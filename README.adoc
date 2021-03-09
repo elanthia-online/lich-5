@@ -1,0 +1,7 @@
+= Lich 5
+
+== About
+
+Lich 5 is a GTK3 variant of Lich that is meant to replace the existing versions of Lich.
+
+More TBD
