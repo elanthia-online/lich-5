@@ -2,7 +2,9 @@ backup/
 data/entry.dat
 data/lich.db3
 data44/
+dist/
 fly64.png
+jinxp
 logs/
 maps/
 scripts/
