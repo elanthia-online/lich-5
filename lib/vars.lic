@@ -161,7 +161,7 @@ elsif defined?(Gtk) and (script.vars[1] == 'setup')
 					vars.each_index { |i| if textboxes[i].nil? or ((vars[i][1].class == String) and (vars[i][1] != textboxes[i].text)); modified = true; break; end }
 				end
 				if modified
-					dialog = Gtk::MessageDialog.new(:parent=> nil, :flags => 
+					dialog = Gtk::MessageDialog.new(:parent=> nil, :flags =>
 						   :modal, :type => :question, :buttons => :yes_no, :message => "Save changes?")
 					dialog.title = "Lich - #{Char.name}'s Vars"
 					dialog.set_icon(@default_icon)

@@ -31,7 +31,7 @@
       0.3 (2014-11-07):
          sort ;alias list
       0.2 (2014-10-05):
-         don't crash from recursive aliases 
+         don't crash from recursive aliases
 
 =end
 
@@ -272,7 +272,7 @@ hook_proc = proc { |client_string|
                   notebook = Gtk::Notebook.new
 				  notebook.append_page(char_sw, Gtk::Label.new("#{Char.name}'s Aliases"))
                   notebook.append_page(global_sw, Gtk::Label.new('Global Aliases'))
-				  
+
                   $alias_setup_window = Gtk::Window.new
                   $alias_setup_window.title = "Lich - Aliases"
                   $alias_setup_window.add(notebook)
@@ -285,7 +285,7 @@ hook_proc = proc { |client_string|
 							global_aliases.each_index { |i| if global_textboxes[i].nil? or (global_aliases[i][1] != global_textboxes[i].text); modified = true; echo modified; break; end }
 						end
                         if modified
-                           dialog = Gtk::MessageDialog.new(:parent=> nil, :flags => 
+                           dialog = Gtk::MessageDialog.new(:parent=> nil, :flags =>
 						   :modal, :type => :question, :buttons => :yes_no, :message => "Save changes?")
                            dialog.title = "Lich - #{Char.name}'s Aliases"
 						   dialog.set_icon(@default_icon)

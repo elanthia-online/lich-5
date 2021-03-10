@@ -9,9 +9,9 @@
 
   changelog:
 	  version 0.53 (2021-03-07)
-	  # fix ruby location report to RbConfig.bindir and rubyw 
+	  # fix ruby location report to RbConfig.bindir and rubyw
 	    detection to avoid special gem directory kerfuffles
-  
+
       version 0.52 (2021-03-04)
       # fix ruby location report to Gem.bindir for cross platform use
 

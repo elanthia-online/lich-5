@@ -16,7 +16,7 @@
 	Recasting to GTK3 needs (03/22/2020):
 		- pointer fix
 		- multi-monitor support (two or more monitors messes up the pointer coords => no room found)
-		
+
 =end
 
 # fixme: click arrow to next map to show map

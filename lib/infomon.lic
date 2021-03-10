@@ -157,7 +157,7 @@ else
   echo 'checking stats...'
   put 'info'
   wait_until { done }
-  
+
   hide_lines = done = false
   action = proc { |server_string|
     if hide_lines
@@ -177,7 +177,7 @@ else
   echo 'checking skills...'
   put 'skills'
   wait_until { done }
-  
+
   hide_lines = done = false
   action = proc { |server_string|
     if hide_lines
@@ -317,7 +317,7 @@ Thread.new {
     loop {
       sleep 300
       save_proc.call
-    } 
+    }
   rescue
     echo $!
     echo $!.backtrace[0..1]
@@ -362,7 +362,7 @@ Thread.new {
 #
 fix_gameobj_status = proc { |server_string|
   # false positive: shudders with sporadic convulsions as pearlescent ripples envelop .*? body
-#The earth elemental rumbles in agony as it teeters for a moment, then tumbles to the ground with a thundering crash! 
+#The earth elemental rumbles in agony as it teeters for a moment, then tumbles to the ground with a thundering crash!
   if server_string =~ /^(?:The fire in the|With a surprised grunt, the|A sudden blue fire bursts over the hair of a|You hear a sound like a weeping child as a white glow separates itself from the|A low gurgling sound comes from deep within the chest of the|The|A|One last prolonged bovine moan escapes from the) (?:<pushBold\/>)?<a.*?exist=["'](\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? (?:body as it rises, disappearing into the heavens|falls to the ground and dies(?:, its feelers twitching)?|falls back into a heap and dies|body goes rigid and collapses to the ground, dead|body goes rigid and collapses to the floor, dead|slowly settles to the ground and begins to dissipate|falls to the ground motionless|body goes rigid and <pushBold\/><a.*?>\w+<\/a><popBold\/> eyes roll back into <pushBold\/><a.*?>\w+<\/a><popBold\/> head as <pushBold\/><a.*?>\w+<\/a><popBold\/> dies|growls one last time, and crumples to the ground in a heap|spins backwards and collapses dead|falls to the ground as the stillness of death overtakes <pushBold\/><a.*?>(?:him|her|it)<\/a><popBold\/>|crumples to the ground motionless|howls in agony one last time and dies|howls in agony while falling to the ground motionless|moans pitifully as <pushBold\/><a.*?>(?:he|she|it)<\/a><popBold\/> is released|careens to the ground and crumples in a heap|hisses one last time and dies|flutters its wings one last time and dies|slumps to the ground with a final snarl|horn dims as (?:his|her) lifeforce fades away|blinks in astonishment, then collapses in a motionless heap|collapses in a heap, its huge girth shaking the floor around it|goes limp and .*? falls over as the fire slowly fades from .*? eyes|eyes slowly fades|sputters violently, cascading flames all around as .*? collapses in a final fiery display|falls to the ground in a clattering, motionless heap|goes limp and .*? falls over as the fire slowly fades from .*? eyes|collapses to the ground and shudders once before finally going still|crumbles into a pile of rubble|shudders once before .*? finally goes still|totters for a moment and then falls to the ground like a pillar, breaking into pieces that fly out in every direction|collapses into a pile of rubble|rumbles in agony as .*? teeters for a moment, then falls directly at you|twists and coils violently in .*? death throes, finally going still|twitches one final time before falling still upon the floor|, consuming .*? form in the space of a breath|screams one last time and dies|breathes .*? last gasp and dies|rolls over and dies|as .*? falls (?:slack|still) against the (?:floor|ground)|collapses to the ground, emits a final squeal, and dies|cries out in pain one last time and dies|crumples to a heap on the ground and dies|collapses to the ground, emits a final sigh, and dies|crumples to the ground and dies|lets out a final caterwaul and dies|screams evilly one last time and goes still|gurgles eerily and collapses into a puddle of water|shudders, then topples to the ground|shudders one last time before lying still|violently for a moment, then goes still|grumbles in pain one last time before lying still|rumbles in agony and goes still|falls to the ground dead|collapses to the ground, emits a final bleat, and dies|topples to the ground motionless|shudders violently for a moment, then goes still|rumbles in agony as .*? teeters for a moment, then tumbles to the ground with a thundering crash)[\.!]\r?\n?$/
     npc_id = $1
     if npc = GameObj.npcs.find { |obj| obj.id == npc_id }
@@ -558,7 +558,7 @@ while line = get
                             total_defense_string = ''
                             total_stat_string    = ''
                             total_skill_string   = ''
-                            
+
               total_offense_string = total_offense_string + total_boltAS.to_s + ' bAS, ' if total_boltAS != 0
               total_offense_string = total_offense_string + total_physicalAS.to_s + ' pAS, ' if total_physicalAS != 0
               total_offense_string = total_offense_string + total_elementalCS.to_s + ' elemCS, ' if total_elementalCS != 0
@@ -568,7 +568,7 @@ while line = get
                             total_offense_string = total_offense_string + total_damagefactor.to_s + '% DF ' if total_damagefactor != 0
                             total_offense_string = total_offense_string + total_uaf.to_s + ' UAF, ' if total_uaf != 0
                             total_offense_string.chop!.chop!
-                            
+
               total_defense_string = total_defense_string + total_boltDS.to_s + ' bDS, ' if total_boltDS != 0
               total_defense_string = total_defense_string + total_physicalDS.to_s + ' pDS, ' if total_physicalDS != 0
               total_defense_string = total_defense_string + total_elementalTD.to_s + ' elemTD, ' if total_elementalTD != 0
@@ -579,16 +579,16 @@ while line = get
                             total_defense_string = total_defense_string + total_asg.to_s + ' AsG, ' if total_asg != 0
                             total_defense_string = total_defense_string + total_fof_offset.to_s + ' FoF offset, ' if total_fof_offset != 0
                             total_defense_string.chop!.chop!
-                            
+
               total_stat_string = total_stat_string + total_strength.to_s + ' str, ' if total_strength != 0
                             total_stat_string = total_stat_string + total_constitution.to_s + ' con, ' if total_constitution != 0
                             total_stat_string = total_stat_string + total_health.to_s + ' health, ' if total_health != 0
                             total_stat_string.chop!.chop!
-                            
+
               total_skill_string = total_skill_string + total_dodging.to_s + ' dodge, ' if total_dodging != 0
                             total_skill_string = total_skill_string + total_combatmaneuvers.to_s + ' CM, ' if total_combatmaneuvers != 0
                             total_skill_string.chop!.chop!
-                            
+
                             output.concat("- Totals:\n")
               output.concat("  Offense: #{total_offense_string}\n") if total_offense_string.length > 0
                             output.concat("  Defense: #{total_defense_string}\n") if total_defense_string.length > 0
@@ -596,7 +596,7 @@ while line = get
                             output.concat("   Skills: #{total_skill_string}\n") if total_skill_string.length > 0
                             output.concat("\n\n")
             end
-          end         
+          end
           if CharSettings['show_gift']
             if CharSettings['lumnis start exp'] and CharSettings['lumnis 3x exp'] and CharSettings['lumnis 2x exp']
               exp_diff = Char.exp - CharSettings['lumnis start exp']
@@ -616,7 +616,7 @@ while line = get
               else
                 cycleminstime = ((CharSettings['lumnis next start'] - Time.now.to_i) / 60.00).as_time
                 days = cycleminstime.slice(/\d+/).to_i / 24
-                hours = cycleminstime.slice(/\d+/).to_i % 24 
+                hours = cycleminstime.slice(/\d+/).to_i % 24
                 mins, secs = cycleminstime.split(':')[-2..-1]
                 mins, secs = mins.to_i, secs.to_i
                 foo = Array.new
@@ -1179,7 +1179,7 @@ while line = get
       while get =~ /^([A-z\s']+)\s+([a-z0-9]+)\s+([0-9])\s*$|Skill name|\-\-\-\-/
                 cman_rank = $3
         cman_name = $1.strip.downcase.gsub(/[\s\-]/,'_').gsub("'", "")
-        
+
         CharSettings['cman'][cman_name] = cman_rank.to_i
         begin
           CMan[cman_name] = cman_rank
@@ -1313,7 +1313,7 @@ while line = get
         total_mana_drained = total_mana_drained - mana_recovered + mana_drained
 
         if spell.active?
-          spell.timeleft = (total_mana_drained/rate.to_f).ceil - (1 - spell.timeleft % 1) 
+          spell.timeleft = (total_mana_drained/rate.to_f).ceil - (1 - spell.timeleft % 1)
         else
           spell.putup
           spell.timeleft = (total_mana_drained/rate.to_f).ceil
@@ -1326,7 +1326,7 @@ while line = get
       elsif (spell.num.to_i >= 9000 and spell.num.to_i != 9011) or (spell.num.to_i == 725)
         spell.putup
                 respond "[ #{spell.name}: +#{spell.time_per.as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
-                
+
                 # Assume Aspect cooldowns
                 if spell.num.to_i > 9013 and spell.num.to_i < 9042
           cooldown_spell = Spell[spell.num+1]
@@ -1483,7 +1483,7 @@ while line = get
             spell_time = 599.0
           else
             spell_time = ($3.to_i * 60) + $4.to_i + ($5.to_i / 60.0)
-          end 
+          end
           if spell_name == 'Raise Dead Recovery'
             # fixme
             spell_name = 'Raise Dead Cooldown'
@@ -1534,7 +1534,7 @@ while line = get
       put 'info'
       script.silent = save_silent
       wait_until { done }
-  
+
       hide_lines = done = false
       action = proc { |server_string|
         if hide_lines
