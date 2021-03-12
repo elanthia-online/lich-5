@@ -1,8 +1,8 @@
 = Lich 5
 :toc:
 
-[link=https://app.netlify.com/sites/admiring-leakey-35fb01/deploys]
-image::https://api.netlify.com/api/v1/badges/e54c4660-3793-40d5-964b-37cef0fb6a5e/deploy-status[Netlify Build Status]
+[link=https://app.netlify.com/sites/wonderful-kepler-18ffed/deploys]
+image::https://api.netlify.com/api/v1/badges/45ca1a98-eeff-43b1-9b48-0a80f37377bf/deploy-status[Netlify Build Status]
 
 == About
 
