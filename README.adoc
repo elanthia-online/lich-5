@@ -8,4 +8,10 @@ image::https://api.netlify.com/api/v1/badges/45ca1a98-eeff-43b1-9b48-0a80f37377b
 
 Lich 5 is a GTK3 variant of Lich that is meant to replace the existing versions of Lich.
 
-More TBD
+== Usage
+
+Make sure you have `jinx.lic` in your scripts directory
+Run:
+```
+;jinx repo add lich5 https://lich5.elanthia.online
+```
