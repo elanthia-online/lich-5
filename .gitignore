@@ -8,3 +8,4 @@ jinxp
 logs/
 maps/
 temp/
+.pre-commit-config.yaml
