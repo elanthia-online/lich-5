@@ -1404,7 +1404,16 @@ class LimitedArray < Array
 end
 
 class XMLParser
-  attr_reader :mana, :max_mana, :health, :max_health, :spirit, :max_spirit, :last_spirit, :stamina, :max_stamina, :stance_text, :stance_value, :mind_text, :mind_value, :prepared_spell, :encumbrance_text, :encumbrance_full_text, :encumbrance_value, :indicator, :injuries, :injury_mode, :room_count, :room_title, :room_description, :room_exits, :room_exits_string, :familiar_room_title, :familiar_room_description, :familiar_room_exits, :bounty_task, :injury_mode, :server_time, :server_time_offset, :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value, :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream, :player_id, :active_spells, :prompt, :current_target_ids, :current_target_id, :room_window_disabled
+  attr_reader :mana, :max_mana, :health, :max_health, :spirit, :max_spirit, :last_spirit,
+              :stamina, :max_stamina, :stance_text, :stance_value, :mind_text, :mind_value,
+              :prepared_spell, :encumbrance_text, :encumbrance_full_text, :encumbrance_value,
+              :indicator, :injuries, :injury_mode, :room_count, :room_title, :room_description,
+              :room_exits, :room_exits_string, :familiar_room_title, :familiar_room_description,
+              :familiar_room_exits, :bounty_task, :injury_mode, :server_time, :server_time_offset,
+              :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
+              :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
+              :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
+              :dialogs
   attr_accessor :send_fake_tags
 
   @@warned_deprecated_spellfront = 0
@@ -1487,8 +1496,13 @@ class XMLParser
     @injuries = {'back' => {'scar' => 0, 'wound' => 0}, 'leftHand' => {'scar' => 0, 'wound' => 0}, 'rightHand' => {'scar' => 0, 'wound' => 0}, 'head' => {'scar' => 0, 'wound' => 0}, 'rightArm' => {'scar' => 0, 'wound' => 0}, 'abdomen' => {'scar' => 0, 'wound' => 0}, 'leftEye' => {'scar' => 0, 'wound' => 0}, 'leftArm' => {'scar' => 0, 'wound' => 0}, 'chest' => {'scar' => 0, 'wound' => 0}, 'leftFoot' => {'scar' => 0, 'wound' => 0}, 'rightFoot' => {'scar' => 0, 'wound' => 0}, 'rightLeg' => {'scar' => 0, 'wound' => 0}, 'neck' => {'scar' => 0, 'wound' => 0}, 'leftLeg' => {'scar' => 0, 'wound' => 0}, 'nsys' => {'scar' => 0, 'wound' => 0}, 'rightEye' => {'scar' => 0, 'wound' => 0}}
     @injury_mode = 0
 
-    @active_spells = Hash.new
+    # psm 3.0 dialogdata updates
+    @dialogs = {}
+  end
 
+  # for backwards compatability
+  def active_spells
+    @dialogs["Active Spells"]
   end
 
   def reset
@@ -1526,6 +1540,19 @@ class XMLParser
     }
   end
 
+  def parse_psm3_progressbar(kind, attributes)
+    @dialogs[kind] ||= {}
+    name = attributes["text"]
+    value = attributes["time"]
+    # puts "Effect:\nattributes=%s\nkind=%s\nname=%s \nvalue=%s" % [attributes, kind, name, value]
+    return unless name && value
+    # in psm 3.0 progress bars now have second precision!
+    hour, minute, second = value.split(':')
+    @dialogs[kind][name] = Time.now + (hour.to_i * 3600) + (minute.to_i * 60) + second.to_i
+  end
+
+  PSM_3_DIALOG_IDS = ["Buffs", "Active Spells", "Debuffs", "Cooldowns"]
+
   def tag_start(name, attributes)
     begin
       @active_tags.push(name)
@@ -1544,8 +1571,9 @@ class XMLParser
         @obj_name = nil
         @obj_before_name = nil
         @obj_after_name = nil
-      elsif name == 'dialogData' and attributes['id'] == 'ActiveSpells' and attributes['clear'] == 't'
-        @active_spells.clear
+      elsif name == 'dialogData' and attributes['clear'] == 't' and PSM_3_DIALOG_IDS.include?(attributes["id"])
+        @dialogs[attributes["id"]] ||= {}
+        @dialogs[attributes["id"]].clear
       elsif name == 'resource' or name == 'nav'
         nil
       elsif name == 'pushStream'
@@ -1644,6 +1672,9 @@ class XMLParser
         elsif attributes['id'] == 'encumlevel'
           @encumbrance_value = attributes['value'].to_i
           @encumbrance_text = attributes['text']
+        elsif PSM_3_DIALOG_IDS.include?(@active_ids[-2])
+          # puts "kind=(%s) name=%s attributes=%s" % [@active_ids[-2], name, attributes]
+          self.parse_psm3_progressbar(@active_ids[-2], attributes)
         end
       elsif name == 'roundTime'
         @roundtime_end = attributes['value'].to_i
@@ -1776,11 +1807,9 @@ class XMLParser
           @level = Stats.level = attributes['value'].slice(/\d+/).to_i
         elsif attributes['id'] == 'encumblurb'
           @encumbrance_full_text = attributes['value']
-        elsif @active_tags[-2] == 'dialogData' and @active_ids[-2] == 'ActiveSpells'
-          if (name = /^lbl(.+)$/.match(attributes['id']).captures.first) and (value = /^\s*([0-9\:]+)\s*$/.match(attributes['value']).captures.first)
-            hour, minute = value.split(':')
-            @active_spells[name] = Time.now + (hour.to_i * 3600) + (minute.to_i * 60)
-          end
+        elsif @active_tags[-2] == 'dialogData' and PSM_3_DIALOG_IDS.include?(@active_ids[-2])
+          # deprecated: labels do not have the required data in psm 3.0 dialogdata
+          #             instead we must parse the <progressBar/> element
         end
       elsif (name == 'container') and (attributes['id'] == 'stow')
         @stow_container_id = attributes['target'].sub('#', '')
@@ -9116,6 +9145,63 @@ class Gift
   end
   def Gift.stopwatch
     nil
+  end
+end
+
+module Effects
+  class Spells
+    class << self
+      include Enumerable
+      
+      def to_h
+        XMLData.dialogs.fetch("Active Spells", {})
+      end
+      
+      def each()
+        to_h.each {|k,v| yield(k,v)}
+      end
+    end
+  end
+
+  class Buffs
+    class << self
+      include Enumerable
+
+      def to_h
+        XMLData.dialogs.fetch("Buffs", {})
+      end
+
+      def each()
+        to_h.each {|k,v| yield(k,v)}
+      end
+    end
+  end
+
+  class Debuffs
+    class << self
+      include Enumerable
+      
+      def to_h
+        XMLData.dialogs.fetch("Debuffs", {})
+      end
+
+      def each()
+        to_h.each {|k,v| yield(k,v)}
+      end
+    end
+  end
+
+  class Cooldowns
+    class << self
+      include Enumerable
+      def to_h
+        XMLData.dialogs.fetch("Cooldown", {})
+      end
+
+      def each()
+        to_h.each {|k,v| yield(k,v)}
+      end
+    end
   end
 end
 
