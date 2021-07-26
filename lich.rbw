@@ -9195,7 +9195,7 @@ module Effects
     class << self
       include Enumerable
       def to_h
-        XMLData.dialogs.fetch("Cooldown", {})
+        XMLData.dialogs.fetch("Cooldowns", {})
       end
 
       def each()
