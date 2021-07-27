@@ -9149,60 +9149,31 @@ class Gift
 end
 
 module Effects
-  class Spells
-    class << self
-      include Enumerable
-      
-      def to_h
-        XMLData.dialogs.fetch("Active Spells", {})
-      end
-      
-      def each()
-        to_h.each {|k,v| yield(k,v)}
-      end
+  class Registry
+    include Enumerable
+
+    def initialize(dialog)
+      @dialog = dialog
+    end
+
+    def to_h
+      XMLData.dialogs.fetch(@dialog, {})
+    end
+
+    def each()
+      to_h.each {|k,v| yield(k,v)}
+    end
+
+    def active?(effect)
+      expiry = to_h.fetch(effect, 0)
+      expiry.to_i > Time.now.to_i
     end
   end
 
-  class Buffs
-    class << self
-      include Enumerable
-
-      def to_h
-        XMLData.dialogs.fetch("Buffs", {})
-      end
-
-      def each()
-        to_h.each {|k,v| yield(k,v)}
-      end
-    end
-  end
-
-  class Debuffs
-    class << self
-      include Enumerable
-      
-      def to_h
-        XMLData.dialogs.fetch("Debuffs", {})
-      end
-
-      def each()
-        to_h.each {|k,v| yield(k,v)}
-      end
-    end
-  end
-
-  class Cooldowns
-    class << self
-      include Enumerable
-      def to_h
-        XMLData.dialogs.fetch("Cooldowns", {})
-      end
-
-      def each()
-        to_h.each {|k,v| yield(k,v)}
-      end
-    end
-  end
+  Spells    = Registry.new("Active Spells")
+  Buffs     = Registry.new("Buffs")
+  Debuffs   = Registry.new("Debuffs")
+  Cooldowns = Registry.new("Cooldowns")
 end
 
 class Wounds
