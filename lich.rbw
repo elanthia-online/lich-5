@@ -1540,12 +1540,15 @@ class XMLParser
     }
   end
 
+  DECADE = 10 * 31_536_000
+
   def parse_psm3_progressbar(kind, attributes)
     @dialogs[kind] ||= {}
     name = attributes["text"]
     value = attributes["time"]
-    # puts "Effect:\nattributes=%s\nkind=%s\nname=%s \nvalue=%s" % [attributes, kind, name, value]
     return unless name && value
+    # set the expiry for a decade for infinite duration effects
+    return @dialogs[kind][name] = Time.now + DECADE if value.downcase.eql?("indefinite")
     # in psm 3.0 progress bars now have second precision!
     hour, minute, second = value.split(':')
     @dialogs[kind][name] = Time.now + (hour.to_i * 3600) + (minute.to_i * 60) + second.to_i
