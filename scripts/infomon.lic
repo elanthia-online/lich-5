@@ -1,91 +1,49 @@
 =begin
 
-    This script tracks a bunch of info about your character that isn't available as XML, such as your skills and stats, the spells you have on and their duration, gift of lumis, and other random things.
+  infomon.lic: This script tracks a bunch of info about your character that isn't available as XML, such as your skills and stats, the spells you have on and their duration, gift of lumis, and other random things
     Use   ;magic   to see what spells you have on.
     Use   ;banks   to see how poor you are.
 
-             author: Tillmen (tillmen@lichproject.org)
-    original author: Shaelun
-               game: Gemstone
-               tags: core
-           required: Lich > 4.6.10
-            version: 1.18.2
+    maintainer: elanthia-online
+  contributers: Tillmen, Shaelun, Athias
+          game: Gemstone
+          tags: core
+      required: Lich > 4.6.10
+       version: 1.18.8
+        Source: https://github.com/elanthia-online/jinx
+    Alt Source: https://github.com/elanthia-online/lich-5
 
   Version Control:
     Major_change.feature_addition.bugfix
 
-    changelog:
-      1.18.2 (2021-01-06):
-        Previous fix exposed different bug. Updated infomon to maintain bind spell
-        state in both $infomon_bound (for checkbound) and Spell[214].active?
-      1.18.1 (2021-01-05):
-        Typo for infomon_bound with envelopes should be envelop
-      1.18 (2021-01-01):
-        update stat parsing regex to handle negative enhanced bonuses
-      1.17 (2020-12-19):
-        Recorded previous commageddon fixes in change log
-        Updated formatting for viewer friendly goodness
-      1.16 (2018-07-30):
-        Rename Core Tap Recovery to match spell active
-      1.15 (2018-07-22):
-        improved tracking for Core Tap
-        fix spell active match for Cloak of Shadows
-      1.14 (2017-10-08):
-        detect Mage Armor in spell active
-=end
-=begin
-
-      1.13 (2017-01-15):
-        rapid fire recovery/penalty fixes
-        somewhat fix lumnis tracking for the new system
-      1.12 (2017-01-09):
-        fix mana leech cooldown timer (Drafix)
-      1.11 (2016-09-19):
-        added Duck and Weave cman support
-      1.10 (2016-05-15):
-        added death message for ants to the missing xml workaround
-      1.9 (2016-01-13):
-        update lumnis start time from "lumnis info"
-      1.8 (2015-07-02):
-        add support for Medatative Resistance (Takoa)
-      1.7 (2015-05-28):
-        add FoF offset to magic bonuses output
-      1.6 (2015-05-21):
-        recognize Vornavis Caravansary bank as a Vornavis bank
-      1.5 (2015-02-21):
-        remove broken ;magic save/load commands
-      1.4 (2015-02-01):
-        added minotaur magus death message for xml fail workaround
-      1.3 (2014-12-17):
-        recognize spells in "spell active" that have an "Indefinite" time left
-      1.2 (2014-11-14):
-        attempted bugfix
-      1.1 (2014-11-10):
-        don't define check(sleeping|bound|silenced|calmed|cutthroat)
-
+  1.18.8 (2021-08-12):
+    Bugfixes for new spell active format
+    Standardized Header information
+    Removed long-standing changelog in favor of github history moving forward
+  1.18.7 (2021-08-05):
+    Introduced first run flag for PSM check to prevent needless old CMan errors
+  1.18.6 (2021-07-31):
+    Changed CMan and added Armor, Feat, Shield and Weapon for PSM release
+  1.18.5 (2021-07-28):
+    Changed CMan regex for PSM release
+  1.18.4 (2021-02-16):
+    Added spellup code for Beacon of Courage
+  1.18.3 (2021-02-10):
+    Fixed game code for test instance to GST from GSTest
+  1.18.2 (2021-01-06):
+    Previous fix exposed different bug. Updated infomon to maintain bind spell
+    state in both $infomon_bound (for checkbound) and Spell[214].active?
+  1.18.1 (2021-01-05):
+    Typo for infomon_bound with envelopes should be envelop
 =end
 
-
-unless XMLData.game =~ /^(?:GSF|GSIV|GSPlat|GSTest)$/
+unless XMLData.game =~ /^(?:GSF|GSIV|GSPlat|GST)$/
   echo "This script is meant for Gemstone Prime, Platinum, or Shattered.  It will likely cause problems on whatever game you're trying to run it on..."
   exit
 end
 
 hide_me
 setpriority(1)
-
-=begin
-get_lich_server = proc {
-  begin
-    lich_server = TCPSocket.open('216.224.171.85', 7153)
-  rescue
-    lich_server.close rescue()
-    lich_server = nil
-    echo "error connecting to server: #{$!}"
-  end
-  lich_server
-}
-=end
 
 sleep(0.1) until Char.name and not Char.name.empty?
 CharSettings['active_spells'] = Hash.new unless CharSettings['active_spells'].class == Hash
@@ -94,6 +52,7 @@ CharSettings['show_circles']  = true     if CharSettings['show_circles'].nil?
 CharSettings['show_bonuses']  = false    if CharSettings['show_bonuses'].nil?
 CharSettings['show_messages'] = true     if CharSettings['show_messages'].nil?
 CharSettings['show_gift']     = true     if CharSettings['show_gift'].nil?
+CharSettings['need_psm_update']    = true     if CharSettings['need_psm_update'].nil?
 
 bank_titles = {
   "Wehnimer's Landing"          => [ '[First Elanith Bank, Teller]', '[Clenchfist Bros. Banking, Lobby]'],
@@ -118,23 +77,24 @@ end
 #
 # Load or get character information
 #
-if CharSettings['Stats'] and CharSettings['Skills'] and CharSettings['Spells'] and CharSettings['Society'] and CharSettings['citizenship'] and CharSettings['cman']
+if CharSettings['Stats'] and
+    CharSettings['Skills'] and
+    CharSettings['Spells'] and
+    CharSettings['Society'] and
+    CharSettings['citizenship']
+
   begin
     Stats.load_serialized   = CharSettings['Stats']
     Skills.load_serialized  = CharSettings['Skills']
     Spells.load_serialized  = CharSettings['Spells']
     Society.load_serialized = CharSettings['Society']
     Char.citizenship        = CharSettings['citizenship']
-    begin
-      CharSettings['cman'].each_pair { |cman,rank| CMan.send("#{cman}=", rank) }
     rescue
-      nil
-    end
-  rescue
     echo $!
     echo $!.backtrace[0..1]
     exit
   end
+
 else
   silence_me
 
@@ -213,36 +173,62 @@ else
   put 'citizenship'
   wait_until { done }
 
-  hide_lines = done = false
+  silence_me
+
+end
+
+Gem::Version.new(LICH_VERSION) < Gem::Version.new('5.0.16') ? psm_abilities = [ 'CMan' ] : psm_abilities = [ 'Feat', 'Armor', 'Weapon', 'Shield', 'CMan' ]
+need_psm = []
+if CharSettings['need_psm_update']
+  need_psm = psm_abilities.dup
+  CharSettings['need_psm_update'] = false
+else
+  psm_abilities.each { |ability|
+    if !defined?(eval("#{ability}"))
+      pp "Encountered fatal error"
+      exit
+    elsif CharSettings["#{ability}".downcase].nil?
+      CharSettings["#{ability}".downcase] = Hash.new
+      need_psm << ability
+    else
+      begin
+        if !CharSettings["#{ability}".downcase].empty?
+          CharSettings["#{ability}".downcase].each_pair { |psm,rank| eval("#{ability}").send("#{psm}=", rank) }
+        end
+      rescue
+        pp "Bad juju happened here."
+        nil
+      end
+    end
+  }
+end
+
+silence_me
+
+need_psm.each { |get_ability|
+  hide_lines = @done = false
   action = proc { |server_string|
     if hide_lines
       if server_string =~ /<output class=""\/>|<prompt/
-        DownstreamHook.remove('infomon_cman')
-        done = true
+          DownstreamHook.remove('psmmon_finder')
+          @done = true
       end
       nil
-    else
-      if server_string =~ /You know absolutely nothing about Combat Maneuvers\./
-        DownstreamHook.remove('infomon_cman')
-        done = true
-        nil
-      elsif server_string =~ /#{Char.name}<\/a>, your Combat Maneuvers are as follows:/
+      elsif server_string =~ /#{Char.name}<\/a>, your (Combat Maneuvers|#{get_ability}.+?)\sare as follows:/
         hide_lines = true
         nil
       else
         server_string
       end
-    end
   }
-  DownstreamHook.add('infomon_cman', action)
-  echo 'checking combat maneuvers...'
-  put 'cman info'
-  wait_until { done }
-
-  echo 'done'
+    DownstreamHook.add('psmmon_finder', action)
+    echo "checking #{get_ability}..."
+    put ("#{get_ability}".downcase) + " info"
+    wait_until { @done }
+}
 
   silence_me
-end
+  echo 'done'
 
 #
 # Load spell timers
@@ -716,86 +702,9 @@ while line = get
           end
         elsif mobj.captures.first =~ /save/i
           echo 'this function no longer works'
-=begin
-          if $SAFE == 0
-            echo("Saving your current active spells on the Lich server for later use on a different computer... please be patient, it can sometimes take up to half a minute to initiate the connection...")
-            if lich_server = get_lich_server.call
-              lich_server.send('x',0)
-              lich_server.puts("#{XMLData.game}:#{XMLData.name}")
-              lich_server.binmode
-              remote_save = Hash.new
-              remote_save['active_spells'] = Hash.new
-              Spells.active.each { |spell|
-                if defined?(spell.real_time) and spell.real_time
-                  remote_save['active_spells'][spell.num.to_s] = Time.now.to_f + (spell.timeleft * 60)
-                else
-                  remote_save['active_spells'][spell.num.to_s] = spell.timeleft
-                end
-              }
-              remote_save['Spellsong'] = Spellsong.serialize
-              remote_save['Stats'] = Stats.serialize
-              remote_save['Skills'] = Skills.serialize
-              remote_save['Spells'] = Spells.serialize
-              remote_save['Gift'] = Gift.serialize
-              remote_save['Society'] = Society.serialize
-              remote_save['citizenship'] = Char.citizenship
-              lich_server.write(Marshal.dump(remote_save))
-              lich_server.close rescue()
-              echo
-              echo "Data has been cached remotely! Simply type '#{$clean_lich_char}magic load' when you wish to restore the current state of your character on the other computer."
-              echo
-            end
-          else
-            echo 'This script must be trusted to use this function. (;trust infomon)'
-          end
-=end
         elsif mobj.captures.first =~ /load/i
           echo 'this function no longer works'
-=begin
-          if $SAFE == 0
-            echo("Loading your current active spells from the remote cache on the Lich server... please be patient, it can sometimes take up to half a minute to initiate the connection...")
-            if lich_server = get_lich_server.call
-              lich_server.send("z",0)
-              lich_server.puts("#{XMLData.game}:#{XMLData.name}")
-              lich_server.binmode
-              begin
-                remote_load = Marshal.load(lich_server.read)
-                Stats.load_serialized   = remote_load['Stats']
-                Skills.load_serialized  = remote_load['Skills']
-                Spells.load_serialized  = remote_load['Spells']
-                Society.load_serialized = remote_load['Society']
-                Char.citizenship        = remote_load['citizenship']
-                remote_load['active_spells'].each_pair { |num,timeleft|
-                  if spell = Spell[num]
-                    if defined?(spell.real_time) and spell.real_time
-                      timeleft = (timeleft - Time.now.to_f)/60.0
-                      if timeleft > 0
-                        spell.timeleft = timeleft
-                        spell.active = true
-                      end
                     else
-                      spell.timeleft = timeleft
-                      spell.active = true
-                    end
-                  end
-                }
-                Spellsong.load_serialized = remote_load['Spellsong'] if remote_load['Spellsong']
-                Gift.load_serialized = remote_load['Gift'] if remote_load['Gift']
-              rescue
-                echo("There was an error loading your status information from the server.  Are you certain you have status info saved on it?  Type `;magic help' for more.")
-                lich_server.close rescue()
-                next
-              end
-              lich_server.close rescue()
-              echo
-              echo 'Data has been loaded!'
-              echo
-            end
-          else
-            echo 'This script must be trusted to use this function. (;trust infomon)'
-          end
-=end
-        else
           echo "Magic error! Type ';magic help' for usage information."
         end
       rescue
@@ -1161,52 +1070,55 @@ while line = get
         Stats.send("#{$1.downcase}=", [ $2.to_i + $3.to_i, $4.to_i + $5.to_i ])
       end
       CharSettings['Stats'] = Stats.serialize
-    elsif (line == 'You know absolutely nothing about Combat Maneuvers.') and defined?(CMan)
-      begin
-        CharSettings['cman'].keys.each { |cman| CMan[cman] = nil }
-      rescue
-        nil
-      end
-      CharSettings['cman'] = Hash.new
-    elsif (line =~ /#{Char.name}, your Combat Maneuvers are as follows:/) and defined?(CMan)
-      begin
-        CharSettings['cman'].keys.each { |cman| CMan[cman] = nil }
-      rescue
-        nil
-      end
-      CharSettings['cman'] = Hash.new
-      get
-      while get =~ /^([A-z\s']+)\s+([a-z0-9]+)\s+([0-9])\s*$|Skill name|\-\-\-\-/
-                cman_rank = $3
-        cman_name = $1.strip.downcase.gsub(/[\s\-]/,'_').gsub("'", "")
-
-        CharSettings['cman'][cman_name] = cman_rank.to_i
+    ## Updating Infomon for PSM3 release with PSM Abilities (CMan, Armor, Feat, Shield, Weapon)
+    ## structure of messaging consistent between all PSM categories
+    ## #{Char.name}, your Combat Maneuvers are as follows:
+    ## (blank line)
+    ##  Skill                          Mnemonic        Ranks Category        Subcategory
+    ##  --------------------------------------------------------------------------------
+    ## (skill line or blank line if no skill)
+    ##
+    elsif (line =~ /#{Char.name}, your (Combat|Armor|Feat|Shield|Weapon).*? are as follows:/)
+      psm_category = $1.dup
+      psm_category = "CMan" if psm_category == "Combat"
+      CharSettings["#{psm_category}".downcase] = Hash.new
+      2.times{get}
+      while get? =~ /^\s+([A-z\s']+)\s+([a-z0-9]+)\s+(\d)\/(\d).*?$/
+        mnemonic_psm = $2
+        rank_psm = $3
+        total_rank_psm = $4
+        name_psm = $1.strip.downcase.gsub(/[\s\-]/,'_').gsub("'", "")
+        CharSettings["#{psm_category}".downcase][name_psm] = rank_psm.to_i
         begin
-          CMan[cman_name] = cman_rank
+          eval("#{psm_category}")[name_psm] = rank_psm
         rescue
           nil
         end
       end
-    elsif (line =~ /^You have now achieved the (first|second|third|fourth|fifth) rank of (.*)\.$/)
-      fix_num = { 'first' => 1, 'second' => 2, 'third' => 3, 'fourth' => 4, 'fifth' => 5 }
-      cman_name = $2
-      cman_rank = $1
-      CharSettings['cman'][cman_name.gsub(/[\s\-]/,'_').gsub("'", "").downcase] = fix_num[cman_rank]
+    elsif (line =~ /^You have now achieved rank (\d) of (.*), costing \d+ (Combat|Armor|Feat|Shield)/)
+      rank_learned = $1
+      psm_learned = $3
+      name_learned = $2
+      psm_learned = "CMan" if psm_learned == "Combat"
+      CharSettings["#{psm_learned}".downcase][name_learned.strip.downcase.gsub(/[\s\-]/,'_').gsub("'", "")] = rank_learned.to_i
       begin
-        CMan[cman_name] = fix_num[cman_rank]
+        eval("#{psm_learned}")[name_learned.strip.downcase.gsub(/[\s\-]/,'_').gsub("'", "")] = rank_learned
       rescue
         nil
       end
-    elsif (line =~ /^You decide to unlearn your (first|second|third|fourth|fifth) rank of (.*),/)
-      fix_num = { 'first' => 0, 'second' => 1, 'third' => 2, 'fourth' => 3, 'fifth' => 4 }
-      cman_name = $2
-      cman_rank = $1
-      CharSettings['cman'][cman_name.gsub(/[\s\-]/,'_').gsub("'", "").downcase] = fix_num[cman_rank]
+    elsif (line =~ /^You decide to unlearn rank (\d) of (.*), regaining \d+ (Combat|Armor|Shield)/)
+      fix_num = { '1' => 0, '2' => 1, '3' => 2, '4' => 3, '5' => 4 }
+      rank_unlearned = $1
+      name_unlearned = $2.strip.downcase
+      psm_unlearned = $3
+      psm_unlearned = "CMan" if psm_unlearned == "Combat"
+      CharSettings["#{psm_unlearned}".downcase][name_unlearned.gsub(/[\s\-]/,'_').gsub("'", "")] = fix_num[rank_unlearned]
       begin
-        CMan[cman_name] = fix_num[cman_rank]
+        eval("#{psm_unlearned}")[name_unlearned] = fix_num[rank_unlearned]
       rescue
         nil
       end
+
     elsif line =~ /^\.\.\.departing in ([0-9]+) mins\.\.\.$/
       Spell[6666].putup
       Spell[6666].timeleft = $1.to_i
@@ -1236,6 +1148,10 @@ while line = get
         end
       elsif spell.num == 9043
         Spell[9042].putdown
+      elsif spell.num == 9655
+        Spell[9656].putup
+      elsif spell.num == 1608
+        Spell[1699].putup
       elsif spell.num == 9627
         Spell[9052].timeleft = 5
         Spell[9052].putup
@@ -1475,7 +1391,7 @@ while line = get
       $infomon_cutthroat = true
     elsif line =~ /^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$/
       $infomon_cutthroat = false
-    elsif line == "You currently have the following active spells:"
+    elsif line == "You currently have the following active effects:"
       while (line = get)
         if line =~ /([A-z0-9\s\'\(\)\-]+) \.* (([0-9]+)\:([0-9]+)\:([0-9]+)|Indefinite)$/
           spell_name = $1
@@ -1492,12 +1408,14 @@ while line = get
           elsif spell_name =~ /^Cloak of Shadows \- /
             spell_name = 'Cloak of Shadows'
           end
-          if spell = Spell.list.find { |s| s.name == spell_name or s.num.to_s == spell_name }
+          if spell = Spell.list.find { |s| s.name.downcase == spell_name.strip().downcase or s.num.to_s == spell_name.strip() }
             spell.active = true
             spell.timeleft = spell_time
           else
             echo "no spell matches #{spell_name}" if $infomon_debug
           end
+        elsif line =~ /^ [.]{40}|^(?:Spells|Cooldowns|Buffs|Debuffs):|^  No (?:spells|cooldowns|buffs|debuffs) found\./
+          next
         elsif line
           script.downstream_buffer.unshift(line)
           break
