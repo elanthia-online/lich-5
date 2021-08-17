@@ -5,10 +5,19 @@
 	click on a room to go there
 	shift-click on a room to show its description
 	right-click for some options
-
-	author: Tillmen (tillmen@lichproject.org)
-	game: any
-	tags: core, movement
+	
+			author: Elanthia-Online (GTK updates)
+			original author: Tillmen (tillmen@lichproject.org)
+			game: Gemstone
+			tags: core, movement, mapping 
+			required: Lich > 5.0.1
+			version: 1.1
+			
+			changelog:
+			1.1 (2021-03-22): 
+			Updated menu elements to support GTK3 in Lich5
+			
+			1.0 baseline version from Tillmen
 
 =end
 
@@ -16,7 +25,7 @@
 	Recasting to GTK3 needs (03/22/2020):
 		- pointer fix
 		- multi-monitor support (two or more monitors messes up the pointer coords => no room found)
-
+		
 =end
 
 # fixme: click arrow to next map to show map
