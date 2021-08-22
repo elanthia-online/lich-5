@@ -35,7 +35,7 @@
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
 
-LICH_VERSION = '5.0.4'
+LICH_VERSION = '5.0.16'
 TESTING = false
 
 if RUBY_VERSION !~ /^2|^3/
@@ -1404,7 +1404,16 @@ class LimitedArray < Array
 end
 
 class XMLParser
-  attr_reader :mana, :max_mana, :health, :max_health, :spirit, :max_spirit, :last_spirit, :stamina, :max_stamina, :stance_text, :stance_value, :mind_text, :mind_value, :prepared_spell, :encumbrance_text, :encumbrance_full_text, :encumbrance_value, :indicator, :injuries, :injury_mode, :room_count, :room_title, :room_description, :room_exits, :room_exits_string, :familiar_room_title, :familiar_room_description, :familiar_room_exits, :bounty_task, :injury_mode, :server_time, :server_time_offset, :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value, :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream, :player_id, :active_spells, :prompt, :current_target_ids, :current_target_id, :room_window_disabled
+  attr_reader :mana, :max_mana, :health, :max_health, :spirit, :max_spirit, :last_spirit,
+              :stamina, :max_stamina, :stance_text, :stance_value, :mind_text, :mind_value,
+              :prepared_spell, :encumbrance_text, :encumbrance_full_text, :encumbrance_value,
+              :indicator, :injuries, :injury_mode, :room_count, :room_title, :room_description,
+              :room_exits, :room_exits_string, :familiar_room_title, :familiar_room_description,
+              :familiar_room_exits, :bounty_task, :injury_mode, :server_time, :server_time_offset,
+              :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
+              :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
+              :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
+              :dialogs, :room_id
   attr_accessor :send_fake_tags
 
   @@warned_deprecated_spellfront = 0
@@ -1487,8 +1496,15 @@ class XMLParser
     @injuries = {'back' => {'scar' => 0, 'wound' => 0}, 'leftHand' => {'scar' => 0, 'wound' => 0}, 'rightHand' => {'scar' => 0, 'wound' => 0}, 'head' => {'scar' => 0, 'wound' => 0}, 'rightArm' => {'scar' => 0, 'wound' => 0}, 'abdomen' => {'scar' => 0, 'wound' => 0}, 'leftEye' => {'scar' => 0, 'wound' => 0}, 'leftArm' => {'scar' => 0, 'wound' => 0}, 'chest' => {'scar' => 0, 'wound' => 0}, 'leftFoot' => {'scar' => 0, 'wound' => 0}, 'rightFoot' => {'scar' => 0, 'wound' => 0}, 'rightLeg' => {'scar' => 0, 'wound' => 0}, 'neck' => {'scar' => 0, 'wound' => 0}, 'leftLeg' => {'scar' => 0, 'wound' => 0}, 'nsys' => {'scar' => 0, 'wound' => 0}, 'rightEye' => {'scar' => 0, 'wound' => 0}}
     @injury_mode = 0
 
-    @active_spells = Hash.new
+    # psm 3.0 dialogdata updates
+    @dialogs = {}
+    # real id updates
+    @room_id = nil
+  end
 
+  # for backwards compatability
+  def active_spells
+    @dialogs["Active Spells"]
   end
 
   def reset
@@ -1526,6 +1542,22 @@ class XMLParser
     }
   end
 
+  DECADE = 10 * 31_536_000
+
+  def parse_psm3_progressbar(kind, attributes)
+    @dialogs[kind] ||= {}
+    name = attributes["text"]
+    value = attributes["time"]
+    return unless name && value
+    # set the expiry for a decade for infinite duration effects
+    return @dialogs[kind][name] = Time.now + DECADE if value.downcase.eql?("indefinite")
+    # in psm 3.0 progress bars now have second precision!
+    hour, minute, second = value.split(':')
+    @dialogs[kind][name] = Time.now + (hour.to_i * 3600) + (minute.to_i * 60) + second.to_i
+  end
+
+  PSM_3_DIALOG_IDS = ["Buffs", "Active Spells", "Debuffs", "Cooldowns"]
+
   def tag_start(name, attributes)
     begin
       @active_tags.push(name)
@@ -1544,10 +1576,13 @@ class XMLParser
         @obj_name = nil
         @obj_before_name = nil
         @obj_after_name = nil
-      elsif name == 'dialogData' and attributes['id'] == 'ActiveSpells' and attributes['clear'] == 't'
-        @active_spells.clear
-      elsif name == 'resource' or name == 'nav'
+      elsif name == 'dialogData' and attributes['clear'] == 't' and PSM_3_DIALOG_IDS.include?(attributes["id"])
+        @dialogs[attributes["id"]] ||= {}
+        @dialogs[attributes["id"]].clear
+      elsif name == 'resource'
         nil
+      elsif name == 'nav'
+        @room_id = attributes['rm'].to_i
       elsif name == 'pushStream'
         @in_stream = true
         @current_stream = attributes['id'].to_s
@@ -1644,6 +1679,9 @@ class XMLParser
         elsif attributes['id'] == 'encumlevel'
           @encumbrance_value = attributes['value'].to_i
           @encumbrance_text = attributes['text']
+        elsif PSM_3_DIALOG_IDS.include?(@active_ids[-2])
+          # puts "kind=(%s) name=%s attributes=%s" % [@active_ids[-2], name, attributes]
+          self.parse_psm3_progressbar(@active_ids[-2], attributes)
         end
       elsif name == 'roundTime'
         @roundtime_end = attributes['value'].to_i
@@ -1776,12 +1814,10 @@ class XMLParser
           @level = Stats.level = attributes['value'].slice(/\d+/).to_i
         elsif attributes['id'] == 'encumblurb'
           @encumbrance_full_text = attributes['value']
-        elsif @active_tags[-2] == 'dialogData' and @active_ids[-2] == 'ActiveSpells'
-          if (name = /^lbl(.+)$/.match(attributes['id']).captures.first) and (value = /^\s*([0-9\:]+)\s*$/.match(attributes['value']).captures.first)
-            hour, minute = value.split(':')
-            @active_spells[name] = Time.now + (hour.to_i * 3600) + (minute.to_i * 60)
+        elsif @active_tags[-2] == 'dialogData' and PSM_3_DIALOG_IDS.include?(@active_ids[-2])
+          # deprecated: labels do not have the required data in psm 3.0 dialogdata
+          #             instead we must parse the <progressBar/> element
           end
-        end
       elsif (name == 'container') and (attributes['id'] == 'stow')
         @stow_container_id = attributes['target'].sub('#', '')
       elsif (name == 'clearStream')
@@ -6119,8 +6155,16 @@ def unnoded_pulse
   return (maxmana * 15 / 100) + (stats.max/10) + (stats.min/20)
 end
 
-def empty_hands
+def stash_hands(right: false, left: false, both: false)
+
+  general_stow_regex = /.+ you (?:deftly|warily) slip your .+ into your.+ A brief shimmer of (?:.+) light|^You (?:move to put your .*? but stop yourself|attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
+
+  general_get_regex = /.+ you (?:quickly|slowly) draw forth your .+ A ripple of (?:.+) light|^You (?:shield the opening of .*? from view as you |discreetly |carefully |deftly)?(?:remove|draw|grab|get|reach|slip|tuck|retrieve|already have)|^Get what\?$|^Why don't you leave some for others\?$|^You need a free hand/
+
   $fill_hands_actions ||= Array.new
+  $fill_left_hand_actions ||= Array.new
+  $fill_right_hand_actions ||= Array.new
+
   actions = Array.new
   right_hand = GameObj.right_hand
   left_hand = GameObj.left_hand
@@ -6142,11 +6186,11 @@ def empty_hands
     end
     other_containers_var
   }
-  if left_hand.id
+  if (left || both) && left_hand.id
     waitrt?
-    if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/) and (wear_result = dothistimeout("wear ##{left_hand.id}", 8, /^You .*#{left_hand.noun}|^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)) and (wear_result !~ /^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)
+    if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/) and (wear_result = dothistimeout("wear ##{left_hand.id}", 8, /^You .*#{left_hand.noun}|^With careful precision, you|^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)) and (wear_result !~ /^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)
         actions.unshift proc {
-      dothistimeout "remove ##{left_hand.id}", 3, /^You|^Remove what\?/
+      dothistimeout "remove ##{left_hand.id}", 3, /^You|^With a slight roll of your shoulder, you|^Remove what\?/
       20.times { break if GameObj.left_hand.id == left_hand.id or GameObj.right_hand.id == left_hand.id; sleep 0.1 }
       if GameObj.right_hand.id == left_hand.id
         dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
@@ -6154,39 +6198,39 @@ def empty_hands
     }
     else
       actions.unshift proc {
-        dothistimeout "get ##{left_hand.id}", 3, /^You (?:shield the opening of .*? from view as you |discreetly |carefully |deftly )?(?:remove|draw|grab|get|reach|slip|tuck|retrieve|already have)|^Get what\?$|^Why don't you leave some for others\?$|^You need a free hand/
+        dothistimeout "get ##{left_hand.id}", 3, general_get_regex
         20.times { break if (GameObj.left_hand.id == left_hand.id) or (GameObj.right_hand.id == left_hand.id); sleep 0.1 }
         if GameObj.right_hand.id == left_hand.id
           dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
         end
       }
       if lootsack
-        result = dothistimeout "put ##{left_hand.id} in ##{lootsack.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
+        result = dothistimeout "put ##{left_hand.id} in ##{lootsack.id}", 4, general_stow_regex
         if result =~ /^You can't .+ It's closed!$/
           actions.push proc { fput "close ##{lootsack.id}" }
           dothistimeout "open ##{lootsack.id}", 3, /^You open|^That is already open\./
-          result = dothistimeout "put ##{left_hand.id} in ##{lootsack.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
+          result = dothistimeout "put ##{left_hand.id} in ##{lootsack.id}", 3, general_stow_regex
         end
       else
         result = nil
       end
       if result.nil? or result =~ /^Your .*? won't fit in .*?\.$/
         for container in other_containers.call
-          result = dothistimeout "put ##{left_hand.id} in ##{container.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
+          result = dothistimeout "put ##{left_hand.id} in ##{container.id}", 4, general_stow_regex
           if result =~ /^You can't .+ It's closed!$/
             actions.push proc { fput "close ##{container.id}" }
             dothistimeout "open ##{container.id}", 3, /^You open|^That is already open\./
-            result = dothistimeout "put ##{left_hand.id} in ##{container.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
+            result = dothistimeout "put ##{left_hand.id} in ##{container.id}", 3, general_stow_regex
           end
           break if result =~ /^You (?:put|absent-mindedly drop|slip)/
         end
       end
     end
   end
-  if right_hand.id
+  if (right || both) && right_hand.id
     waitrt?
     actions.unshift proc {
-      dothistimeout "get ##{right_hand.id}", 3, /^You (?:shield the opening of .*? from view as you |discreetly |carefully |deftly )?(?:remove|draw|grab|get|reach|slip|tuck|retrieve|already have)|^Get what\?$|^Why don't you leave some for others\?$|^You need a free hand/
+      dothistimeout "get ##{right_hand.id}", 3, general_get_regex
       20.times { break if GameObj.left_hand.id == right_hand.id or GameObj.right_hand.id == right_hand.id; sleep 0.1 }
       if GameObj.left_hand.id == right_hand.id
         dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
@@ -6196,304 +6240,109 @@ def empty_hands
       weaponsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack).sub(' ', ' .*')}/i }
     end
     if weaponsack
-      result = dothistimeout "put ##{right_hand.id} in ##{weaponsack.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
+      result = dothistimeout "put ##{right_hand.id} in ##{weaponsack.id}", 4, general_stow_regex
       if result =~ /^You can't .+ It's closed!$/
         actions.push proc { fput "close ##{weaponsack.id}" }
         dothistimeout "open ##{weaponsack.id}", 3, /^You open|^That is already open\./
-        result = dothistimeout "put ##{right_hand.id} in ##{weaponsack.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
+        result = dothistimeout "put ##{right_hand.id} in ##{weaponsack.id}", 3, general_stow_regex
       end
     elsif lootsack
-      result = dothistimeout "put ##{right_hand.id} in ##{lootsack.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
+      result = dothistimeout "put ##{right_hand.id} in ##{lootsack.id}", 4, general_stow_regex
       if result =~ /^You can't .+ It's closed!$/
         actions.push proc { fput "close ##{lootsack.id}" }
         dothistimeout "open ##{lootsack.id}", 3, /^You open|^That is already open\./
-        result = dothistimeout "put ##{right_hand.id} in ##{lootsack.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
+        result = dothistimeout "put ##{right_hand.id} in ##{lootsack.id}", 3, general_stow_regex
       end
     else
       result = nil
     end
     if result.nil? or result =~ /^Your .*? won't fit in .*?\.$/
       for container in other_containers.call
-        result = dothistimeout "put ##{right_hand.id} in ##{container.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
+        result = dothistimeout "put ##{right_hand.id} in ##{container.id}", 4, general_stow_regex
         if result =~ /^You can't .+ It's closed!$/
           actions.push proc { fput "close ##{container.id}" }
           dothistimeout "open ##{container.id}", 3, /^You open|^That is already open\./
-          result = dothistimeout "put ##{right_hand.id} in ##{container.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
+          result = dothistimeout "put ##{right_hand.id} in ##{container.id}", 3, general_stow_regex
         end
         break if result =~ /^You (?:put|absent-mindedly drop|slip)/
       end
     end
   end
-  $fill_hands_actions.push(actions)
+  $fill_hands_actions.push(actions) if both
+  $fill_left_hand_actions.push(actions) if left
+  $fill_right_hand_actions.push(actions) if right
 end
 
-def fill_hands
+def equip_hands(left: false, right: false, both: false)
   $fill_hands_actions ||= Array.new
-  for action in $fill_hands_actions.pop
-    action.call
+  $fill_left_hand_actions ||= Array.new
+  $fill_right_hand_actions ||= Array.new
+
+  if both
+    for action in $fill_hands_actions.pop
+      action.call
+    end
+  elsif left
+    for action in $fill_left_hand_actions.pop
+      action.call
+    end
+  elsif right
+    for action in $fill_right_hand_actions.pop
+      action.call
+    end
+  else
+    if $fill_right_hand_actions.length > 0
+      for action in $fill_right_hand_actions.pop
+        action.call
+      end
+    elsif $fill_left_hand_actions.length > 0
+      for action in $fill_left_hand_actions.pop
+        action.call
+      end
+    end
   end
+end
+
+def empty_hands
+  stash_hands(both: true)
 end
 
 def empty_hand
-  $fill_hand_actions ||= Array.new
-  actions = Array.new
+
   right_hand = GameObj.right_hand
   left_hand = GameObj.left_hand
-  if UserVars.lootsack.nil? or UserVars.lootsack.empty?
-    lootsack = nil
-  else
-    lootsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack).sub(' ', ' .*')}/i }
-  end
-  other_containers_var = nil
-  other_containers = proc {
-    if other_containers_var.nil?
-      Script.current.want_downstream = false
-      Script.current.want_downstream_xml = true
-      result = dothistimeout 'inventory containers', 5, /^You are wearing/
-      Script.current.want_downstream_xml = false
-      Script.current.want_downstream = true
-      other_containers_ids = result.scan(/exist="(.*?)"/).flatten - [ lootsack.id ]
-      other_containers_var = GameObj.inv.find_all { |obj| other_containers_ids.include?(obj.id) }
-    end
-    other_containers_var
-  }
+
   unless (right_hand.id.nil? and ([ Wounds.rightArm, Wounds.rightHand, Scars.rightArm, Scars.rightHand ].max < 3)) or (left_hand.id.nil? and ([ Wounds.leftArm, Wounds.leftHand, Scars.leftArm, Scars.leftHand ].max < 3))
     if right_hand.id and ([ Wounds.rightArm, Wounds.rightHand, Scars.rightArm, Scars.rightHand ].max < 3 or [ Wounds.leftArm, Wounds.leftHand, Scars.leftArm, Scars.leftHand ].max = 3)
-      waitrt?
-      actions.unshift proc {
-        dothistimeout "get ##{right_hand.id}", 3, /^You (?:shield the opening of .*? from view as you |discreetly |carefully |deftly )?(?:remove|draw|grab|get|reach|slip|tuck|retrieve|already have)|^Get what\?$|^Why don't you leave some for others\?$|^You need a free hand/
-        20.times { break if GameObj.left_hand.id == right_hand.id or GameObj.right_hand.id == right_hand.id; sleep 0.1 }
-        if GameObj.left_hand.id == right_hand.id
-          dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
-        end
-      }
-      if UserVars.weapon and UserVars.weaponsack and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
-        weaponsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack).sub(' ', ' .*')}/i }
-      end
-      if weaponsack
-        result = dothistimeout "put ##{right_hand.id} in ##{weaponsack.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-        if result =~ /^You can't .+ It's closed!$/
-          actions.push proc { fput "close ##{weaponsack.id}" }
-          dothistimeout "open ##{weaponsack.id}", 3, /^You open|^That is already open\./
-          result = dothistimeout "put ##{right_hand.id} in ##{weaponsack.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-        end
-      elsif lootsack
-        result = dothistimeout "put ##{right_hand.id} in ##{lootsack.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-        if result =~ /^You can't .+ It's closed!$/
-          actions.push proc { fput "close ##{lootsack.id}" }
-          dothistimeout "open ##{lootsack.id}", 3, /^You open|^That is already open\./
-          result = dothistimeout "put ##{right_hand.id} in ##{lootsack.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-        end
-      else
-        result = nil
-      end
-      if result.nil? or result =~ /^Your .*? won't fit in .*?\.$/
-        for container in other_containers.call
-          result = dothistimeout "put ##{right_hand.id} in ##{container.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-          if result =~ /^You can't .+ It's closed!$/
-            actions.push proc { fput "close ##{container.id}" }
-            dothistimeout "open ##{container.id}", 3, /^You open|^That is already open\./
-            result = dothistimeout "put ##{right_hand.id} in ##{container.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-          end
-          break if result =~ /^You (?:put|absent-mindedly drop|slip)/
-        end
-      end
+      stash_hands(right: true)
     else
-      waitrt?
-      if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/) and (wear_result = dothistimeout("wear ##{left_hand.id}", 8, /^You .*#{left_hand.noun}|^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)) and (wear_result !~ /^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)
-          actions.unshift proc {
-        dothistimeout "remove ##{left_hand.id}", 3, /^You|^Remove what\?/
-        20.times { break if GameObj.left_hand.id == left_hand.id or GameObj.right_hand.id == left_hand.id; sleep 0.1 }
-        if GameObj.right_hand.id == left_hand.id
-          dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
-        end
-      }
-      else
-        actions.unshift proc {
-          dothistimeout "get ##{left_hand.id}", 3, /^You (?:shield the opening of .*? from view as you |discreetly |carefully |deftly )?(?:remove|draw|grab|get|reach|slip|tuck|retrieve|already have)|^Get what\?$|^Why don't you leave some for others\?$|^You need a free hand/
-          20.times { break if GameObj.left_hand.id == left_hand.id or GameObj.right_hand.id == left_hand.id; sleep 0.1 }
-          if GameObj.right_hand.id == left_hand.id
-            dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
-          end
-        }
-        if lootsack
-          result = dothistimeout "put ##{left_hand.id} in ##{lootsack.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-          if result =~ /^You can't .+ It's closed!$/
-            actions.push proc { fput "close ##{lootsack.id}" }
-            dothistimeout "open ##{lootsack.id}", 3, /^You open|^That is already open\./
-            result = dothistimeout "put ##{left_hand.id} in ##{lootsack.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-          end
-        else
-          result = nil
-        end
-        if result.nil? or result =~ /^Your .*? won't fit in .*?\.$/
-          for container in other_containers.call
-            result = dothistimeout "put ##{left_hand.id} in ##{container.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-            if result =~ /^You can't .+ It's closed!$/
-              actions.push proc { fput "close ##{container.id}" }
-              dothistimeout "open ##{container.id}", 3, /^You open|^That is already open\./
-              result = dothistimeout "put ##{left_hand.id} in ##{container.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-            end
-            break if result =~ /^You (?:put|absent-mindedly drop|slip)/
-          end
-        end
-      end
+      stash_hands(left: true)
     end
-  end
-  $fill_hand_actions.push(actions)
-end
-
-def fill_hand
-  $fill_hand_actions ||= Array.new
-  for action in $fill_hand_actions.pop
-    action.call
   end
 end
 
 def empty_right_hand
-  $fill_right_hand_actions ||= Array.new
-  actions = Array.new
-  right_hand = GameObj.right_hand
-  if UserVars.lootsack.nil? or UserVars.lootsack.empty?
-    lootsack = nil
-  else
-    lootsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack).sub(' ', ' .*')}/i }
-  end
-  other_containers_var = nil
-  other_containers = proc {
-    if other_containers_var.nil?
-      Script.current.want_downstream = false
-      Script.current.want_downstream_xml = true
-      result = dothistimeout 'inventory containers', 5, /^You are wearing/
-      Script.current.want_downstream_xml = false
-      Script.current.want_downstream = true
-      other_containers_ids = result.scan(/exist="(.*?)"/).flatten - [ lootsack.id ]
-      other_containers_var = GameObj.inv.find_all { |obj| other_containers_ids.include?(obj.id) }
-    end
-    other_containers_var
-  }
-  if right_hand.id
-    waitrt?
-    actions.unshift proc {
-      dothistimeout "get ##{right_hand.id}", 3, /^You (?:shield the opening of .*? from view as you |discreetly |carefully |deftly )?(?:remove|draw|grab|get|reach|slip|tuck|retrieve|already have)|^Get what\?$|^Why don't you leave some for others\?$|^You need a free hand/
-      20.times { break if GameObj.left_hand.id == right_hand.id or GameObj.right_hand.id == right_hand.id; sleep 0.1 }
-      if GameObj.left_hand.id == right_hand.id
-        dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
-      end
-    }
-    if UserVars.weapon and UserVars.weaponsack and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
-      weaponsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack).sub(' ', ' .*')}/i }
-    end
-    if weaponsack
-      result = dothistimeout "put ##{right_hand.id} in ##{weaponsack.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-      if result =~ /^You can't .+ It's closed!$/
-        actions.push proc { fput "close ##{weaponsack.id}" }
-        dothistimeout "open ##{weaponsack.id}", 3, /^You open|^That is already open\./
-        result = dothistimeout "put ##{right_hand.id} in ##{weaponsack.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-      end
-    elsif lootsack
-      result = dothistimeout "put ##{right_hand.id} in ##{lootsack.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-      if result =~ /^You can't .+ It's closed!$/
-        actions.push proc { fput "close ##{lootsack.id}" }
-        dothistimeout "open ##{lootsack.id}", 3, /^You open|^That is already open\./
-        result = dothistimeout "put ##{right_hand.id} in ##{lootsack.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-      end
-    else
-      result = nil
-    end
-    if result.nil? or result =~ /^Your .*? won't fit in .*?\.$/
-      for container in other_containers.call
-        result = dothistimeout "put ##{right_hand.id} in ##{container.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-        if result =~ /^You can't .+ It's closed!$/
-          actions.push proc { fput "close ##{container.id}" }
-          dothistimeout "open ##{container.id}", 3, /^You open|^That is already open\./
-          result = dothistimeout "put ##{right_hand.id} in ##{container.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-        end
-        break if result =~ /^You (?:put|absent-mindedly drop|slip)/
-      end
-    end
-  end
-  $fill_right_hand_actions.push(actions)
-end
-
-def fill_right_hand
-  $fill_right_hand_actions ||= Array.new
-  for action in $fill_right_hand_actions.pop
-    action.call
-  end
+  stash_hands(right: true)
 end
 
 def empty_left_hand
-  $fill_left_hand_actions ||= Array.new
-  actions = Array.new
-  left_hand = GameObj.left_hand
-  if UserVars.lootsack.nil? or UserVars.lootsack.empty?
-    lootsack = nil
-  else
-    lootsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack).sub(' ', ' .*')}/i }
-  end
-  other_containers_var = nil
-  other_containers = proc {
-    if other_containers_var.nil?
-      Script.current.want_downstream = false
-      Script.current.want_downstream_xml = true
-      result = dothistimeout 'inventory containers', 5, /^You are wearing/
-      Script.current.want_downstream_xml = false
-      Script.current.want_downstream = true
-      other_containers_ids = result.scan(/exist="(.*?)"/).flatten - [ lootsack.id ]
-      other_containers_var = GameObj.inv.find_all { |obj| other_containers_ids.include?(obj.id) }
-    end
-    other_containers_var
-  }
-  if left_hand.id
-    waitrt?
-    if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/) and (wear_result = dothistimeout("wear ##{left_hand.id}", 8, /^You .*#{left_hand.noun}|^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)) and (wear_result !~ /^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)
-        actions.unshift proc {
-      dothistimeout "remove ##{left_hand.id}", 3, /^You|^Remove what\?/
-      20.times { break if GameObj.left_hand.id == left_hand.id or GameObj.right_hand.id == left_hand.id; sleep 0.1 }
-      if GameObj.right_hand.id == left_hand.id
-        dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
-      end
-    }
-    else
-      actions.unshift proc {
-        dothistimeout "get ##{left_hand.id}", 3, /^You (?:shield the opening of .*? from view as you |discreetly |carefully |deftly )?(?:remove|draw|grab|get|reach|slip|tuck|retrieve|already have)|^Get what\?$|^Why don't you leave some for others\?$|^You need a free hand/
-        20.times { break if GameObj.left_hand.id == left_hand.id or GameObj.right_hand.id == left_hand.id; sleep 0.1 }
-        if GameObj.right_hand.id == left_hand.id
-          dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
-        end
-      }
-      if lootsack
-        result = dothistimeout "put ##{left_hand.id} in ##{lootsack.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-        if result =~ /^You can't .+ It's closed!$/
-          actions.push proc { fput "close ##{lootsack.id}" }
-          dothistimeout "open ##{lootsack.id}", 3, /^You open|^That is already open\./
-          dothistimeout "put ##{left_hand.id} in ##{lootsack.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-        end
-      else
-        result = nil
-      end
-      if result.nil? or result =~ /^Your .*? won't fit in .*?\.$/
-        for container in other_containers.call
-          result = dothistimeout "put ##{left_hand.id} in ##{container.id}", 4, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-          if result =~ /^You can't .+ It's closed!$/
-            actions.push proc { fput "close ##{container.id}" }
-            dothistimeout "open ##{container.id}", 3, /^You open|^That is already open\./
-            result = dothistimeout "put ##{left_hand.id} in ##{container.id}", 3, /^You (?:attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-          end
-          break if result =~ /^You (?:put|absent-mindedly drop|slip)/
-        end
-      end
-    end
-  end
-  $fill_left_hand_actions.push(actions)
+  stash_hands(left: true)
+end
+
+def fill_hands
+  equip_hands(both: true)
+end
+
+def fill_hand
+  equip_hands()
+end
+
+def fill_right_hand
+  equip_hands(right: true)
 end
 
 def fill_left_hand
-  $fill_left_hand_actions ||= Array.new
-  for action in $fill_left_hand_actions.pop
-    action.call
-  end
+  equip_hands(left: true)
 end
 
 def dothis (action, success_line)
@@ -6648,13 +6497,15 @@ def sf_to_wiz(line)
     if line =~ /<preset id='speech'>(.*?)<\/preset>/m
       line = line.sub(/<preset id='speech'>.*?<\/preset>/m, "#{$speech_highlight_start}#{$1}#{$speech_highlight_end}")
     end
-  if line =~ /<pushStream id="thoughts"[^>]*>\[([^\\]+)\]\s*(.*?)<popStream\/>/m
-    thought_channel = $1
-	msg = $2
-    thought_channel.gsub!(' ', '-')
-    line = line.sub(/<pushStream id="thoughts".*<popStream\/>/m, "You hear the faint thoughts of [#{thought_channel}]-ESP echo in your mind:\r\n#{msg}")
-  end
-  if line =~ /<pushStream id="voln"[^>]*>\[Voln \- (?:<a[^>]*>)?([A-Z][a-z]+)(?:<\/a>)?\]\s*(".*")[\r\n]*<popStream\/>/m
+    if line =~ /<pushStream id="thoughts"[^>]*>\[([^\\]+?)\]\s*(.*?)<popStream\/>/m
+      thought_channel = $1
+      msg = $2
+      thought_channel.gsub!(' ', '-')
+      msg.gsub!('<pushBold/>', '')
+      msg.gsub!('<popBold/>', '')
+      line = line.sub(/<pushStream id="thoughts".*<popStream\/>/m, "You hear the faint thoughts of [#{thought_channel}]-ESP echo in your mind:\r\n#{msg}")
+    end
+    if line =~ /<pushStream id="voln"[^>]*>\[Voln \- (?:<a[^>]*>)?([A-Z][a-z]+)(?:<\/a>)?\]\s*(".*")[\r\n]*<popStream\/>/m
       line = line.sub(/<pushStream id="voln"[^>]*>\[Voln \- (?:<a[^>]*>)?([A-Z][a-z]+)(?:<\/a>)?\]\s*(".*")[\r\n]*<popStream\/>/m, "The Symbol of Thought begins to burn in your mind and you hear #{$1} thinking, #{$2}\r\n")
     end
     if line =~ /<stream id="thoughts"[^>]*>([^:]+): (.*?)<\/stream>/m
@@ -6683,7 +6534,7 @@ def sf_to_wiz(line)
     line = line.gsub(/<[^>]+>/, '')
     line = line.gsub('&gt;', '>')
     line = line.gsub('&lt;', '<')
-	line = line.gsub('&amp;', '&')
+	  line = line.gsub('&amp;', '&')
     return nil if line.gsub("\r\n", '').length < 1
     return line
   rescue
@@ -8370,11 +8221,11 @@ module Games
         elsif (circle_num == 99) and (Society.status == 'Council of Light')
           ranks = Society.rank
         elsif (circle_num == 96)
-          if CMan[@name].to_i > 0
-            return true
-          else
             return false
-          end
+
+#          deprecate CMan from Spell class .known?
+#          See CMan, CMan.known? and CMan.available? methods in CMan class
+
         else
           return false
         end
@@ -8442,20 +8293,29 @@ module Games
       def remaining
         self.timeleft.as_time
       end
+
       def affordable?(options={})
         # fixme: deal with them dirty bards!
         release_options = options.dup
         release_options[:multicast] = nil
-        if (self.mana_cost(options) > 0) and (  !checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options)/4, 1].max))  )
-          false
-        elsif (self.stamina_cost(options) > 0) and (Spell[9699].active? or not checkstamina(self.stamina_cost(options)))
+        if (self.stamina_cost(options) > 0) and (Spell[9699].active? or not checkstamina(self.stamina_cost(options)))
           false
         elsif (self.spirit_cost(options) > 0) and not checkspirit(self.spirit_cost(options) + 1 + [ 9912, 9913, 9914, 9916, 9916, 9916 ].delete_if { |num| !Spell[num].active? }.length)
           false
+        elsif (self.mana_cost(options) > 0)
+          ## convert Spell[9699].active? to Effects::Debuffs test (if Debuffs is where it shows)
+          if (Char.prof == "Monk" and Feat.known?(:mental_acuity)) and (Spell[9699].active? or not checkstamina(self.mana_cost(options)*2))
+            false
+          elsif (  !checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options)/4, 1].max))  )
+            false
+        else
+          true
+        end
         else
           true
         end
       end
+
       def Spell.lock_cast
         script = Script.current
         @@cast_lock.push(script)
@@ -8733,263 +8593,12 @@ def circlename;    self.circle_name;                 end
 def selfonly;      @availability != 'all';           end
 end
 
-class CMan
-  @@acrobats_leap          ||= 0
-  @@armor_spike_focus      ||= 0
-  @@bearhug                ||= 0
-  @@berserk                ||= 0
-  @@block_mastery          ||= 0
-  @@bull_rush              ||= 0
-  @@burst_of_swiftness     ||= 0
-  @@charge                 ||= 0
-  @@cheapshots             ||= 0
-  @@combat_focus           ||= 0
-  @@combat_mastery         ||= 0
-  @@combat_mobility        ||= 0
-  @@combat_movement        ||= 0
-  @@combat_toughness       ||= 0
-  @@coup_de_grace          ||= 0
-  @@crowd_press            ||= 0
-  @@cunning_defense        ||= 0
-  @@cutthroat              ||= 0
-  @@dirtkick               ||= 0
-  @@disarm_weapon          ||= 0
-  @@dislodge               ||= 0
-  @@divert                 ||= 0
-  @@duck_and_weave         ||= 0
-  @@dust_shroud            ||= 0
-  @@evade_mastery          ||= 0
-  @@executioners_stance    ||= 0
-  @@feint                  ||= 0
-  @@flurry_of_blows        ||= 0
-  @@garrote                ||= 0
-  @@grapple_mastery        ||= 0
-  @@griffins_voice         ||= 0
-  @@groin_kick             ||= 0
-  @@hamstring              ||= 0
-  @@haymaker               ||= 0
-  @@headbutt               ||= 0
-  @@inner_harmony          ||= 0
-  @@internal_power         ||= 0
-  @@ki_focus               ||= 0
-  @@kick_mastery           ||= 0
-  @@mighty_blow            ||= 0
-  @@mystic_strike          ||= 0
-  @@parry_mastery          ||= 0
-  @@perfect_self           ||= 0
-  @@precision              ||= 0
-  @@predators_eye          ||= 0
-  @@punch_mastery          ||= 0
-  @@quickstrike            ||= 0
-  @@rolling_krynch_stance  ||= 0
-  @@shadow_dance           ||= 0
-  @@shadow_mastery         ||= 0
-  @@shield_bash            ||= 0
-  @@shield_charge          ||= 0
-  @@side_by_side           ||= 0
-  @@silent_strike          ||= 0
-  @@slippery_mind          ||= 0
-  @@specialization_i       ||= 0
-  @@specialization_ii      ||= 0
-  @@specialization_iii     ||= 0
-  @@spell_cleaving         ||= 0
-  @@spell_parry            ||= 0
-  @@spell_thieve           ||= 0
-  @@spin_attack            ||= 0
-  @@staggering_blow        ||= 0
-  @@stance_of_the_mongoose ||= 0
-  @@striking_asp           ||= 0
-  @@stun_maneuvers         ||= 0
-  @@subdual_strike         ||= 0
-  @@subdue                 ||= 0
-  @@sucker_punch           ||= 0
-  @@sunder_shield          ||= 0
-  @@surge_of_strength      ||= 0
-  @@sweep                  ||= 0
-  @@tackle                 ||= 0
-  @@tainted_bond           ||= 0
-  @@trip                   ||= 0
-  @@true_strike            ||= 0
-  @@twin_hammerfists       ||= 0
-  @@unarmed_specialist     ||= 0
-  @@weapon_bonding         ||= 0
-  @@vanish                 ||= 0
-  @@whirling_dervish       ||= 0
-
-  def CMan.acrobats_leap;                @@acrobats_leap;              end
-  def CMan.armor_spike_focus;            @@armor_spike_focus;          end
-  def CMan.bearhug;                      @@bearhug;                    end
-  def CMan.berserk;                      @@berserk;                    end
-  def CMan.block_mastery;                @@block_mastery;              end
-  def CMan.bull_rush;                    @@bull_rush;                  end
-  def CMan.burst_of_swiftness;           @@burst_of_swiftness;         end
-  def CMan.charge;                       @@charge;                     end
-  def CMan.cheapshots;                   @@cheapshots;                 end
-  def CMan.combat_focus;                 @@combat_focus;               end
-  def CMan.combat_mastery;               @@combat_mastery;             end
-  def CMan.combat_mobility;              @@combat_mobility;            end
-  def CMan.combat_movement;              @@combat_movement;            end
-  def CMan.combat_toughness;             @@combat_toughness;           end
-  def CMan.coup_de_grace;                @@coup_de_grace;              end
-  def CMan.crowd_press;                  @@crowd_press;                end
-  def CMan.cunning_defense;              @@cunning_defense;            end
-  def CMan.cutthroat;                    @@cutthroat;                  end
-  def CMan.dirtkick;                     @@dirtkick;                   end
-  def CMan.disarm_weapon;                @@disarm_weapon;              end
-  def CMan.dislodge;                     @@dislodge;                   end
-  def CMan.divert;                       @@divert;                     end
-  def CMan.duck_and_weave;               @@duck_and_weave;             end
-  def CMan.dust_shroud;                  @@dust_shroud;                end
-  def CMan.evade_mastery;                @@evade_mastery;              end
-  def CMan.executioners_stance;          @@executioners_stance;        end
-  def CMan.feint;                        @@feint;                      end
-  def CMan.flurry_of_blows;              @@flurry_of_blows;            end
-  def CMan.garrote;                      @@garrote;                    end
-  def CMan.grapple_mastery;              @@grapple_mastery;            end
-  def CMan.griffins_voice;               @@griffins_voice;             end
-  def CMan.groin_kick;                   @@groin_kick;                 end
-  def CMan.hamstring;                    @@hamstring;                  end
-  def CMan.haymaker;                     @@haymaker;                   end
-  def CMan.headbutt;                     @@headbutt;                   end
-  def CMan.inner_harmony;                @@inner_harmony;              end
-  def CMan.internal_power;               @@internal_power;             end
-  def CMan.ki_focus;                     @@ki_focus;                   end
-  def CMan.kick_mastery;                 @@kick_mastery;               end
-  def CMan.mighty_blow;                  @@mighty_blow;                end
-  def CMan.mystic_strike;                @@mystic_strike;              end
-  def CMan.parry_mastery;                @@parry_mastery;              end
-  def CMan.perfect_self;                 @@perfect_self;               end
-  def CMan.precision;                    @@precision;                  end
-  def CMan.predators_eye;                @@predators_eye;              end
-  def CMan.punch_mastery;                @@punch_mastery;              end
-  def CMan.quickstrike;                  @@quickstrike;                end
-  def CMan.rolling_krynch_stance;        @@rolling_krynch_stance;      end
-  def CMan.shadow_dance;                 @@shadow_dance;               end
-  def CMan.shadow_mastery;               @@shadow_mastery;             end
-  def CMan.shield_bash;                  @@shield_bash;                end
-  def CMan.shield_charge;                @@shield_charge;              end
-  def CMan.side_by_side;                 @@side_by_side;               end
-  def CMan.silent_strike;                @@silent_strike;              end
-  def CMan.slippery_mind;                @@slippery_mind;              end
-  def CMan.specialization_i;             @@specialization_i;           end
-  def CMan.specialization_ii;            @@specialization_ii;          end
-  def CMan.specialization_iii;           @@specialization_iii;         end
-  def CMan.spell_cleaving;               @@spell_cleaving;             end
-  def CMan.spell_parry;                  @@spell_parry;                end
-  def CMan.spell_thieve;                 @@spell_thieve;               end
-  def CMan.spin_attack;                  @@spin_attack;                end
-  def CMan.staggering_blow;              @@staggering_blow;            end
-  def CMan.stance_of_the_mongoose;       @@stance_of_the_mongoose;     end
-  def CMan.striking_asp;                 @@striking_asp;               end
-  def CMan.stun_maneuvers;               @@stun_maneuvers;             end
-  def CMan.subdual_strike;               @@subdual_strike;             end
-  def CMan.subdue;                       @@subdue;                     end
-  def CMan.sucker_punch;                 @@sucker_punch;               end
-  def CMan.sunder_shield;                @@sunder_shield;              end
-  def CMan.surge_of_strength;            @@surge_of_strength;          end
-  def CMan.sweep;                        @@sweep;                      end
-  def CMan.tackle;                       @@tackle;                     end
-  def CMan.tainted_bond;                 @@tainted_bond;               end
-  def CMan.trip;                         @@trip;                       end
-  def CMan.true_strike;                  @@true_strike;                end
-  def CMan.twin_hammerfists;             @@twin_hammerfists;           end
-  def CMan.unarmed_specialist;           @@unarmed_specialist;         end
-  def CMan.vanish;                       @@vanish;                     end
-  def CMan.weapon_bonding;               @@weapon_bonding;             end
-  def CMan.whirling_dervish;             @@whirling_dervish;           end
-
-  def CMan.acrobats_leap=(val);          @@acrobats_leap=val;          end
-  def CMan.armor_spike_focus=(val);      @@armor_spike_focus=val;      end
-  def CMan.bearhug=(val);                @@bearhug=val;                end
-  def CMan.berserk=(val);                @@berserk=val;                end
-  def CMan.block_mastery=(val);          @@block_mastery=val;          end
-  def CMan.bull_rush=(val);              @@bull_rush=val;              end
-  def CMan.burst_of_swiftness=(val);     @@burst_of_swiftness=val;     end
-  def CMan.charge=(val);                 @@charge=val;                 end
-  def CMan.cheapshots=(val);             @@cheapshots=val;             end
-  def CMan.combat_focus=(val);           @@combat_focus=val;           end
-  def CMan.combat_mastery=(val);         @@combat_mastery=val;         end
-  def CMan.combat_mobility=(val);        @@combat_mobility=val;        end
-  def CMan.combat_movement=(val);        @@combat_movement=val;        end
-  def CMan.combat_toughness=(val);       @@combat_toughness=val;       end
-  def CMan.coup_de_grace=(val);          @@coup_de_grace=val;          end
-  def CMan.crowd_press=(val);            @@crowd_press=val;            end
-  def CMan.cunning_defense=(val);        @@cunning_defense=val;        end
-  def CMan.cutthroat=(val);              @@cutthroat=val;              end
-  def CMan.dirtkick=(val);               @@dirtkick=val;               end
-  def CMan.disarm_weapon=(val);          @@disarm_weapon=val;          end
-  def CMan.dislodge=(val);               @@dislodge=val;               end
-  def CMan.divert=(val);                 @@divert=val;                 end
-  def CMan.duck_and_weave=(val);         @@duck_and_weave=val;         end
-  def CMan.dust_shroud=(val);            @@dust_shroud=val;            end
-  def CMan.evade_mastery=(val);          @@evade_mastery=val;          end
-  def CMan.executioners_stance=(val);    @@executioners_stance=val;    end
-  def CMan.feint=(val);                  @@feint=val;                  end
-  def CMan.flurry_of_blows=(val);        @@flurry_of_blows=val;        end
-  def CMan.garrote=(val);                @@garrote=val;                end
-  def CMan.grapple_mastery=(val);        @@grapple_mastery=val;        end
-  def CMan.griffins_voice=(val);         @@griffins_voice=val;         end
-  def CMan.groin_kick=(val);             @@groin_kick=val;             end
-  def CMan.hamstring=(val);              @@hamstring=val;              end
-  def CMan.haymaker=(val);               @@haymaker=val;               end
-  def CMan.headbutt=(val);               @@headbutt=val;               end
-  def CMan.inner_harmony=(val);          @@inner_harmony=val;          end
-  def CMan.internal_power=(val);         @@internal_power=val;         end
-  def CMan.ki_focus=(val);               @@ki_focus=val;               end
-  def CMan.kick_mastery=(val);           @@kick_mastery=val;           end
-  def CMan.mighty_blow=(val);            @@mighty_blow=val;            end
-  def CMan.mystic_strike=(val);          @@mystic_strike=val;          end
-  def CMan.parry_mastery=(val);          @@parry_mastery=val;          end
-  def CMan.perfect_self=(val);           @@perfect_self=val;           end
-  def CMan.precision=(val);              @@precision=val;              end
-  def CMan.predators_eye=(val);          @@predators_eye=val;          end
-  def CMan.punch_mastery=(val);          @@punch_mastery=val;          end
-  def CMan.quickstrike=(val);            @@quickstrike=val;            end
-  def CMan.rolling_krynch_stance=(val);  @@rolling_krynch_stance=val;  end
-  def CMan.shadow_dance=(val);           @@shadow_dance=val;           end
-  def CMan.shadow_mastery=(val);         @@shadow_mastery=val;         end
-  def CMan.shield_bash=(val);            @@shield_bash=val;            end
-  def CMan.shield_charge=(val);          @@shield_charge=val;          end
-  def CMan.side_by_side=(val);           @@side_by_side=val;           end
-  def CMan.silent_strike=(val);          @@silent_strike=val;          end
-  def CMan.slippery_mind=(val);          @@slippery_mind=val;          end
-  def CMan.specialization_i=(val);       @@specialization_i=val;       end
-  def CMan.specialization_ii=(val);      @@specialization_ii=val;      end
-  def CMan.specialization_iii=(val);     @@specialization_iii=val;     end
-  def CMan.spell_cleaving=(val);         @@spell_cleaving=val;         end
-  def CMan.spell_parry=(val);            @@spell_parry=val;            end
-  def CMan.spell_thieve=(val);           @@spell_thieve=val;           end
-  def CMan.spin_attack=(val);            @@spin_attack=val;            end
-  def CMan.staggering_blow=(val);        @@staggering_blow=val;        end
-  def CMan.stance_of_the_mongoose=(val); @@stance_of_the_mongoose=val; end
-  def CMan.striking_asp=(val);           @@striking_asp=val;           end
-  def CMan.stun_maneuvers=(val);         @@stun_maneuvers=val;         end
-  def CMan.subdual_strike=(val);         @@subdual_strike=val;         end
-  def CMan.subdue=(val);                 @@subdue=val;                 end
-  def CMan.sucker_punch=(val);           @@sucker_punch=val;           end
-  def CMan.sunder_shield=(val);          @@sunder_shield=val;          end
-  def CMan.surge_of_strength=(val);      @@surge_of_strength=val;      end
-  def CMan.sweep=(val);                  @@sweep=val;                  end
-  def CMan.tackle=(val);                 @@tackle=val;                 end
-  def CMan.tainted_bond=(val);           @@tainted_bond=val;           end
-  def CMan.trip=(val);                   @@trip=val;                   end
-  def CMan.true_strike=(val);            @@true_strike=val;            end
-  def CMan.twin_hammerfists=(val);       @@twin_hammerfists=val;       end
-  def CMan.unarmed_specialist=(val);     @@unarmed_specialist=val;     end
-  def CMan.vanish=(val);                 @@vanish=val;                 end
-  def CMan.weapon_bonding=(val);         @@weapon_bonding=val;         end
-  def CMan.whirling_dervish=(val);       @@whirling_dervish=val;       end
-
-  def CMan.method_missing(arg1, arg2=nil)
-    nil
-  end
-  def CMan.[](name)
-    CMan.send(name.gsub(/[\s\-]/, '_').gsub("'", "").downcase)
-  end
-  def CMan.[]=(name,val)
-    CMan.send("#{name.gsub(/[\s\-]/, '_').gsub("'", "").downcase}=", val.to_i)
-  end
-end
+##updating PSM3 abilities via breakout - 20210801
+require_relative("./lib/armor.rb")
+require_relative("./lib/cman.rb")
+require_relative("./lib/feat.rb")
+require_relative("./lib/shield.rb")
+require_relative("./lib/weapon.rb")
 
 class Stats
   @@race ||= 'unknown'
@@ -9117,6 +8726,34 @@ class Gift
   def Gift.stopwatch
     nil
   end
+end
+
+module Effects
+  class Registry
+    include Enumerable
+
+    def initialize(dialog)
+      @dialog = dialog
+    end
+
+    def to_h
+      XMLData.dialogs.fetch(@dialog, {})
+    end
+
+    def each()
+      to_h.each {|k,v| yield(k,v)}
+    end
+
+    def active?(effect)
+      expiry = to_h.fetch(effect, 0)
+      expiry.to_i > Time.now.to_i
+    end
+  end
+
+  Spells    = Registry.new("Active Spells")
+  Buffs     = Registry.new("Buffs")
+  Debuffs   = Registry.new("Debuffs")
+  Cooldowns = Registry.new("Cooldowns")
 end
 
 class Wounds
@@ -10486,8 +10123,6 @@ if ARGV.any? { |arg| (arg == '-h') or (arg == '--help') }
   exit
 end
 
-
-
 if arg = ARGV.find { |a| a == '--hosts-dir' }
   i = ARGV.index(arg)
   ARGV.delete_at(i)
@@ -10509,221 +10144,12 @@ if arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=[0-9]+$/ }
   detachable_client_port = /^\-\-detachable\-client=([0-9]+)$/.match(arg).captures.first
 end
 
-
-
 #
-# import Lich 4.4 settings to Lich 4.6
+# Report an error if Lich 4.4 data is found
 #
-begin
-  did_import = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='imported_44_data';")
-rescue SQLite3::BusyException
-  sleep 0.1
-  retry
-end
-if did_import.nil?
-  begin
-    Lich.db.execute('BEGIN')
-  rescue SQLite3::BusyException
-    sleep 0.1
-    retry
-  end
-  begin
-    Lich.db.execute("INSERT INTO lich_settings(name,value) VALUES('imported_44_data', 'yes');")
-  rescue SQLite3::BusyException
-    sleep 0.1
-    retry
-  end
-  backup_dir = 'data44/'
-  Dir.mkdir(backup_dir) unless File.exists?(backup_dir)
-  Dir.entries(DATA_DIR).find_all { |fn| fn =~ /\.sav$/i }.each { |fn|
-    next if fn == 'lich.sav'
-    s = fn.match(/^(.+)\.sav$/i).captures.first
-    data = File.open("#{DATA_DIR}/#{fn}", 'rb') { |f| f.read }
-    blob = SQLite3::Blob.new(data)
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,':',?);", s.encode('UTF-8'), blob)
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
-    File.rename("#{DATA_DIR}/#{fn}", "#{backup_dir}#{fn}")
-    File.rename("#{DATA_DIR}/#{fn}~", "#{backup_dir}#{fn}~") if File.exists?("#{DATA_DIR}/#{fn}~")
-  }
-  Dir.entries(DATA_DIR).find_all { |fn| File.directory?("#{DATA_DIR}/#{fn}") and fn !~ /^\.\.?$/}.each { |game|
-    Dir.mkdir("#{backup_dir}#{game}") unless File.exists?("#{backup_dir}#{game}")
-    Dir.entries("#{DATA_DIR}/#{game}").find_all { |fn| fn =~ /\.sav$/i }.each { |fn|
-      s = fn.match(/^(.+)\.sav$/i).captures.first
-      data = File.open("#{DATA_DIR}/#{game}/#{fn}", 'rb') { |f| f.read }
-      blob = SQLite3::Blob.new(data)
-      begin
-        Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', s.encode('UTF-8'), game.encode('UTF-8'), blob)
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      File.rename("#{DATA_DIR}/#{game}/#{fn}", "#{backup_dir}#{game}/#{fn}")
-      File.rename("#{DATA_DIR}/#{game}/#{fn}~", "#{backup_dir}#{game}/#{fn}~") if File.exists?("#{DATA_DIR}/#{game}/#{fn}~")
-    }
-    Dir.entries("#{DATA_DIR}/#{game}").find_all { |fn| File.directory?("#{DATA_DIR}/#{game}/#{fn}") and fn !~ /^\.\.?$/ }.each { |char|
-      Dir.mkdir("#{backup_dir}#{game}/#{char}") unless File.exists?("#{backup_dir}#{game}/#{char}")
-      Dir.entries("#{DATA_DIR}/#{game}/#{char}").find_all { |fn| fn =~ /\.sav$/i }.each { |fn|
-        s = fn.match(/^(.+)\.sav$/i).captures.first
-        data = File.open("#{DATA_DIR}/#{game}/#{char}/#{fn}", 'rb') { |f| f.read }
-        blob = SQLite3::Blob.new(data)
-        begin
-          Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', s.encode('UTF-8'), "#{game}:#{char}".encode('UTF-8'), blob)
-        rescue SQLite3::BusyException
-          sleep 0.1
-          retry
-        end
-        File.rename("#{DATA_DIR}/#{game}/#{char}/#{fn}", "#{backup_dir}#{game}/#{char}/#{fn}")
-        File.rename("#{DATA_DIR}/#{game}/#{char}/#{fn}~", "#{backup_dir}#{game}/#{char}/#{fn}~") if File.exists?("#{DATA_DIR}/#{game}/#{char}/#{fn}~")
-      }
-      if File.exists?("#{DATA_DIR}/#{game}/#{char}/uservars.dat")
-        blob = SQLite3::Blob.new(File.open("#{DATA_DIR}/#{game}/#{char}/uservars.dat", 'rb') { |f| f.read })
-        begin
-          Lich.db.execute('INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);', "#{game}:#{char}".encode('UTF-8'), blob)
-        rescue SQLite3::BusyException
-          sleep 0.1
-          retry
-        end
-        blob = nil
-        File.rename("#{DATA_DIR}/#{game}/#{char}/uservars.dat", "#{backup_dir}#{game}/#{char}/uservars.dat")
-      end
-    }
-  }
-  begin
-    Lich.db.execute('END')
-  rescue SQLite3::BusyException
-    sleep 0.1
-    retry
-  end
-  backup_dir = nil
-  characters = Array.new
-  begin
-    Lich.db.execute("SELECT DISTINCT(scope) FROM script_auto_settings;").each { |row| characters.push(row[0]) if row[0] =~ /^.+:.+$/ }
-  rescue SQLite3::BusyException
-    sleep 0.1
-    retry
-  end
-  if File.exists?("#{DATA_DIR}/lich.sav")
-    data = File.open("#{DATA_DIR}/lich.sav", 'rb') { |f| Marshal.load(f.read) }
-    favs = data['favorites']
-    aliases = data['alias']
-    trusted = data['lichsettings']['trusted_scripts']
-    if favs.class == Hash
-      begin
-        Lich.db.execute('BEGIN')
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      favs.each { |scope,script_list|
-        hash = { 'scripts' => Array.new }
-        script_list.each { |name,args| hash['scripts'].push(:name => name, :args => args) }
-        blob = SQLite3::Blob.new(Marshal.dump(hash))
-        if scope == 'global'
-          begin
-            Lich.db.execute("INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES('autostart',':',?);", blob)
-          rescue SQLite3::BusyException
-            sleep 0.1
-            retry
-          end
-        else
-          characters.find_all { |c| c =~ /^.+:#{scope}$/ }.each { |c|
-            begin
-              Lich.db.execute("INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES('autostart',?,?);", c.encode('UTF-8'), blob)
-            rescue SQLite3::BusyException
-              sleep 0.1
-              retry
-            end
-          }
-        end
-      }
-      begin
-        Lich.db.execute('END')
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-    end
-    favs = nil
-
-    db = SQLite3::Database.new("#{DATA_DIR}/alias.db3")
-    begin
-      db.execute("CREATE TABLE IF NOT EXISTS global (trigger TEXT NOT NULL, target TEXT NOT NULL, UNIQUE(trigger));")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
-    begin
-      db.execute('BEGIN')
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
-    if aliases.class == Hash
-      aliases.each { |scope,alias_hash|
-        if scope == 'global'
-          tables = ['global']
-        else
-          tables = characters.find_all { |c| c =~ /^.+:#{scope}$/ }.collect { |t| t.downcase.sub(':', '_').gsub(/[^a-z_]/, '').encode('UTF-8') }
-        end
-        tables.each { |t|
-          begin
-            db.execute("CREATE TABLE IF NOT EXISTS #{t} (trigger TEXT NOT NULL, target TEXT NOT NULL, UNIQUE(trigger));")
-          rescue SQLite3::BusyException
-            sleep 0.1
-            retry
-          end
-        }
-        alias_hash.each { |trigger,target|
-          tables.each { |t|
-            begin
-              db.execute("INSERT OR REPLACE INTO #{t} (trigger,target) VALUES(?,?);", trigger.gsub(/\\(.)/) { $1 }.encode('UTF-8'), target.encode('UTF-8'))
-            rescue SQLite3::BusyException
-              sleep 0.1
-              retry
-            end
-          }
-        }
-      }
-    end
-    begin
-      db.execute('END')
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
-
-    begin
-      Lich.db.execute('BEGIN')
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
-    trusted.each { |script_name|
-      begin
-        Lich.db.execute('INSERT OR REPLACE INTO trusted_scripts(name) values(?);', script_name.encode('UTF-8'))
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-    }
-    begin
-      Lich.db.execute('END')
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
-    db.close rescue nil
-    db = nil
-    data = nil
-    aliases = nil
-    characters = nil
-    trusted = nil
-    File.rename("#{DATA_DIR}/lich.sav", "#{backup_dir}lich.sav")
-  end
+if File.exists?("#{DATA_DIR}/lich.sav")
+  Lich.log "error: Archaic Lich 4.4 configuration found: Please remove #{DATA_DIR}/lich.sav"
+  Lich.msgbox "error: Archaic Lich 4.4 configuration found: Please remove #{DATA_DIR}/lich.sav"
 end
 
 if argv_options[:sal]
@@ -10856,53 +10282,104 @@ else
 end
 
 if defined?(Gtk)
-  unless File.exists?('fly64.png')
-    File.open('fly64.png', 'wb') { |f| f.write '
-         iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAChVBMVEUAAAAA
-         AAABAQECAgIDAwMEBAQFBQUGBgYHBwcICAgKCgoLCwsMDAwNDQ0ODg4QEBAR
-         ERESEhITExMUFBQWFhYXFxcYGBgZGRkaGhobGxscHBwdHR0eHh4fHx8hISEi
-         IiIjIyMkJCQmJiYnJycoKCgpKSksLCwtLS0uLi4vLy8wMDAyMjIzMzM1NTU2
-         NjY4ODg6Ojo7Ozs8PDw9PT0+Pj5AQEBBQUFCQkJDQ0NERERFRUVGRkZHR0dJ
-         SUlKSkpLS0tMTExNTU1OTk5PT09QUFBRUVFSUlJTU1NUVFRVVVVWVlZXV1dY
-         WFhZWVlaWlpcXFxdXV1eXl5gYGBiYmJjY2NkZGRnZ2dpaWlqampra2tsbGxt
-         bW1ubm5vb29xcXFycnJ0dHR1dXV2dnZ4eHh5eXl6enp7e3t8fHx9fX1/f3+A
-         gICBgYGCgoKDg4OEhISFhYWGhoaHh4eJiYmKioqLi4uMjIyNjY2Ojo6Pj4+Q
-         kJCRkZGSkpKTk5OVlZWXl5eYmJiZmZmcnJydnZ2goKChoaGioqKjo6OlpaWm
-         pqanp6eoqKipqamqqqqrq6utra2urq6vr6+wsLCxsbGysrKzs7O0tLS1tbW2
-         tra3t7e4uLi5ubm6urq7u7u9vb2+vr6/v7/AwMDBwcHCwsLDw8PExMTFxcXH
-         x8fIyMjJycnLy8vMzMzPz8/Q0NDR0dHS0tLT09PV1dXW1tbX19fZ2dnc3Nzd
-         3d3e3t7f39/g4ODh4eHi4uLj4+Pk5OTl5eXm5ubn5+fo6Ojp6enq6urr6+vs
-         7Ozt7e3v7+/w8PDx8fHy8vLz8/P09PT19fX29vb39/f4+Pj5+fn6+vr7+/v8
-         /Pz9/f3+/v7////aGP7gAAAAAXRSTlMAQObYZgAABDZJREFUWMOll4tfVEUU
-         x+/vxgJlYmUKKZT4KIOgQi3toWA+e1CGEthDEJMwA/KR0UM0X/kow420QMns
-         pdVCaka0ApUh0YJF7u/vae7u3d175z4+W3c+n4WZs+d858ycM3NmFcWtcYiK
-         p8ZbPAL+KPXoQGOrR8DNHldwPtOjA6sf9+YBU7HRG+GbiZj+kycEt6Tiuf9L
-         IIUlh+/D9WeSQ3xIk15o9aTSoIY4dh0WDSczYb2velQJ64MrZ6G149qYd6hI
-         xgeG5mLqCW1ODr2KaLtfG+4F1ie3CLahjApf063VnAVbxbAdmJfsPvKaKnK3
-         bo+nDx0YZfgMkJl0HIiXybkwtOI+8SfoYiEDdit8DFixMAZQxafTHFzT6Ohn
-         JkAQp4VM5G+awYk6GqzbCisCMQa5M2+/2YV2hIT8fZbA1FZ2hCPB+TzqmNrQ
-         ow1PrsJmeQW7ovHugqWV7GivSRELemTToz4xvGHrxgxUWvaWz6dGZIvh0HJ7
-         tamDb60R/WW/WmPDWT5xAPq6Msxm9e9Vj4320msGoxvA81/ahZYTkGYz71Mi
-         my4dnKNGBnk7XJKC0yan2wBU6ofTX5qijZd3Mux8ghnq+vReidCVUPi67Foh
-         GLuHbsnJFAlQbdTm4TIhGveSC6FDXsN8Sn7uyhXS8gEnRiWwxgS40xrwwDyR
-         FGvtCfThbj5sBNxqo8iLGSoqbGO5H2jgoBFgX5+YpWLATj4FIqHZYiRU2hLe
-         BDZZF9czCViidfxGQn6fDeJ7oFYWs1lT/znSPSeF0oIQd+U7UnwGszXdHF3a
-         aQ5m1d9m7au3Q7qs+bZQmwjsjN3tN0n5sPhH6neYyNiv8lXJATYCr/D1BJby
-         sVYx5tnaZv/Rln2NS7Rxs+RAAT4hs7AqDiiGS8vYIu/Kb5hGpRv4OE6cI9vE
-         OtkrNwcsm8omvKuwwbAxnCEBQhzt7fmhe4C0O4y8cYzYojS8mADIXvtdi0o/
-         6qn0AmcNEmMTFeoN16I0X0vgbZiecO6wCcDlDhkdNQ8W4Unxf7I4R3HZOqP9
-         Q/wI9zgBwlwrquDFyKoNZegBI6BZe3L10978CO5qiXx1CosS8n+0e1x8DhRq
-         gCGFH4xD8S82xaC1aL0eFZbDUCv3AbO0SB7hXxXpiNS2tjzr+VMun4gHlbnp
-         hhXMBP5UmKP6NNtLurPHszLP0bHEExWKcQtbrirK6ATUmC7l7eIN4RSLYwjE
-         9eqAZyKKv0uHlpdnlDgQWIWRWD8APKirZU+Ri3h5gcN1XIALeq8/BTNjzwhU
-         WRa9odD+ml2hFkXLoLhRZ8dUuvGdVfPbhbaEC8AT4qAFxUWS2KhWXLGZ6+SI
-         rQtNImPG3yYeIKcTCb3N9pXqtI1fjBeIqX4aX8Cz/9sTfbijxxy1uqUef7XU
-         bvAIqG/yCNjuEaB0rvMIGHnBm73CfK8/4E+5A/4FccSsAIr2lfUAAAAASUVO
-         RK5CYII='.unpack('m')[0] }
+  unless File.exists?('logo.png')
+    File.open('logo.png', 'wb') { |f| f.write '
+      iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAA
+      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'.unpack('m')[0] }
   end
+
   begin
     Gtk.queue {
-      @default_icon = GdkPixbuf::Pixbuf.new(:file => 'fly64.png')
+      @default_icon = GdkPixbuf::Pixbuf.new(:file => 'logo.png')
       # Add a function to call for when GTK is idle
       GLib::Idle.add do
         gtk_sleep_while_idle
@@ -10921,6 +10398,7 @@ main_thread = Thread.new {
   $lich_char = Regexp.escape($clean_lich_char)
 
   launch_data = nil
+  require_relative("./lib/eaccess.rb")
 
   if ARGV.include?('--login')
     if File.exists?("#{DATA_DIR}/entry.dat")
@@ -10968,106 +10446,34 @@ main_thread = Thread.new {
         end
       }
 
-      login_server = nil
-      connect_thread = nil
-      timeout_thread = Thread.new {
-        sleep 30
-        $stdout.puts "error: timed out connecting to eaccess.play.net:7900"
-        Lich.log "error: timed out connecting to eaccess.play.net:7900"
-        connect_thread.kill rescue nil
-        login_server = nil
-      }
-      connect_thread = Thread.new {
-        begin
-          login_server = TCPSocket.new('eaccess.play.net', 7900)
-        rescue
-          login_server = nil
-          $stdout.puts "error connecting to server: #{$!}"
-          Lich.log "error connecting to server: #{$!}"
-        end
-      }
-      connect_thread.join
-      timeout_thread.kill rescue nil
+      launch_data_hash = EAccess.auth(
+        account: data[:user_id],
+        password: data[:password],
+        character: data[:char_name],
+        game_code: data[:game_code]
+      )
 
-      if login_server
-        login_server.puts "K\n"
-        hashkey = login_server.gets
-        if 'test'[0].class == String
-          password = data[:password].split('').collect { |c| c.getbyte(0) }
-          hashkey = hashkey.split('').collect { |c| c.getbyte(0) }
-        else
-          password = data[:password].split('').collect { |c| c[0] }
-          hashkey = hashkey.split('').collect { |c| c[0] }
+      launch_data = launch_data_hash.map{|k,v| "#{k.upcase}=#{v}"}
+        if data[:frontend] == 'wizard'
+              launch_data.collect! { |line| line.sub(/GAMEFILE=.+/, 'GAMEFILE=WIZARD.EXE').sub(/GAME=.+/, 'GAME=WIZ').sub(/FULLGAMENAME=.+/, 'FULLGAMENAME=Wizard Front End') }
+        elsif data[:frontend] == 'avalon'
+              launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') }
         end
-        password.each_index { |i| password[i] = ((password[i]-32)^hashkey[i])+32 }
-        password = password.collect { |c| c.chr }.join
-        login_server.puts "A\t#{data[:user_id]}\t#{password}\n"
-        password = nil
-        response = login_server.gets
-        login_key = /KEY\t([^\t]+)\t/.match(response).captures.first
-        if login_key
-          login_server.puts "M\n"
-          response = login_server.gets
-          if response =~ /^M\t/
-            login_server.puts "F\t#{data[:game_code]}\n"
-            response = login_server.gets
-            if response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
-              login_server.puts "G\t#{data[:game_code]}\n"
-              login_server.gets
-              login_server.puts "P\t#{data[:game_code]}\n"
-              login_server.gets
-              login_server.puts "C\n"
-              char_code = login_server.gets.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '').scan(/[^\t]+\t[^\t^\n]+/).find { |c| c.split("\t")[1] == data[:char_name] }.split("\t")[0]
-              login_server.puts "L\t#{char_code}\tSTORM\n"
-              response = login_server.gets
-              if response =~ /^L\t/
-                login_server.close unless login_server.closed?
-                launch_data = response.sub(/^L\tOK\t/, '').split("\t")
-                if data[:frontend] == 'wizard'
-                  launch_data.collect! { |line| line.sub(/GAMEFILE=.+/, 'GAMEFILE=WIZARD.EXE').sub(/GAME=.+/, 'GAME=WIZ').sub(/FULLGAMENAME=.+/, 'FULLGAMENAME=Wizard Front End') }
-                elsif data[:frontend] == 'avalon'
-                  launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') }
-                end
-                if data[:custom_launch]
-                  launch_data.push "CUSTOMLAUNCH=#{data[:custom_launch]}"
-                  if data[:custom_launch_dir]
-                    launch_data.push "CUSTOMLAUNCHDIR=#{data[:custom_launch_dir]}"
-                  end
-                end
-              else
-                login_server.close unless login_server.closed?
-                $stdout.puts "error: unrecognized response from server. (#{response})"
-                Lich.log "error: unrecognized response from server. (#{response})"
+        if data[:custom_launch]
+              launch_data.push "CUSTOMLAUNCH=#{login_info[:custom_launch]}"
+              if login_info[:custom_launch_dir]
+                launch_data.push "CUSTOMLAUNCHDIR=#{login_info[:custom_launch_dir]}"
               end
-            else
-              login_server.close unless login_server.closed?
-              $stdout.puts "error: unrecognized response from server. (#{response})"
-              Lich.log "error: unrecognized response from server. (#{response})"
-            end
-          else
-            login_server.close unless login_server.closed?
-            $stdout.puts "error: unrecognized response from server. (#{response})"
-            Lich.log "error: unrecognized response from server. (#{response})"
-          end
-        else
-          login_server.close unless login_server.closed?
-          $stdout.puts "Something went wrong... probably invalid user id and/or password.\nserver response: #{response}"
-          Lich.log "Something went wrong... probably invalid user id and/or password.\nserver response: #{response}"
-          reconnect_if_wanted.call
         end
-      else
-        $stdout.puts "error: failed to connect to server"
-        Lich.log "error: failed to connect to server"
-        reconnect_if_wanted.call
-        Lich.log "info: exiting..."
-        Gtk.queue { Gtk.main_quit } if defined?(Gtk)
-        exit
-      end
     else
       $stdout.puts "error: failed to find login data for #{char_name}"
       Lich.log "error: failed to find login data for #{char_name}"
     end
+
+  ## GUI starts here
+
   elsif defined?(Gtk) and (ARGV.empty? or argv_options[:gui])
+
     if File.exists?("#{DATA_DIR}/entry.dat")
       entry_data = File.open("#{DATA_DIR}/entry.dat", 'r') { |file|
         begin
@@ -11090,7 +10496,7 @@ main_thread = Thread.new {
       install_tab_loaded = false
 
       msgbox = proc { |msg|
-        dialog = Gtk::MessageDialog.new(window, Gtk::Dialog::DESTROY_WITH_PARENT, Gtk::MessageDialog::QUESTION, Gtk::MessageDialog::BUTTONS_CLOSE, msg)
+        dialog = Gtk::MessageDialog.new(window, Gtk::Dialog::DESTROY_WITH_PARENT, Gtk::MessageDialog::ERROR, Gtk::MessageDialog::BUTTONS_CLOSE, msg)
         #			dialog.set_icon(default_icon)
         dialog.run
         dialog.destroy
@@ -11111,7 +10517,7 @@ main_thread = Thread.new {
 
         account_book = Gtk::Notebook.new
         account_book.set_tab_pos(:left)
-		account_book.show_border=true
+		    account_book.show_border=true
         lightgrey = Gdk::RGBA::parse("#d3d3d3")
         account_book.override_background_color(:normal, lightgrey)
 
@@ -11128,13 +10534,20 @@ main_thread = Thread.new {
             if login_info[:game_name] != last_game_name
               horizontal_separator = Gtk::Separator.new(:horizontal)
               account_box.pack_start(horizontal_separator, :expand => false, :fill => false, :padding => 3)
-              instance_label = Gtk::Label.new('<span foreground="cadetblue" size="large"><b>' + login_info[:game_name] + '</b></span>')
-              instance_label.use_markup = true
-              account_box.pack_start(instance_label, :expand => false, :fill => false, :padding => 3)
-              horizontal_separator = Gtk::Separator.new(:horizontal)
-              account_box.pack_start(horizontal_separator, :expand => false, :fill => false, :padding => 3)
             end
             last_game_name = login_info[:game_name]
+
+	    realm = ''
+
+  	    if login_info[:game_code] =~ /GSX/
+              realm = 'Platinum'
+            elsif login_info[:game_code] =~ /GST/
+              realm = 'Test'
+            elsif login_info[:game_code] =~ /GSF/
+              realm = 'Shattered'
+            else
+              realm = 'Prime'
+            end
 
             button_provider = Gtk::CssProvider.new
             button_provider.load(data:
@@ -11144,15 +10557,20 @@ main_thread = Thread.new {
                       button:hover { background-color: darkgrey; } ")
 
             play_button = Gtk::Button.new()
+            char_label = Gtk::Label.new("#{realm} - #{login_info[:char_name]}")
             char_label = Gtk::Label.new("#{login_info[:char_name]}")
-			char_label.set_width_chars(15)
+            char_label.set_width_chars(15)
             fe_label = Gtk::Label.new("(#{login_info[:frontend].capitalize})")
-			fe_label.set_width_chars(15)
+            fe_label.set_width_chars(10)
+            instance_label = Gtk::Label.new("#{realm}")
+            instance_label.set_width_chars(10)
             char_label.set_alignment(0, 0.5)
-            fe_label.set_alignment(0.1, 0.5)
             button_row = Gtk::Paned.new(:horizontal)
+            button_inset = Gtk::Paned.new(:horizontal)
+            button_inset.pack1(instance_label, :shrink => false)
+            button_inset.pack2(fe_label, :shrink => false)
             button_row.pack1(char_label, :shrink => false)
-            button_row.pack2(fe_label, :shrink => false)
+            button_row.pack2(button_inset, :shrink => false)
 
 
             play_button.add(button_row)
@@ -11160,12 +10578,12 @@ main_thread = Thread.new {
             remove_button = Gtk::Button.new()
             remove_label = Gtk::Label.new('<span foreground="red"><b>Remove</b></span>')
             remove_label.use_markup = true
-			remove_label.set_width_chars(10)
+			      remove_label.set_width_chars(10)
             remove_button.add(remove_label)
 
             remove_button.style_context.add_provider(button_provider, Gtk::StyleProvider::PRIORITY_USER)
             play_button.style_context.add_provider(button_provider, Gtk::StyleProvider::PRIORITY_USER)
-			account_book.style_context.add_provider(tab_provider, Gtk::StyleProvider::PRIORITY_USER)
+			      account_book.style_context.add_provider(tab_provider, Gtk::StyleProvider::PRIORITY_USER)
 
             char_box = Gtk::Box.new(:horizontal)
             char_box.pack_end(remove_button, :expand => true, :fill => false, :padding => 0)
@@ -11174,95 +10592,29 @@ main_thread = Thread.new {
 
             play_button.signal_connect('clicked') {
               play_button.sensitive = false
-              begin
-                login_server = nil
-                connect_thread = Thread.new {
-                  login_server = TCPSocket.new('eaccess.play.net', 7900)
-                }
-                300.times {
-                  sleep 0.1
-                  break unless connect_thread.status
-                }
-                if connect_thread.status
-                  connect_thread.kill rescue nil
-                  msgbox.call "error: timed out connecting to eaccess.play.net:7900"
-                end
-              rescue
-                msgbox.call "error connecting to server: #{$!}"
-                play_button.sensitive = true
-              end
-              if login_server
-                login_server.puts "K\n"
-                hashkey = login_server.gets
-                if 'test'[0].class == String
-                  password = login_info[:password].split('').collect { |c| c.getbyte(0) }
-                  hashkey = hashkey.split('').collect { |c| c.getbyte(0) }
-                else
-                  password = login_info[:password].split('').collect { |c| c[0] }
-                  hashkey = hashkey.split('').collect { |c| c[0] }
-                end
-                password.each_index { |i| password[i] = ((password[i] - 32) ^ hashkey[i]) + 32 }
-                password = password.collect { |c| c.chr }.join
-                login_server.puts "A\t#{login_info[:user_id]}\t#{password}\n"
-                password = nil
-                response = login_server.gets
-                login_key = /KEY\t([^\t]+)\t/.match(response).captures.first
-                if login_key
-                  login_server.puts "M\n"
-                  response = login_server.gets
-                  if response =~ /^M\t/
-                    login_server.puts "F\t#{login_info[:game_code]}\n"
-                    response = login_server.gets
-                    if response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
-                      login_server.puts "G\t#{login_info[:game_code]}\n"
-                      login_server.gets
-                      login_server.puts "P\t#{login_info[:game_code]}\n"
-                      login_server.gets
-                      login_server.puts "C\n"
-                      char_code = login_server.gets.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '').scan(/[^\t]+\t[^\t^\n]+/).find { |c| c.split("\t")[1] == login_info[:char_name] }.split("\t")[0]
-                      login_server.puts "L\t#{char_code}\tSTORM\n"
-                      response = login_server.gets
-                      if response =~ /^L\t/
-                        login_server.close unless login_server.closed?
-                        launch_data = response.sub(/^L\tOK\t/, '').split("\t")
-                        if login_info[:frontend] == 'wizard'
+                  launch_data_hash = EAccess.auth(
+                    account: login_info[:user_id],
+                    password: login_info[:password],
+                    character: login_info[:char_name],
+                    game_code: login_info[:game_code]
+                  )
+
+                  launch_data = launch_data_hash.map{|k,v| "#{k.upcase}=#{v}"}
+                    if login_info[:frontend] == 'wizard'
                           launch_data.collect! { |line| line.sub(/GAMEFILE=.+/, 'GAMEFILE=WIZARD.EXE').sub(/GAME=.+/, 'GAME=WIZ').sub(/FULLGAMENAME=.+/, 'FULLGAMENAME=Wizard Front End') }
-                        elsif login_info[:frontend] == 'avalon'
+                    elsif login_info[:frontend] == 'avalon'
                           launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') }
-                        end
-                        if login_info[:custom_launch]
+                    end
+                    if login_info[:custom_launch]
                           launch_data.push "CUSTOMLAUNCH=#{login_info[:custom_launch]}"
                           if login_info[:custom_launch_dir]
                             launch_data.push "CUSTOMLAUNCHDIR=#{login_info[:custom_launch_dir]}"
                           end
-                        end
-                        window.destroy
-                        done = true
-                      else
-                        login_server.close unless login_server.closed?
-                        msgbox.call("Unrecognized response from server. (#{response})")
-                        play_button.sensitive = true
-                      end
-                    else
-                      login_server.close unless login_server.closed?
-                      msgbox.call("Unrecognized response from server. (#{response})")
-                      play_button.sensitive = true
                     end
-                  else
-                    login_server.close unless login_server.closed?
-                    msgbox.call("Unrecognized response from server. (#{response})")
-                    play_button.sensitive = true
-                  end
-                else
-                  login_server.close unless login_server.closed?
-                  msgbox.call "Something went wrong... probably invalid user id and/or password.\nserver response: #{response}"
-                  play_button.sensitive = true
-                end
-              else
-                msgbox.call "error: failed to connect to server"
-                play_button.sensitive = true
-              end
+                    window.destroy
+                    done = true
             }
+
             remove_button.signal_connect('button-release-event') { |owner, ev|
               if (ev.event_type == Gdk::EventType::BUTTON_RELEASE) and (ev.button == 1)
                 if (ev.state.inspect =~ /shift-mask/)
@@ -11287,13 +10639,10 @@ main_thread = Thread.new {
           }
           account_book.append_page(account_box, Gtk::Label.new(account.upcase))
         }
-#        adjustment = Gtk::Adjustment.new(0, 0, 1000, 5, 20, 500)
-        quick_vp = Gtk::Viewport.new#(adjustment, adjustment)
-        quick_vp.add(account_book)
 
         quick_sw = Gtk::ScrolledWindow.new
         quick_sw.set_policy(:automatic, :automatic)
-        quick_sw.add(quick_vp)
+        quick_sw.add(account_book)
 
         quick_game_entry_tab = Gtk::Box.new(:vertical)
         quick_game_entry_tab.border_width = 5
@@ -11369,10 +10718,8 @@ main_thread = Thread.new {
       custom_launch_dir.append_text("../StormFront")
 
       make_quick_option = Gtk::CheckButton.new('Save this info for quick game entry')
-
       play_button = Gtk::Button.new(:label => ' Play ')
       play_button.sensitive = false
-
       play_button_box = Gtk::Box.new(:horizontal)
       play_button_box.pack_end(play_button, :expand => false, :fill => false, :padding => 5)
 
@@ -11410,90 +10757,38 @@ main_thread = Thread.new {
         iter[1] = 'working...'
         Gtk.queue {
           begin
-            login_server = nil
-            connect_thread = Thread.new {
-              login_server = TCPSocket.new('eaccess.play.net', 7900)
-            }
-            300.times {
-              sleep 0.1
-              break unless connect_thread.status
-            }
-            if connect_thread.status
-              connect_thread.kill rescue nil
-              msgbox.call "error: timed out connecting to eaccess.play.net:7900"
+            login_info = EAccess.auth(
+              account: user_id_entry.text || argv.account,
+              password: pass_entry.text || argv.password,
+              legacy: true
+            )
+
             end
-          rescue
-            msgbox.call "error connecting to server: #{$!}"
+          if login_info =~ /error/i
+            msgbox.call "\nSomething went wrong... probably invalid \nuser id and / or password.\n\nserver response: #{login_info}"
             connect_button.sensitive = true
+            disconnect_button = false
             user_id_entry.sensitive = true
             pass_entry.sensitive = true
+          else
+            liststore.clear
+            login_info.each do |row|
+              iter = liststore.append
+              iter[0] = row[:game_code]
+              iter[1] = row[:game_name]
+              iter[2] = row[:char_code]
+              iter[3] = row[:char_name]
+            end
           end
           disconnect_button.sensitive = true
-          if login_server
-            login_server.puts "K\n"
-            hashkey = login_server.gets
-            if 'test'[0].class == String
-              password = pass_entry.text.split('').collect { |c| c.getbyte(0) }
-              hashkey = hashkey.split('').collect { |c| c.getbyte(0) }
-            else
-              password = pass_entry.text.split('').collect { |c| c[0] }
-              hashkey = hashkey.split('').collect { |c| c[0] }
-            end
-            # pass_entry.text = String.new
-            password.each_index { |i| password[i] = ((password[i]-32)^hashkey[i])+32 }
-            password = password.collect { |c| c.chr }.join
-            login_server.puts "A\t#{user_id_entry.text}\t#{password}\n"
-            password = nil
-            response = login_server.gets
-            login_key = /KEY\t([^\t]+)\t/.match(response).captures.first
-            if login_key
-              login_server.puts "M\n"
-              response = login_server.gets
-              if response =~ /^M\t/
-                liststore.clear
-                for game in response.sub(/^M\t/, '').scan(/[^\t]+\t[^\t^\n]+/)
-                  game_code, game_name = game.split("\t")
-                  login_server.puts "N\t#{game_code}\n"
-                  if login_server.gets =~ /STORM/
-                    login_server.puts "F\t#{game_code}\n"
-                    if login_server.gets =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
-                      login_server.puts "G\t#{game_code}\n"
-                      login_server.gets
-                      login_server.puts "P\t#{game_code}\n"
-                      login_server.gets
-                      login_server.puts "C\n"
-                      for code_name in login_server.gets.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '').scan(/[^\t]+\t[^\t^\n]+/)
-                        char_code, char_name = code_name.split("\t")
-                        iter = liststore.append
-                        iter[0] = game_code
-                        iter[1] = game_name
-                        iter[2] = char_code
-                        iter[3] = char_name
-                      end
-                    end
-                  end
-                end
-                disconnect_button.sensitive = true
-              else
-                login_server.close unless login_server.closed?
-                msgbox.call "Unrecognized response from server (#{response})"
-              end
-            else
-              login_server.close unless login_server.closed?
-              disconnect_button.sensitive = false
-              connect_button.sensitive = true
-              user_id_entry.sensitive = true
-              pass_entry.sensitive = true
-              msgbox.call "Something went wrong... probably invalid user id and/or password.\nserver response: #{response}"
-            end
-          end
+          login_server = true
         }
       }
+
       treeview.signal_connect('cursor-changed') {
-        if login_server
           play_button.sensitive = true
-        end
       }
+
       disconnect_button.signal_connect('clicked') {
         disconnect_button.sensitive = false
         play_button.sensitive = false
@@ -11503,28 +10798,20 @@ main_thread = Thread.new {
         user_id_entry.sensitive = true
         pass_entry.sensitive = true
       }
+
       play_button.signal_connect('clicked') {
         play_button.sensitive = false
         game_code = treeview.selection.selected[0]
-        char_code = treeview.selection.selected[2]
-        if login_server and not login_server.closed?
-          login_server.puts "F\t#{game_code}\n"
-          login_server.gets
-          login_server.puts "G\t#{game_code}\n"
-          login_server.gets
-          login_server.puts "P\t#{game_code}\n"
-          login_server.gets
-          login_server.puts "C\n"
-          login_server.gets
-          login_server.puts "L\t#{char_code}\tSTORM\n"
-          response = login_server.gets
-          if response =~ /^L\t/
-            login_server.close unless login_server.closed?
-            port = /GAMEPORT=([0-9]+)/.match(response).captures.first
-            host = /GAMEHOST=([^\t\n]+)/.match(response).captures.first
-            key = /KEY=([^\t\n]+)/.match(response).captures.first
-            launch_data = response.sub(/^L\tOK\t/, '').split("\t")
-            login_server.close unless login_server.closed?
+        char_name = treeview.selection.selected[3]
+
+        launch_data_hash = EAccess.auth(
+          account: user_id_entry.text,
+          password: pass_entry.text,
+          character: char_name,
+          game_code: game_code
+        )
+
+        launch_data = launch_data_hash.map{|k,v| "#{k.upcase}=#{v}"}
             if wizard_option.active?
               launch_data.collect! { |line| line.sub(/GAMEFILE=.+/, "GAMEFILE=WIZARD.EXE").sub(/GAME=.+/, "GAME=WIZ") }
             elsif avalon_option.active?
@@ -11562,184 +10849,30 @@ main_thread = Thread.new {
               entry_data.push h={ :char_name => treeview.selection.selected[3], :game_code => treeview.selection.selected[0], :game_name => treeview.selection.selected[1], :user_id => user_id_entry.text, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir }
               save_entry_data = true
             end
+
+        if launch_data
             user_id_entry.text = String.new
             pass_entry.text = String.new
             window.destroy
             done = true
           else
-            login_server.close unless login_server.closed?
             disconnect_button.sensitive = false
             play_button.sensitive = false
             connect_button.sensitive = true
             user_id_entry.sensitive = true
             pass_entry.sensitive = true
           end
-        else
-          disconnect_button.sensitive = false
-          play_button.sensitive = false
-          connect_button.sensitive = true
-          user_id_entry.sensitive = true
-          pass_entry.sensitive = true
-        end
       }
+
       user_id_entry.signal_connect('activate') {
         pass_entry.grab_focus
       }
+
       pass_entry.signal_connect('activate') {
         connect_button.clicked
       }
 
-      #
-      # link tab
-      #
-
-      link_to_web_button = Gtk::Button.new(:label => 'Link to Website')
-      unlink_from_web_button = Gtk::Button.new(:label => 'Unlink from Website')
-      web_button_box = Gtk::Box.new(:horizontal)
-      web_button_box.pack_start(link_to_web_button, :expand => true, :fill => true, :padding => 5)
-      web_button_box.pack_start(unlink_from_web_button, :expand => true, :fill => true, :padding => 5)
-
-      web_order_label = Gtk::Label.new
-      web_order_label.text = "Unknown"
-
-      web_box = Gtk::Box.new(:vertical)
-      web_box.pack_start(web_order_label, :expand => true, :fill => true, :padding => 5)
-      web_box.pack_start(web_button_box, :expand => true, :fill => true, :padding => 5)
-
-      web_frame = Gtk::Frame.new('Website Launch Chain')
-      web_frame.add(web_box)
-
-      link_to_sge_button = Gtk::Button.new(:label => 'Link to SGE')
-      unlink_from_sge_button = Gtk::Button.new(:label => 'Unlink from SGE')
-      sge_button_box = Gtk::Box.new(:horizontal)
-      sge_button_box.pack_start(link_to_sge_button, :expand => true, :fill => true, :padding => 5)
-      sge_button_box.pack_start(unlink_from_sge_button, :expand => true, :fill => true, :padding => 5)
-
-      sge_order_label = Gtk::Label.new
-      sge_order_label.text = "Unknown"
-
-      sge_box = Gtk::Box.new(:vertical)
-      sge_box.pack_start(sge_order_label, :expand => true, :fill => true, :padding => 5)
-      sge_box.pack_start(sge_button_box, :expand => true, :fill => true, :padding => 5)
-
-      sge_frame = Gtk::Frame.new('SGE Launch Chain')
-      sge_frame.add(sge_box)
-
-
-      refresh_button = Gtk::Button.new(:label => ' Refresh ')
-
-      refresh_box = Gtk::Box.new(:horizontal)
-      refresh_box.pack_end(refresh_button, :expand => false, :fill => false, :padding => 5)
-
-      install_tab = Gtk::Box.new(:vertical)
-      install_tab.border_width = 5
-      install_tab.pack_start(web_frame, :expand => false, :fill => false, :padding => 5)
-      install_tab.pack_start(sge_frame, :expand => false, :fill => false, :padding => 5)
-      install_tab.pack_start(refresh_box, :expand => false, :fill => false, :padding => 5)
-
-      refresh_button.signal_connect('clicked') {
-        install_tab_loaded = true
-        if defined?(Win32)
-          begin
-            key = Win32.RegOpenKeyEx(:hKey => Win32::HKEY_LOCAL_MACHINE, :lpSubKey => 'Software\\Classes\\Simutronics.Autolaunch\\Shell\\Open\\command', :samDesired => (Win32::KEY_ALL_ACCESS|Win32::KEY_WOW64_32KEY))[:phkResult]
-            web_launch_cmd = Win32.RegQueryValueEx(:hKey => key)[:lpData]
-            real_web_launch_cmd = Win32.RegQueryValueEx(:hKey => key, :lpValueName => 'RealCommand')[:lpData]
-          rescue
-            web_launch_cmd = String.new
-            real_web_launch_cmd = String.new
-          ensure
-            Win32.RegCloseKey(:hKey => key) rescue nil
-          end
-          begin
-            key = Win32.RegOpenKeyEx(:hKey => Win32::HKEY_LOCAL_MACHINE, :lpSubKey => 'Software\\Simutronics\\Launcher', :samDesired => (Win32::KEY_ALL_ACCESS|Win32::KEY_WOW64_32KEY))[:phkResult]
-            sge_launch_cmd = Win32.RegQueryValueEx(:hKey => key, :lpValueName => 'Directory')[:lpData]
-            real_sge_launch_cmd = Win32.RegQueryValueEx(:hKey => key, :lpValueName => 'RealDirectory')[:lpData]
-          rescue
-            sge_launch_cmd = String.new
-            real_launch_cmd = String.new
-          ensure
-            Win32.RegCloseKey(:hKey => key) rescue nil
-          end
-        elsif defined?(Wine)
-          web_launch_cmd = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Classes\\Simutronics.Autolaunch\\Shell\\Open\\command\\').to_s
-          real_web_launch_cmd = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Classes\\Simutronics.Autolaunch\\Shell\\Open\\command\\RealCommand').to_s
-          sge_launch_cmd = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\Launcher\\Directory').to_s
-          real_sge_launch_cmd = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\Launcher\\RealDirectory').to_s
-        else
-          web_launch_cmd = String.new
-          sge_launch_cmd = String.new
-        end
-        if web_launch_cmd =~ /lich/i
-          link_to_web_button.sensitive = false
-          unlink_from_web_button.sensitive = true
-          if real_web_launch_cmd =~ /launcher.exe/i
-            web_order_label.text = "Website => Lich => Simu Launcher => Frontend"
-          else
-            web_order_label.text = "Website => Lich => Unknown"
-          end
-        elsif web_launch_cmd =~ /launcher.exe/i
-          web_order_label.text = "Website => Simu Launcher => Frontend"
-          link_to_web_button.sensitive = true
-          unlink_from_web_button.sensitive = false
-        else
-          web_order_label.text = "Website => Unknown"
-          link_to_web_button.sensitive = false
-          unlink_from_web_button.sensitive = false
-        end
-        if sge_launch_cmd =~ /lich/i
-          link_to_sge_button.sensitive = false
-          unlink_from_sge_button.sensitive = true
-          if real_sge_launch_cmd and (defined?(Wine) or File.exists?("#{real_sge_launch_cmd}\\launcher.exe"))
-            sge_order_label.text = "SGE => Lich => Simu Launcher => Frontend"
-          else
-            sge_order_label.text = "SGE => Lich => Unknown"
-          end
-        elsif sge_launch_cmd and (defined?(Wine) or File.exists?("#{sge_launch_cmd}\\launcher.exe"))
-          sge_order_label.text = "SGE => Simu Launcher => Frontend"
-          link_to_sge_button.sensitive = true
-          unlink_from_sge_button.sensitive = false
-        else
-          sge_order_label.text = "SGE => Unknown"
-          link_to_sge_button.sensitive = false
-          unlink_from_sge_button.sensitive = false
-        end
-      }
-      link_to_web_button.signal_connect('clicked') {
-        link_to_web_button.sensitive = false
-        Lich.link_to_sal
-        if defined?(Win32)
-          refresh_button.clicked
-        else
-          Lich.msgbox(:message => 'WINE will take 5-30 seconds to update the registry.  Wait a while and click the refresh button.')
-        end
-      }
-      unlink_from_web_button.signal_connect('clicked') {
-        unlink_from_web_button.sensitive = false
-        Lich.unlink_from_sal
-        if defined?(Win32)
-          refresh_button.clicked
-        else
-          Lich.msgbox(:message => 'WINE will take 5-30 seconds to update the registry.  Wait a while and click the refresh button.')
-        end
-      }
-      link_to_sge_button.signal_connect('clicked') {
-        link_to_sge_button.sensitive = false
-        Lich.link_to_sge
-        if defined?(Win32)
-          refresh_button.clicked
-        else
-          Lich.msgbox(:message => 'WINE will take 5-30 seconds to update the registry.  Wait a while and click the refresh button.')
-        end
-      }
-      unlink_from_sge_button.signal_connect('clicked') {
-        unlink_from_sge_button.sensitive = false
-        Lich.unlink_from_sge
-        if defined?(Win32)
-          refresh_button.clicked
-        else
-          Lich.msgbox(:message => 'WINE will take 5-30 seconds to update the registry.  Wait a while and click the refresh button.')
-        end
-      }
+      # Link tab removed
 
       #
       # put it together and show the window
@@ -11747,15 +10880,15 @@ main_thread = Thread.new {
       silver = Gdk::RGBA::parse("#d3d3d3")
       notebook = Gtk::Notebook.new
       notebook.override_background_color(:normal, silver)
-      notebook.append_page(quick_game_entry_tab, Gtk::Label.new('Quick Game Entry'))
-      notebook.append_page(game_entry_tab, Gtk::Label.new('Game Entry'))
-      notebook.append_page(install_tab, Gtk::Label.new('Link'))
+      notebook.append_page(quick_game_entry_tab, Gtk::Label.new('Saved Entry'))
+      notebook.append_page(game_entry_tab, Gtk::Label.new('Manual Entry'))
 
       notebook.signal_connect('switch-page') { |who,page,page_num|
         if (page_num == 2) and not install_tab_loaded
           refresh_button.clicked
         end
       }
+
       grey = Gdk::RGBA::parse("#d3d3d3")
       window = Gtk::Window.new
       window.set_icon(@default_icon)
@@ -11763,7 +10896,7 @@ main_thread = Thread.new {
       window.border_width = 5
       window.add(notebook)
       window.signal_connect('delete_event') { window.destroy; done = true }
-      window.default_width = 510
+      window.default_width = 550
       window.default_height = 550
       window.show_all
 
@@ -11788,6 +10921,12 @@ main_thread = Thread.new {
 	  exit
     end
   end
+
+
+  #
+  # open the client and have it connect to us
+  #
+
   $_SERVERBUFFER_ = LimitedArray.new
   $_SERVERBUFFER_.max_size = 400
   $_CLIENTBUFFER_ = LimitedArray.new
@@ -11795,9 +10934,6 @@ main_thread = Thread.new {
 
   Socket.do_not_reverse_lookup = true
 
-  #
-  # open the client and have it connect to us
-  #
   if argv_options[:sal]
     begin
       launch_data = File.open(argv_options[:sal]) { |file| file.readlines }.collect { |line| line.chomp }
@@ -12141,26 +11277,6 @@ main_thread = Thread.new {
   end
 
   listener = timeout_thr = nil
-=begin
-   #
-   # drop superuser privileges
-   #
-   unless (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
-      Lich.log "info: dropping superuser privileges..."
-      begin
-         Process.uid = `id -ru`.strip.to_i
-         Process.gid = `id -rg`.strip.to_i
-         Process.egid = `id -rg`.strip.to_i
-         Process.euid = `id -ru`.strip.to_i
-      rescue SecurityError
-         Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      rescue SystemCallError
-         Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      rescue
-         Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      end
-   end
-=end
 
   # backward compatibility
   if $frontend =~ /^(?:wizard|avalon)$/
@@ -12439,8 +11555,12 @@ main_thread = Thread.new {
   Vars.save
   Lich.log 'info: closing connections...'
   Game.close
-  $_CLIENT_.close rescue nil
-  #   Lich.db.close rescue nil
+  200.times { sleep 0.1; break if Game.closed? }
+  pause 0.5
+  $_CLIENT_.close
+  200.times { sleep 0.1; break if $_CLIENT_.closed? }
+  Lich.db.close
+  200.times {sleep 0.1; break if Lich.db.closed? }
   reconnect_if_wanted.call
   Lich.log "info: exiting..."
   Gtk.queue { Gtk.main_quit } if defined?(Gtk)
