@@ -5,13 +5,16 @@
 
 	;vars help
 
-	author: Tillmen (tillmen@lichproject.org)
+	author: Elanthia-Online (GTK updates)
+	original author: Tillmen (tillmen@lichproject.org)
 	game: any
 	tags: core
-	required: Lich >= 4.6.14
-	version: 0.8 (interim)
+	required: Lich > 5.0.1
+	version: 0.9
 
 	changelog:
+		0.9 (2021-03-01): 
+			Updated menu elements to support GTK3 in Lich5
 		0.8 (2020-03-20:
 			updated to support GTK3
 		0.7 (2015-04-26):
@@ -161,7 +164,7 @@ elsif defined?(Gtk) and (script.vars[1] == 'setup')
 					vars.each_index { |i| if textboxes[i].nil? or ((vars[i][1].class == String) and (vars[i][1] != textboxes[i].text)); modified = true; break; end }
 				end
 				if modified
-					dialog = Gtk::MessageDialog.new(:parent=> nil, :flags =>
+					dialog = Gtk::MessageDialog.new(:parent=> nil, :flags => 
 						   :modal, :type => :question, :buttons => :yes_no, :message => "Save changes?")
 					dialog.title = "Lich - #{Char.name}'s Vars"
 					dialog.set_icon(@default_icon)

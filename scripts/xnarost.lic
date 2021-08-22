@@ -1,7 +1,7 @@
 =begin
-  xNarost - Lost Ranger's eXperimental Narost branch.
+xNarost - Lost Ranger's eXperimental Narost branch.
 
-	Tracks your current room on Tsoran (or other) maps
+Tracks your current room on Tsoran (or other) maps
 
   Key differences between this and ;narost:
     * xnarost has a better-organized map list with submenus, and uses 'proper' map names instead of filenames.
@@ -12,16 +12,20 @@
 	shift-click on a room to show its description
 	right-click for some options
 
-  author: LostRanger (thisgenericname@gmail.com)
-	original Narost author: Tillmen (tillmen@lichproject.org)
+			author: Elanthia-Online (GTK updates)
+			original author: LostRanger (thisgenericname@gmail.com, original Narost author: Tillmen (tillmen@lichproject.org)
+			game: Gemstone
+			tags: core, movement, mapping 
+			required: Lich > 5.0.1
+			version: 0.7
 
-	game: Gemstone
-	tags: core, movement
-
-  version: 0.6 (2019-08-14) based on narost.lic from 2014-08-24
+  version: 0.7 (2021-03-01) based on narost.lic from 2014-08-24
 
   changelog:
-    version 0.6
+    version 0.7
+	 * Updated menu elements to support GTK3 in Lich5.
+	
+	version 0.6
      * Metadata is no longer built-in to xnarost but is now instead set on rooms in the mapdb.
 
     version 0.5.1 (2017-05-29)
@@ -49,7 +53,9 @@
 
     version 0.1 (2017-05-25) based on narost.lic from 2014-08-24
      * Improve map list organization.
+
 =end
+
 
 # fixme: click arrow to next map to show map
 
