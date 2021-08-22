@@ -35,7 +35,7 @@
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
 
-LICH_VERSION = '5.0.16'
+LICH_VERSION = '5.0.17'
 TESTING = false
 
 if RUBY_VERSION !~ /^2|^3/
@@ -1925,7 +1925,7 @@ class XMLParser
               GameObj.new_loot(@obj_exist, @obj_noun, text_string)
             end
           elsif (text_string =~ /that (?:is|appears) ([\w\s]+)(?:,| and|\.)/) or (text_string =~ / \(([^\(]+)\)/)
-            GameObj.npcs[-1].status = $1
+            GameObj.npcs[-1].status = $1.dup
           end
         elsif @active_ids.include?('room players')
           if @active_tags.include?('a')
@@ -8304,9 +8304,9 @@ module Games
           false
         elsif (self.mana_cost(options) > 0)
           ## convert Spell[9699].active? to Effects::Debuffs test (if Debuffs is where it shows)
-          if (Char.prof == "Monk" and Feat.known?(:mental_acuity)) and (Spell[9699].active? or not checkstamina(self.mana_cost(options)*2))
+          if Feat.known?(:mental_acuity) and (Spell[9699].active? or not checkstamina(self.mana_cost(options)*2))
             false
-          elsif (  !checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options)/4, 1].max))  )
+          elsif ( !Feat.known?(:mental_acuity) ) && ( !checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options)/4, 1].max))  )
             false
         else
           true
@@ -8330,17 +8330,20 @@ module Games
       end
       def cast(target=nil, results_of_interest=nil)
         # fixme: find multicast in target and check mana for it
-        script = Script.current
-        if @type.nil?
-          echo "cast: spell missing type (#{@name})"
-          sleep 0.1
-          return false
-        end
-        unless (self.mana_cost <= 0) or checkmana(self.mana_cost)
-          echo 'cast: not enough mana'
-          sleep 0.1
-          return false
-        end
+        check_energy = proc {
+          if Feat.known?(:mental_acuity)
+            unless (self.mana_cost <= 0) or checkstamina(self.mana_cost*2)
+              echo 'cast: not enough stamina there, Monk!'
+              sleep 0.1
+              return false
+            end
+          else
+            unless (self.mana_cost <= 0) or checkmana(self.mana_cost)
+              echo 'cast: not enough mana'
+              sleep 0.1
+              return false
+            end
+          end
         unless (self.spirit_cost > 0) or checkspirit(self.spirit_cost + 1 + [ 9912, 9913, 9914, 9916, 9916, 9916 ].delete_if { |num| !Spell[num].active? }.length)
           echo 'cast: not enough spirit'
           sleep 0.1
@@ -8351,6 +8354,14 @@ module Games
           sleep 0.1
           return false
         end
+        }
+        script = Script.current
+        if @type.nil?
+          echo "cast: spell missing type (#{@name})"
+          sleep 0.1
+          return false
+        end
+        check_energy.call
         begin
           save_want_downstream = script.want_downstream
           save_want_downstream_xml = script.want_downstream_xml
@@ -8362,39 +8373,11 @@ module Games
             Script.current # allows this loop to be paused
             @@cast_lock.delete_if { |s| s.paused or not Script.list.include?(s) }
           end
-          unless (self.mana_cost <= 0) or checkmana(self.mana_cost)
-            echo 'cast: not enough mana'
-            sleep 0.1
-            return false
-          end
-          unless (self.spirit_cost > 0) or checkspirit(self.spirit_cost + 1 + [ 9912, 9913, 9914, 9916, 9916, 9916 ].delete_if { |num| !Spell[num].active? }.length)
-            echo 'cast: not enough spirit'
-            sleep 0.1
-            return false
-          end
-          unless (self.stamina_cost <= 0) or checkstamina(self.stamina_cost)
-            echo 'cast: not enough stamina'
-            sleep 0.1
-            return false
-          end
+          check_energy.call
           if @cast_proc
             waitrt?
             waitcastrt?
-            unless (self.mana_cost <= 0) or checkmana(self.mana_cost)
-              echo 'cast: not enough mana'
-              sleep 0.1
-              return false
-            end
-            unless (self.spirit_cost > 0) or checkspirit(self.spirit_cost + 1 + [ 9912, 9913, 9914, 9916, 9916, 9916 ].delete_if { |num| !Spell[num].active? }.length)
-              echo 'cast: not enough spirit'
-              sleep 0.1
-              return false
-            end
-            unless (self.stamina_cost <= 0) or checkstamina(self.stamina_cost)
-              echo 'cast: not enough stamina'
-              sleep 0.1
-              return false
-            end
+            check_energy.call
             begin
               proc { begin; $SAFE = 3; rescue; nil; end; eval(@cast_proc) }.call
             rescue
