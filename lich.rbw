@@ -1544,17 +1544,36 @@ class XMLParser
 
   DECADE = 10 * 31_536_000
 
-  def parse_psm3_progressbar(kind, attributes)
-    @dialogs[kind] ||= {}
-    name = attributes["text"]
-    value = attributes["time"]
-    return unless name && value
+def init_psm3_dialog(kind)
+  @dialogs[kind] ||= {
+    # Names contains our name => id lookup. Allows us to reference effects by name or id.
+    :names => {},
+    # Data contains ... the data.
+    :data => {},
+  }
+
+  @dialogs[kind][:names].clear
+  @dialogs[kind][:data].clear
+end
+
+def parse_psm3_progressbar(kind, attributes)
+  init_psm3_dialog(kind) unless @dialogs[kind]
+
+  # Attributes that must exist
+  id = attributes["id"].to_i
+  name = attributes["text"]
+  value = attributes["time"]
+
+  return unless id && name && value
+
     # set the expiry for a decade for infinite duration effects
-    return @dialogs[kind][name] = Time.now + DECADE if value.downcase.eql?("indefinite")
+  @dialogs[kind][:names][name] = id
+
+  return @dialogs[kind][:data][id] = Time.now + DECADE if value.downcase.eql?("indefinite")
     # in psm 3.0 progress bars now have second precision!
-    hour, minute, second = value.split(':')
-    @dialogs[kind][name] = Time.now + (hour.to_i * 3600) + (minute.to_i * 60) + second.to_i
-  end
+  hour, minute, second = value.split(':')
+  @dialogs[kind][:data][id] = Time.now + (hour.to_i * 3600) + (minute.to_i * 60) + second.to_i
+end
 
   PSM_3_DIALOG_IDS = ["Buffs", "Active Spells", "Debuffs", "Cooldowns"]
 
@@ -1577,8 +1596,7 @@ class XMLParser
         @obj_before_name = nil
         @obj_after_name = nil
       elsif name == 'dialogData' and attributes['clear'] == 't' and PSM_3_DIALOG_IDS.include?(attributes["id"])
-        @dialogs[attributes["id"]] ||= {}
-        @dialogs[attributes["id"]].clear
+        init_psm3_dialog(attributes["id"])
       elsif name == 'resource'
         nil
       elsif name == 'nav'
@@ -8720,15 +8738,18 @@ module Effects
     end
 
     def to_h
-      XMLData.dialogs.fetch(@dialog, {})
+     XMLData.dialogs.fetch(@dialog, { :names => {}, :data => {} })
     end
 
     def each()
       to_h.each {|k,v| yield(k,v)}
     end
 
-    def active?(effect)
-      expiry = to_h.fetch(effect, 0)
+    def active?(id_or_name)
+      unless id_or_name.instance_of?(Integer)
+        id_or_name = to_h[:names].fetch(id_or_name)
+      end
+      expiry = to_h[:data].fetch(id_or_name, 0)
       expiry.to_i > Time.now.to_i
     end
   end
