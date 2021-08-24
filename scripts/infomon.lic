@@ -9,13 +9,15 @@
           game: Gemstone
           tags: core
       required: Lich > 4.6.10
-       version: 1.18.8
+       version: 1.18.9
         Source: https://github.com/elanthia-online/jinx
     Alt Source: https://github.com/elanthia-online/lich-5
 
   Version Control:
     Major_change.feature_addition.bugfix
 
+  1.18.9 (2021-08-22):
+    Bugfix for spells regex
   1.18.8 (2021-08-12):
     Bugfixes for new spell active format
     Standardized Header information
@@ -1393,8 +1395,8 @@ while line = get
       $infomon_cutthroat = false
     elsif line == "You currently have the following active effects:"
       while (line = get)
-        if line =~ /([A-z0-9\s\'\(\)\-]+) \.* (([0-9]+)\:([0-9]+)\:([0-9]+)|Indefinite)$/
-          spell_name = $1
+        if line =~ /\s+([A-z0-9\s\'\(\)\-]+) \.* (([0-9]+)\:([0-9]+)\:([0-9]+)|Indefinite)$/
+          spell_name = $1.dup
           if $2 == 'Indefinite'
             spell_time = 599.0
           else
@@ -1403,9 +1405,9 @@ while line = get
           if spell_name == 'Raise Dead Recovery'
             # fixme
             spell_name = 'Raise Dead Cooldown'
-          elsif spell_name =~ /^Mage Armor \- /
+          elsif spell_name =~ /Mage Armor \- /
             spell_name = 'Mage Armor'
-          elsif spell_name =~ /^Cloak of Shadows \- /
+          elsif spell_name =~ /Cloak of Shadows \- /
             spell_name = 'Cloak of Shadows'
           end
           if spell = Spell.list.find { |s| s.name.downcase == spell_name.strip().downcase or s.num.to_s == spell_name.strip() }
