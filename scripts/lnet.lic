@@ -303,7 +303,7 @@ class LNet
 					if @@options['fam_window']
 						$_CLIENT_.puts("\034GSe\r\n#{channel}#{aliased_from}: \"#{message}\"#{timestamp}\r\n\034GSf\r\n")
 					else
-						$_CLIENT_.puts("You hear the faint thoughts of #{channel}#{aliased_from} echo in your mind:\n\"#{message}\"#{timestamp}\r\n")
+						$_CLIENT_.puts("You hear the faint thoughts of #{channel}#{aliased_from} echo in your mind:\r\n\"#{message}\"#{timestamp}\r\n")
 					end
 					Script.new_downstream("#{channel}#{aliased_from}: \"#{message}\"#{timestamp}")
 				else
