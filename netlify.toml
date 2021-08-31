@@ -7,5 +7,7 @@ command = """
   | cut -d '"' -f 4 \
   | wget -qi - \
   && chmod +x jinxp \
-  && ./jinxp -i scripts
+  && ./jinxp -i scripts \
+  && ./jinxp -i lib \
+  && ./jinxp -i /
   """
