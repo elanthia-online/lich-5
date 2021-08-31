@@ -1,0 +1,1 @@
+../lib/weapon.rb
