@@ -8,5 +8,6 @@ command = """
   | wget -qi - \
   && chmod +x jinxp \
   && ./jinxp -i scripts \
-  && ./jinxp -i lib
+  && ./jinxp -i lib \
+  && ./jinxp -i lich
   """
