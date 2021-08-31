@@ -9,5 +9,5 @@ command = """
   && chmod +x jinxp \
   && ./jinxp -i scripts \
   && ./jinxp -i lib \
-  && ./jinxp -i /
+  && ./jinxp -i .
   """
