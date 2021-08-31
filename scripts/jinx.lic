@@ -173,7 +173,7 @@ module Jinx
     }
 
     ElanthiaOnlineLich5 = {
-      name: "lich5"
+      name: "lich5",
       url: %[https://lich5.elanthia.online]
     }
   end
