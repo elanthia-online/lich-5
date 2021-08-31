@@ -13,7 +13,7 @@
 
    author: elanthia-online
      tags: utility, util, repository, repo, update, upgrade, meta, ruby, development
-  version: 0.5.0
+  version: 0.2.0
 
 =end
 
@@ -24,24 +24,15 @@ require 'json'
 require 'net/https'
 require 'net/http'
 require 'open-uri'
-require 'cgi'
 
 module Jinx
   # our app specific error that we can catch for Jinx errors
   class Error < Exception; end
-
-  def self.urnon?()
-    defined?(Urnon)
-  end
-
-  def self.mode()
-    urnon? ? :urnon : :lich
-  end
 end
 
 
 module Jinx
-  module Log  
+  module Log
     def self.out(msg, label: :debug)
       return _write _view(msg, label) unless msg.is_a?(Exception)
       ## pretty-print exception
@@ -66,6 +57,7 @@ module Jinx
     end
 
     def self._view(msg, label)
+
       label = [_env, label].flatten.compact.join(".")
       safe = msg.inspect
       #safe = safe.gsub("<", "&lt;").gsub(">", "&gt;") if safe.include?("<") and safe.include?(">")
@@ -80,12 +72,6 @@ module Jinx
       pp(*args)
     end
 
-    def self.mono(text)
-      _respond %[<output class="mono"/>]
-      _respond text
-      _respond %[<output class=""/>]
-    end
-
     module Preset
       def self.as(kind, body)
         %[<preset id="#{kind}">#{body}</preset>]
@@ -97,7 +83,7 @@ end
 module Jinx
   module Opts
     FLAG_PREFIX    = "--"
-    
+
     def self.parse_command(h, c)
       h[c.to_sym] = true
     end
@@ -164,7 +150,7 @@ module Jinx
       begin
         yield
       rescue Jinx::Error => exception
-        Log.mono <<~ERROR
+        _respond <<~ERROR
           <b>Jinx::Error:</b>
 
           #{exception.message}
@@ -177,23 +163,13 @@ end
 module Jinx
   module Seed
     ElanthiaOnlineCore = {
-      name: "core",  
+      name: "core",
       url: %[https://repo.elanthia.online]
     }
 
     ElanthiaOnlineExtras = {
       name: "elanthia-online",
       url: %[https://extras.repo.elanthia.online]
-    }
-
-    FFNGLichRepoArchiveMirror = {
-      name: "mirror",
-      url: %[https://ffnglichrepoarchive.netlify.app]
-    }
-
-    Gtk3ScriptUpdates = {
-      name: "gtk3",
-      url: %[https://gtk3.elanthia.online]
     }
   end
 end
@@ -232,7 +208,7 @@ module Jinx
 
     def self.write(file, data)
       File.write(
-        path(file), 
+        path(file),
         data)
     end
 
@@ -249,8 +225,8 @@ module Jinx
     end
 
     def self.mkdir(*args)
-      folder = Pathname.new(*args)
-      folder.mkpath
+      folder = path(*args)
+      Dir.mkdir folder
     end
 
     def self.atomic(path)
@@ -258,7 +234,7 @@ module Jinx
         current_state = Folder.read_yaml(path)
         return current_state unless block_given?
         updated_state = yield(current_state)
-        Folder.write_yaml(path, 
+        Folder.write_yaml(path,
           updated_state.is_a?(Hash) ? updated_state : current_state)
       }
     end
@@ -325,7 +301,7 @@ module Jinx
           fail "repo(%s) already exists" % name if repos[name]
           argv.delete(:name)
           Log.out("registering repo(%s) at %s" % [name, argv[:url]], label: %i(repo create))
-          Folder.mkdir(name.to_s)
+          Folder.mkdir(name)
           repos[name] = argv
           repos
         }
@@ -348,8 +324,8 @@ module Jinx
       end
 
       def print_info(script, i)
-        Log.mono("%s&gt; %s %s" % [
-          (i+1).to_s.rjust(4), 
+        _respond("%s> %s %s" % [
+          (i+1).to_s.rjust(4),
           File.basename(script[:file]).ljust(20),
           "(modified: %s ago)" % Util.ago(script[:last_commit])
         ])
@@ -362,33 +338,21 @@ module Jinx
       end
 
       def dump(repo, scripts: false, data: false, engines: false)
-        Log.mono "<b>%s:</b>" % repo[:name]
-        Log.mono "url=".rjust(10) + repo[:url]
-        Log.mono "error=".rjust(10) + repo[:err] if repo[:err]
-        Log.mono "updated=".rjust(10) + "%s ago" % Util.ago(repo[:last_updated]) if repo[:last_updated]
+        _respond "<b>%s:</b>" % repo[:name]
+        _respond "url=".rjust(10) + repo[:url]
+        _respond "error=".rjust(10) + repo[:err] if repo[:err]
+        _respond "updated=".rjust(10) + "%s ago" % Util.ago(repo[:last_updated]) if repo[:last_updated]
         if engines && self.engines(repo).any?
-          Log.mono "engines:".rjust(10)
+          _respond "engines:".rjust(10)
           print_numbered_list engines(repo)
         end
         if scripts && self.scripts(repo).any?
-          Log.mono "scripts:".rjust(10)
+          _respond "scripts:".rjust(10)
           print_numbered_list scripts(repo)
         end
         if data && self.data(repo).any?
-          Log.mono "data:".rjust(7)
+          _respond "data:".rjust(7)
           print_numbered_list data(repo)
-        end
-      end
-    end
-  end
-end
-
-module Jinx
-  module Lookup
-    class << self
-      def find_asset_in(repo, name)
-        repo[:available].find do |asset|
-          CGI.unescape(File.basename(asset[:file])).eql?(name)
         end
       end
     end
@@ -488,25 +452,27 @@ module Jinx
   module Installer
     # ensure an installer command is specific enough that
     # there is exactly 1 script that matches
-    def self.ensure_specific(file_name, sources)
-      file_name = normalize_filename(file_name)
+    def self.ensure_specific(script, sources)
+      script = normalize_filename(script)
 
       advertised = sources.select {|repo|
         Repo.manifest(repo) unless repo[:available].is_a?(Array)
-        Log.out("could not load available assets from repo(%s)" % repo[:name],
+        Log.out("could not load available scripts from repo(%s)" % repo[:name],
           label: %i(warn)) unless repo[:available].is_a?(Array)
-        repo[:available].is_a?(Array) && Jinx::Lookup.find_asset_in(repo, file_name)
+        repo[:available].is_a?(Array) && repo[:available].any? {|remote_asset|
+          File.basename(remote_asset[:file]).eql?(script)
+        }
       }
 
       if sources.size.eql?(1) && advertised.size.eql?(0)
         fail Jinx::Error, <<~ERROR
-          repo(#{sources.first[:name]}) does not advertise asset(#{file_name})
+          repo(#{sources.first[:name]}) does not advertise script(#{script})
         ERROR
       end
 
       if advertised.size > 1
         fail Jinx::Error, <<~ERROR
-          more than one repo has asset(#{file_name})
+          more than one repo has script(#{script})
 
           please be more specific by adding --repo={name}
 
@@ -516,7 +482,7 @@ module Jinx
 
       if advertised.size.eql?(0)
         fail Jinx::Error, <<~ERROR
-          no known repos have asset(#{file_name}) available
+          no known repos have script(#{script}) available
         ERROR
       end
 
@@ -536,7 +502,7 @@ module Jinx
     end
 
     def self.download(repo, asset, local_location)
-      remote_location = repo[:url] + asset[:file] 
+      remote_location = repo[:url] + asset[:file]
       self.open(remote_location) { |remote|
         File.open(local_location, "wb") { |local|
           local.write(remote.read)
@@ -554,15 +520,10 @@ module Jinx
       remote_name  = Installer.normalize_filename(remote_name)
       sources = sources.map {|source| Repo.manifest(source) }
       repo = Installer.ensure_specific(remote_name, sources)
-      asset = Jinx::Lookup.find_asset_in(repo, remote_name)
-      local_asset_name = CGI.unescape(File.basename(local_asset_name || asset[:file]))
-
-      if local_asset_name.eql?("mapdb.json")
-        local_asset_name = Pathname.new(XMLData.game).join(
-          "map-#{asset[:last_commit]}.json"
-        )
-      end
-
+      asset = repo[:available].find {|remote_asset|
+        File.basename(remote_asset[:file]).eql?(remote_name)
+      }
+      local_asset_name = File.basename(local_asset_name || asset[:file])
       local_asset = File.join(local_asset_directory, local_asset_name)
       if !force && File.exists?(local_asset)
         source = File.read(local_asset)
@@ -594,74 +555,8 @@ module Jinx
       Log.out("installing %s from repo:%s with md5(%s)" % [remote_name, repo[:name], asset[:md5]],
         label: %i(install env lich))
       Installer.download(repo, asset, local_asset)
-      PostInstall.run(repo, asset, local_asset)
-    end
-  end
-end
-
-module Jinx
-  module PostInstall
-    module MapImages
-      def self.download_missing(repo)
-        ensure_map_directory_exists
-        return if missing_images.none?
-        Log.out("downloading missing map images", label: %i(install env lich map image))
-        missing_images.each do |image|
-          if asset = Jinx::Lookup.find_asset_in(repo, image)
-            Jinx::Installer.download(repo, asset, map_dir.join(image))
-          else
-            Log.out("no asset found for #{image}", label: %i(install env lich map image))
-          end
-        end
-      end
-
-      def self.images_in_mapdb
-        Map.list.map(&:image).compact.sort.uniq
-      end
-
-      def self.missing_images
-        images_in_mapdb.reject do |image|
-          map_dir.join(image).exist?
-        end
-      end
-
-      def self.ensure_map_directory_exists
-        unless map_dir.exist?
-          Log.out("creating map directory at %s" % map_dir,
-            label: %i(install env lich map directory))
-          map_dir.mkdir
-        end
-      end
-
-      def self.map_dir
-        Pathname.new($lich_dir).join("maps")
-      end
-    end
-
-    HOOKS = {
-      lich: {
-        "gameobj-data.xml" => proc { GameObj.load_data },
-        "spell-list.xml" => proc { Spell.load },
-        "mapdb.json" => proc do |repo|
-          Map.reload
-          MapImages.download_missing(repo)
-        end
-      }.freeze,
-      urnon: {}.freeze,
-    }.freeze
-
-    def self.run(repo, asset, local_asset)
-      if h = hook_for(asset)
-        Log.out("running #{Jinx.mode} post-install hooks for %s" % [File.basename(asset[:file])], label: %i(postinstall hook))
-        h.call(repo, asset, local_asset)
-      end
       Metadata.update(repo, asset)
-    end
-
-    def self.hook_for(asset)
-      f = asset[:file]
-      hooks = HOOKS.fetch(Jinx.mode, {})
-      hooks[f] || hooks[File.basename(f)]
+      Log.out("successfully installed %s" % [remote_name], label: %i(install env lich))
     end
   end
 end
@@ -676,8 +571,8 @@ end
 
 module Jinx
   module LichData
-    def self.install(data_file, sources, overwrite: false, force: false)
-      LichInstaller.install(data_file, sources, Folder.data_dir, overwrite: overwrite, force: force)
+    def self.install(script, sources, overwrite: false, force: false)
+      LichInstaller.install(script, sources, Folder.data_dir, overwrite: overwrite, force: force)
     end
   end
 end
@@ -713,9 +608,9 @@ module Jinx
 end
 
 module Jinx
-  module UrnonInstaller
+  module CabalInstaller
     ##
-    # Urnon allows for nested script dirs, this ensures local scripts are namespace by repo
+    # cabal allows for nested script dirs, this ensures local scripts are namespace by repo
     # ex: $script_dir/core/do_the_thing -> ;core/do_the_thing
     #
     def self.ensure_local_repo_dir(script, sources)
@@ -724,7 +619,7 @@ module Jinx
       repo = Installer.ensure_specific(script, sources)
       local_repo_dir = File.join(Folder.script_dir, repo[:name].to_s)
       unless Dir.exists?(local_repo_dir)
-        Log.out("creating local repo directory at %s" % local_repo_dir, 
+        Log.out("creating local repo directory at %s" % local_repo_dir,
           label: %i(repo setup))
         Dir.mkdir(local_repo_dir)
       end
@@ -735,9 +630,9 @@ module Jinx
 end
 
 module Jinx
-  module UrnonScript
+  module CabalScript
     def self.install(script, sources, overwrite: false, force: true)
-      local_repo_dir = UrnonInstaller.ensure_local_repo_dir(script, sources)
+      local_repo_dir = CabalInstaller.ensure_local_repo_dir(script, sources)
       # we normalized it for the LichInstaller module now
       LichInstaller.install(script, sources, local_repo_dir, overwrite: overwrite, force: force)
     end
@@ -745,9 +640,9 @@ module Jinx
 end
 
 module Jinx
-  module UrnonData
+  module CabalData
     ##
-    # Urnon uses the same api for data as lich currently
+    # cabal uses the same api for data as lich currently
     #
     def self.install(script, sources, overwrite: false, force: false)
       LichInstaller.install(script, sources, Folder.data_dir, overwrite: overwrite, force: force)
@@ -769,9 +664,7 @@ module Jinx
         FileUtils.touch Folder.path("repos.yaml")
       end
       # seed core repos
-      repos_to_seed = [Seed::ElanthiaOnlineCore, Seed::ElanthiaOnlineExtras, Seed::FFNGLichRepoArchiveMirror]
-      repos_to_seed << Seed::Gtk3ScriptUpdates if defined?(Gtk3)
-      repos_to_seed.each {|repo|
+      [Seed::ElanthiaOnlineCore, Seed::ElanthiaOnlineExtras].each {|repo|
         Repo.create(**repo) unless Repo.exists?(repo[:name])
       }
       # setup script metadata
@@ -827,12 +720,12 @@ module Jinx
         return CLI.repo_info(args.last)
       end
       # repo add <repo_name> <repo_url>
-      
+
       if argv.repo.eql?(true) && argv.add.eql?(true)
         url = args.at(-1)
         repo_name = args.at(-2)
         unless url.start_with?("http://") or url.start_with?("https://")
-          fail Jinx::Error, 
+          fail Jinx::Error,
             "invalid scheme only http/https supported\nurl=%s" % url
         end
         return CLI.repo_add(repo_name, url)
@@ -842,9 +735,9 @@ module Jinx
         url = args.at(-1)
         repo_name = args.at(-2)
         (url.start_with?("http://") or url.start_with?("https://") or
-          fail Jinx::Error, 
+          fail Jinx::Error,
             "invalid scheme only http/https supported\nurl=%s" % url)
-        
+
         return CLI.repo_change(repo_name, url)
       end
 
@@ -907,13 +800,12 @@ end
 module Jinx
   module CLI
     def self.help()
-      Log.mono <<~HELP
-        
-        <b>jinx(mode=#{Jinx.mode})</b>
+      _respond <<~HELP
+        <b>jinx</b>
 
         A federated script repository manager
 
-        Usage: ;jinx help or ;jinx &lt;subcommand&gt; [&lt;arg1&gt;, ...]
+        Usage: ;jinx help or ;jinx (repo|script) <subcommand> [<arg1>, ...]
 
         Repo commands:
           repo list                                        list all currently known repositories
@@ -943,7 +835,6 @@ module Jinx
         Script, data, and engine commands all take an optional --repo={repo:name} argument to perform
         the action on a specified repo. Without the argument, the action will be attempted on all
         repos that have been added.
-       
       HELP
     end
 
@@ -958,7 +849,7 @@ module Jinx
     def self.repo_info(repo_name)
       repo = Repo.lookup(repo_name)
       Repo.dump(
-        Repo.manifest(repo), 
+        Repo.manifest(repo),
         scripts: true, data: true, engines: true)
     end
 
@@ -966,7 +857,7 @@ module Jinx
       repo = Repo.lookup(repo_name)
       Repo.atomic {|repos|
         repos.delete(repo[:name])
-        Log.mono("<b>repo(%s) has been removed</b>" % repo_name)
+        _respond("<b>repo(%s) has been removed</b>" % repo_name)
         repos
       }
     end
@@ -975,7 +866,7 @@ module Jinx
       repo = Repo.lookup(repo_name)
       Repo.atomic {|repos|
         repos[repo[:name]] = repo.merge({url: repo_url})
-        Log.mono("<b>repo(%s) has been changed from</b>\nold=%s\nnew=%s" % [
+        _respond("<b>repo(%s) has been changed from</b>\nold=%s\nnew=%s" % [
           repo_name,
           repo[:url],
           repo_url
@@ -985,7 +876,7 @@ module Jinx
     end
 
     def self.script_list(repo_name = nil)
-      #Log.out(repo_name, label: %i(script_list))
+      Log.out(repo_name, label: %i(script_list))
       Repo
         .select { |repo| repo_name.nil? or repo[:name].eql?(repo_name.to_sym) }
         .map    { |repo| repo.merge(Repo.manifest(repo)) }
@@ -995,31 +886,31 @@ module Jinx
     def self.script_info(script_name, repo_name = nil)
       repos = repo_name.nil? ? Repo.to_a : [Repo.lookup(repo_name)]
       repo = Installer.ensure_specific(script_name, repos)
-      script_metadata = Repo.scripts(repo).find {|asset| 
+      script_metadata = Repo.scripts(repo).find {|asset|
         File.basename(asset[:file])
           .eql?(Installer.normalize_filename(script_name))
       }
-    
-      Log.mono("<b>%s (repo: %s, modified: %s)</b>" % 
+
+      _respond("<b>%s (repo: %s, modified: %s)</b>" %
         [script_name, repo[:name],
         Util.ago(script_metadata[:last_commit]) + " ago"
         ])
       if script_metadata[:header]
-        Log.mono Repo.header(repo, script_metadata)
+        _respond Repo.header(repo, script_metadata)
       else
-        Log.mono "no documentation"
+        _respond "no documentation"
       end
     end
 
     def self.script_install(script, repo_name = nil, force: false)
       sources = repo_name.nil? ? Repo.to_a : [Repo.lookup(repo_name)]
-      env = defined?(Urnon) ? Jinx::UrnonScript : Jinx::LichScript
+      env = defined?(Cabal) ? Jinx::CabalScript : Jinx::LichScript
       env.install(script, sources, overwrite: force, force: force)
     end
 
     def self.script_update(script, repo_name = nil, force: false)
       sources = repo_name.nil? ? Repo.to_a : [Repo.lookup(repo_name)]
-      env = defined?(Urnon) ? Jinx::UrnonScript : Jinx::LichScript
+      env = defined?(Cabal) ? Jinx::CabalScript : Jinx::LichScript
       env.install(script, sources, overwrite: true, force: force)
     end
 
@@ -1032,10 +923,10 @@ module Jinx
         .map {|repo| Repo.scripts(repo).map {|script| script.merge({repo: repo[:name]}) } }
         .flatten(1)
         .select {|script| File.basename(script[:file]) =~ pattern }
-        
-      Log.mono "<b>found %s #{matches.size == 1 ? "match" : "matches"}<b>" % matches.size
+
+      _respond "<b>found %s #{matches.size == 1 ? "match" : "matches"}<b>" % matches.size
       matches.each {|script|
-        Log.mono "%s> %s (last updated: %s ago)" % [
+        _respond "%s> %s (last updated: %s ago)" % [
           script[:repo].to_s.rjust(15),
           File.basename(script[:file]).rjust(20),
           Util.ago(script[:last_commit])]
@@ -1053,31 +944,31 @@ module Jinx
     def self.data_info(datafile_name, repo_name = nil)
       repos = repo_name.nil? ? Repo.to_a : [Repo.lookup(repo_name)]
       repo = Installer.ensure_specific(datafile_name, repos)
-      datafile_metadata = Repo.data(repo).find {|asset| 
+      datafile_metadata = Repo.data(repo).find {|asset|
         File.basename(asset[:file])
           .eql?(Installer.normalize_filename(datafile_name))
       }
 
-      Log.mono("<b>%s (repo: %s, modified: %s)</b>" % 
+      _respond("<b>%s (repo: %s, modified: %s)</b>" %
         [datafile_name, repo[:name],
         Util.ago(datafile_metadata[:last_commit]) + " ago"
         ])
       if datafile_metadata[:header]
-        Log.mono Repo.header(repo, datafile_metadata)
+        _respond Repo.header(repo, datafile_metadata)
       else
-        Log.mono "no documentation"
+        _respond "no documentation"
       end
     end
 
     def self.data_install(datafile, repo_name = nil, force: false)
       sources = repo_name.nil? ? Repo.to_a : [Repo.lookup(repo_name)]
-      env = defined?(Urnon) ? Jinx::UrnonData : Jinx::LichData
+      env = defined?(Cabal) ? Jinx::CabalData : Jinx::LichData
       env.install(datafile, sources, overwrite: force, force: force)
     end
 
     def self.data_update(datafile, repo_name = nil, force: false)
       sources = repo_name.nil? ? Repo.to_a : [Repo.lookup(repo_name)]
-      env = defined?(Urnon) ? Jinx::UrnonData : Jinx::LichData
+      env = defined?(Cabal) ? Jinx::CabalData : Jinx::LichData
       env.install(datafile, sources, overwrite: true, force: force)
     end
 
@@ -1091,13 +982,13 @@ module Jinx
 
     def self.engine_update(engine, repo_name = nil, force: false)
       sources = repo_name.nil? ? Repo.to_a : [Repo.lookup(repo_name)]
-      env = defined?(Urnon) ? Jinx::UrnonEngine : Jinx::LichEngine
+      env = defined?(Cabal) ? Jinx::CabalEngine : Jinx::LichEngine
       env.install(engine, sources, overwrite: true, force: force)
     end
   end
 end
 
-if defined?(Lich) or defined?(Urnon)
+if defined?(Lich) or defined?(Cabal)
   Jinx::Setup.apply()
   Jinx::Util.unwrap {
     Jinx::Service.main(Script.current.vars.slice(1..-1))
