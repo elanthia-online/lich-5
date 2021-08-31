@@ -171,6 +171,11 @@ module Jinx
       name: "elanthia-online",
       url: %[https://extras.repo.elanthia.online]
     }
+
+    ElanthiaOnlineLich5 = {
+      name: "lich5"
+      url: %[https://lich5.elanthia.online]
+    }
   end
 end
 
@@ -191,6 +196,11 @@ module Jinx
     def self.script_dir()
       $script_dir.is_a?(String) or fail Jinx::Error, "$script_dir is not String"
       $script_dir
+    end
+
+    def self.lib_dir()
+      $lib_dir.is_a?(String) or fail Jinx::Error, "$lib_dir is not a String"
+      $lib_dir
     end
 
     def self.engine_dir()
@@ -319,6 +329,10 @@ module Jinx
         assets_in(repo).select { |f| f[:type] == "data" }
       end
 
+      def lib(repo)
+        assets_in(repo).select { |f| f[:type] == "lib" }
+      end
+
       def engines(repo)
         assets_in(repo).select { |f| f[:type] == "engine" }
       end
@@ -337,7 +351,7 @@ module Jinx
           .each_with_index(&method(:print_info))
       end
 
-      def dump(repo, scripts: false, data: false, engines: false)
+      def dump(repo, scripts: false, data: false, lib: false, engines: false)
         _respond "<b>%s:</b>" % repo[:name]
         _respond "url=".rjust(10) + repo[:url]
         _respond "error=".rjust(10) + repo[:err] if repo[:err]
@@ -349,6 +363,10 @@ module Jinx
         if scripts && self.scripts(repo).any?
           _respond "scripts:".rjust(10)
           print_numbered_list scripts(repo)
+        end
+        if lib && self.lib(repo).any?
+          _respond "lib:".rjust(6)
+          print_numbered_list data(repo)
         end
         if data && self.data(repo).any?
           _respond "data:".rjust(7)
@@ -410,6 +428,8 @@ module Jinx
           ScriptMetadata
         when "data", :data
           DatafileMetadata
+        when "lib", :lib
+          LibfileMetadata
         when "engine", :engine
           EngineMetadata
         else
@@ -439,6 +459,12 @@ module Jinx
     extend Metadata::Base
 
     @file = "scripts.yaml"
+  end
+
+  module LibMetadata
+    extend Metadata::Base
+
+    @file = "lib.yaml"
   end
 
   module EngineMetadata
@@ -664,7 +690,7 @@ module Jinx
         FileUtils.touch Folder.path("repos.yaml")
       end
       # seed core repos
-      [Seed::ElanthiaOnlineCore, Seed::ElanthiaOnlineExtras].each {|repo|
+      [Seed::ElanthiaOnlineCore, Seed::ElanthiaOnlineExtras, Seed::ElanthiaOnlineLich5].each {|repo|
         Repo.create(**repo) unless Repo.exists?(repo[:name])
       }
       # setup script metadata
@@ -676,6 +702,11 @@ module Jinx
       unless File.exists? Folder.path("data.yaml")
         Log.out("creating %s" % Folder.path("data.yaml"), label: %i(setup data))
         FileUtils.touch Folder.path("data.yaml")
+      end
+      # setup lib file metadata
+      unless File.exists? Folder.path("lib.yaml")
+        Log.out("creating %s" % Folder.path("lib.yaml"), label: %i(setup data))
+        FileUtils.touch Folder.path("lib.yaml")
       end
       # setup engine metadata
       unless File.exists? Folder.path("engine.yaml")
@@ -782,6 +813,22 @@ module Jinx
       if argv.data.eql?(true) && argv.update.eql?(true)
         return CLI.data_update(args.last, argv.repo, force: argv.force)
       end
+      # lib list
+      if argv.lib.eql?(true) && argv.list.eql?(true)
+        return CLI.lib_list(argv.repo)
+      end
+      # lib info <lib_name>
+      if argv.lib.eql?(true) && argv.info.eql?(true)
+        return CLI.lib_info(args.last, argv.repo)
+      end
+      # lib install <lib_name>
+      if argv.lib.eql?(true) && argv.install.eql?(true)
+        return CLI.lib_install(args.last, argv.repo, force: argv.force)
+      end
+      # lib update <lib_name>
+      if argv.lib.eql?(true) && argv.update.eql?(true)
+        return CLI.lib_update(args.last, argv.repo, force: argv.force)
+      end
       # engine list
       if argv.engine.eql?(true) && argv.list.eql?(true)
         return CLI.engine_list(argv.repo)
@@ -827,6 +874,13 @@ module Jinx
           data install {datafile:name}                     attempt to install a data file
           data update  {datafile:name}                     attempts to update an installed data file
           data search  {pattern}                           searches for data files matching the pattern
+
+        Data commands:
+          lib list                                         list all currently known lib files
+          lib info    {libfile:name}                       shows known info about a remote lib file
+          lib install {libfile:name}                       attempt to install a lib file
+          lib update  {libfile:name}                       attempts to update an installed lib file
+          lib search  {pattern}                            searches for lib files matching the pattern
 
         Engine commands:
           engine list                                      list all currently known scripting engines
@@ -970,6 +1024,45 @@ module Jinx
       sources = repo_name.nil? ? Repo.to_a : [Repo.lookup(repo_name)]
       env = defined?(Cabal) ? Jinx::CabalData : Jinx::LichData
       env.install(datafile, sources, overwrite: true, force: force)
+    end
+
+    def self.lib_list(repo_name = nil)
+      Log.out(repo_name, label: %i(lib_list))
+      Repo
+        .select { |repo| repo_name.nil? or repo[:name].eql?(repo_name.to_sym) }
+        .map    { |repo| repo.merge(Repo.manifest(repo)) }
+        .each   { |repo| Repo.dump(repo, lib: true) }
+    end
+
+    def self.lib_info(libfile_name, repo_name = nil)
+      repos = repo_name.nil? ? Repo.to_a : [Repo.lookup(repo_name)]
+      repo = Installer.ensure_specific(libfile_name, repos)
+      libfile_metadata = Repo.lib(repo).find {|asset|
+        File.basename(asset[:file])
+          .eql?(Installer.normalize_filename(libfile_name))
+      }
+
+      _respond("<b>%s (repo: %s, modified: %s)</b>" %
+        [libfile_name, repo[:name],
+        Util.ago(libfile_metadata[:last_commit]) + " ago"
+        ])
+      if libfile_metadata[:header]
+        _respond Repo.header(repo, libfile_metadata)
+      else
+        _respond "no documentation"
+      end
+    end
+
+    def self.lib_install(libfile, repo_name = nil, force: false)
+      sources = repo_name.nil? ? Repo.to_a : [Repo.lookup(repo_name)]
+      env = defined?(Cabal) ? Jinx::CabalData : Jinx::LichLib
+      env.install(libfile, sources, overwrite: force, force: force)
+    end
+
+    def self.lib_update(libfile, repo_name = nil, force: false)
+      sources = repo_name.nil? ? Repo.to_a : [Repo.lookup(repo_name)]
+      env = defined?(Cabal) ? Jinx::CabalData : Jinx::LichLib
+      env.install(libfile, sources, overwrite: true, force: force)
     end
 
     def self.engine_list(repo_name = nil)

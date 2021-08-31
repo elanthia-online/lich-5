@@ -9937,6 +9937,7 @@ LICH_DIR   ||= File.dirname(File.expand_path($PROGRAM_NAME))
 TEMP_DIR   ||= "#{LICH_DIR}/temp"
 DATA_DIR   ||= "#{LICH_DIR}/data"
 SCRIPT_DIR ||= "#{LICH_DIR}/scripts"
+LIB_DIR    ||= "#{LICH_DIR}/lib"
 MAP_DIR    ||= "#{LICH_DIR}/maps"
 LOG_DIR    ||= "#{LICH_DIR}/logs"
 BACKUP_DIR ||= "#{LICH_DIR}/backup"
@@ -10016,6 +10017,15 @@ unless File.exists?(SCRIPT_DIR)
     exit
   end
 end
+unless File.exists?(LIB_DIR)
+  begin
+    Dir.mkdir(LIB_DIR)
+  rescue
+    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    Lich.msgbox(:message => "An error occured while attempting to create directory #{LIB_DIR}\n\n#{$!}", :icon => :error)
+    exit
+  end
+end
 unless File.exists?(MAP_DIR)
   begin
     Dir.mkdir(MAP_DIR)
@@ -10051,6 +10061,7 @@ $lich_dir = "#{LICH_DIR}/"
 $temp_dir = "#{TEMP_DIR}/"
 $script_dir = "#{SCRIPT_DIR}/"
 $data_dir = "#{DATA_DIR}/"
+$lib_dir = "#{LIB_DIR}/"
 
 #
 # only keep the last 20 debug files
