@@ -35,7 +35,7 @@
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
 
-LICH_VERSION = '5.0.17'
+LICH_VERSION = '5.0.18'
 TESTING = false
 
 if RUBY_VERSION !~ /^2|^3/
@@ -8746,11 +8746,14 @@ module Effects
     end
 
     def active?(id_or_name)
-      unless id_or_name.instance_of?(Integer)
-        id_or_name = to_h[:names].fetch(id_or_name)
+      begin
+        expiry = to_h[:data].fetch(id_or_name, 0) if id_or_name.instance_of?(Integer)
+        expiry = to_h[:data].fetch(to_h[:names].transform_keys(&:downcase).fetch(id_or_name.downcase), 0) if id_or_name.instance_of?(String)
+        expiry = to_h[:data].fetch(to_h[:names].transform_keys(&:downcase).fetch(id_or_name.to_s.gsub(/[\_]/, ' ').split.map(&:downcase).join(' ')), 0) if id_or_name.instance_of?(Symbol)
+        expiry.to_i > Time.now.to_i
+      rescue
+        false
       end
-      expiry = to_h[:data].fetch(id_or_name, 0)
-      expiry.to_i > Time.now.to_i
     end
   end
 
