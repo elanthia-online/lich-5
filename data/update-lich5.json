@@ -28,7 +28,7 @@
     "update_type":"refresh",
     "version_lich":"5.0.18",
     "update_libs":["eaccess.rb", "armor.rb", "cman.rb", "feat.rb", "shield.rb", "weapon.rb"],
-    "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lnet.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
+    "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "lnet.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
     "recommend_update_scripts":["waggle.lic"],
     "announce_features":[]
   }
