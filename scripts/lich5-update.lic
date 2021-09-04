@@ -84,9 +84,33 @@ download_lich = proc {
     filename = "#{$lich_dir}#{File.basename($PROGRAM_NAME)}"
     backupfilename = "#{$temp_dir}lich-#{LICH_VERSION}.rb"
     tempfilename = "#{$lich_dir}temp_lich.rbw"
-    File.open(filename, 'rb') { |r| File.open(backupfilename, 'wb') { |w| w.write(r.read) } }
-    File.open(tempfilename, 'rb') { |r| File.open(filename, 'wb') { |w| w.write(r.read) } }
-    File.delete(tempfilename)
+    if defined?(Win32)
+      begin
+        File.rename(filename, backupfilename)
+      rescue
+        if $!.to_s =~ /Invalid cross-device link/
+          File.open(filename, 'rb') { |r| File.open(backupfilename, 'wb') { |w| w.write(r.read) } }
+          File.delete(filename)
+        else
+          raise $!
+        end
+      end
+      begin
+        File.rename(tempfilename, filename)
+      rescue
+        if $!.to_s =~ /Invalid cross-device link/
+          File.open(tempfilename, 'rb') { |r| File.open(filename, 'wb') { |w| w.write(r.read) } }
+          File.delete(tempfilename)
+        else
+          raise $!
+        end
+      end
+      # perserves file mode, which might be suid and we can't set that here
+    else
+      File.open(filename, 'rb') { |r| File.open(backupfilename, 'wb') { |w| w.write(r.read) } }
+      File.open(tempfilename, 'rb') { |r| File.open(filename, 'wb') { |w| w.write(r.read) } }
+      File.delete(tempfilename)
+    end
     echo "Lich5 has been updated to Lich5 version #{@udpate_to}"
     echo 'You should exit the game, then log back in.  This will start the game'
     echo 'with your updated Lich.  Enjoy!'
