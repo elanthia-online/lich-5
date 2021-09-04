@@ -3,7 +3,7 @@
   {
     "update_type":"current",
     "version_lich":"5.0.18",
-    "update_libs":[],
+    "update_libs":["eaccess.rb", "armor.rb", "cman.rb", "feat.rb", "shield.rb", "weapon.rb"],
     "update_core_scripts":["infomon.lic", "lnet.lic"],
     "recommend_update_scripts":{"waggle.lic":";jinx script update waggle --repo=gtk3"},
     "announce_features":["Lich 5.0.18 includes",
