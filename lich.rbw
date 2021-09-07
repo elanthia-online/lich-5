@@ -35,7 +35,7 @@
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
 
-LICH_VERSION = '5.0.16'
+LICH_VERSION = '5.0.18'
 TESTING = false
 
 if RUBY_VERSION !~ /^2|^3/
@@ -1504,7 +1504,28 @@ class XMLParser
 
   # for backwards compatability
   def active_spells
-    @dialogs["Active Spells"]
+    z = {}
+    XMLData.dialogs.sort.each do |a,b|
+      b[:names].each do |k,v|
+        case a
+        when /Active Spells|Buffs/
+          z.merge!(k => b[:data].fetch(v))
+        when /Cooldowns/
+          if z.has_key?(k)
+            z.merge!("#{k} - Recovery" => b[:data].fetch(v))
+          else
+            z.merge!(k => b[:data].fetch(v))
+  end
+        when /Debuffs/
+          if z.has_key?(k)
+            z.merge!("#{k} - Debuff" => b[:data].fetch(v))
+          else
+            z.merge!(k => b[:data].fetch(v))
+          end
+        end
+      end
+    end
+    z
   end
 
   def reset
@@ -1544,16 +1565,35 @@ class XMLParser
 
   DECADE = 10 * 31_536_000
 
+def init_psm3_dialog(kind)
+  @dialogs[kind] ||= {
+    # Names contains our name => id lookup. Allows us to reference effects by name or id.
+    :names => {},
+    # Data contains ... the data.
+    :data => {},
+  }
+
+  @dialogs[kind][:names].clear
+  @dialogs[kind][:data].clear
+end
+
   def parse_psm3_progressbar(kind, attributes)
-    @dialogs[kind] ||= {}
+  init_psm3_dialog(kind) unless @dialogs[kind]
+
+  # Attributes that must exist
+  id = attributes["id"].to_i
     name = attributes["text"]
     value = attributes["time"]
-    return unless name && value
+
+  return unless id && name && value
+
     # set the expiry for a decade for infinite duration effects
-    return @dialogs[kind][name] = Time.now + DECADE if value.downcase.eql?("indefinite")
+  @dialogs[kind][:names][name] = id
+
+  return @dialogs[kind][:data][id] = Time.now + DECADE if value.downcase.eql?("indefinite")
     # in psm 3.0 progress bars now have second precision!
     hour, minute, second = value.split(':')
-    @dialogs[kind][name] = Time.now + (hour.to_i * 3600) + (minute.to_i * 60) + second.to_i
+  @dialogs[kind][:data][id] = Time.now + (hour.to_i * 3600) + (minute.to_i * 60) + second.to_i
   end
 
   PSM_3_DIALOG_IDS = ["Buffs", "Active Spells", "Debuffs", "Cooldowns"]
@@ -1577,8 +1617,7 @@ class XMLParser
         @obj_before_name = nil
         @obj_after_name = nil
       elsif name == 'dialogData' and attributes['clear'] == 't' and PSM_3_DIALOG_IDS.include?(attributes["id"])
-        @dialogs[attributes["id"]] ||= {}
-        @dialogs[attributes["id"]].clear
+        init_psm3_dialog(attributes["id"])
       elsif name == 'resource'
         nil
       elsif name == 'nav'
@@ -8304,9 +8343,9 @@ module Games
           false
         elsif (self.mana_cost(options) > 0)
           ## convert Spell[9699].active? to Effects::Debuffs test (if Debuffs is where it shows)
-          if (Char.prof == "Monk" and Feat.known?(:mental_acuity)) and (Spell[9699].active? or not checkstamina(self.mana_cost(options)*2))
+          if Feat.known?(:mental_acuity) and (Spell[9699].active? or not checkstamina(self.mana_cost(options)*2))
             false
-          elsif (  !checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options)/4, 1].max))  )
+          elsif ( !Feat.known?(:mental_acuity) ) && ( !checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options)/4, 1].max))  )
             false
         else
           true
@@ -8330,17 +8369,20 @@ module Games
       end
       def cast(target=nil, results_of_interest=nil)
         # fixme: find multicast in target and check mana for it
-        script = Script.current
-        if @type.nil?
-          echo "cast: spell missing type (#{@name})"
+        check_energy = proc {
+          if Feat.known?(:mental_acuity)
+            unless (self.mana_cost <= 0) or checkstamina(self.mana_cost*2)
+              echo 'cast: not enough stamina there, Monk!'
           sleep 0.1
           return false
         end
+          else
         unless (self.mana_cost <= 0) or checkmana(self.mana_cost)
           echo 'cast: not enough mana'
           sleep 0.1
           return false
         end
+          end
         unless (self.spirit_cost > 0) or checkspirit(self.spirit_cost + 1 + [ 9912, 9913, 9914, 9916, 9916, 9916 ].delete_if { |num| !Spell[num].active? }.length)
           echo 'cast: not enough spirit'
           sleep 0.1
@@ -8351,6 +8393,14 @@ module Games
           sleep 0.1
           return false
         end
+        }
+        script = Script.current
+        if @type.nil?
+          echo "cast: spell missing type (#{@name})"
+          sleep 0.1
+          return false
+        end
+        check_energy.call
         begin
           save_want_downstream = script.want_downstream
           save_want_downstream_xml = script.want_downstream_xml
@@ -8362,39 +8412,11 @@ module Games
             Script.current # allows this loop to be paused
             @@cast_lock.delete_if { |s| s.paused or not Script.list.include?(s) }
           end
-          unless (self.mana_cost <= 0) or checkmana(self.mana_cost)
-            echo 'cast: not enough mana'
-            sleep 0.1
-            return false
-          end
-          unless (self.spirit_cost > 0) or checkspirit(self.spirit_cost + 1 + [ 9912, 9913, 9914, 9916, 9916, 9916 ].delete_if { |num| !Spell[num].active? }.length)
-            echo 'cast: not enough spirit'
-            sleep 0.1
-            return false
-          end
-          unless (self.stamina_cost <= 0) or checkstamina(self.stamina_cost)
-            echo 'cast: not enough stamina'
-            sleep 0.1
-            return false
-          end
+          check_energy.call
           if @cast_proc
             waitrt?
             waitcastrt?
-            unless (self.mana_cost <= 0) or checkmana(self.mana_cost)
-              echo 'cast: not enough mana'
-              sleep 0.1
-              return false
-            end
-            unless (self.spirit_cost > 0) or checkspirit(self.spirit_cost + 1 + [ 9912, 9913, 9914, 9916, 9916, 9916 ].delete_if { |num| !Spell[num].active? }.length)
-              echo 'cast: not enough spirit'
-              sleep 0.1
-              return false
-            end
-            unless (self.stamina_cost <= 0) or checkstamina(self.stamina_cost)
-              echo 'cast: not enough stamina'
-              sleep 0.1
-              return false
-            end
+            check_energy.call
             begin
               proc { begin; $SAFE = 3; rescue; nil; end; eval(@cast_proc) }.call
             rescue
@@ -8736,19 +8758,39 @@ module Effects
       @dialog = dialog
     end
 
-    def to_h
-      XMLData.dialogs.fetch(@dialog, {})
+    def to_h(complex: false)
+      if complex
+        XMLData.dialogs.fetch(@dialog, { :names => {}, :data => {} })
+      else
+        XMLData.active_spells
+    end
     end
 
     def each()
       to_h.each {|k,v| yield(k,v)}
     end
 
-    def active?(effect)
-      expiry = to_h.fetch(effect, 0)
+    def active?(id_or_name)
+      begin
+        expiry = to_h[:data].fetch(id_or_name, 0) if id_or_name.instance_of?(Integer)
+        expiry = to_h[:data].fetch(to_h[:names].transform_keys(&:downcase).fetch(id_or_name.downcase), 0) if id_or_name.instance_of?(String)
+        expiry = to_h[:data].fetch(to_h[:names].transform_keys(&:downcase).fetch(id_or_name.to_s.gsub(/[\_]/, ' ').split.map(&:downcase).join(' ')), 0) if id_or_name.instance_of?(Symbol)
       expiry.to_i > Time.now.to_i
+      rescue
+        false
     end
   end
+
+  def temp_putup(effect:)
+    # to account for SIMU XML delays
+    tempduration = Time.now + 10
+    tempspell = 1 + rand(99)
+    insertnamehash = { "#{effect}" => tempspell }
+    insertdatahash = { tempspell => tempduration }
+    XMLData.dialogs.fetch(@dialog)[:names].to_h.merge!(insertnamehash)
+    XMLData.dialogs.fetch(@dialog)[:data].to_h.merge!(insertdatahash)
+  end
+end
 
   Spells    = Registry.new("Active Spells")
   Buffs     = Registry.new("Buffs")
