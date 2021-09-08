@@ -1506,7 +1506,7 @@ class XMLParser
   # for backwards compatability
   def active_spells
     z = {}
-    XMLData.dialogs.each do |a,b|
+    XMLData.dialogs.sort.each do |a,b|
       b.each do |k,v|
         case a
         when /Active Spells|Buffs/
