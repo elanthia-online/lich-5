@@ -35,7 +35,7 @@
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
 
-LICH_VERSION = '5.0.18'
+LICH_VERSION = '5.0.19'
 TESTING = false
 
 if RUBY_VERSION !~ /^2|^3/
@@ -1413,7 +1413,7 @@ class XMLParser
               :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
               :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
               :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
-              :dialogs, :room_id
+              :dialogs, :room_id, :ext_dialogs
   attr_accessor :send_fake_tags
 
   @@warned_deprecated_spellfront = 0
@@ -1498,6 +1498,8 @@ class XMLParser
 
     # psm 3.0 dialogdata updates
     @dialogs = {}
+    @ext_dialogs = {}
+
     # real id updates
     @room_id = nil
   end
@@ -1505,26 +1507,18 @@ class XMLParser
   # for backwards compatability
   def active_spells
     z = {}
-    XMLData.dialogs.sort.each do |a,b|
+    XMLData.ext_dialogs.sort.each do |a,b|
       b[:names].each do |k,v|
         case a
         when /Active Spells|Buffs/
           z.merge!(k => b[:data].fetch(v))
         when /Cooldowns/
-          if z.has_key?(k)
-            z.merge!("#{k} - Recovery" => b[:data].fetch(v))
-          else
-            z.merge!(k => b[:data].fetch(v))
-  end
+          z.merge!("CD - #{k}" => b[:data].fetch(v))
         when /Debuffs/
-          if z.has_key?(k)
-            z.merge!("#{k} - Debuff" => b[:data].fetch(v))
-          else
-            z.merge!(k => b[:data].fetch(v))
+          z.merge!("DB - #{k}" => b[:data].fetch(v))
           end
         end
       end
-    end
     z
   end
 
@@ -1565,35 +1559,32 @@ class XMLParser
 
   DECADE = 10 * 31_536_000
 
-def init_psm3_dialog(kind)
-  @dialogs[kind] ||= {
-    # Names contains our name => id lookup. Allows us to reference effects by name or id.
-    :names => {},
-    # Data contains ... the data.
-    :data => {},
-  }
-
-  @dialogs[kind][:names].clear
-  @dialogs[kind][:data].clear
-end
-
   def parse_psm3_progressbar(kind, attributes)
-  init_psm3_dialog(kind) unless @dialogs[kind]
+    @dialogs[kind] ||= {}
 
-  # Attributes that must exist
-  id = attributes["id"].to_i
     name = attributes["text"]
     value = attributes["time"]
-
-  return unless id && name && value
-
+    return unless name && value
     # set the expiry for a decade for infinite duration effects
-  @dialogs[kind][:names][name] = id
-
-  return @dialogs[kind][:data][id] = Time.now + DECADE if value.downcase.eql?("indefinite")
+    return @dialogs[kind][name] = Time.now + DECADE if value.downcase.eql?("indefinite")
     # in psm 3.0 progress bars now have second precision!
     hour, minute, second = value.split(':')
-  @dialogs[kind][:data][id] = Time.now + (hour.to_i * 3600) + (minute.to_i * 60) + second.to_i
+    @dialogs[kind][name] = Time.now + (hour.to_i * 3600) + (minute.to_i * 60) + second.to_i
+end
+
+  def parse_psm3_extended(kind, attributes)
+    @ext_dialogs[kind] ||= { :names => {}, :data => {}, }
+
+  id = attributes["id"].to_i
+    name = attributes["text"]
+    duration = attributes["time"]
+    return unless id && name && duration
+    # set the expiry for a decade for infinite duration effects
+    @ext_dialogs[kind][:names][name] = id
+    return @ext_dialogs[kind][:data][id] = Time.now + DECADE if duration.downcase.eql?("indefinite")
+    # in psm 3.0 progress bars now have second precision!
+    hour, minute, second = duration.split(':')
+    @ext_dialogs[kind][:data][id] = Time.now + (hour.to_i * 3600) + (minute.to_i * 60) + second.to_i
   end
 
   PSM_3_DIALOG_IDS = ["Buffs", "Active Spells", "Debuffs", "Cooldowns"]
@@ -1617,7 +1608,8 @@ end
         @obj_before_name = nil
         @obj_after_name = nil
       elsif name == 'dialogData' and attributes['clear'] == 't' and PSM_3_DIALOG_IDS.include?(attributes["id"])
-        init_psm3_dialog(attributes["id"])
+        @dialogs[attributes["id"]] ||= {}
+        @dialogs[attributes["id"]].clear
       elsif name == 'resource'
         nil
       elsif name == 'nav'
@@ -1721,6 +1713,7 @@ end
         elsif PSM_3_DIALOG_IDS.include?(@active_ids[-2])
           # puts "kind=(%s) name=%s attributes=%s" % [@active_ids[-2], name, attributes]
           self.parse_psm3_progressbar(@active_ids[-2], attributes)
+          self.parse_psm3_extended(@active_ids[-2], attributes)
         end
       elsif name == 'roundTime'
         @roundtime_end = attributes['value'].to_i
@@ -8758,11 +8751,11 @@ module Effects
       @dialog = dialog
     end
 
-    def to_h(complex: false)
-      if complex
-        XMLData.dialogs.fetch(@dialog, { :names => {}, :data => {} })
+    def to_h(ext: false)
+      if ext
+        XMLData.ext_dialogs.fetch(@dialog, {})
       else
-        XMLData.active_spells
+        XMLData.dialogs.fetch(@dialog, {})
     end
     end
 
@@ -8770,27 +8763,13 @@ module Effects
       to_h.each {|k,v| yield(k,v)}
     end
 
-    def active?(id_or_name)
-      begin
-        expiry = to_h[:data].fetch(id_or_name, 0) if id_or_name.instance_of?(Integer)
-        expiry = to_h[:data].fetch(to_h[:names].transform_keys(&:downcase).fetch(id_or_name.downcase), 0) if id_or_name.instance_of?(String)
-        expiry = to_h[:data].fetch(to_h[:names].transform_keys(&:downcase).fetch(id_or_name.to_s.gsub(/[\_]/, ' ').split.map(&:downcase).join(' ')), 0) if id_or_name.instance_of?(Symbol)
+    def active?(effect)
+      expiry = to_h(ext: true)[:data].fetch(effect, 0) if effect.instance_of?(Integer)
+      expiry = to_h.transform_keys(&:downcase).fetch(effect.to_s.gsub(/[\_]/, ' ').split.map(&:downcase).join(' '), 0) if ( effect.instance_of?(String) || effect.instance_of?(Symbol) )
       expiry.to_i > Time.now.to_i
-      rescue
-        false
     end
-  end
 
-  def temp_putup(effect:)
-    # to account for SIMU XML delays
-    tempduration = Time.now + 10
-    tempspell = 1 + rand(99)
-    insertnamehash = { "#{effect}" => tempspell }
-    insertdatahash = { tempspell => tempduration }
-    XMLData.dialogs.fetch(@dialog)[:names].to_h.merge!(insertnamehash)
-    XMLData.dialogs.fetch(@dialog)[:data].to_h.merge!(insertdatahash)
   end
-end
 
   Spells    = Registry.new("Active Spells")
   Buffs     = Registry.new("Buffs")
