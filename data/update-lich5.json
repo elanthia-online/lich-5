@@ -2,6 +2,15 @@
 
   {
     "update_type":"current",
+    "version_lich":"5.0.19",
+    "update_libs":["eaccess.rb", "armor.rb", "cman.rb", "feat.rb", "shield.rb", "weapon.rb"],
+    "update_core_scripts":["infomon.lic", "lich5-update.lic"],
+    "recommend_update_scripts":{"waggle.lic":";jinx script update waggle --repo=gtk3-scripts"},
+    "announce_features":["Lich 5.0.19 includes:", "Support for Mental Acuity and stamina-based spell casting", "Support for PSM3 IDs", "Support for XML.active_spells reporting all PSM3 categories"]
+  },
+  
+  {
+    "update_type":"previous",
     "version_lich":"5.0.16",
     "update_libs":["eaccess.rb", "armor.rb", "cman.rb", "feat.rb", "shield.rb", "weapon.rb"],
     "update_core_scripts":["infomon.lic"],
