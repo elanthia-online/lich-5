@@ -9,13 +9,16 @@
           game: Gemstone
           tags: core
       required: Lich > 4.6.10
-       version: 1.18.9
+       version: 1.18.10
         Source: https://github.com/elanthia-online/jinx
     Alt Source: https://github.com/elanthia-online/lich-5
 
   Version Control:
     Major_change.feature_addition.bugfix
 
+  1.18.10 (2021-09-10):
+    Bugfix for regex Cloak of Shadows with Retribution (CoS - spell)
+    Bugfix for regex Raise Dead (Raise Dead Link)
   1.18.9 (2021-08-22):
     Bugfix for spells regex
   1.18.8 (2021-08-12):
@@ -1402,12 +1405,11 @@ while line = get
           else
             spell_time = ($3.to_i * 60) + $4.to_i + ($5.to_i / 60.0)
           end
-          if spell_name == 'Raise Dead Recovery'
-            # fixme
+          if spell_name == 'Raise Dead Link'
             spell_name = 'Raise Dead Cooldown'
           elsif spell_name =~ /Mage Armor \- /
             spell_name = 'Mage Armor'
-          elsif spell_name =~ /Cloak of Shadows \- /
+          elsif spell_name =~ /CoS \- /
             spell_name = 'Cloak of Shadows'
           end
           if spell = Spell.list.find { |s| s.name.downcase == spell_name.strip().downcase or s.num.to_s == spell_name.strip() }
