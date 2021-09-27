@@ -1,6 +1,20 @@
-# Lich5 Carve out for class Spell
-# intended for use beyond 5.0.19
-# needs: DRY, and LIB header scheme
+=begin
+spell.rb: Core lich file for spell management and for spell related scripts.
+Further modifications are to support the retirement of spell-list.xml.
+
+    Maintainer: Elanthia-Online
+    Original Author: Tillmen, others
+    game: Gemstone
+    tags: CORE, spells
+    required: Lich > 5.0.19
+    version: 1.1.0
+
+  changelog:
+    version 1.1.0 rebaselined as spell.rb to support spell-list.xml retirement
+    version 1.0.0
+     * Initial release and subsequent modifications as SIMU changes warranted
+
+=end
 
 module Games
   module Gemstone

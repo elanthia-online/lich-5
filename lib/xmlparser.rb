@@ -1,6 +1,19 @@
-# Lich5 Carve out for class XMLParser
-# intended for use beyond 5.0.19
-# needs: DRY, and LIB header scheme
+=begin
+xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
+
+    Maintainer: Elanthia-Online
+    Original Author: Tillmen, others
+    game: Gemstone
+    tags: CORE, spells
+    required: Lich > 5.0.19
+    version: 1.1.0
+
+  changelog:
+    version 1.1.0 rebaselined as xmlparser.rb to support continuing game changes
+    version 1.0.0
+     * Initial release and subsequent modifications as SIMU XML changes warranted
+
+=end
 
 class XMLParser
   attr_reader :mana, :max_mana, :health, :max_health, :spirit, :max_spirit, :last_spirit,
