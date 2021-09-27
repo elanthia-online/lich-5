@@ -268,7 +268,7 @@ class CMan
 
   def CMan.available?(name)
     CMan.known?(name) and CMan.affordable?(name) and
-    !Effects::Cooldowns.to_h.transform_keys(&:downcase).include?(name.to_s.gsub(/[_\-]/, ' ').gsub("'", "").downcase) and !Effects::Debuffs.to_h.include?('Strained Muscles')
+    !Lich::Util.indiCheck("Cooldowns", name) and !Lich::Util.indiCheck('Debuffs', 'Strained Muscles')
   end
 
 end

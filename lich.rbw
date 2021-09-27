@@ -35,7 +35,7 @@
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
 
-LICH_VERSION = '5.0.19'
+LICH_VERSION = '5.2.0'
 TESTING = false
 
 if RUBY_VERSION !~ /^2|^3/
