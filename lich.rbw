@@ -4578,6 +4578,10 @@ class Room < Map
   end
 end
 
+## adding util to the list of defs
+
+require_relative("./lib/util.rb")
+
 def hide_me
   Script.current.hidden = !Script.current.hidden
 end
