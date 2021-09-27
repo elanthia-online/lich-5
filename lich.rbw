@@ -35,7 +35,7 @@
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
 
-LICH_VERSION = '5.0.19'
+LICH_VERSION = '5.1.1'
 TESTING = false
 
 if RUBY_VERSION !~ /^2|^3/
@@ -6170,156 +6170,10 @@ def unnoded_pulse
   return (maxmana * 15 / 100) + (stats.max/10) + (stats.min/20)
 end
 
-def stash_hands(right: false, left: false, both: false)
-
-  general_stow_regex = /.+ you (?:deftly|warily) slip your .+ into your.+ A brief shimmer of (?:.+) light|^You (?:move to put your .*? but stop yourself|attempt to shield .*? from view as you |discreetly |carefully |absent-mindedly )?(?:put|place|slip|tuck|add|drop|untie your|find an incomplete bundle|wipe off .*? and sheathe|secure)|^A sigh of grateful pleasure can be heard as you feed .*? to your|^As you place|^I could not find what you were referring to\.$|^Your bundle would be too large|^The .+ is too large to be bundled\.|^As you place your|^As you prepare to drop|^The .*? is already a bundle|^Your .*? won't fit in .*?\.$|^You can't .+ It's closed!$/
-
-  general_get_regex = /.+ you (?:quickly|slowly) draw forth your .+ A ripple of (?:.+) light|^You (?:shield the opening of .*? from view as you |discreetly |carefully |deftly)?(?:remove|draw|grab|get|reach|slip|tuck|retrieve|already have)|^Get what\?$|^Why don't you leave some for others\?$|^You need a free hand/
-
-  $fill_hands_actions ||= Array.new
-  $fill_left_hand_actions ||= Array.new
-  $fill_right_hand_actions ||= Array.new
-
-  actions = Array.new
-  right_hand = GameObj.right_hand
-  left_hand = GameObj.left_hand
-  if UserVars.lootsack.nil? or UserVars.lootsack.empty?
-    lootsack = nil
-  else
-    lootsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack).sub(' ', ' .*')}/i }
-  end
-  other_containers_var = nil
-  other_containers = proc {
-    if other_containers_var.nil?
-      Script.current.want_downstream = false
-      Script.current.want_downstream_xml = true
-      result = dothistimeout 'inventory containers', 5, /^You are wearing/
-      Script.current.want_downstream_xml = false
-      Script.current.want_downstream = true
-      other_containers_ids = result.scan(/exist="(.*?)"/).flatten - [ lootsack.id ]
-      other_containers_var = GameObj.inv.find_all { |obj| other_containers_ids.include?(obj.id) }
-    end
-    other_containers_var
-  }
-  if (left || both) && left_hand.id
-    waitrt?
-    if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/) and (wear_result = dothistimeout("wear ##{left_hand.id}", 8, /^You .*#{left_hand.noun}|^With careful precision, you|^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)) and (wear_result !~ /^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)
-        actions.unshift proc {
-      dothistimeout "remove ##{left_hand.id}", 3, /^You|^With a slight roll of your shoulder, you|^Remove what\?/
-      20.times { break if GameObj.left_hand.id == left_hand.id or GameObj.right_hand.id == left_hand.id; sleep 0.1 }
-      if GameObj.right_hand.id == left_hand.id
-        dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
-      end
-    }
-    else
-      actions.unshift proc {
-        dothistimeout "get ##{left_hand.id}", 3, general_get_regex
-        20.times { break if (GameObj.left_hand.id == left_hand.id) or (GameObj.right_hand.id == left_hand.id); sleep 0.1 }
-        if GameObj.right_hand.id == left_hand.id
-          dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
-        end
-      }
-      if lootsack
-        result = dothistimeout "put ##{left_hand.id} in ##{lootsack.id}", 4, general_stow_regex
-        if result =~ /^You can't .+ It's closed!$/
-          actions.push proc { fput "close ##{lootsack.id}" }
-          dothistimeout "open ##{lootsack.id}", 3, /^You open|^That is already open\./
-          result = dothistimeout "put ##{left_hand.id} in ##{lootsack.id}", 3, general_stow_regex
-        end
-      else
-        result = nil
-      end
-      if result.nil? or result =~ /^Your .*? won't fit in .*?\.$/
-        for container in other_containers.call
-          result = dothistimeout "put ##{left_hand.id} in ##{container.id}", 4, general_stow_regex
-          if result =~ /^You can't .+ It's closed!$/
-            actions.push proc { fput "close ##{container.id}" }
-            dothistimeout "open ##{container.id}", 3, /^You open|^That is already open\./
-            result = dothistimeout "put ##{left_hand.id} in ##{container.id}", 3, general_stow_regex
-          end
-          break if result =~ /^You (?:put|absent-mindedly drop|slip)/
-        end
-      end
-    end
-  end
-  if (right || both) && right_hand.id
-    waitrt?
-    actions.unshift proc {
-      dothistimeout "get ##{right_hand.id}", 3, general_get_regex
-      20.times { break if GameObj.left_hand.id == right_hand.id or GameObj.right_hand.id == right_hand.id; sleep 0.1 }
-      if GameObj.left_hand.id == right_hand.id
-        dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
-      end
-    }
-    if UserVars.weapon and UserVars.weaponsack and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
-      weaponsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack).sub(' ', ' .*')}/i }
-    end
-    if weaponsack
-      result = dothistimeout "put ##{right_hand.id} in ##{weaponsack.id}", 4, general_stow_regex
-      if result =~ /^You can't .+ It's closed!$/
-        actions.push proc { fput "close ##{weaponsack.id}" }
-        dothistimeout "open ##{weaponsack.id}", 3, /^You open|^That is already open\./
-        result = dothistimeout "put ##{right_hand.id} in ##{weaponsack.id}", 3, general_stow_regex
-      end
-    elsif lootsack
-      result = dothistimeout "put ##{right_hand.id} in ##{lootsack.id}", 4, general_stow_regex
-      if result =~ /^You can't .+ It's closed!$/
-        actions.push proc { fput "close ##{lootsack.id}" }
-        dothistimeout "open ##{lootsack.id}", 3, /^You open|^That is already open\./
-        result = dothistimeout "put ##{right_hand.id} in ##{lootsack.id}", 3, general_stow_regex
-      end
-    else
-      result = nil
-    end
-    if result.nil? or result =~ /^Your .*? won't fit in .*?\.$/
-      for container in other_containers.call
-        result = dothistimeout "put ##{right_hand.id} in ##{container.id}", 4, general_stow_regex
-        if result =~ /^You can't .+ It's closed!$/
-          actions.push proc { fput "close ##{container.id}" }
-          dothistimeout "open ##{container.id}", 3, /^You open|^That is already open\./
-          result = dothistimeout "put ##{right_hand.id} in ##{container.id}", 3, general_stow_regex
-        end
-        break if result =~ /^You (?:put|absent-mindedly drop|slip)/
-      end
-    end
-  end
-  $fill_hands_actions.push(actions) if both
-  $fill_left_hand_actions.push(actions) if left
-  $fill_right_hand_actions.push(actions) if right
-end
-
-def equip_hands(left: false, right: false, both: false)
-  $fill_hands_actions ||= Array.new
-  $fill_left_hand_actions ||= Array.new
-  $fill_right_hand_actions ||= Array.new
-
-  if both
-    for action in $fill_hands_actions.pop
-      action.call
-    end
-  elsif left
-    for action in $fill_left_hand_actions.pop
-      action.call
-    end
-  elsif right
-    for action in $fill_right_hand_actions.pop
-      action.call
-    end
-  else
-    if $fill_right_hand_actions.length > 0
-      for action in $fill_right_hand_actions.pop
-        action.call
-      end
-    elsif $fill_left_hand_actions.length > 0
-      for action in $fill_left_hand_actions.pop
-        action.call
-      end
-    end
-  end
-end
+require_relative("./lib/stash.rb")
 
 def empty_hands
-  stash_hands(both: true)
+  Lich::Stash::stash_hands(both: true)
 end
 
 def empty_hand
@@ -6329,35 +6183,35 @@ def empty_hand
 
   unless (right_hand.id.nil? and ([ Wounds.rightArm, Wounds.rightHand, Scars.rightArm, Scars.rightHand ].max < 3)) or (left_hand.id.nil? and ([ Wounds.leftArm, Wounds.leftHand, Scars.leftArm, Scars.leftHand ].max < 3))
     if right_hand.id and ([ Wounds.rightArm, Wounds.rightHand, Scars.rightArm, Scars.rightHand ].max < 3 or [ Wounds.leftArm, Wounds.leftHand, Scars.leftArm, Scars.leftHand ].max = 3)
-      stash_hands(right: true)
+      Lich::Stash::stash_hands(right: true)
     else
-      stash_hands(left: true)
+      Lich::Stash::stash_hands(left: true)
     end
   end
 end
 
 def empty_right_hand
-  stash_hands(right: true)
+  Lich::Stash::stash_hands(right: true)
 end
 
 def empty_left_hand
-  stash_hands(left: true)
+  Lich::Stash::stash_hands(left: true)
 end
 
 def fill_hands
-  equip_hands(both: true)
+  Lich::Stash::equip_hands(both: true)
 end
 
 def fill_hand
-  equip_hands()
+  Lich::Stash::equip_hands()
 end
 
 def fill_right_hand
-  equip_hands(right: true)
+  Lich::Stash::equip_hands(right: true)
 end
 
 def fill_left_hand
-  equip_hands(left: true)
+  Lich::Stash::equip_hands(left: true)
 end
 
 def dothis (action, success_line)
