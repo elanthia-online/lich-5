@@ -26,11 +26,8 @@ module Lich
 
     def self.container(param)
       container = find_container(param)
-      if container.contents.nil?
-        # opening a closed container populates the container's inventory in XML.
-        fput "close my #{container}"
-        fput "open my #{container}"
-      end
+      result = Lich::Util.quiet_command_xml("look in my #{container}", /In the .*$|That is closed\./) if container.contents.nil?
+      fput "open my #{container}" if result.include?('That is closed.')
       return container
     end
 
