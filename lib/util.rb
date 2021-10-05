@@ -21,7 +21,7 @@ module Lich
   module Util
     include Enumerable
 
-    def self.indiCheck(effect, val)
+    def self.normalize_lookup(effect, val)
       caller_type = "Effects::#{effect}"
       case val
       when String
