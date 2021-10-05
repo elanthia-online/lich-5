@@ -91,7 +91,7 @@ class Feat
 
   def Feat.available?(name)
     Feat.known?(name) and Feat.affordable?(name) and
-    !Lich::Util.indiCheck("Cooldowns", name) and !Lich::Util.indiCheck('Debuffs', 'Strained Muscles')
+    !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Strained Muscles')
   end
 
 end
