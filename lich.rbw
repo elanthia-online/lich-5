@@ -35,25 +35,6 @@
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
 
-LICH_VERSION = 5.2.1
-TESTING = false
-
-if RUBY_VERSION !~ /^2|^3/
-  if (RUBY_PLATFORM =~ /mingw|win/) and (RUBY_PLATFORM !~ /darwin/i)
-    if RUBY_VERSION =~ /^1\.9/
-      require 'fiddle'
-      Fiddle::Function.new(DL.dlopen('user32.dll')['MessageBox'], [Fiddle::TYPE_INT, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_INT], Fiddle::TYPE_INT).call(0, 'Upgrade Ruby to version 2.0', "Lich v#{LICH_VERSION}", 16)
-    else
-      # fixme: This message never shows up on Ruby 1.8 because it errors out on negative lookbehind regex later in the file
-      require 'dl'
-      DL.dlopen('user32.dll')['MessageBox', 'LLPPL'].call(0, 'Upgrade Ruby to version 2.0', "Lich v#{LICH_VERSION}", 16)
-    end
-  else
-    puts "Upgrade Ruby to version 2.0"
-  end
-  exit
-end
-
 require 'time'
 require 'socket'
 require 'rexml/document'
@@ -64,6 +45,19 @@ require 'drb'
 require 'resolv'
 require 'digest/md5'
 require 'json'
+
+require_relative('./lib/constants')
+require 'lib/version'
+
+if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
+  if (RUBY_PLATFORM =~ /mingw|win/) and (RUBY_PLATFORM !~ /darwin/i)
+      require 'fiddle'
+      Fiddle::Function.new(DL.dlopen('user32.dll')['MessageBox'], [Fiddle::TYPE_INT, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_INT], Fiddle::TYPE_INT).call(0, 'Upgrade Ruby to version 2.6', "Lich v#{LICH_VERSION}", 16)
+  else
+    puts "Upgrade Ruby to version 2.6"
+  end
+  exit
+end
 
 begin
   # stupid workaround for Windows
