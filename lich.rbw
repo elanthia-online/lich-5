@@ -35,7 +35,7 @@
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
 
-LICH_VERSION = '5.0.20'
+LICH_VERSION = 5.0.21
 TESTING = false
 
 if RUBY_VERSION !~ /^2|^3/
@@ -4002,34 +4002,28 @@ end
 
 def waitrt
   wait_until { (XMLData.roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f) > 0 }
-  sleep((XMLData.roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f + "0.6".to_f).abs)
-end
-
-def waitrt?
-  rt = XMLData.roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f + "0.6".to_f
-  if rt > 0
-    sleep rt
-  end
+  sleep checkrt
 end
 
 def waitcastrt
   wait_until { (XMLData.cast_roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f) > 0 }
-  sleep((XMLData.cast_roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f + "0.6".to_f).abs)
-end
-
-def waitcastrt?
-  rt = XMLData.cast_roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f + "0.6".to_f
-  if rt > 0
-    sleep rt
-  end
+  sleep checkcastrt
 end
 
 def checkrt
-  [XMLData.roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f + "0.6".to_f, 0].max
+  [ 0, XMLData.roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f ].max
 end
 
 def checkcastrt
-  [XMLData.cast_roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f + "0.6".to_f, 0].max
+  [ 0, XMLData.cast_roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f ].max
+end
+
+def waitrt?
+  sleep checkrt
+end
+
+def waitcastrt?
+  sleep checkcastrt
 end
 
 def checkpoison
