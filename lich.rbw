@@ -8339,14 +8339,6 @@ for arg in ARGV
   end
 end
 
-LICH_DIR   ||= File.dirname(File.expand_path($PROGRAM_NAME))
-TEMP_DIR   ||= "#{LICH_DIR}/temp"
-DATA_DIR   ||= "#{LICH_DIR}/data"
-SCRIPT_DIR ||= "#{LICH_DIR}/scripts"
-MAP_DIR    ||= "#{LICH_DIR}/maps"
-LOG_DIR    ||= "#{LICH_DIR}/logs"
-BACKUP_DIR ||= "#{LICH_DIR}/backup"
-
 unless File.exists?(LICH_DIR)
   begin
     Dir.mkdir(LICH_DIR)
