@@ -123,4 +123,9 @@ class Shield
     @@cost_hash.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase) < XMLData.stamina
   end
 
+  def Shield.available?(name)
+    Shield.known?(name) and Shield.affordable?(name) and
+    !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Strained Muscles')
+  end
+
 end

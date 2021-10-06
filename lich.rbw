@@ -35,7 +35,7 @@
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
 
-LICH_VERSION = 5.1.1
+LICH_VERSION = 5.2.0
 TESTING = false
 
 if RUBY_VERSION !~ /^2|^3/
@@ -3867,6 +3867,10 @@ class Room < Map
     super(*args)
   end
 end
+
+## adding util to the list of defs
+
+require_relative("./lib/util.rb")
 
 def hide_me
   Script.current.hidden = !Script.current.hidden

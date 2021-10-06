@@ -89,4 +89,9 @@ class Feat
     @@cost_hash.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase) < XMLData.stamina
   end
 
+  def Feat.available?(name)
+    Feat.known?(name) and Feat.affordable?(name) and
+    !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Strained Muscles')
+  end
+
 end
