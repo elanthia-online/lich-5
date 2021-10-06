@@ -101,7 +101,7 @@ class Weapon
 
   def Weapon.available?(name)
     Weapon.known?(name) and Weapon.affordable?(name) and
-    !Effects::Cooldowns.to_h.transform_keys(&:downcase).include?(name.to_s.gsub(/[_\-]/, ' ').gsub("'", "").downcase) and !Effects::Debuffs.to_h.include?('Strained Muscles')
+    !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Strained Muscles')
   end
 
 end
