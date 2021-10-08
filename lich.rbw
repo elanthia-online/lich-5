@@ -50,9 +50,6 @@ require 'json'
 require_relative('./lib/constants')
 require 'lib/version'
 
-require 'lib/gui-login'
-require 'lib/gtk'
-
 if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
   if (RUBY_PLATFORM =~ /mingw|win/) and (RUBY_PLATFORM !~ /darwin/i)
       require 'fiddle'
@@ -608,6 +605,10 @@ else
   HAVE_GTK = false
   early_gtk_error = "info: DISPLAY environment variable is not set; not trying gtk"
 end
+
+# TODO: Need to split out initiatilzation functions to move require to top of file
+require 'lib/gtk'
+require 'lib/gui-login'
 
 module Lich
   @@hosts_file = nil
