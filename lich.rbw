@@ -8541,7 +8541,7 @@ main_thread = Thread.new {
   $clean_lich_char = ';' # fixme
   $lich_char = Regexp.escape($clean_lich_char)
 
-  launch_data = nil
+  @launch_data = nil
   require_relative("./lib/eaccess.rb")
 
   if ARGV.include?('--login')
@@ -8597,16 +8597,16 @@ main_thread = Thread.new {
         game_code: data[:game_code]
       )
 
-      launch_data = launch_data_hash.map{|k,v| "#{k.upcase}=#{v}"}
+      @launch_data = launch_data_hash.map{|k,v| "#{k.upcase}=#{v}"}
         if data[:frontend] == 'wizard'
-              launch_data.collect! { |line| line.sub(/GAMEFILE=.+/, 'GAMEFILE=WIZARD.EXE').sub(/GAME=.+/, 'GAME=WIZ').sub(/FULLGAMENAME=.+/, 'FULLGAMENAME=Wizard Front End') }
+              @launch_data.collect! { |line| line.sub(/GAMEFILE=.+/, 'GAMEFILE=WIZARD.EXE').sub(/GAME=.+/, 'GAME=WIZ').sub(/FULLGAMENAME=.+/, 'FULLGAMENAME=Wizard Front End') }
         elsif data[:frontend] == 'avalon'
-              launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') }
+              @launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') }
         end
         if data[:custom_launch]
-              launch_data.push "CUSTOMLAUNCH=#{login_info[:custom_launch]}"
+              @launch_data.push "CUSTOMLAUNCH=#{login_info[:custom_launch]}"
               if login_info[:custom_launch_dir]
-                launch_data.push "CUSTOMLAUNCHDIR=#{login_info[:custom_launch_dir]}"
+                @launch_data.push "CUSTOMLAUNCHDIR=#{login_info[:custom_launch_dir]}"
               end
         end
     else
@@ -8634,7 +8634,7 @@ main_thread = Thread.new {
 
   if argv_options[:sal]
     begin
-      launch_data = File.open(argv_options[:sal]) { |file| file.readlines }.collect { |line| line.chomp }
+      @launch_data = File.open(argv_options[:sal]) { |file| file.readlines }.collect { |line| line.chomp }
     rescue
       $stdout.puts "error: failed to read launch_file: #{$!}"
       Lich.log "info: launch_file: #{argv_options[:sal]}"
@@ -8642,45 +8642,45 @@ main_thread = Thread.new {
       exit
     end
   end
-  if launch_data
-    unless gamecode = launch_data.find { |line| line =~ /GAMECODE=/ }
+  if @launch_data
+    unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
       Lich.log "error: launch_data contains no GAMECODE info"
       exit(1)
     end
-    unless gameport = launch_data.find { |line| line =~ /GAMEPORT=/ }
+    unless gameport = @launch_data.find { |line| line =~ /GAMEPORT=/ }
       $stdout.puts "error: launch_data contains no GAMEPORT info"
       Lich.log "error: launch_data contains no GAMEPORT info"
       exit(1)
     end
-    unless gamehost = launch_data.find { |opt| opt =~ /GAMEHOST=/ }
+    unless gamehost = @launch_data.find { |opt| opt =~ /GAMEHOST=/ }
       $stdout.puts "error: launch_data contains no GAMEHOST info"
       Lich.log "error: launch_data contains no GAMEHOST info"
       exit(1)
     end
-    unless game = launch_data.find { |opt| opt =~ /GAME=/ }
+    unless game = @launch_data.find { |opt| opt =~ /GAME=/ }
       $stdout.puts "error: launch_data contains no GAME info"
       Lich.log "error: launch_data contains no GAME info"
       exit(1)
     end
-    if custom_launch = launch_data.find { |opt| opt =~ /CUSTOMLAUNCH=/ }
+    if custom_launch = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCH=/ }
       custom_launch.sub!(/^.*?\=/, '')
       Lich.log "info: using custom launch command: #{custom_launch}"
     end
-    if custom_launch_dir = launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ }
+    if custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ }
       custom_launch_dir.sub!(/^.*?\=/, '')
       Lich.log "info: using working directory for custom launch command: #{custom_launch_dir}"
     end
     if ARGV.include?('--without-frontend')
       $frontend = 'unknown'
-      unless (game_key = launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
+      unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
         exit(1)
       end
     elsif game =~ /SUKS/i
       $frontend = 'suks'
-      unless (game_key = launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
+      unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
         exit(1)
@@ -8688,7 +8688,7 @@ main_thread = Thread.new {
     elsif game =~ /AVALON/i
       launcher_cmd = "open -n -b Avalon \"%1\""
     elsif custom_launch
-      unless (game_key = launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
+      unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
         exit(1)
@@ -8747,12 +8747,12 @@ main_thread = Thread.new {
         else
           localhost = "localhost"
         end
-        launch_data.collect! { |line| line.sub(/GAMEPORT=.+/, "GAMEPORT=#{localport}").sub(/GAMEHOST=.+/, "GAMEHOST=#{localhost}") }
+        @launch_data.collect! { |line| line.sub(/GAMEPORT=.+/, "GAMEPORT=#{localport}").sub(/GAMEHOST=.+/, "GAMEHOST=#{localhost}") }
         sal_filename = "#{TEMP_DIR}/lich#{rand(10000)}.sal"
         while File.exists?(sal_filename)
           sal_filename = "#{TEMP_DIR}/lich#{rand(10000)}.sal"
         end
-        File.open(sal_filename, 'w') { |f| f.puts launch_data }
+        File.open(sal_filename, 'w') { |f| f.puts @launch_data }
         launcher_cmd = launcher_cmd.sub('%1', sal_filename)
         launcher_cmd = launcher_cmd.tr('/', "\\") if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       end
