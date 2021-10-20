@@ -15,7 +15,7 @@ Tracks your current room on Tsoran (or other) maps
 			author: Elanthia-Online (GTK updates)
 			original author: LostRanger (thisgenericname@gmail.com, original Narost author: Tillmen (tillmen@lichproject.org)
 			game: Gemstone
-			tags: core, movement, mapping 
+			tags: core, movement, mapping
 			required: Lich > 5.0.1
 			version: 0.7
 
@@ -24,7 +24,7 @@ Tracks your current room on Tsoran (or other) maps
   changelog:
     version 0.7
 	 * Updated menu elements to support GTK3 in Lich5.
-	
+
 	version 0.6
      * Metadata is no longer built-in to xnarost but is now instead set on rooms in the mapdb.
 
@@ -263,7 +263,13 @@ map_offset_x = nil
 map_offset_y = nil
 narost_exit = false
 dragging = false
-map_dir = "#{$lich_dir}maps#{File::Separator}"
+
+if @theme_state == 'on' && File.exist?('maps-dark')
+  map_dir = "#{$lich_dir}maps-dark#{File::Separator}"
+else
+	map_dir = "#{$lich_dir}maps#{File::Separator}"
+end
+
 window_resized = true
 fix_click = nil
 current_room = nil
