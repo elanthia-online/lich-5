@@ -7401,16 +7401,16 @@ main_thread = Thread.new {
 
   Socket.do_not_reverse_lookup = true
 
-  if argv_options[:sal]
-    begin
-      @launch_data = File.open(argv_options[:sal]) { |file| file.readlines }.collect { |line| line.chomp }
-    rescue
-      $stdout.puts "error: failed to read launch_file: #{$!}"
-      Lich.log "info: launch_file: #{argv_options[:sal]}"
-      Lich.log "error: failed to read launch_file: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      exit
-    end
-  end
+#  if argv_options[:sal]
+#    begin
+#      @launch_data = File.open(argv_options[:sal]) { |file| file.readlines }.collect { |line| line.chomp }
+#    rescue
+#      $stdout.puts "error: failed to read launch_file: #{$!}"
+#      Lich.log "info: launch_file: #{argv_options[:sal]}"
+#      Lich.log "error: failed to read launch_file: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+#      exit
+#    end
+#  end
   if @launch_data
     unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
@@ -7435,10 +7435,24 @@ main_thread = Thread.new {
     if custom_launch = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCH=/ }
       custom_launch.sub!(/^.*?\=/, '')
       Lich.log "info: using custom launch command: #{custom_launch}"
+    elsif (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+      Lich.log("info: Working against a Windows Platform for FE Executable")
+       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
+         custom_launch = "Wizard.Exe /GGS /H127.0.0.1 /P%port% /K%key%"
+       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
+         custom_launch = "Stormfront.exe /GGS/Hlocalhost/P%port%/K%key%"
+    end
     end
     if custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ }
       custom_launch_dir.sub!(/^.*?\=/, '')
       Lich.log "info: using working directory for custom launch command: #{custom_launch_dir}"
+    elsif (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+      Lich.log "info: Working against a Windows Platform for FE Location"
+      if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
+        custom_launch_dir = Lich.seek('wizard')  ##HERE I AM
+      elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
+        custom_launch_dir = Lich.seek('stormfront')  ##HERE I AM
+    end
     end
     if ARGV.include?('--without-frontend')
       $frontend = 'unknown'
@@ -7462,13 +7476,13 @@ main_thread = Thread.new {
         Lich.log "error: launch_data contains no KEY info"
         exit(1)
       end
-    else
-      unless launcher_cmd = Lich.get_simu_launcher
-        $stdout.puts 'error: failed to find the Simutronics launcher'
-        Lich.log 'error: failed to find the Simutronics launcher'
-        exit(1)
+#    else
+#      unless launcher_cmd = Lich.get_simu_launcher
+#        $stdout.puts 'error: failed to find the Simutronics launcher'
+#        Lich.log 'error: failed to find the Simutronics launcher'
+#        exit(1)
+#      end
       end
-    end
     gamecode = gamecode.split('=').last
     gameport = gameport.split('=').last
     gamehost = gamehost.split('=').last
@@ -7529,6 +7543,7 @@ main_thread = Thread.new {
         if custom_launch_dir
           Dir.chdir(custom_launch_dir)
         end
+=begin
         if defined?(Win32)
           launcher_cmd =~ /^"(.*?)"\s*(.*)$/
           dir_file = $1
@@ -7590,6 +7605,15 @@ main_thread = Thread.new {
           Lich.log "info: launcher_cmd: #{launcher_cmd}"
           spawn launcher_cmd
         end
+=end
+
+        if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
+          system ("start #{launcher_cmd}")
+        else # macOS and linux - does not account for WINE on linux
+          spawn launcher_cmd
+        end
+
+
       rescue
         Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         Lich.msgbox(:message => "error: #{$!}", :icon => :error)
@@ -7600,11 +7624,11 @@ main_thread = Thread.new {
       Dir.chdir(LICH_DIR)
       unless $_CLIENT_
         Lich.log "error: timeout waiting for client to connect"
-        if defined?(Win32)
-          Lich.msgbox(:message => "error: launch method #{method_num + 1} timed out waiting for the client to connect\n\nTry again and another method will be used.", :icon => :error)
-        else
+#        if defined?(Win32)
+#          Lich.msgbox(:message => "error: launch method #{method_num + 1} timed out waiting for the client to connect\n\nTry again and another method will be used.", :icon => :error)
+#        else
           Lich.msgbox(:message => "error: timeout waiting for client to connect", :icon => :error)
-        end
+#        end
         if sal_filename
           File.delete(sal_filename) rescue()
         end
@@ -7615,9 +7639,9 @@ main_thread = Thread.new {
         Gtk.queue { Gtk.main_quit } if defined?(Gtk)
         exit
       end
-      if defined?(Win32)
-        Lich.win32_launch_method = "#{method_num}:success"
-      end
+#      if defined?(Win32)
+#        Lich.win32_launch_method = "#{method_num}:success"
+#      end
       Lich.log 'info: connected'
       listener.close rescue nil
       if sal_filename

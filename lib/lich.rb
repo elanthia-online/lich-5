@@ -11,6 +11,15 @@ module Lich
     Vars.method_missing(arg1, arg2)
   end
 
+  def Lich.seek(fe)
+    if fe =~ /wizard/
+      return $wiz_fe_loc
+    elsif fe =~ /stormfront/
+      return $sf_fe_loc
+    end
+    pp "Landed in get_simu_launcher method"
+  end
+
   def Lich.db
     if $SAFE == 0
       @@lich_db ||= SQLite3::Database.new("#{DATA_DIR}/lich.db3")
