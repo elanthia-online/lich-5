@@ -744,5 +744,6 @@ module Games
     def command;       nil;                              end
     def circlename;    self.circle_name;                 end
     def selfonly;      @availability != 'all';           end
-  end
-end
+    end # class
+  end # mod
+end # mod
