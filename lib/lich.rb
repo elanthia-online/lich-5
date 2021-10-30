@@ -553,4 +553,66 @@ module Lich
     end
     [gamehost, gameport]
   end
+
+# new feature GUI states
+
+  def Lich.track_autosort_state
+    begin
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_autosort_state';")
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    val
+  end
+
+  def Lich.track_autosort_state=(val)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_autosort_state',?);", val.to_s.encode('UTF-8'))
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    nil
+  end
+
+  def Lich.track_layout_state
+    begin
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_layout_state';")
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    val
+  end
+
+  def Lich.track_layout_state=(val)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_layout_state',?);", val.to_s.encode('UTF-8'))
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    nil
+  end
+
+  def Lich.track_dark_mode
+    begin
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_dark_mode';")
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    val
+  end
+
+  def Lich.track_dark_mode=(val)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_dark_mode',?);", val.to_s.encode('UTF-8'))
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    nil
+  end
 end
