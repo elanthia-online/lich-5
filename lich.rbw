@@ -4669,6 +4669,20 @@ def do_client(client_string)
       else
         respond "--- Lich: this feature isn't available in this version of Ruby "
       end
+    elsif cmd =~ /^set\s(.+)\s(on|off)/
+      toggle_var = $1
+      set_state = $2
+      did_something = false
+      begin
+        Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values(?,?);", toggle_var.to_s.encode('UTF-8'),set_state.to_s.encode('UTF-8'))
+        did_something = true
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      respond("--- Lich: toggle #{toggle_var} set #{set_state}") if did_something
+      did_something = false
+      nil
     elsif cmd =~ /^help$/i
       respond
       respond "Lich v#{LICH_VERSION}"
@@ -4713,6 +4727,8 @@ def do_client(client_string)
       end
       respond "   #{$clean_lich_char}send <line>               send a line to all scripts as if it came from the game"
       respond "   #{$clean_lich_char}send to <script> <line>   send a line to a specific script"
+      respond
+      respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
       respond
       respond 'If you liked this help message, you might also enjoy:'
       respond "   #{$clean_lich_char}lnet help"
