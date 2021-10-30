@@ -22,7 +22,7 @@
     "update_type":"refresh",
     "version_lich":"5.2.1",
     "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "shield.rb", "spell.rb", "stash.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
-    "update_core_scripts":["infomon.lic", "lich5-update.lic"],
+    "update_core_scripts":["infomon.lic", "lich5-update.lic", "xnarost.lic"],
     "recommend_update_scripts":{},
     "announce_features":["Lich 5.2.1 includes:", "Support for STOWing items irrespective of special item scripts", "Improved query support for Effects and CMans", "Fix Lich bug to respect the 'groupmovement' flag in game", "Fix Lich round time calculations (more aggressive timing)", "Dark Mode is now a thing", "Lich4 Style GUI layout available", "Several file location changes to support future code change efforts"]
   }
