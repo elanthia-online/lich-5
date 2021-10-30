@@ -6,7 +6,7 @@
   "update_core_scripts":["infomon.lic", "lich5-update.lic", "xnarost.lic"],
   "recommend_update_scripts":{},
   "announce_features":["Lich 5.2.1 includes:", "Support for STOWing items irrespective of special item scripts", "Improved query support for Effects and CMans", "Fix Lich bug to respect the 'groupmovement' flag in game", "Fix Lich round time calculations (more aggressive timing)", "Dark Mode is now a thing", "Lich4 Style GUI layout available", "Several file location changes to support future code change efforts"]
-},
+  },
 
   {
     "update_type":"previous",
@@ -17,7 +17,6 @@
     "announce_features":["Lich 5.0.19 includes:", "Support for Mental Acuity and stamina-based spell casting", "Support for PSM3 IDs", "Support for XML.active_spells reporting all PSM3 categories"]
   },
 
-
   {
     "update_type":"refresh",
     "version_lich":"5.2.1",
@@ -26,5 +25,4 @@
     "recommend_update_scripts":{},
     "announce_features":["Lich 5.2.1 includes:", "Support for STOWing items irrespective of special item scripts", "Improved query support for Effects and CMans", "Fix Lich bug to respect the 'groupmovement' flag in game", "Fix Lich round time calculations (more aggressive timing)", "Dark Mode is now a thing", "Lich4 Style GUI layout available", "Several file location changes to support future code change efforts"]
   }
-
 ]
