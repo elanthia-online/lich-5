@@ -6,7 +6,7 @@ Tracks your current room on Tsoran (or other) maps
   Key differences between this and ;narost:
     * xnarost has a better-organized map list with submenus, and uses 'proper' map names instead of filenames.
     * xnarost sorts the list of tags.
-    * xnarost supports CTRL+Mousewheel zooming.
+
 
 	click on a room to go there
 	shift-click on a room to show its description
@@ -19,14 +19,12 @@ Tracks your current room on Tsoran (or other) maps
 			required: Lich > 5.0.1
 			version: 1.0
 
-  version: 0.7 (2021-03-01) based on narost.lic from 2014-08-24
-
   changelog:
   
     version 1.0 [2021-10-30]
      * Added darkmode support for maps included in lich\maps-dark directory
 	 
-    version 0.7
+    version 0.7 (2021-03-01) based on narost.lic from 2014-08-24
      * Updated menu elements to support GTK3 in Lich5.
 
     version 0.6
@@ -94,7 +92,6 @@ end
 # https://docs.google.com/spreadsheets/d/1oGk-4XZL0196aMGPUQFtDpvo_LPxJI3sx40tRKw7uoY/edit#gid=0
 #
 # This nag message will be removed when the data collection is complete and the script is updated.
-# See also ;repo set-updatable xnarost.lic
 # * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 # EOF
 
