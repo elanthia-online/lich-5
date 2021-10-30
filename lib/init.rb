@@ -31,6 +31,39 @@ rescue
   nil
 end
 
+if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
+  require 'win32/registry'
+  include Win32
+
+  paths = ['SOFTWARE\\WOW6432Node\\Simutronics\\STORM32',
+           'SOFTWARE\\WOW6432Node\\Simutronics\\WIZ32']
+
+  def key_exists?(path)
+    Registry.open(Registry::HKEY_LOCAL_MACHINE, path, ::Win32::Registry::KEY_READ)
+    true
+  rescue StandardError
+    false
+  end
+
+  paths.each do |path|
+    next unless key_exists?(path)
+
+    Registry.open(Registry::HKEY_LOCAL_MACHINE, path).each_value do |_subkey, _type, data|
+      dirloc = data
+      if path =~ /WIZ32/
+        $wiz_fe_loc = dirloc
+      elsif path =~ /STORM32/
+        $sf_fe_loc = dirloc
+      else
+        Lich.log("Hammer time, couldn't find me a SIMU FE on a Windows box")
+      end
+    end
+  end
+end
+
+## The following should be deprecated with the direct-frontend-launch-method
+## TODO: remove as part of chore/Remove unnecessary Win32 calls
+
 if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
   #
   # Windows API made slightly less annoying
@@ -460,6 +493,8 @@ if ARGV[0] == 'shellexecute'
   Win32.ShellExecute(:lpOperation => args[:op], :lpFile => args[:file], :lpDirectory => args[:dir], :lpParameters => args[:params])
   exit
 end
+
+## End of TODO
 
 begin
   require 'sqlite3'
