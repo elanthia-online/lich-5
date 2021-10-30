@@ -17,15 +17,19 @@ Tracks your current room on Tsoran (or other) maps
 			game: Gemstone
 			tags: core, movement, mapping
 			required: Lich > 5.0.1
-			version: 0.7
+			version: 1.0
 
   version: 0.7 (2021-03-01) based on narost.lic from 2014-08-24
 
   changelog:
+  
+    version 1.0 [2021-10-30]
+     * Added darkmode support for maps included in lich\maps-dark directory
+	 
     version 0.7
-	 * Updated menu elements to support GTK3 in Lich5.
+     * Updated menu elements to support GTK3 in Lich5.
 
-	version 0.6
+    version 0.6
      * Metadata is no longer built-in to xnarost but is now instead set on rooms in the mapdb.
 
     version 0.5.1 (2017-05-29)
