@@ -7417,16 +7417,16 @@ main_thread = Thread.new {
 
   Socket.do_not_reverse_lookup = true
 
-#  if argv_options[:sal]
-#    begin
-#      @launch_data = File.open(argv_options[:sal]) { |file| file.readlines }.collect { |line| line.chomp }
-#    rescue
-#      $stdout.puts "error: failed to read launch_file: #{$!}"
-#      Lich.log "info: launch_file: #{argv_options[:sal]}"
-#      Lich.log "error: failed to read launch_file: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-#      exit
-#    end
-#  end
+  if argv_options[:sal]
+    begin
+      @launch_data = File.open(argv_options[:sal]) { |file| file.readlines }.collect { |line| line.chomp }
+    rescue
+      $stdout.puts "error: failed to read launch_file: #{$!}"
+      Lich.log "info: launch_file: #{argv_options[:sal]}"
+      Lich.log "error: failed to read launch_file: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      exit
+    end
+  end
   if @launch_data
     unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
