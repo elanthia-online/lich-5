@@ -9,10 +9,12 @@
    original author: Shaelun
               game: any
               tags: core, movement
-           version: 1.26
+           version: 1.27
           required: Lich >= 4.6.14
 
    changelog:
+      1.27 (2021-10-29):
+        Fix lag check after COMBATANT verb was updated
       1.26 (2020-10-08):
         Fix silver check broken by Commageddon
       1.25 (2019-05-11):
@@ -952,9 +954,8 @@ loop {
       break if Room.current.id == destination.id
       echo 'restarting script...'
       if error_count > 1
-         # dothis 'help lag-check', /^No help files matching that entry were found\.|^MERCHANT HELP/
          if XMLData.game =~ /^GS/
-            dothis 'combatant', /^That only works in the Gladiator Arenas\./
+            dothistimeout 'help lag-check', 5, /^No help files matching that entry were found\./
          else
             sleep 5
          end
