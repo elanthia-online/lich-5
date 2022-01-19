@@ -7427,6 +7427,7 @@ main_thread = Thread.new {
       exit
     end
   end
+
   if @launch_data
     unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
@@ -7453,11 +7454,11 @@ main_thread = Thread.new {
       Lich.log "info: using custom launch command: #{custom_launch}"
     elsif (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       Lich.log("info: Working against a Windows Platform for FE Executable")
-       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
-         custom_launch = "Wizard.Exe /GGS /H127.0.0.1 /P%port% /K%key%"
-       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
-         custom_launch = "Stormfront.exe /GGS/Hlocalhost/P%port%/K%key%"
-    end
+      if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
+        custom_launch = "Wizard.Exe /GGS /H127.0.0.1 /P%port% /K%key%"
+      elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
+        custom_launch = "Stormfront.exe /GGS/Hlocalhost/P%port%/K%key%"
+      end
     end
     if custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ }
       custom_launch_dir.sub!(/^.*?\=/, '')
@@ -7468,7 +7469,7 @@ main_thread = Thread.new {
         custom_launch_dir = Lich.seek('wizard')  ##HERE I AM
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
         custom_launch_dir = Lich.seek('stormfront')  ##HERE I AM
-    end
+      end
     end
     if ARGV.include?('--without-frontend')
       $frontend = 'unknown'
@@ -7492,13 +7493,13 @@ main_thread = Thread.new {
         Lich.log "error: launch_data contains no KEY info"
         exit(1)
       end
-#    else
-#      unless launcher_cmd = Lich.get_simu_launcher
-#        $stdout.puts 'error: failed to find the Simutronics launcher'
-#        Lich.log 'error: failed to find the Simutronics launcher'
-#        exit(1)
-#      end
+    else
+      unless launcher_cmd = Lich.get_simu_launcher
+        $stdout.puts 'error: failed to find the Simutronics launcher'
+        Lich.log 'error: failed to find the Simutronics launcher'
+        exit(1)
       end
+    end
     gamecode = gamecode.split('=').last
     gameport = gameport.split('=').last
     gamehost = gamehost.split('=').last
@@ -7625,6 +7626,9 @@ main_thread = Thread.new {
 
         if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
           system ("start #{launcher_cmd}")
+        elsif defined?(Wine) and (game != 'AVALON') # Wine on linux
+          Lich.log "info: launcher_cmd: #{Wine::BIN} #{launcher_cmd}"
+          spawn "#{Wine::BIN} #{launcher_cmd}"
         else # macOS and linux - does not account for WINE on linux
           spawn launcher_cmd
         end
