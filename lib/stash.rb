@@ -42,7 +42,7 @@ module Lich
       bag = container(bag)
       try_or_fail(command: "_drag ##{item.id} ##{bag.id}") do
         4.times {
-        return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) and bag.contents.to_a.map(&:id).include?(item.id))
+          return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) and bag.contents.to_a.map(&:id).include?(item.id))
           sleep 0.1
         }
         return false
@@ -129,6 +129,8 @@ module Lich
         else
           result = nil
         end
+        sleep 0.1
+        pp result
         if result.nil? or !result
           for container in other_containers.call
             result = Lich::Stash::add_to_bag(container, GameObj.right_hand)
