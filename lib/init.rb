@@ -31,6 +31,92 @@ rescue
   nil
 end
 
+# check for Linux | WINE (and maybe in future MacOS | WINE) first due to low population
+# segment of code unmodified from Lich4 (Tillmen)
+if arg = ARGV.find { |a| a =~ /^--wine=.+$/i }
+  $wine_bin = arg.sub(/^--wine=/, '')
+else
+  begin
+    $wine_bin = `which wine`.strip
+  rescue
+    $wine_bin = nil
+  end
+end
+if arg = ARGV.find { |a| a =~ /^--wine-prefix=.+$/i }
+  $wine_prefix = arg.sub(/^--wine-prefix=/, '')
+elsif ENV['WINEPREFIX']
+  $wine_prefix = ENV['WINEPREFIX']
+elsif ENV['HOME']
+  $wine_prefix = ENV['HOME'] + '/.wine'
+else
+  $wine_prefix = nil
+end
+if $wine_bin and File.exists?($wine_bin) and File.file?($wine_bin) and $wine_prefix and File.exists?($wine_prefix) and File.directory?($wine_prefix)
+  module Wine
+    BIN = $wine_bin
+    PREFIX = $wine_prefix
+    def Wine.registry_gets(key)
+      hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme: stupid highlights ]/
+      if File.exist?(PREFIX + '/system.reg')
+        if hkey == 'HKEY_LOCAL_MACHINE'
+          subkey = "[#{subkey.gsub('\\', '\\\\\\')}]"
+          if thingie.nil? or thingie.empty?
+            thingie = '@'
+          else
+            thingie = "\"#{thingie}\""
+          end
+          lookin = result = false
+          File.open(PREFIX + '/system.reg') { |f| f.readlines }.each { |line|
+            if line[0...subkey.length] == subkey
+              lookin = true
+            elsif line =~ /^\[/
+              lookin = false
+            elsif lookin and line =~ /^#{thingie}="(.*)"$/i
+              result = $1.split('\\"').join('"').split('\\\\').join('\\').sub(/\\0$/, '')
+              break
+            end
+          }
+          return result
+        else
+          return false
+        end
+      else
+        return false
+      end
+    end
+
+    def Wine.registry_puts(key, value)
+      hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme ]/
+      if File.exists?(PREFIX)
+        if thingie.nil? or thingie.empty?
+          thingie = '@'
+        else
+          thingie = "\"#{thingie}\""
+        end
+        # gsub sucks for this..
+        value = value.split('\\').join('\\\\')
+        value = value.split('"').join('\"')
+        begin
+          regedit_data = "REGEDIT4\n\n[#{hkey}\\#{subkey}]\n#{thingie}=\"#{value}\"\n\n"
+          filename = "#{TEMP_DIR}/wine-#{Time.now.to_i}.reg"
+          File.open(filename, 'w') { |f| f.write(regedit_data) }
+          system("#{BIN} regedit #{filename}")
+          sleep 0.2
+          File.delete(filename)
+        rescue
+          return false
+        end
+        return true
+      end
+    end
+  end
+end
+#$wine_bin = nil
+#$wine_prefix = nil
+#end
+
+# find the FE locations for Win and for Linux | WINE
+
 if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
   require 'win32/registry'
   include Win32
@@ -59,11 +145,18 @@ if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
       end
     end
   end
+elsif defined?(Wine)
+  paths = ['HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\STORM32\\Directory',
+           'HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\WIZ32\\Directory']
+## Needs improvement - iteration and such.  Quick slam test.
+#  $sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\STORM32\\Directory')
+#  $wiz_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\WIZ32\\Directory')
+$sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory')
 end
 
 ## The following should be deprecated with the direct-frontend-launch-method
 ## TODO: remove as part of chore/Remove unnecessary Win32 calls
-
+=begin
 if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
   #
   # Windows API made slightly less annoying
@@ -487,7 +580,7 @@ else
   $wine_bin = nil
   $wine_prefix = nil
 end
-
+=end
 if ARGV[0] == 'shellexecute'
   args = Marshal.load(ARGV[1].unpack('m')[0])
   Win32.ShellExecute(:lpOperation => args[:op], :lpFile => args[:file], :lpDirectory => args[:dir], :lpParameters => args[:params])
