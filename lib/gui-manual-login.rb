@@ -48,7 +48,7 @@ sw.set_policy(:automatic, :automatic)
 sw.add(treeview)
 
 wizard_option = Gtk::RadioButton.new(:label => 'Wizard')
-stormfront_option = Gtk::RadioButton.new(:label => 'Stormfront', :member => wizard_option)
+stormfront_option = Gtk::RadioButton.new(:label => 'Stormfront | Wrayth', :member => wizard_option)
 avalon_option = Gtk::RadioButton.new(:label => 'Avalon', :member => wizard_option)
 suks_option = Gtk::RadioButton.new(:label => 'suks', :member => wizard_option)
 
@@ -84,9 +84,9 @@ play_button_box.pack_end(play_button, :expand => false, :fill => false, :padding
 @game_entry_tab.pack_start(login_button_box, :expand => false, :fill => false, :padding => 0)
 @game_entry_tab.pack_start(sw, :expand => true, :fill => true, :padding => 3)
 @game_entry_tab.pack_start(frontend_box, :expand => false, :fill => false, :padding => 3)
-@game_entry_tab.pack_start(custom_launch_option, :expand => false, :fill => false, :padding => 3)
-@game_entry_tab.pack_start(@custom_launch_entry, :expand => false, :fill => false, :padding => 3)
-@game_entry_tab.pack_start(@custom_launch_dir, :expand => false, :fill => false, :padding => 3)
+#@game_entry_tab.pack_start(custom_launch_option, :expand => false, :fill => false, :padding => 3)
+#@game_entry_tab.pack_start(@custom_launch_entry, :expand => false, :fill => false, :padding => 3)
+#@game_entry_tab.pack_start(@custom_launch_dir, :expand => false, :fill => false, :padding => 3)
 @game_entry_tab.pack_start(@make_quick_option, :expand => false, :fill => false, :padding => 3)
 @game_entry_tab.pack_start(play_button_box, :expand => false, :fill => false, :padding => 3)
 
