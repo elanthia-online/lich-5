@@ -33,5 +33,5 @@
     "update_core_scripts":["go2.lic", "jinx.lic"],
     "recommend_update_scripts":{},
     "announce_features":["Lich 5.3.0 includes:", "Support for Wrayth launch", "Support for direct FE launch on Linux | WINE platforms"]
-  },
+  }
 ]
