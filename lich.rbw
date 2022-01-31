@@ -3105,6 +3105,8 @@ def move(dir='none', giveup_seconds=10, giveup_lines=30)
       put_dir.call
     elsif (line =~ /^You (?:take a few steps toward|trudge up to|limp towards|march up to|sashay gracefully up to|skip happily towards|sneak up to|stumble toward) a rusty doorknob/) and (dir =~ /door/)
       which = [ 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eight', 'ninth', 'tenth', 'eleventh', 'twelfth' ]
+      # avoid stomping the room for the entire session due to a transient failure
+      dir = dir.to_s
       if dir =~ /\b#{which.join('|')}\b/
         dir.sub!(/\b(#{which.join('|')})\b/) { "#{which[which.index($1)+1]}" }
       else
