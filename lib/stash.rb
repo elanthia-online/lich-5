@@ -143,7 +143,6 @@ module Lich
           result = nil
         end
         sleep 0.1
-        echo result
         if result.nil? or !result
           for container in other_containers.call
             result = Lich::Stash::add_to_bag(container, GameObj.right_hand)
