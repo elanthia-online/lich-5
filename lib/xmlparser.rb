@@ -115,7 +115,7 @@ class XMLParser
     @room_id = nil
   end
 
-  # for backwards compatability
+  # for backwards compatibility
   def active_spells
     z = {}
     XMLData.dialogs.sort.each do |a, b|
@@ -124,9 +124,9 @@ class XMLParser
         when /Active Spells|Buffs/
           z.merge!(k => v) if k.instance_of?(String)
         when /Cooldowns/
-          z.merge!("CD - #{k}" => v) if k.instance_of?(String)
+          z.merge!("#{k}" => v) if k.instance_of?(String)
         when /Debuffs/
-          z.merge!("DB - #{k}" => v) if k.instance_of?(String)
+          z.merge!("#{k}" => v) if k.instance_of?(String)
         end
       end
     end
