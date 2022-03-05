@@ -220,7 +220,6 @@ class XMLParser
       elsif name == 'popStream'
         if attributes['id'] == 'room'
           unless @room_window_disabled
-            @previous_nav_rm = @room_id 
             @room_count += 1
             $room_count += 1
           end
@@ -708,7 +707,6 @@ class XMLParser
         @room_exits.each { |exit| gsl_exits.concat(DIRMAP[SHORTDIR[exit]].to_s) }
         $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
         gsl_exits = nil
-        @previous_nav_rm = @room_id 
         @room_count += 1
         $room_count += 1
       end

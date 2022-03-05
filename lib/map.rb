@@ -242,16 +242,10 @@ class Map
           1.times {
             foggy_exits = (XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/)
             shortlist = [] + Map.ids_from_uid(XMLData.room_id)
-            if (!@@current_room_id.nil? or @@current_room_id != -1) and !Map.ids_from_uid(XMLData.room_id).empty?
-              shortlist = Map.ids_from_uid(XMLData.room_id) + @@list[Map.ids_from_uid(XMLData.room_id)[0]].wayto.keys.map(&:to_i)
-            end
             if shortlist.size > 0
               shortlist.each_with_index { |s,x|
                 r = @@list[s]
-                if (
-                   #(r.wayto.keys.include?(@@current_room_id.to_s)) or
-                   #(@@list[@@current_room_id].wayto.keys.include?(s.to_s)) or
-                   (r.title.include?(XMLData.room_title) and 
+                if ((r.title.include?(XMLData.room_title) and 
                       r.description.include?(XMLData.room_description.strip) and 
                      (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
                      (foggy_exits or r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths'))
