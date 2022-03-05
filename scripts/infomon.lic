@@ -9,13 +9,15 @@
           game: Gemstone
           tags: core
       required: Lich > 4.6.10
-       version: 1.18.11
+       version: 1.18.12
         Source: https://github.com/elanthia-online/jinx
     Alt Source: https://github.com/elanthia-online/lich-5
 
   Version Control:
     Major_change.feature_addition.bugfix
 
+  1.18.12 (2022-02-04):
+    Bugfix for syncing up invoker spells / sk spells in infomon
   1.18.11 (2021-12-03):
     Bugfix for duplicate names between Spell and Cooldown
   1.18.10 (2021-09-10):
@@ -44,10 +46,12 @@
     Typo for infomon_bound with envelopes should be envelop
 =end
 
-unless XMLData.game =~ /^(?:GSF|GSIV|GSPlat|GST)$/
+unless XMLData.game =~ /^(?:GSF|GSIV|GSPlat|GST|Test)$/
   echo "This script is meant for Gemstone Prime, Platinum, or Shattered.  It will likely cause problems on whatever game you're trying to run it on..."
   exit
 end
+
+$infomon_debug = false
 
 hide_me
 setpriority(1)
@@ -59,18 +63,18 @@ CharSettings['show_circles']  = true     if CharSettings['show_circles'].nil?
 CharSettings['show_bonuses']  = false    if CharSettings['show_bonuses'].nil?
 CharSettings['show_messages'] = true     if CharSettings['show_messages'].nil?
 CharSettings['show_gift']     = true     if CharSettings['show_gift'].nil?
-CharSettings['need_psm_update']    = true     if CharSettings['need_psm_update'].nil?
+CharSettings['need_psm_update'] = true if CharSettings['need_psm_update'].nil?
 
 bank_titles = {
-  "Wehnimer's Landing"          => [ '[First Elanith Bank, Teller]', '[Clenchfist Bros. Banking, Lobby]'],
-  'Kharam-Dzu'                  => [ '[The Bank of Kharam-Dzu]' ],
-  'Icemule Trace'               => [ '[Icemule Trace, Bank]' ],
-  'Vornavis'                    => [ '[Bank of Vornavis, Solhaven]', '[Mercantylers\' Banking Hall]' ],
-  "River's Rest"                => [ "[River's Rest Bank, Teller]" ],
-  "Kharag 'doth Dzulthu"        => [ '[Bank of Zul Logoth]' ],
-  'United City-States'          => [ '[United Bank of City-States]', '[The United Bank of City-States]' ],
-  'Isle of the Four Winds Bank' => [ '[Mist Harbor Bank, Bank Windows]', '[Mist Harbor Bank, Windows]' ],
-  'Cysaegir'                    => [ '[Cysaegir Bank]' ],
+  "Wehnimer's Landing" => ['[First Elanith Bank, Teller]', '[Clenchfist Bros. Banking, Lobby]'],
+  'Kharam-Dzu' => ['[The Bank of Kharam-Dzu]'],
+  'Icemule Trace' => ['[Icemule Trace, Bank]'],
+  'Vornavis' => ['[Bank of Vornavis, Solhaven]', '[Mercantylers\' Banking Hall]'],
+  "River's Rest" => ["[River's Rest Bank, Teller]"],
+  "Kharag 'doth Dzulthu" => ['[Bank of Zul Logoth]'],
+  'United City-States' => ['[United Bank of City-States]', '[The United Bank of City-States]'],
+  'Isle of the Four Winds Bank' => ['[Mist Harbor Bank, Bank Windows]', '[Mist Harbor Bank, Windows]'],
+  'Cysaegir' => ['[Cysaegir Bank]'],
 }
 
 #
@@ -85,10 +89,10 @@ end
 # Load or get character information
 #
 if CharSettings['Stats'] and
-    CharSettings['Skills'] and
-    CharSettings['Spells'] and
-    CharSettings['Society'] and
-    CharSettings['citizenship']
+   CharSettings['Skills'] and
+   CharSettings['Spells'] and
+   CharSettings['Society'] and
+   CharSettings['citizenship']
 
   begin
     Stats.load_serialized   = CharSettings['Stats']
@@ -96,7 +100,7 @@ if CharSettings['Stats'] and
     Spells.load_serialized  = CharSettings['Spells']
     Society.load_serialized = CharSettings['Society']
     Char.citizenship        = CharSettings['citizenship']
-    rescue
+  rescue
     echo $!
     echo $!.backtrace[0..1]
     exit
@@ -184,7 +188,7 @@ else
 
 end
 
-Gem::Version.new(LICH_VERSION) < Gem::Version.new('5.0.16') ? psm_abilities = [ 'CMan' ] : psm_abilities = [ 'Feat', 'Armor', 'Weapon', 'Shield', 'CMan' ]
+Gem::Version.new(LICH_VERSION) < Gem::Version.new('5.0.16') ? psm_abilities = ['CMan'] : psm_abilities = ['Feat', 'Armor', 'Weapon', 'Shield', 'CMan']
 need_psm = []
 if CharSettings['need_psm_update']
   need_psm = psm_abilities.dup
@@ -200,7 +204,7 @@ else
     else
       begin
         if !CharSettings["#{ability}".downcase].empty?
-          CharSettings["#{ability}".downcase].each_pair { |psm,rank| eval("#{ability}").send("#{psm}=", rank) }
+          CharSettings["#{ability}".downcase].each_pair { |psm, rank| eval("#{ability}").send("#{psm}=", rank) }
         end
       rescue
         pp "Bad juju happened here."
@@ -217,33 +221,33 @@ need_psm.each { |get_ability|
   action = proc { |server_string|
     if hide_lines
       if server_string =~ /<output class=""\/>|<prompt/
-          DownstreamHook.remove('psmmon_finder')
-          @done = true
+        DownstreamHook.remove('psmmon_finder')
+        @done = true
       end
       nil
-      elsif server_string =~ /#{Char.name}<\/a>, your (Combat Maneuvers|#{get_ability}.+?)\sare as follows:/
-        hide_lines = true
-        nil
-      else
-        server_string
-      end
+    elsif server_string =~ /#{Char.name}<\/a>, your (Combat Maneuvers|#{get_ability}.+?)\sare as follows:/
+      hide_lines = true
+      nil
+    else
+      server_string
+    end
   }
-    DownstreamHook.add('psmmon_finder', action)
-    echo "checking #{get_ability}..."
-    put ("#{get_ability}".downcase) + " info"
-    wait_until { @done }
+  DownstreamHook.add('psmmon_finder', action)
+  echo "checking #{get_ability}..."
+  put ("#{get_ability}".downcase) + " info"
+  wait_until { @done }
 }
 
-  silence_me
-  echo 'done'
+silence_me
+echo 'done'
 
 #
 # Load spell timers
 #
-CharSettings['active_spells'].each_pair { |spell_num,timeleft|
+CharSettings['active_spells'].each_pair { |spell_num, timeleft|
   if (spell = Spell[spell_num.to_i])
     if defined?(spell.real_time) and spell.real_time
-      timeleft = (timeleft - Time.now.to_f)/60.0
+      timeleft = (timeleft - Time.now.to_f) / 60.0
       if timeleft > 0
         spell.timeleft = timeleft
         spell.active = true
@@ -336,7 +340,7 @@ Thread.new {
         if defined?(killit.clear_on_death)
           killit.putdown if killit.clear_on_death
         else
-          killit.putdown unless [6666,9009,920,9516,9003,9011].include?(killit.num)
+          killit.putdown unless [6666, 9009, 920, 9516, 9003, 9011].include?(killit.num)
         end
       }
       Spellsong.renewed
@@ -353,6 +357,7 @@ Thread.new {
 #
 # Another workaround for Simu fail
 #
+=begin
 fix_gameobj_status = proc { |server_string|
   # false positive: shudders with sporadic convulsions as pearlescent ripples envelop .*? body
 #The earth elemental rumbles in agony as it teeters for a moment, then tumbles to the ground with a thundering crash!
@@ -371,7 +376,99 @@ fix_gameobj_status = proc { |server_string|
 }
 before_dying { DownstreamHook.remove('fix_gameobj_status') }
 DownstreamHook.add('fix_gameobj_status', fix_gameobj_status)
+=end
+#
+# Spell timing true-up (Invoker and SK item spells do not have proper durations)
+# this needs to be addressed in class Spell rewrite
+# in the meantime, this should mean no spell is more than 1 second off from
+# Simu's time calculations
+#
+if Gtk::Version::STRING.chr == '3'
+  Thread.new {
+    setpriority(2)
+    loop {
+      begin
+        sleep 2
+        update_spell_durations = XMLData.active_spells
+        update_spell_names = []
+        @makeychange = []
+        update_spell_durations.each do |k, v|
+          if k =~ /Mage Armor \- /
+            @makeychange << k
+            update_spell_names.push("Mage Armor")
+            next
+          elsif k =~ /CoS \- /
+            @makeychange << k
+            update_spell_names.push("Cloak of Shadows")
+            next
+          elsif k =~ /Enh\./
+            @makeychange << k
+            case k
+            when /Enh\. Strength/
+              update_spell_names.push("Surge of Strength")
+            when /Enh\. (?:Dexterity|Agility)/
+              update_spell_names.push("Burst of Swiftness")
+            end
+            next
+          elsif k =~ /Empowered/
+            @makeychange << k
+            update_spell_names.push("Shout")
+            next
+          elsif k =~ /Multi\-Strike/
+            @makeychange << k
+            update_spell_names.push("MStrike Cooldown")
+            next
+          elsif k =~ /Next Bounty Cooldown/
+            @makeychange << k
+            update_spell_names.push("Next Bounty")
+            next
+          end
+          update_spell_names << k
+        end
+        @makeychange.each do |changekey|
+          if update_spell_durations.key?(changekey)
+            case changekey
+            when /Mage Armor \- /
+              update_spell_durations['Mage Armor'] = update_spell_durations.delete changekey
+            when /CoS \- /
+              update_spell_durations['Cloak of Shadows'] = update_spell_durations.delete changekey
+            when /Enh\. Strength/
+              update_spell_durations['Surge of Strength'] = update_spell_durations.delete changekey
+            when /Enh\. (?:Dexterity|Agility)/
+              update_spell_durations['Burst of Swiftness'] = update_spell_durations.delete changekey
+            when /Empowered/
+              update_spell_durations['Shout'] = update_spell_durations.delete changekey
+            when /Multi\-Strike/
+              update_spell_durations['MStrike Cooldown'] = update_spell_durations.delete changekey
+            when /Next Bounty Cooldown/
+              update_spell_durations['Next Bounty'] = update_spell_durations.delete changekey
+            end
+          end
+        end
 
+        existing_spell_names = []
+        Spell.active.each { |s| existing_spell_names << s.name }
+        inactive_spells = existing_spell_names - update_spell_names
+        inactive_spells.each { |s| badspell = Spell[s].num; Spell[badspell].putdown if Spell[s].active? }
+
+        update_spell_durations.uniq.each do |k, v|
+          if spell = Spell.list.find { |s| s.name.downcase == k.strip().downcase or s.num.to_s == k.strip() }
+            spell.active = true
+            if v - Time.now > 300 * 60
+              spell.timeleft = 600.01
+            else
+              spell.timeleft = ((v - Time.now) / 60)
+            end
+          else
+            echo "no spell matches #{k}" if $infomon_debug
+          end
+        end
+      rescue
+        echo "Error in spell durations thread" if $infomon_debug
+      end
+    }
+  }
+end
 #
 # Spell tracking
 #
@@ -469,10 +566,10 @@ while line = get
                   bonus_string.concat "#{spell.elemental_cs} elemCS, "
                   total_elementalCS += spell.elemental_cs
                 end
-#               if spell.mental_cs != 0
-#                 bonus_string.concat "#{spell.mental_cs} mentCS, "
-#                 total_mentalCS += spell.mental_cs
-#               end
+                #               if spell.mental_cs != 0
+                #                 bonus_string.concat "#{spell.mental_cs} mentCS, "
+                #                 total_mentalCS += spell.mental_cs
+                #               end
                 if spell.spirit_cs != 0
                   bonus_string.concat "#{spell.spirit_cs} spirCS, "
                   total_spiritCS += spell.spirit_cs
@@ -548,9 +645,9 @@ while line = get
             output.concat("\n")
             if CharSettings['show_bonuses']
               total_offense_string = ''
-                            total_defense_string = ''
-                            total_stat_string    = ''
-                            total_skill_string   = ''
+              total_defense_string = ''
+              total_stat_string    = ''
+              total_skill_string   = ''
 
               total_offense_string = total_offense_string + total_boltAS.to_s + ' bAS, ' if total_boltAS != 0
               total_offense_string = total_offense_string + total_physicalAS.to_s + ' pAS, ' if total_physicalAS != 0
@@ -558,9 +655,9 @@ while line = get
               total_offense_string = total_offense_string + total_mentalCS.to_s + ' mentCS, ' if total_mentalCS != 0
               total_offense_string = total_offense_string + total_spiritCS.to_s + ' spirCS, ' if total_spiritCS != 0
               total_offense_string = total_offense_string + total_sorcererCS.to_s + ' sorcCS, ' if total_sorcererCS != 0
-                            total_offense_string = total_offense_string + total_damagefactor.to_s + '% DF ' if total_damagefactor != 0
-                            total_offense_string = total_offense_string + total_uaf.to_s + ' UAF, ' if total_uaf != 0
-                            total_offense_string.chop!.chop!
+              total_offense_string = total_offense_string + total_damagefactor.to_s + '% DF ' if total_damagefactor != 0
+              total_offense_string = total_offense_string + total_uaf.to_s + ' UAF, ' if total_uaf != 0
+              total_offense_string.chop!.chop!
 
               total_defense_string = total_defense_string + total_boltDS.to_s + ' bDS, ' if total_boltDS != 0
               total_defense_string = total_defense_string + total_physicalDS.to_s + ' pDS, ' if total_physicalDS != 0
@@ -568,26 +665,26 @@ while line = get
               total_defense_string = total_defense_string + total_mentalTD.to_s + ' mentTD, ' if total_mentalTD != 0
               total_defense_string = total_defense_string + total_spiritTD.to_s + ' spirTD, ' if total_spiritTD != 0
               total_defense_string = total_defense_string + total_sorcererTD.to_s + ' sorcTD, ' if total_sorcererTD != 0
-                            total_defense_string = total_defense_string + total_block.to_s + '% block, ' if total_block != 0
-                            total_defense_string = total_defense_string + total_asg.to_s + ' AsG, ' if total_asg != 0
-                            total_defense_string = total_defense_string + total_fof_offset.to_s + ' FoF offset, ' if total_fof_offset != 0
-                            total_defense_string.chop!.chop!
+              total_defense_string = total_defense_string + total_block.to_s + '% block, ' if total_block != 0
+              total_defense_string = total_defense_string + total_asg.to_s + ' AsG, ' if total_asg != 0
+              total_defense_string = total_defense_string + total_fof_offset.to_s + ' FoF offset, ' if total_fof_offset != 0
+              total_defense_string.chop!.chop!
 
               total_stat_string = total_stat_string + total_strength.to_s + ' str, ' if total_strength != 0
-                            total_stat_string = total_stat_string + total_constitution.to_s + ' con, ' if total_constitution != 0
-                            total_stat_string = total_stat_string + total_health.to_s + ' health, ' if total_health != 0
-                            total_stat_string.chop!.chop!
+              total_stat_string = total_stat_string + total_constitution.to_s + ' con, ' if total_constitution != 0
+              total_stat_string = total_stat_string + total_health.to_s + ' health, ' if total_health != 0
+              total_stat_string.chop!.chop!
 
               total_skill_string = total_skill_string + total_dodging.to_s + ' dodge, ' if total_dodging != 0
-                            total_skill_string = total_skill_string + total_combatmaneuvers.to_s + ' CM, ' if total_combatmaneuvers != 0
-                            total_skill_string.chop!.chop!
+              total_skill_string = total_skill_string + total_combatmaneuvers.to_s + ' CM, ' if total_combatmaneuvers != 0
+              total_skill_string.chop!.chop!
 
-                            output.concat("- Totals:\n")
+              output.concat("- Totals:\n")
               output.concat("  Offense: #{total_offense_string}\n") if total_offense_string.length > 0
-                            output.concat("  Defense: #{total_defense_string}\n") if total_defense_string.length > 0
-                            output.concat("    Stats: #{total_stat_string}\n") if total_stat_string.length > 0
-                            output.concat("   Skills: #{total_skill_string}\n") if total_skill_string.length > 0
-                            output.concat("\n\n")
+              output.concat("  Defense: #{total_defense_string}\n") if total_defense_string.length > 0
+              output.concat("    Stats: #{total_stat_string}\n") if total_stat_string.length > 0
+              output.concat("   Skills: #{total_skill_string}\n") if total_skill_string.length > 0
+              output.concat("\n\n")
             end
           end
           if CharSettings['show_gift']
@@ -595,12 +692,12 @@ while line = get
               exp_diff = Char.exp - CharSettings['lumnis start exp']
               if exp_diff < (CharSettings['lumnis 3x exp'] * 3)
                 exp = exp_diff / 3
-                output.concat "You have used #{exp}/#{CharSettings['lumnis 3x exp']} (#{exp*100/CharSettings['lumnis 3x exp']}%) of your 3x multiplier and 0/#{CharSettings['lumnis 3x exp']} (0%) of your 2x multiplier this week for a total of #{exp_diff} experience.\n"
+                output.concat "You have used #{exp}/#{CharSettings['lumnis 3x exp']} (#{exp * 100 / CharSettings['lumnis 3x exp']}%) of your 3x multiplier and 0/#{CharSettings['lumnis 3x exp']} (0%) of your 2x multiplier this week for a total of #{exp_diff} experience.\n"
               elsif exp_diff < ((CharSettings['lumnis 3x exp'] * 3) + (CharSettings['lumnis 2x exp'] * 2))
                 exp = (exp_diff - (CharSettings['lumnis 3x exp'] * 3)) / 2
-                output.concat "You have used #{CharSettings['lumnis 3x exp']}/#{CharSettings['lumnis 3x exp']} (100%) of your 3x multiplier and #{exp}/#{CharSettings['lumnis 2x exp']} (#{exp*100/CharSettings['lumnis 2x exp']}%) of your 2x multiplier this week for a total of #{exp_diff} experience.\n"
+                output.concat "You have used #{CharSettings['lumnis 3x exp']}/#{CharSettings['lumnis 3x exp']} (100%) of your 3x multiplier and #{exp}/#{CharSettings['lumnis 2x exp']} (#{exp * 100 / CharSettings['lumnis 2x exp']}%) of your 2x multiplier this week for a total of #{exp_diff} experience.\n"
               elsif CharSettings['lumnis next start'] >= Time.now.to_i
-                output.concat "You have used up your Gift of Lumnis this week for a total of #{(CharSettings['lumnis 3x exp']*3)+(CharSettings['lumnis 2x exp']*2)} experience.\n"
+                output.concat "You have used up your Gift of Lumnis this week for a total of #{(CharSettings['lumnis 3x exp'] * 3) + (CharSettings['lumnis 2x exp'] * 2)} experience.\n"
               end
             end
             if CharSettings['lumnis next start']
@@ -633,8 +730,8 @@ while line = get
           respond '   ;magic bonuses             - Toggles the display of spell bonuses with the active spell list.'
           respond '   ;magic gift                - Toggles the display of Gift of Lumnis information with the active spell list.'
           respond '   ;magic messages            - Toggles the display of a duration message after each cast.'
-#         respond '   ;magic save                - Saves your currently active spells and currently tracked skills/stats on the Lich server.'
-#         respond '   ;magic load                - Load your currently active spells and skills/stats from the Lich server.'
+          #         respond '   ;magic save                - Saves your currently active spells and currently tracked skills/stats on the Lich server.'
+          #         respond '   ;magic load                - Load your currently active spells and skills/stats from the Lich server.'
           respond
         elsif mobj.captures.first =~ /clear|reset/i
           if mobj.captures[1].nil? or mobj.captures[1].empty?
@@ -711,7 +808,7 @@ while line = get
           echo 'this function no longer works'
         elsif mobj.captures.first =~ /load/i
           echo 'this function no longer works'
-                    else
+        else
           echo "Magic error! Type ';magic help' for usage information."
         end
       rescue
@@ -726,7 +823,7 @@ while line = get
         respond
         subtotal = 0
         total = 0
-        for town,amount in CharSettings['bank_accounts']
+        for town, amount in CharSettings['bank_accounts']
           if town =~ /Icemule Trace|Wehnimer's Landing/
             respond "#{town.rjust(27)}:#{amount.to_s.reverse.scan(/(?:\d*\.)?\d{1,3}-?/).join(',').reverse.rjust(13)}"
             subtotal += amount
@@ -736,7 +833,7 @@ while line = get
         respond '                      -------------------'
         respond "                   Subtotal:#{total.to_s.reverse.scan(/(?:\d*\.)?\d{1,3}-?/).join(',').reverse.rjust(13)}"
         respond
-        for town,amount in CharSettings['bank_accounts']
+        for town, amount in CharSettings['bank_accounts']
           if town !~ /Icemule Trace|Wehnimer's Landing/
             respond "#{town.rjust(27)}:#{amount.to_s.reverse.scan(/(?:\d*\.)?\d{1,3}-?/).join(',').reverse.rjust(13)}"
             total += amount
@@ -748,7 +845,7 @@ while line = get
       else
         respond
         total = 0
-        for town,amount in CharSettings['bank_accounts']
+        for town, amount in CharSettings['bank_accounts']
           respond "#{town.rjust(27)}:#{amount.to_s.reverse.scan(/(?:\d*\.)?\d{1,3}-?/).join(',').reverse.rjust(13)}"
           total += amount
         end
@@ -757,21 +854,21 @@ while line = get
         respond
       end
     elsif line =~ /^(?:You hand your silvers? over to the|You hand your notes to the|You hand over your notes to the|You deposit [0-9]+ silvers? into your account.  The|The) (?:teller|dwarf).*(?:balance is |balance of |balance to |balance up to |balance is currently at |New balance\: )([0-9]+)/
-      for town,titles in bank_titles
+      for town, titles in bank_titles
         if titles.include?(checkroom)
           CharSettings['bank_accounts'][town] = $1.to_i
           break
         end
       end
     elsif line =~ /^The (?:teller|dwarf) (?:carefully records the transaction,|scribbles the transaction into a book)(?: and)?(?: then)?(?: reluctantly)? hands you ([0-9]+)/
-      for town,titles in bank_titles
+      for town, titles in bank_titles
         if titles.include?(checkroom)
           CharSettings['bank_accounts'][town] = CharSettings['bank_accounts'][town].to_i - $1.to_i
           break
         end
       end
     elsif line =~ /^You deposit(?: your note worth| your chit worth)? ([0-9]+)/
-      for town,titles in bank_titles
+      for town, titles in bank_titles
         if titles.include?(checkroom)
           CharSettings['bank_accounts'][town] = CharSettings['bank_accounts'][town].to_i + $1.to_i
           break
@@ -781,15 +878,15 @@ while line = get
       surcharge = $1.to_i
       if line = $_CLIENTBUFFER_.reverse.find { |line| line =~ /^(?:\[.*?\]>)?(?:<c>)?(?:wit|with|withd|withr|withdra|withdraw)\s+[0-9]+/i }
         amount = line.slice(/[0-9]+/).to_i
-        for town,titles in bank_titles
+        for town, titles in bank_titles
           if titles.include?(checkroom)
-            CharSettings['bank_accounts'][town] = [ (CharSettings['bank_accounts'][town].to_i - amount - surcharge), 0 ].max
+            CharSettings['bank_accounts'][town] = [(CharSettings['bank_accounts'][town].to_i - amount - surcharge), 0].max
             break
           end
         end
       end
     elsif line =~ /^The (?:teller|dwarf).*you don't(?: seem to)? have an (?:open )?account/
-      for town,titles in bank_titles
+      for town, titles in bank_titles
         if titles.include?(checkroom)
           CharSettings['bank_accounts'][town] = 0
           break
@@ -804,10 +901,10 @@ while line = get
           break
         end
       }
-#   elsif line =~ /^You stop singing\.$|^But you are not singing any spellsongs\.$/
-#     Spell.list.each { |spell| spell.putdown if spell.circle.to_i == 10 }
-#   elsif line =~ /^The soft feeling of serenity slowly dissipates from your mind\.$/
-#     nil
+    #   elsif line =~ /^You stop singing\.$|^But you are not singing any spellsongs\.$/
+    #     Spell.list.each { |spell| spell.putdown if spell.circle.to_i == 10 }
+    #   elsif line =~ /^The soft feeling of serenity slowly dissipates from your mind\.$/
+    #     nil
     elsif line =~ /^The global Lumnis experience boost currently multiplies your first (\d+) experience points by 3, and your next (\d+) experience points by 2, for a total bonus of/
       CharSettings['lumnis 3x exp'] = $1.to_i
       CharSettings['lumnis 2x exp'] = $2.to_i
@@ -854,7 +951,7 @@ while line = get
       put 'lumnis info'
       silence_me if undo_silence
     elsif line == 'Repeating the sign has no effect!'
-      if spell_name = [ 'Sign of Striking', 'Sign of Smiting', 'Sign of Swords', 'Sign of Warding', 'Sign of Defending', 'Sign of Shields', 'Sign of Deflection', 'Sign of Dissipation' ].find { |name| (XMLData.active_spells[name] > Time.now) and not Spell[name].active? }
+      if spell_name = ['Sign of Striking', 'Sign of Smiting', 'Sign of Swords', 'Sign of Warding', 'Sign of Defending', 'Sign of Shields', 'Sign of Deflection', 'Sign of Dissipation'].find { |name| (XMLData.active_spells[name] > Time.now) and not Spell[name].active? }
         spell = Spell[spell_name]
         spell.putup
         respond "[ #{spell.name}: +#{spell.time_per.as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
@@ -908,7 +1005,7 @@ while line = get
       CharSettings['Society'] = Society.serialize
     elsif line =~ /^\s#{Char.name} \(at level/o
       begin
-        before_ranks = [ Spells.minorelemental, Spells.minormental, Spells.majorelemental, Spells.minorspiritual, Spells.majorspiritual, Spells.wizard, Spells.sorcerer, Spells.ranger, Spells.paladin, Spells.empath, Spells.cleric, Spells.bard, Skills.magicitemuse, Skills.arcanesymbols ]
+        before_ranks = [Spells.minorelemental, Spells.minormental, Spells.majorelemental, Spells.minorspiritual, Spells.majorspiritual, Spells.wizard, Spells.sorcerer, Spells.ranger, Spells.paladin, Spells.empath, Spells.cleric, Spells.bard, Skills.magicitemuse, Skills.arcanesymbols]
         Skills.armoruse, Skills.shielduse, Skills.combatmaneuvers, Skills.edgedweapons, Skills.bluntweapons, Skills.twohandedweapons, Skills.rangedweapons, Skills.thrownweapons, Skills.polearmweapons, Skills.brawling, Skills.ambush, Skills.multiopponentcombat, Skills.combatleadership, Skills.physicalfitness, Skills.dodging, Skills.arcanesymbols, Skills.magicitemuse, Skills.spellaiming, Skills.harnesspower, Skills.emc, Skills.mmc, Skills.smc, Skills.elair, Skills.elearth, Skills.elfire, Skills.elwater, Skills.slblessings, Skills.slreligion, Skills.slsummoning, Skills.sldemonology, Skills.slnecromancy, Skills.mldivination, Skills.mlmanipulation, Skills.mltelepathy, Skills.mltransference, Skills.mltransformation, Skills.survival, Skills.disarmingtraps, Skills.pickinglocks, Skills.stalkingandhiding, Skills.perception, Skills.climbing, Skills.swimming, Skills.firstaid, Skills.trading, Skills.pickpocketing, Spells.minorelemental, Spells.minormental, Spells.majorelemental, Spells.minorspiritual, Spells.majorspiritual, Spells.wizard, Spells.sorcerer, Spells.ranger, Spells.paladin, Spells.empath, Spells.cleric, Spells.bard = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         until (line = get) =~ /\(Use |[0-9]+ days? remain|You started this migration period|Further information can be found in the FAQs./
           if line =~ /Two Weapon Combat/
@@ -1041,7 +1138,7 @@ while line = get
         end
         CharSettings['Skills'] = Skills.serialize
         CharSettings['Spells'] = Spells.serialize
-        if (before_ranks != [ Spells.minorelemental, Spells.minormental, Spells.majorelemental, Spells.minorspiritual, Spells.majorspiritual, Spells.wizard, Spells.sorcerer, Spells.ranger, Spells.paladin, Spells.empath, Spells.cleric, Spells.bard, Skills.magicitemuse, Skills.arcanesymbols ])
+        if (before_ranks != [Spells.minorelemental, Spells.minormental, Spells.majorelemental, Spells.minorspiritual, Spells.majorspiritual, Spells.wizard, Spells.sorcerer, Spells.ranger, Spells.paladin, Spells.empath, Spells.cleric, Spells.bard, Skills.magicitemuse, Skills.arcanesymbols])
           if defined?(LNet.upload_spell_ranks)
             if LNet.upload_spell_ranks
               CharSettings['uploaded_spell_ranks'] = true
@@ -1053,7 +1150,7 @@ while line = get
           end
         end
       rescue
-          echo $!
+        echo $!
       end
     elsif line =~ /^Name:\s+[-A-z\s']+Race:\s+([-A-z\s]+)\s+Profession:\s+([-A-z\s]+)/
       Stats.race = $1.strip
@@ -1065,8 +1162,8 @@ while line = get
         Stats.level = $4.to_i
         get
         while get =~ /^\s*[A-Z][a-z]+\s\((STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):\s+([0-9]+)\s\((\-?[0-9]+)\)\s+[.]{3}\s+(\d+)\s+\((-?\d+)\)/
-          Stats.send("#{$1.downcase}=", [ $2.to_i, $3.to_i])
-          Stats.send("enhanced_#{$1.downcase}=", [ $4.to_i, $5.to_i]) rescue nil # available on Lich 4.6.54+
+          Stats.send("#{$1.downcase}=", [$2.to_i, $3.to_i])
+          Stats.send("enhanced_#{$1.downcase}=", [$4.to_i, $5.to_i]) rescue nil # available on Lich 4.6.54+
         end
       end
       CharSettings['Stats'] = Stats.serialize
@@ -1074,7 +1171,7 @@ while line = get
       Stats.level = $1.to_i
       get
       while get =~ /^\s*(?:Strength|Constitution|Dexterity|Agility|Discipline|Aura|Logic|Intuition|Wisdom|Influence|Dexterity)\s+\((STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\)\s*\:\s+([0-9]+)\s+\+([0-9]+)\s+\.\.\.\s+(\-?[0-9]+)\s*\+?([0-9]+)\s*$/
-        Stats.send("#{$1.downcase}=", [ $2.to_i + $3.to_i, $4.to_i + $5.to_i ])
+        Stats.send("#{$1.downcase}=", [$2.to_i + $3.to_i, $4.to_i + $5.to_i])
       end
       CharSettings['Stats'] = Stats.serialize
     ## Updating Infomon for PSM3 release with PSM Abilities (CMan, Armor, Feat, Shield, Weapon)
@@ -1089,12 +1186,12 @@ while line = get
       psm_category = $1.dup
       psm_category = "CMan" if psm_category == "Combat"
       CharSettings["#{psm_category}".downcase] = Hash.new
-      2.times{get}
+      2.times { get }
       while get? =~ /^\s+([A-z\s']+)\s+([a-z0-9]+)\s+(\d)\/(\d).*?$/
         mnemonic_psm = $2
         rank_psm = $3
         total_rank_psm = $4
-        name_psm = $1.strip.downcase.gsub(/[\s\-]/,'_').gsub("'", "")
+        name_psm = $1.strip.downcase.gsub(/[\s\-]/, '_').gsub("'", "")
         CharSettings["#{psm_category}".downcase][name_psm] = rank_psm.to_i
         begin
           eval("#{psm_category}")[name_psm] = rank_psm
@@ -1107,9 +1204,9 @@ while line = get
       psm_learned = $3
       name_learned = $2
       psm_learned = "CMan" if psm_learned == "Combat"
-      CharSettings["#{psm_learned}".downcase][name_learned.strip.downcase.gsub(/[\s\-]/,'_').gsub("'", "")] = rank_learned.to_i
+      CharSettings["#{psm_learned}".downcase][name_learned.strip.downcase.gsub(/[\s\-]/, '_').gsub("'", "")] = rank_learned.to_i
       begin
-        eval("#{psm_learned}")[name_learned.strip.downcase.gsub(/[\s\-]/,'_').gsub("'", "")] = rank_learned
+        eval("#{psm_learned}")[name_learned.strip.downcase.gsub(/[\s\-]/, '_').gsub("'", "")] = rank_learned
       rescue
         nil
       end
@@ -1119,7 +1216,7 @@ while line = get
       name_unlearned = $2.strip.downcase
       psm_unlearned = $3
       psm_unlearned = "CMan" if psm_unlearned == "Combat"
-      CharSettings["#{psm_unlearned}".downcase][name_unlearned.gsub(/[\s\-]/,'_').gsub("'", "")] = fix_num[rank_unlearned]
+      CharSettings["#{psm_unlearned}".downcase][name_unlearned.gsub(/[\s\-]/, '_').gsub("'", "")] = fix_num[rank_unlearned]
       begin
         eval("#{psm_unlearned}")[name_unlearned] = fix_num[rank_unlearned]
       rescue
@@ -1130,7 +1227,7 @@ while line = get
       Spell[6666].putup
       Spell[6666].timeleft = $1.to_i
     elsif line =~ /^\((?:You sense that your soul has been bound to your body for|Thy soul is bound to thy body for an extra) ([0-9]+) minutes( and 30 seconds)?/
-      #The hermit gestures at you.  A web of light surrounds you then the web fades into your body.
+      # The hermit gestures at you.  A web of light surrounds you then the web fades into your body.
       time_added = $1.to_f
       time_added += 0.5 if $2
       time_added += Spell[6666].minsleft
@@ -1174,7 +1271,7 @@ while line = get
         Spell.list.each { |s| s.putdown if s.name =~ /^Meditative/ }
       end
       if (spell.name == 'Core Tap Recovery') and (line != 'You are too exhausted to cast Core Tap right now.')
-        thresholds = [ [210,4], [135,3], [60,2], [0,1] ]
+        thresholds = [[210, 4], [135, 3], [60, 2], [0, 1]]
         max_uses = thresholds.find { |foo| Skills.elearth >= foo[0] }[1]
         if (max_uses > 1) and not Spell['Core Tap Recovery (1 Charge)'].active?
           spell = Spell['Core Tap Recovery (1 Charge)']
@@ -1194,7 +1291,7 @@ while line = get
         spell.timeleft = $1.to_f
         respond "[ #{spell.name}: +#{$1.to_f.as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
       elsif spell.name =~ /^Sign of (?:Striking|Smiting|Swords)$/
-        if spell_name = [ 'Sign of Striking', 'Sign of Smiting', 'Sign of Swords' ].find { |name| (XMLData.active_spells[name] > Time.now) and not Spell[name].active? }
+        if spell_name = ['Sign of Striking', 'Sign of Smiting', 'Sign of Swords'].find { |name| (XMLData.active_spells[name] > Time.now) and not Spell[name].active? }
           spell = Spell[spell_name]
           spell.putup
           respond "[ #{spell.name}: +#{spell.time_per.as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
@@ -1206,7 +1303,7 @@ while line = get
           respond "[ #{spell.name}: +#{spell.time_per.as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
         end
       elsif spell.name =~ /^Sign of (?:Warding|Defending|Shields)$/
-        if spell_name = [ 'Sign of Warding', 'Sign of Defending', 'Sign of Shields' ].find { |name| (XMLData.active_spells[name] > Time.now) and not Spell[name].active? }
+        if spell_name = ['Sign of Warding', 'Sign of Defending', 'Sign of Shields'].find { |name| (XMLData.active_spells[name] > Time.now) and not Spell[name].active? }
           spell = Spell[spell_name]
           spell.putup
           respond "[ #{spell.name}: +#{spell.time_per.as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
@@ -1220,7 +1317,7 @@ while line = get
       elsif spell.num.to_i == 9516
         rate = maxmana / 30
         rate += 1 if Skills.to_bonus(Skills.emc) >= 100
-        rate += [Skills.to_bonus(Skills.emc)-100, 0].max / 20
+        rate += [Skills.to_bonus(Skills.emc) - 100, 0].max / 20
         mana_time = total_mana_drained = mana_recovered = 0
         mana_drained = line.slice(/[0-9]+/).to_i
 
@@ -1236,10 +1333,10 @@ while line = get
         total_mana_drained = total_mana_drained - mana_recovered + mana_drained
 
         if spell.active?
-          spell.timeleft = (total_mana_drained/rate.to_f).ceil - (1 - spell.timeleft % 1)
+          spell.timeleft = (total_mana_drained / rate.to_f).ceil - (1 - spell.timeleft % 1)
         else
           spell.putup
-          spell.timeleft = (total_mana_drained/rate.to_f).ceil
+          spell.timeleft = (total_mana_drained / rate.to_f).ceil
         end
 
         UserVars.total_mana_drained = total_mana_drained
@@ -1248,11 +1345,11 @@ while line = get
         respond "[ #{spell.name}: +#{spell.timeleft.as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
       elsif (spell.num.to_i >= 9000 and spell.num.to_i != 9011) or (spell.num.to_i == 725)
         spell.putup
-                respond "[ #{spell.name}: +#{spell.time_per.as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
+        respond "[ #{spell.name}: +#{spell.time_per.as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
 
-                # Assume Aspect cooldowns
-                if spell.num.to_i > 9013 and spell.num.to_i < 9042
-          cooldown_spell = Spell[spell.num+1]
+        # Assume Aspect cooldowns
+        if spell.num.to_i > 9013 and spell.num.to_i < 9042
+          cooldown_spell = Spell[spell.num + 1]
           cooldown_spell.putup
           respond "[ #{cooldown_spell.name}: +#{cooldown_spell.timeleft.as_time}, #{cooldown_spell.remaining} remaining. ]" if CharSettings['show_messages']
         end
@@ -1324,25 +1421,25 @@ while line = get
                 break
               end
             }
-            respond "[ #{spell.name}: +#{(spell.time_per(options)*multicast_num).as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
+            respond "[ #{spell.name}: +#{(spell.time_per(options) * multicast_num).as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
           else
             2.times { spell.putup(options) }
-            respond "[ #{spell.name}: +#{(spell.time_per(options)*2).as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
+            respond "[ #{spell.name}: +#{(spell.time_per(options) * 2).as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
           end
         else
           spell.putup(options)
           respond "[ #{spell.name}: +#{spell.time_per(options).as_time}, #{spell.remaining} remaining. ]" if CharSettings['show_messages']
         end
       end
-       if spell == Spell['Core Tap Recovery']
-            Spell['Core Tap Recovery (3 Charges)'].putdown if Spell['Core Tap Recovery (3 Charges)'].active?
-            Spell['Core Tap Recovery (2 Charges)'].putdown if Spell['Core Tap Recovery (2 Charges)'].active?
-            Spell['Core Tap Recovery (1 Charge)'].putdown if Spell['Core Tap Recovery (1 Charge)'].active?
-         elsif spell == Spell['Core Tap Recovery (3 Charges)']
-            Spell['Core Tap Recovery (2 Charges)'].putdown
-         elsif spell == Spell['Core Tap Recovery (2 Charges)']
-            Spell['Core Tap Recovery (1 Charge)'].putdown
-       end
+      if spell == Spell['Core Tap Recovery']
+        Spell['Core Tap Recovery (3 Charges)'].putdown if Spell['Core Tap Recovery (3 Charges)'].active?
+        Spell['Core Tap Recovery (2 Charges)'].putdown if Spell['Core Tap Recovery (2 Charges)'].active?
+        Spell['Core Tap Recovery (1 Charge)'].putdown if Spell['Core Tap Recovery (1 Charge)'].active?
+      elsif spell == Spell['Core Tap Recovery (3 Charges)']
+        Spell['Core Tap Recovery (2 Charges)'].putdown
+      elsif spell == Spell['Core Tap Recovery (2 Charges)']
+        Spell['Core Tap Recovery (1 Charge)'].putdown
+      end
     elsif line =~ spell_dn_msgs_re and not $timers_test
       if spell = (Spell.active.find { |s| line =~ /^#{s.msgdn}$/ } || Spell.list.find { |s| line =~ /^#{s.msgdn}$/ })
         if (spell.num == 218) and servant_type
@@ -1401,47 +1498,7 @@ while line = get
       #
       # monitoring for spell active and true up spell durations
       #
-    elsif line == "You currently have the following active effects:"
-      while (line = get)
-        case line
-        when /Spells:/
-          next
-        when /Cooldowns:/
-          cooldown_list = true
-          next
-        when /Buffs:/
-          cooldown_list = false
-          next
-        when /Debuffs:/
-          next
-        when /\s+([A-z0-9\s\'\(\)\-]+) \.* (([0-9]+)\:([0-9]+)\:([0-9]+)|Indefinite)$/
-          spell_name = $1.dup
-          spell_name = spell_name+' Cooldown' if cooldown_list
-          if $2.dup == 'Indefinite'
-            spell_time = 599.0
-          else
-            spell_time = ($3.dup.to_i * 60) + $4.dup.to_i + ($5.dup.to_i / 60.0)
-          end
-          if spell_name == 'Raise Dead Link'
-            spell_name = 'Raise Dead Cooldown'
-          elsif spell_name =~ /Mage Armor \- /
-            spell_name = 'Mage Armor'
-          elsif spell_name =~ /CoS \- /
-            spell_name = 'Cloak of Shadows'
-          end
-          if spell = Spell.list.find { |s| s.name.downcase == spell_name.strip().downcase or s.num.to_s == spell_name.strip() }
-            spell.active = true
-            spell.timeleft = spell_time
-          else
-            echo "no spell matches #{spell_name}" if $infomon_debug
-          end
-        when /^ [.]{40}|^  No (?:spells|cooldowns|buffs|debuffs) found\./
-          next
-        else
-          script.downstream_buffer.unshift(line) if line
-          break
-        end
-      end
+
     elsif line =~ /^You currently have .*? citizenship in (.*)\.$/
       Char.citizenship = $1
       CharSettings['citizenship'] = Char.citizenship
