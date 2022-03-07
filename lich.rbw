@@ -4418,6 +4418,7 @@ end
 require_relative("./lib/stash.rb")
 
 def empty_hands
+  waitrt?
   Lich::Stash::stash_hands(both: true)
 end
 
@@ -4427,34 +4428,42 @@ def empty_hand
 
   unless (right_hand.id.nil? and ([Wounds.rightArm, Wounds.rightHand, Scars.rightArm, Scars.rightHand].max < 3)) or (left_hand.id.nil? and ([Wounds.leftArm, Wounds.leftHand, Scars.leftArm, Scars.leftHand].max < 3))
     if right_hand.id and ([Wounds.rightArm, Wounds.rightHand, Scars.rightArm, Scars.rightHand].max < 3 or [Wounds.leftArm, Wounds.leftHand, Scars.leftArm, Scars.leftHand].max = 3)
+      waitrt?
       Lich::Stash::stash_hands(right: true)
     else
+      waitrt?
       Lich::Stash::stash_hands(left: true)
     end
   end
 end
 
 def empty_right_hand
+  waitrt?
   Lich::Stash::stash_hands(right: true)
 end
 
 def empty_left_hand
+  waitrt?
   Lich::Stash::stash_hands(left: true)
 end
 
 def fill_hands
+  waitrt?
   Lich::Stash::equip_hands(both: true)
 end
 
 def fill_hand
+  waitrt?
   Lich::Stash::equip_hands()
 end
 
 def fill_right_hand
+  waitrt?
   Lich::Stash::equip_hands(right: true)
 end
 
 def fill_left_hand
+  waitrt?
   Lich::Stash::equip_hands(left: true)
 end
 
