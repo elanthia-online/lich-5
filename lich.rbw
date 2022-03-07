@@ -5313,19 +5313,6 @@ module Games
         end
         @@socket.sync = true
 
-        Thread.new {
-          @@last_recv = Time.now
-          loop {
-            if (@@last_recv + 300) < Time.now
-              Lich.log "#{Time.now}: error: nothing recieved from game server in 5 minutes"
-              @@thread.kill rescue nil
-              break
-            end
-            sleep (300 - (Time.now - @@last_recv))
-            sleep 1
-          }
-        }
-
         @@thread = Thread.new {
           begin
             atmospherics = false
