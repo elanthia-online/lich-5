@@ -5366,6 +5366,15 @@ module Games
                       Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                     end
                   end
+                  if alt_string =~ /<resource picture=.*roomName/
+                    if (Lich.display_lichid =~ /on|true|yes/ && Lich.display_uid =~ /on|true|yes/) || (Lich.display_lichid.nil? && Lich.display_uid.nil?) #default on
+                      alt_string.sub!(']') { " - #{Room.current.id}] (u#{XMLData.room_id})" }
+                    elsif Lich.display_lichid =~ /on|true|yes/ || Lich.display_lichid.nil? # don't force an entry
+                      alt_string.sub!(']') { " - #{Room.current.id}]" }
+                    elsif Lich.display_uid =~ /on|true|yes/ || Lich.display_uid.nil? # don't force an entry
+                      alt_string.sub!(']') { "] (u#{XMLData.room_id})" }
+                    end
+                  end
                   if $frontend =~ /^(?:wizard|avalon)$/
                     alt_string = sf_to_wiz(alt_string)
                   end
