@@ -20,7 +20,7 @@
   {
     "update_type":"refresh",
     "version_lich":"5.3.0",
-    "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "shield.rb", "spell.rb", "stash.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
+    "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "shield.rb", "spell.rb", "stash.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
     "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "lnet.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
     "recommend_update_scripts":{},
     "announce_features":["Lich 5.3.0 includes:", "Support for Wrayth launch", "Support for direct FE launch on Linux | WINE platforms"]
