@@ -93,5 +93,48 @@ module Lich
       return result
     end
 
+    def self.silver_count(timeout = 3)
+      silence_me unless undo_silence = silence_me
+      result = ''
+      name = self.anon_hook
+      filter = false
+      Script.current.want_downstream = true
+      Script.current.want_downstream_xml = false
+      start_pattern = /^\s*Name\:/
+      end_pattern = /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9,]+)/
+
+      begin
+        Timeout::timeout(timeout, Interrupt) {
+          DownstreamHook.add(name, proc { |line|
+            if filter
+              if line =~ end_pattern
+                result = $1.dup
+                DownstreamHook.remove(name)
+                filter = false
+              else
+                next(nil)
+  end
+            elsif line =~ start_pattern
+              filter = true
+              next(nil)
+            else
+              line
+end
+          })
+          fput 'info'
+
+          until (line = get) =~ start_pattern; end
+        }
+      rescue Interrupt
+        nil
+      ensure
+        DownstreamHook.remove(name)
+        silence_me if undo_silence
+        Script.current.want_downstream_xml = true
+        Script.current.want_downstream = false
+      end
+      return result.gsub(',', '').to_i
+    end
+
   end
 end
