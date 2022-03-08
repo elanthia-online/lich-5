@@ -5482,7 +5482,7 @@ module Games
           expiry.to_i > Time.now.to_i
         end
         
-        def timeleft(effect)
+        def time_left(effect)
           expiry = to_h.fetch(effect, 0)
           if to_h.fetch(effect, 0) != 0
             ((expiry - Time.now) / 60.to_f)
