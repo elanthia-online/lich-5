@@ -2025,10 +2025,19 @@ end
 
 def waitrt?
   sleep checkrt
+  return true if checkrt > 0.0
+  return false if checkrt == 0
 end
 
 def waitcastrt?
-  sleep checkcastrt
+#  sleep checkcastrt
+  current_castrt = checkcastrt
+  if current_castrt.to_f > 0.0
+    sleep(current_castrt)
+    return true
+  else
+    return false
+  end
 end
 
 def checkpoison
