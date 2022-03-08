@@ -8,9 +8,11 @@ stash.rb: Core lich file for extending free_hands, empty_hands functions in
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.0.19
-    version: 1.0.0
+    version: 1.1.0
 
   changelog:
+    version 1.1.0
+     * Added ethereal weapon support
     version 1.0.0
      * Initial release
 
@@ -43,6 +45,7 @@ module Lich
       try_or_fail(command: "_drag ##{item.id} ##{bag.id}") do
         4.times {
           return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) and bag.contents.to_a.map(&:id).include?(item.id))
+          return true if item.name =~ /^ethereal \w+$/ && ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id)
           sleep 0.1
         }
         return false
@@ -89,10 +92,15 @@ module Lich
           }
         else
           actions.unshift proc {
-            fput "get ##{left_hand.id}"
-            20.times { break if (GameObj.left_hand.id == left_hand.id) or (GameObj.right_hand.id == left_hand.id); sleep 0.1 }
+            if left_hand.name =~ /^ethereal \w+$/
+              fput "rub #{left_hand.noun} tattoo"
+              20.times { break if (GameObj.left_hand.name == left_hand.name) or (GameObj.right_hand.name == left_hand.name); sleep 0.1 }
+            else
+              fput "get ##{left_hand.id}"
+              20.times { break if (GameObj.left_hand.id == left_hand.id) or (GameObj.right_hand.id == left_hand.id); sleep 0.1 }
+            end
 
-            if GameObj.right_hand.id == left_hand.id
+            if GameObj.right_hand.id == left_hand.id or (GameObj.right_hand.name == left_hand.name && left_hand.name =~ /^ethereal \w+$/)
               dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
             end
           }
@@ -112,10 +120,15 @@ module Lich
       if (right || both) && right_hand.id
         waitrt?
         actions.unshift proc {
-          fput "get ##{right_hand.id}"
-          20.times { break if GameObj.left_hand.id == right_hand.id or GameObj.right_hand.id == right_hand.id; sleep 0.1 }
+          if right_hand.name =~ /^ethereal \w+$/
+            fput "rub #{right_hand.noun} tattoo"
+            20.times { break if GameObj.left_hand.name == right_hand.name or GameObj.right_hand.name == right_hand.name; sleep 0.1 }
+          else
+            fput "get ##{right_hand.id}"
+            20.times { break if GameObj.left_hand.id == right_hand.id or GameObj.right_hand.id == right_hand.id; sleep 0.1 }
+          end
 
-          if GameObj.left_hand.id == right_hand.id
+          if GameObj.left_hand.id == right_hand.id or (GameObj.left_hand.name == right_hand.name && right_hand.name =~ /^ethereal \w+$/)
             dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
           end
         }
@@ -130,7 +143,6 @@ module Lich
           result = nil
         end
         sleep 0.1
-        pp result
         if result.nil? or !result
           for container in other_containers.call
             result = Lich::Stash::add_to_bag(container, GameObj.right_hand)
