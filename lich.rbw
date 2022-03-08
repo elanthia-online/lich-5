@@ -5481,6 +5481,15 @@ module Games
           expiry = to_h.fetch(effect, 0)
           expiry.to_i > Time.now.to_i
         end
+        
+        def timeleft(effect)
+          expiry = to_h.fetch(effect, 0)
+          if to_h.fetch(effect, 0) != 0
+            ((expiry - Time.now) / 60.to_f)
+          else
+            expiry
+          end
+        end
       end
 
       Spells    = Registry.new("Active Spells")
