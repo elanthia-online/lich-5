@@ -17,7 +17,6 @@ class Map
   @@elevated_load_xml        = proc { Map.load_xml }
   @@elevated_save            = proc { Map.save }
   @@elevated_save_xml        = proc { Map.save_xml }
-  @@current_room_uid       ||= -1
   @@previous_room_id       ||= -1
   @@uids                     = {}
   attr_reader :id
@@ -172,7 +171,7 @@ class Map
             1.times {
               @@current_room_count = XMLData.room_count
               foggy_exits = (XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/)
-              shortlist = Map.ids_from_uid(@@current_room_uid)
+              shortlist = Map.ids_from_uid(XMLData.room_id)
               if shortlist.size > 0
                 shortlist.each { |s|
                   r = @@list[s]
@@ -359,7 +358,7 @@ class Map
       }
       current_location = Map.get_location
       foggy_exits = (XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/)
-      shortlist = [] + Map.ids_from_uid(XMLData.room_id) + @@list[@@previous_room_id].wayto.keys.map(&:to_i) 
+      shortlist = [] + Map.ids_from_uid(XMLData.room_id)
       if shortlist.size > 0
         shortlist.each { |s|
           r = @@list[s]
