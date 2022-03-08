@@ -5,14 +5,16 @@
 
 	;vars help
 
-	author: Elanthia-Online (GTK updates)
-	original author: Tillmen (tillmen@lichproject.org)
-	game: any
-	tags: core
-	required: Lich > 5.0.1
-	version: 0.9
+   original author: Tillmen (tillmen@lichproject.org)
+   maintained by: Elanthia-Online
+   game: Gemstone
+   tags: core
+   required: Lich > 5.0.1
+   version: 1.0
 
 	changelog:
+		1.0 (2021-12-09) 
+			Baselined GTK3 variant for consistency 
 		0.9 (2021-03-01): 
 			Updated menu elements to support GTK3 in Lich5
 		0.8 (2020-03-20:
