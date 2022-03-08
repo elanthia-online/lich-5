@@ -9,9 +9,12 @@
   contributors: SpiffyJr (theman@spiffyjr.me)
           game: any
           tags: core
-       version: 2.35
+       version: 2.36
 
   changelog:
+                      
+    2.36 (2020-12-19):
+      show the author name and time of the last map database upload when downloading it
     2.35 (2020-06-27):
       change mapdb format to json
     2.34 (2018-08-26):
@@ -22,6 +25,8 @@
 =end
 =begin
 
+                      
+                                                        
     2.32 (2017-03-04):
       change checkout-mapdb time limit to 12 hours
     2.31 (2016-04-04):
@@ -131,7 +136,7 @@ require 'digest/md5'
 hostname           = 'repo.lichproject.org'
 port               = 7157
 ca_cert            = OpenSSL::X509::Certificate.new("-----BEGIN CERTIFICATE-----\nMIIDlTCCAn2gAwIBAgIJAKuu65i5NsruMA0GCSqGSIb3DQEBCwUAMGExCzAJBgNV\nBAYTAlVTMREwDwYDVQQIDAhJbGxpbm9pczESMBAGA1UECgwJTWF0dCBMb3dlMQ8w\nDQYDVQQDDAZSb290Q0ExGjAYBgkqhkiG9w0BCQEWC21hdHRAaW80LnVzMB4XDTE0\nMDYwNzE3NDUwMFoXDTI0MDYwNDE3NDUwMFowYTELMAkGA1UEBhMCVVMxETAPBgNV\nBAgMCElsbGlub2lzMRIwEAYDVQQKDAlNYXR0IExvd2UxDzANBgNVBAMMBlJvb3RD\nQTEaMBgGCSqGSIb3DQEJARYLbWF0dEBpbzQudXMwggEiMA0GCSqGSIb3DQEBAQUA\nA4IBDwAwggEKAoIBAQCcIRn0IMCNYeL5agKmkdedgJXsIyTJS8qKrY6EvQsq4tt0\nmO3Or9K8IaDl7qFdQ9nfSJ5phNgoCy9wZ9rDWv5FhY5MnnVHGr3fCa7RkMxJFR/N\nwiD4ihQlixOUly76glceyc/6QQS9bNe96evZDstERGAFfzgHY4qAlyurR6mBu9Mb\nyyCRok6xMRnjrbTMNkvvOsuG0sY9ot+SLHGgU3qT7+wVh/CbWcjeF7/Qwa//fbFk\nmq5c1FuvhU3DanSSz+VuWudPFSyZ3r5pYrLMJWsyomDa4gkL2bJ5jya2BWDMXvSS\nCpdQgPDIlClMfAFLd/Ss8ZIGa6uNFcSK6Xca51ClAgMBAAGjUDBOMB0GA1UdDgQW\nBBScbglRiGzz9yzuhgBwFYjgimeByDAfBgNVHSMEGDAWgBScbglRiGzz9yzuhgBw\nFYjgimeByDAMBgNVHRMEBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQA7MLZYfqam\n5aaSBqQpT6sOGDtVc9koIok59oTQmNXqe+awg2VUnAiesxtLd+FWGUMp8XzHdGWw\nH3O6kAUkPm/in001X7TRAhbgDujfTRbTzxND0XrjuEzDMALs3YpDM1pMXqC7RXWA\n7z+N0gRaUgmh1rMbk/qA3cAfC2dwf2j3NYy3bDw3lMpdyIwAfOQxiZVglYgX3dgT\nU9b//gsUyPCvlpL0mYcmhOOLt6oqQhMJaw1I6A9xMe2kO2L+8KPGK2u1B+P5/Sx0\nFE8LIp5KA3a7yRbOty19NsGR+yW7WwV7BL6c6GOKb/iKJBLYzTmNG6m16hRrxDGj\ntGu91I0ORptB\n-----END CERTIFICATE-----")
-client_version     = '2.35'
+client_version     = '2.36'
 mapdb_reloaded     = false
 cmd                = Array.new
 cmd_author         = nil
@@ -761,7 +766,11 @@ download_mapdb = proc {
       end
       if response['error']
         if response['error'] == 'already up-to-date'
-          echo 'map database is up-to-date'
+          if response['timestamp'] and response['uploaded by']
+            echo "map database is up-to-date; last updated by #{response['uploaded by']} at #{Time.at(response['timestamp'].to_i)}"
+          else
+            echo 'map database is up-to-date'
+          end  
           failed = false
         else
           echo "error: server says: #{response['error']}"
@@ -772,7 +781,11 @@ download_mapdb = proc {
         response['size'] = response['size'].to_i
         newfilename = "#{$data_dir}#{XMLData.game}/map-#{response['timestamp']}.json"
         tempfilename = "#{$temp_dir}#{rand(100000000)}.repo"
-        echo 'downloading map database...'
+        if response['timestamp'] and response['uploaded by']
+          echo "downloading map database... (uploaded by #{response['uploaded by']} at #{Time.at(response['timestamp'].to_i)})"
+        else
+          echo 'downloading map database...'
+        end 
         File.open(tempfilename, 'wb') { |f|
           (response['size'] / 1_000_000).times { f.write(ssl_socket.read(1_000_000)) }
           f.write(ssl_socket.read(response['size'] % 1_000_000)) unless (response['size'] % 1_000_000) == 0

@@ -564,7 +564,7 @@ module Lich
     [gamehost, gameport]
   end
 
-# new feature GUI states
+# new feature GUI / internal settings states
 
   def Lich.track_autosort_state
     begin
@@ -625,4 +625,45 @@ module Lich
     end
     nil
   end
+
+  def Lich.display_lichid
+    begin
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_lichid';")
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+end
+    val
+  end
+
+  def Lich.display_lichid=(val)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_lichid',?);", val.to_s.encode('UTF-8'))
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    nil
+  end
+
+  def Lich.display_uid
+    begin
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_uid';")
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    val
+  end
+
+  def Lich.display_uid=(val)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_uid',?);", val.to_s.encode('UTF-8'))
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    nil
+  end
+
 end

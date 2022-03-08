@@ -98,18 +98,6 @@ class Numeric
   end
 end
 
-class TrueClass
-  def method_missing(*usersave)
-    true
-  end
-end
-
-class FalseClass
-  def method_missing(*usersave)
-    nil
-  end
-end
-
 class String
   @@elevated_untaint = proc { |what| what.orig_untaint }
   alias :orig_untaint :untaint
@@ -2025,10 +2013,19 @@ end
 
 def waitrt?
   sleep checkrt
+  return true if checkrt > 0.0
+  return false if checkrt == 0
 end
 
 def waitcastrt?
-  sleep checkcastrt
+#  sleep checkcastrt
+  current_castrt = checkcastrt
+  if current_castrt.to_f > 0.0
+    sleep(current_castrt)
+    return true
+  else
+    return false
+  end
 end
 
 def checkpoison
@@ -3495,6 +3492,7 @@ end
 require_relative("./lib/stash.rb")
 
 def empty_hands
+  waitrt?
   Lich::Stash::stash_hands(both: true)
 end
 
@@ -3504,34 +3502,42 @@ def empty_hand
 
   unless (right_hand.id.nil? and ([Wounds.rightArm, Wounds.rightHand, Scars.rightArm, Scars.rightHand].max < 3)) or (left_hand.id.nil? and ([Wounds.leftArm, Wounds.leftHand, Scars.leftArm, Scars.leftHand].max < 3))
     if right_hand.id and ([Wounds.rightArm, Wounds.rightHand, Scars.rightArm, Scars.rightHand].max < 3 or [Wounds.leftArm, Wounds.leftHand, Scars.leftArm, Scars.leftHand].max = 3)
+      waitrt?
       Lich::Stash::stash_hands(right: true)
     else
+      waitrt?
       Lich::Stash::stash_hands(left: true)
     end
   end
 end
 
 def empty_right_hand
+  waitrt?
   Lich::Stash::stash_hands(right: true)
 end
 
 def empty_left_hand
+  waitrt?
   Lich::Stash::stash_hands(left: true)
 end
 
 def fill_hands
+  waitrt?
   Lich::Stash::equip_hands(both: true)
 end
 
 def fill_hand
+  waitrt?
   Lich::Stash::equip_hands()
 end
 
 def fill_right_hand
+  waitrt?
   Lich::Stash::equip_hands(right: true)
 end
 
 def fill_left_hand
+  waitrt?
   Lich::Stash::equip_hands(left: true)
 end
 
@@ -4390,19 +4396,6 @@ module Games
         end
         @@socket.sync = true
 
-        Thread.new {
-          @@last_recv = Time.now
-          loop {
-            if (@@last_recv + 300) < Time.now
-              Lich.log "#{Time.now}: error: nothing recieved from game server in 5 minutes"
-              @@thread.kill rescue nil
-              break
-            end
-            sleep (300 - (Time.now - @@last_recv))
-            sleep 1
-          }
-        }
-
         @@thread = Thread.new {
           begin
             atmospherics = false
@@ -4441,6 +4434,15 @@ module Games
                       respond "--- Lich: error: client_thread: #{$!}"
                       respond $!.backtrace.first
                       Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                    end
+                  end
+                  if alt_string =~ /<resource picture=.*roomName/
+                    if (Lich.display_lichid =~ /on|true|yes/ && Lich.display_uid =~ /on|true|yes/) || (Lich.display_lichid.nil? && Lich.display_uid.nil?) #default on
+                      alt_string.sub!(']') { " - #{Room.current.id}] (u#{XMLData.room_id})" }
+                    elsif Lich.display_lichid =~ /on|true|yes/ || Lich.display_lichid.nil? # don't force an entry
+                      alt_string.sub!(']') { " - #{Room.current.id}]" }
+                    elsif Lich.display_uid =~ /on|true|yes/ || Lich.display_uid.nil? # don't force an entry
+                      alt_string.sub!(']') { "] (u#{XMLData.room_id})" }
                     end
                   end
                   if $frontend =~ /^(?:wizard|avalon)$/
