@@ -25,7 +25,7 @@ class XMLParser
               :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
               :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
               :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
-              :dialogs, :room_id
+              :dialogs, :room_id, :previous_nav_rm
   attr_accessor :send_fake_tags
 
   @@warned_deprecated_spellfront = 0
@@ -113,6 +113,7 @@ class XMLParser
 
     # real id updates
     @room_id = nil
+    @previous_nav_rm = nil
   end
 
   # for backwards compatibility
@@ -210,6 +211,7 @@ class XMLParser
       elsif name == 'resource'
         nil
       elsif name == 'nav'
+        @previous_nav_rm = @room_id
         @room_id = attributes['rm'].to_i
       elsif name == 'pushStream'
         @in_stream = true
