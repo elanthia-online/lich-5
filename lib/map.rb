@@ -358,7 +358,7 @@ class Map
       }
       current_location = Map.get_location
       foggy_exits = (XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/)
-      shortlist = [] + Map.ids_from_uid(XMLData.room_id) + @@list[@@previous_room_id].wayto.keys.map(&:to_i) 
+      shortlist = [] + Map.ids_from_uid(XMLData.room_id)
       if shortlist.size > 0
         shortlist.each { |s|
           r = @@list[s]
