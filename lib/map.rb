@@ -53,6 +53,9 @@ class Map
     Map.load unless @@loaded
     if (val.class == Integer) or (val.class == Bignum) or val =~ /^[0-9]+$/
       @@list[val.to_i]
+    elsif val =~ /^u(-?\d+)$/i
+      uid_request = $1.dup.to_i
+      @@list[(Map.ids_from_uid(uid_request)[0]).to_i]
     else
       chkre = /#{val.strip.sub(/\.$/, '').gsub(/\.(?:\.\.)?/, '|')}/i
       chk = /#{Regexp.escape(val.strip)}/i
