@@ -98,18 +98,6 @@ class Numeric
   end
 end
 
-class TrueClass
-  def method_missing(*usersave)
-    true
-  end
-end
-
-class FalseClass
-  def method_missing(*usersave)
-    nil
-  end
-end
-
 class String
   @@elevated_untaint = proc { |what| what.orig_untaint }
   alias :orig_untaint :untaint
