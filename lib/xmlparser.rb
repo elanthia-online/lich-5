@@ -125,9 +125,9 @@ class XMLParser
         when /Active Spells|Buffs/
           z.merge!(k => v) if k.instance_of?(String)
         when /Cooldowns/
-          z.merge!("#{k}" => v) if k.instance_of?(String)
+          z.merge!("#{k} Cooldown" => v) if k.instance_of?(String)
         when /Debuffs/
-          z.merge!("#{k}" => v) if k.instance_of?(String)
+          z.merge!("#{k} Debuff" => v) if k.instance_of?(String)
         end
       end
     end
