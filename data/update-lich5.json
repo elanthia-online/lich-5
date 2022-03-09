@@ -1,24 +1,15 @@
 [
   {
     "update_type":"current",
-    "version_lich":"5.4.0",
+    "version_lich":"5.4.1",
     "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "shield.rb", "spell.rb", "stash.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
     "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "lnet.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
     "recommend_update_scripts":{},
-    "announce_features":["Lich 5.4.0 includes:", "unique Simu supplied id (uid) for each room", "Configurable display at Room Title of the Lich ID and UID", "No more 5 minute time out", "empty_hands and fill_hands will now wait out round time before action", "Spell timers should be significantly more accurate in ;magic and legacy scripts", "Updates to support others' script development"]
+    "announce_features":["Lich 5.4.1 includes:", "Updates and fixes for 5.4.0 which included:", "unique Simu supplied id (uid) for each room", "Configurable display at Room Title of the Lich ID and UID", "No more 5 minute time out", "empty_hands and fill_hands will now wait out round time before action", "Spell timers should be significantly more accurate in ;magic and legacy scripts", "Updates to support others' script development"]
   },
 
   {
     "update_type":"previous",
-    "version_lich":"5.3.1",
-    "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "shield.rb", "spell.rb", "stash.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
-    "update_core_scripts":["infomon.lic", "lich5-update.lic", "xnarost.lic"],
-    "recommend_update_scripts":{},
-    "announce_features":["Lich 5.3.1 includes:", "Support for Wrayth launch", "Support for direct FE launch on Linux | WINE platforms"]
-  },
-
-  {
-    "update_type":"refresh",
     "version_lich":"5.4.0",
     "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "shield.rb", "spell.rb", "stash.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
     "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "lnet.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
@@ -27,11 +18,20 @@
   },
 
   {
-    "update_type":"snapshot",
-    "version_lich":"5.3.1",
-    "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "shield.rb", "spell.rb", "stash.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
+    "update_type":"refresh",
+    "version_lich":"5.4.1",
+    "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "shield.rb", "spell.rb", "stash.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
     "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "lnet.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
     "recommend_update_scripts":{},
-    "announce_features":["Lich 5.3.1 includes:", "Support for Wrayth launch", "Support for direct FE launch on Linux | WINE platforms"]
+    "announce_features":["Lich 5.4.1 includes:", "Updates and fixes for 5.4.0 which included:", "unique Simu supplied id (uid) for each room", "Configurable display at Room Title of the Lich ID and UID", "No more 5 minute time out", "empty_hands and fill_hands will now wait out round time before action", "Spell timers should be significantly more accurate in ;magic and legacy scripts", "Updates to support others' script development"]
+  },
+
+  {
+    "update_type":"snapshot",
+    "version_lich":"5.4.0",
+    "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "shield.rb", "spell.rb", "stash.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
+    "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "lnet.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
+    "recommend_update_scripts":{},
+    "announce_features":[]
   }
 ]
