@@ -116,7 +116,7 @@ class XMLParser
     @previous_nav_rm = nil
   end
 
-  # for backwards compatability
+  # for backwards compatibility
   def active_spells
     z = {}
     XMLData.dialogs.sort.each do |a, b|
@@ -125,9 +125,9 @@ class XMLParser
         when /Active Spells|Buffs/
           z.merge!(k => v) if k.instance_of?(String)
         when /Cooldowns/
-          z.merge!("CD - #{k}" => v) if k.instance_of?(String)
+          z.merge!("#{k}" => v) if k.instance_of?(String)
         when /Debuffs/
-          z.merge!("DB - #{k}" => v) if k.instance_of?(String)
+          z.merge!("#{k}" => v) if k.instance_of?(String)
         end
       end
     end
@@ -312,6 +312,8 @@ class XMLParser
         elsif PSM_3_DIALOG_IDS.include?(@active_ids[-2])
           # puts "kind=(%s) name=%s attributes=%s" % [@active_ids[-2], name, attributes]
           self.parse_psm3_progressbar(@active_ids[-2], attributes)
+          # since we received an updated spell duration, let's signal infomon to update
+          $process_legacy_spell_durations = true
         end
       elsif name == 'roundTime'
         @roundtime_end = attributes['value'].to_i
