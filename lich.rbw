@@ -7446,7 +7446,7 @@ main_thread = Thread.new {
           elsif server_string =~ /^<flag id="Display Inventory Boxes" status='on' desc="Display all inventory and container windows."\/>/
             server_string.sub("status='on'", "status='off'")
           elsif server_string =~ /^\s*<d cmd="flag Inventory off">Inventory<\/d>\s+ON/
-            server_string.sub("flag Inventory off", "flag Inventory on").sub('ON', 'OFF')
+            server_string.sub("flag Inventory off", "flag Inventory on").sub('ON ', 'OFF')
           else
             server_string
           end
