@@ -253,13 +253,13 @@ elsif script.vars[0] =~ /^targets$/i
       }
       output.concat "\n"
    }
-  if XMLData.game =~ /^DR/
-    output.concat "---------------------------------------------------------------\n"
-    output.concat " - Known Nexus Rooms\n"
-    output.concat "---------------------------------------------------------------\n"
-    Map.list.find_all{ |room| room.tags.include?('nexus') }
+if XMLData.game =~ /^DR/
+   output.concat "---------------------------------------------------------------\n"
+   output.concat " - Known Nexus Rooms\n"
+   output.concat "---------------------------------------------------------------\n"
+   Map.list.find_all{ |room| room.tags.include?('nexus') }
             .each{ |room| output.concat "#{room.title.first.sub(/^\[/, '').sub(/\]$/, '').ljust(45)} - #{room.id.to_s.rjust(5)}\n" }
-  end
+   end
    respond output
    exit
 elsif script.vars[0] =~ /^list$/i
@@ -1010,18 +1010,18 @@ loop {
    path.reverse!
    est_time = shortest_distances[destination.id]
    previous = shortest_distances = nil
-	if Script.running?('roomnumbers')
-		rooms = [Room.current.id] + path
-		if rooms.any? { |room| Room[room].tags.first.include?('peer') }
-			stop_script('roomnumbers')
-			before_dying { start_script('roomnumbers') } unless Room[rooms.last].tags.first.include?('peer')
-		end
-	end
+   if Script.running?('roomnumbers')
+     rooms = [Room.current.id] + path
+       if rooms.any? { |room| Room[room].tags.first.include?('peer') }
+         stop_script('roomnumbers')
+         before_dying { start_script('roomnumbers') } unless Room[rooms.last].tags.first.include?('peer')
+       end
+   end
 
-	if Script.running?('textsubs') && est_time > 5
-		stop_script('textsubs')
-		before_dying { start_script('textsubs') }
-	end
+   if Script.running?('textsubs') && est_time > 5
+     stop_script('textsubs')
+     before_dying { start_script('textsubs') }
+   end
 
    if XMLData.game =~ /^GS/
       needed_silvers = get_silver_cost.call(path)
