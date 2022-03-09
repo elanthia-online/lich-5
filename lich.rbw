@@ -4425,17 +4425,6 @@ module Games
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
                 if alt_string = DownstreamHook.run($_SERVERSTRING_)
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if $_DETACHABLE_CLIENT_
-                    begin
-                      $_DETACHABLE_CLIENT_.write(alt_string)
-                    rescue
-                      $_DETACHABLE_CLIENT_.close rescue nil
-                      $_DETACHABLE_CLIENT_ = nil
-                      respond "--- Lich: error: client_thread: #{$!}"
-                      respond $!.backtrace.first
-                      Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    end
-                  end
                   if alt_string =~ /<resource picture=.*roomName/
                     if (Lich.display_lichid =~ /on|true|yes/ && Lich.display_uid =~ /on|true|yes/) || (Lich.display_lichid.nil? && Lich.display_uid.nil?) #default on
                       alt_string.sub!(']') { " - #{Room.current.id}] (u#{XMLData.room_id})" }
@@ -4448,7 +4437,19 @@ module Games
                   if $frontend =~ /^(?:wizard|avalon)$/
                     alt_string = sf_to_wiz(alt_string)
                   end
-                  $_CLIENT_.write(alt_string)
+                  if $_DETACHABLE_CLIENT_
+                    begin
+                      $_DETACHABLE_CLIENT_.write(alt_string)
+                    rescue
+                      $_DETACHABLE_CLIENT_.close rescue nil
+                      $_DETACHABLE_CLIENT_ = nil
+                      respond "--- Lich: error: client_thread: #{$!}"
+                      respond $!.backtrace.first
+                      Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                    end
+                  else
+                    $_CLIENT_.write(alt_string)
+                  end
                 end
                 unless $_SERVERSTRING_ =~ /^<settings /
                   if $_SERVERSTRING_ =~ /^<settingsInfo .*?space not found /
