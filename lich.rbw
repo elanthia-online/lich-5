@@ -961,6 +961,45 @@ class Script
   attr_reader :name, :vars, :safe, :file_name, :label_order, :at_exit_procs
   attr_accessor :quiet, :no_echo, :jump_label, :current_label, :want_downstream, :want_downstream_xml, :want_upstream, :want_script_output, :hidden, :paused, :silent, :no_pause_all, :no_kill_all, :downstream_buffer, :upstream_buffer, :unique_buffer, :die_with, :match_stack_labels, :match_stack_strings, :watchfor, :command_line, :ignore_pause
 
+  def Script.version(script_name, script_version_required = nil)
+    script_name = script_name.sub(/[.](lic|rb|cmd|wiz)$/, '')
+    file_list = Dir.entries(SCRIPT_DIR).delete_if { |fn| (fn == '.') or (fn == '..') }
+    file_list = file_list.sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
+    if file_name = (file_list.find { |val| val =~ /^#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i })
+      script_name = file_name.sub(/\..{1,3}$/, '')
+    end
+    file_list = nil
+    if file_name.nil?
+      respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR}"
+      return nil
+    end
+   
+    script_version = '0.0.0'
+    script_data = open("#{SCRIPT_DIR}/#{file_name}", 'r').read
+    if script_data =~ /^=begin\r?\n?(.+?)^=end/m
+      comments = $1.split("\n")
+    else
+      comments = []
+      script_data.split("\n").each {|line|
+        if line =~ /^[\t\s]*#/
+          comments.push(line)
+        elsif line !~ /^[\t\s]*$/
+          break
+        end
+      }
+    end
+    for line in comments
+      if line =~ /^[\s\t#]*version:[\s\t]*([\w,\s\.\d]+)/i
+        script_version = $1.sub(/\s\(.*?\)/, '').strip
+      end
+    end
+    if script_version_required
+      Gem::Version.new(script_version) < Gem::Version.new(script_version_required)
+    else
+      Gem::Version.new(script_version)
+    end
+  end
+    
   def Script.list
     @@running.dup
   end
@@ -4425,17 +4464,6 @@ module Games
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
                 if alt_string = DownstreamHook.run($_SERVERSTRING_)
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if $_DETACHABLE_CLIENT_
-                    begin
-                      $_DETACHABLE_CLIENT_.write(alt_string)
-                    rescue
-                      $_DETACHABLE_CLIENT_.close rescue nil
-                      $_DETACHABLE_CLIENT_ = nil
-                      respond "--- Lich: error: client_thread: #{$!}"
-                      respond $!.backtrace.first
-                      Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    end
-                  end
                   if alt_string =~ /<resource picture=.*roomName/
                     if (Lich.display_lichid =~ /on|true|yes/ && Lich.display_uid =~ /on|true|yes/) || (Lich.display_lichid.nil? && Lich.display_uid.nil?) #default on
                       alt_string.sub!(']') { " - #{Room.current.id}] (u#{XMLData.room_id})" }
@@ -4448,7 +4476,19 @@ module Games
                   if $frontend =~ /^(?:wizard|avalon)$/
                     alt_string = sf_to_wiz(alt_string)
                   end
-                  $_CLIENT_.write(alt_string)
+                  if $_DETACHABLE_CLIENT_
+                    begin
+                      $_DETACHABLE_CLIENT_.write(alt_string)
+                    rescue
+                      $_DETACHABLE_CLIENT_.close rescue nil
+                      $_DETACHABLE_CLIENT_ = nil
+                      respond "--- Lich: error: client_thread: #{$!}"
+                      respond $!.backtrace.first
+                      Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                    end
+                  else
+                    $_CLIENT_.write(alt_string)
+                  end
                 end
                 unless $_SERVERSTRING_ =~ /^<settings /
                   if $_SERVERSTRING_ =~ /^<settingsInfo .*?space not found /
@@ -7446,7 +7486,7 @@ main_thread = Thread.new {
           elsif server_string =~ /^<flag id="Display Inventory Boxes" status='on' desc="Display all inventory and container windows."\/>/
             server_string.sub("status='on'", "status='off'")
           elsif server_string =~ /^\s*<d cmd="flag Inventory off">Inventory<\/d>\s+ON/
-            server_string.sub("flag Inventory off", "flag Inventory on").sub('ON', 'OFF')
+            server_string.sub("flag Inventory off", "flag Inventory on").sub('ON ', 'OFF')
           else
             server_string
           end
