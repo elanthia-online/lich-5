@@ -228,7 +228,7 @@ elsif script.vars[0] =~ /^targets$/i
    town_ids = town_list.collect { |room| room.id }
    town_hash = Hash.new
    town_ids.each { |id| town_hash[id] = Array.new }
-   interesting_tags = if XMLData.game == 'DR'
+   interesting_tags = if XMLData.game =~ /^DR/
                         dr_interesting_tags
                       else
                         gs_interesting_tags
