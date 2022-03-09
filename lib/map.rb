@@ -175,8 +175,7 @@ class Map
               if shortlist.size > 0
                 shortlist.each { |s|
                   r = @@list[s]
-                  if (r.wayto.keys.include?(@@current_room_id.to_s)) or
-                      (@@list[@@current_room_id].wayto.keys.include?(s.to_s)) or
+                  if  (!@@current_room_id.nil? and @@list[@@current_room_id].wayto.keys.include?(s.to_s)) or
                       (r.title.include?(XMLData.room_title) and 
                        r.description.include?(XMLData.room_description.strip) and 
                       (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
