@@ -162,7 +162,7 @@ if script.vars[1]
         scripts_to_check = Set.new
         script.vars[1..-1].each do |prefix|
             scripts = Dir["#{SCRIPT_DIR}/#{prefix}*"].find_all{|x| x =~ /\.lic$/i}
-	    scripts += Dir["#{LICH_DIR}/lib/#{prefix}*"].find_all{|x| x =~ /\.rb$/i}
+            scripts += Dir["#{LICH_DIR}/lib/#{prefix}*"].find_all{|x| x =~ /\.rb$/i}
             if scripts.length == 0
                 echo "#{prefix}: No matching scripts found!"
             end
