@@ -100,8 +100,8 @@ module Lich
       result = ''
       name = self.anon_hook
       filter = false
-      save_want_downstream = Script.want_downstream
-      save_want_downstream_xml = Script.want_downstream_xml
+      save_want_downstream = Script.current.want_downstream
+      save_want_downstream_xml = Script.current.want_downstream_xml
       Script.current.want_downstream = true
       Script.current.want_downstream_xml = false
       start_pattern = /^\s*Name\:/
