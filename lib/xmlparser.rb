@@ -148,7 +148,11 @@ class XMLParser
   end
 
   def safe_to_respond?
-    !in_stream && !@bold && (!@current_style || @current_style.empty?)
+    if @game =~ /^DR/
+      !in_stream && !@bold && (!@current_style || @current_style.empty?)
+    else
+      return true
+    end
   end
 
   def make_wound_gsl
