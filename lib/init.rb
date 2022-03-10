@@ -797,6 +797,15 @@ unless File.exists?(SCRIPT_DIR)
     exit
   end
 end
+unless File.exists?("#{SCRIPT_DIR}/custom")
+  begin
+    Dir.mkdir("#{SCRIPT_DIR}/custom")
+  rescue
+    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    Lich.msgbox(:message => "An error occured while attempting to create directory #{SCRIPT_DIR}/custom\n\n#{$!}", :icon => :error)
+    exit
+  end
+end
 unless File.exists?(MAP_DIR)
   begin
     Dir.mkdir(MAP_DIR)
