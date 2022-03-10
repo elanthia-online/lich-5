@@ -49,6 +49,8 @@ module Lich
       result = []
       name = self.anon_hook
       filter = false
+      save_want_downstream = Script.current.want_downstream
+      save_want_downstream_xml = Script.current.want_downstream_xml
       Script.current.want_downstream = false
       Script.current.want_downstream_xml = true
 
@@ -89,8 +91,8 @@ module Lich
         nil
       ensure
         DownstreamHook.remove(name)
-        Script.current.want_downstream_xml = false
-        Script.current.want_downstream = true
+        Script.current.want_downstream_xml = save_want_downstream_xml
+        Script.current.want_downstream = save_want_downstream
       end
       return result
     end
@@ -100,10 +102,10 @@ module Lich
       result = ''
       name = self.anon_hook
       filter = false
-      save_want_downstream = Script.current.want_downstream
-      save_want_downstream_xml = Script.current.want_downstream_xml
-      Script.current.want_downstream = true
-      Script.current.want_downstream_xml = false
+      #save_want_downstream = Script.current.want_downstream
+      #save_want_downstream_xml = Script.current.want_downstream_xml
+      #Script.current.want_downstream = true
+      #Script.current.want_downstream_xml = false
       start_pattern = /^\s*Name\:/
       end_pattern = /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9,]+)/
 
@@ -134,8 +136,8 @@ module Lich
       ensure
         DownstreamHook.remove(name)
         silence_me if undo_silence
-        Script.current.want_downstream_xml = save_want_downstream_xml
-        Script.current.want_downstream = save_want_downstream
+        #Script.current.want_downstream_xml = save_want_downstream_xml
+        #Script.current.want_downstream = save_want_downstream
       end
       return result.gsub(',', '').to_i
     end
