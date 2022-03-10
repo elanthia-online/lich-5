@@ -488,7 +488,6 @@ class XMLParser
           end
         end
       elsif (name == 'app') and (@name = attributes['char'])
-        @game = attributes['game']
         if @game.nil? or @game.empty?
           @game = 'unknown'
         end
