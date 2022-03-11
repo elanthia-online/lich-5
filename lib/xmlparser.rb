@@ -272,8 +272,8 @@ class XMLParser
           @room_description = String.new
           GameObj.clear_room_desc
         elsif attributes['id'] == 'room extra' # DragonRealms
-          @room_count += 1
-          $room_count += 1
+          #@room_count += 1
+          #$room_count += 1
           # elsif attributes['id'] == 'sprite'
         end
       elsif name == 'clearContainer'
