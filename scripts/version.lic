@@ -4,20 +4,22 @@
 	  author: LostRanger (thisgenericname@gmail.com)
 	  game: any
 	  tags: utility
-
-  version: 0.53 (2021-03-07)
+       version: 0.54
 
   changelog:
-	  version 0.53 (2021-03-07)
-	  # fix ruby location report to RbConfig.bindir and rubyw 
-	    detection to avoid special gem directory kerfuffles
+    version 0.54 (2022-03-10)
+      * add support for lib and ui folder.
+
+    version 0.53 (2021-03-07)
+      * fix ruby location report to RbConfig.bindir and rubyw 
+      * detection to avoid special gem directory kerfuffles
   
-      version 0.52 (2021-03-04)
-      # fix ruby location report to Gem.bindir for cross platform use
+    version 0.52 (2021-03-04)
+      * fix ruby location report to Gem.bindir for cross platform use
 
     version 0.51 (2020-12-19)
-      # add core engine algorithm to detect Cabal and LICH
-      # add json to regex for file extension naming
+      * add core engine algorithm to detect Cabal and LICH
+      * add json to regex for file extension naming
 
     version 0.5 (2020-03-19)
       * Fix our exception handling not actually working.
@@ -160,6 +162,7 @@ if script.vars[1]
         scripts_to_check = Set.new
         script.vars[1..-1].each do |prefix|
             scripts = Dir["#{SCRIPT_DIR}/#{prefix}*"].find_all{|x| x =~ /\.lic$/i}
+            scripts += Dir["#{LICH_DIR}/lib/#{prefix}*"].find_all{|x| x =~ /\.rb$/i}
             if scripts.length == 0
                 echo "#{prefix}: No matching scripts found!"
             end
