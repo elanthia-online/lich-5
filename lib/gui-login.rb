@@ -36,8 +36,8 @@ def gui_login
     @window = nil
     install_tab_loaded = false
 
-    msgbox = proc { |msg|
-      dialog = Gtk::MessageDialog.new(:parent => window, :flags => Gtk::DialogFlags::DESTROY_WITH_PARENT, :type => Gtk::MessageType::ERROR, :buttons => Gtk::ButtonsType::CLOSE, :message => msg)
+    @msgbox = proc { |msg|
+      dialog = Gtk::MessageDialog.new(:parent => @window, :flags => Gtk::DialogFlags::DESTROY_WITH_PARENT, :type => Gtk::MessageType::ERROR, :buttons => Gtk::ButtonsType::CLOSE, :message => msg)
       #			dialog.set_icon(default_icon)
       dialog.run
       dialog.destroy

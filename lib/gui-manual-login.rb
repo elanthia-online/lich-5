@@ -119,7 +119,7 @@ connect_button.signal_connect('clicked') {
       )
     end
     if login_info =~ /error/i
-      msgbox.call "\nSomething went wrong... probably invalid \nuser id and / or password.\n\nserver response: #{login_info}"
+      @msgbox.call "\nSomething went wrong... probably invalid \nuser id and / or password.\n\nserver response: #{login_info}"
       connect_button.sensitive = true
       disconnect_button = false
       user_id_entry.sensitive = true
