@@ -28,7 +28,7 @@ class XMLParser
               :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
               :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
               :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
-              :dialogs, :room_id, :previous_nav_rm
+              :dialogs, :room_id, :previous_nav_rm, :room_objects, :concentration, :max_concentration
   attr_accessor :send_fake_tags
 
   @@warned_deprecated_spellfront = 0
@@ -79,6 +79,7 @@ class XMLParser
     @room_description = String.new
     @room_exits = Array.new
     @room_exits_string = String.new
+    @room_objects = String.new
 
     @familiar_room_title = String.new
     @familiar_room_description = String.new
@@ -99,6 +100,8 @@ class XMLParser
     @last_spirit = nil
     @stamina = 0
     @max_stamina = 0
+    @concentration = 0
+    @max_concentration = 0
     @stance_text = String.new
     @stance_value = 0
     @mind_text = String.new
@@ -142,6 +145,14 @@ class XMLParser
     @active_ids = Array.new
     @current_stream = String.new
     @current_style = String.new
+  end
+
+  def safe_to_respond?
+    if @game =~ /^DR/
+      !in_stream && !@bold && (!@current_style || @current_style.empty?)
+    else
+      return true
+    end
   end
 
   def make_wound_gsl
@@ -216,6 +227,8 @@ class XMLParser
       elsif name == 'nav'
         @previous_nav_rm = @room_id
         @room_id = attributes['rm'].to_i
+        $nav_seen = true
+        Map.last_seen_objects = nil
       elsif name == 'pushStream'
         @in_stream = true
         @current_stream = attributes['id'].to_s
@@ -259,8 +272,8 @@ class XMLParser
           @room_description = String.new
           GameObj.clear_room_desc
         elsif attributes['id'] == 'room extra' # DragonRealms
-          @room_count += 1
-          $room_count += 1
+          #@room_count += 1
+          #$room_count += 1
           # elsif attributes['id'] == 'sprite'
         end
       elsif name == 'clearContainer'
@@ -312,6 +325,8 @@ class XMLParser
         elsif attributes['id'] == 'encumlevel'
           @encumbrance_value = attributes['value'].to_i
           @encumbrance_text = attributes['text']
+        elsif attributes['id'] == 'concentration'
+          @concentration, @max_concentration = attributes['text'].scan(/-?\d+/).collect { |num| num.to_i }
         elsif PSM_3_DIALOG_IDS.include?(@active_ids[-2])
           # puts "kind=(%s) name=%s attributes=%s" % [@active_ids[-2], name, attributes]
           self.parse_psm3_progressbar(@active_ids[-2], attributes)
@@ -477,6 +492,7 @@ class XMLParser
           end
         end
       elsif (name == 'app') and (@name = attributes['char'])
+        @game = attributes['game'] if @game =~ /^DR/
         if @game.nil? or @game.empty?
           @game = 'unknown'
         end
@@ -712,6 +728,13 @@ class XMLParser
         @room_exits.each { |exit| gsl_exits.concat(DIRMAP[SHORTDIR[exit]].to_s) }
         $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
         gsl_exits = nil
+        @room_count += 1
+        $room_count += 1
+      elsif name == 'compass' and $nav_seen
+        $nav_seen = false
+        @second_compass = true
+      elsif name == 'compass' and @second_compass
+        @second_compass = false
         @room_count += 1
         $room_count += 1
       end
