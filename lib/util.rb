@@ -7,10 +7,12 @@ Entries added here should always be accessible from Lich::Util.feature namespace
     game: Gemstone
     tags: CORE, util, utilities
     required: Lich > 5.0.19
-    version: 1.0.0
+    version: 1.1.0
 
   changelog:
-    version 1.0.0
+    v1.1.0 (2022-03-09)
+     * Fix silver_count forcing downstream_xml on
+    v1.0.0 (2022-03-08)
      * Initial release
 
 =end
@@ -47,6 +49,8 @@ module Lich
       result = []
       name = self.anon_hook
       filter = false
+      save_want_downstream = Script.current.want_downstream
+      save_want_downstream_xml = Script.current.want_downstream_xml
       Script.current.want_downstream = false
       Script.current.want_downstream_xml = true
 
@@ -87,8 +91,8 @@ module Lich
         nil
       ensure
         DownstreamHook.remove(name)
-        Script.current.want_downstream_xml = false
-        Script.current.want_downstream = true
+        Script.current.want_downstream_xml = save_want_downstream_xml
+        Script.current.want_downstream = save_want_downstream
       end
       return result
     end
@@ -98,8 +102,10 @@ module Lich
       result = ''
       name = self.anon_hook
       filter = false
-      Script.current.want_downstream = true
-      Script.current.want_downstream_xml = false
+      #save_want_downstream = Script.current.want_downstream
+      #save_want_downstream_xml = Script.current.want_downstream_xml
+      #Script.current.want_downstream = true
+      #Script.current.want_downstream_xml = false
       start_pattern = /^\s*Name\:/
       end_pattern = /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9,]+)/
 
@@ -113,13 +119,13 @@ module Lich
                 filter = false
               else
                 next(nil)
-  end
+              end
             elsif line =~ start_pattern
               filter = true
               next(nil)
             else
               line
-end
+            end
           })
           fput 'info'
 
@@ -130,8 +136,8 @@ end
       ensure
         DownstreamHook.remove(name)
         silence_me if undo_silence
-        Script.current.want_downstream_xml = true
-        Script.current.want_downstream = false
+        #Script.current.want_downstream_xml = save_want_downstream_xml
+        #Script.current.want_downstream = save_want_downstream
       end
       return result.gsub(',', '').to_i
     end
