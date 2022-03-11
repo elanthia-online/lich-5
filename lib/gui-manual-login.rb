@@ -121,7 +121,7 @@ connect_button.signal_connect('clicked') {
     if login_info =~ /error/i
       @msgbox.call "\nSomething went wrong... probably invalid \nuser id and / or password.\n\nserver response: #{login_info}"
       connect_button.sensitive = true
-      disconnect_button = false
+      disconnect_button.sensitive = false
       user_id_entry.sensitive = true
       pass_entry.sensitive = true
     else
@@ -134,8 +134,8 @@ connect_button.signal_connect('clicked') {
         iter[2] = row[:char_code]
         iter[3] = row[:char_name]
       end
-    end
     disconnect_button.sensitive = true
+    end
     login_server = true
   }
 }
@@ -148,7 +148,7 @@ disconnect_button.signal_connect('clicked') {
   disconnect_button.sensitive = false
   play_button.sensitive = false
   liststore.clear
-  login_server.close unless login_server.closed?
+  login_server = false
   connect_button.sensitive = true
   user_id_entry.sensitive = true
   pass_entry.sensitive = true
