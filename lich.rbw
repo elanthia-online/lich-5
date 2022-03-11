@@ -989,7 +989,7 @@ class Script
       respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR}"
       return nil
     end
-   
+
     script_version = '0.0.0'
     script_data = open("#{SCRIPT_DIR}/#{file_name}", 'r').read
     if script_data =~ /^=begin\r?\n?(.+?)^=end/m
@@ -1015,7 +1015,7 @@ class Script
       Gem::Version.new(script_version)
     end
   end
-    
+
   def Script.list
     @@running.dup
   end
@@ -5645,7 +5645,7 @@ module Games
           expiry = to_h.fetch(effect, 0)
           expiry.to_i > Time.now.to_i
         end
-        
+
         def time_left(effect)
           expiry = to_h.fetch(effect, 0)
           if to_h.fetch(effect, 0) != 0
@@ -7901,3 +7901,5 @@ else
   main_thread.join
 end
 exit
+
+# Webhook test
