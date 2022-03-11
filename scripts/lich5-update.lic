@@ -50,7 +50,7 @@ prep_update = proc { |type|
   filename = "https://raw.githubusercontent.com/elanthia-online/lich-5/master/data/update-lich5.json"
   update_info = open(filename).read
   JSON::parse(update_info).each { |entry|
-    if entry["update_type"]["#{type}"] && (Gem::Version.new(entry["version_lich"]) > installed || type = :refresh)
+    if entry["update_type"]["#{type}"] && (Gem::Version.new(entry["version_lich"]) > installed || type == :refresh)
       @update_to = entry["version_lich"]
       @update_scripts = entry["update_core_scripts"] if !entry["update_core_scripts"].empty?
       @update_lib = entry["update_libs"] if !entry["update_libs"].empty?
