@@ -161,7 +161,16 @@ class SynchronizedSocket
       @delegate.puts *args, &block
     }
   end
-
+  def puts_if(*args)
+    @mutex.synchronize {
+      if yield
+         @delegate.puts *args
+         return true
+       else
+          return false
+       end
+      }
+  end
   def write(*args, &block)
     @mutex.synchronize {
       @delegate.write *args, &block
@@ -734,17 +743,16 @@ class Script
 
     # fixme: look in wizard script directory
     # fixme: allow subdirectories?
-    file_list = Dir.entries(SCRIPT_DIR).delete_if { |fn| (fn == '.') or (fn == '..') }
-    file_list = file_list.sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
-    if file_name = (file_list.find { |val| val =~ /^#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i })
+    file_list = Dir.children(File.join(SCRIPT_DIR, "custom")).sort.map{ |s| s.prepend("/custom/") } + Dir.children(SCRIPT_DIR).sort
+    if file_name = (file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i })
       script_name = file_name.sub(/\..{1,3}$/, '')
     end
     file_list = nil
     if file_name.nil?
-      respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR}"
+      respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR} or #{SCRIPT_DIR}/custom"
       next nil
     end
-    if (options[:force] != true) and (Script.running + Script.hidden).find { |s| s.name =~ /^#{Regexp.escape(script_name)}$/i }
+    if (options[:force] != true) and (Script.running + Script.hidden).find { |s| s.name =~ /^#{Regexp.escape(script_name.sub('/custom/', ''))}$/i }
       respond "--- Lich: #{script_name} is already running (use #{$clean_lich_char}force [scriptname] if desired)."
       next nil
     end
@@ -892,9 +900,17 @@ class Script
     if script_name =~ /\\|\//
       nil
     elsif script_name =~ /\.(?:lic|lich|rb|cmd|wiz)(?:\.gz)?$/i
-      File.exists?("#{SCRIPT_DIR}/#{script_name}")
+      File.exists?("#{SCRIPT_DIR}/#{script_name}") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}")
     else
-      File.exists?("#{SCRIPT_DIR}/#{script_name}.lic") || File.exists?("#{SCRIPT_DIR}/#{script_name}.lich") || File.exists?("#{SCRIPT_DIR}/#{script_name}.rb") || File.exists?("#{SCRIPT_DIR}/#{script_name}.cmd") || File.exists?("#{SCRIPT_DIR}/#{script_name}.wiz") || File.exists?("#{SCRIPT_DIR}/#{script_name}.lic.gz") || File.exists?("#{SCRIPT_DIR}/#{script_name}.rb.gz") || File.exists?("#{SCRIPT_DIR}/#{script_name}.cmd.gz") || File.exists?("#{SCRIPT_DIR}/#{script_name}.wiz.gz")
+      File.exists?("#{SCRIPT_DIR}/#{script_name}.lic") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.lic") ||
+      File.exists?("#{SCRIPT_DIR}/#{script_name}.lich") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.lich") ||
+      File.exists?("#{SCRIPT_DIR}/#{script_name}.rb") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.rb") ||
+      File.exists?("#{SCRIPT_DIR}/#{script_name}.cmd") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.cmd") ||
+      File.exists?("#{SCRIPT_DIR}/#{script_name}.wiz") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.wiz") ||
+      File.exists?("#{SCRIPT_DIR}/#{script_name}.lic.gz") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.lic.gz") ||
+      File.exists?("#{SCRIPT_DIR}/#{script_name}.rb.gz") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.rb.gz") ||
+      File.exists?("#{SCRIPT_DIR}/#{script_name}.cmd.gz") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.cmd.gz") ||
+      File.exists?("#{SCRIPT_DIR}/#{script_name}.wiz.gz") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.wiz.gz")
     end
   }
   @@elevated_log = proc { |data|
@@ -1219,7 +1235,8 @@ class Script
         @vars.concat args[:args].scan(/[^\s"]*(?<!\\)"(?:\\"|[^"])+(?<!\\)"[^\s]*|(?:\\"|[^"\s])+/).collect { |s| s.gsub(/(?<!\\)"/, '').gsub('\\"', '"') }
       end
     elsif args[:args].class == Array
-      @vars = args[:args] # fixme: set @vars[0] ?
+      @vars = [ args[:args].join(" ") ]
+      @vars.concat args[:args]
     else
       @vars = Array.new
     end
@@ -2366,7 +2383,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     end
     if line.nil?
       sleep 0.1
-    elsif line =~ /^You can't do that while engaged!|^You are engaged to /
+    elsif line =~ /^You realize that would be next to impossible while in combat.|^You can't do that while engaged!|^You are engaged to |^You need to retreat out of combat first!|^You try to move, but you're engaged|^While in combat\?  You'll have better luck if you first retreat/
       # DragonRealms
       fput 'retreat'
       fput 'retreat'
@@ -2384,7 +2401,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
         dir.sub!('door', 'second door')
       end
       put_dir.call
-    elsif line =~ /^You can't go there|^You can't (?:go|swim) in that direction\.|^Where are you trying to go\?|^What were you referring to\?|^I could not find what you were referring to\.|^How do you plan to do that here\?|^You take a few steps towards|^You cannot do that\.|^You settle yourself on|^You shouldn't annoy|^You can't go to|^That's probably not a very good idea|^You can't do that|^Maybe you should look|^You are already|^You walk over to|^You step over to|The [\w\s]+ is too far away|You may not pass\.|become impassable\.|prevents you from entering\.|Please leave promptly\.|is too far above you to attempt that\.$|^Uh, yeah\.  Right\.$|^Definitely NOT a good idea\.$|^Your attempt fails|^There doesn't seem to be any way to do that at the moment\.$/
+    elsif line =~ /^You can't go there|^You can't (?:go|swim) in that direction\.|^Where are you trying to go\?|^What were you referring to\?|^I could not find what you were referring to\.|^How do you plan to do that here\?|^You take a few steps towards|^You cannot do that\.|^You settle yourself on|^You shouldn't annoy|^You can't go to|^That's probably not a very good idea|^Maybe you should look|^You are already(?! as far away as you can get)|^You walk over to|^You step over to|The [\w\s]+ is too far away|You may not pass\.|become impassable\.|prevents you from entering\.|Please leave promptly\.|is too far above you to attempt that\.$|^Uh, yeah\.  Right\.$|^Definitely NOT a good idea\.$|^Your attempt fails|^There doesn't seem to be any way to do that at the moment\.$/
       echo 'move: failed'
       fill_hands if need_full_hands
       Script.current.downstream_buffer.unshift(save_stream)
@@ -2397,11 +2414,11 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       Script.current.downstream_buffer.flatten!
       # return nil instead of false to show the direction shouldn't be removed from the map database
       return nil
-    elsif line =~ /^You grab [A-Z][a-z]+ and try to drag h(?:im|er), but s?he (?:is too heavy|doesn't budge)\.$|^Tentatively, you attempt to swim through the nook\.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!$|^Guards(?:wo)?man [A-Z][a-z]+ stops you and says, "(?:Stop\.|Halt!)  You need to make sure you check in|^You step into the root, but can see no way to climb the slippery tendrils inside\.  After a moment, you step back out\.$|^As you start .*? back to safe ground\.$|^You stumble a bit as you try to enter the pool but feel that your persistence will pay off\.$|^A shimmering field of magical crimson and gold energy flows through the area\.$|^You attempt to navigate your way through the fog, but (?:quickly become entangled|get turned around)/
+    elsif line =~ /^You grab [A-Z][a-z]+ and try to drag h(?:im|er), but s?he (?:is too heavy|doesn't budge)\.$|^Tentatively, you attempt to swim through the nook\.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!$|^Guards(?:wo)?man [A-Z][a-z]+ stops you and says, "(?:Stop\.|Halt!)  You need to make sure you check in|^You step into the root, but can see no way to climb the slippery tendrils inside\.  After a moment, you step back out\.$|^As you start .*? back to safe ground\.$|^You stumble a bit as you try to enter the pool but feel that your persistence will pay off\.$|^A shimmering field of magical crimson and gold energy flows through the area\.$|^You attempt to navigate your way through the fog, but (?:quickly become entangled|get turned around)|^Trying to judge the climb, you peer over the edge\.\s*A wave of dizziness hits you, and you back away from the .*\.$|^You approach the .*, but the steepness is intimidating\.$|^You make your way up the .*\.\s*Partway up, you make the mistake of looking down\. Struck by vertigo, you cling to the .* for a few moments, then slowly climb back down\.$|^You pick your way up the .*, but reach a point where your footing is questionable.\s*Reluctantly, you climb back down.$/
       sleep 1
       waitrt?
       put_dir.call
-    elsif line =~ /^Climbing.*(?:plunge|fall)|^Tentatively, you attempt to climb.*(?:fall|slip)|^You start.*but quickly realize|^You.*drop back to the ground|^You leap .* fall unceremoniously to the ground in a heap\.$|^You search for a way to make the climb .*? but without success\.$|^You start to climb .* you fall to the ground|^You attempt to climb .* wrong approach|^You run towards .*? slowly retreat back, reassessing the situation\./
+    elsif line =~ /^Climbing.*(?:plunge|fall)|^Tentatively, you attempt to climb.*(?:fall|slip)|^You start up the .* but slip after a few feet and fall to the ground|^You start.*but quickly realize|^You.*drop back to the ground|^You leap .* fall unceremoniously to the ground in a heap\.$|^You search for a way to make the climb .*? but without success\.$|^You start to climb .* you fall to the ground|^You attempt to climb .* wrong approach|^You run towards .*? slowly retreat back, reassessing the situation\.|^You attempt to climb down the .*, but you can't seem to find purchase\.|^You start down the .*, but you find it hard going.\s*Rather than risking a fall, you make your way back up\./
       sleep 1
       waitrt?
       fput 'stand' unless standing?
@@ -2471,9 +2488,20 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
         sleep 0.3
       end
       put_dir.call
-    elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^Try standing up|^Perhaps you should stand up|^Standing up might help|^You should really stand up first/
+    elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^Try standing up|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down/
       fput 'stand'
       waitrt?
+      put_dir.call
+    elsif line == "You're still recovering from your recent cast."
+      sleep 2
+      put_dir.call
+    elsif line =~ /^The ground approaches you at an alarming rate/
+      sleep 1
+      fput 'stand' unless standing?
+      put_dir.call
+    elsif line =~ /You go flying down several feet, landing with a/
+      sleep 1
+      fput 'stand' unless standing?
       put_dir.call
     elsif line =~ /^Sorry, you may only type ahead/
       sleep 1
@@ -2488,7 +2516,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       put_dir.call
     elsif line =~ /^You flick your hand (?:up|down)wards and focus your aura on your disk, but your disk only wobbles briefly\.$/
       put_dir.call
-    elsif line =~ /^You dive into the fast-moving river, but the current catches you and whips you back to shore, wet and battered\.$|^Running through the swampy terrain, you notice a wet patch in the bog/
+    elsif line =~ /^You dive into the fast-moving river, but the current catches you and whips you back to shore, wet and battered\.$|^Running through the swampy terrain, you notice a wet patch in the bog|^You flounder around in the water.$|^You blunder around in the water, barely able|^You struggle against the swift current to swim|^You slap at the water in a sad failure to swim|^You work against the swift current to swim/
       waitrt?
       put_dir.call
     elsif line == "You don't seem to be able to move to do that."
@@ -2498,6 +2526,9 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
         sleep 0.1
       }
       put_dir.call
+    elsif line =~ /^It's pitch dark and you can't see a thing!/
+      echo "You will need a light source to continue your journey"
+      return true
     end
     if XMLData.room_count > room_count
       fill_hands if need_full_hands
@@ -2783,6 +2814,21 @@ def percentstamina(num = nil)
   end
 end
 
+def maxconcentration()
+   XMLData.max_concentration
+end
+def percentconcentration(num=nil)
+   if XMLData.max_concentration == 0
+      percent == 100
+   else
+      percent = ((XMLData.concentration.to_f / XMLData.max_concentration.to_f) * 100).to_i
+   end
+   if num.nil?
+      percent
+   else
+      percent >= num.to_i
+   end
+end
 def checkstance(num = nil)
   if num.nil?
     XMLData.stance_text
@@ -3461,15 +3507,30 @@ def respond(first = "", *messages)
     end
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
-    if $frontend == 'stormfront'
+    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
+    if $frontend == 'stormfront' || $frontend == 'genie'
       str = "<output class=\"mono\"/>\r\n#{str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')}<output class=\"\"/>\r\n"
     elsif $frontend == 'profanity'
       str = str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
     end
-    wait_while { XMLData.in_stream }
-    $_CLIENT_.puts(str)
+    # Double-checked locking to avoid interrupting a stream and crashing the client
+    str_sent = false
+    if $_CLIENT_
+      until str_sent
+        wait_while { !XMLData.safe_to_respond? }
+        str_sent = $_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
+      end
+    end
     if $_DETACHABLE_CLIENT_
-      $_DETACHABLE_CLIENT_.puts(str) rescue nil
+      str_sent = false
+      until str_sent
+        wait_while { !XMLData.safe_to_respond? }
+        begin
+          str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
+        rescue
+          break
+        end
+      end
     end
   rescue
     puts $!
@@ -3485,12 +3546,26 @@ def _respond(first = "", *messages)
     else
       str += sprintf("%s\r\n", first.to_s.chomp)
     end
+    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) } # fixme: strip/separate script output?
-    wait_while { XMLData.in_stream }
-    $_CLIENT_.puts(str)
+    str_sent = false
+    if $_CLIENT_
+      until str_sent
+        wait_while { !XMLData.safe_to_respond? }
+        str_sent = $_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
+      end
+    end
     if $_DETACHABLE_CLIENT_
-      $_DETACHABLE_CLIENT_.puts(str) rescue nil
+      str_sent = false
+      until str_sent
+        wait_while { !XMLData.safe_to_respond? }
+        begin
+          str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
+        rescue
+          break
+        end
+      end
     end
   rescue
     puts $!
@@ -3709,6 +3784,18 @@ $link_highlight_end = ''
 $speech_highlight_start = ''
 $speech_highlight_end = ''
 
+def fb_to_sf(line)
+  begin
+    return line if line == "\r\n"
+
+    line = line.gsub(/<c>/, "")
+    return nil if line.gsub("\r\n", '').length < 1
+    return line
+  rescue
+    $_CLIENT_.puts "--- Error: fb_to_sf: #{$!}"
+    $_CLIENT_.puts '$_SERVERSTRING_: ' + $_SERVERSTRING_.to_s
+  end
+end
 def sf_to_wiz(line)
   begin
     return line if line == "\r\n"
@@ -3783,6 +3870,11 @@ def strip_xml(line)
   return line if line == "\r\n"
 
   if $strip_xml_multiline
+    if $strip_xml_multiline =~ /^<pushStream id="atmospherics" \/>/ && line =~ /^<prompt time=/
+      # Dragonrealms serves up malformed atmospherics, a lot.
+      # If this multiline is for an atmospheric the next occurence of a prompt SHOULD be closing the stream.
+      line = '<popStream id="atmospherics" />' + line
+    end
     $strip_xml_multiline = $strip_xml_multiline + line
     line = $strip_xml_multiline
   end
@@ -3807,7 +3899,7 @@ end
 def monsterbold_start
   if $frontend =~ /^(?:wizard|avalon)$/
     "\034GSL\r\n"
-  elsif $frontend == 'stormfront'
+  elsif $frontend =~ /^(?:stormfront|frostbite)$/
     '<pushBold/>'
   elsif $frontend == 'profanity'
     '<b>'
@@ -3819,7 +3911,7 @@ end
 def monsterbold_end
   if $frontend =~ /^(?:wizard|avalon)$/
     "\034GSM\r\n"
-  elsif $frontend == 'stormfront'
+  elsif $frontend =~ /^(?:stormfront|frostbite)$/
     '<popBold/>'
   elsif $frontend == 'profanity'
     '</b>'
@@ -3925,13 +4017,9 @@ def do_client(client_string)
           Script.new_downstream(msg)
         end
       end
-    elsif cmd =~ /^(?:exec|e)(q)? (.+)$/
-      cmd_data = $2
-      if $1.nil?
-        ExecScript.start(cmd_data, flags = { :quiet => false, :trusted => true })
-      else
-        ExecScript.start(cmd_data, flags = { :quiet => true, :trusted => true })
-      end
+    elsif cmd =~ /^(?:exec|e)(q)?(n)? (.+)$/
+      cmd_data = $3
+      ExecScript.start(cmd_data, flags={ :quiet => $1, :trusted => ($2.nil? and RUBY_VERSION =~ /^2\.[012]\./)  })
     elsif cmd =~ /^trust\s+(.*)/i
       script_name = $1
       if RUBY_VERSION =~ /^2\.[012]\./
@@ -4438,11 +4526,42 @@ module Games
         @@thread = Thread.new {
           begin
             atmospherics = false
+            combat_count = 0
+            end_combat_tags = [ "<prompt", "<clearStream", "<component", "<pushStream id=\"percWindow" ]
             while $_SERVERSTRING_ = @@socket.gets
               @@last_recv = Time.now
               @@_buffer.update($_SERVERSTRING_) if TESTING
               begin
                 $cmd_prefix = String.new if $_SERVERSTRING_ =~ /^\034GSw/
+                ## Clear out superfluous tags
+                $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />","")
+                $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<popStream id=\"combat\" /><pushStream id=\"combat\" />","")
+
+                ## Fix combat wrapping components - Why, DR, Why?
+                $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><component id=","<component id=")
+                # $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
+
+                ## Fix duplicate pushStrings
+                while $_SERVERSTRING_.include?("<pushStream id=\"combat\" /><pushStream id=\"combat\" />")
+                  $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><pushStream id=\"combat\" />","<pushStream id=\"combat\" />")
+                end
+
+                if combat_count >0
+                  end_combat_tags.each do | tag |
+                    # $_SERVERSTRING_ = "<!-- looking for tag: #{tag}" + $_SERVERSTRING_
+                    if $_SERVERSTRING_.include?(tag)
+                      $_SERVERSTRING_ = $_SERVERSTRING_.gsub(tag,"<popStream id=\"combat\" />" + tag) unless $_SERVERSTRING_.include?("<popStream id=\"combat\" />")
+                      combat_count -= 1
+                    end
+                    if $_SERVERSTRING_.include?("<pushStream id=\"combat\" />")
+                      $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" />","")
+                    end
+                  end
+                end
+
+                combat_count += $_SERVERSTRING_.scan("<pushStream id=\"combat\" />").length
+                combat_count -= $_SERVERSTRING_.scan("<popStream id=\"combat\" />").length
+                combat_count = 0 if combat_count < 0
                 # The Rift, Scatter is broken...
                 if $_SERVERSTRING_ =~ /<compDef id='room text'><\/compDef>/
                   $_SERVERSTRING_.sub!(/(.*)\s\s<compDef id='room text'><\/compDef>/) { "<compDef id='room desc'>#{$1}</compDef>" }
@@ -4513,7 +4632,12 @@ module Games
                   stripped_server = strip_xml($_SERVERSTRING_)
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
-                    Script.new_downstream(line) unless line.empty?
+                    if !Map.last_seen_objects && line =~ /(You also see .*)$/
+                      Map.last_seen_objects = $1
+                    end
+                    unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
+                      Script.new_downstream(line) unless line.empty?
+                    end
                   }
                 end
               rescue
@@ -6574,6 +6698,8 @@ alias :stamina? :checkstamina
 alias :stunned? :checkstunned
 alias :bleeding? :checkbleeding
 alias :reallybleeding? :checkreallybleeding
+alias :poisoned? :checkpoison
+alias :diseased? :checkdisease
 alias :dead? :checkdead
 alias :hiding? :checkhidden
 alias :hidden? :checkhidden
@@ -6786,10 +6912,12 @@ if ARGV.any? { |arg| (arg == '-h') or (arg == '--help') }
   puts '  -w, --wizard        Run in Wizard mode (default)'
   puts '  -s, --stormfront    Run in StormFront mode.'
   puts '      --avalon        Run in Avalon mode.'
+  puts '      --frostbite     Run in Frosbite mode.'
   puts ''
   puts '      --gemstone      Connect to the Gemstone IV Prime server (default).'
   puts '      --dragonrealms  Connect to the DragonRealms server.'
   puts '      --platinum      Connect to the Gemstone IV/DragonRealms Platinum server.'
+  puts '      --test          Connect to the test instance of the selected game server.'
   puts '  -g, --game          Set the IP address and port of the game.  See example below.'
   puts ''
   puts '      --install       Edits the Windows/WINE registry so that Lich is started when logging in using the website or SGE.'
@@ -6803,6 +6931,7 @@ if ARGV.any? { |arg| (arg == '-h') or (arg == '--help') }
   puts 'Examples:'
   puts '  lich -w -d /usr/bin/lich/          (run Lich in Wizard mode using the dir \'/usr/bin/lich/\' as the program\'s home)'
   puts '  lich -g gs3.simutronics.net:4000   (run Lich using the IP address \'gs3.simutronics.net\' and the port number \'4000\')'
+  puts '  lich --dragonrealms --test --genie (run Lich connected to DragonRealms Test server for the Genie frontend)'
   puts '  lich --script-dir /mydir/scripts   (run Lich with its script directory set to \'/mydir/scripts\')'
   puts '  lich --bare -g skotos.net:5555     (run in bare-bones mode with the IP address and port of the game set to \'skotos.net:5555\')'
   puts ''
@@ -6873,6 +7002,8 @@ if arg = ARGV.find { |a| (a == '-g') or (a == '--game') }
     $frontend = 'wizard'
   elsif ARGV.any? { |arg| arg == '--avalon' }
     $frontend = 'avalon'
+  elsif ARGV.any? { |arg| arg == '--frostbite' }
+    $frontend = 'frostbite'
   else
     $frontend = 'unknown'
   end
@@ -6923,6 +7054,23 @@ elsif ARGV.include?('--shattered')
       $frontend = 'wizard'
     end
   end
+elsif ARGV.include?('--fallen')
+  $platinum = false
+  # Not sure what the port info is for anything else but Genie :(
+  if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+    $frontend = 'stormfront'
+    $stdout.puts "fixme"
+    Lich.log "fixme"
+    exit
+  elsif ARGV.grep(/--genie/).any?
+    game_host = 'dr.simutronics.net'
+    game_port = 11324
+    $frontend = 'genie'
+  else
+    $stdout.puts "fixme"
+    Lich.log "fixme"
+    exit
+  end
 elsif ARGV.include?('--dragonrealms')
   if ARGV.include?('--platinum')
     $platinum = true
@@ -6931,6 +7079,10 @@ elsif ARGV.include?('--dragonrealms')
       Lich.log "fixme"
       exit
       $frontend = 'stormfront'
+    elsif ARGV.grep(/--genie/).any?
+      game_host = 'dr.simutronics.net'
+      game_port = 11124
+      $frontend = 'genie'
     else
       $stdout.puts "fixme"
       Lich.log "fixme"
@@ -6944,11 +7096,17 @@ elsif ARGV.include?('--dragonrealms')
       $stdout.puts "fixme"
       Lich.log "fixme"
       exit
+    elsif ARGV.grep(/--genie/).any?
+      game_host = 'dr.simutronics.net'
+      game_port = ARGV.include?('--test') ? 11624 : 11024
+      $frontend = 'genie'
     else
       game_host = 'dr.simutronics.net'
-      game_port = 4901
+      game_port = ARGV.include?('--test') ? 11624 : 11024
       if ARGV.any? { |arg| arg == '--avalon' }
         $frontend = 'avalon'
+      elsif ARGV.any? { |arg| arg == '--frostbite' }
+        $frontend = 'frostbite'
       else
         $frontend = 'wizard'
       end
@@ -6963,7 +7121,7 @@ main_thread = Thread.new {
   test_mode = false
   $SEND_CHARACTER = '>'
   $cmd_prefix = '<c>'
-  $clean_lich_char = ';' # fixme
+  $clean_lich_char = $frontend == 'genie' ? ',' : ';'
   $lich_char = Regexp.escape($clean_lich_char)
 
   @launch_data = nil
@@ -6996,6 +7154,14 @@ main_thread = Thread.new {
       data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
     else
       data = entry_data.find { |d| (d[:char_name] == char_name) }
+    end
+    unless data
+      data = { char_name: char_name }
+      data[:game_code] = "DR"
+      user_id = ARGV[ARGV.index('--user_id')+1]
+      data[:user_id] = user_id
+      password = ARGV[ARGV.index('--password')+1]
+      data[:password] = password
     end
     if data
       Lich.log "info: using quick game entry settings for #{char_name}"
@@ -7068,6 +7234,11 @@ main_thread = Thread.new {
   end
 
   if @launch_data
+    if @launch_data.find { |opt| opt =~ /GAMECODE=DR/ }
+      gamecodeshort = "DR"
+    else
+      gamecodeshort = "GS"
+    end
     unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
       Lich.log "error: launch_data contains no GAMECODE info"
@@ -7094,18 +7265,18 @@ main_thread = Thread.new {
     elsif (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       Lich.log("info: Working against a Windows Platform for FE Executable")
       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
-        custom_launch = "Wizard.Exe /GGS /H127.0.0.1 /P%port% /K%key%"
+        custom_launch = "Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
-        custom_launch = "Wrayth.exe /GGS/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /Wrayth/
-        custom_launch = "Stormfront.exe /GGS/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
+        custom_launch = "Wrayth.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /Wrayth/
+        custom_launch = "Stormfront.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
       end
     elsif defined?(Wine)
       Lich.log("info: Working against a Linux | WINE Platform")
       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
-        custom_launch = "Wizard.Exe /GGS /H127.0.0.1 /P%port% /K%key%"
+        custom_launch = "Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
-        custom_launch = "Wrayth.exe /GGS/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /Wrayth/
-        custom_launch = "Stormfront.exe /GGS/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
+        custom_launch = "Wrayth.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /Wrayth/
+        custom_launch = "Stormfront.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
       end
     end
     if custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ }
@@ -7382,6 +7553,24 @@ main_thread = Thread.new {
 
   listener = timeout_thr = nil
 
+  #
+  # drop superuser privileges
+  #
+  unless (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+    Lich.log "info: dropping superuser privileges..."
+    begin
+      Process.uid = `id -ru`.strip.to_i
+      Process.gid = `id -rg`.strip.to_i
+      Process.egid = `id -rg`.strip.to_i
+      Process.euid = `id -ru`.strip.to_i
+    rescue SecurityError
+      Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    rescue SystemCallError
+      Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    rescue
+      Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    end
+  end
   # backward compatibility
   if $frontend =~ /^(?:wizard|avalon)$/
     $fake_stormfront = true
@@ -7474,6 +7663,35 @@ main_thread = Thread.new {
         # client wants to send "GOOD", xml server won't recognize it
         #
         $_CLIENT_.gets
+      elsif $frontend =~ /^(?:frostbite)$/
+        #
+        # send the login key
+        #
+        client_string = $_CLIENT_.gets
+        client_string = fb_to_sf(client_string)
+        Game._puts(client_string)
+        #
+        # take the version string from the client, ignore it, and ask the server for xml
+        #
+        $_CLIENT_.gets
+        client_string = "/FE:STORMFRONT /VERSION:1.0.1.26 /P:#{RUBY_PLATFORM} /XML"
+        $_CLIENTBUFFER_.push(client_string.dup)
+        Game._puts(client_string)
+        #
+        # tell the server we're ready
+        #
+        2.times {
+          sleep 0.3
+          $_CLIENTBUFFER_.push("#{$cmd_prefix}\r\n")
+          Game._puts($cmd_prefix)
+        }
+        #
+        # set up some stuff
+        #
+        for client_string in [ "#{$cmd_prefix}_injury 2", "#{$cmd_prefix}_flag Display Inventory Boxes 1", "#{$cmd_prefix}_flag Display Dialog Boxes 0" ]
+          $_CLIENTBUFFER_.push(client_string)
+          Game._puts(client_string)
+        end
       else
         inv_off_proc = proc { |server_string|
           if server_string =~ /^<(?:container|clearContainer|exposeContainer)/
@@ -7530,7 +7748,12 @@ main_thread = Thread.new {
 
       begin
         while client_string = $_CLIENT_.gets
-          client_string = "#{$cmd_prefix}#{client_string}" if $frontend =~ /^(?:wizard|avalon)$/
+          if $frontend =~ /^(?:wizard|avalon)$/
+            client_string = "#{$cmd_prefix}#{client_string}"
+          elsif $frontend =~ /^(?:frostbite)$/
+            client_string = fb_to_sf(client_string)
+          end
+          #Lich.log(client_string)
           begin
             $_IDLETIMESTAMP_ = Time.now
             do_client(client_string)
