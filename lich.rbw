@@ -743,7 +743,7 @@ class Script
 
     # fixme: look in wizard script directory
     # fixme: allow subdirectories?
-    file_list = Dir.children(File.join(SCRIPT_DIR, "custom")).sort.map{ |s| s.prepend("/custom/") } + Dir.children(SCRIPT_DIR).sort
+    file_list = Dir.children(File.join(SCRIPT_DIR, "custom")).sort_by{ |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }.map{ |s| s.prepend("/custom/") } + Dir.children(SCRIPT_DIR).sort_by{|fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '')}
     if file_name = (file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i })
       script_name = file_name.sub(/\..{1,3}$/, '')
     end
@@ -979,9 +979,8 @@ class Script
 
   def Script.version(script_name, script_version_required = nil)
     script_name = script_name.sub(/[.](lic|rb|cmd|wiz)$/, '')
-    file_list = Dir.entries(SCRIPT_DIR).delete_if { |fn| (fn == '.') or (fn == '..') }
-    file_list = file_list.sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
-    if file_name = (file_list.find { |val| val =~ /^#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i })
+    file_list = Dir.children(File.join(SCRIPT_DIR, "custom")).sort_by{ |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }.map{ |s| s.prepend("/custom/") } + Dir.children(SCRIPT_DIR).sort_by{|fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '')}
+    if file_name = (file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i })
       script_name = file_name.sub(/\..{1,3}$/, '')
     end
     file_list = nil
