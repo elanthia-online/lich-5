@@ -722,7 +722,9 @@ class Script
           end
         elsif args[1].class == Hash
           options = args[1]
-          script_args = (options[:args] || String.new)
+          unless options[:args].nil? or options[:args].empty?
+            script_args = options[:args]
+          end
         else
           # fixme: error
           next nil
@@ -738,7 +740,9 @@ class Script
         # fixme: error
         next nil
       end
-      script_args = (options[:args] || String.new)
+      unless options[:args].nil? or options[:args].empty?
+        script_args = options[:args]
+      end
     end
 
     # fixme: look in wizard script directory
