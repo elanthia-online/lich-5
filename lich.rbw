@@ -6751,21 +6751,43 @@ bad_args = Array.new
 
 for arg in ARGV
   if (arg == '-h') or (arg == '--help')
-    puts "
-   -h, --help               Display this message and exit
-   -v, --version            Display version number and credits and exit
-
-   --home=<directory>      Set home directory for Lich (default: location of this file)
-   --scripts=<directory>   Set directory for script files (default: home/scripts)
-   --data=<directory>      Set directory for data files (default: home/data)
-   --temp=<directory>      Set directory for temp files (default: home/temp)
-   --logs=<directory>      Set directory for log files (default: home/logs)
-   --maps=<directory>      Set directory for map images (default: home/maps)
-   --backup=<directory>    Set directory for backups (default: home/backup)
-
-   --start-scripts=<script1,script2,etc>   Start the specified scripts after login
-
-    "
+    puts 'Usage:  lich [OPTION]'
+    puts ''
+    puts 'Options are:'
+    puts '  -h, --help          Display this list.'
+    puts '  -V, --version       Display the program version number and credits.'
+    puts ''
+    puts '  -d, --directory     Set the main Lich program directory.'
+    puts '      --script-dir    Set the directoy where Lich looks for scripts.'
+    puts '      --data-dir      Set the directory where Lich will store script data.'
+    puts '      --temp-dir      Set the directory where Lich will store temporary files.'
+    puts ''
+    puts '  -w, --wizard        Run in Wizard mode (default)'
+    puts '  -s, --stormfront    Run in StormFront mode.'
+    puts '      --avalon        Run in Avalon mode.'
+    puts '      --frostbite     Run in Frosbite mode.'
+    puts ''
+    puts '      --gemstone      Connect to the Gemstone IV Prime server (default).'
+    puts '      --dragonrealms  Connect to the DragonRealms server.'
+    puts '      --platinum      Connect to the Gemstone IV/DragonRealms Platinum server.'
+    puts '      --test          Connect to the test instance of the selected game server.'
+    puts '  -g, --game          Set the IP address and port of the game.  See example below.'
+    puts ''
+    puts '      --install       Edits the Windows/WINE registry so that Lich is started when logging in using the website or SGE.'
+    puts '      --uninstall     Removes Lich from the registry.'
+    puts ''
+    puts 'The majority of Lich\'s built-in functionality was designed and implemented with Simutronics MUDs in mind (primarily Gemstone IV): as such, many options/features provided by Lich may not be applicable when it is used with a non-Simutronics MUD.  In nearly every aspect of the program, users who are not playing a Simutronics game should be aware that if the description of a feature/option does not sound applicable and/or compatible with the current game, it should be assumed that the feature/option is not.  This particularly applies to in-script methods (commands) that depend heavily on the data received from the game conforming to specific patterns (for instance, it\'s extremely unlikely Lich will know how much "health" your character has left in a non-Simutronics game, and so the "health" script command will most likely return a value of 0).'
+    puts ''
+    puts 'The level of increase in efficiency when Lich is run in "bare-bones mode" (i.e. started with the --bare argument) depends on the data stream received from a given game, but on average results in a moderate improvement and it\'s recommended that Lich be run this way for any game that does not send "status information" in a format consistent with Simutronics\' GSL or XML encoding schemas.'
+    puts ''
+    puts ''
+    puts 'Examples:'
+    puts '  lich -w -d /usr/bin/lich/          (run Lich in Wizard mode using the dir \'/usr/bin/lich/\' as the program\'s home)'
+    puts '  lich -g gs3.simutronics.net:4000   (run Lich using the IP address \'gs3.simutronics.net\' and the port number \'4000\')'
+    puts '  lich --dragonrealms --test --genie (run Lich connected to DragonRealms Test server for the Genie frontend)'
+    puts '  lich --script-dir /mydir/scripts   (run Lich with its script directory set to \'/mydir/scripts\')'
+    puts '  lich --bare -g skotos.net:5555     (run in bare-bones mode with the IP address and port of the game set to \'skotos.net:5555\')'
+    puts ''
     exit
   elsif (arg == '-v') or (arg == '--version')
     puts "The Lich, version #{LICH_VERSION}"
@@ -6894,47 +6916,6 @@ for arg in ARGV
   else
     bad_args.push(arg)
   end
-end
-
-if ARGV.any? { |arg| (arg == '-h') or (arg == '--help') }
-  puts 'Usage:  lich [OPTION]'
-  puts ''
-  puts 'Options are:'
-  puts '  -h, --help          Display this list.'
-  puts '  -V, --version       Display the program version number and credits.'
-  puts ''
-  puts '  -d, --directory     Set the main Lich program directory.'
-  puts '      --script-dir    Set the directoy where Lich looks for scripts.'
-  puts '      --data-dir      Set the directory where Lich will store script data.'
-  puts '      --temp-dir      Set the directory where Lich will store temporary files.'
-  puts ''
-  puts '  -w, --wizard        Run in Wizard mode (default)'
-  puts '  -s, --stormfront    Run in StormFront mode.'
-  puts '      --avalon        Run in Avalon mode.'
-  puts '      --frostbite     Run in Frosbite mode.'
-  puts ''
-  puts '      --gemstone      Connect to the Gemstone IV Prime server (default).'
-  puts '      --dragonrealms  Connect to the DragonRealms server.'
-  puts '      --platinum      Connect to the Gemstone IV/DragonRealms Platinum server.'
-  puts '      --test          Connect to the test instance of the selected game server.'
-  puts '  -g, --game          Set the IP address and port of the game.  See example below.'
-  puts ''
-  puts '      --install       Edits the Windows/WINE registry so that Lich is started when logging in using the website or SGE.'
-  puts '      --uninstall     Removes Lich from the registry.'
-  puts ''
-  puts 'The majority of Lich\'s built-in functionality was designed and implemented with Simutronics MUDs in mind (primarily Gemstone IV): as such, many options/features provided by Lich may not be applicable when it is used with a non-Simutronics MUD.  In nearly every aspect of the program, users who are not playing a Simutronics game should be aware that if the description of a feature/option does not sound applicable and/or compatible with the current game, it should be assumed that the feature/option is not.  This particularly applies to in-script methods (commands) that depend heavily on the data received from the game conforming to specific patterns (for instance, it\'s extremely unlikely Lich will know how much "health" your character has left in a non-Simutronics game, and so the "health" script command will most likely return a value of 0).'
-  puts ''
-  puts 'The level of increase in efficiency when Lich is run in "bare-bones mode" (i.e. started with the --bare argument) depends on the data stream received from a given game, but on average results in a moderate improvement and it\'s recommended that Lich be run this way for any game that does not send "status information" in a format consistent with Simutronics\' GSL or XML encoding schemas.'
-  puts ''
-  puts ''
-  puts 'Examples:'
-  puts '  lich -w -d /usr/bin/lich/          (run Lich in Wizard mode using the dir \'/usr/bin/lich/\' as the program\'s home)'
-  puts '  lich -g gs3.simutronics.net:4000   (run Lich using the IP address \'gs3.simutronics.net\' and the port number \'4000\')'
-  puts '  lich --dragonrealms --test --genie (run Lich connected to DragonRealms Test server for the Genie frontend)'
-  puts '  lich --script-dir /mydir/scripts   (run Lich with its script directory set to \'/mydir/scripts\')'
-  puts '  lich --bare -g skotos.net:5555     (run in bare-bones mode with the IP address and port of the game set to \'skotos.net:5555\')'
-  puts ''
-  exit
 end
 
 if arg = ARGV.find { |a| a == '--hosts-dir' }
