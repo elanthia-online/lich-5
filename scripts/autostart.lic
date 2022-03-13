@@ -49,7 +49,6 @@ end
 
 if Settings['scripts'].nil?
   Settings['scripts'] = Array.new
-  Settings['scripts'].push(:name => 'xnarost', :args => [])
   Settings['scripts'].push(:name => 'alias', :args => [])
   Settings['scripts'].push(:name => 'lnet', :args => [])
 end
