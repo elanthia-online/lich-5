@@ -306,7 +306,7 @@ Example usage:
     download_lib.call
     @update_lib = []
 
-  elsif arg =~ /^--data=([\w\d\-\_]+)(?:.rb)?$/i
+  elsif arg =~ /^--data=([\w\d\-\_]+)(?:.xml)?$/i
     requested_script = $1.dup
     echo "Downloading #{requested_script}"
     @update_data = ["#{requested_script}.xml"]
