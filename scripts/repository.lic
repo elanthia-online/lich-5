@@ -6,13 +6,16 @@
   ;repository help
 
         author: Tillmen (tillmen@lichproject.org)
+ maintained by: Elanthia-online
   contributors: SpiffyJr (theman@spiffyjr.me)
           game: any
           tags: core
-       version: 2.36
+       version: 2.37
 
   changelog:
                       
+    2.37 (2022-03-13):
+      changed updatables 
     2.36 (2020-12-19):
       show the author name and time of the last map database upload when downloading it
     2.35 (2020-06-27):
@@ -103,6 +106,7 @@ if Settings['updatable'].nil?
   Settings['first-gs-run'] = true
   Settings['updatable'] = Hash.new
   Settings['updatable'][:scripts] = Array.new
+  Settings['updatable'][:scripts].push(:filename => 'repository.lic', :game => 'gs', :author => 'elanthia-online')
   Settings['updatable'][:scripts].push(:filename => 'lnet.lic', :game => 'gs', :author => 'elanthia-online')
   Settings['updatable'][:scripts].push(:filename => 'alias.lic', :game => 'gs', :author => 'elanthia-online')
   Settings['updatable'][:scripts].push(:filename => 'vars.lic', :game => 'gs', :author => 'elanthia-online')
@@ -113,7 +117,7 @@ if Settings['updatable'].nil?
   Settings['updatable'][:mapdb]['GSIV'] = true
   Settings['updatable'][:mapdb]['GSF'] = true
   Settings['updatable'][:mapdb]['GSPlat'] = true
-  Settings['updatable'][:lich] = true
+  Settings['updatable'][:lich] = false
 end
 
 if (XMLData.game =~ /^GS/) and Settings['first-gs-run']
@@ -124,8 +128,13 @@ if (XMLData.game =~ /^GS/) and Settings['first-gs-run']
 end
 
 if s = Settings['updatable'][:scripts].find { |s| s[:filename] == 'gameobj-data.xml' && s[:author] == 'Tillmen' }
-  echo "updating ownership of gameobj-data.xml from Tillmen to elanthia-online"
+  echo "updating ownership of #{s[:filename]} from Tillmen to elanthia-online"
   s[:author] = 'elanthia-online'
+end
+if s = Settings['updatable'][:scripts].find { |s| s[:filename] =~ /^(?:repository|lnet|alias|vars|go2|autostart).lic$/ && s[:author] == 'Tillmen' }
+  echo "updating ownership of #{s[:filename]} from Tillmen to elanthia-online"
+  s[:author] = 'elanthia-online'
+  s[:game] = 'gs'
 end
 
 require 'openssl'
