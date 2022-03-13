@@ -213,6 +213,7 @@ Example usage:
     ;lich5-update --refresh                   Update everything Lich5 core related
     ;lich5-update --script=<NAME>             Update individual script file found in Lich-5
     ;lich5-update --library=<NAME>            Update individual library file found in Lich-5
+    ;lich5-update --data=<NAME>            Update individual data file found in Lich-5
     ;lich5-update --snapshot --refresh        Backup to default location then refresh
     ;lich5-update --snapshot --update         Backup to default location then update
 
