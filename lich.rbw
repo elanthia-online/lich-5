@@ -722,9 +722,7 @@ class Script
           end
         elsif args[1].class == Hash
           options = args[1]
-          unless options[:args].nil? or options[:args].empty?
-            script_args = options[:args]
-          end
+          script_args = (options[:args] || String.new)
         else
           # fixme: error
           next nil
@@ -740,9 +738,7 @@ class Script
         # fixme: error
         next nil
       end
-      unless options[:args].nil? or options[:args].empty?
-        script_args = options[:args]
-      end
+      script_args = (options[:args] || String.new)
     end
 
     # fixme: look in wizard script directory
@@ -1238,8 +1234,10 @@ class Script
         @vars.concat args[:args].scan(/[^\s"]*(?<!\\)"(?:\\"|[^"])+(?<!\\)"[^\s]*|(?:\\"|[^"\s])+/).collect { |s| s.gsub(/(?<!\\)"/, '').gsub('\\"', '"') }
       end
     elsif args[:args].class == Array
-      @vars = [ args[:args].join(" ") ]
-      @vars.concat args[:args]
+      unless (args[:args].nil? || args[:args].empty?)
+        @vars = [ args[:args].join(" ") ]
+        @vars.concat args[:args]
+      end
     else
       @vars = Array.new
     end
