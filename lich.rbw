@@ -53,6 +53,7 @@ require 'lib/version'
 
 require 'lib/lich'
 require 'lib/init'
+require 'lib/front-end'
 
 # TODO: Need to split out initiatilzation functions to move require to top of file
 require 'lib/gtk'
@@ -4622,7 +4623,7 @@ module Games
                         $_SERVERSTRING_.gsub!(/(<[^>]+=)'([^=>'\\]+'[^=>']+)'([\s>])/) { "#{$1}\"#{$2}\"#{$3}" }
                         retry
                       end
-                      $stdout.puts "--- error: server_thread: #{$!}"
+                      $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                       Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                     end
                     XMLData.reset
@@ -4640,18 +4641,18 @@ module Games
                   }
                 end
               rescue
-                $stdout.puts "--- error: server_thread: #{$!}"
+                $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                 Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
               end
             end
           rescue Exception
             Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            $stdout.puts "--- error: server_thread: #{$!}"
+            $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.slice(0..10).join("\n\t")}"
             sleep 0.2
             retry unless $_CLIENT_.closed? or @@socket.closed? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i)
           rescue
             Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            $stdout.puts "--- error: server_thread: #{$!}"
+            $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace..slice(0..10).join("\n\t")}"
             sleep 0.2
             retry unless $_CLIENT_.closed? or @@socket.closed? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i)
           end
@@ -7778,6 +7779,9 @@ main_thread = Thread.new {
       loop {
         begin
           server = TCPServer.new('127.0.0.1', detachable_client_port)
+          char_name = ARGV[ARGV.index('--login')+1].capitalize
+          Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
+          
           $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(server.accept)
           $_DETACHABLE_CLIENT_.sync = true
         rescue
@@ -7789,6 +7793,7 @@ main_thread = Thread.new {
           next
         ensure
           server.close rescue nil
+          Frontend.cleanup_session_file
         end
         if $_DETACHABLE_CLIENT_
           begin
