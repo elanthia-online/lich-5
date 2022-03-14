@@ -5642,7 +5642,7 @@ module Games
 
         def active?(effect)
           expiry = to_h.fetch(effect, 0)
-          expiry.to_i > Time.now.to_i
+          expiry.to_f > Time.now.to_f
         end
 
         def time_left(effect)
