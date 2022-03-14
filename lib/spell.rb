@@ -570,14 +570,14 @@ module Games
             cast_cmd = 'cast'
           end
           unless (arg_options.nil? || arg_options.empty?)
-            if arg_options.split(" ")[0] =~ /incant|channel|evoke/
+            if arg_options.split(" ")[0] =~ /incant|channel|evoke|cast/
               cast_cmd = arg_options.split(" ")[0]
               arg_options = arg_options.split(" ").drop(1)
               arg_options = arg_options.join(" ") unless arg_options.empty?
             end
           end
           
-          if (target.nil? || target.to_s.empty?) && !(@no_incant) && cast_cmd !~ /channel|evoke/
+          if (target.nil? || target.to_s.empty?) && !(@no_incant) && cast_cmd !~ /^(?:channel|evoke)/ && (cast_cmd == "cast" && arg_options.nil?)
             cast_cmd = "incant #{@num}"
           elsif (target.nil? or target.to_s.empty?) and (@type =~ /attack/i) and not [410,435,525,912,909,609].include?(@num)
             cast_cmd += ' target'
@@ -718,6 +718,14 @@ module Games
       cast(target, results_of_interest, arg_options)
     end
 
+    def force_cast(target=nil, arg_options=nil, results_of_interest=nil)
+      unless arg_options.nil? || arg_options.empty?
+        arg_options = "cast #{arg_options}"
+      else
+        arg_options = "cast"
+      end
+      cast(target, results_of_interest, arg_options)
+    end
     
     def _bonus
       @bonus.dup
