@@ -11,9 +11,10 @@ Further modifications are to support the retirement of spell-list.xml.
 
   changelog:
     v1.2.0 (2022-03-14)
-      add Spell.incant(args, results_of_interest)
-      add Spell.evoke(target, args, results_of_interest)
-      add Spell.channel(target, args, results_of_interest)
+      add Spell.force_cast(target, args, results_of_interest)
+      add Spell.force_channel(target, args, results_of_interest)
+      add Spell.force_evoke(target, args, results_of_interest)
+      add Spell.force_incant(args, results_of_interest)
     v1.1.0 (2021-09-27
       rebaselined as spell.rb to support spell-list.xml retirement
     v1.0.0 (2021-09-22)
@@ -690,16 +691,16 @@ module Games
         @@cast_lock.delete(script)
       end
     end
-    
-    def force_incant(arg_options=nil, results_of_interest=nil)
+
+    def force_cast(target=nil, arg_options=nil, results_of_interest=nil)
       unless arg_options.nil? || arg_options.empty?
-        arg_options = "incant #{arg_options}"
+        arg_options = "cast #{arg_options}"
       else
-        arg_options = "incant"
+        arg_options = "cast"
       end
-      cast(nil, results_of_interest, arg_options)
+      cast(target, results_of_interest, arg_options)
     end
-    
+
     def force_channel(target=nil, arg_options=nil, results_of_interest=nil)
       unless arg_options.nil? || arg_options.empty?
         arg_options = "channel #{arg_options}"
@@ -717,16 +718,16 @@ module Games
       end
       cast(target, results_of_interest, arg_options)
     end
-
-    def force_cast(target=nil, arg_options=nil, results_of_interest=nil)
-      unless arg_options.nil? || arg_options.empty?
-        arg_options = "cast #{arg_options}"
-      else
-        arg_options = "cast"
-      end
-      cast(target, results_of_interest, arg_options)
-    end
     
+    def force_incant(arg_options=nil, results_of_interest=nil)
+      unless arg_options.nil? || arg_options.empty?
+        arg_options = "incant #{arg_options}"
+      else
+        arg_options = "incant"
+      end
+      cast(nil, results_of_interest, arg_options)
+    end
+   
     def _bonus
       @bonus.dup
     end
