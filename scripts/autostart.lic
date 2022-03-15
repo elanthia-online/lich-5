@@ -9,13 +9,10 @@
   contributors: Athias
           game: any
           tags: core
-       version: 0.54
+       version: 0.53
       required: Lich >= 4.6.58
 
   changelog:
-    0.54 (2022-03-14):
-      DragonRealms/GemstoneIV infomon detection
-      Removed xnarost from default autostarting
     0.53 (2021-07-27):
       Fixed defect where autostart would error if a completely new / fresh install with no lich.db3 existing.
     0.52 (2021-05-10):
