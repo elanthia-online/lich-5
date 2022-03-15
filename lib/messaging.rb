@@ -13,6 +13,7 @@ Entries added here should always be accessible from Lich::Messaging.feature name
     v1.0.0 (2022-03-15)
       Initial release
       Supports Lich::Messaging.stream_window(msg, window) SENDS msg to stream window
+      Supports Lich::Messaging.msg(type, text) SENDS msg in colors, supports debug output
       Supports Lich::Messaging.monsterbold(msg)  RETURNS msg in monsterbold
 
 =end
