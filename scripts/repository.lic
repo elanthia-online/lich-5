@@ -103,7 +103,6 @@ unless defined?(LICH_VERSION) # Lich < 4.5
 end
 
 if Settings['updatable'].nil?
-  Settings['first-gs-run'] = true
   Settings['updatable'] = Hash.new
   Settings['updatable'][:scripts] = Array.new
   Settings['updatable'][:scripts].push(:filename => 'repository.lic', :game => 'gs', :author => 'elanthia-online')
@@ -112,6 +111,14 @@ if Settings['updatable'].nil?
   Settings['updatable'][:scripts].push(:filename => 'vars.lic', :game => 'gs', :author => 'elanthia-online')
   Settings['updatable'][:scripts].push(:filename => 'go2.lic', :game => 'gs', :author => 'elanthia-online')
   Settings['updatable'][:scripts].push(:filename => 'autostart.lic', :game => 'gs', :author => 'elanthia-online')
+  if XMLData.game =~ /^GS/
+    #GemstoneIV specific updatable scripts here
+    Settings['updatable'][:scripts].push(:filename => 'gameobj-data.xml', :game => 'gs', :author => 'elanthia-online')
+    #Settings['updatable'][:scripts].push(:filename => 'infomon.lic', :game => 'gs', :author => 'Tillmen')
+    #Settings['updatable'][:scripts].push(:filename => 'spell-list.xml', :game => 'gs', :author => 'Tillmen')
+  elsif XMLData.game =~ /^DR/
+    #DragonRealms specific updatable scripts here
+  end
   Settings['updatable'][:mapdb] = Hash.new
   Settings['updatable'][:mapdb][XMLData.game] = true
   Settings['updatable'][:mapdb]['GSIV'] = true
@@ -122,9 +129,6 @@ end
 
 if (XMLData.game =~ /^GS/) and Settings['first-gs-run']
   Settings['first-gs-run'] = false
-  #Settings['updatable'][:scripts].push(:filename => 'infomon.lic', :game => 'gs', :author => 'Tillmen')
-  #Settings['updatable'][:scripts].push(:filename => 'spell-list.xml', :game => 'gs', :author => 'Tillmen')
-  Settings['updatable'][:scripts].push(:filename => 'gameobj-data.xml', :game => 'gs', :author => 'elanthia-online')
 end
 
 if s = Settings['updatable'][:scripts].find { |s| s[:filename] == 'gameobj-data.xml' && s[:author] == 'Tillmen' }
