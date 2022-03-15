@@ -54,6 +54,42 @@ module Lich
         msg
       end
     end
+
+    def self.msg(type = "info", text)
+      if type == "debug"
+        if Lich.debug_messaging
+          if $frontend == 'stormfront' || $frontend == 'profanity'
+            _respond "\<preset id=\"speech\"\>#{text}\<\/preset\>"
+          else 
+            echo ">> #{text}"
+          end
+        end
+      elsif $frontend == 'stormfront' || $frontend == 'profanity'
+        if type == "error" || type == "yellow" || type == "bold" || type == "monster" || type == "creature"
+          _respond "\<pushBold\/\>#{text}\<popBold\/\>"
+        elsif type == "warn" || type == "orange" || type == "thought"
+          _respond "\<preset id=\"thought\"\>#{text}\<\/preset\>"
+        elsif type == "info" || type == "teal" || type == "whisper"
+          _respond "\<preset id=\"whisper\"\>#{text}\<\/preset\>"
+        elsif type == "green" || type == "speech"
+          _respond "\<preset id=\"speech\"\>#{text}\<\/preset\>"
+        else
+          respond text
+        end
+      else
+        if type == "error" || type == "yellow" || type == "bold" || type == "monster" || type == "creature"
+          echo "** #{text}"
+        elsif type == "warn" || type == "orange" || type == "thought"
+          echo "!! #{text}"
+        elsif type == "info" || type == "teal" || type == "whisper"
+          echo "-- #{text}"
+        elsif type == "green" || type == "speech"
+          echo ">> #{text}"
+        else
+          echo text
+        end
+      end
+    end
     
   end
 end
