@@ -1237,6 +1237,8 @@ class Script
       unless (args[:args].nil? || args[:args].empty?)
         @vars = [ args[:args].join(" ") ]
         @vars.concat args[:args]
+      else
+        @vars = Array.new
       end
     else
       @vars = Array.new
