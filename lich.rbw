@@ -4511,6 +4511,8 @@ module Games
       @@buffer    = SharedBuffer.new
       @@_buffer   = SharedBuffer.new
       @@_buffer.max_size = 1000
+      @@autostarted = false
+      @@cli_scripts = false
       def Game.open(host, port)
         @@socket = TCPSocket.open(host, port)
         begin
