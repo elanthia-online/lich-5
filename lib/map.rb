@@ -318,7 +318,7 @@ class Map
   end
   def Map.current_or_new
     return nil unless Script.current
-    if XMLData.game =~ /DR/
+    if XMLData.game =~ /^DR/
       @@current_room_count = -1
       @@fuzzy_room_count = -1
       Map.current || Map.new(Map.get_free_id, [ XMLData.room_title ], [ XMLData.room_description.strip ], [ XMLData.room_exits_string.strip ], [XMLData.room_id] )
