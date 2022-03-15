@@ -228,7 +228,7 @@ class XMLParser
         @previous_nav_rm = @room_id
         @room_id = attributes['rm'].to_i
         $nav_seen = true
-        Map.last_seen_objects = nil
+        Map.last_seen_objects = nil if Map.method_defined?(:last_seen_objects); # DR Only
       elsif name == 'pushStream'
         @in_stream = true
         @current_stream = attributes['id'].to_s

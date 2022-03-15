@@ -1910,8 +1910,6 @@ class Watchfor
   end
 end
 
-require_relative("./lib/map.rb")
-
 ## adding util to the list of defs
 
 require_relative("./lib/util.rb")
@@ -4631,8 +4629,8 @@ module Games
                   stripped_server = strip_xml($_SERVERSTRING_)
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
-                    if !Map.last_seen_objects && line =~ /(You also see .*)$/
-                      Map.last_seen_objects = $1
+                    if Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
+                      Map.last_seen_objects = $1  # DR only: copy loot line to Map.last_seen_objects 
                     end
                     unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
                       Script.new_downstream(line) unless line.empty?
@@ -7235,8 +7233,10 @@ main_thread = Thread.new {
   if @launch_data
     if @launch_data.find { |opt| opt =~ /GAMECODE=DR/ }
       gamecodeshort = "DR"
+      require_relative("./lib/map_dr.rb")
     else
       gamecodeshort = "GS"
+      require_relative("./lib/map_gs.rb")
     end
     unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
