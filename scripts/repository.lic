@@ -127,10 +127,6 @@ if Settings['updatable'].nil?
   Settings['updatable'][:lich] = false
 end
 
-if (XMLData.game =~ /^GS/) and Settings['first-gs-run']
-  Settings['first-gs-run'] = false
-end
-
 if s = Settings['updatable'][:scripts].find { |s| s[:filename] == 'gameobj-data.xml' && s[:author] == 'Tillmen' }
   echo "updating ownership of #{s[:filename]} from Tillmen to elanthia-online"
   s[:author] = 'elanthia-online'
