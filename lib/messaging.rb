@@ -89,13 +89,13 @@ module Lich
           preset_color_before = monsterbold_start
           preset_color_after = monsterbold_end
         when "warn", "orange", "gold", "thought"
-          preset_color_before = wizard_color["gold"]
+          preset_color_before = wizard_color["gold"].chr
           preset_color_after = "\217"
         when "info", "teal", "whisper"
-          preset_color_before = wizard_color["teal"]
+          preset_color_before = wizard_color["teal"].chr
           preset_color_after = "\217"
         when "green", "speech", "debug", "light green"
-          preset_color_before = wizard_color["light green"]
+          preset_color_before = wizard_color["light green"].chr
           preset_color_after = "\217"
         when "link", "command", "selectedLink", "watching", "roomName"
         
