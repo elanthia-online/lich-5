@@ -15,11 +15,20 @@ Entries added here should always be accessible from Lich::Messaging.feature name
       Supports Lich::Messaging.stream_window(msg, window) SENDS msg to stream window
       Supports Lich::Messaging.msg(type, text) SENDS msg in colors, supports debug output
       Supports Lich::Messaging.monsterbold(msg)  RETURNS msg in monsterbold
+      Supports Lich::Messaging.xml_encode(msg)  RETURNS xml encoded text
 
 =end
 
 module Lich
   module Messaging
+  
+    def self.xml_encode(msg)
+      msg.encode(:xml => :text)
+    end
+
+    def self.monsterbold(msg)
+      return monsterbold_start + self.xml_encode(msg) + monsterbold_end
+    end
     
     def self.stream_window(msg, window = "familiar")
       
@@ -41,55 +50,80 @@ module Lich
         end
       end
       
-      _respond stream_window_before_txt + msg + stream_window_after_txt
+      _respond stream_window_before_txt + self.xml_encode(msg) + stream_window_after_txt
     end
-    
-    def self.monsterbold(msg)
-      if $frontend =~ /^(?:stormfront|frostbite)$/
-        "<pushBold/>" + msg + "<popBold/>"
-      elsif $frontend =~ /^(?:wizard|avalon)$/
-        "\034GSL\r\n" + msg + "\034GSM\r\n"
-      elsif $frontend == "profanity"
-        "<b>" + msg + "</b>" 
+  
+    def self.msg_format(type = info, msg = "")
+      
+      preset_color_before = ""
+      preset_color_after = ""
+      
+      wizard_color = {"white"=>128, "black"=>129, "dark blue"=>130, "dark green"=>131, "dark teal"=>132,
+     "dark red"=>133, "purple"=>134, "gold"=>135, "light grey"=>136, "blue"=>137,
+     "bright green"=>138, "teal"=>139, "red"=>140, "pink"=>141, "yellow"=>142}
+      
+      if $frontend =~ /^(?:stormfront|frostbite|profanity)$/
+        case type
+        when "error", "yellow", "bold", "monster", "creature"
+          preset_color_before = monsterbold_start
+          preset_color_after = monsterbold_end
+        when "warn", "orange", "gold", "thought"
+          preset_color_before = "<preset id='thought'>"
+          preset_color_after = "</preset>"
+        when "info", "teal", "whisper"
+          preset_color_before = "<preset id='whisper'>"
+          preset_color_after = "</preset>"
+        when "green", "speech", "debug", "light green"
+          preset_color_before = "<preset id='speech'>"
+          preset_color_after = "</preset>"
+        when "link", "command", "selectedLink", "watching", "roomName"
+          
+        end
+      elsif $frontend =~ /^(?:wizard)$/
+        case type
+        when "error", "yellow", "bold", "monster", "creature"
+          preset_color_before = monsterbold_start
+          preset_color_after = monsterbold_end
+        when "warn", "orange", "gold", "thought"
+          preset_color_before = wizard_color["gold"]
+          preset_color_after = "\217"
+        when "info", "teal", "whisper"
+          preset_color_before = wizard_color["teal"]
+          preset_color_after = "\217"
+        when "green", "speech", "debug", "light green"
+          preset_color_before = wizard_color["light green"]
+          preset_color_after = "\217"
+        when "link", "command", "selectedLink", "watching", "roomName"
+        
+        end
       else
-        msg
+        case type
+        when "error", "yellow", "bold", "monster", "creature"
+          preset_color_before = monsterbold_start
+          preset_color_after = monsterbold_end
+        when "warn", "orange", "gold", "thought"
+          preset_color_before = "!! "
+          preset_color_after = ""
+        when "info", "teal", "whisper"
+          preset_color_before = "-- "
+          preset_color_after = ""
+        when "green", "speech", "debug", "light green"
+          preset_color_before = ">> "
+          preset_color_after = ""
+        when "link", "command", "selectedLink", "watching", "roomName"
+        
+        end
       end
+      
+      return (preset_color_before + self.xml_encode(msg) + preset_color_after)
+    
     end
 
-    def self.msg(type = "info", text)
-      if type == "debug"
-        if Lich.debug_messaging
-          if $frontend == 'stormfront' || $frontend == 'profanity'
-            _respond "\<preset id=\"speech\"\>#{text}\<\/preset\>"
-          else 
-            echo ">> #{text}"
-          end
-        end
-      elsif $frontend == 'stormfront' || $frontend == 'profanity'
-        if type == "error" || type == "yellow" || type == "bold" || type == "monster" || type == "creature"
-          _respond "\<pushBold\/\>#{text}\<popBold\/\>"
-        elsif type == "warn" || type == "orange" || type == "thought"
-          _respond "\<preset id=\"thought\"\>#{text}\<\/preset\>"
-        elsif type == "info" || type == "teal" || type == "whisper"
-          _respond "\<preset id=\"whisper\"\>#{text}\<\/preset\>"
-        elsif type == "green" || type == "speech"
-          _respond "\<preset id=\"speech\"\>#{text}\<\/preset\>"
-        else
-          respond text
-        end
-      else
-        if type == "error" || type == "yellow" || type == "bold" || type == "monster" || type == "creature"
-          echo "** #{text}"
-        elsif type == "warn" || type == "orange" || type == "thought"
-          echo "!! #{text}"
-        elsif type == "info" || type == "teal" || type == "whisper"
-          echo "-- #{text}"
-        elsif type == "green" || type == "speech"
-          echo ">> #{text}"
-        else
-          echo text
-        end
-      end
+    def self.msg(type = "info", msg = "")
+      
+      return if type == "debug" && (Lich.debug_messaging.nil? || Lich.debug_messaging == "false")
+      _respond msg_format(type, self.xml_encode(msg))
+      
     end
     
   end
