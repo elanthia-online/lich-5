@@ -14,6 +14,7 @@ Entries added here should always be accessible from Lich::Messaging.feature name
       Initial release
       Supports Lich::Messaging.stream_window(msg, window) SENDS msg to stream window
       Supports Lich::Messaging.msg(type, text) SENDS msg in colors, supports debug output
+      Supports Lich::Messaging.msg_format(type, text) RETURNS msg in colors
       Supports Lich::Messaging.monsterbold(msg)  RETURNS msg in monsterbold
       Supports Lich::Messaging.xml_encode(msg)  RETURNS xml encoded text
 
@@ -47,6 +48,9 @@ module Lich
         if window =~ /familiar/i
           stream_window_before_txt = "\034GSe\r\n"
           stream_window_after_txt = "\034GSf\r\n"
+        elsif window =~ /thoughts/i
+          stream_window_before_txt = "You hear the faint thoughts of LICH-MESSAGE echo in your mind:\r\n"
+          stream_window_after_txt = ""
         end
       end
       
