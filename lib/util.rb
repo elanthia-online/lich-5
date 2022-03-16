@@ -161,7 +161,7 @@ module Lich
       silence_me unless undo_silence = silence_me
       result = Lich::Util.quiet_command_xml("info", /^\s*Name\:/, /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9,]+)/, true, timeout)
       silence_me if undo_silence
-      return result.find( |line| line =~ ^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9,]+)/}.gsub(',', '').to_i
+      return result.find{ |line| line =~ /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9,]+)/}.gsub(',', '').to_i
     end
 
   end
