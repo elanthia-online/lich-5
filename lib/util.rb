@@ -58,22 +58,16 @@ module Lich
       Script.current.want_downstream_xml = true
       ttl = Time.now + timeout
       begin
-        Timeout::timeout(timeout, Interrupt) {
           DownstreamHook.add(name, proc { |xml|
             if filter
               if xml =~ end_pattern
                 DownstreamHook.remove(name)
                 filter = false
-                # result << xml.rstrip if include_end
-                # thread.raise(Interrupt)
-                # next(include_end ? nil : xml)
               else
-                # result << xml.rstrip
                 next(nil)
               end
             elsif xml =~ start_pattern
               filter = true
-              # result << xml.rstrip
               next(nil)
             else
               xml
@@ -96,12 +90,10 @@ module Lich
               break
             end
             break if Time.now > ttl
-          end
           }
           if include_end
             result << xml.rstrip
           end
-        }
       ensure
         DownstreamHook.remove(name)
         Script.current.want_downstream_xml = save_want_downstream_xml
@@ -120,7 +112,6 @@ module Lich
       Script.current.want_downstream_xml = false
       ttl = Time.now + timeout
       begin
-        Timeout::timeout(timeout, Interrupt) {
           DownstreamHook.add(name, proc { |line|
             if filter
               if line =~ end_pattern
@@ -153,12 +144,10 @@ module Lich
               break
             end
             break if Time.now > ttl
-          end
           }
           if include_end
             result << line.rstrip
           end
-        }
       ensure
         DownstreamHook.remove(name)
         Script.current.want_downstream_xml = save_want_downstream_xml
