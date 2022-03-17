@@ -1234,8 +1234,12 @@ class Script
         @vars.concat args[:args].scan(/[^\s"]*(?<!\\)"(?:\\"|[^"])+(?<!\\)"[^\s]*|(?:\\"|[^"\s])+/).collect { |s| s.gsub(/(?<!\\)"/, '').gsub('\\"', '"') }
       end
     elsif args[:args].class == Array
-      @vars = [ args[:args].join(" ") ]
-      @vars.concat args[:args]
+      unless (args[:args].nil? || args[:args].empty?)
+        @vars = [ args[:args].join(" ") ]
+        @vars.concat args[:args]
+      else
+        @vars = Array.new
+      end
     else
       @vars = Array.new
     end
