@@ -4511,6 +4511,8 @@ module Games
       @@buffer    = SharedBuffer.new
       @@_buffer   = SharedBuffer.new
       @@_buffer.max_size = 1000
+      @@autostarted = false
+      @@cli_scripts = false
       def Game.open(host, port)
         @@socket = TCPSocket.open(host, port)
         begin
@@ -4580,6 +4582,21 @@ module Games
                 #                           $_SERVERSTRING_.concat(@@socket.gets)
                 #                        end
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
+
+                if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
+                  Script.start('autostart') if Script.exists?('autostart')
+                  @@autostarted = true
+                end
+
+                if @@autostarted and $_SERVERSTRING_ =~ /roomDesc/ and !@@cli_scripts
+                  if arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ }
+                    for script_name in arg.sub('--start-scripts=', '').split(',')
+                      Script.start(script_name)
+                    end
+                  end
+                  @@cli_scripts = true
+                end
+
                 if alt_string = DownstreamHook.run($_SERVERSTRING_)
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
                   if alt_string =~ /<resource picture=.*roomName/
