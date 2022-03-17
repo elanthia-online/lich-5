@@ -7194,9 +7194,9 @@ main_thread = Thread.new {
         @launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') }
       end
       if data[:custom_launch]
-        @launch_data.push "CUSTOMLAUNCH=#{login_info[:custom_launch]}"
-        if login_info[:custom_launch_dir]
-          @launch_data.push "CUSTOMLAUNCHDIR=#{login_info[:custom_launch_dir]}"
+        @launch_data.push "CUSTOMLAUNCH=#{data[:custom_launch]}"
+        if data[:custom_launch_dir]
+          @launch_data.push "CUSTOMLAUNCHDIR=#{data[:custom_launch_dir]}"
         end
       end
     else
