@@ -666,4 +666,24 @@ end
     nil
   end
 
+  def Lich.debug_messaging
+    begin
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='debug_messaging';")
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    val
+  end
+
+  def Lich.debug_messaging=(val)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('debug_messaging',?);", val.to_s.encode('UTF-8'))
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    nil
+  end
+
 end

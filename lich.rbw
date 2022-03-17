@@ -1920,6 +1920,7 @@ require_relative("./lib/map.rb")
 ## adding util to the list of defs
 
 require_relative("./lib/util.rb")
+require_relative("./lib/messaging.rb")
 
 def hide_me
   Script.current.hidden = !Script.current.hidden
