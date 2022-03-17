@@ -530,12 +530,6 @@ class XMLParser
           $_CLIENT_.puts "\034GSQ#{sprintf('%010d', @roundtime_end)}\r\n" if @roundtime_end > 0
         end
         Game._puts("#{$cmd_prefix}_flag Display Inventory Boxes 1")
-        Script.start('autostart') if Script.exists?('autostart')
-        if arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ }
-          for script_name in arg.sub('--start-scripts=', '').split(',')
-            Script.start(script_name)
-          end
-        end
       end
     rescue
       $stdout.puts "--- error: XMLParser.tag_start: #{$!}"

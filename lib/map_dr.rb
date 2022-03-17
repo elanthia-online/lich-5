@@ -281,7 +281,7 @@ class Map
   end
   def Map.current_or_new
     return nil unless Script.current
-    if XMLData.game =~ /DR/
+    if XMLData.game =~ /^DR/
       @@current_room_count = -1
       @@fuzzy_room_count = -1
       Map.current || Map.new(Map.get_free_id, [ XMLData.room_title ], [ XMLData.room_description.strip ], [ XMLData.room_exits_string.strip ], [XMLData.room_id] )
@@ -410,37 +410,35 @@ class Map
     Map.clear
     Map.load
   end
+  
   def Map.load(filename=nil)
-    if $SAFE == 0
-      if filename.nil?
-        file_list = Dir.entries("#{DATA_DIR}/#{XMLData.game}").find_all { |filename| filename =~ /^map\-[0-9]+\.(?:dat|xml|json)$/i }.collect { |filename| "#{DATA_DIR}/#{XMLData.game}/#{filename}" }.sort.reverse
+    if filename.nil?
+      file_list = Dir.entries("#{DATA_DIR}/#{XMLData.game}").find_all { |filename| filename =~ /^map\-[0-9]+\.(?:dat|xml|json)$/i }.collect { |filename| "#{DATA_DIR}/#{XMLData.game}/#{filename}" }.sort.reverse
+    else
+      file_list = [ filename ]
+    end
+    if file_list.empty?
+      respond "--- Lich: error: no map database found"
+      return false
+    end
+    while filename = file_list.shift
+      if filename =~ /\.json$/i
+        if Map.load_json(filename)
+          return true
+        end
+      elsif filename =~ /\.xml$/
+        if Map.load_xml(filename)
+          return true
+        end
       else
-        file_list = [ filename ]
-      end
-      if file_list.empty?
-        respond "--- Lich: error: no map database found"
-        return false
-      end
-      while filename = file_list.shift
-        if filename =~ /\.json$/i
-          if Map.load_json(filename)
-            return true
-          end
-        elsif filename =~ /\.xml$/
-          if Map.load_xml(filename)
-            return true
-          end
-        else
-          if Map.load_dat(filename)
-            return true
-          end
+        if Map.load_dat(filename)
+          return true
         end
       end
-      return false
-    else
-      @@elevated_load.call
     end
+    return false
   end
+
   def Map.load_json(filename=nil)
     if $SAFE == 0
       @@load_mutex.synchronize {

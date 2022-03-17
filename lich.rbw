@@ -53,6 +53,7 @@ require 'lib/version'
 
 require 'lib/lich'
 require 'lib/init'
+require 'lib/front-end'
 
 # TODO: Need to split out initiatilzation functions to move require to top of file
 require 'lib/gtk'
@@ -251,14 +252,14 @@ class DownstreamHook
 
   def DownstreamHook.run(server_string)
     for key in @@downstream_hooks.keys
+      return nil if server_string.nil?
       begin
-        server_string = @@downstream_hooks[key].call(server_string.dup)
+        server_string = @@downstream_hooks[key].call(server_string.dup) if server_string.is_a?(String)
       rescue
         @@downstream_hooks.delete(key)
         respond "--- Lich: DownstreamHook: #{$!}"
         respond $!.backtrace.first
       end
-      return nil if server_string.nil?
     end
     return server_string
   end
@@ -1234,8 +1235,12 @@ class Script
         @vars.concat args[:args].scan(/[^\s"]*(?<!\\)"(?:\\"|[^"])+(?<!\\)"[^\s]*|(?:\\"|[^"\s])+/).collect { |s| s.gsub(/(?<!\\)"/, '').gsub('\\"', '"') }
       end
     elsif args[:args].class == Array
-      @vars = [ args[:args].join(" ") ]
-      @vars.concat args[:args]
+      unless (args[:args].nil? || args[:args].empty?)
+        @vars = [ args[:args].join(" ") ]
+        @vars.concat args[:args]
+      else
+        @vars = Array.new
+      end
     else
       @vars = Array.new
     end
@@ -1913,6 +1918,7 @@ end
 ## adding util to the list of defs
 
 require_relative("./lib/util.rb")
+require_relative("./lib/messaging.rb")
 
 def hide_me
   Script.current.hidden = !Script.current.hidden
@@ -4509,6 +4515,8 @@ module Games
       @@buffer    = SharedBuffer.new
       @@_buffer   = SharedBuffer.new
       @@_buffer.max_size = 1000
+      @@autostarted = false
+      @@cli_scripts = false
       def Game.open(host, port)
         @@socket = TCPSocket.open(host, port)
         begin
@@ -4578,14 +4586,29 @@ module Games
                 #                           $_SERVERSTRING_.concat(@@socket.gets)
                 #                        end
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
+
+                if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
+                  Script.start('autostart') if Script.exists?('autostart')
+                  @@autostarted = true
+                end
+
+                if @@autostarted and $_SERVERSTRING_ =~ /roomDesc/ and !@@cli_scripts
+                  if arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ }
+                    for script_name in arg.sub('--start-scripts=', '').split(',')
+                      Script.start(script_name)
+                    end
+                  end
+                  @@cli_scripts = true
+                end
+
                 if alt_string = DownstreamHook.run($_SERVERSTRING_)
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
                   if alt_string =~ /<resource picture=.*roomName/
-                    if (Lich.display_lichid =~ /on|true|yes/ && Lich.display_uid =~ /on|true|yes/) || (Lich.display_lichid.nil? && Lich.display_uid.nil?) #default on
+                    if (Lich.display_lichid =~ /on|true|yes/ && Lich.display_uid =~ /on|true|yes/) || ((Lich.display_lichid.nil? && Lich.display_uid.nil?) && XMLData !~ /^DR/) #default on
                       alt_string.sub!(']') { " - #{Room.current.id}] (u#{XMLData.room_id})" }
-                    elsif Lich.display_lichid =~ /on|true|yes/ || Lich.display_lichid.nil? # don't force an entry
+                    elsif Lich.display_lichid =~ /on|true|yes/ || (Lich.display_lichid.nil? && XMLData !~ /^DR/) # don't force an entry
                       alt_string.sub!(']') { " - #{Room.current.id}]" }
-                    elsif Lich.display_uid =~ /on|true|yes/ || Lich.display_uid.nil? # don't force an entry
+                    elsif Lich.display_uid =~ /on|true|yes/ || (Lich.display_uid.nil? && XMLData !~ /^DR/) # don't force an entry
                       alt_string.sub!(']') { "] (u#{XMLData.room_id})" }
                     end
                   end
@@ -4620,7 +4643,7 @@ module Games
                         $_SERVERSTRING_.gsub!(/(<[^>]+=)'([^=>'\\]+'[^=>']+)'([\s>])/) { "#{$1}\"#{$2}\"#{$3}" }
                         retry
                       end
-                      $stdout.puts "--- error: server_thread: #{$!}"
+                      $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                       Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                     end
                     XMLData.reset
@@ -4638,18 +4661,18 @@ module Games
                   }
                 end
               rescue
-                $stdout.puts "--- error: server_thread: #{$!}"
+                $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                 Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
               end
             end
           rescue Exception
             Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            $stdout.puts "--- error: server_thread: #{$!}"
+            $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.slice(0..10).join("\n\t")}"
             sleep 0.2
             retry unless $_CLIENT_.closed? or @@socket.closed? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i)
           rescue
             Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            $stdout.puts "--- error: server_thread: #{$!}"
+            $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace..slice(0..10).join("\n\t")}"
             sleep 0.2
             retry unless $_CLIENT_.closed? or @@socket.closed? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i)
           end
@@ -5640,7 +5663,7 @@ module Games
 
         def active?(effect)
           expiry = to_h.fetch(effect, 0)
-          expiry.to_i > Time.now.to_i
+          expiry.to_f > Time.now.to_f
         end
 
         def time_left(effect)
@@ -6749,21 +6772,43 @@ bad_args = Array.new
 
 for arg in ARGV
   if (arg == '-h') or (arg == '--help')
-    puts "
-   -h, --help               Display this message and exit
-   -v, --version            Display version number and credits and exit
-
-   --home=<directory>      Set home directory for Lich (default: location of this file)
-   --scripts=<directory>   Set directory for script files (default: home/scripts)
-   --data=<directory>      Set directory for data files (default: home/data)
-   --temp=<directory>      Set directory for temp files (default: home/temp)
-   --logs=<directory>      Set directory for log files (default: home/logs)
-   --maps=<directory>      Set directory for map images (default: home/maps)
-   --backup=<directory>    Set directory for backups (default: home/backup)
-
-   --start-scripts=<script1,script2,etc>   Start the specified scripts after login
-
-    "
+    puts 'Usage:  lich [OPTION]'
+    puts ''
+    puts 'Options are:'
+    puts '  -h, --help          Display this list.'
+    puts '  -V, --version       Display the program version number and credits.'
+    puts ''
+    puts '  -d, --directory     Set the main Lich program directory.'
+    puts '      --script-dir    Set the directoy where Lich looks for scripts.'
+    puts '      --data-dir      Set the directory where Lich will store script data.'
+    puts '      --temp-dir      Set the directory where Lich will store temporary files.'
+    puts ''
+    puts '  -w, --wizard        Run in Wizard mode (default)'
+    puts '  -s, --stormfront    Run in StormFront mode.'
+    puts '      --avalon        Run in Avalon mode.'
+    puts '      --frostbite     Run in Frosbite mode.'
+    puts ''
+    puts '      --gemstone      Connect to the Gemstone IV Prime server (default).'
+    puts '      --dragonrealms  Connect to the DragonRealms server.'
+    puts '      --platinum      Connect to the Gemstone IV/DragonRealms Platinum server.'
+    puts '      --test          Connect to the test instance of the selected game server.'
+    puts '  -g, --game          Set the IP address and port of the game.  See example below.'
+    puts ''
+    puts '      --install       Edits the Windows/WINE registry so that Lich is started when logging in using the website or SGE.'
+    puts '      --uninstall     Removes Lich from the registry.'
+    puts ''
+    puts 'The majority of Lich\'s built-in functionality was designed and implemented with Simutronics MUDs in mind (primarily Gemstone IV): as such, many options/features provided by Lich may not be applicable when it is used with a non-Simutronics MUD.  In nearly every aspect of the program, users who are not playing a Simutronics game should be aware that if the description of a feature/option does not sound applicable and/or compatible with the current game, it should be assumed that the feature/option is not.  This particularly applies to in-script methods (commands) that depend heavily on the data received from the game conforming to specific patterns (for instance, it\'s extremely unlikely Lich will know how much "health" your character has left in a non-Simutronics game, and so the "health" script command will most likely return a value of 0).'
+    puts ''
+    puts 'The level of increase in efficiency when Lich is run in "bare-bones mode" (i.e. started with the --bare argument) depends on the data stream received from a given game, but on average results in a moderate improvement and it\'s recommended that Lich be run this way for any game that does not send "status information" in a format consistent with Simutronics\' GSL or XML encoding schemas.'
+    puts ''
+    puts ''
+    puts 'Examples:'
+    puts '  lich -w -d /usr/bin/lich/          (run Lich in Wizard mode using the dir \'/usr/bin/lich/\' as the program\'s home)'
+    puts '  lich -g gs3.simutronics.net:4000   (run Lich using the IP address \'gs3.simutronics.net\' and the port number \'4000\')'
+    puts '  lich --dragonrealms --test --genie (run Lich connected to DragonRealms Test server for the Genie frontend)'
+    puts '  lich --script-dir /mydir/scripts   (run Lich with its script directory set to \'/mydir/scripts\')'
+    puts '  lich --bare -g skotos.net:5555     (run in bare-bones mode with the IP address and port of the game set to \'skotos.net:5555\')'
+    puts ''
     exit
   elsif (arg == '-v') or (arg == '--version')
     puts "The Lich, version #{LICH_VERSION}"
@@ -6892,47 +6937,6 @@ for arg in ARGV
   else
     bad_args.push(arg)
   end
-end
-
-if ARGV.any? { |arg| (arg == '-h') or (arg == '--help') }
-  puts 'Usage:  lich [OPTION]'
-  puts ''
-  puts 'Options are:'
-  puts '  -h, --help          Display this list.'
-  puts '  -V, --version       Display the program version number and credits.'
-  puts ''
-  puts '  -d, --directory     Set the main Lich program directory.'
-  puts '      --script-dir    Set the directoy where Lich looks for scripts.'
-  puts '      --data-dir      Set the directory where Lich will store script data.'
-  puts '      --temp-dir      Set the directory where Lich will store temporary files.'
-  puts ''
-  puts '  -w, --wizard        Run in Wizard mode (default)'
-  puts '  -s, --stormfront    Run in StormFront mode.'
-  puts '      --avalon        Run in Avalon mode.'
-  puts '      --frostbite     Run in Frosbite mode.'
-  puts ''
-  puts '      --gemstone      Connect to the Gemstone IV Prime server (default).'
-  puts '      --dragonrealms  Connect to the DragonRealms server.'
-  puts '      --platinum      Connect to the Gemstone IV/DragonRealms Platinum server.'
-  puts '      --test          Connect to the test instance of the selected game server.'
-  puts '  -g, --game          Set the IP address and port of the game.  See example below.'
-  puts ''
-  puts '      --install       Edits the Windows/WINE registry so that Lich is started when logging in using the website or SGE.'
-  puts '      --uninstall     Removes Lich from the registry.'
-  puts ''
-  puts 'The majority of Lich\'s built-in functionality was designed and implemented with Simutronics MUDs in mind (primarily Gemstone IV): as such, many options/features provided by Lich may not be applicable when it is used with a non-Simutronics MUD.  In nearly every aspect of the program, users who are not playing a Simutronics game should be aware that if the description of a feature/option does not sound applicable and/or compatible with the current game, it should be assumed that the feature/option is not.  This particularly applies to in-script methods (commands) that depend heavily on the data received from the game conforming to specific patterns (for instance, it\'s extremely unlikely Lich will know how much "health" your character has left in a non-Simutronics game, and so the "health" script command will most likely return a value of 0).'
-  puts ''
-  puts 'The level of increase in efficiency when Lich is run in "bare-bones mode" (i.e. started with the --bare argument) depends on the data stream received from a given game, but on average results in a moderate improvement and it\'s recommended that Lich be run this way for any game that does not send "status information" in a format consistent with Simutronics\' GSL or XML encoding schemas.'
-  puts ''
-  puts ''
-  puts 'Examples:'
-  puts '  lich -w -d /usr/bin/lich/          (run Lich in Wizard mode using the dir \'/usr/bin/lich/\' as the program\'s home)'
-  puts '  lich -g gs3.simutronics.net:4000   (run Lich using the IP address \'gs3.simutronics.net\' and the port number \'4000\')'
-  puts '  lich --dragonrealms --test --genie (run Lich connected to DragonRealms Test server for the Genie frontend)'
-  puts '  lich --script-dir /mydir/scripts   (run Lich with its script directory set to \'/mydir/scripts\')'
-  puts '  lich --bare -g skotos.net:5555     (run in bare-bones mode with the IP address and port of the game set to \'skotos.net:5555\')'
-  puts ''
-  exit
 end
 
 if arg = ARGV.find { |a| a == '--hosts-dir' }
@@ -7192,9 +7196,9 @@ main_thread = Thread.new {
         @launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') }
       end
       if data[:custom_launch]
-        @launch_data.push "CUSTOMLAUNCH=#{login_info[:custom_launch]}"
-        if login_info[:custom_launch_dir]
-          @launch_data.push "CUSTOMLAUNCHDIR=#{login_info[:custom_launch_dir]}"
+        @launch_data.push "CUSTOMLAUNCH=#{data[:custom_launch]}"
+        if data[:custom_launch_dir]
+          @launch_data.push "CUSTOMLAUNCHDIR=#{data[:custom_launch_dir]}"
         end
       end
     else
@@ -7778,6 +7782,9 @@ main_thread = Thread.new {
       loop {
         begin
           server = TCPServer.new('127.0.0.1', detachable_client_port)
+          char_name = ARGV[ARGV.index('--login')+1].capitalize
+          Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
+          
           $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(server.accept)
           $_DETACHABLE_CLIENT_.sync = true
         rescue
@@ -7789,6 +7796,7 @@ main_thread = Thread.new {
           next
         ensure
           server.close rescue nil
+          Frontend.cleanup_session_file
         end
         if $_DETACHABLE_CLIENT_
           begin
