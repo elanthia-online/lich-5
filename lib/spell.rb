@@ -7,12 +7,18 @@ Further modifications are to support the retirement of spell-list.xml.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.0.19
-    version: 1.1.0
+    version: 1.2.0
 
   changelog:
-    version 1.1.0 rebaselined as spell.rb to support spell-list.xml retirement
-    version 1.0.0
-     * Initial release and subsequent modifications as SIMU changes warranted
+    v1.2.0 (2022-03-14)
+      add Spell.force_cast(target, args, results_of_interest)
+      add Spell.force_channel(target, args, results_of_interest)
+      add Spell.force_evoke(target, args, results_of_interest)
+      add Spell.force_incant(args, results_of_interest)
+    v1.1.0 (2021-09-27
+      rebaselined as spell.rb to support spell-list.xml retirement
+    v1.0.0 (2021-09-22)
+      initial release and subsequent modifications as SIMU changes warranted
 
 =end
 
@@ -30,6 +36,9 @@ module Games
     @@after_stance = nil
     attr_reader :num, :name, :timestamp, :msgup, :msgdn, :circle, :active, :type, :cast_proc, :real_time, :persist_on_death, :availability, :no_incant
     attr_accessor :stance, :channel
+    
+    @@prepare_regex = /^You already have a spell readied!  You must RELEASE it if you wish to prepare another!$|^Your spell(?:song)? is ready\.|^You can't think clearly enough to prepare a spell!$|^You are concentrating too intently .*?to prepare a spell\.$|^You are too injured to make that dextrous of a movement|^The searing pain in your throat makes that impossible|^But you don't have any mana!\.$|^You can't make that dextrous of a move!$|^As you begin to prepare the spell the wind blows small objects at you thwarting your attempt\.$|^You do not know that spell!$|^All you manage to do is cough up some blood\.$|The incantations of countless spells swirl through your mind as a golden light flashes before your eyes\./
+    @@results_regex = /^(?:Cast|Sing) Roundtime [0-9]+ Seconds?\.$|^Cast at what\?$|^But you don't have any mana!$|^\[Spell Hindrance for|^You don't have a spell prepared!$|keeps? the spell from working\.|^Be at peace my child, there is no need for spells of war in here\.$|Spells of War cannot be cast|^As you focus on your magic, your vision swims with a swirling haze of crimson\.$|^Your magic fizzles ineffectually\.$|^All you manage to do is cough up some blood\.$|^And give yourself away!  Never!$|^You are unable to do that right now\.$|^You feel a sudden rush of power as you absorb [0-9]+ mana!$|^You are unable to drain it!$|leaving you casting at nothing but thin air!$|^You don't seem to be able to move to do that\.$|^Provoking a GameMaster is not such a good idea\.$|^You can't think clearly enough to prepare a spell!$|^You do not currently have a target\.$|The incantations of countless spells swirl through your mind as a golden light flashes before your eyes\.|You can only evoke certain spells\.|You can only channel certain spells for extra power\./
 
     def initialize(xml_spell)
       @num = xml_spell.attributes['number'].to_i
@@ -498,7 +507,7 @@ module Games
     def Spell.unlock_cast
       @@cast_lock.delete(Script.current)
     end
-    def cast(target=nil, results_of_interest=nil)
+    def cast(target=nil, results_of_interest=nil, arg_options=nil)
       # fixme: find multicast in target and check mana for it
       check_energy = proc {
         if Feat.known?(:mental_acuity)
@@ -561,7 +570,15 @@ module Games
           else
             cast_cmd = 'cast'
           end
-          if (target.nil? or target.to_s.empty?) and not @no_incant
+          unless (arg_options.nil? || arg_options.empty?)
+            if arg_options.split(" ")[0] =~ /incant|channel|evoke|cast/
+              cast_cmd = arg_options.split(" ")[0]
+              arg_options = arg_options.split(" ").drop(1)
+              arg_options = arg_options.join(" ") unless arg_options.empty?
+            end
+          end
+          
+          if (((target.nil? || target.to_s.empty?) && !(@no_incant)) && (cast_cmd == "cast" && arg_options.nil?) || cast_cmd == "incant") && cast_cmd !~ /^(?:channel|evoke)/
             cast_cmd = "incant #{@num}"
           elsif (target.nil? or target.to_s.empty?) and (@type =~ /attack/i) and not [410,435,525,912,909,609].include?(@num)
             cast_cmd += ' target'
@@ -569,9 +586,16 @@ module Games
             cast_cmd += " ##{target.id}"
           elsif target.class == Integer
             cast_cmd += " ##{target}"
-          else
+          elsif cast_cmd !~ /^incant/
             cast_cmd += " #{target}"
           end
+          
+          unless (arg_options.nil? || arg_options.empty?)
+            cast_cmd += " #{arg_options}"
+          end
+          
+          
+          
           cast_result = nil
           loop {
             waitrt?
@@ -602,7 +626,7 @@ module Games
                 loop {
                   waitrt?
                   waitcastrt?
-                  prepare_result = dothistimeout "prepare #{@num}", 8, /^You already have a spell readied!  You must RELEASE it if you wish to prepare another!$|^Your spell(?:song)? is ready\.|^You can't think clearly enough to prepare a spell!$|^You are concentrating too intently .*?to prepare a spell\.$|^You are too injured to make that dextrous of a movement|^The searing pain in your throat makes that impossible|^But you don't have any mana!\.$|^You can't make that dextrous of a move!$|^As you begin to prepare the spell the wind blows small objects at you thwarting your attempt\.$|^You do not know that spell!$|^All you manage to do is cough up some blood\.$|The incantations of countless spells swirl through your mind as a golden light flashes before your eyes\./
+                  prepare_result = dothistimeout "prepare #{@num}", 8, @@prepare_regex
                   if prepare_result =~ /^Your spell(?:song)? is ready\./
                     break
                   elsif prepare_result == 'You already have a spell readied!  You must RELEASE it if you wish to prepare another!'
@@ -625,14 +649,14 @@ module Games
               # dothistimeout 'stance offensive', 5, /^You (?:are now in|move into) an? offensive stance|^You are unable to change your stance\.$/
             end
             if results_of_interest.class == Regexp
-              results_regex = /^(?:Cast|Sing) Roundtime [0-9]+ Seconds?\.$|^Cast at what\?$|^But you don't have any mana!$|^\[Spell Hindrance for|^You don't have a spell prepared!$|keeps? the spell from working\.|^Be at peace my child, there is no need for spells of war in here\.$|Spells of War cannot be cast|^As you focus on your magic, your vision swims with a swirling haze of crimson\.$|^Your magic fizzles ineffectually\.$|^All you manage to do is cough up some blood\.$|^And give yourself away!  Never!$|^You are unable to do that right now\.$|^You feel a sudden rush of power as you absorb [0-9]+ mana!$|^You are unable to drain it!$|leaving you casting at nothing but thin air!$|^You don't seem to be able to move to do that\.$|^Provoking a GameMaster is not such a good idea\.$|^You can't think clearly enough to prepare a spell!$|^You do not currently have a target\.$|The incantations of countless spells swirl through your mind as a golden light flashes before your eyes\.|#{results_of_interest.to_s}/
+              merged_results_regex = /#{@@results_regex}|#{results_of_interest}/
             else
-              results_regex = /^(?:Cast|Sing) Roundtime [0-9]+ Seconds?\.$|^Cast at what\?$|^But you don't have any mana!$|^\[Spell Hindrance for|^You don't have a spell prepared!$|keeps? the spell from working\.|^Be at peace my child, there is no need for spells of war in here\.$|Spells of War cannot be cast|^As you focus on your magic, your vision swims with a swirling haze of crimson\.$|^Your magic fizzles ineffectually\.$|^All you manage to do is cough up some blood\.$|^And give yourself away!  Never!$|^You are unable to do that right now\.$|^You feel a sudden rush of power as you absorb [0-9]+ mana!$|^You are unable to drain it!$|leaving you casting at nothing but thin air!$|^You don't seem to be able to move to do that\.$|^Provoking a GameMaster is not such a good idea\.$|^You can't think clearly enough to prepare a spell!$|^You do not currently have a target\.$|The incantations of countless spells swirl through your mind as a golden light flashes before your eyes\./
+              merged_results_regex = @@results_regex
             end
-            cast_result = dothistimeout cast_cmd, 5, results_regex
+            cast_result = dothistimeout cast_cmd, 5, merged_results_regex
             if cast_result == "You don't seem to be able to move to do that."
               100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
-              cast_result = dothistimeout cast_cmd, 5, results_regex
+              cast_result = dothistimeout cast_cmd, 5, merged_results_regex
             end
             if @stance
               if @@after_stance
@@ -652,8 +676,13 @@ module Games
             if cast_result =~ /^Cast at what\?$|^Be at peace my child, there is no need for spells of war in here\.$|^Provoking a GameMaster is not such a good idea\.$/
               dothistimeout 'release', 5, /^You feel the magic of your spell rush away from you\.$|^You don't have a prepared spell to release!$/
             end
-            break unless (@circle.to_i == 10) and (cast_result =~ /^\[Spell Hindrance for/)
-            }
+            if cast_result =~ /You can only evoke certain spells\.|You can only channel certain spells for extra power\./
+              echo "cast: can't evoke/channel #{@num}"
+              cast_cmd = cast_cmd.gsub(/^(?:evoke|channel)/, "cast")
+              next
+            end
+            break unless ((@circle.to_i == 10) && (cast_result =~ /^\[Spell Hindrance for/))
+          }
           cast_result
         end
       ensure
@@ -662,6 +691,43 @@ module Games
         @@cast_lock.delete(script)
       end
     end
+
+    def force_cast(target=nil, arg_options=nil, results_of_interest=nil)
+      unless arg_options.nil? || arg_options.empty?
+        arg_options = "cast #{arg_options}"
+      else
+        arg_options = "cast"
+      end
+      cast(target, results_of_interest, arg_options)
+    end
+
+    def force_channel(target=nil, arg_options=nil, results_of_interest=nil)
+      unless arg_options.nil? || arg_options.empty?
+        arg_options = "channel #{arg_options}"
+      else
+        arg_options = "channel"
+      end
+      cast(target, results_of_interest, arg_options)
+    end
+
+    def force_evoke(target=nil, arg_options=nil, results_of_interest=nil)
+      unless arg_options.nil? || arg_options.empty?
+        arg_options = "evoke #{arg_options}"
+      else
+        arg_options = "evoke"
+      end
+      cast(target, results_of_interest, arg_options)
+    end
+    
+    def force_incant(arg_options=nil, results_of_interest=nil)
+      unless arg_options.nil? || arg_options.empty?
+        arg_options = "incant #{arg_options}"
+      else
+        arg_options = "incant"
+      end
+      cast(nil, results_of_interest, arg_options)
+    end
+   
     def _bonus
       @bonus.dup
     end
