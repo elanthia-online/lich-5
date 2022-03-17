@@ -87,7 +87,11 @@ if XMLData.game =~ /^DR/
     retry
   end
   if did_dependency_install.nil?
-    unless File.exist?("#{SCRIPT_DIR}/bootstrap.lic") && File.exist?("#{SCRIPT_DIR}/drinfomon.lic")
+    unless File.exist?("#{SCRIPT_DIR}/dependency.lic")
+      Script.run('repository', 'download dependency')
+      sleep 1
+    end
+    unless File.exist?("#{SCRIPT_DIR}/bootstrap.lic") && File.exist?("#{SCRIPT_DIR}/drinfomon.lic") && File.exist?("#{SCRIPT_DIR}/common.lic") && File.exist?("#{SCRIPT_DIR}/dependency.lic")
       Script.run('repository', 'download dependency')
       sleep 0.5
       Script.run('dependency', 'install')
