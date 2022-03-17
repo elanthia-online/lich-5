@@ -20,7 +20,7 @@ class Map
   @@current_room_uid       ||= -1
   @@previous_room_id       ||= -1
   @@uids                     = {}
-  @@last_seen_objects = nil
+  @@last_seen_objects        = nil
   attr_reader :id
   attr_accessor :title, :description, :paths, :uid, :location, :climate, :terrain, :wayto, :timeto, :image, :image_coords, :tags, :check_location, :unique_loot, :uid, :room_objects
   def initialize(id, title, description, paths, uid = [], location=nil, climate=nil, terrain=nil, wayto={}, timeto={}, image=nil, image_coords=nil, tags=[], check_location=nil, unique_loot=nil, room_objects=nil)
@@ -179,24 +179,6 @@ class Map
             1.times {
               @@current_room_count = XMLData.room_count
               foggy_exits = (XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/)
-              shortlist = Map.ids_from_uid(XMLData.room_id)
-              if shortlist.size > 0
-                shortlist.each { |s|
-                  r = @@list[s]
-                  if  (!@@current_room_id.nil? and @@list[@@current_room_id].wayto.keys.include?(s.to_s)) or
-                      (r.title.include?(XMLData.room_title) and 
-                       r.description.include?(XMLData.room_description.strip) and 
-                      (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
-                      (foggy_exits or r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths') and
-                      (r.room_objects.nil? || r.room_objects.all?{|obj| /\b#{obj}\b/ =~ Map.last_seen_objects } ) )
-                    )
-                    room = r
-                    @@previous_room_id = @@current_room_id
-                    @@current_room_id = room.id
-                    return room
-                  end
-                }
-              end
               if room = @@list.find { |r| r.title.include?(XMLData.room_title) and 
                   r.description.include?(XMLData.room_description.strip) and 
                   (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and 
@@ -253,25 +235,6 @@ class Map
           @@fuzzy_room_count = XMLData.room_count
           1.times {
             foggy_exits = (XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/)
-            shortlist = [] + Map.ids_from_uid(XMLData.room_id)
-            if shortlist.size > 0
-              shortlist.each_with_index { |s,x|
-                r = @@list[s]
-                if ((r.title.include?(XMLData.room_title) and 
-                      r.description.include?(XMLData.room_description.strip) and 
-                     (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
-                     (foggy_exits or r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and
-                     (r.room_objects.nil? || r.room_objects.all?{|obj| /\b#{obj}\b/ =~ Map.last_seen_objects } )
-                    )
-                  )
-                  room = r
-                  @@previous_room_id = @@current_room_id if x == 0
-                  @@current_room_id = room.id            if x == 0
-                  @@fuzzy_room_id = room.id
-                  return room
-                end
-              }
-            end
             if (room = @@list.find { |r| r.title.include?(XMLData.room_title) and 
                 r.description.include?(XMLData.room_description.strip) and 
                 (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and 
@@ -371,22 +334,6 @@ class Map
       }
       current_location = Map.get_location
       foggy_exits = (XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/)
-      shortlist = [] + Map.ids_from_uid(XMLData.room_id)
-      if shortlist.size > 0
-        shortlist.each { |s|
-          r = @@list[s]
-          if (r.wayto.keys.include?(@@current_room_id.to_s)) or
-             (@@list[@@current_room_id].wayto.keys.include?(s.to_s)) or
-             (r.title.include?(XMLData.room_title) and 
-                r.description.include?(XMLData.room_description.strip) and 
-               (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
-               (foggy_exits or r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths'))
-             )
-            room = r
-            return room
-          end
-          }
-      end
       if room = @@list.find { |r| (r.location == current_location) and r.title.include?(XMLData.room_title) and
           r.description.include?(XMLData.room_description.strip) and 
           (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and 
