@@ -606,7 +606,7 @@ module Lich
         sleep 0.1
         retry
       end
-      val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != "" # default false if DR, otherwise default true
+      val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != ""; # default false if DR, otherwise default true
       @@display_lichid = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
     end
     return @@display_lichid
@@ -631,7 +631,7 @@ module Lich
         sleep 0.1
         retry
       end
-      val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != "" # default false if DR, otherwise default true
+      val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != ""; # default false if DR, otherwise default true
       @@display_uid = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
     end
     return @@display_uid
