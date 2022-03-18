@@ -101,6 +101,9 @@ if XMLData.game =~ /^DR/
       sleep 0.1
       retry
     end
+  else
+    Script.start('dependency')
+    sleep 1
   end
 end
 
@@ -116,9 +119,7 @@ if script.vars.empty?
     if script_list.class == Array
       if run_info == false
         # Run infomon
-        if XMLData.game =~ /^DR/
-          Script.start("drinfomon") if Script.exists?("drinfomon")
-        else
+        unless XMLData.game =~ /^DR/
           Script.start("infomon")
         end
         run_info = true
