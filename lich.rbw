@@ -7806,40 +7806,42 @@ main_thread = Thread.new {
         end
         if $_DETACHABLE_CLIENT_
           begin
-            $frontend = 'profanity'
-            Thread.new {
-              100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
-              init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
-              init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
-              init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
-              init_str.concat "<progressBar id='stamina' value='0' text='stamina #{XMLData.stamina}/#{XMLData.max_stamina}'/>"
-              init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{XMLData.encumbrance_text}'/>"
-              init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
-              init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{XMLData.mind_text}'/>"
-              init_str.concat "<spell>#{XMLData.prepared_spell}</spell>"
-              init_str.concat "<right>#{GameObj.right_hand.name}</right>"
-              init_str.concat "<left>#{GameObj.left_hand.name}</left>"
-              for indicator in ['IconBLEEDING', 'IconPOISONED', 'IconDISEASED', 'IconSTANDING', 'IconKNEELING', 'IconSITTING', 'IconPRONE']
-                init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
-              end
-              for area in ['back', 'leftHand', 'rightHand', 'head', 'rightArm', 'abdomen', 'leftEye', 'leftArm', 'chest', 'rightLeg', 'neck', 'leftLeg', 'nsys', 'rightEye']
-                if Wounds.send(area) > 0
-                  init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
-                elsif Scars.send(area) > 0
-                  init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
+            unless ARGV.include?('--genie')
+              $frontend = 'profanity'
+              Thread.new {
+                100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
+                init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
+                init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
+                init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
+                init_str.concat "<progressBar id='stamina' value='0' text='stamina #{XMLData.stamina}/#{XMLData.max_stamina}'/>"
+                init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{XMLData.encumbrance_text}'/>"
+                init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
+                init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{XMLData.mind_text}'/>"
+                init_str.concat "<spell>#{XMLData.prepared_spell}</spell>"
+                init_str.concat "<right>#{GameObj.right_hand.name}</right>"
+                init_str.concat "<left>#{GameObj.left_hand.name}</left>"
+                for indicator in ['IconBLEEDING', 'IconPOISONED', 'IconDISEASED', 'IconSTANDING', 'IconKNEELING', 'IconSITTING', 'IconPRONE']
+                  init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
                 end
-              end
-              init_str.concat '<compass>'
-              shorten_dir = { 'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se', 'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw', 'up' => 'up', 'down' => 'down', 'out' => 'out' }
-              for dir in XMLData.room_exits
-                if short_dir = shorten_dir[dir]
-                  init_str.concat "<dir value='#{short_dir}'/>"
+                for area in ['back', 'leftHand', 'rightHand', 'head', 'rightArm', 'abdomen', 'leftEye', 'leftArm', 'chest', 'rightLeg', 'neck', 'leftLeg', 'nsys', 'rightEye']
+                  if Wounds.send(area) > 0
+                    init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
+                  elsif Scars.send(area) > 0
+                    init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
+                  end
                 end
-              end
-              init_str.concat '</compass>'
-              $_DETACHABLE_CLIENT_.puts init_str
-              init_str = nil
-            }
+                init_str.concat '<compass>'
+                shorten_dir = { 'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se', 'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw', 'up' => 'up', 'down' => 'down', 'out' => 'out' }
+                for dir in XMLData.room_exits
+                  if short_dir = shorten_dir[dir]
+                    init_str.concat "<dir value='#{short_dir}'/>"
+                  end
+                end
+                init_str.concat '</compass>'
+                $_DETACHABLE_CLIENT_.puts init_str
+                init_str = nil
+              }
+            end
             while client_string = $_DETACHABLE_CLIENT_.gets
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
               begin
