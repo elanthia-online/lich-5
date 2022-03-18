@@ -121,9 +121,7 @@ if script.vars.empty?
         # Run infomon
         unless XMLData.game =~ /^DR/
           Script.start("infomon")
-	else
-	  Start.script("drinfomon")  
-        end
+	end
         run_info = true
         sleep 0.5
       end
