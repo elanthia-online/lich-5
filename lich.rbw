@@ -4653,7 +4653,7 @@ module Games
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
                     if Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
-                      Map.last_seen_objects = $1  # DR only: copy loot line to Map.last_seen_objects 
+                      Map.last_seen_objects = $1  # DR only: copy loot line to Map.last_seen_objects
                     end
                     unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
                       Script.new_downstream(line) unless line.empty?
@@ -7153,16 +7153,20 @@ main_thread = Thread.new {
       end
     elsif ARGV.include?('--shattered')
       data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
+    elsif ARGV.include?('--dragonrealms')
+      if ARGV.include?('--platinum')
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRX') }
+      elsif ARGV.include?('--fallen')
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
+      elsif ARGV.include?('--test')
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRT') }
+      else
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
+      end
+    elsif ARGV.include?('--fallen')
+      data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
     else
       data = entry_data.find { |d| (d[:char_name] == char_name) }
-    end
-    unless data
-      data = { char_name: char_name }
-      data[:game_code] = "DR"
-      user_id = ARGV[ARGV.index('--user_id')+1]
-      data[:user_id] = user_id
-      password = ARGV[ARGV.index('--password')+1]
-      data[:password] = password
     end
     if data
       Lich.log "info: using quick game entry settings for #{char_name}"
@@ -7559,19 +7563,21 @@ main_thread = Thread.new {
   #
   # drop superuser privileges
   #
-  unless (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
-    Lich.log "info: dropping superuser privileges..."
-    begin
-      Process.uid = `id -ru`.strip.to_i
-      Process.gid = `id -rg`.strip.to_i
-      Process.egid = `id -rg`.strip.to_i
-      Process.euid = `id -ru`.strip.to_i
-    rescue SecurityError
-      Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    rescue SystemCallError
-      Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    rescue
-      Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+  unless RUBY_PLATFORM =~ /darwin/i
+    if RUBY_PLATFORM =~ /mingw|win/i
+      Lich.log "info: dropping superuser privileges..."
+      begin
+        Process.uid = `id -ru`.strip.to_i
+        Process.gid = `id -rg`.strip.to_i
+        Process.egid = `id -rg`.strip.to_i
+        Process.euid = `id -ru`.strip.to_i
+      rescue SecurityError
+        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      rescue SystemCallError
+        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      rescue
+        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      end
     end
   end
   # backward compatibility
@@ -7784,7 +7790,7 @@ main_thread = Thread.new {
           server = TCPServer.new('127.0.0.1', detachable_client_port)
           char_name = ARGV[ARGV.index('--login')+1].capitalize
           Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
-          
+
           $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(server.accept)
           $_DETACHABLE_CLIENT_.sync = true
         rescue
