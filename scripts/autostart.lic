@@ -101,6 +101,9 @@ if XMLData.game =~ /^DR/
       sleep 0.1
       retry
     end
+  else
+    Script.start('dependency') if Script.exist?('dependency')
+    sleep 1
   end
 end
 
