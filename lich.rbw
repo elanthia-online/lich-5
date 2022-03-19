@@ -7562,9 +7562,12 @@ main_thread = Thread.new {
 
   listener = timeout_thr = nil
 
-  #
+  # 
   # drop superuser privileges
-  #
+  # OSXLich-Doug - this section causes problems on too many systems.
+  # Hard remarking it out to prevent errors while a better solution is
+  # sought
+=begin
   unless RUBY_PLATFORM =~ /darwin/i
     if RUBY_PLATFORM =~ /mingw|win/i
       Lich.log "info: dropping superuser privileges..."
@@ -7582,6 +7585,7 @@ main_thread = Thread.new {
       end
     end
   end
+=end
   # backward compatibility
   if $frontend =~ /^(?:wizard|avalon)$/
     $fake_stormfront = true
