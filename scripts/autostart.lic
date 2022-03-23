@@ -9,10 +9,12 @@
   contributors: Athias
           game: any
           tags: core
-       version: 0.54
+       version: 0.55
       required: Lich >= 4.6.58
 
   changelog:
+    0.55 (2022-03-23):
+      Adding check for dependency, with note.
     0.54 (2022-03-15):
       Added logic to welcome Dragonrealms.
       DragonRealms/GemstoneIV infomon detection
@@ -134,6 +136,9 @@ if script.vars.empty?
       # Loop through list
       for script_info in script_list
         if script_info[:name] == 'infomon' || script_info[:name] == 'repository'
+          next
+        elsif script_info[:name] == 'dependency' && XMLData.game =~ /^DR/
+          respond "\n--- dependency found in autostart list. It can be removed from here, as it's no longer used.\n\n---"
           next
         else
           Script.start(script_info[:name], :args => script_info[:args])
