@@ -138,7 +138,7 @@ if script.vars.empty?
         if script_info[:name] == 'infomon' || script_info[:name] == 'repository'
           next
         elsif script_info[:name] == 'dependency' && XMLData.game =~ /^DR/
-          respond "\n--- dependency found in autostart list. It can be removed from here, as it's no longer used.\n\n---"
+          respond "\n--- dependency found in autostart list. It can be removed from here, as it's no longer used. It can be safely removed with ';autostart remove --global dependency'"
           next
         else
           Script.start(script_info[:name], :args => script_info[:args])
