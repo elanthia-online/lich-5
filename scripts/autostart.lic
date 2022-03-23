@@ -138,7 +138,7 @@ if script.vars.empty?
         if script_info[:name] == 'infomon' || script_info[:name] == 'repository'
           next
         elsif script_info[:name] == 'dependency' && XMLData.game =~ /^DR/
-          respond "\n--- dependency found in autostart list. Attempting to remove it now. If unsuccessful, it can be safely removed with ';autostart remove --global dependency'"
+          respond "\n--- dependency found in autostart list. Attempting to remove it now. If unsuccessful, it can be safely removed with '#{$clean_lich_char}autostart remove --global dependency'"
           temp_script_list = Settings['scripts']
           if (temp_script_list.class == Array) and (temp_script_info = temp_script_list.find { |s| s[:name] == script_info[:name] })
             temp_script_list.delete(temp_script_info)
