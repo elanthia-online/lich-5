@@ -7,9 +7,12 @@ Entries added here should always be accessible from Lich::Util.feature namespace
     game: Gemstone
     tags: CORE, util, utilities
     required: Lich > 5.0.19
-    version: 1.1.0
+    version: 1.2.0
 
   changelog:
+    v1.2.0 (2022-03-16)
+     * Add Lich::Util.quiet_command to mimic XML version
+     * Removed usage of Timeout::timeout
     v1.1.0 (2022-03-09)
      * Fix silver_count forcing downstream_xml on
     v1.0.0 (2022-03-08)
@@ -53,42 +56,44 @@ module Lich
       save_want_downstream_xml = Script.current.want_downstream_xml
       Script.current.want_downstream = false
       Script.current.want_downstream_xml = true
-
+      ttl = Time.now + timeout
       begin
-        Timeout::timeout(timeout, Interrupt) {
-          DownstreamHook.add(name, proc { |xml|
+          DownstreamHook.add(name, proc { |line|
             if filter
-              if xml =~ end_pattern
+              if line =~ end_pattern
                 DownstreamHook.remove(name)
                 filter = false
-                # result << xml.rstrip if include_end
-                # thread.raise(Interrupt)
-                # next(include_end ? nil : xml)
               else
-                # result << xml.rstrip
                 next(nil)
               end
-            elsif xml =~ start_pattern
+            elsif line =~ start_pattern
               filter = true
-              # result << xml.rstrip
               next(nil)
             else
-              xml
+              line
             end
           })
           fput command
-
-          until (xml = get) =~ start_pattern; end
-          result << xml.rstrip
-          until (xml = get) =~ end_pattern
-            result << xml.rstrip
-          end
+          loop {
+            # non-blocking check, this allows us to 
+            # check the time even when the buffer is empty
+            line = get?
+            break if line && line =~ start_pattern
+            break if Time.now > ttl
+            sleep 0.1 # prevent a tight-loop
+          }
+          result << line.rstrip
+          loop {
+            line = get?
+            if line && line =~ end_pattern
+              result << line.rstrip
+              break
+            end
+            break if Time.now > ttl
+          }
           if include_end
-            result << xml.rstrip
+            result << line.rstrip
           end
-        }
-      rescue Interrupt
-        nil
       ensure
         DownstreamHook.remove(name)
         Script.current.want_downstream_xml = save_want_downstream_xml
@@ -97,49 +102,66 @@ module Lich
       return result
     end
 
-    def self.silver_count(timeout = 3)
-      silence_me unless undo_silence = silence_me
-      result = ''
+    def self.quiet_command(command, start_pattern, end_pattern, include_end = true, timeout = 5)
+      result = []
       name = self.anon_hook
       filter = false
-
-      start_pattern = /^\s*Name\:/
-      end_pattern = /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9,]+)/
+      save_want_downstream = Script.current.want_downstream
+      save_want_downstream_xml = Script.current.want_downstream_xml
+      Script.current.want_downstream = true
+      Script.current.want_downstream_xml = false
       ttl = Time.now + timeout
       begin
-        # main thread
-        DownstreamHook.add(name, proc { |line|
-          if filter
-            if line =~ end_pattern
-              result = $1.dup
-              DownstreamHook.remove(name)
-              filter = false
-            else
+          DownstreamHook.add(name, proc { |line|
+            if filter
+              if line =~ end_pattern
+                DownstreamHook.remove(name)
+                filter = false
+              else
+                next(nil)
+              end
+            elsif line =~ start_pattern
+              filter = true
               next(nil)
+            else
+              line
             end
-          elsif line =~ start_pattern
-            filter = true
-            next(nil)
-          else
-            line
+          })
+          fput command
+          loop {
+            # non-blocking check, this allows us to 
+            # check the time even when the buffer is empty
+            line = get?
+            break if line && line =~ start_pattern
+            break if Time.now > ttl
+            sleep 0.1 # prevent a tight-loop
+          }
+          result << line.rstrip
+          loop {
+            line = get?
+            if line && line =~ end_pattern
+              result << line.rstrip
+              break
+            end
+            break if Time.now > ttl
+          }
+          if include_end
+            result << line.rstrip
           end
-        })
-        # script thread
-        fput 'info'
-        loop {
-          # non-blocking check, this allows us to
-          # check the time even when the buffer is empty
-          line = get?
-          break if line && line =~ start_pattern
-          break if Time.now > ttl
-          sleep 0.1 # prevent a tight-loop
-        }
-
       ensure
         DownstreamHook.remove(name)
-        silence_me if undo_silence
+        Script.current.want_downstream_xml = save_want_downstream_xml
+        Script.current.want_downstream = save_want_downstream
       end
-      return result.gsub(',', '').to_i
+      return result
+    end
+
+
+    def self.silver_count(timeout = 3)
+      silence_me unless undo_silence = silence_me
+      result = Lich::Util.quiet_command_xml("info", /^\s*Name\:/, /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9,]+)/, true, timeout)
+      silence_me if undo_silence
+      return result.find{ |line| line =~ /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9,]+)/}.gsub(',', '').to_i
     end
 
   end
