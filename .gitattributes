@@ -7,5 +7,5 @@ netlify.toml    export-ignore
 # second, let's take a running stab at ignoring a directory
 /lich           export-ignore
 # third, let's ignore a file in a directory
-/data/update-lich5.json
+/data/update-lich5.json   export-ignore
 # next up, consider normalized line endings
