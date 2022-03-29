@@ -7131,7 +7131,7 @@ main_thread = Thread.new {
     $clean_lich_char = ';'
     $clean_lich_char_alt = ','
   end
-  $lich_char = Regexp.union(Regexp.escape($clean_lich_char), Regexp.escape($clean_lich_char_alt))
+  $lich_char = Regexp.union($clean_lich_char, $clean_lich_char_alt)
 
 
   @launch_data = nil
