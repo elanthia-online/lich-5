@@ -7124,8 +7124,15 @@ main_thread = Thread.new {
   test_mode = false
   $SEND_CHARACTER = '>'
   $cmd_prefix = '<c>'
-  $clean_lich_char = $frontend == 'genie' ? ',' : ';'
-  $lich_char = Regexp.escape($clean_lich_char)
+  if $frontend == 'genie'
+    $clean_lich_char = ','
+    $clean_lich_char_alt = ';'
+  else
+    $clean_lich_char = ';'
+    $clean_lich_char_alt = ','
+  end
+  $lich_char = Regexp.union(Regexp.escape($clean_lich_char), Regexp.escape($clean_lich_char_alt))
+
 
   @launch_data = nil
   require_relative("./lib/eaccess.rb")
@@ -7562,6 +7569,13 @@ main_thread = Thread.new {
 
   listener = timeout_thr = nil
 
+=begin
+########
+#
+# Removing as no longer necessary
+#
+########
+
   # 
   # drop superuser privileges
   # OSXLich-Doug - this section causes problems on too many systems.
@@ -7586,6 +7600,7 @@ main_thread = Thread.new {
        end
     end
   end
+=end
       
   # backward compatibility
   if $frontend =~ /^(?:wizard|avalon)$/
