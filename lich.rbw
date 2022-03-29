@@ -7569,13 +7569,6 @@ main_thread = Thread.new {
 
   listener = timeout_thr = nil
 
-=begin
-########
-#
-# Removing as no longer necessary
-#
-########
-
   # 
   # drop superuser privileges
   # OSXLich-Doug - this section causes problems on too many systems.
@@ -7600,7 +7593,6 @@ main_thread = Thread.new {
        end
     end
   end
-=end
       
   # backward compatibility
   if $frontend =~ /^(?:wizard|avalon)$/
