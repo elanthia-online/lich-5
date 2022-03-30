@@ -7125,8 +7125,6 @@ main_thread = Thread.new {
   $SEND_CHARACTER = '>'
   $cmd_prefix = '<c>'
   $clean_lich_char = $frontend == 'genie' ? ',' : ';'
-  # for backwards compatibility, we keep $lich_char defined and matching
-  # since since scripts expect this to be the case.
   $lich_char = Regexp.escape($clean_lich_char)
   $lich_char_regex = Regexp.union(',', ';')
 
