@@ -7124,17 +7124,11 @@ main_thread = Thread.new {
   test_mode = false
   $SEND_CHARACTER = '>'
   $cmd_prefix = '<c>'
-  if $frontend == 'genie'
-    $clean_lich_char = ','
-    $clean_lich_char_alt = ';'
-  else
-    $clean_lich_char = ';'
-    $clean_lich_char_alt = ','
-  end
+  $clean_lich_char = $frontend == 'genie' ? ',' : ';'
   # for backwards compatibility, we keep $lich_char defined and matching
   # since since scripts expect this to be the case.
   $lich_char = $clean_lich_char
-  $lich_char_regex = Regexp.union($clean_lich_char, $clean_lich_char_alt)
+  $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
   require_relative("./lib/eaccess.rb")
