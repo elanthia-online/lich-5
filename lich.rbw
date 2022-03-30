@@ -7127,7 +7127,7 @@ main_thread = Thread.new {
   $clean_lich_char = $frontend == 'genie' ? ',' : ';'
   # for backwards compatibility, we keep $lich_char defined and matching
   # since since scripts expect this to be the case.
-  $lich_char = $clean_lich_char
+  $lich_char = Regexp.escape($clean_lich_char)
   $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
