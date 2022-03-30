@@ -3930,7 +3930,7 @@ def do_client(client_string)
   #   Buffer.update(client_string, Buffer::UPSTREAM_MOD)
   return nil if client_string.nil?
 
-  if client_string =~ /^(?:<c>)?#{$lich_cmd_char}(.+)$/
+  if client_string =~ /^(?:<c>)?#{$lich_cmd_char_regex}(.+)$/
     cmd = $1
     if cmd =~ /^k$|^kill$|^stop$/
       if Script.running.empty?
@@ -7131,8 +7131,10 @@ main_thread = Thread.new {
     $clean_lich_char = ';'
     $clean_lich_char_alt = ','
   end
+  # for backwards compatibility, we keep $lich_char defined and matching
+  # since since scripts expect this to be the case.
   $lich_char = $clean_lich_char
-  $lich_cmd_char = Regexp.union($clean_lich_char, $clean_lich_char_alt)
+  $lich_cmd_char_regex = Regexp.union($clean_lich_char, $clean_lich_char_alt)
 
   @launch_data = nil
   require_relative("./lib/eaccess.rb")
