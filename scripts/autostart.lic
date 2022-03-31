@@ -90,12 +90,12 @@ if XMLData.game =~ /^DR/
   end
   if did_dependency_install.nil?
     unless File.exist?("#{SCRIPT_DIR}/dependency.lic")
-      _respond("<pushBold/>DR First run detected. Downloading dependency.<popBold/>")
+      Lich::Messaging.monsterbold("DR First run detected. Downloading dependency.")
       Script.run('repository', 'download dependency')
       sleep 1
     end
     unless File.exist?("#{SCRIPT_DIR}/bootstrap.lic") && File.exist?("#{SCRIPT_DIR}/drinfomon.lic") && File.exist?("#{SCRIPT_DIR}/common.lic") && File.exist?("#{SCRIPT_DIR}/dependency.lic")
-      _respond("<pushBold/>DR First run detected. Performing dependency install. - Please wait until the process finishes completely before proceeding.<popBold/>")
+      Lich::Messaging.monsterbold("DR First run detected. Performing dependency install. - Please wait until the process finishes completely before proceeding.")
       sleep 0.5
       Script.run('dependency', 'install')
     end
@@ -227,11 +227,11 @@ else
   output.concat "\n"
   respond output
   if XMLData.game =~ /^DR/
-  _respond("     <pushBold/>########################################################<popBold/>\n")
-  _respond("     <pushBold/># DR-Scripts do not normally usually use this script.  #<popBold/>\n")
-  _respond("     <pushBold/># Please read the autostart sections in:               #<popBold/>\n")
-  _respond("     <pushBold/># https://elanthipedia.play.net/Lich_script_repository #<popBold/>\n")
-  _respond("     <pushBold/>########################################################<popBold/>\n")
+  Lich::Messaging.monsterbold("     ########################################################")
+  Lich::Messaging.monsterbold("     # DR-Scripts do not normally usually use this script.  #")
+  Lich::Messaging.monsterbold("     # Please read the autostart sections in:               #")
+  Lich::Messaging.monsterbold("     # https://elanthipedia.play.net/Lich_script_repository #")
+  Lich::Messaging.monsterbold("     ########################################################")
   end
 
 end
