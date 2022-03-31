@@ -9,10 +9,12 @@
   contributors: Athias
           game: any
           tags: core
-       version: 0.54
+       version: 0.55
       required: Lich >= 4.6.58
 
   changelog:
+    0.55 (2022-03-31):
+      Added messaging for DR users noting this script isn't normally used with DR-Scripts
     0.54 (2022-03-15):
       Added logic to welcome Dragonrealms.
       DragonRealms/GemstoneIV infomon detection
