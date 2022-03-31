@@ -90,12 +90,12 @@ if XMLData.game =~ /^DR/
   end
   if did_dependency_install.nil?
     unless File.exist?("#{SCRIPT_DIR}/dependency.lic")
-      Lich::Messaging.monsterbold("DR First run detected. Downloading dependency.")
+      _respond Lich::Messaging.monsterbold("DR First run detected. Downloading dependency.")
       Script.run('repository', 'download dependency')
       sleep 1
     end
     unless File.exist?("#{SCRIPT_DIR}/bootstrap.lic") && File.exist?("#{SCRIPT_DIR}/drinfomon.lic") && File.exist?("#{SCRIPT_DIR}/common.lic") && File.exist?("#{SCRIPT_DIR}/dependency.lic")
-      Lich::Messaging.monsterbold("DR First run detected. Performing dependency install. - Please wait until the process finishes completely before proceeding.")
+      _respond Lich::Messaging.monsterbold("DR First run detected. Performing dependency install. - Please wait until the process finishes completely before proceeding.")
       sleep 0.5
       Script.run('dependency', 'install')
     end
@@ -227,11 +227,11 @@ else
   output.concat "\n"
   respond output
   if XMLData.game =~ /^DR/
-  Lich::Messaging.monsterbold("     ########################################################")
-  Lich::Messaging.monsterbold("     # DR-Scripts do not normally usually use this script.  #")
-  Lich::Messaging.monsterbold("     # Please read the autostart sections in:               #")
-  Lich::Messaging.monsterbold("     # https://elanthipedia.play.net/Lich_script_repository #")
-  Lich::Messaging.monsterbold("     ########################################################")
+    _respond Lich::Messaging.monsterbold("     ########################################################")
+    _respond Lich::Messaging.monsterbold("     # DR-Scripts do not normally usually use this script.  #")
+    _respond Lich::Messaging.monsterbold("     # Please read the autostart sections in:               #")
+    _respond Lich::Messaging.monsterbold("     # https://elanthipedia.play.net/Lich_script_repository #")
+    _respond Lich::Messaging.monsterbold("     ########################################################")
   end
 
 end
