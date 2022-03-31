@@ -88,12 +88,12 @@ if XMLData.game =~ /^DR/
   end
   if did_dependency_install.nil?
     unless File.exist?("#{SCRIPT_DIR}/dependency.lic")
-      _respond("<pushBold/>DR First run detected. Downloading dependency<popBold/>")
+      _respond("<pushBold/>DR First run detected. Downloading dependency.<popBold/>")
       Script.run('repository', 'download dependency')
       sleep 1
     end
     unless File.exist?("#{SCRIPT_DIR}/bootstrap.lic") && File.exist?("#{SCRIPT_DIR}/drinfomon.lic") && File.exist?("#{SCRIPT_DIR}/common.lic") && File.exist?("#{SCRIPT_DIR}/dependency.lic")
-      _respond("<pushBold/>DR First run detected. Performing dependency install - Please wait until the process finishes completely before proceeding.<popBold/>")
+      _respond("<pushBold/>DR First run detected. Performing dependency install. - Please wait until the process finishes completely before proceeding.<popBold/>")
       sleep 0.5
       Script.run('dependency', 'install')
     end
