@@ -7011,6 +7011,7 @@ if arg = ARGV.find { |a| (a == '-g') or (a == '--game') }
     $frontend = 'unknown'
   end
 elsif ARGV.include?('--gemstone')
+  require_relative("./lib/map_gs.rb")
   if ARGV.include?('--platinum')
     $platinum = true
     if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
@@ -7075,6 +7076,7 @@ elsif ARGV.include?('--fallen')
     exit
   end
 elsif ARGV.include?('--dragonrealms')
+  require_relative("./lib/map_dr.rb")
   if ARGV.include?('--platinum')
     $platinum = true
     if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
@@ -7243,10 +7245,8 @@ main_thread = Thread.new {
   if @launch_data
     if @launch_data.find { |opt| opt =~ /GAMECODE=DR/ }
       gamecodeshort = "DR"
-      require_relative("./lib/map_dr.rb")
     else
       gamecodeshort = "GS"
-      require_relative("./lib/map_gs.rb")
     end
     unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
