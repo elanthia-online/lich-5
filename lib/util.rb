@@ -48,14 +48,19 @@ module Lich
       "Util::#{prefix}-#{now}-#{Random.rand(10000)}"
     end
 
-    def self.quiet_command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5)
+    def self.quiet_command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true)
       result = []
       name = self.anon_hook
       filter = false
+      if silent
+        save_script_silent = Script.current.silent
+        Script.current.silent = true
+      end
       save_want_downstream = Script.current.want_downstream
       save_want_downstream_xml = Script.current.want_downstream_xml
       Script.current.want_downstream = false
       Script.current.want_downstream_xml = true
+      
       ttl = Time.now + timeout
       begin
           DownstreamHook.add(name, proc { |line|
@@ -78,34 +83,40 @@ module Lich
             # non-blocking check, this allows us to 
             # check the time even when the buffer is empty
             line = get?
-            break if line && line =~ start_pattern
-            break if Time.now > ttl
-            sleep 0.1 # prevent a tight-loop
-          }
-          result << line.rstrip
-          loop {
-            line = get?
-            if line && line =~ end_pattern
+            if line && line =~ start_pattern
               result << line.rstrip
               break
             end
             break if Time.now > ttl
+            sleep 0.1 # prevent a tight-loop
           }
-          if include_end
-            result << line.rstrip
-          end
+          loop {
+            line = get?
+            if line && line =~ end_pattern
+              result << line.rstrip if include_end
+              break
+            elsif line
+              result << line.rstrip
+            end
+            break if Time.now > ttl
+          }
       ensure
         DownstreamHook.remove(name)
         Script.current.want_downstream_xml = save_want_downstream_xml
         Script.current.want_downstream = save_want_downstream
+        Script.current.silent = save_script_silent if silent
       end
       return result
     end
 
-    def self.quiet_command(command, start_pattern, end_pattern, include_end = true, timeout = 5)
+    def self.quiet_command(command, start_pattern, end_pattern, include_end = true, timeout = 5, silent = true)
       result = []
       name = self.anon_hook
       filter = false
+      if silent
+        save_script_silent = Script.current.silent
+        Script.current.silent = true
+      end
       save_want_downstream = Script.current.want_downstream
       save_want_downstream_xml = Script.current.want_downstream_xml
       Script.current.want_downstream = true
@@ -132,26 +143,28 @@ module Lich
             # non-blocking check, this allows us to 
             # check the time even when the buffer is empty
             line = get?
-            break if line && line =~ start_pattern
-            break if Time.now > ttl
-            sleep 0.1 # prevent a tight-loop
-          }
-          result << line.rstrip
-          loop {
-            line = get?
-            if line && line =~ end_pattern
+            if line && line =~ start_pattern
               result << line.rstrip
               break
             end
             break if Time.now > ttl
+            sleep 0.1 # prevent a tight-loop
           }
-          if include_end
-            result << line.rstrip
-          end
+          loop {
+            line = get?
+            if line && line =~ end_pattern
+              result << line.rstrip if include_end
+              break
+            elsif line
+              result << line.rstrip
+            end
+            break if Time.now > ttl
+          }
       ensure
         DownstreamHook.remove(name)
         Script.current.want_downstream_xml = save_want_downstream_xml
         Script.current.want_downstream = save_want_downstream
+        Script.current.silent = save_script_silent if silent
       end
       return result
     end
