@@ -128,4 +128,81 @@ class Shield
     !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Strained Muscles')
   end
 
+  @@regex_hash = {
+	"adamantine_bulwark"        => /Adamantine Bulwark does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+	"block_the_elements"        => /Block the Elements does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+	"deflect_magic"             => /Deflect Magic does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization./i,
+	"deflect_missiles"          => /Deflect Missiles does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization./i,
+	"deflect_the_elements"      => /Deflect the Elements does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+	"disarming_presence"        => /You assume the Disarming Presence Stance, adjusting your footing and grip to allow for the proper pivot and thrust technique to disarm attacking foes.|You re-settle into the Disarming Presence Stance, re-ensuring your footing and grip are properly positioned./i,
+	"guard_mastery"             => /Guard Mastery does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+	"large_shield_focus"        => /Large Shield Focus does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+	"medium_shield_focus"       => /Medium Shield Focus does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+	"phalanx"                   => /Phalanx does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+	"prop_up"                   => /Prop Up does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization./i,
+	"protective_wall"           => /Protective Wall does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+	"shield_bash"               => /Shield Bash what?|You lunge forward at (.*) with your (.*) and attempt a shield bash\!/i,
+	"shield_charge"             => /You charge forward at (.*) with your (.*) and attempt a shield charge!/i,
+	"shield_forward"            => /Shield Forward does not need to be activated once you have learned it.  It will automatically activate upon the use of a shield attack./i,
+	"shield_mind"               => /You must be wielding an ensorcelled or anti-magical shield to be able to properly shield your mind and soul.|/i,
+	"shield_pin"                => /You attempt to expose a vulnerability with a diversionary shield bash on (.*)\!/i,
+	"shield_push"               => /You raise your (.*) before you and attempt to push (.*) away!/i,
+	"shield_riposte"            => /You assume the Shield Riposte Stance, preparing yourself to lash out at a moment's notice.|You re\-settle into the Shield Riposte Stance, preparing yourself to lash out at a moment's notice./i,
+	"shield_spike_mastery"      => /Shield Spike Mastery does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+	"shield_strike"             => /You launch a quick bash with your (.*) at (.*)\!/i,
+	"shield_strike_mastery"     => /Shield Strike Mastery does not need to be activated once you have learned it.  It will automatically apply to all relevant focused multi-attacks, provided that you maintain the prerequisite ranks of Shield Bash./i,
+	"shield_swiftness"          => /Shield Swiftness does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks, provided that you are wielding a small or medium shield and have at least 3 ranks of the relevant Shield Focus specialization./i,
+	"shield_throw"              => /You snap your arm forward, hurling your (.*) at (.*) with all your might\!/i,
+	"shield_trample"            => /You raise your (.*) before you and charge headlong towards (.*)\!/i,
+	"shielded_brawler"          => /Shielded Brawler does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization./i,
+	"small_shield_focus"        => /Small Shield Focus does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+	"spell_block"               => /Spell Block does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization./i,
+	"steady_shield"             => /Steady Shield does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks against you, provided that you maintain the prerequisite ranks of Stun Maneuvers./i,
+	"steely_resolve"            => /You focus your mind in a steely resolve to block all attacks against you.|You are still mentally fatigued from your last invocation of your Steely Resolve./i,
+	"tortoise_stance"           => /You assume the Stance of the Tortoise, holding back some of your offensive power in order to maximize your defense.|You re\-settle into the Stance of the Tortoise, holding back your offensive power in order to maximize your defense./i,
+	"tower_shield_focus"        => /Tower Shield Focus does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+  }
+  
+  @@usage_hash = {
+	"adamantine_bulwark"     => nil,
+	"block_the_elements"     => nil,
+	"deflect_magic"          => nil,
+	"deflect_missiles"       => nil,
+	"deflect_the_elements"   => nil,
+	"disarming_presence"     => "dpresence",
+	"guard_mastery"          => nil,
+	"large_shield_focus"     => nil,
+	"medium_shield_focus"    => nil,
+	"phalanx"                => nil,
+	"prop_up"                => nil,
+	"protective_wall"        => nil,
+	"shield_bash"            => "bash",
+	"shield_charge"          => "charge",
+	"shield_forward"         => "forward",
+	"shield_mind"            => "mind",
+	"shield_pin"             => "pin attack",
+	"shield_push"            => "push",
+	"shield_riposte"         => "riposte",
+	"shield_spike_mastery"   => nil,
+	"shield_strike"          => "strike",
+	"shield_strike_mastery"  => nil,
+	"shield_swiftness"       => nil,
+	"shield_throw"           => "throw",
+	"shield_trample"         => "trample",
+	"shielded_brawler"       => nil,
+	"small_shield_focus"     => nil,
+	"spell_block"            => nil,
+	"steady_shield"          => nil,
+	"steely_resolve"         => "resolve",
+	"tortoise_stance"        => "tortoise",
+	"tower_shield_focus"     => nil,
+  }
+
+  def Shield.use(name, target = "")
+    usage = @@usage_hash.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)
+    return if usage.nil?
+    return unless Shield.available?(name)
+    dothistimeout("shield #{usage} #{target}", 3, @@regex_hash.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase))
+  end
+
 end
