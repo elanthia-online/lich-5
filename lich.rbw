@@ -6996,9 +6996,9 @@ if argv_options[:sal]
   end
 end
 
-if ARGV.include?('--gemstone') || ARGV.include?('--shattered') || 
+if ARGV.include?('--gemstone') || ARGV.include?('--shattered')
   require_relative("./lib/map_gs.rb")
-elsif ARGV.include?('--dragonrealms') || ARGV.include?('--fallen') || 
+elsif ARGV.include?('--dragonrealms') || ARGV.include?('--fallen')
   require_relative("./lib/map_dr.rb")
 end
 
