@@ -1,1 +1,11 @@
 *.lic linguist-language=Ruby
+# let's gussy this up a bit for a working zip / tarball release
+# first, let's ignore files we don't want in the zip
+.git*           export-ignore
+README.adoc     export-ignore
+netlify.toml    export-ignore
+# second, let's take a running stab at ignoring a directory
+/lich           export-ignore
+# third, let's ignore a file in a directory
+/data/update-lich5.json   export-ignore
+# next up, consider normalized line endings
