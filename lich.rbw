@@ -7081,7 +7081,6 @@ elsif ARGV.include?('--fallen')
     exit
   end
 elsif ARGV.include?('--dragonrealms')
-  require_relative("./lib/map_dr.rb")
   if ARGV.include?('--platinum')
     $platinum = true
     if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
