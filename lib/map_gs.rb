@@ -479,35 +479,31 @@ class Map
     Map.load
   end
   def Map.load(filename=nil)
-    if $SAFE == 0
-      if filename.nil?
-        file_list = Dir.entries("#{DATA_DIR}/#{XMLData.game}").find_all { |filename| filename =~ /^map\-[0-9]+\.(?:dat|xml|json)$/i }.collect { |filename| "#{DATA_DIR}/#{XMLData.game}/#{filename}" }.sort.reverse
+    if filename.nil?
+      file_list = Dir.entries("#{DATA_DIR}/#{XMLData.game}").find_all { |filename| filename =~ /^map\-[0-9]+\.(?:dat|xml|json)$/i }.collect { |filename| "#{DATA_DIR}/#{XMLData.game}/#{filename}" }.sort.reverse
+    else
+      file_list = [ filename ]
+    end
+    if file_list.empty?
+      respond "--- Lich: error: no map database found"
+      return false
+    end
+    while filename = file_list.shift
+      if filename =~ /\.json$/i
+        if Map.load_json(filename)
+          return true
+        end
+      elsif filename =~ /\.xml$/
+        if Map.load_xml(filename)
+          return true
+        end
       else
-        file_list = [ filename ]
-      end
-      if file_list.empty?
-        respond "--- Lich: error: no map database found"
-        return false
-      end
-      while filename = file_list.shift
-        if filename =~ /\.json$/i
-          if Map.load_json(filename)
-            return true
-          end
-        elsif filename =~ /\.xml$/
-          if Map.load_xml(filename)
-            return true
-          end
-        else
-          if Map.load_dat(filename)
-            return true
-          end
+        if Map.load_dat(filename)
+          return true
         end
       end
-      return false
-    else
-      @@elevated_load.call
     end
+    return false
   end
   def Map.load_json(filename=nil)
     if $SAFE == 0
