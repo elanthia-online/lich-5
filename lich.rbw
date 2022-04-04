@@ -6996,6 +6996,12 @@ if argv_options[:sal]
   end
 end
 
+if ARGV.include?('--gemstone') || ARGV.include?('--shattered') || 
+  require_relative("./lib/map_gs.rb")
+elsif ARGV.include?('--dragonrealms') || ARGV.include?('--fallen') || 
+  require_relative("./lib/map_dr.rb")
+end
+
 if arg = ARGV.find { |a| (a == '-g') or (a == '--game') }
   game_host, game_port = ARGV[ARGV.index(arg) + 1].split(':')
   game_port = game_port.to_i
@@ -7011,7 +7017,6 @@ if arg = ARGV.find { |a| (a == '-g') or (a == '--game') }
     $frontend = 'unknown'
   end
 elsif ARGV.include?('--gemstone')
-  require_relative("./lib/map_gs.rb")
   if ARGV.include?('--platinum')
     $platinum = true
     if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
@@ -7242,11 +7247,13 @@ main_thread = Thread.new {
     end
   end
 
-  if @launch_data
+  if @launch_data && (!@launch_data.nil? || !@launch_data.empty?)
     if @launch_data.find { |opt| opt =~ /GAMECODE=DR/ }
       gamecodeshort = "DR"
+      require_relative("./lib/map_dr.rb")
     else
       gamecodeshort = "GS"
+      require_relative("./lib/map_gs.rb")
     end
     unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
