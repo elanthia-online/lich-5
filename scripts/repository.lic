@@ -10,10 +10,12 @@
   contributors: SpiffyJr (theman@spiffyjr.me)
           game: any
           tags: core
-       version: 2.37
+       version: 2.38
 
   changelog:
                       
+    2.38 (2022-04-03):
+      add data folder support for .ui files
     2.37 (2022-03-13):
       changed updatables 
     2.36 (2020-12-19):
@@ -956,7 +958,7 @@ download_file = proc { |file,game,version|
       false
     else
       response['size'] = response['size'].to_i
-      if (file =~ /\.xml$/i) and (LICH_VERSION.split('.').collect { |num| num.rjust(5, '0') }.join('.') >= '00004.00006.00000')
+      if (file =~ /\.(?:ui|xml)$/i) and (LICH_VERSION.split('.').collect { |num| num.rjust(5, '0') }.join('.') >= '00004.00006.00000')
         newfilename = "#{$data_dir}#{file}"
       else
         newfilename = "#{$script_dir}#{file}"
@@ -1200,7 +1202,7 @@ elsif cmd[0] =~ /^list-?update[sd]$/i
     exit
   end
   list.delete_if { |row|
-    if (row[fi] =~ /\.xml$/i) and (LICH_VERSION.split('.').collect { |n| n.rjust(5,'0') }.join('.') >= '00004.00006.00000')
+    if (row[fi] =~ /\.(?:ui|xml)$/i) and (LICH_VERSION.split('.').collect { |n| n.rjust(5,'0') }.join('.') >= '00004.00006.00000')
       not File.exists?("#{$data_dir}#{row[fi]}") or ((File.mtime("#{$data_dir}#{row[fi]}").to_i + 15) > row[lui].to_i)
     else
       not File.exists?("#{$script_dir}#{row[fi]}") or ((File.mtime("#{$script_dir}#{row[fi]}").to_i + 15) > row[lui].to_i)
@@ -1225,7 +1227,7 @@ elsif cmd[0] =~ /^list-?new$/i
     exit
   end
   list.delete_if { |row|
-    if (row[fi] =~ /\.xml$/i) and (LICH_VERSION.split('.').collect { |num| num.rjust(5, '0') }.join('.') >= '00004.00006.00000')
+    if (row[fi] =~ /\.(?:ui|xml)$/i) and (LICH_VERSION.split('.').collect { |num| num.rjust(5, '0') }.join('.') >= '00004.00006.00000')
       File.exists?("#{$data_dir}#{row[fi]}")
     else
       File.exists?("#{$script_dir}#{row[fi]}")
@@ -1564,7 +1566,7 @@ elsif (cmd[0] =~ /^upload$/i)
   elsif File.exists?("#{$script_dir}#{cmd[1]}.lic")
     file = "#{cmd[1]}.lic"
     filename = "#{$script_dir}#{cmd[1]}.lic"
-  elsif (cmd[1] =~ /\.xml$/i) and (LICH_VERSION.split('.').collect { |num| num.rjust(5, '0') }.join('.') >= '00004.00006.00000') and File.exists?("#{$data_dir}#{cmd[1]}")
+  elsif (cmd[1] =~ /\.(?:ui|xml)$/i) and (LICH_VERSION.split('.').collect { |num| num.rjust(5, '0') }.join('.') >= '00004.00006.00000') and File.exists?("#{$data_dir}#{cmd[1]}")
     file = "#{cmd[1]}"
     filename = "#{$data_dir}#{cmd[1]}"
   else
