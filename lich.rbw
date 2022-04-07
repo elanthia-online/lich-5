@@ -6996,12 +6996,6 @@ if argv_options[:sal]
   end
 end
 
-if ARGV.include?('--gemstone') || ARGV.include?('--shattered')
-  require_relative("./lib/map_gs.rb")
-elsif ARGV.include?('--dragonrealms') || ARGV.include?('--fallen')
-  require_relative("./lib/map_dr.rb")
-end
-
 if arg = ARGV.find { |a| (a == '-g') or (a == '--game') }
   game_host, game_port = ARGV[ARGV.index(arg) + 1].split(':')
   game_port = game_port.to_i
@@ -7134,6 +7128,15 @@ main_thread = Thread.new {
   $lich_char = Regexp.escape($clean_lich_char)
 
   @launch_data = nil
+  if (@launch_data||{}).find { |opt| opt =~ /GAMECODE=DR/ } || ARGV.include?('--dragonrealms') || ARGV.include?('--fallen')
+    gamecodeshort = "DR"
+    require_relative("./lib/map_dr.rb")
+  elsif ARGV.include?('--gemstone') || ARGV.include?('--shattered') || (@launch_data && !@launch_data.empty?)
+    gamecodeshort = "GS"
+    require_relative("./lib/map_gs.rb")
+  else
+    raise error
+  end
   require_relative("./lib/eaccess.rb")
 
   if ARGV.include?('--login')
@@ -7246,14 +7249,7 @@ main_thread = Thread.new {
     end
   end
 
-  if @launch_data && (!@launch_data.nil? || !@launch_data.empty?)
-    if @launch_data.find { |opt| opt =~ /GAMECODE=DR/ }
-      gamecodeshort = "DR"
-      require_relative("./lib/map_dr.rb")
-    else
-      gamecodeshort = "GS"
-      require_relative("./lib/map_gs.rb")
-    end
+  if @launch_data && !@launch_data.empty?
     unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
       Lich.log "error: launch_data contains no GAMECODE info"
