@@ -7135,7 +7135,7 @@ main_thread = Thread.new {
     gamecodeshort = "GS"
     require_relative("./lib/map_gs.rb")
   else
-    raise error
+    echo "Could not determine game instance. Please report this as a bug."
   end
   require_relative("./lib/eaccess.rb")
 
