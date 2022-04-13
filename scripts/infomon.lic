@@ -9,13 +9,15 @@
           game: Gemstone
           tags: core
       required: Lich > 5.0.16
-       version: 1.18.13
+       version: 1.18.14
         Source: https://github.com/elanthia-online/jinx
     Alt Source: https://github.com/elanthia-online/lich-5
 
   Version Control:
     Major_change.feature_addition.bugfix
 
+  1.18.14 (2022-04-13)
+    Updated to use update.rb for lich5-update process
   1.18.13 (2022-03-09):
     Fix for 520/712 ShowSpellNames flag being off
   1.18.12 (2022-02-04):
@@ -267,11 +269,15 @@ Spellsong.load_serialized = CharSettings['Spellsong'] if CharSettings['Spellsong
 
 #
 # Register ;magic and ;banks commands
+# Register ;lich5-update and ;l5u commands only for Lich version > 5.5.0
 #
 action = proc { |client_string|
-  if client_string =~ /^(?:<c>)?#{$lich_char}((?:magic|banks).*)/i
+  if client_string =~ /^(?:<c>)?#{$lich_char}((?:magic|banks).*)/i ||\
+    (client_string =~ /^(?:<c>)?#{$lich_char}((?:lich5-update|l5u).*)/i &&\
+    Gem::Version.new(LICH_VERSION) > Gem::Version.new('5.5.0'))
+    $1.dup.nil? ? registered_command = $2.dup : registered_command = $1.dup
     if scr = (Script.running + Script.hidden).find { |val| val.name == 'infomon' }
-      scr.downstream_buffer.shove("#{$clean_lich_char}#{$1}")
+      scr.downstream_buffer.shove("#{$clean_lich_char}#{registered_command}")
     else
       UpstreamHook.remove('infomon')
     end
@@ -516,6 +522,10 @@ while line = get
       echo "other_invoke.delete(#{$1.inspect}) => #{other_invoke.inspect}" if $infomon_debug
     elsif line =~ /^Your songs? renews?/
       Spellsong.renewed
+    elsif line =~ /^#{$lich_char}(?:lich5-update|l5u)\s?((?:--announce|--update|--snapshot|--update|--revert|-a|-u|-s|-u|-r|--script=)?.*)$/i
+      update_parameter = $1.dup
+      require 'lib/update.rb'
+      Lich::Util::Update.request("#{update_parameter}")
     elsif mobj = /^#{$lich_char}magic\s?(clear|set|reset|help|circles|bonus|bonuses|messages|update|load|save|gift|cleanup)?\s?([^\s]+|#{Spell.list.collect { |spell| Regexp.escape(spell.name) }.join('|')})?\s?(\d+\.?\d?\d?)?$/oi.match(line)
       begin
         if mobj.captures.first.nil? or mobj.captures.first =~ /cleanup/i
