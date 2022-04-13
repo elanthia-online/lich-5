@@ -2160,7 +2160,7 @@ def do_client(client_string)
       respond("--- Lich: toggle #{toggle_var} set #{set_state}") if did_something
       did_something = false
       nil
-    elsif ( cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i && Gem::Version.new(LICH_VERSION) > Gem::Version.new('5.5.0') )
+    elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
       require 'lib/update.rb'
       Lich::Util::Update.request("#{update_parameter}")
@@ -2210,10 +2210,8 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}send to <script> <line>   send a line to a specific script"
       respond
       respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
-      if (LICH_VERSION =~ /^5/) && Gem::Version.new(LICH_VERSION) > Gem::Version.new('5.5.0')
-        respond "   #{$clean_lich_char}lich5-update --<command> Lich5 ecosystem management "
-        respond "                                               see #{$clean_lich_char}lich5-update --help"
-      end
+      respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
+      respond "                                                see #{$clean_lich_char}lich5-update --help"
       respond
       respond 'If you liked this help message, you might also enjoy:'
       respond "   #{$clean_lich_char}lnet help"
