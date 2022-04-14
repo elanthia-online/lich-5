@@ -293,7 +293,37 @@ class Shield
     return unless Shield.available?(name)
     usage = @@shield_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:usage]
     return if usage.nil?
-    dothistimeout("shield #{usage} #{target}", 3, @@shield_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex])
+    
+    results_regex = Regexp.union(
+      @@shield_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
+      /^#{name} what\?$/i,
+      /^Roundtime: [0-9]+ sec\.$/,
+      /^And give yourself away!  Never!$/,
+      /^You are unable to do that right now\.$/,
+      /^You don't seem to be able to move to do that\.$/,
+      /^Provoking a GameMaster is not such a good idea\.$/,
+      /^You do not currently have a target\.$/,
+    )
+    usage_cmd = "shield #{usage}"
+    if target.class == GameObj
+      usage_cmd += " ##{target.id}"
+    elsif target.class == Integer
+      usage_cmd += " ##{target}"
+    elsif target != ""
+      usage_cmd += " #{target}"
+    end
+    usage_result = nil
+    loop {
+      waitrt?
+      waitcastrt?
+      usage_result = dothistimeout usage_cmd, 5, results_regex
+      if usage_result == "You don't seem to be able to move to do that."
+        100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
+        usage_result = dothistimeout usage_cmd, 5, results_regex
+      end
+      break
+    }
+    usage_result
   end
 
 end
