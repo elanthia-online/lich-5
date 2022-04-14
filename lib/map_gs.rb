@@ -284,6 +284,7 @@ class Map
     room = Map[Map.match_multi_ids(ids)] if ids.size > 1
     room = Map[Map.match_current(Script.current)] if room.nil?;
     if !room.nil? # existing room
+      room = Map[id]
       if !room.uid.include?(XMLData.room_id)
         room.uid << XMLData.room_id
         Map.uids_add(XMLData.room_id,room.id)
