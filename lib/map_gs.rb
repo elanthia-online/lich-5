@@ -283,7 +283,7 @@ class Map
     id = ids[0] if ids.size == 1;
     id = Map.match_multi_ids(ids) if ids.size > 1;
     id = Map.match_current(Script.current) if id.nil?;
-    if !room.nil? # existing room
+    if !id.nil? # existing room
       room = Map[id]
       if !room.uid.include?(XMLData.room_id)
         room.uid << XMLData.room_id
