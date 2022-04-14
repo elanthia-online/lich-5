@@ -280,9 +280,9 @@ class Map
     Map.load unless @@loaded
     ids = Map.ids_from_uid(XMLData.room_id);
     room = nil
-    room = Map[ids[0]] if ids.size == 1
-    room = Map[Map.match_multi_ids(ids)] if ids.size > 1
-    room = Map[Map.match_current(Script.current)] if room.nil?;
+    id = ids[0] if ids.size == 1;
+    id = Map.match_multi_ids(ids) if ids.size > 1;
+    id = Map.match_current(Script.current) if id.nil?;
     if !room.nil? # existing room
       room = Map[id]
       if !room.uid.include?(XMLData.room_id)
