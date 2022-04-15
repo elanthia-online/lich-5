@@ -30,11 +30,11 @@ jobs:
           curl https://extras.repo.elanthia.online/assets/infomon.lic > scripts/infomon.lic
           curl https://extras.repo.elanthia.online/assets/go2.lic > scripts/go2.lic
       - name: Release
-          uses: softprops/action-gh-release@v1
-          with:
-            body: ${{steps.build_changelog.outputs.changelog}}
-            draft: true
-            prerelease: false
-            token: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-            files: |
-              .*
+        uses: softprops/action-gh-release@v1
+        with:
+          body: ${{steps.build_changelog.outputs.changelog}}
+          draft: true
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+          files: |
+            .*
