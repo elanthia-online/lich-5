@@ -13,7 +13,8 @@
       required: Lich >= 4.6.58
 
   changelog:
-    0.55 (2022-03-23):
+    0.55 (2022-03-31):
+      Added messaging for DR users noting this script isn't normally used with DR-Scripts
       Adding check for dependency, with note.
     0.54 (2022-03-15):
       Added logic to welcome Dragonrealms.
@@ -90,10 +91,12 @@ if XMLData.game =~ /^DR/
   end
   if did_dependency_install.nil?
     unless File.exist?("#{SCRIPT_DIR}/dependency.lic")
+      _respond Lich::Messaging.monsterbold("DR First run detected. Downloading dependency.")
       Script.run('repository', 'download dependency')
       sleep 1
     end
     unless File.exist?("#{SCRIPT_DIR}/bootstrap.lic") && File.exist?("#{SCRIPT_DIR}/drinfomon.lic") && File.exist?("#{SCRIPT_DIR}/common.lic") && File.exist?("#{SCRIPT_DIR}/dependency.lic")
+      _respond Lich::Messaging.monsterbold("DR First run detected. Performing dependency install. - Please wait until the process finishes completely before proceeding.")
       sleep 0.5
       Script.run('dependency', 'install')
     end
@@ -104,7 +107,7 @@ if XMLData.game =~ /^DR/
       retry
     end
   else
-    Script.start('dependency')
+    Script.start('dependency') unless Script.running?('dependency')
     sleep 1
   end
 end
@@ -239,4 +242,12 @@ else
   output.concat "     #{$clean_lich_char}autostart list\n"
   output.concat "\n"
   respond output
+  if XMLData.game =~ /^DR/
+    _respond Lich::Messaging.monsterbold("     ########################################################")
+    _respond Lich::Messaging.monsterbold("     # DR-Scripts do not normally usually use this script.  #")
+    _respond Lich::Messaging.monsterbold("     # Please read the autostart sections in:               #")
+    _respond Lich::Messaging.monsterbold("     # https://elanthipedia.play.net/Lich_script_repository #")
+    _respond Lich::Messaging.monsterbold("     ########################################################")
+  end
+
 end
