@@ -3510,8 +3510,8 @@ def respond(first = "", *messages)
     end
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
-    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
-    if $frontend == 'stormfront' || $frontend == 'genie'
+#    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
+    if $frontend == 'stormfront' # || $frontend == 'genie'
       str = "<output class=\"mono\"/>\r\n#{str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')}<output class=\"\"/>\r\n"
     elsif $frontend == 'profanity'
       str = str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
@@ -3549,7 +3549,7 @@ def _respond(first = "", *messages)
     else
       str += sprintf("%s\r\n", first.to_s.chomp)
     end
-    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
+#    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) } # fixme: strip/separate script output?
     str_sent = false
@@ -3930,7 +3930,7 @@ def do_client(client_string)
   #   Buffer.update(client_string, Buffer::UPSTREAM_MOD)
   return nil if client_string.nil?
 
-  if client_string =~ /^(?:<c>)?#{$lich_char}(.+)$/
+  if client_string =~ /^(?:<c>)?#{$lich_char_regex}(.+)$/
     cmd = $1
     if cmd =~ /^k$|^kill$|^stop$/
       if Script.running.empty?
@@ -4588,6 +4588,7 @@ module Games
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
 
                 if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
+                  require 'lib/map.rb'
                   Script.start('autostart') if Script.exists?('autostart')
                   @@autostarted = true
                 end
@@ -4654,7 +4655,7 @@ module Games
                   stripped_server = strip_xml($_SERVERSTRING_)
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
-                    if Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
+                    if defined?(Map) and Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
                       Map.last_seen_objects = $1  # DR only: copy loot line to Map.last_seen_objects
                     end
                     unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
@@ -7126,6 +7127,7 @@ main_thread = Thread.new {
   $cmd_prefix = '<c>'
   $clean_lich_char = $frontend == 'genie' ? ',' : ';'
   $lich_char = Regexp.escape($clean_lich_char)
+  $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
   require_relative("./lib/eaccess.rb")
@@ -7243,10 +7245,8 @@ main_thread = Thread.new {
   if @launch_data
     if @launch_data.find { |opt| opt =~ /GAMECODE=DR/ }
       gamecodeshort = "DR"
-      require_relative("./lib/map_dr.rb")
     else
       gamecodeshort = "GS"
-      require_relative("./lib/map_gs.rb")
     end
     unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
