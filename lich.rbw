@@ -3930,7 +3930,7 @@ def do_client(client_string)
   #   Buffer.update(client_string, Buffer::UPSTREAM_MOD)
   return nil if client_string.nil?
 
-  if client_string =~ /^(?:<c>)?#{$lich_char}(.+)$/
+  if client_string =~ /^(?:<c>)?#{$lich_char_regex}(.+)$/
     cmd = $1
     if cmd =~ /^k$|^kill$|^stop$/
       if Script.running.empty?
@@ -7126,6 +7126,7 @@ main_thread = Thread.new {
   $cmd_prefix = '<c>'
   $clean_lich_char = $frontend == 'genie' ? ',' : ';'
   $lich_char = Regexp.escape($clean_lich_char)
+  $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
   require_relative("./lib/eaccess.rb")
