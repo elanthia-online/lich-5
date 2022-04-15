@@ -1,8 +1,6 @@
+scripts/
+data/
 backup/
-data/alias.db3
-data/GSIV
-data/entry.dat
-data/simu.pem
 logo.png
 data/lich.db3
 data44/
