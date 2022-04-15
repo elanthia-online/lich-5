@@ -29,6 +29,7 @@ jobs:
           curl https://extras.repo.elanthia.online/assets/jinx.lic > scripts/jinx.lic
           curl https://extras.repo.elanthia.online/assets/infomon.lic > scripts/infomon.lic
           curl https://extras.repo.elanthia.online/assets/go2.lic > scripts/go2.lic
+          ls
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
