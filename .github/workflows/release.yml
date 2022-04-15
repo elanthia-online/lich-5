@@ -24,18 +24,16 @@ jobs:
       - name: Install core scripts
         id: install_core_scripts
         run: |
-          mkdir _release
-          mkdir _release/scripts
-          mkdir _release/data/
-          curl https://extras.repo.elanthia.online/assets/jinx.lic > _release/scripts/jinx.lic
-          curl https://extras.repo.elanthia.online/assets/infomon.lic > _release/scripts/infomon.lic
-          curl https://extras.repo.elanthia.online/assets/go2.lic > _release/scripts/go2.lic
-          cp lich.rbw _release/
-          cp -r lib _release/
-          cp -r lich _release/
-          ls _release/
-          tar -czvf lich.tar.gz _release/
-          zip -r lich.zip _release/
+          mkdir lich5
+          mkdir lich5/scripts
+          mkdir lich5/data/
+          curl https://extras.repo.elanthia.online/assets/jinx.lic > lich5/scripts/jinx.lic
+          curl https://extras.repo.elanthia.online/assets/infomon.lic > lich5/scripts/infomon.lic
+          curl https://extras.repo.elanthia.online/assets/go2.lic > lich5/scripts/go2.lic
+          cp lich.rbw lich5/
+          cp -r lib lich5/
+          tar -czvf lich.tar.gz lich5/
+          zip -r lich.zip lich5/
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
