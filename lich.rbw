@@ -3510,8 +3510,8 @@ def respond(first = "", *messages)
     end
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
-    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
-    if $frontend == 'stormfront' || $frontend == 'genie'
+#    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
+    if $frontend == 'stormfront' # || $frontend == 'genie'
       str = "<output class=\"mono\"/>\r\n#{str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')}<output class=\"\"/>\r\n"
     elsif $frontend == 'profanity'
       str = str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
@@ -3549,7 +3549,7 @@ def _respond(first = "", *messages)
     else
       str += sprintf("%s\r\n", first.to_s.chomp)
     end
-    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
+#    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) } # fixme: strip/separate script output?
     str_sent = false
@@ -3930,7 +3930,7 @@ def do_client(client_string)
   #   Buffer.update(client_string, Buffer::UPSTREAM_MOD)
   return nil if client_string.nil?
 
-  if client_string =~ /^(?:<c>)?#{$lich_char}(.+)$/
+  if client_string =~ /^(?:<c>)?#{$lich_char_regex}(.+)$/
     cmd = $1
     if cmd =~ /^k$|^kill$|^stop$/
       if Script.running.empty?
@@ -4588,6 +4588,7 @@ module Games
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
 
                 if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
+                  require 'lib/map.rb'
                   Script.start('autostart') if Script.exists?('autostart')
                   @@autostarted = true
                 end
@@ -4603,12 +4604,12 @@ module Games
 
                 if alt_string = DownstreamHook.run($_SERVERSTRING_)
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if (Lich.display_lichid or Lich.display_uid) and alt_string =~ /<resource picture=.*roomName/
-                    if (Lich.display_lichid and Lich.display_uid)
+                  if (Lich.display_lichid == true or Lich.display_uid == true) and XMLData.game =~ /^GS/ and alt_string =~ /<resource picture=.*roomName/
+                    if (Lich.display_lichid == true and Lich.display_uid == true)
                       alt_string.sub!(']') {" - #{Map.current.id}] (u#{XMLData.room_id})"}
-                    elsif Lich.display_lichid
+                    elsif Lich.display_lichid == true
                       alt_string.sub!(']') {" - #{Map.current.id}]"}
-                    elsif Lich.display_uid
+                    elsif Lich.display_uid == true
                       alt_string.sub!(']') {"] (u#{XMLData.room_id})"}
                     end
                   end
@@ -4652,8 +4653,8 @@ module Games
                   stripped_server = strip_xml($_SERVERSTRING_)
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
-                    if Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
-                      Map.last_seen_objects = $1  # DR only: copy loot line to Map.last_seen_objects 
+                    if defined?(Map) and Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
+                      Map.last_seen_objects = $1  # DR only: copy loot line to Map.last_seen_objects
                     end
                     unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
                       Script.new_downstream(line) unless line.empty?
@@ -7124,6 +7125,7 @@ main_thread = Thread.new {
   $cmd_prefix = '<c>'
   $clean_lich_char = $frontend == 'genie' ? ',' : ';'
   $lich_char = Regexp.escape($clean_lich_char)
+  $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
   require_relative("./lib/eaccess.rb")
@@ -7153,16 +7155,20 @@ main_thread = Thread.new {
       end
     elsif ARGV.include?('--shattered')
       data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
+    elsif ARGV.include?('--dragonrealms')
+      if ARGV.include?('--platinum')
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRX') }
+      elsif ARGV.include?('--fallen')
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
+      elsif ARGV.include?('--test')
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRT') }
+      else
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
+      end
+    elsif ARGV.include?('--fallen')
+      data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
     else
       data = entry_data.find { |d| (d[:char_name] == char_name) }
-    end
-    unless data
-      data = { char_name: char_name }
-      data[:game_code] = "DR"
-      user_id = ARGV[ARGV.index('--user_id')+1]
-      data[:user_id] = user_id
-      password = ARGV[ARGV.index('--password')+1]
-      data[:password] = password
     end
     if data
       Lich.log "info: using quick game entry settings for #{char_name}"
@@ -7237,10 +7243,8 @@ main_thread = Thread.new {
   if @launch_data
     if @launch_data.find { |opt| opt =~ /GAMECODE=DR/ }
       gamecodeshort = "DR"
-      require_relative("./lib/map_dr.rb")
     else
       gamecodeshort = "GS"
-      require_relative("./lib/map_gs.rb")
     end
     unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
@@ -7558,22 +7562,29 @@ main_thread = Thread.new {
 
   #
   # drop superuser privileges
+  # OSXLich-Doug - this section causes problems on too many systems.
+  # Putting in a patch courtesy a player
   #
-  unless (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
-    Lich.log "info: dropping superuser privileges..."
-    begin
-      Process.uid = `id -ru`.strip.to_i
-      Process.gid = `id -rg`.strip.to_i
-      Process.egid = `id -rg`.strip.to_i
-      Process.euid = `id -ru`.strip.to_i
-    rescue SecurityError
-      Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    rescue SystemCallError
-      Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    rescue
-      Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+  unless RUBY_PLATFORM =~ /darwin/i
+    if RUBY_PLATFORM =~ /mingw|win/i
+      Lich.log "info: dropping superuser privileges..."
+      begin
+        Process.uid = `id -ru`.strip.to_i
+        Process.gid = `id -rg`.strip.to_i
+        Process.egid = `id -rg`.strip.to_i
+        Process.euid = `id -ru`.strip.to_i
+      rescue SecurityError
+        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      rescue SystemCallError
+        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      rescue NotImplementedError
+        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      rescue
+        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+       end
     end
   end
+
   # backward compatibility
   if $frontend =~ /^(?:wizard|avalon)$/
     $fake_stormfront = true
@@ -7784,7 +7795,7 @@ main_thread = Thread.new {
           server = TCPServer.new('127.0.0.1', detachable_client_port)
           char_name = ARGV[ARGV.index('--login')+1].capitalize
           Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
-          
+
           $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(server.accept)
           $_DETACHABLE_CLIENT_.sync = true
         rescue
@@ -7800,40 +7811,42 @@ main_thread = Thread.new {
         end
         if $_DETACHABLE_CLIENT_
           begin
-            $frontend = 'profanity'
-            Thread.new {
-              100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
-              init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
-              init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
-              init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
-              init_str.concat "<progressBar id='stamina' value='0' text='stamina #{XMLData.stamina}/#{XMLData.max_stamina}'/>"
-              init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{XMLData.encumbrance_text}'/>"
-              init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
-              init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{XMLData.mind_text}'/>"
-              init_str.concat "<spell>#{XMLData.prepared_spell}</spell>"
-              init_str.concat "<right>#{GameObj.right_hand.name}</right>"
-              init_str.concat "<left>#{GameObj.left_hand.name}</left>"
-              for indicator in ['IconBLEEDING', 'IconPOISONED', 'IconDISEASED', 'IconSTANDING', 'IconKNEELING', 'IconSITTING', 'IconPRONE']
-                init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
-              end
-              for area in ['back', 'leftHand', 'rightHand', 'head', 'rightArm', 'abdomen', 'leftEye', 'leftArm', 'chest', 'rightLeg', 'neck', 'leftLeg', 'nsys', 'rightEye']
-                if Wounds.send(area) > 0
-                  init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
-                elsif Scars.send(area) > 0
-                  init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
+            unless ARGV.include?('--genie')
+              $frontend = 'profanity'
+              Thread.new {
+                100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
+                init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
+                init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
+                init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
+                init_str.concat "<progressBar id='stamina' value='0' text='stamina #{XMLData.stamina}/#{XMLData.max_stamina}'/>"
+                init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{XMLData.encumbrance_text}'/>"
+                init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
+                init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{XMLData.mind_text}'/>"
+                init_str.concat "<spell>#{XMLData.prepared_spell}</spell>"
+                init_str.concat "<right>#{GameObj.right_hand.name}</right>"
+                init_str.concat "<left>#{GameObj.left_hand.name}</left>"
+                for indicator in ['IconBLEEDING', 'IconPOISONED', 'IconDISEASED', 'IconSTANDING', 'IconKNEELING', 'IconSITTING', 'IconPRONE']
+                  init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
                 end
-              end
-              init_str.concat '<compass>'
-              shorten_dir = { 'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se', 'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw', 'up' => 'up', 'down' => 'down', 'out' => 'out' }
-              for dir in XMLData.room_exits
-                if short_dir = shorten_dir[dir]
-                  init_str.concat "<dir value='#{short_dir}'/>"
+                for area in ['back', 'leftHand', 'rightHand', 'head', 'rightArm', 'abdomen', 'leftEye', 'leftArm', 'chest', 'rightLeg', 'neck', 'leftLeg', 'nsys', 'rightEye']
+                  if Wounds.send(area) > 0
+                    init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
+                  elsif Scars.send(area) > 0
+                    init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
+                  end
                 end
-              end
-              init_str.concat '</compass>'
-              $_DETACHABLE_CLIENT_.puts init_str
-              init_str = nil
-            }
+                init_str.concat '<compass>'
+                shorten_dir = { 'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se', 'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw', 'up' => 'up', 'down' => 'down', 'out' => 'out' }
+                for dir in XMLData.room_exits
+                  if short_dir = shorten_dir[dir]
+                    init_str.concat "<dir value='#{short_dir}'/>"
+                  end
+                end
+                init_str.concat '</compass>'
+                $_DETACHABLE_CLIENT_.puts init_str
+                init_str = nil
+              }
+            end
             while client_string = $_DETACHABLE_CLIENT_.gets
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
               begin
