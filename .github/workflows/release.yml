@@ -24,12 +24,17 @@ jobs:
       - name: Install core scripts
         id: install_core_scripts
         run: |
-          mkdir scripts/
-          mkdir data/
-          curl https://extras.repo.elanthia.online/assets/jinx.lic > scripts/jinx.lic
-          curl https://extras.repo.elanthia.online/assets/infomon.lic > scripts/infomon.lic
-          curl https://extras.repo.elanthia.online/assets/go2.lic > scripts/go2.lic
-          ls
+          mkdir _release
+          mkdir _release/scripts
+          mkdir _release/data/
+          curl https://extras.repo.elanthia.online/assets/jinx.lic > _release/scripts/jinx.lic
+          curl https://extras.repo.elanthia.online/assets/infomon.lic > _release/scripts/infomon.lic
+          curl https://extras.repo.elanthia.online/assets/go2.lic > _release/scripts/go2.lic
+          cp lich.rbw _release/
+          cp -r lib _release/
+          cp -r lich _release/
+          ls _release/
+          tar -czvf lich.tar.gz _release/
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
@@ -38,4 +43,5 @@ jobs:
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
           files: |
-            .*
+            lich.tar.gz
+
