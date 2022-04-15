@@ -15,6 +15,7 @@
   changelog:
     0.55 (2022-03-31):
       Added messaging for DR users noting this script isn't normally used with DR-Scripts
+      Adding check for dependency, with note.
     0.54 (2022-03-15):
       Added logic to welcome Dragonrealms.
       DragonRealms/GemstoneIV infomon detection
@@ -138,6 +139,21 @@ if script.vars.empty?
       # Loop through list
       for script_info in script_list
         if script_info[:name] == 'infomon' || script_info[:name] == 'repository'
+          next
+        elsif script_info[:name] == 'dependency' && XMLData.game =~ /^DR/
+          respond "\n--- dependency found in autostart list. Attempting to remove it now. If unsuccessful, it can be safely removed with '#{$clean_lich_char}autostart remove --global dependency'"
+          temp_script_list = Settings['scripts']
+          if (temp_script_list.class == Array) and (temp_script_info = temp_script_list.find { |s| s[:name] == script_info[:name] })
+            temp_script_list.delete(temp_script_info)
+            Settings['scripts'] = temp_script_list
+            respond "\n--- #{script_info[:name]} was removed from the global autostart list\n\n"
+          end
+          temp_script_list = CharSettings['scripts']
+          if (temp_script_list.class == Array) and (temp_script_info = temp_script_list.find { |s| s[:name] == script_info[:name] })
+            temp_script_list.delete(temp_script_info)
+            CharSettings['scripts'] = temp_script_list
+            respond "\n--- #{script_info[:name]} was removed from #{XMLData.name}'s autostart list\n\n"
+          end
           next
         else
           Script.start(script_info[:name], :args => script_info[:args])

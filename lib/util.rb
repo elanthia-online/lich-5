@@ -10,6 +10,8 @@ Entries added here should always be accessible from Lich::Util.feature namespace
     version: 1.1.0
 
   changelog:
+    v1.2.0 (2022-03-16)
+     * Add Lich::Util.quiet_command to mimic XML version
     v1.1.0 (2022-03-09)
      * Fix silver_count forcing downstream_xml on
     v1.0.0 (2022-03-08)
@@ -45,10 +47,14 @@ module Lich
       "Util::#{prefix}-#{now}-#{Random.rand(10000)}"
     end
 
-    def self.quiet_command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5)
+    def self.quiet_command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true)
       result = []
       name = self.anon_hook
       filter = false
+      if silent
+        save_script_silent = Script.current.silent
+        Script.current.silent = true
+      end
       save_want_downstream = Script.current.want_downstream
       save_want_downstream_xml = Script.current.want_downstream_xml
       Script.current.want_downstream = false
@@ -61,16 +67,11 @@ module Lich
               if xml =~ end_pattern
                 DownstreamHook.remove(name)
                 filter = false
-                # result << xml.rstrip if include_end
-                # thread.raise(Interrupt)
-                # next(include_end ? nil : xml)
               else
-                # result << xml.rstrip
                 next(nil)
               end
             elsif xml =~ start_pattern
               filter = true
-              # result << xml.rstrip
               next(nil)
             else
               xml
@@ -93,6 +94,59 @@ module Lich
         DownstreamHook.remove(name)
         Script.current.want_downstream_xml = save_want_downstream_xml
         Script.current.want_downstream = save_want_downstream
+        Script.current.silent = save_script_silent if silent
+      end
+      return result
+    end
+    
+    def self.quiet_command(command, start_pattern, end_pattern, include_end = true, timeout = 5, silent = true)
+      result = []
+      name = self.anon_hook
+      filter = false
+      if silent
+        save_script_silent = Script.current.silent
+        Script.current.silent = true
+      end
+      save_want_downstream = Script.current.want_downstream
+      save_want_downstream_xml = Script.current.want_downstream_xml
+      Script.current.want_downstream = true
+      Script.current.want_downstream_xml = false
+
+      begin
+        Timeout::timeout(timeout, Interrupt) {
+          DownstreamHook.add(name, proc { |line|
+            if filter
+              if line =~ end_pattern
+                DownstreamHook.remove(name)
+                filter = false
+              else
+                next(nil)
+              end
+            elsif line =~ start_pattern
+              filter = true
+              next(nil)
+            else
+              line
+            end
+          })
+          fput command
+
+          until (line = get) =~ start_pattern; end
+          result << line.rstrip
+          until (line = get) =~ end_pattern
+            result << line.rstrip
+          end
+          if include_end
+            result << line.rstrip
+          end
+        }
+      rescue Interrupt
+        nil
+      ensure
+        DownstreamHook.remove(name)
+        Script.current.want_downstream_xml = save_want_downstream_xml
+        Script.current.want_downstream = save_want_downstream
+        Script.current.silent = save_script_silent if silent
       end
       return result
     end
