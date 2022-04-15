@@ -2321,6 +2321,7 @@ module Games
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
 
                 if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
+                  require 'lib/map.rb'
                   Script.start('autostart') if Script.exists?('autostart')
                   @@autostarted = true
                 end
@@ -2336,15 +2337,13 @@ module Games
 
                 if alt_string = DownstreamHook.run($_SERVERSTRING_)
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if alt_string =~ /<resource picture=.*roomName/
-                    unless XMLData.game =~ /^DR/
-                      if (Lich.display_lichid =~ /on|true|yes/ && Lich.display_uid =~ /on|true|yes/) || (Lich.display_lichid.nil? && Lich.display_uid.nil?) #default on
-                        alt_string.sub!(']') { " - #{Room.current.id}] (u#{XMLData.room_id})" }
-                      elsif Lich.display_lichid =~ /on|true|yes/ || (Lich.display_lichid.nil?) # don't force an entry
-                        alt_string.sub!(']') { " - #{Room.current.id}]" }
-                      elsif Lich.display_uid =~ /on|true|yes/ || (Lich.display_uid.nil?) # don't force an entry
-                        alt_string.sub!(']') { "] (u#{XMLData.room_id})" }
-                      end
+                  if (Lich.display_lichid == true or Lich.display_uid == true) and XMLData.game =~ /^GS/ and alt_string =~ /<resource picture=.*roomName/
+                    if (Lich.display_lichid == true and Lich.display_uid == true)
+                      alt_string.sub!(']') {" - #{Map.current.id}] (u#{XMLData.room_id})"}
+                    elsif Lich.display_lichid == true
+                      alt_string.sub!(']') {" - #{Map.current.id}]"}
+                    elsif Lich.display_uid == true
+                      alt_string.sub!(']') {"] (u#{XMLData.room_id})"}
                     end
                   end
                   if $frontend =~ /^(?:wizard|avalon)$/
@@ -2387,7 +2386,7 @@ module Games
                   stripped_server = strip_xml($_SERVERSTRING_)
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
-                    if Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
+                    if defined?(Map) and Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
                       Map.last_seen_objects = $1  # DR only: copy loot line to Map.last_seen_objects
                     end
                     unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
@@ -4859,6 +4858,7 @@ main_thread = Thread.new {
   $cmd_prefix = '<c>'
   $clean_lich_char = $frontend == 'genie' ? ',' : ';'
   $lich_char = Regexp.escape($clean_lich_char)
+  $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
   require_relative("./lib/eaccess.rb")
@@ -4976,10 +4976,8 @@ main_thread = Thread.new {
   if @launch_data
     if @launch_data.find { |opt| opt =~ /GAMECODE=DR/ }
       gamecodeshort = "DR"
-      require_relative("./lib/map_dr.rb")
     else
       gamecodeshort = "GS"
-      require_relative("./lib/map_gs.rb")
     end
     unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
@@ -5294,31 +5292,6 @@ main_thread = Thread.new {
   end
 
   listener = timeout_thr = nil
-
-  #
-  # drop superuser privileges
-  # OSXLich-Doug - this section causes problems on too many systems.
-  # Putting in a patch courtesy a player
-  #
-  unless RUBY_PLATFORM =~ /darwin/i
-    if RUBY_PLATFORM =~ /mingw|win/i
-      Lich.log "info: dropping superuser privileges..."
-      begin
-        Process.uid = `id -ru`.strip.to_i
-        Process.gid = `id -rg`.strip.to_i
-        Process.egid = `id -rg`.strip.to_i
-        Process.euid = `id -ru`.strip.to_i
-      rescue SecurityError
-        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      rescue SystemCallError
-        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      rescue NotImplementedError
-        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      rescue
-        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-       end
-    end
-  end
 
   # backward compatibility
   if $frontend =~ /^(?:wizard|avalon)$/
