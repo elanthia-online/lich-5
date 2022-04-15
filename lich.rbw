@@ -7562,31 +7562,6 @@ main_thread = Thread.new {
 
   listener = timeout_thr = nil
 
-  #
-  # drop superuser privileges
-  # OSXLich-Doug - this section causes problems on too many systems.
-  # Putting in a patch courtesy a player
-  #
-  unless RUBY_PLATFORM =~ /darwin/i
-    if RUBY_PLATFORM =~ /mingw|win/i
-      Lich.log "info: dropping superuser privileges..."
-      begin
-        Process.uid = `id -ru`.strip.to_i
-        Process.gid = `id -rg`.strip.to_i
-        Process.egid = `id -rg`.strip.to_i
-        Process.euid = `id -ru`.strip.to_i
-      rescue SecurityError
-        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      rescue SystemCallError
-        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      rescue NotImplementedError
-        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      rescue
-        Lich.log "error: failed to drop superuser privileges: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-       end
-    end
-  end
-
   # backward compatibility
   if $frontend =~ /^(?:wizard|avalon)$/
     $fake_stormfront = true
