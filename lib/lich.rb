@@ -1,14 +1,7 @@
 module Lich
-  @@hosts_file           = nil
-  @@lich_db              = nil
+  @@hosts_file = nil
+  @@lich_db    = nil
   @@last_warn_deprecated = 0
-
-  # settings
-  @@display_lichid       = nil # boolean
-  @@display_uid          = nil # boolean
-  @@track_autosort_state = nil # boolean
-  @@track_dark_mode      = nil # boolean
-  @@track_layout_state   = nil # boolean
 
   def Lich.method_missing(arg1, arg2 = '')
     if (Time.now.to_i - @@last_warn_deprecated) > 300
@@ -573,150 +566,124 @@ module Lich
 
 # new feature GUI / internal settings states
 
-  def Lich.debug_messaging
-    if @@debug_messaging.nil?
+  def Lich.track_autosort_state
     begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='debug_messaging';")
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_autosort_state';")
     rescue SQLite3::BusyException
       sleep 0.1
       retry
     end
-      @@debug_messaging = (val.to_s =~ /on|true|yes/ ? true : false)
-      Lich.debug_messaging = @@debug_messaging
-  end
-    return @@debug_messaging
+    val
   end
 
-  def Lich.debug_messaging=(val)
-    @@debug_messaging = (val.to_s =~ /on|true|yes/ ? true : false)
+  def Lich.track_autosort_state=(val)
     begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('debug_messaging',?);", @@debug_messaging.to_s.encode('UTF-8'))
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_autosort_state',?);", val.to_s.encode('UTF-8'))
     rescue SQLite3::BusyException
       sleep 0.1
       retry
     end
-    return nil
+    nil
+  end
+
+  def Lich.track_layout_state
+    begin
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_layout_state';")
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    val
+  end
+
+  def Lich.track_layout_state=(val)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_layout_state',?);", val.to_s.encode('UTF-8'))
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    nil
+  end
+
+  def Lich.track_dark_mode
+    begin
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_dark_mode';")
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    val
+  end
+
+  def Lich.track_dark_mode=(val)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_dark_mode',?);", val.to_s.encode('UTF-8'))
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    nil
   end
 
   def Lich.display_lichid
-    if @@display_lichid.nil?
     begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_lichid';")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
-      val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != ""; # default false if DR, otherwise default true
-      @@display_lichid = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
-  end
-    return @@display_lichid
-  end
-
-  def Lich.display_lichid=(val)
-    @@display_lichid = (val.to_s =~ /on|true|yes/ ? true : false)
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_lichid',?);", @@display_lichid.to_s.encode('UTF-8'))
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
-    return nil
-  end
-
-  def Lich.display_uid
-    if @@display_uid.nil?
-    begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_uid';")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
-      val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != ""; # default false if DR, otherwise default true
-      @@display_uid = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
-  end
-    return @@display_uid
-  end
-
-  def Lich.display_uid=(val)
-    @@display_uid = (val.to_s =~ /on|true|yes/ ? true : false)
-    begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_uid',?);", @@display_uid.to_s.encode('UTF-8'))
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
-    return nil
-  end
-
-  def Lich.track_autosort_state
-    if @@track_autosort_state.nil?
-    begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_autosort_state';")
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_lichid';")
     rescue SQLite3::BusyException
       sleep 0.1
       retry
 end
-      @@track_autosort_state = (val.to_s =~ /on|true|yes/ ? true : false)
-  end
-    return @@track_autosort_state
+    val
   end
 
-  def Lich.track_autosort_state=(val)
-    @@track_autosort_state = (val.to_s =~ /on|true|yes/ ? true : false)
+  def Lich.display_lichid=(val)
     begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_autosort_state',?);", @@track_autosort_state.to_s.encode('UTF-8'))
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_lichid',?);", val.to_s.encode('UTF-8'))
     rescue SQLite3::BusyException
       sleep 0.1
       retry
     end
-    return nil
+    nil
   end
 
-  def Lich.track_dark_mode
-    if @@track_dark_mode.nil?
+  def Lich.display_uid
     begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_dark_mode';")
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_uid';")
     rescue SQLite3::BusyException
       sleep 0.1
       retry
     end
-      @@track_dark_mode = (val.to_s =~ /on|true|yes/ ? true : false)
-  end
-    return @@track_dark_mode
+    val
   end
 
-  def Lich.track_dark_mode=(val)
-    @@track_dark_mode = (val.to_s =~ /on|true|yes/ ? true : false)
+  def Lich.display_uid=(val)
     begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_dark_mode',?);", @@track_dark_mode.to_s.encode('UTF-8'))
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_uid',?);", val.to_s.encode('UTF-8'))
     rescue SQLite3::BusyException
       sleep 0.1
       retry
     end
-    return nil
+    nil
   end
 
-  def Lich.track_layout_state
-    if @@track_layout_state.nil?
+  def Lich.debug_messaging
     begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_layout_state';")
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='debug_messaging';")
     rescue SQLite3::BusyException
       sleep 0.1
       retry
     end
-      @@track_layout_state = (val.to_s =~ /on|true|yes/ ? true : false)
-  end
-    return @@track_layout_state
+    val
   end
 
-  def Lich.track_layout_state=(val)
-    @@track_layout_state = (val.to_s =~ /on|true|yes/ ? true : false)
+  def Lich.debug_messaging=(val)
     begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_layout_state',?);", @@track_layout_state.to_s.encode('UTF-8'))
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('debug_messaging',?);", val.to_s.encode('UTF-8'))
     rescue SQLite3::BusyException
       sleep 0.1
       retry
     end
-    return nil
+    nil
   end
+
 end
