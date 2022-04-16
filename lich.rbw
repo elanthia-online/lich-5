@@ -2337,15 +2337,13 @@ module Games
 
                 if alt_string = DownstreamHook.run($_SERVERSTRING_)
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if alt_string =~ /<resource picture=.*roomName/
-                    unless XMLData.game =~ /^DR/
-                      if (Lich.display_lichid =~ /on|true|yes/ && Lich.display_uid =~ /on|true|yes/) || (Lich.display_lichid.nil? && Lich.display_uid.nil?) #default on
-                        alt_string.sub!(']') { " - #{Room.current.id}] (u#{XMLData.room_id})" }
-                      elsif Lich.display_lichid =~ /on|true|yes/ || (Lich.display_lichid.nil?) # don't force an entry
-                        alt_string.sub!(']') { " - #{Room.current.id}]" }
-                      elsif Lich.display_uid =~ /on|true|yes/ || (Lich.display_uid.nil?) # don't force an entry
-                        alt_string.sub!(']') { "] (u#{XMLData.room_id})" }
-                      end
+                  if (Lich.display_lichid == true or Lich.display_uid == true) and XMLData.game =~ /^GS/ and alt_string =~ /<resource picture=.*roomName/
+                    if (Lich.display_lichid == true and Lich.display_uid == true)
+                      alt_string.sub!(']') {" - #{Map.current.id}] (u#{XMLData.room_id})"}
+                    elsif Lich.display_lichid == true
+                      alt_string.sub!(']') {" - #{Map.current.id}]"}
+                    elsif Lich.display_uid == true
+                      alt_string.sub!(']') {"] (u#{XMLData.room_id})"}
                     end
                   end
                   if $frontend =~ /^(?:wizard|avalon)$/
