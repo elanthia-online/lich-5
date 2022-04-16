@@ -10,7 +10,7 @@ def gui_login
   if File.exists?("#{DATA_DIR}/entry.dat")
     @entry_data = File.open("#{DATA_DIR}/entry.dat", 'r') { |file|
       begin
-        if @autosort_state == 'on'
+        if @autosort_state == true
         # Sort in list by instance name, account name, and then character name
         Marshal.load(file.read.unpack('m').first).sort do |a, b|
           [a[:game_name], a[:user_id], a[:char_name]] <=> [b[:game_name], b[:user_id], b[:char_name]]
@@ -54,7 +54,7 @@ def gui_login
     #
     silver = Gdk::RGBA::parse("#d3d3d3")
     @notebook = Gtk::Notebook.new
-    @notebook.override_background_color(:normal, silver) if @theme_state == 'off'
+    @notebook.override_background_color(:normal, silver) if @theme_state == false
     @notebook.append_page(@quick_game_entry_tab, Gtk::Label.new('Saved Entry'))
     @notebook.append_page(@game_entry_tab, Gtk::Label.new('Manual Entry'))
 
