@@ -4,7 +4,7 @@
 # this file is intended to load as part of the loginGUI Gtk queue block method
 # it is a sequential stream presently, so do not (yet) modify to class / module
 
-Gtk::Settings.default.gtk_application_prefer_dark_theme = true if @theme_state == true
+Gtk::Settings.default.gtk_application_prefer_dark_theme = true if @theme_state
 
 if @entry_data.empty?
   box = Gtk::Box.new(:horizontal)
@@ -16,13 +16,13 @@ else
   last_user_id = nil
   account_array = []
 
-  if @tab_layout_state == true
+  if @tab_layout_state
 
     @account_book = Gtk::Notebook.new
     @account_book.set_tab_pos(:left)
     @account_book.show_border = true
 
-    if @theme_state != true
+    unless @theme_state
       lightgrey = Gdk::RGBA::parse("#d3d3d3")
       @account_book.override_background_color(:normal, lightgrey)
 
@@ -89,7 +89,7 @@ else
 
         @remove_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
         @play_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
-        @account_book.style_context.add_provider(@tab_provider, Gtk::StyleProvider::PRIORITY_USER) if @theme_state != true
+        @account_book.style_context.add_provider(@tab_provider, Gtk::StyleProvider::PRIORITY_USER) unless @theme_state
 
         char_box = Gtk::Box.new(:horizontal)
         char_box.pack_end(@remove_button, :expand => true, :fill => false, :padding => 0)
@@ -335,9 +335,9 @@ else
     theme_select_label = Gtk::Label.new('Dark Theme')
     tab_select_label = Gtk::Label.new('Tab Layout')
     sort_select_label = Gtk::Label.new(' AutoSort   ')
-    theme_select.set_active(true) if @theme_state == true
-    tab_select.set_active(true) if @tab_layout_state == true
-    sort_select.set_active(true) if @autosort_state == true
+    theme_select.set_active(true) if @theme_state
+    tab_select.set_active(true) if @tab_layout_state
+    sort_select.set_active(true) if @autosort_state
 
     @slider_box.pack_start(theme_select, :expand => true, :fill => false, :padding => 0)
     @slider_box.pack_start(theme_select_label, :expand => true, :fill => false, :padding => 0)
@@ -358,8 +358,7 @@ else
     }
 
     theme_select.signal_connect('notify::active') { |s|
-      @theme_state = theme_select.active? ? true : false
-      if @theme_state == true
+      if theme_select.active?
         Gtk::Settings.default.gtk_application_prefer_dark_theme = true
         @play_button.style_context.remove_provider(@button_provider) if defined?(@button_provider)
         @account_book.style_context.remove_provider(@tab_provider) if defined?(@tab_provider)
@@ -376,13 +375,11 @@ else
     }
 
     tab_select.signal_connect('notify::active') { |s|
-      @tab_layout_state = tab_select.active? 
-      Lich.track_layout_state = tab_select.active?
+      Lich.track_layout_state = tab_select.active? ? true : false
     }
 
     sort_select.signal_connect('notify::active') { |s|
-      @autosort_state = sort_select.active? 
-      Lich.track_autosort_state = sort_select.active?
+      Lich.track_autosort_state = sort_select.active? ? true : false
     }
 
 end #if
