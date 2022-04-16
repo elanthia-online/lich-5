@@ -2,6 +2,7 @@
 # let's gussy this up a bit for a working zip / tarball release
 # first, let's ignore files we don't want in the zip
 .git*           export-ignore
+.ruby-version   export-ignore
 README.adoc     export-ignore
 netlify.toml    export-ignore
 # second, let's take a running stab at ignoring a directory
