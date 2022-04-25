@@ -259,20 +259,20 @@ module Lich
           # delete all lib files
           FileUtils.rm_f Dir.glob("#{LIB_DIR}/*")
           # copy all backed up lib files
-          FileUtils.cp_r "#{BACKUP_DIR}/#{restore_snapshot}/lib/.", "#{LIB_DIR}"
+          FileUtils.cp_r "#{restore_snapshot}/lib/.", "#{LIB_DIR}"
           # delete array of core scripts
           @snapshot_core_script.each { |file|
             File.delete("#{SCRIPT_DIR}/#{file}") if File.exist?("#{SCRIPT_DIR}/#{file}")
           }
           # copy all backed up core scripts (array to save, only array files in backup)
-          FileUtils.cp_r "#{BACKUP_DIR}/#{restore_snapshot}/scripts/.", "#{SCRIPT_DIR}"
+          FileUtils.cp_r "#{restore_snapshot}/scripts/.", "#{SCRIPT_DIR}"
 
           # skip gameobj-data and spell-list (non-functional logically, previous versions
           # already present and current files may contain local edits)
 
           # update lich.rbw in stream because it is active (we hope)
           lich_to_update = "#{LICH_DIR}/#{File.basename($PROGRAM_NAME)}"
-          update_to_lich = "#{BACKUP_DIR}/#{restore_snapshot}/lich.rbw"
+          update_to_lich = "#{restore_snapshot}/lich.rbw"
           File.open(update_to_lich, 'rb') { |r| File.open(lich_to_update, 'wb') { |w| w.write(r.read) } }
 
           # as a courtesy to the player, remind which version they were rev'd back to
