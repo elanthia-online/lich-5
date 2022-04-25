@@ -19,14 +19,14 @@ module Lich
           self.help # Ok, that's just wrong.
         when /--update|-u/
           self.download_update
+        when /--refresh/
+          _respond; _respond "This command has been removed."
         when /--revert|-r/
           self.revert
         when /--(?:(script|library|data))=(.*)/
           self.update_file($1.dup, $2.dup)
         when /--snapshot|-s/ # this one needs to be after --script
           self.snapshot
-        when /--refresh/
-          _respond; _respond "This command has been removed."
         else
           _respond; _respond "Command '#{type}' unknown, illegitimate and ignored.  Exiting . . ."; _respond
         end
