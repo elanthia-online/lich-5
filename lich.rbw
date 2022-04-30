@@ -2304,6 +2304,9 @@ module Games
                 if $_SERVERSTRING_ =~ /<compDef id='room text'><\/compDef>/
                   $_SERVERSTRING_.sub!(/(.*)\s\s<compDef id='room text'><\/compDef>/) { "<compDef id='room desc'>#{$1}</compDef>" }
                 end
+                if $_SERVERSTRING_ =~ /(?:subtitle=".*\[)(.*")(?:\]")/
+                  $_SERVERSTRING_.gsub!(/(?<!=)(?<!\])"/, '&quote;')
+                end
                 if atmospherics
                   atmospherics = false
                   $_SERVERSTRING.prepend('<popStream id="atmospherics" \/>') unless $_SERVERSTRING =~ /<popStream id="atmospherics" \/>/
