@@ -7,9 +7,11 @@ Entries added here should always be accessible from Lich::Messaging.feature name
     game: Gemstone
     tags: CORE, util, utilities
     required: Lich > 5.4.0
-    version: 1.0.0
+    version: 1.0.1
 
   changelog:
+    v1.0.1 (2022-05-05)
+      Bugfix for Wizard character encoding
     v1.0.0 (2022-03-15)
       Initial release
       Supports Lich::Messaging.stream_window(msg, window) SENDS msg to stream window
@@ -57,14 +59,14 @@ module Lich
       _respond stream_window_before_txt + self.xml_encode(msg) + stream_window_after_txt
     end
   
-    def self.msg_format(type = info, msg = "")
+    def self.msg_format(type = "info", msg = "")
       
       preset_color_before = ""
       preset_color_after = ""
       
       wizard_color = {"white"=>128, "black"=>129, "dark blue"=>130, "dark green"=>131, "dark teal"=>132,
-     "dark red"=>133, "purple"=>134, "gold"=>135, "light grey"=>136, "blue"=>137,
-     "bright green"=>138, "teal"=>139, "red"=>140, "pink"=>141, "yellow"=>142}
+        "dark red"=>133, "purple"=>134, "gold"=>135, "light grey"=>136, "blue"=>137,
+        "bright green"=>138, "teal"=>139, "red"=>140, "pink"=>141, "yellow"=>142}
       
       if $frontend =~ /^(?:stormfront|frostbite|profanity)$/
         case type
@@ -89,14 +91,14 @@ module Lich
           preset_color_before = monsterbold_start
           preset_color_after = monsterbold_end
         when "warn", "orange", "gold", "thought"
-          preset_color_before = wizard_color["gold"].chr
-          preset_color_after = "\217"
+          preset_color_before = wizard_color["gold"].chr.force_encoding(Encoding::ASCII_8BIT)
+          preset_color_after = "\217".force_encoding(Encoding::ASCII_8BIT)
         when "info", "teal", "whisper"
-          preset_color_before = wizard_color["teal"].chr
-          preset_color_after = "\217"
+          preset_color_before = wizard_color["teal"].chr.force_encoding(Encoding::ASCII_8BIT)
+          preset_color_after = "\217".force_encoding(Encoding::ASCII_8BIT)
         when "green", "speech", "debug", "light green"
-          preset_color_before = wizard_color["light green"].chr
-          preset_color_after = "\217"
+          preset_color_before = wizard_color["bright green"].chr.force_encoding(Encoding::ASCII_8BIT)
+          preset_color_after = "\217".force_encoding(Encoding::ASCII_8BIT)
         when "link", "command", "selectedLink", "watching", "roomName"
         
         end
@@ -118,15 +120,15 @@ module Lich
         
         end
       end
-      
-      return (preset_color_before + self.xml_encode(msg) + preset_color_after)
+    
+      return (preset_color_before + xml_encode(msg) + preset_color_after)
     
     end
 
     def self.msg(type = "info", msg = "")
       
       return if type == "debug" && (Lich.debug_messaging.nil? || Lich.debug_messaging == "false")
-      _respond msg_format(type, self.xml_encode(msg))
+      _respond msg_format(type, msg)
       
     end
     
