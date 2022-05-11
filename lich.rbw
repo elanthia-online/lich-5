@@ -2415,7 +2415,6 @@ module Games
             retry unless $_CLIENT_.closed? or @@socket.closed? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i)
           rescue
             Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Lich.log "06 XML error: #{$_SERVERSTRING_}"
             $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace..slice(0..10).join("\n\t")}"
             sleep 0.2
             retry unless $_CLIENT_.closed? or @@socket.closed? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i)
