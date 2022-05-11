@@ -2365,9 +2365,9 @@ module Games
                 end
                 unless $_SERVERSTRING_ =~ /^<settings /
                   if $_SERVERSTRING_ =~ /<settingsInfo .*?space not found /
-                    Lich.log "01 Invalid XML tags detected: #{$_SERVERSTRING_}"
+                    Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_}"
                     $_SERVERSTRING_.sub!('space not found', '')
-                    Lich.log "01 Fixed XML: #{$_SERVERSTRING_}"
+                    Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_}"
                   end
                   begin
                     REXML::Document.parse_stream($_SERVERSTRING_, XMLData)
@@ -2376,18 +2376,17 @@ module Games
                     unless $!.to_s =~ /invalid byte sequence/
                       if $_SERVERSTRING_ =~ /<[^>]+='[^=>'\\]+'[^=>']+'[\s>]/
                         # Simu has a nasty habbit of bad quotes in XML.  <tag attr='this's that'>
-                        Lich.log "02 Invalid XML tags detected: #{$_SERVERSTRING_}"
+                        Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_}"
                         $_SERVERSTRING_.gsub!(/(<[^>]+=)'([^=>'\\]+'[^=>']+)'([\s>])/) { "#{$1}\"#{$2}\"#{$3}" }
-                        Lich.log "02 Invalid XML tags fixed to: #{$_SERVERSTRING_}"
+                        Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_}"
                         retry
                       elsif $_SERVERSTRING_ =~ /^<streamWindow.*subtitle=".*\[.*"\]"/
-                        Lich.log "03 Invalid XML tags detected: #{$_SERVERSTRING_}"
+                        Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_}"
                         $_SERVERSTRING_.gsub!(/(?<!=)(?<!\])"/, '&quote;')
-                        Lich.log "03 Invalid XML tags fixed to: #{$_SERVERSTRING_}"
+                        Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_}"
                         retry
                       end
                       $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                      Lich.log "04 XML error: #{$_SERVERSTRING_}"
                       Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                     end
                     XMLData.reset
@@ -2407,12 +2406,10 @@ module Games
               rescue
                 $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                 Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                Lich.log "05 XML error: #{$_SERVERSTRING_}"
               end
             end
           rescue Exception
             Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Lich.log "06 XML error: #{$_SERVERSTRING_}"
             $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.slice(0..10).join("\n\t")}"
             sleep 0.2
             retry unless $_CLIENT_.closed? or @@socket.closed? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i)
