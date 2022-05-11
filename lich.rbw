@@ -2382,9 +2382,9 @@ module Games
                         retry
                       elsif $_SERVERSTRING_ =~ /^<streamWindow.*subtitle=".*\[.*"\]"/
                         # Some room titles have nested double quotes in them, which results in invalid XML. <subtitle=" - ["Kertigen's Honor"]">
-                        # This replaces the inner double quotes to &quote; making them XML compliant <subtitle=" - [&quote;Kertigen's Honor&quote;]">
+                        # This replaces the inner double quotes to &quot; making them XML compliant <subtitle=" - [&quot;Kertigen's Honor&quot;]">
                         Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_}"
-                        $_SERVERSTRING_.gsub!(/(?<!=)(?<!\])"/, '&quote;')
+                        $_SERVERSTRING_.gsub!(/(?<!=)(?<!\])"/, '&quot;')
                         Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_}"
                         retry
                       end
