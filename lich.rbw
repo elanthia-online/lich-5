@@ -2387,6 +2387,7 @@ module Games
                         retry
                       end
                       $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                      Lich.log "Invalid XML detected: #{$_SERVERSTRING_}"
                       Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                     end
                     XMLData.reset
