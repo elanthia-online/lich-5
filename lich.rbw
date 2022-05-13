@@ -2381,7 +2381,7 @@ module Games
                         Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_}"
                         retry
                       end
-                      # Simu has a nasty habbit of bad double quotes in XML.  <tag attr='this's that">
+                      # Simu has a nasty habbit of bad double quotes in XML.  <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
                       while data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/)
                         Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_}"
                         $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
