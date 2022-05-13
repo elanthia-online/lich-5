@@ -2364,6 +2364,9 @@ module Games
                   end
                 end
                 unless $_SERVERSTRING_ =~ /^<settings /
+                  # Fixed invalid xml such as:
+                  # <mode id="GAME"/><settingsInfo  space not found crc='0' instance='DR'/>
+                  # <settingsInfo  space not found crc='0' instance='DR'/>
                   if $_SERVERSTRING_ =~ /<settingsInfo .*?space not found /
                     Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_}"
                     $_SERVERSTRING_.sub!('space not found', '')
@@ -2382,7 +2385,7 @@ module Games
                         Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_}"
                         retry
                       end
-                      # Fixes invalid XML with nested single quotes in it such as:
+                      # Fixes invalid XML with nested double quotes in it such as:
                       # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
                       while data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/)
                         Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_}"
@@ -2391,7 +2394,7 @@ module Games
                         retry
                       end
                       $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                      Lich.log "Invalid XML detected: #{$_SERVERSTRING_}"
+                      Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_}"
                       Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                     end
                     XMLData.reset
