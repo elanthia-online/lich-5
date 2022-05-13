@@ -2374,14 +2374,16 @@ module Games
                     # XMLData.parse($_SERVERSTRING_)
                   rescue
                     unless $!.to_s =~ /invalid byte sequence/
-                      # Simu has a nasty habbit of bad single quotes in XML.  <tag attr='this's that'>
+                      # Fixes invalid XML with nested single quotes in it such as:
+                      # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
                       while data = $_SERVERSTRING_.match(/'([^=]*'[^=]*)'/)
                         Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_}"
                         $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
                         Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_}"
                         retry
                       end
-                      # Simu has a nasty habbit of bad double quotes in XML.  <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
+                      # Fixes invalid XML with nested single quotes in it such as:
+                      # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
                       while data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/)
                         Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_}"
                         $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
