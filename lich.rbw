@@ -2374,17 +2374,17 @@ module Games
                     # XMLData.parse($_SERVERSTRING_)
                   rescue
                     unless $!.to_s =~ /invalid byte sequence/
-                      if $_SERVERSTRING_ =~ /<[^>]+='[^=>'\\]+'[^=>']+'[\s>]/
-                        # Simu has a nasty habbit of bad quotes in XML.  <tag attr='this's that'>
+                      # Simu has a nasty habbit of bad single quotes in XML.  <tag attr='this's that'>
+                      while data = $_SERVERSTRING_.match(/'([^=]*'[^=]*)'/)
                         Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_}"
-                        $_SERVERSTRING_.gsub!(/(<[^>]+=)'([^=>'\\]+'[^=>']+)'([\s>])/) { "#{$1}\"#{$2}\"#{$3}" }
+                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
                         Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_}"
                         retry
-                      elsif $_SERVERSTRING_ =~ /^<streamWindow.*subtitle=".*\[.*"\]"/
-                        # Some room titles have nested double quotes in them, which results in invalid XML. <subtitle=" - ["Kertigen's Honor"]">
-                        # This replaces the inner double quotes to &quot; making them XML compliant <subtitle=" - [&quot;Kertigen's Honor&quot;]">
+                      end
+                      # Simu has a nasty habbit of bad double quotes in XML.  <tag attr='this's that">
+                      while data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/)
                         Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_}"
-                        $_SERVERSTRING_.gsub!(/(?<!=)(?<!\])"/, '&quot;')
+                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
                         Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_}"
                         retry
                       end
