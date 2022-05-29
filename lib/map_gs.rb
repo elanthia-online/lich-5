@@ -99,21 +99,20 @@ class Map
       return @@list[@@current_room_id] if XMLData.room_count == @@fuzzy_room_count and !@@current_room_id.nil?;
     end
     ids = Map.ids_from_uid(XMLData.room_id);
-    return Map.set_current(ids[0])  if ids.size == 1;
+    return Map.set_current(ids[0]) if ids.size == 1;
     if ids.size > 1 and !@@current_room_id.nil? and id = Map.match_multi_ids(ids)
       return Map.set_current(id)
-    else
-      return Map.set_fuzzy(Map.match_no_uid()) if ids.empty?;
     end
+    return Map.match_no_uid()
   end
   def Map.set_current(id) # returns Map/Room
-    @@previous_room_id   = @@current_room_id if id != @@current_room_id;
-    @@current_room_id    = id
+    @@previous_room_id = @@current_room_id if id != @@current_room_id;
+    @@current_room_id  = id
     return nil if id.nil?
     return @@list[id]
   end
   def Map.set_fuzzy(id)  # returns Map/Room
-    @@previous_room_id = @@current_room_id if id != nil and id != @@current_room_id;
+    @@previous_room_id = @@current_room_id if !id.nil? and id != @@current_room_id;
     @@current_room_id  = id
     return nil if id.nil?
     return @@list[id]
@@ -123,11 +122,11 @@ class Map
     return matches[0] if matches.size == 1;
     return nil;
   end
-  def Map.match_no_uid() # returns id
+  def Map.match_no_uid() # returns Map/Room
     if script = Script.current;
-      return Map.match_current(script)
+      return Map.set_current(Map.match_current(script))
     else
-      return Map.match_fuzzy()
+      return Map.set_fuzzy(Map.match_fuzzy())
     end
   end
   def Map.match_current(script) # returns id
