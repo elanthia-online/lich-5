@@ -2164,6 +2164,9 @@ def do_client(client_string)
       update_parameter = $1.dup
       require 'lib/update.rb'
       Lich::Util::Update.request("#{update_parameter}")
+    elsif cmd =~ /^(?:lich5-update|l5u)/i
+      require 'lib/update.rb'
+      Lich::Util::Update.request("--help")
     elsif cmd =~ /^help$/i
       respond
       respond "Lich v#{LICH_VERSION}"
