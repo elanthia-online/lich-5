@@ -1,6 +1,16 @@
 [
   {
     "update_type":"current",
+    "version_lich":"5.6.1",
+    "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "front-end.rb", "global_defs.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "map_dr.rb", "map_gs.rb", "messaging.rb", "shield.rb", "spell.rb", "stash.rb", "update.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
+    "update_datas":["spell-list.xml", "gameobj-data.xml"],
+    "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
+    "recommend_update_scripts":{},
+    "announce_features":["Lich 5.6.1 includes:", "Fix for XML to limit login errors (DR)", "Fix for XMLData.active_spells to register wizard 'recovery' spell cooldowns", "Messaging updates to remove error in Wizard FE encodings", "Corrects error in detecting PSM skill changes (cman)", "Deprecates LNet script from master repository", "Miscellaneous small bug squashings"]
+  },
+
+  {
+    "update_type":"previous",
     "version_lich":"5.6.0",
     "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "front-end.rb", "global_defs.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "map_dr.rb", "map_gs.rb", "messaging.rb", "shield.rb", "spell.rb", "stash.rb", "update.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
     "update_datas":["spell-list.xml", "gameobj-data.xml"],
@@ -10,32 +20,22 @@
   },
 
   {
-    "update_type":"previous",
-    "version_lich":"5.4.1",
-    "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "shield.rb", "spell.rb", "stash.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
-    "update_datas":["spell-list.xml", "gameobj-data.xml"],
-    "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "lnet.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
-    "recommend_update_scripts":{},
-    "announce_features":["Lich 5.4.0 includes:", "unique Simu supplied id (uid) for each room", "Configurable display at Room Title of the Lich ID and UID", "No more 5 minute time out", "empty_hands and fill_hands will now wait out round time before action", "Spell timers should be significantly more accurate in ;magic and legacy scripts", "Updates to support others' script development"]
-  },
-
-  {
     "update_type":"refresh",
-    "version_lich":"5.5.0",
+    "version_lich":"5.6.1",
     "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "front-end.rb", "global_defs.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "map_dr.rb", "map_gs.rb", "messaging.rb", "shield.rb", "spell.rb", "stash.rb", "update.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
     "update_datas":["spell-list.xml", "gameobj-data.xml"],
-    "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "lnet.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
+    "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
     "recommend_update_scripts":{},
-    "announce_features":["Lich 5.5.0 includes:", "Support for DragonRealms", "Support for new features in popular scripts like Bigshot", "Fixes for almost 20 defects and changes are included", "Profanity users get LichID and UID Room Numbers", "Spell now includes methods to explicitly incant, channel, and evoke", "A new custom scripts directory to save all your personal script modifications to", "A standardized method for displaying messages with formatting features", "Updates to support others' script development"]
+    "announce_features":["Lich 5.6.1 includes:", "Fix for XML to limit login errors (DR)", "Fix for XMLData.active_spells to register wizard 'recovery' spell cooldowns", "Messaging updates to remove error in Wizard FE encodings", "Corrects error in detecting PSM skill changes (cman)", "Deprecates LNet script from master repository", "Miscellaneous small bug squashings"]
   },
 
   {
     "update_type":"snapshot",
-    "version_lich":"5.5.0",
+    "version_lich":"5.6.0",
     "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "front-end.rb", "global_defs.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "map_dr.rb", "map_gs.rb", "messaging.rb", "shield.rb", "spell.rb", "stash.rb", "update.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
     "update_datas":["spell-list.xml", "gameobj-data.xml"],
     "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "lnet.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
     "recommend_update_scripts":{},
-    "announce_features":["Lich 5.5.0 includes:", "Support for DragonRealms", "Support for new features in popular scripts like Bigshot", "Fixes for almost 20 defects and changes are included", "Profanity users get LichID and UID Room Numbers", "Spell now includes methods to explicitly incant, channel, and evoke", "A new custom scripts directory to save all your personal script modifications to", "A standardized method for displaying messages with formatting features", "Updates to support others' script development"]
+    "announce_features":["Lich 5.6.0 includes:", "(DragonRealms) Support for Genie and Frostbite frontends", "(GemStone) Changed methods to improve ;go2 speed and reduce lich.db3 calls", "(GemStone) Updates to support silver_count function", "(Both) Changed method for updating lich ecosystem"]
   }
 ]
