@@ -6,9 +6,12 @@ xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.0.19
-    version: 1.2.0
+    version: 1.2.1
 
   changelog:
+    v1.2.1 (2022-05-29)
+      Logic to avoid adding 'Cooldown' tag to any spell with text 'Recovery'
+      (for 599, Rapid Fire Recovery) in XMLData.active_spells
     v1.2.0 (2022-03-09)
       Adding the tags 'Cooldown' and 'Debuff' so that spell-list.xml spell detection of 'Cooldown' and recovery is back in operation.
     v1.1.0 (2022-03-08)
@@ -131,7 +134,11 @@ class XMLParser
         when /Active Spells|Buffs/
           z.merge!(k => v) if k.instance_of?(String)
         when /Cooldowns/
+          if k =~ /Recovery/
+            z.merge!(k => v) if k.instance_of?(String)
+          else
           z.merge!("#{k} Cooldown" => v) if k.instance_of?(String)
+          end
         when /Debuffs/
           z.merge!("#{k} Debuff" => v) if k.instance_of?(String)
         end
