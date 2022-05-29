@@ -2364,20 +2364,37 @@ module Games
                   end
                 end
                 unless $_SERVERSTRING_ =~ /^<settings /
-                  if $_SERVERSTRING_ =~ /^<settingsInfo .*?space not found /
+                  # Fixed invalid xml such as:
+                  # <mode id="GAME"/><settingsInfo  space not found crc='0' instance='DR'/>
+                  # <settingsInfo  space not found crc='0' instance='DR'/>
+                  if $_SERVERSTRING_ =~ /<settingsInfo .*?space not found /
+                    Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_}"
                     $_SERVERSTRING_.sub!('space not found', '')
+                    Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_}"
                   end
                   begin
                     REXML::Document.parse_stream($_SERVERSTRING_, XMLData)
                     # XMLData.parse($_SERVERSTRING_)
                   rescue
                     unless $!.to_s =~ /invalid byte sequence/
-                      if $_SERVERSTRING_ =~ /<[^>]+='[^=>'\\]+'[^=>']+'[\s>]/
-                        # Simu has a nasty habbit of bad quotes in XML.  <tag attr='this's that'>
-                        $_SERVERSTRING_.gsub!(/(<[^>]+=)'([^=>'\\]+'[^=>']+)'([\s>])/) { "#{$1}\"#{$2}\"#{$3}" }
+                      # Fixes invalid XML with nested single quotes in it such as:
+                      # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
+                      while data = $_SERVERSTRING_.match(/'([^=]*'[^=]*)'/)
+                        Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_}"
+                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
+                        Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_}"
+                        retry
+                      end
+                      # Fixes invalid XML with nested double quotes in it such as:
+                      # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
+                      while data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/)
+                        Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_}"
+                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
+                        Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_}"
                         retry
                       end
                       $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                      Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_}"
                       Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                     end
                     XMLData.reset
