@@ -138,7 +138,7 @@ module Lich
           elsif entry.include? 'zipball_url'
             @zipfile = entry[1]
           elsif entry.include? 'body'
-            @new_features = entry[1].gsub!(/\#\# What's Changed.+$/m, '')
+            @new_features = entry[1].gsub(/\#\# What's Changed.+$/m, '')
           end
         }
       end
