@@ -163,7 +163,7 @@ module Lich
             file.write open("#{@zipfile}").read
           end
 
-          Dir.mkdir("#{TEMP_DIR}/#{filename}")
+          Dir.mkdir(File.join(TEMP_DIR, filename))
           Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"), "#{TEMP_DIR}/#{filename}")
           new_target = Dir.children(File.join(TEMP_DIR, filename))
           FileUtils.cp_r(File.join(TEMP_DIR, filename, new_target[0]), TEMP_DIR)
