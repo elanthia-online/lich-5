@@ -5,6 +5,8 @@ module Lich
     module Update
       require 'json'
       require 'open-uri'
+      require 'rubygems/package'
+      require 'zlib'
 
       @current = LICH_VERSION
       @snapshot_core_script = ["alias.lic", "autostart.lic", "go2.lic", "infomon.lic",
@@ -135,10 +137,10 @@ module Lich
         JSON::parse(update_info).each { |entry|
           if entry.include? 'tag_name'
             @update_to = entry[1].sub('v', '')
-          elsif entry.include? 'zipball_url'
+          elsif entry.include? 'tarball_url'
             @zipfile = entry[1]
           elsif entry.include? 'body'
-            @new_features = entry[1].gsub!(/\#\# What's Changed.+$/m, '')
+            @new_features = entry[1].gsub(/\#\# What's Changed.+$/m, '')
           end
         }
       end
@@ -157,33 +159,16 @@ module Lich
         else
           _respond; _respond "Downloading Lich5 version #{@update_to}"; _respond
           filename = "lich5-#{@update_to}"
-          File.open(File.join(TEMP_DIR, "#{filename}.zip"), "wb") do |file|
+          File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
             file.write open("#{@zipfile}").read
           end
 
-          if defined?(Win32)
-            Dir.chdir(TEMP_DIR)
-            system("tar -xf #{File.join(TEMP_DIR, filename)}.zip")
-            sleep 2
-            system("move elanthia-online-lich* #{filename}")
-            sleep 2
-          else
-            finish = spawn "unzip #{File.join(TEMP_DIR, filename)}.zip -d #{File.join(TEMP_DIR, filename)}"
-          end
-          unless defined?(Win32)
-            50.times { break unless (Process.waitpid(finish, Process::WNOHANG)).nil?; sleep 0.1 }
-
-            new_target = Dir.children(File.join(TEMP_DIR, filename))
-            FileUtils.cp_r(File.join(TEMP_DIR, filename, new_target[0]), TEMP_DIR)
-            FileUtils.remove_dir(File.join(TEMP_DIR, filename))
-            FileUtils.mv(File.join(TEMP_DIR, new_target[0]), File.join(TEMP_DIR, filename))
-          end
-          ## These five lines may be deleted after zipfiles are created with .gitattributes
-          cleanup_dir = Dir.children(File.join(TEMP_DIR, filename))
-          FileUtils.remove_dir(File.join(TEMP_DIR, filename, "lich")) if cleanup_dir.include?("lich")
-          FileUtils.rm(File.join(TEMP_DIR, filename, "netlify.toml")) if cleanup_dir.include?("netlify.toml")
-          FileUtils.rm(File.join(TEMP_DIR, filename, "README.adoc")) if cleanup_dir.include?("README.adoc")
-          FileUtils.rm(File.join(TEMP_DIR, filename, "data", "update-lich5.json")) if Dir.children(File.join(TEMP_DIR, filename, "data")).include?("update-lich5.json")
+          Dir.mkdir("#{TEMP_DIR}/#{filename}")
+          Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"), "#{TEMP_DIR}/#{filename}")
+          new_target = Dir.children(File.join(TEMP_DIR, filename))
+          FileUtils.cp_r(File.join(TEMP_DIR, filename, new_target[0]), TEMP_DIR)
+          FileUtils.remove_dir(File.join(TEMP_DIR, filename))
+          FileUtils.mv(File.join(TEMP_DIR, new_target[0]), File.join(TEMP_DIR, filename))
 
           _respond; _respond 'Copying updated lich files to their locations.'
 
@@ -237,7 +222,7 @@ module Lich
           ## And we clen up after ourselves
 
           FileUtils.remove_dir(File.join(TEMP_DIR, filename))   # we know these exist because
-          FileUtils.rm(File.join(TEMP_DIR, "#{filename}.zip"))       # we just processed them
+          FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz"))       # we just processed them
 
           _respond; _respond "Lich5 has been updated to Lich5 version #{@update_to}"
           _respond "You should exit the game, then log back in.  This will start the game"
