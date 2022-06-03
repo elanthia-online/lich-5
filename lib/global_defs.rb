@@ -1632,7 +1632,7 @@ def _respond(first = "", *messages)
     else
       str += sprintf("%s\r\n", first.to_s.chomp)
     end
-    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
+    # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) } # fixme: strip/separate script output?
     str_sent = false
