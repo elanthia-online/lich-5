@@ -1593,7 +1593,7 @@ def respond(first = "", *messages)
     end
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
-    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
+    # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     if $frontend == 'stormfront' || $frontend == 'genie'
       str = "<output class=\"mono\"/>\r\n#{str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')}<output class=\"\"/>\r\n"
     elsif $frontend == 'profanity'
