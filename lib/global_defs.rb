@@ -1593,7 +1593,7 @@ def respond(first = "", *messages)
     end
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
-    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
+    # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     if $frontend == 'stormfront' || $frontend == 'genie'
       str = "<output class=\"mono\"/>\r\n#{str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')}<output class=\"\"/>\r\n"
     elsif $frontend == 'profanity'
@@ -1632,7 +1632,7 @@ def _respond(first = "", *messages)
     else
       str += sprintf("%s\r\n", first.to_s.chomp)
     end
-    str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
+    # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) } # fixme: strip/separate script output?
     str_sent = false
@@ -2015,7 +2015,7 @@ def do_client(client_string)
   #   Buffer.update(client_string, Buffer::UPSTREAM_MOD)
   return nil if client_string.nil?
 
-  if client_string =~ /^(?:<c>)?#{$lich_char}(.+)$/
+  if client_string =~ /^(?:<c>)?#{$lich_char_regex}(.+)$/
     cmd = $1
     if cmd =~ /^k$|^kill$|^stop$/
       if Script.running.empty?

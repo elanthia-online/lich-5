@@ -286,7 +286,7 @@ class Shield
 
   def Shield.available?(name)
     Shield.known?(name) and Shield.affordable?(name) and
-    !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Strained Muscles')
+    !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
   end
 
   def Shield.use(name, target = "")
