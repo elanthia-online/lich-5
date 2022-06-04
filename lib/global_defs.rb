@@ -2015,7 +2015,7 @@ def do_client(client_string)
   #   Buffer.update(client_string, Buffer::UPSTREAM_MOD)
   return nil if client_string.nil?
 
-  if client_string =~ /^(?:<c>)?#{$lich_char}(.+)$/
+  if client_string =~ /^(?:<c>)?#{$lich_char_regex}(.+)$/
     cmd = $1
     if cmd =~ /^k$|^kill$|^stop$/
       if Script.running.empty?
