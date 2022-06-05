@@ -2270,9 +2270,15 @@ module Games
               @@last_recv = Time.now
               @@_buffer.update($_SERVERSTRING_) if TESTING
               begin
-                $cmd_prefix = String.new if $_SERVERSTRING_ =~ /^\034GSw/
-          
-                # These rooms are in the Crossing temple in DR
+                $cmd_prefix = String.new if $_SERVERSTRING_ =~ /^\034GSw/  
+                ## Clear out superfluous tags
+                $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />","")
+                $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<popStream id=\"combat\" /><pushStream id=\"combat\" />","")
+
+                ## Fix combat wrapping components - Why, DR, Why?
+                $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><component id=","<component id=")
+                # $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
+
                 # Fixes xml with \r\n in the middle of it like:
                 # <component id='room exits'>Obvious paths: clockwise, widdershins.\r\n
                 # <compass></compass></component>\r\n
@@ -2282,20 +2288,27 @@ module Games
                   Lich.log "Unclosed component tag detected: #{$_SERVERSTRING_.inspect}"
                   $_SERVERSTRING_ = "<component id='room exits'>Obvious paths: <d>clockwise</d>, <d>widdershins</d>.<compass></compass></component>"
                   Lich.log "Unclosed component tag fixed to: #{$_SERVERSTRING_.inspect}"
+                  # retry
                 end
                 # This is an actual DR line "<compass></compass></component>\r\n" which happens when the above is sent... subbing it out since we fix the tag above.
                 if $_SERVERSTRING_ == "<compass></compass></component>\r\n"
+                  Lich.log "Extraneous closed tag detected: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_ = ""
+                  Lich.log "Extraneous closed tag fixed: #{$_SERVERSTRING_.inspect}"
+                end
+
+                # "<component id='room objs'>  You also see a granite altar with several candles and a water jug on it, and a granite font.\r\n"
+                # "</component>\r\n"
+                if $_SERVERSTRING_ =~ /^<component id='room objs'>[^<]*(?!<\/component>)\r\n/
+                  Lich.log "Open-ended room objects component id tag: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_.gsub!("\r\n", "</component>")
+                  Lich.log "Open-ended room objects component id tag fixed to: #{$_SERVERSTRING_.inspect}"
+                end
+                # "</component>\r\n"                
+                if $_SERVERSTRING_ == "</component>\r\n"
                   Lich.log "Extraneous closing tag detected and deleted: #{$_SERVERSTRING_.inspect}"
                   $_SERVERSTRING_ = ""
-                end                
-          
-                ## Clear out superfluous tags
-                $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />","")
-                $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<popStream id=\"combat\" /><pushStream id=\"combat\" />","")
-
-                ## Fix combat wrapping components - Why, DR, Why?
-                $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><component id=","<component id=")
-                # $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
+                end
 
                 ## Fix duplicate pushStrings
                 while $_SERVERSTRING_.include?("<pushStream id=\"combat\" /><pushStream id=\"combat\" />")
