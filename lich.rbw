@@ -2270,7 +2270,7 @@ module Games
               @@last_recv = Time.now
               @@_buffer.update($_SERVERSTRING_) if TESTING
               begin
-                $cmd_prefix = String.new if $_SERVERSTRING_ =~ /^\034GSw/  
+                $cmd_prefix = String.new if $_SERVERSTRING_ =~ /^\034GSw/
                 ## Clear out superfluous tags
                 $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />","")
                 $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<popStream id=\"combat\" /><pushStream id=\"combat\" />","")
