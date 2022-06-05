@@ -2285,9 +2285,8 @@ module Games
                 end
                 # This is an actual DR line "<compass></compass></component>\r\n" which happens when the above is sent... subbing it out since we fix the tag above.
                 if $_SERVERSTRING_ == "<compass></compass></component>\r\n"
-                  Lich.log "Extraneous closing tag detected: #{$_SERVERSTRING_.inspect}"
+                  Lich.log "Extraneous closing tag detected and deleted: #{$_SERVERSTRING_.inspect}"
                   $_SERVERSTRING_ = ""
-                  Lich.log "Extraneous closing tag fixed: #{$_SERVERSTRING_.inspect}"
                 end                
           
                 ## Clear out superfluous tags
