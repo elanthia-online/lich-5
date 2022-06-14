@@ -4835,6 +4835,10 @@ elsif ARGV.include?('--dragonrealms')
       game_host = 'dr.simutronics.net'
       game_port = 11124
       $frontend = 'genie'
+    elsif ARGV.grep(/--frostbite/).any?
+      game_host = 'dr.simutronics.net'
+      game_port = 11124
+      $frontend = 'frostbite'
     else
       $stdout.puts "fixme"
       Lich.log "fixme"
