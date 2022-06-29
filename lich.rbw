@@ -2298,8 +2298,10 @@ module Games
                 end
 
                 # "<component id='room objs'>  You also see a granite altar with several candles and a water jug on it, and a granite font.\r\n"
+                # "<component id='room extra'>Placed around the interior, you see: some furniture and other bits of interest.\r\n
+                # Followed by in a new line.
                 # "</component>\r\n"
-                if $_SERVERSTRING_ =~ /^<component id='room objs'>[^<]*(?!<\/component>)\r\n/
+                if $_SERVERSTRING_ =~ /^<component id='room (?:objs|extra)'>[^<]*(?!<\/component>)\r\n/
                   Lich.log "Open-ended room objects component id tag: #{$_SERVERSTRING_.inspect}"
                   $_SERVERSTRING_.gsub!("\r\n", "</component>")
                   Lich.log "Open-ended room objects component id tag fixed to: #{$_SERVERSTRING_.inspect}"
