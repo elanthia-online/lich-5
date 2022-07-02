@@ -2411,8 +2411,11 @@ module Games
                   rescue
                     unless $!.to_s =~ /invalid byte sequence/
                       # Fixes invalid XML with nested single quotes in it such as:
+                      # From DR intro tips
                       # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
-                      while data = $_SERVERSTRING_.match(/'([^=]*'[^=]*)'/)
+                      # From GS
+                      # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
+                      while data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/)
                         Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
                         $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
                         Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
