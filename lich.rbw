@@ -4736,8 +4736,6 @@ if argv_options[:sal]
       if r < 33
         Lich.log "error: Win32.ShellExecute returned #{r}; Win32.GetLastError: #{Win32.GetLastError}"
       end
-    elsif defined?(Wine)
-      system("#{Wine::BIN} #{launcher_cmd}")
     else
       system(launcher_cmd)
     end
@@ -5150,9 +5148,8 @@ main_thread = Thread.new {
 
         if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
           system ("start #{launcher_cmd}")
-        elsif defined?(Wine) and (game != 'AVALON') # Wine on linux
-          spawn "#{Wine::BIN} #{launcher_cmd}"
         else # macOS and linux - does not account for WINE on linux
+          $stdout.puts "Launching: #{launcher_cmd}"
           spawn launcher_cmd
         end
       rescue
