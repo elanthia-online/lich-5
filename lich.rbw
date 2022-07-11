@@ -3607,6 +3607,7 @@ module Games
         @noun = noun
         @noun = 'lapis' if @noun == 'lapis lazuli'
         @noun = 'hammer' if @noun == "Hammer of Kai"
+        @noun = 'ball' if @noun == "ball and chain" # DR item 'ball and chain' doesn't work.
         @noun = 'mother-of-pearl' if (@noun == 'pearl') and (@name =~ /mother\-of\-pearl/)
         @name = name
         @before_name = before
