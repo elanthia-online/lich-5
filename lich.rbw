@@ -2297,13 +2297,6 @@ module Games
                   Lich.log "Extraneous closed tag fixed: #{$_SERVERSTRING_.inspect}"
                 end
 
-                # Remove empty push/popbold tags
-                if $_SERVERSTRING_ == /<pushBold\/><popBold\/>/
-                  Lich.log "Empty push/popbold tags detected: #{$_SERVERSTRING_.inspect}"
-                  $_SERVERSTRING_.gsub!("<pushBold/><popBold/>", '')
-                  Lich.log "Empty push/popbold tags removed: #{$_SERVERSTRING_.inspect}"
-                end
-
                 # "<component id='room objs'>  You also see a granite altar with several candles and a water jug on it, and a granite font.\r\n"
                 # "<component id='room extra'>Placed around the interior, you see: some furniture and other bits of interest.\r\n
                 # Followed by in a new line.
