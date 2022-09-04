@@ -593,7 +593,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line == 'You are still stunned.'
       wait_while { stunned? }
       put_dir.call
-    elsif line =~ /you slip (?:on a patch of ice )?and flail uselessly as you land on your rear(?:\.|!)$|You wobble and stumble only for a moment before landing flat on your face!$/
+    elsif line =~ /you slip (?:on a patch of ice )?and flail uselessly as you land on your rear(?:\.|!)$|You wobble and stumble only for a moment before landing flat on your face!$|^You slip in the mud and fall flat on your back\!$/
       waitrt?
       fput 'stand' unless standing?
       waitrt?
