@@ -77,7 +77,7 @@ class Feat
     "chain_armor_proficiency" => 0,
     "combat_mastery" => 0,
     "critical_counter" => 0,
-    "dispel_magic" => 0,
+    "dispel_magic" => 30,
     "dragonscale_skin" => 0,
     "guard" => 0,
     "kroderine_soul" => 0,
