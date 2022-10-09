@@ -2279,6 +2279,39 @@ module Games
                 $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><component id=","<component id=")
                 # $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
 
+                # Fixes xml with \r\n in the middle of it like:
+                # <component id='room exits'>Obvious paths: clockwise, widdershins.\r\n
+                # <compass></compass></component>\r\n
+                # We close the first line and in the next segment, we remove the trailing bits
+                # Because we can only match line by line, this couldn't be fixed in one matching block...
+                if $_SERVERSTRING_ == "<component id='room exits'>Obvious paths: clockwise, widdershins.\r\n"
+                  Lich.log "Unclosed component tag detected: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_ = "<component id='room exits'>Obvious paths: <d>clockwise</d>, <d>widdershins</d>.<compass></compass></component>"
+                  Lich.log "Unclosed component tag fixed to: #{$_SERVERSTRING_.inspect}"
+                  # retry
+                end
+                # This is an actual DR line "<compass></compass></component>\r\n" which happens when the above is sent... subbing it out since we fix the tag above.
+                if $_SERVERSTRING_ == "<compass></compass></component>\r\n"
+                  Lich.log "Extraneous closed tag detected: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_ = ""
+                  Lich.log "Extraneous closed tag fixed: #{$_SERVERSTRING_.inspect}"
+                end
+
+                # "<component id='room objs'>  You also see a granite altar with several candles and a water jug on it, and a granite font.\r\n"
+                # "<component id='room extra'>Placed around the interior, you see: some furniture and other bits of interest.\r\n
+                # Followed by in a new line.
+                # "</component>\r\n"
+                if $_SERVERSTRING_ =~ /^<component id='room (?:objs|extra)'>[^<]*(?!<\/component>)\r\n/
+                  Lich.log "Open-ended room objects component id tag: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_.gsub!("\r\n", "</component>")
+                  Lich.log "Open-ended room objects component id tag fixed to: #{$_SERVERSTRING_.inspect}"
+                end
+                # "</component>\r\n"                
+                if $_SERVERSTRING_ == "</component>\r\n"
+                  Lich.log "Extraneous closing tag detected and deleted: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_ = ""
+                end
+
                 ## Fix duplicate pushStrings
                 while $_SERVERSTRING_.include?("<pushStream id=\"combat\" /><pushStream id=\"combat\" />")
                   $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><pushStream id=\"combat\" />","<pushStream id=\"combat\" />")
@@ -2368,9 +2401,9 @@ module Games
                   # <mode id="GAME"/><settingsInfo  space not found crc='0' instance='DR'/>
                   # <settingsInfo  space not found crc='0' instance='DR'/>
                   if $_SERVERSTRING_ =~ /<settingsInfo .*?space not found /
-                    Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_}"
+                    Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_.inspect}"
                     $_SERVERSTRING_.sub!('space not found', '')
-                    Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_}"
+                    Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                   end
                   begin
                     REXML::Document.parse_stream($_SERVERSTRING_, XMLData)
@@ -2378,23 +2411,26 @@ module Games
                   rescue
                     unless $!.to_s =~ /invalid byte sequence/
                       # Fixes invalid XML with nested single quotes in it such as:
+                      # From DR intro tips
                       # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
-                      while data = $_SERVERSTRING_.match(/'([^=]*'[^=]*)'/)
-                        Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_}"
+                      # From GS
+                      # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
+                      while data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/)
+                        Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
                         $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
-                        Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_}"
+                        Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                         retry
                       end
                       # Fixes invalid XML with nested double quotes in it such as:
                       # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
                       while data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/)
-                        Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_}"
+                        Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
                         $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
-                        Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_}"
+                        Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                         retry
                       end
                       $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                      Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_}"
+                      Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
                       Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                     end
                     XMLData.reset
