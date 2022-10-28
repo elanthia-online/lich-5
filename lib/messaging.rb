@@ -7,9 +7,11 @@ Entries added here should always be accessible from Lich::Messaging.feature name
     game: Gemstone
     tags: CORE, util, utilities
     required: Lich > 5.4.0
-    version: 1.0.1
+    version: 1.1.0
 
   changelog:
+    v1.1.0 (2022-10-28)
+      Add loot window as an option
     v1.0.1 (2022-05-05)
       Bugfix for Wizard character encoding
     v1.0.0 (2022-03-15)
@@ -36,7 +38,7 @@ module Lich
     def self.stream_window(msg, window = "familiar")
       
       if XMLData.game =~ /^GS/
-        allowed_streams = ["familiar", "speech", "thoughts"]
+        allowed_streams = ["familiar", "speech", "thoughts", "loot"]
       elsif XMLData.game =~ /^DR/
         allowed_streams = ["familiar", "speech", "thoughts", "combat"]
       end
