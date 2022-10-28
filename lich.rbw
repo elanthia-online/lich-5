@@ -4961,11 +4961,6 @@ main_thread = Thread.new {
     else
       data = entry_data.find { |d| (d[:char_name] == char_name) }
     end
-    if ARGV.include?('--gst')
-      data[:game_code] = 'GST'
-    elsif ARGV.include?('--drt')
-      data[:game_code] = 'DRT'
-    end
     if data
       Lich.log "info: using quick game entry settings for #{char_name}"
       msgbox = proc { |msg|
@@ -4983,6 +4978,12 @@ main_thread = Thread.new {
           Lich.log(msg)
         end
       }
+
+      if ARGV.include?('--gst')
+        data[:game_code] = 'GST'
+      elsif ARGV.include?('--drt')
+        data[:game_code] = 'DRT'
+      end
 
       launch_data_hash = EAccess.auth(
         account: data[:user_id],
