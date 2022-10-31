@@ -7,9 +7,11 @@ Further modifications are to support the retirement of spell-list.xml.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.0.19
-    version: 1.2.1
+    version: 1.2.2
 
   changelog:
+    v1.2.2 (2022-10-31)
+      fix for Mental Acuity to only work on MnM spells 1201-1220
     v1.2.1 (2022-05-10)
       add unknown spell result to regex results
     v1.2.0 (2022-03-14)
@@ -485,7 +487,7 @@ module Games
         false
       elsif (self.mana_cost(options) > 0)
         ## convert Spell[9699].active? to Effects::Debuffs test (if Debuffs is where it shows)
-        if Feat.known?(:mental_acuity) and (Spell[9699].active? or not checkstamina(self.mana_cost(options)*2))
+        if (Feat.known?(:mental_acuity) and self.num.between?(1201,1220) ) and (Spell[9699].active? or not checkstamina(self.mana_cost(options)*2))
           false
         elsif ( !Feat.known?(:mental_acuity) ) && ( !checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options)/4, 1].max))  )
           false
