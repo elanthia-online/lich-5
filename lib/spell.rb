@@ -489,7 +489,7 @@ module Games
         ## convert Spell[9699].active? to Effects::Debuffs test (if Debuffs is where it shows)
         if (Feat.known?(:mental_acuity) and self.num.between?(1201,1220) ) and (Spell[9699].active? or not checkstamina(self.mana_cost(options)*2))
           false
-        elsif ( !Feat.known?(:mental_acuity) ) && ( !checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options)/4, 1].max))  )
+        elsif ( !(Feat.known?(:mental_acuity) and self.num.between?(1201,1220) ) ) and ( !checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options)/4, 1].max))  )
           false
         else
           true
