@@ -49,7 +49,7 @@ module Lich
       "Util::#{prefix}-#{now}-#{Random.rand(10000)}"
     end
 
-    def self.quiet_command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true)
+    def self.quiet_command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true, quiet = true)
       result = []
       name = self.anon_hook
       filter = false
@@ -70,11 +70,19 @@ module Lich
                 DownstreamHook.remove(name)
                 filter = false
               else
-                next(nil)
+                if quiet 
+                  next(nil)
+                else
+                  xml
+                end
               end
             elsif xml =~ start_pattern
               filter = true
-              next(nil)
+              if quiet
+                next(nil)
+              else
+                xml
+              end
             else
               xml
             end
@@ -101,7 +109,7 @@ module Lich
       return result
     end
     
-    def self.quiet_command(command, start_pattern, end_pattern, include_end = true, timeout = 5, silent = true)
+    def self.quiet_command(command, start_pattern, end_pattern, include_end = true, timeout = 5, silent = true, quiet = true)
       result = []
       name = self.anon_hook
       filter = false
@@ -122,11 +130,19 @@ module Lich
                 DownstreamHook.remove(name)
                 filter = false
               else
-                next(nil)
+                if quiet
+                  next(nil)
+                else
+                  line
+                end
               end
             elsif line =~ start_pattern
               filter = true
-              next(nil)
+              if quiet
+                next(nil)
+              else
+                line
+              end
             else
               line
             end
@@ -154,107 +170,11 @@ module Lich
     end
 
     def self.command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true)
-      result = []
-      name = self.anon_hook
-      filter = false
-      if silent
-        save_script_silent = Script.current.silent
-        Script.current.silent = true
-      end
-      save_want_downstream = Script.current.want_downstream
-      save_want_downstream_xml = Script.current.want_downstream_xml
-      Script.current.want_downstream = false
-      Script.current.want_downstream_xml = true
-
-      begin
-        Timeout::timeout(timeout, Interrupt) {
-          DownstreamHook.add(name, proc { |xml|
-            if filter
-              if xml =~ end_pattern
-                DownstreamHook.remove(name)
-                filter = false
-              else
-                xml
-              end
-            elsif xml =~ start_pattern
-              filter = true
-              xml
-            else
-              xml
-            end
-          })
-          fput command
-
-          until (xml = get) =~ start_pattern; end
-          result << xml.rstrip
-          until (xml = get) =~ end_pattern
-            result << xml.rstrip
-          end
-          if include_end
-            result << xml.rstrip
-          end
-        }
-      rescue Interrupt
-        nil
-      ensure
-        DownstreamHook.remove(name)
-        Script.current.want_downstream_xml = save_want_downstream_xml
-        Script.current.want_downstream = save_want_downstream
-        Script.current.silent = save_script_silent if silent
-      end
-      return result
+      return quiet_command_xml(command, start_pattern, end_pattern, include_end, timeout, silent, false)
     end
 
     def self.command(command, start_pattern, end_pattern, include_end = true, timeout = 5, silent = true)
-      result = []
-      name = self.anon_hook
-      filter = false
-      if silent
-        save_script_silent = Script.current.silent
-        Script.current.silent = true
-      end
-      save_want_downstream = Script.current.want_downstream
-      save_want_downstream_xml = Script.current.want_downstream_xml
-      Script.current.want_downstream = true
-      Script.current.want_downstream_xml = false
-
-      begin
-        Timeout::timeout(timeout, Interrupt) {
-          DownstreamHook.add(name, proc { |line|
-            if filter
-              if line =~ end_pattern
-                DownstreamHook.remove(name)
-                filter = false
-              else
-                line
-              end
-            elsif line =~ start_pattern
-              filter = true
-              line
-            else
-              line
-            end
-          })
-          fput command
-
-          until (line = get) =~ start_pattern; end
-          result << line.rstrip
-          until (line = get) =~ end_pattern
-            result << line.rstrip
-          end
-          if include_end
-            result << line.rstrip
-          end
-        }
-      rescue Interrupt
-        nil
-      ensure
-        DownstreamHook.remove(name)
-        Script.current.want_downstream_xml = save_want_downstream_xml
-        Script.current.want_downstream = save_want_downstream
-        Script.current.silent = save_script_silent if silent
-      end
-      return result
+      return quiet_command(command, start_pattern, end_pattern, include_end, timeout, silent, false)
     end
 
     def self.silver_count(timeout = 3)
