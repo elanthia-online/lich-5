@@ -7,9 +7,11 @@ Entries added here should always be accessible from Lich::Util.feature namespace
     game: Gemstone
     tags: CORE, util, utilities
     required: Lich > 5.0.19
-    version: 1.1.0
+    version: 1.3.0
 
   changelog:
+    v1.3.0 (2022-03-16)
+     * Add Lich::Util.command_xml and Lich::Util.command for non-quiet usage
     v1.2.0 (2022-03-16)
      * Add Lich::Util.quiet_command to mimic XML version
     v1.1.0 (2022-03-09)
@@ -125,6 +127,110 @@ module Lich
             elsif line =~ start_pattern
               filter = true
               next(nil)
+            else
+              line
+            end
+          })
+          fput command
+
+          until (line = get) =~ start_pattern; end
+          result << line.rstrip
+          until (line = get) =~ end_pattern
+            result << line.rstrip
+          end
+          if include_end
+            result << line.rstrip
+          end
+        }
+      rescue Interrupt
+        nil
+      ensure
+        DownstreamHook.remove(name)
+        Script.current.want_downstream_xml = save_want_downstream_xml
+        Script.current.want_downstream = save_want_downstream
+        Script.current.silent = save_script_silent if silent
+      end
+      return result
+    end
+
+    def self.command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true)
+      result = []
+      name = self.anon_hook
+      filter = false
+      if silent
+        save_script_silent = Script.current.silent
+        Script.current.silent = true
+      end
+      save_want_downstream = Script.current.want_downstream
+      save_want_downstream_xml = Script.current.want_downstream_xml
+      Script.current.want_downstream = false
+      Script.current.want_downstream_xml = true
+
+      begin
+        Timeout::timeout(timeout, Interrupt) {
+          DownstreamHook.add(name, proc { |xml|
+            if filter
+              if xml =~ end_pattern
+                DownstreamHook.remove(name)
+                filter = false
+              else
+                xml
+              end
+            elsif xml =~ start_pattern
+              filter = true
+              xml
+            else
+              xml
+            end
+          })
+          fput command
+
+          until (xml = get) =~ start_pattern; end
+          result << xml.rstrip
+          until (xml = get) =~ end_pattern
+            result << xml.rstrip
+          end
+          if include_end
+            result << xml.rstrip
+          end
+        }
+      rescue Interrupt
+        nil
+      ensure
+        DownstreamHook.remove(name)
+        Script.current.want_downstream_xml = save_want_downstream_xml
+        Script.current.want_downstream = save_want_downstream
+        Script.current.silent = save_script_silent if silent
+      end
+      return result
+    end
+
+    def self.command(command, start_pattern, end_pattern, include_end = true, timeout = 5, silent = true)
+      result = []
+      name = self.anon_hook
+      filter = false
+      if silent
+        save_script_silent = Script.current.silent
+        Script.current.silent = true
+      end
+      save_want_downstream = Script.current.want_downstream
+      save_want_downstream_xml = Script.current.want_downstream_xml
+      Script.current.want_downstream = true
+      Script.current.want_downstream_xml = false
+
+      begin
+        Timeout::timeout(timeout, Interrupt) {
+          DownstreamHook.add(name, proc { |line|
+            if filter
+              if line =~ end_pattern
+                DownstreamHook.remove(name)
+                filter = false
+              else
+                line
+              end
+            elsif line =~ start_pattern
+              filter = true
+              line
             else
               line
             end
