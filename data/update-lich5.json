@@ -1,7 +1,7 @@
 [
   {
     "update_type":"current",
-    "version_lich":"5.6.1",
+    "version_lich":"5.6.2",
     "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "front-end.rb", "global_defs.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "map_dr.rb", "map_gs.rb", "messaging.rb", "shield.rb", "spell.rb", "stash.rb", "update.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
     "update_datas":["spell-list.xml", "gameobj-data.xml"],
     "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
@@ -11,7 +11,7 @@
 
   {
     "update_type":"previous",
-    "version_lich":"5.6.0",
+    "version_lich":"5.6.1",
     "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "front-end.rb", "global_defs.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "map_dr.rb", "map_gs.rb", "messaging.rb", "shield.rb", "spell.rb", "stash.rb", "update.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
     "update_datas":["spell-list.xml", "gameobj-data.xml"],
     "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "lnet.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
@@ -21,7 +21,7 @@
 
   {
     "update_type":"refresh",
-    "version_lich":"5.6.1",
+    "version_lich":"5.6.2",
     "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "front-end.rb", "global_defs.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "map_dr.rb", "map_gs.rb", "messaging.rb", "shield.rb", "spell.rb", "stash.rb", "update.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
     "update_datas":["spell-list.xml", "gameobj-data.xml"],
     "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
@@ -31,7 +31,7 @@
 
   {
     "update_type":"snapshot",
-    "version_lich":"5.6.0",
+    "version_lich":"5.6.1",
     "update_libs":["armor.rb", "cman.rb", "constants.rb", "eaccess.rb", "feat.rb", "front-end.rb", "global_defs.rb", "gtk.rb", "gui-login.rb", "gui-manual-login.rb", "gui-saved-login.rb", "init.rb", "lich.rb", "map.rb", "map_dr.rb", "map_gs.rb", "messaging.rb", "shield.rb", "spell.rb", "stash.rb", "update.rb", "util.rb", "version.rb", "weapon.rb", "xmlparser.rb"],
     "update_datas":["spell-list.xml", "gameobj-data.xml"],
     "update_core_scripts":["alias.lic", "autostart.lic", "go2.lic", "infomon.lic", "jinx.lic", "lich5-update.lic", "lnet.lic", "log.lic", "narost.lic", "repository.lic", "vars.lic", "version.lic", "xnarost.lic"],
