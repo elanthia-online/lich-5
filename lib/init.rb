@@ -4,7 +4,7 @@
 #
 # Report an error if Lich 4.4 data is found
 #
-if File.exists?("#{DATA_DIR}/lich.sav")
+if File.exist?("#{DATA_DIR}/lich.sav")
   Lich.log "error: Archaic Lich 4.4 configuration found: Please remove #{DATA_DIR}/lich.sav"
   Lich.msgbox "error: Archaic Lich 4.4 configuration found: Please remove #{DATA_DIR}/lich.sav"
   exit
@@ -51,7 +51,7 @@ elsif ENV['HOME']
 else
   $wine_prefix = nil
 end
-if $wine_bin and File.exists?($wine_bin) and File.file?($wine_bin) and $wine_prefix and File.exists?($wine_prefix) and File.directory?($wine_prefix)
+if $wine_bin and File.exist?($wine_bin) and File.file?($wine_bin) and $wine_prefix and File.exist?($wine_prefix) and File.directory?($wine_prefix)
   module Wine
     BIN = $wine_bin
     PREFIX = $wine_prefix
@@ -641,7 +641,7 @@ else
   @early_gtk_error = "info: DISPLAY environment variable is not set; not trying gtk"
 end
 
-unless File.exists?(LICH_DIR)
+unless File.exist?(LICH_DIR)
   begin
     Dir.mkdir(LICH_DIR)
   rescue
@@ -660,7 +660,7 @@ end
 
 Dir.chdir(LICH_DIR)
 
-unless File.exists?(TEMP_DIR)
+unless File.exist?(TEMP_DIR)
   begin
     Dir.mkdir(TEMP_DIR)
   rescue
