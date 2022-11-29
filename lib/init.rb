@@ -601,6 +601,20 @@ if ARGV[0] == 'shellexecute'
 end
 
 ## End of TODO
+gem_file = nil
+gem_default_parameters = "--source http://rubygems.org --no-document --platform ruby"
+if defined?(Win32)
+  r = Win32.GetModuleFileName
+
+  if r[:return] > 0
+    ruby_bin_dir = File.dirname(r[:lpFilename])
+
+    if File.exists?("#{ruby_bin_dir}\\gem.cmd")
+      gem_file = "#{ruby_bin_dir}\\gem.cmd"
+    elsif File.exists?("#{ruby_bin_dir}\\gem.bat")
+      gem_file = "#{ruby_bin_dir}\\gem.bat"
+    end
+end
 
 begin
   require 'sqlite3'
@@ -614,16 +628,16 @@ rescue LoadError
         if File.exists?("#{ruby_bin_dir}\\gem.bat")
           verb = (Win32.isXP? ? 'open' : 'runas')
           # fixme: using --source http://rubygems.org to avoid https because it has been failing to validate the certificate on Windows
-          r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --source http://rubygems.org --no-ri --no-rdoc --version 1.3.13')
+          r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => gem_file, :lpParameters => "install sqlite3 --version 1.3.13 #{gem_default_parameters}")
           if r[:return] > 0
             pid = r[:hProcess]
             sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
             r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
           else
             # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
-            r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --source http://rubygems.org --no-ri --no-rdoc --version 1.3.13')
+            r = Win32.ShellExecute(:lpOperation => verb, :lpFile => gem_file, :lpParameters => "install sqlite3 --version 1.3.13 #{gem_default_parameters}")
             if r <= 32
-              Win32.MessageBox(:lpText => "error: failed to start the sqlite3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\#{gem_file}\", :lpParameters => \"install sqlite3 --source http://rubygems.org --no-ri --no-rdoc --version 1.3.13'\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
+              Win32.MessageBox(:lpText => "error: failed to start the sqlite3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => '#{gem_file}', :lpParameters => \"install sqlite3 --version 1.3.13 #{gem_default_parameters}'\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
               exit
             end
             r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
@@ -662,28 +676,19 @@ if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)) or ENV['DI
       if defined?(Win32)
         r = Win32.MessageBox(:lpText => "Lich uses gtk3 to create windows, but it is not installed.  You can use Lich from the command line (ruby lich.rbw --help) or you can install gtk2 for a point and click interface.\n\nWould you like to install gtk2 now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
         if r == Win32::IDIYES
-          r = Win32.GetModuleFileName
-          if r[:return] > 0
-            ruby_bin_dir = File.dirname(r[:lpFilename])
-            if File.exists?("#{ruby_bin_dir}\\gem.cmd")
-              gem_file = 'gem.cmd'
-            elsif File.exists?("#{ruby_bin_dir}\\gem.bat")
-              gem_file = 'gem.bat'
-            else
-              gem_file = nil
-            end
+        
             if gem_file
               verb = (Win32.isXP? ? 'open' : 'runas')
-              r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install cairo:1.14.3 gtk2:2.2.5 --source http://rubygems.org --no-ri --no-rdoc')
+              r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => gem_file, :lpParameters => "install cairo:1.14.3 gtk2:2.2.5 #{gem_default_parameters}")
               if r[:return] > 0
                 pid = r[:hProcess]
                 sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
                 r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
               else
                 # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
-                r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install cairo:1.14.3 gtk2:2.2.5 --source http://rubygems.org --no-ri --no-rdoc')
+                r = Win32.ShellExecute(:lpOperation => verb, :lpFile => gem_file, :lpParameters => 'install cairo:1.14.3 gtk2:2.2.5 --source http://rubygems.org --no-ri --no-rdoc')
                 if r <= 32
-                  Win32.MessageBox(:lpText => "error: failed to start the gtk3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\gem.bat\", :lpParameters => \"install cairo:1.14.3 gtk2:2.2.5 --source http://rubygems.org --no-ri --no-rdoc\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
+                  Win32.MessageBox(:lpText => "error: failed to start the gtk3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{gem_file}\", :lpParameters => \"install cairo:1.14.3 gtk2:2.2.5 -#{gem_default_parameters}\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
                   exit
                 end
                 r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
