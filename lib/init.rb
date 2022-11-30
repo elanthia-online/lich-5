@@ -601,8 +601,11 @@ if ARGV[0] == 'shellexecute'
 end
 
 ## End of TODO
+
+# Setup common variables needed for installing gems correctly on Win32 systems.
 gem_file = nil
 gem_default_parameters = "--source http://rubygems.org --no-document --platform ruby"
+gem_verb = nil
 if defined?(Win32)
   r = Win32.GetModuleFileName
 
@@ -614,118 +617,123 @@ if defined?(Win32)
     elsif File.exists?("#{ruby_bin_dir}\\gem.bat")
       gem_file = "#{ruby_bin_dir}\\gem.bat"
     end
+  end
+
+  gem_verb = (Win32.isXP? ? 'open' : 'runas')
 end
 
-begin
-  require 'sqlite3'
-rescue LoadError
-  if defined?(Win32)
-    r = Win32.MessageBox(:lpText => "Lich needs sqlite3 to save settings and data, but it is not installed.\n\nWould you like to install sqlite3 now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
-    if r == Win32::IDIYES
-      r = Win32.GetModuleFileName
-      if r[:return] > 0
-        ruby_bin_dir = File.dirname(r[:lpFilename])
-        if File.exists?("#{ruby_bin_dir}\\gem.bat")
-          verb = (Win32.isXP? ? 'open' : 'runas')
+required_modules = [
+  # :name -> The module to require/install
+  # :version -> The version of the module to require/install
+  # :reason ->  Displayed to the used. This should make sense in the sentence "Lich needs {:name} {:reason}, but it is not installed."
+  # :condition -> Optional action which returns true/false if the module is required for this invocation
+  # :postinstall -> Optiona; action to take if the module is sucessfully 'require'ed
+  {
+    :name => 'sqlite3',
+    :version => '1.3.13',
+    :reason => 'to save settings and data',
+  },
+  {
+    :name => 'gtk3',
+    :version => '4.0.3',
+    :reason => 'to create windows',
+    :condition => lambda { return
+            # from line 656 - must be true
+            (((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)) or ENV['DISPLAY'])
+            and
+            # Previously, GTK3 was considered optional under these conditions. The code would attempt to 'require' it,
+            # then succeed (but not set HAVE_GTK = false) if the original 'require' failed.  (No attempt was made to
+            # install it).
+            ((ENV['RUN_BY_CRON'].nil? or ENV['RUN_BY_CRON'] == 'false') and ARGV.empty? or ARGV.any? { |arg| arg =~ /^--gui$/ } or not $stdout.isatty)
+        }
+
+    :postinstall => lambda { HAVE_GTK = true },
+  }
+]
+
+required_modules.each{|required_module|
+  begin
+    if !required_module.key?(:condition) || required_module[:condition].call
+      require required_module[:name]
+
+      if required_module.key?(:postinstall)
+        required_module[:postinstall].call
+      end
+
+    else
+      required_module[:result] = "Not required."
+    end
+
+  rescue LoadError
+    if defined?(Win32)
+      result = Win32.MessageBox(:lpText => "Lich needs #{required_module[:name]} #{required_module[:reason]}, but it is not installed.\n\nWould you like to install #{required_module[:name]} now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
+
+      if result == Win32::IDIYES
+        if gem_file
           # fixme: using --source http://rubygems.org to avoid https because it has been failing to validate the certificate on Windows
-          r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => gem_file, :lpParameters => "install sqlite3 --version 1.3.13 #{gem_default_parameters}")
-          if r[:return] > 0
-            pid = r[:hProcess]
+          result = Win32.ShellExecuteEx(
+            :fMask => Win32::SEE_MASK_NOCLOSEPROCESS,
+            :lpVerb => gem_verb,
+            :lpFile => gem_file,
+            :lpParameters => "install #{required_module[:name]} --version #{required_module[:version]} #{gem_default_parameters}")
+
+          if result[:return] > 0
+            pid = result[:hProcess]
+            # Use to indicate that the hProcess member receives the process handle. This handle is typically used to allow an application to find out when a process created with ShellExecuteEx terminates
             sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
-            r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
+            result = Win32.MessageBox(
+              :lpText => "Install finished.  Lich will restart now.",
+              :lpCaption => "Lich v#{LICH_VERSION}",
+              :uType => Win32::MB_OKCANCEL)
+
           else
             # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
-            r = Win32.ShellExecute(:lpOperation => verb, :lpFile => gem_file, :lpParameters => "install sqlite3 --version 1.3.13 #{gem_default_parameters}")
-            if r <= 32
-              Win32.MessageBox(:lpText => "error: failed to start the sqlite3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => '#{gem_file}', :lpParameters => \"install sqlite3 --version 1.3.13 #{gem_default_parameters}'\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
+            # We don't wait for this process to exit so install may still be ongoing when we ask to restart lich? Or does lack
+            # of :fMask => Win32::SEE_MASK_NOCLOSEPROCESS address that.
+            result = Win32.ShellExecute(
+                :lpOperation => gem_verb,
+                :lpFile => gem_file,
+                :lpParameters => "install #{required_module[:name]} --version #{required_module[:version]} #{gem_default_parameters}")
+
+            if result <= 32
+              Win32.MessageBox(:lpText => "error: failed to install #{required_module[:name]}.\n\nfailed command: Win32.ShellExecute(:lpOperation => #{gem_verb.inspect}, :lpFile => '#{gem_file}', :lpParameters => \"install sqlite3 --version 1.3.13 #{gem_default_parameters}'\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
               exit
             end
-            r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
+
+            result = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
           end
-          if r == Win32::IDIOK
+
+          # Result is either the result of ShellExecute on the gem_file command or the result of
+          # requesting that the used clicks OK to restart lich.
+          if result == Win32::IDIOK
             if File.exists?("#{ruby_bin_dir}\\rubyw.exe")
               Win32.ShellExecute(:lpOperation => 'open', :lpFile => "#{ruby_bin_dir}\\rubyw.exe", :lpParameters => "\"#{File.expand_path($PROGRAM_NAME)}\"")
+              exit
             else
               Win32.MessageBox(:lpText => "error: failed to find rubyw.exe; can't restart Lich for you", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
+              required_module[:result] = "Failed to find rubyw.exe; can't restart Lich."
             end
           else
             # user doesn't want to restart Lich
+            required_module[:result] = "Installed, but lich not restarted."
           end
+
         else
           Win32.MessageBox(:lpText => "error: Could not find gem.cmd or gem.bat in directory #{ruby_bin_dir}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
+          required_module[:result] = "Could not find gem.cmd or gem.bat in directory #{ruby_bin_dir}."
         end
-      else
-        Win32.MessageBox(:lpText => "error: GetModuleFileName failed", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-      end
-    else
-      # user doesn't want to install sqlite3 gem
-    end
-  else
-    # fixme: no sqlite3 on Linux/Mac
-    puts "The sqlite3 gem is not installed (or failed to load), you may need to: sudo gem install sqlite3"
-  end
-  exit
-end
 
-if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)) or ENV['DISPLAY']
-  begin
-    require 'gtk3'
-    HAVE_GTK = true
-  rescue LoadError
-    if (ENV['RUN_BY_CRON'].nil? or ENV['RUN_BY_CRON'] == 'false') and ARGV.empty? or ARGV.any? { |arg| arg =~ /^--gui$/ } or not $stdout.isatty
-      if defined?(Win32)
-        r = Win32.MessageBox(:lpText => "Lich uses gtk3 to create windows, but it is not installed.  You can use Lich from the command line (ruby lich.rbw --help) or you can install gtk2 for a point and click interface.\n\nWould you like to install gtk2 now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
-        if r == Win32::IDIYES
-        
-            if gem_file
-              verb = (Win32.isXP? ? 'open' : 'runas')
-              r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => gem_file, :lpParameters => "install cairo:1.14.3 gtk2:2.2.5 #{gem_default_parameters}")
-              if r[:return] > 0
-                pid = r[:hProcess]
-                sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
-                r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
-              else
-                # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
-                r = Win32.ShellExecute(:lpOperation => verb, :lpFile => gem_file, :lpParameters => 'install cairo:1.14.3 gtk2:2.2.5 --source http://rubygems.org --no-ri --no-rdoc')
-                if r <= 32
-                  Win32.MessageBox(:lpText => "error: failed to start the gtk3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{gem_file}\", :lpParameters => \"install cairo:1.14.3 gtk2:2.2.5 -#{gem_default_parameters}\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-                  exit
-                end
-                r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
-              end
-              if r == Win32::IDIOK
-                if File.exists?("#{ruby_bin_dir}\\rubyw.exe")
-                  Win32.ShellExecute(:lpOperation => 'open', :lpFile => "#{ruby_bin_dir}\\rubyw.exe", :lpParameters => "\"#{File.expand_path($PROGRAM_NAME)}\"")
-                else
-                  Win32.MessageBox(:lpText => "error: failed to find rubyw.exe; can't restart Lich for you", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-                end
-              else
-                # user doesn't want to restart Lich
-              end
-            else
-              Win32.MessageBox(:lpText => "error: Could not find gem.bat in directory #{ruby_bin_dir}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-            end
-          else
-            Win32.MessageBox(:lpText => "error: GetModuleFileName failed", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-          end
-        else
-          # user doesn't want to install gtk3 gem
-        end
       else
-        # fixme: no gtk3 on Linux/Mac
-        puts "The gtk3 gem is not installed (or failed to load), you may need to: sudo gem install gtk3"
+        # user doesn't want to install gem
+        required_module[:result] = "User declined installation."
       end
-      exit
     else
-      # gtk is optional if command line arguments are given or started in a terminal
-      HAVE_GTK = false
-      @early_gtk_error = "warning: failed to load GTK\n\t#{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      # fixme: no module on Linux/Mac
+      puts "The #{required_module[:name]} gem is not installed (or failed to load), you may need to: sudo gem install #{required_module[:name]}"
+      required_module[:result] = "Install skipped. Not a Win32 platform."
     end
   end
-else
-  HAVE_GTK = false
-  @early_gtk_error = "info: DISPLAY environment variable is not set; not trying gtk"
-end
+}
 
 unless File.exists?(LICH_DIR)
   begin
@@ -781,63 +789,26 @@ $stderr.sync = true
 Lich.log "info: Lich #{LICH_VERSION}"
 Lich.log "info: Ruby #{RUBY_VERSION}"
 Lich.log "info: #{RUBY_PLATFORM}"
-Lich.log @early_gtk_error if @early_gtk_error
-@early_gtk_error = nil
+# TODO: This is broken with the refactor. Consider how to fix.
+required_modules.each{|required_module|
+  if required_module.key?(:result)
+    Lich.log "#{required_module[:name]} install result: #{required_module[:result]}"
+  else
+    Lich.log "#{required_module[:name]} install result not recorded."
+  end
+}
 
-unless File.exists?(DATA_DIR)
-  begin
-    Dir.mkdir(DATA_DIR)
-  rescue
-    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occured while attempting to create directory #{DATA_DIR}\n\n#{$!}", :icon => :error)
-    exit
+[DATA_DIR, SCRIPT_DIR, "#{SCRIPT_DIR}/custom", MAP_DIR, LOG_DIR, BACKUP_DIR].each{|required_directory|
+  unless File.exists?(required_directory)
+    begin
+      Dir.mkdir(required_directory)
+    rescue
+      Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      Lich.msgbox(:message => "An error occured while attempting to create directory #{required_directory}\n\n#{$!}", :icon => :error)
+      exit
+    end
   end
-end
-unless File.exists?(SCRIPT_DIR)
-  begin
-    Dir.mkdir(SCRIPT_DIR)
-  rescue
-    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occured while attempting to create directory #{SCRIPT_DIR}\n\n#{$!}", :icon => :error)
-    exit
-  end
-end
-unless File.exists?("#{SCRIPT_DIR}/custom")
-  begin
-    Dir.mkdir("#{SCRIPT_DIR}/custom")
-  rescue
-    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occured while attempting to create directory #{SCRIPT_DIR}/custom\n\n#{$!}", :icon => :error)
-    exit
-  end
-end
-unless File.exists?(MAP_DIR)
-  begin
-    Dir.mkdir(MAP_DIR)
-  rescue
-    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occured while attempting to create directory #{MAP_DIR}\n\n#{$!}", :icon => :error)
-    exit
-  end
-end
-unless File.exists?(LOG_DIR)
-  begin
-    Dir.mkdir(LOG_DIR)
-  rescue
-    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occured while attempting to create directory #{LOG_DIR}\n\n#{$!}", :icon => :error)
-    exit
-  end
-end
-unless File.exists?(BACKUP_DIR)
-  begin
-    Dir.mkdir(BACKUP_DIR)
-  rescue
-    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occured while attempting to create directory #{BACKUP_DIR}\n\n#{$!}", :icon => :error)
-    exit
-  end
-end
+}
 
 Lich.init_db
 
