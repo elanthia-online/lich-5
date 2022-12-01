@@ -27,7 +27,6 @@ login_button_box.pack_end(connect_button, :expand => false, :fill => false, :pad
 login_button_box.pack_end(disconnect_button, :expand => false, :fill => false, :padding => 5)
 
 liststore = Gtk::ListStore.new(String, String, String, String)
-liststore.set_sort_column_id(1, :ascending)
 
 renderer = Gtk::CellRendererText.new
 #         renderer.background = 'white'
@@ -36,10 +35,12 @@ treeview = Gtk::TreeView.new(liststore)
 treeview.height_request = 160
 
 col = Gtk::TreeViewColumn.new("Game", renderer, :text => 1)
+col.set_sort_column_id(1)
 col.resizable = true
 treeview.append_column(col)
 
 col = Gtk::TreeViewColumn.new("Character", renderer, :text => 3)
+col.set_sort_column_id(3)
 col.resizable = true
 treeview.append_column(col)
 
@@ -125,16 +126,23 @@ connect_button.signal_connect('clicked') {
       user_id_entry.sensitive = true
       pass_entry.sensitive = true
     else
-
       liststore.clear
-      login_info.each do |row|
+
+      login_info
+        .sort{ |a, b|
+          if a[:game_code] != b[:game_code]
+            a[:game_code] <=> b[:game_code]
+          else
+            a[:char_name] <=> b[:char_name]
+          end}
+      .each{ |row|
         iter = liststore.append
         iter[0] = row[:game_code]
         iter[1] = row[:game_name]
         iter[2] = row[:char_code]
-        iter[3] = row[:char_name]
-      end
-    disconnect_button.sensitive = true
+        iter[3] = row[:char_name]}
+
+      disconnect_button.sensitive = true
     end
     login_server = true
   }
