@@ -1,3 +1,5 @@
+module Games
+  module Gemstone
     class GameObj
       @@loot          = Array.new
       @@npcs          = Array.new
@@ -406,3 +408,5 @@
     #
     # end deprecated stuff
     #
+  end
+end
