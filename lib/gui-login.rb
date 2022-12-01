@@ -1,14 +1,14 @@
 # Lich5 Carve out - GTK3 lich-login code stuff
 
-def gui_login
+def gui_login(entry_file)
 
   @autosort_state = Lich.track_autosort_state
   @tab_layout_state = Lich.track_layout_state
   @theme_state = Lich.track_dark_mode
 
   @launch_data = nil
-  if File.exists?("#{DATA_DIR}/entry.dat")
-    @entry_data = File.open("#{DATA_DIR}/entry.dat", 'r') { |file|
+  if File.exists?(entry_data_file)
+    @entry_data = File.open(entry_data_file, 'r') { |file|
       begin
         if @autosort_state == true
         # Sort in list by instance name, account name, and then character name
@@ -88,7 +88,7 @@ def gui_login
   wait_until { @done }
 
   if @save_entry_data
-    File.open("#{DATA_DIR}/entry.dat", 'w') { |file|
+    File.open(entry_data_file, 'w') { |file|
       file.write([Marshal.dump(@entry_data)].pack('m'))
     }
   end

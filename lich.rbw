@@ -4911,6 +4911,8 @@ else
 end
 
 main_thread = Thread.new {
+  entry_data_file = "#{DATA_DIR}/entry.dat"
+  
   test_mode = false
   $SEND_CHARACTER = '>'
   $cmd_prefix = '<c>'
@@ -4920,10 +4922,18 @@ main_thread = Thread.new {
 
   @launch_data = nil
   require_relative("./lib/eaccess.rb")
+  
+  switch_index = ARGV.index("--entrydat")
 
+  if ( !switch_index.nil? )
+    entry_data_file = ARGV[switch_index + 1]
+    ARGV.delete("--entrydat")
+    ARGV.delete(entry_data_file)
+  end
+  
   if ARGV.include?('--login')
-    if File.exists?("#{DATA_DIR}/entry.dat")
-      entry_data = File.open("#{DATA_DIR}/entry.dat", 'r') { |file|
+    if File.exists?(entry_data_file)
+      entry_data = File.open(entry_data_file, 'r') { |file|
         begin
           Marshal.load(file.read.unpack('m').first)
         rescue
@@ -5006,7 +5016,7 @@ main_thread = Thread.new {
   ## GUI starts here
 
   elsif defined?(Gtk) and (ARGV.empty? or argv_options[:gui])
-    gui_login
+    gui_login(entry_data_file)
   end
 
   #
