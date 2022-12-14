@@ -3236,6 +3236,7 @@ module Games
     end
 
     require_relative("./lib/spell.rb")
+    require_relative("./lib/bounty.rb")
 
     # #updating PSM3 abilities via breakout - 20210801
     require_relative("./lib/armor.rb")
