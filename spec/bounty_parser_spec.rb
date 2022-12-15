@@ -4,8 +4,8 @@ class Bounty
   describe Parser, "#parse" do
     it "can tell when we don't have a task" do
       bounty = described_class.parse "You are not currently assigned a task."
-        expect(bounty[:task]).to be_nil
-        expect(bounty[:status]).to eq(:assigned)
+        expect(bounty[:task]).to eq(:none)
+        expect(bounty[:status]).to eq(:none)
     end
 
     context "when assigned a task" do

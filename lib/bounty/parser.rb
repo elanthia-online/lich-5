@@ -13,7 +13,7 @@ class Bounty
       /the sentry just outside (?<town>Kraken's Fall)/,
     )
 
-    TASK_ASSIGNED = ({ nil => /^You are not currently assigned a task/ }).merge({
+    TASK_ASSIGNED = {
       bandit:   /It appears they have a bandit problem they'd like you to solve/,
       cull:     /It appears they have a creature problem they'd like you to solve/,
       gem:      /The local gem dealer, [^,]+, has an order to fill and wants our help/,
@@ -21,7 +21,7 @@ class Bounty
       herb:     /Hmm, I've got a task here from the town of (?<town>[^.]+?).  The local [^,]+?, [^,]+, has asked for our aid.  Head over there and see what you can do.  Be sure to ASK about BOUNTIES./,
       rescue:   /It appears that a local resident urgently needs our help in some matter/,
       skins:    /The local furrier .+ has an order to fill and wants our help/,
-    })
+    }
 
     TASK_COMPLETE = {
       taskmaster: /^You have succeeded in your task and can return to the Adventurer's Guild/,
@@ -58,7 +58,12 @@ class Bounty
       )
     }
 
+   TASK_NONE = {
+      none: /^You are not currently assigned a task/,
+    }
+
     TASK_MATCHERS = {
+      none: TASK_NONE,
       assigned: TASK_ASSIGNED,
       done: TASK_COMPLETE,
       failed: TASK_FAILED,
