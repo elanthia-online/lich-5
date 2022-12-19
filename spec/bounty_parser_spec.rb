@@ -20,7 +20,7 @@ class Bounty
         expect(bounty[:task]).to eq(:heirloom_assignment)
       end
 
-      it "can tell we were assigned a skins task" do
+      it "can tell we were assigned a skin task" do
         bounty = described_class.parse "The local furrier Furrier has an order to fill and wants our help"
         expect(bounty[:task]).to eq(:skin_assignment)
       end
@@ -169,10 +169,10 @@ class Bounty
         end
       end
 
-      context "skins" do
+      context "skin" do
         it "with a one word town name" do
           bounty = described_class.parse "You have been tasked to retrieve 8 madrinol skins of at least fair quality for Gaedrein in Ta'Illistim.  You can SKIN them off the corpse of a snow madrinol or purchase them from another adventurer.  You can SELL the skins to the furrier as you collect them.\""
-          expect(bounty[:task]).to eq(:skins)
+          expect(bounty[:task]).to eq(:skin)
           expect(bounty[:town]).to eq("Ta'Illistim")
           expect(bounty[:requirements]).to include({
             :creature => "snow madrinol",
@@ -185,7 +185,7 @@ class Bounty
 
         it "with a multipart town name" do
           bounty = described_class.parse "You have been tasked to retrieve 5 thrak tails of at least exceptional quality for the furrier in the Company Store in Kharam-Dzu.  You can SKIN them off the corpse of a red-scaled thrak or purchase them from another adventurer.  You can SELL the skins to the furrier as you collect them.\""
-          expect(bounty[:task]).to eq(:skins)
+          expect(bounty[:task]).to eq(:skin)
           expect(bounty[:town]).to eq("Kharam-Dzu")
           expect(bounty[:requirements]).to include({
             :creature => "red-scaled thrak",
