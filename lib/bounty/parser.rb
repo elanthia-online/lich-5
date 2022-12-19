@@ -13,35 +13,25 @@ class Bounty
       /the sentry just outside (?<town>Kraken's Fall)/,
     )
 
-    TASK_ASSIGNED = {
-      bandit:   /It appears they have a bandit problem they'd like you to solve/,
-      cull:     /It appears they have a creature problem they'd like you to solve/,
-      gem:      /The local gem dealer, [^,]+, has an order to fill and wants our help/,
-      heirloom: /It appears they need your help in tracking down some kind of lost heirloom/,
-      herb:     /Hmm, I've got a task here from the town of (?<town>[^.]+?).  The local [^,]+?, [^,]+, has asked for our aid.  Head over there and see what you can do.  Be sure to ASK about BOUNTIES./,
-      rescue:   /It appears that a local resident urgently needs our help in some matter/,
-      skins:    /The local furrier .+ has an order to fill and wants our help/,
-    }
-
-    TASK_COMPLETE = {
-      taskmaster: /^You have succeeded in your task and can return to the Adventurer's Guild/,
-      heirloom:   /^You have located (?:an?|some) (?<item>.+) and should bring it back to #{GUARD_REGEX}\.$/,
-      cull:       /^You succeeded in your task and should report back to #{GUARD_REGEX}\.$/,
-    }
-
-    TASK_TRIGGERED = {
-      dangerous: /^You have been tasked to hunt down and kill a particularly dangerous (?<creature>[^.]+) that has established a territory [oi]n (?:the\s+)?(?<area>[^.]+?)(?: near [^.]+)?\.  You have provoked (?:his|her|its) attention and now you must(?: return to where you left (?:him|her|it) and)? kill (?:him|her|it)!$/,
-      rescue:    /^You have made contact with the child you are to rescue and you must get (?:him|her) back alive to #{GUARD_REGEX}\.$/,
-    }
-
     TASK_UNFINISHED = {
+    }
+
+
+    TASK_MATCHERS = {
+      none: /^You are not currently assigned a task/,
+      bandit_assignment:   /It appears they have a bandit problem they'd like you to solve/,
+      creature_assignment:     /It appears they have a creature problem they'd like you to solve/,
+      gem_assignment:      /The local gem dealer, [^,]+, has an order to fill and wants our help/,
+      heirloom_assignment: /It appears they need your help in tracking down some kind of lost heirloom/,
+      herb_assignment:     /Hmm, I've got a task here from the town of (?<town>[^.]+?).  The local [^,]+?, [^,]+, has asked for our aid.  Head over there and see what you can do.  Be sure to ASK about BOUNTIES./,
+      rescue_assignment:   /It appears that a local resident urgently needs our help in some matter/,
+      skin_assignment:    /The local furrier .+ has an order to fill and wants our help/,
+      taskmaster: /^You have succeeded in your task and can return to the Adventurer's Guild/,
+      heirloom_found:   /^You have located (?:an?|some) (?<item>.+) and should bring it back to #{GUARD_REGEX}\.$/,
+      guard:       /^You succeeded in your task and should report back to #{GUARD_REGEX}\.$/,
+      dangerous_spawned: /^You have been tasked to hunt down and kill a particularly dangerous (?<creature>[^.]+) that has established a territory #{LOCATION_REGEX}\.  You have provoked (?:his|her|its) attention and now you must(?: return to where you left (?:him|her|it) and)? kill (?:him|her|it)!$/,
+      rescue_spawned:    /^You have made contact with the child you are to rescue and you must get (?:him|her) back alive to #{GUARD_REGEX}\.$/,
       bandit: /^You have been tasked to(?: help \w+)? suppress (?<creature>bandit) activity #{LOCATION_REGEX}\.  You need to kill (?<number>\d+) (?:more\s+)?of them to complete your task\.$/,
-      cull: Regexp.union(
-        /^You have been tasked to(?: help \w+)? suppress (?<creature>[^.]+) activity #{LOCATION_REGEX}\.  You need to kill (?<number>\d+) (?:more\s+)?of them to complete your task\.$/,
-        /^You have been tasked to help \w+ rescue a missing child by suppressing (?<creature>[^.]+) activity #{LOCATION_REGEX} during the rescue attempt\.  You need to kill (?<number>\d+) (?:more\s+)?of them to complete your task\.$/,
-        /^You have been tasked to help \w+ retrieve an heirloom by suppressing (?<creature>[^.]+) activity #{LOCATION_REGEX} during the retrieval effort\.  You need to kill (?<number>\d+) (?:more\s+)?of them to complete your task\.$/,
-        /^You have been tasked to help \w+ kill a dangerous creature by suppressing (?<creature>[^.]+) activity #{LOCATION_REGEX} during the hunt\.  You need to kill (?<number>\d+) (?:more\s+)?of them to complete your task\.$/
-      ),
       dangerous: /^You have been tasked to hunt down and kill a (?:particularly )?dangerous (?<creature>[^.]+) that has established a territory #{LOCATION_REGEX}\.  You can get its attention by killing other creatures of the same type in its territory\.$/,
       escort: /^(?:The taskmaster told you:  ")?I've got a special mission for you\.  A certain client has hired us to provide a protective escort on (?:his|her) upcoming journey\.  Go to (?<start>[^.]+) and WAIT for (?:him|her) to meet you there\.  You must guarantee (?:his|her) safety to (?<destination>[^.]+) as soon as you can, being ready for any dangers that the two of you may face\.  Good luck!"?$/,
       gem: /^The gem dealer in (?<town>[^,]+), [^,]+, has received orders from multiple customers requesting (?:an?|some) (?<gem>[^.]+)\.  You have been tasked to retrieve (?<number>\d+) (?:more\s+)?of them\.  You can SELL them to the gem dealer as you find them\.$/,
@@ -49,26 +39,16 @@ class Bounty
       herb: /^The .+? in (?<town>[^,]+?), [^,]+?, is working on a concoction that requires (?:an?|some) (?<herb>[^.]+?) found [oi]n (?:the\s+)?(?<area>[^.]+?)(?:\s+(?:near|under|between) [^.]+)?\.  These samples must be in pristine condition\.  You have been tasked to retrieve (?<number>\d+) (?:more\s+)?samples?\.$/,
       rescue: /^You have been tasked to rescue the young (?:runaway|kidnapped) (?:son|daughter) of a local citizen\.  A local divinist has had visions of the child fleeing from an? (?<creature>[^.]+?) #{LOCATION_REGEX}\.  Find the area where the child was last seen and clear out the creatures that have been tormenting (?:him|her) in order to bring (?:him|her) out of hiding\.$/,
       skins: /^You have been tasked to retrieve (?<number>\d+) (?<skin>[^.]+?)s? of at least (?<quality>[^.]+) quality for [^.]+ in (?<town>[^.]+?)\.  You can SKIN them off the corpse of an? (?<creature>[^.]+) or purchase them from another adventurer\.  You can SELL the skins to the furrier as you collect them\."$/,
-    }
-
-    TASK_FAILED = {
-      taskmaster: Regexp.union(
+      cull: Regexp.union(
+        /^You have been tasked to(?: help \w+)? suppress (?<creature>[^.]+) activity #{LOCATION_REGEX}\.  You need to kill (?<number>\d+) (?:more\s+)?of them to complete your task\.$/,
+        /^You have been tasked to help \w+ rescue a missing child by suppressing (?<creature>[^.]+) activity #{LOCATION_REGEX} during the rescue attempt\.  You need to kill (?<number>\d+) (?:more\s+)?of them to complete your task\.$/,
+        /^You have been tasked to help \w+ retrieve an heirloom by suppressing (?<creature>[^.]+) activity #{LOCATION_REGEX} during the retrieval effort\.  You need to kill (?<number>\d+) (?:more\s+)?of them to complete your task\.$/,
+        /^You have been tasked to help \w+ kill a dangerous creature by suppressing (?<creature>[^.]+) activity #{LOCATION_REGEX} during the hunt\.  You need to kill (?<number>\d+) (?:more\s+)?of them to complete your task\.$/,
+      ),
+      failed: Regexp.union(
         /^You have failed in your task/,
         /^The child you were tasked to rescue is gone and your task is failed.  Report this failure to the Adventurer's Guild./,
-      )
-    }
-
-   TASK_NONE = {
-      none: /^You are not currently assigned a task/,
-    }
-
-    TASK_MATCHERS = {
-      none: TASK_NONE,
-      assigned: TASK_ASSIGNED,
-      done: TASK_COMPLETE,
-      failed: TASK_FAILED,
-      triggered: TASK_TRIGGERED,
-      unfinished: TASK_UNFINISHED,
+      ),
     }
 
     def initialize(description)
@@ -78,19 +58,15 @@ class Bounty
     attr_reader :description
 
     def parse
-
-      TASK_MATCHERS.each do |(status, matchers)|
-        matchers.each do |(task, regex)|
-          if md = regex.match(description)
-            return (
-              {
-                status: status,
-                task: task,
-              }.merge(
-                task_details_from(md.named_captures)
-              ).compact
-            )
-          end
+      TASK_MATCHERS.each do |(task_type, regex)|
+        if md = regex.match(description)
+          return (
+            {
+              task: task_type,
+            }.merge(
+              task_details_from(md.named_captures)
+            ).compact
+          )
         end
       end
     end
