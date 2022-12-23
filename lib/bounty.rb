@@ -2,8 +2,14 @@ require_relative "./bounty/parser"
 require_relative "./bounty/task"
 
 class Bounty
+  KNOWN_TASKS = Parser::TASK_MATCHERS.keys
+
   def self.current
     Task.new(Parser.parse(checkbounty))
+  end
+
+  def self.task
+    current
   end
 
   # Delegate class methods to a new instance of the current bounty task

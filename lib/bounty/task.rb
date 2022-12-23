@@ -1,19 +1,5 @@
 class Bounty
   class Task
-    TYPES = [
-      :cull, :heirloom, :skins,
-      :gem, :escort, :herb,
-      :rescue, :dangerous, :bandit,
-    ].freeze
-
-    STATUSES = [
-      :assigned,
-      :triggered,
-      :done,
-      :failed,
-      :unfinished,
-    ].freeze
-
     def initialize(options={})
       @description    = options[:description]
       @requirements   = options[:requirements] || {}
@@ -24,6 +10,7 @@ class Bounty
     attr_accessor :task, :status, :requirements, :description, :town
 
     def type; task; end
+    def kind; task; end
     def count; number; end
 
     def creature
@@ -42,13 +29,17 @@ class Bounty
       requirements[:area] || town
     end
 
+    def heirloom?
+      task == :heirloom
+    end
+
     def search_heirloom?
-      task == :heirloom &&
+      heirloom &&
         requirements[:action] == "search"
     end
 
     def loot_heirloom?
-      task == :heirloom &&
+      heirloom &&
         requirements[:action] == "loot"
     end
 
@@ -56,16 +47,18 @@ class Bounty
       [:done, :failed].include?(status)
     end
 
-    def triggered?
-      :triggered == status
+    def spawned?
+      task.end_with?("spawned")
     end
 
+    def triggered?; spawned?; end
+
     def any?
-      !!status
+      !none?
     end
 
     def none?
-      !any?
+      [:none, nil].include?(task)
     end
 
     def help?

@@ -1,4 +1,4 @@
-require 'bounty'
+require 'bounty/parser'
 
 class Bounty
   describe Parser, "#parse" do
