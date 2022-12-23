@@ -29,7 +29,7 @@ class Bounty
     end
 
     def bandit?
-      task.start_with?("bandit")
+      task.to_s.start_with?("bandit")
     end
 
     def creature?
@@ -39,35 +39,35 @@ class Bounty
     end
 
     def cull?
-      task.start_with?("cull")
+      task.to_s.start_with?("cull")
     end
 
     def dangerous?
-      task.start_with?("dangerous")
+      task.to_s.start_with?("dangerous")
     end
 
     def escort?
-      task.start_with?("escort")
+      task.to_s.start_with?("escort")
     end
 
     def gem?
-      task.start_with?("gem")
+      task.to_s.start_with?("gem")
     end
 
     def heirloom?
-      task.start_with?("heirloom")
+      task.to_s.start_with?("heirloom")
     end
 
     def herb?
-      task.start_with?("herb")
+      task.to_s.start_with?("herb")
     end
 
     def rescue?
-      task.start_with?("rescue")
+      task.to_s.start_with?("rescue")
     end
 
     def skin?
-      task.start_with?("skin")
+      task.to_s.start_with?("skin")
     end
 
     def search_heirloom?
