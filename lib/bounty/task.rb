@@ -4,10 +4,9 @@ class Bounty
       @description    = options[:description]
       @requirements   = options[:requirements] || {}
       @task           = options[:task]
-      @status         = options[:status]
       @town           = options[:town] || @requirements[:town]
     end
-    attr_accessor :task, :status, :requirements, :description, :town
+    attr_accessor :task, :requirements, :description, :town
 
     def type; task; end
     def kind; task; end
@@ -29,8 +28,46 @@ class Bounty
       requirements[:area] || town
     end
 
+    def bandit?
+      task.start_with?("bandit")
+    end
+
+    def creature?
+      [
+        :creature_assignment, :cull, :dangerous, :dangerous_spawned, :rescue, :heirloom
+      ].include?(task)
+    end
+
+    def cull?
+      task.start_with?("cull")
+    end
+
+    def dangerous?
+      task.start_with?("dangerous")
+    end
+
+    def escort?
+      task.start_with?("escort")
+    end
+
+    def gem?
+      task.start_with?("gem")
+    end
+
     def heirloom?
-      task == :heirloom
+      task.start_with?("heirloom")
+    end
+
+    def herb?
+      task.start_with?("herb")
+    end
+
+    def rescue?
+      task.start_with?("rescue")
+    end
+
+    def skin?
+      task.start_with?("skin")
     end
 
     def search_heirloom?
@@ -44,11 +81,15 @@ class Bounty
     end
 
     def done?
-      [:done, :failed].include?(status)
+      [
+        :failed, :guard, :taskmaster
+      ].include?(task)
     end
 
     def spawned?
-      task.end_with?("spawned")
+      [
+        :dangerous_spawned, :escort, :rescue_spawned
+      ].include?(task)
     end
 
     def triggered?; spawned?; end
@@ -59,6 +100,13 @@ class Bounty
 
     def none?
       [:none, nil].include?(task)
+    end
+
+    def guard?
+      [
+        :guard,
+        :bandit_assignment, :creature_assignment, :heirloom_assignment, :rescue_assignment
+      ].include?(task)
     end
 
     def help?

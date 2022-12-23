@@ -13,10 +13,6 @@ class Bounty
       /the sentry just outside (?<town>Kraken's Fall)/,
     )
 
-    TASK_UNFINISHED = {
-    }
-
-
     TASK_MATCHERS = {
       none: /^You are not currently assigned a task/,
       bandit_assignment:   /It appears they have a bandit problem they'd like you to solve/,
