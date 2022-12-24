@@ -58,7 +58,7 @@ class Bounty
         if md = regex.match(description)
           return (
             {
-              task: task_type,
+              type: task_type,
             }.merge(
               task_details_from(md.named_captures)
             ).compact

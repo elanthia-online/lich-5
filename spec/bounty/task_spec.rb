@@ -5,14 +5,14 @@ shared_examples "task predicate examples" do
 
   it "truthy types" do
     truthy_types.each do |type|
-      t = described_class.new(task: type)
+      t = described_class.new(type: type)
       expect(t.send(predicate)).to be_truthy, "expected #{predicate} for :#{type} to be true"
     end
   end
 
   it "falsey types" do
     falsey_types.each do |type|
-      t = described_class.new(task: type)
+      t = described_class.new(type: type)
       expect(t.send(predicate)).to be_falsey, "expected #{predicate} for :#{type} to be false"
     end
   end
@@ -131,6 +131,13 @@ class Bounty
     describe "#guard?" do
       let(:predicate) { :guard? }
       let(:truthy_types) { [:guard, :bandit_assignment, :creature_assignment, :heirloom_assignment, :rescue_assignment] }
+
+      include_examples "task predicate examples"
+    end
+
+    describe "#assigned?" do
+      let(:predicate) { :assigned? }
+      let(:truthy_types) { [:bandit_assignment, :creature_assignment, :gem_assignment, :heirloom_assignment, :herb_assignment, :rescue_assignment, :skin_assignment] }
 
       include_examples "task predicate examples"
     end
