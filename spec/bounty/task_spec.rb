@@ -141,5 +141,28 @@ class Bounty
 
       include_examples "task predicate examples"
     end
+
+    describe "#ready?" do
+      let(:predicate) { :ready? }
+      let(:truthy_types) { [ :bandit_assignment, :escort_assignment, :cull, :dangerous, :gem, :herb, :skin, :heirloom ] }
+
+      include_examples "task predicate examples"
+    end
+
+    describe "#help?" do
+      subject(:task) { described_class.new(description: desc) }
+
+      context "when a help task" do
+        let(:desc) { "You have been tasked to help Buddy suppress bandit activity in the grasslands between Wehnimer's Landing and Solhaven.  You need to kill 18 of them to complete your task." }
+
+        it { expect(task.help?).to be_truthy }
+      end
+
+      context "when not a help task" do
+        let(:desc) { "You have been tasked to suppress bandit activity near Widowmaker's Road near Kraken's Fall.  You need to kill 11 more of them to complete your task." }
+
+        it { expect(task.help?).to be_falsey }
+      end
+    end
   end
 end

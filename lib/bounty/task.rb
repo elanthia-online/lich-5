@@ -113,6 +113,14 @@ class Bounty
       type.end_with?("assignment")
     end
 
+    def ready?
+      [
+        :bandit_assignment, :escort_assignment,
+        :cull, :dangerous, :gem, :herb, :skin, :heirloom
+      ].include?(type)
+    end
+    def assist?; ready?; end
+
     def help?
       description.start_with?("You have been tasked to help")
     end
