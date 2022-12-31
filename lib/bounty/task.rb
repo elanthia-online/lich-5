@@ -119,11 +119,12 @@ class Bounty
         :cull, :dangerous, :gem, :herb, :skin, :heirloom
       ].include?(type)
     end
-    def assist?; ready?; end
 
     def help?
       description.start_with?("You have been tasked to help")
     end
+    def assist?; help?; end
+    def group?; help? ;end
 
     def method_missing(symbol, *args, &blk)
       if requirements&.keys.include?(symbol)
