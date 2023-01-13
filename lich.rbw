@@ -2205,7 +2205,7 @@ module Games
                   $_SERVERSTRING_.gsub!("\r\n", "</component>")
                   Lich.log "Open-ended room objects component id tag fixed to: #{$_SERVERSTRING_.inspect}"
                 end
-                # "</component>\r\n"
+
                 if $_SERVERSTRING_ == "</component>\r\n"
                   Lich.log "Extraneous closing tag detected and deleted: #{$_SERVERSTRING_.inspect}"
                   $_SERVERSTRING_ = ""
