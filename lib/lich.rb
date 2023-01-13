@@ -29,11 +29,6 @@ module Lich
 
   def Lich.db
     @@lich_db ||= SQLite3::Database.new("#{DATA_DIR}/lich.db3")
-    #if $SAFE == 0
-    #  @@lich_db ||= SQLite3::Database.new("#{DATA_DIR}/lich.db3")
-    #else
-    #  nil
-    #end
   end
 
   def Lich.init_db

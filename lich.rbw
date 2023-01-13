@@ -100,12 +100,6 @@ class Numeric
 end
 
 class String
-  @@elevated_untaint = proc { |what| what.orig_untaint }
-  alias :orig_untaint :untaint
-  def untaint
-    @@elevated_untaint.call(self)
-  end
-
   def to_s
     self.dup
   end
@@ -122,7 +116,6 @@ end
 class StringProc
   def initialize(string)
     @string = string
-    @string.untaint
   end
 
   def kind_of?(type)
@@ -134,7 +127,7 @@ class StringProc
   end
 
   def call(*a)
-    proc { begin; $SAFE = 3; rescue; nil; end; eval(@string) }.call
+    proc { eval(@string) }.call
   end
 
   def _dump(d = nil)
@@ -764,13 +757,6 @@ class Script
       else
         if script_obj.labels.length > 1
           trusted = false
-        elsif proc { begin; $SAFE = 3; true; rescue; false; end }.call
-          begin
-            trusted = Lich.db.get_first_value('SELECT name FROM trusted_scripts WHERE name=?;', script_name.encode('UTF-8'))
-          rescue SQLite3::BusyException
-            sleep 0.1
-            retry
-          end
         else
           trusted = true
         end
@@ -843,7 +829,7 @@ class Script
         else
           begin
             while (script = Script.current) and script.current_label
-              proc { foo = script.labels[script.current_label]; foo.untaint; begin; $SAFE = 3; rescue; nil; end; eval(foo, script_binding, script.name, 1) }.call
+              proc { foo = script.labels[script.current_label]; eval(foo, script_binding, script.name, 1) }.call
               Script.current.get_next_label
             end
           rescue SystemExit
@@ -1167,7 +1153,7 @@ class Script
   if (RUBY_VERSION =~ /^2\.[012]\./)
     def Script.trust(script_name)
       # fixme: case sensitive blah blah
-      if ($SAFE == 0) and not caller.any? { |c| c =~ /eval|run/ }
+      if not caller.any? { |c| c =~ /eval|run/ }
         begin
           Lich.db.execute('INSERT OR REPLACE INTO trusted_scripts(name) values(?);', script_name.encode('UTF-8'))
         rescue SQLite3::BusyException
@@ -1361,11 +1347,11 @@ class Script
   def instance_eval(*a);         nil; end
 
   def labels
-    ($SAFE == 0) ? @labels : nil
+    @labels
   end
 
   def thread_group
-    ($SAFE == 0) ? @thread_group : nil
+    @thread_group
   end
 
   def has_thread?(t)
@@ -1488,8 +1474,10 @@ end
 
 class ExecScript < Script
   @@name_exec_mutex = Mutex.new
-  @@elevated_start = proc { |cmd_data, options|
-    options[:trusted] = false
+  attr_reader :cmd_data
+
+  def ExecScript.start(cmd_data, options = {})
+    options = { :quiet => true } if options == true
     unless new_script = ExecScript.new(cmd_data, options)
       respond '--- Lich: failed to start exec script'
       return false
@@ -1501,9 +1489,9 @@ class ExecScript < Script
         Thread.current.priority = 1
         respond("--- Lich: #{script.name} active.") unless script.quiet
         begin
-          script_binding = Scripting.new.script
+          script_binding = TRUSTED_SCRIPT_BINDING.call
           eval('script = Script.current', script_binding, script.name.to_s)
-          proc { cmd_data.untaint; $SAFE = 3; eval(cmd_data, script_binding, script.name.to_s) }.call
+          eval(cmd_data, script_binding, script.name.to_s)
           Script.current.kill
         rescue SystemExit
           Script.current.kill
@@ -1555,90 +1543,11 @@ class ExecScript < Script
           Script.current.kill
         end
       else
-        respond '--- Lich: error: ExecScript.start: out of cheese'
+        respond 'start_exec_script screwed up...'
       end
     }
     new_script.thread_group.add(new_thread)
     new_script
-  }
-  attr_reader :cmd_data
-
-  def ExecScript.start(cmd_data, options = {})
-    options = { :quiet => true } if options == true
-    if ($SAFE < 2) and (options[:trusted] or (RUBY_VERSION !~ /^2\.[012]\./))
-      unless new_script = ExecScript.new(cmd_data, options)
-        respond '--- Lich: failed to start exec script'
-        return false
-      end
-      new_thread = Thread.new {
-        100.times { break if Script.current == new_script; sleep 0.01 }
-
-        if script = Script.current
-          Thread.current.priority = 1
-          respond("--- Lich: #{script.name} active.") unless script.quiet
-          begin
-            script_binding = TRUSTED_SCRIPT_BINDING.call
-            eval('script = Script.current', script_binding, script.name.to_s)
-            eval(cmd_data, script_binding, script.name.to_s)
-            Script.current.kill
-          rescue SystemExit
-            Script.current.kill
-          rescue SyntaxError
-            respond "--- SyntaxError: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "SyntaxError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue ScriptError
-            respond "--- ScriptError: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "ScriptError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue NoMemoryError
-            respond "--- NoMemoryError: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "NoMemoryError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue LoadError
-            respond("--- LoadError: #{$!}")
-            respond "--- LoadError: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "LoadError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue SecurityError
-            respond "--- SecurityError: #{$!}"
-            respond $!.backtrace[0..1]
-            Lich.log "SecurityError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue ThreadError
-            respond "--- ThreadError: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "ThreadError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue SystemStackError
-            respond "--- SystemStackError: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "SystemStackError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue Exception
-            respond "--- Exception: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "Exception: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue
-            respond "--- Lich: error: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "Error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          end
-        else
-          respond 'start_exec_script screwed up...'
-        end
-      }
-      new_script.thread_group.add(new_thread)
-      new_script
-    else
-      @@elevated_start.call(cmd_data, options)
-    end
   end
 
   def initialize(cmd_data, flags = Hash.new)
@@ -2154,50 +2063,40 @@ class SpellRanks
   @@list      ||= Array.new
   @@timestamp ||= 0
   @@loaded    ||= false
-  @@elevated_load = proc { SpellRanks.load }
-  @@elevated_save = proc { SpellRanks.save }
   attr_reader :name
   attr_accessor :minorspiritual, :majorspiritual, :cleric, :minorelemental, :majorelemental, :minormental, :ranger, :sorcerer, :wizard, :bard, :empath, :paladin, :arcanesymbols, :magicitemuse, :monk
 
   def SpellRanks.load
-    if $SAFE == 0
-      if File.exists?("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat")
-        begin
-          File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'rb') { |f|
-            @@timestamp, @@list = Marshal.load(f.read)
-          }
-          # minor mental circle added 2012-07-18; old data files will have @minormental as nil
-          @@list.each { |rank_info| rank_info.minormental ||= 0 }
-          # monk circle added 2013-01-15; old data files will have @minormental as nil
-          @@list.each { |rank_info| rank_info.monk ||= 0 }
-          @@loaded = true
-        rescue
-          respond "--- Lich: error: SpellRanks.load: #{$!}"
-          Lich.log "error: SpellRanks.load: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          @@list      = Array.new
-          @@timestamp = 0
-          @@loaded = true
-        end
-      else
+    if File.exists?("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat")
+      begin
+        File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'rb') { |f|
+          @@timestamp, @@list = Marshal.load(f.read)
+        }
+        # minor mental circle added 2012-07-18; old data files will have @minormental as nil
+        @@list.each { |rank_info| rank_info.minormental ||= 0 }
+        # monk circle added 2013-01-15; old data files will have @minormental as nil
+        @@list.each { |rank_info| rank_info.monk ||= 0 }
+        @@loaded = true
+      rescue
+        respond "--- Lich: error: SpellRanks.load: #{$!}"
+        Lich.log "error: SpellRanks.load: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+        @@list      = Array.new
+        @@timestamp = 0
         @@loaded = true
       end
     else
-      @@elevated_load.call
+      @@loaded = true
     end
   end
 
   def SpellRanks.save
-    if $SAFE == 0
-      begin
-        File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'wb') { |f|
-          f.write(Marshal.dump([@@timestamp, @@list]))
-        }
-      rescue
-        respond "--- Lich: error: SpellRanks.save: #{$!}"
-        Lich.log "error: SpellRanks.save: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      end
-    else
-      @@elevated_save.call
+    begin
+      File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'wb') { |f|
+        f.write(Marshal.dump([@@timestamp, @@list]))
+      }
+    rescue
+      respond "--- Lich: error: SpellRanks.save: #{$!}"
+      Lich.log "error: SpellRanks.save: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
     end
   end
 
@@ -2306,7 +2205,7 @@ module Games
                   $_SERVERSTRING_.gsub!("\r\n", "</component>")
                   Lich.log "Open-ended room objects component id tag fixed to: #{$_SERVERSTRING_.inspect}"
                 end
-                # "</component>\r\n"                
+                # "</component>\r\n"
                 if $_SERVERSTRING_ == "</component>\r\n"
                   Lich.log "Extraneous closing tag detected and deleted: #{$_SERVERSTRING_.inspect}"
                   $_SERVERSTRING_ = ""
@@ -2348,9 +2247,6 @@ module Games
                 elsif ($_SERVERSTRING_ =~ /<pushStream id="atmospherics" \/>/)
                   atmospherics = true
                 end
-                #                        while $_SERVERSTRING_.scan('<pushStream').length > $_SERVERSTRING_.scan('<popStream').length
-                #                           $_SERVERSTRING_.concat(@@socket.gets)
-                #                        end
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
 
                 if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
@@ -3236,7 +3132,6 @@ module Games
     end
 
     require_relative("./lib/spell.rb")
-    require_relative("./lib/bounty.rb")
 
     # #updating PSM3 abilities via breakout - 20210801
     require_relative("./lib/armor.rb")
@@ -3634,7 +3529,6 @@ module Games
       @@fam_room_desc = Array.new
       @@type_data     = Hash.new
       @@sellable_data = Hash.new
-      @@elevated_load = proc { GameObj.load_data }
 
       attr_reader :id
       attr_accessor :noun, :name, :before_name, :after_name
@@ -3946,55 +3840,51 @@ module Games
       end
 
       def GameObj.load_data(filename = nil)
-        if $SAFE == 0
-          if filename.nil?
-            if File.exists?("#{DATA_DIR}/gameobj-data.xml")
-              filename = "#{DATA_DIR}/gameobj-data.xml"
-            elsif File.exists?("#{SCRIPT_DIR}/gameobj-data.xml") # deprecated
-              filename = "#{SCRIPT_DIR}/gameobj-data.xml"
-            else
-              filename = "#{DATA_DIR}/gameobj-data.xml"
-            end
-          end
-          if File.exists?(filename)
-            begin
-              @@type_data = Hash.new
-              @@sellable_data = Hash.new
-              File.open(filename) { |file|
-                doc = REXML::Document.new(file.read)
-                doc.elements.each('data/type') { |e|
-                  if type = e.attributes['name']
-                    @@type_data[type] = Hash.new
-                    @@type_data[type][:name]    = Regexp.new(e.elements['name'].text) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
-                    @@type_data[type][:noun]    = Regexp.new(e.elements['noun'].text) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
-                    @@type_data[type][:exclude] = Regexp.new(e.elements['exclude'].text) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
-                  end
-                }
-                doc.elements.each('data/sellable') { |e|
-                  if sellable = e.attributes['name']
-                    @@sellable_data[sellable] = Hash.new
-                    @@sellable_data[sellable][:name]    = Regexp.new(e.elements['name'].text) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
-                    @@sellable_data[sellable][:noun]    = Regexp.new(e.elements['noun'].text) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
-                    @@sellable_data[sellable][:exclude] = Regexp.new(e.elements['exclude'].text) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
-                  end
-                }
-              }
-              true
-            rescue
-              @@type_data = nil
-              @@sellable_data = nil
-              echo "error: GameObj.load_data: #{$!}"
-              respond $!.backtrace[0..1]
-              false
-            end
+        if filename.nil?
+          if File.exists?("#{DATA_DIR}/gameobj-data.xml")
+            filename = "#{DATA_DIR}/gameobj-data.xml"
+          elsif File.exists?("#{SCRIPT_DIR}/gameobj-data.xml") # deprecated
+            filename = "#{SCRIPT_DIR}/gameobj-data.xml"
           else
+            filename = "#{DATA_DIR}/gameobj-data.xml"
+          end
+        end
+        if File.exists?(filename)
+          begin
+            @@type_data = Hash.new
+            @@sellable_data = Hash.new
+            File.open(filename) { |file|
+              doc = REXML::Document.new(file.read)
+              doc.elements.each('data/type') { |e|
+                if type = e.attributes['name']
+                  @@type_data[type] = Hash.new
+                  @@type_data[type][:name]    = Regexp.new(e.elements['name'].text) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
+                  @@type_data[type][:noun]    = Regexp.new(e.elements['noun'].text) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
+                  @@type_data[type][:exclude] = Regexp.new(e.elements['exclude'].text) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
+                end
+              }
+              doc.elements.each('data/sellable') { |e|
+                if sellable = e.attributes['name']
+                  @@sellable_data[sellable] = Hash.new
+                  @@sellable_data[sellable][:name]    = Regexp.new(e.elements['name'].text) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
+                  @@sellable_data[sellable][:noun]    = Regexp.new(e.elements['noun'].text) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
+                  @@sellable_data[sellable][:exclude] = Regexp.new(e.elements['exclude'].text) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
+                end
+              }
+            }
+            true
+          rescue
             @@type_data = nil
             @@sellable_data = nil
-            echo "error: GameObj.load_data: file does not exist: #{filename}"
+            echo "error: GameObj.load_data: #{$!}"
+            respond $!.backtrace[0..1]
             false
           end
         else
-          @@elevated_load.call
+          @@type_data = nil
+          @@sellable_data = nil
+          echo "error: GameObj.load_data: file does not exist: #{filename}"
+          false
         end
       end
 
