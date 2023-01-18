@@ -409,25 +409,25 @@ module Lich
         windir = (ENV['windir'] || ENV['SYSTEMROOT'] || 'c:\windows')
         hosts_path.gsub('%SystemRoot%', windir)
         hosts_file = "#{hosts_path}\\hosts"
-        if File.exists?(hosts_file)
+        if File.exist?(hosts_file)
           return (@@hosts_file = hosts_file)
         end
       end
-      if (windir = (ENV['windir'] || ENV['SYSTEMROOT'])) and File.exists?("#{windir}\\system32\\drivers\\etc\\hosts")
+      if (windir = (ENV['windir'] || ENV['SYSTEMROOT'])) and File.exist?("#{windir}\\system32\\drivers\\etc\\hosts")
         return (@@hosts_file = "#{windir}\\system32\\drivers\\etc\\hosts")
       end
 
       for drive in ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
         for windir in ['winnt', 'windows']
-          if File.exists?("#{drive}:\\#{windir}\\system32\\drivers\\etc\\hosts")
+          if File.exist?("#{drive}:\\#{windir}\\system32\\drivers\\etc\\hosts")
             return (@@hosts_file = "#{drive}:\\#{windir}\\system32\\drivers\\etc\\hosts")
           end
         end
       end
     else # Linux/Mac
-      if File.exists?('/etc/hosts')
+      if File.exist?('/etc/hosts')
         return (@@hosts_file = '/etc/hosts')
-      elsif File.exists?('/private/etc/hosts')
+      elsif File.exist?('/private/etc/hosts')
         return (@@hosts_file = '/private/etc/hosts')
       end
     end
@@ -435,10 +435,10 @@ module Lich
   end
 
   def Lich.modify_hosts(game_host)
-    if Lich.hosts_file and File.exists?(Lich.hosts_file)
+    if Lich.hosts_file and File.exist?(Lich.hosts_file)
       at_exit { Lich.restore_hosts }
       Lich.restore_hosts
-      if File.exists?("#{Lich.hosts_file}.bak")
+      if File.exist?("#{Lich.hosts_file}.bak")
         return false
       end
 
@@ -446,7 +446,7 @@ module Lich
         # copy hosts to hosts.bak
         File.open("#{Lich.hosts_file}.bak", 'w') { |hb| File.open(Lich.hosts_file) { |h| hb.write(h.read) } }
       rescue
-        File.unlink("#{Lich.hosts_file}.bak") if File.exists?("#{Lich.hosts_file}.bak")
+        File.unlink("#{Lich.hosts_file}.bak") if File.exist?("#{Lich.hosts_file}.bak")
         return false
       end
       File.open(Lich.hosts_file, 'a') { |f| f.write "\r\n127.0.0.1\t\t#{game_host}" }
@@ -457,10 +457,10 @@ module Lich
   end
 
   def Lich.restore_hosts
-    if Lich.hosts_file and File.exists?(Lich.hosts_file)
+    if Lich.hosts_file and File.exist?(Lich.hosts_file)
       begin
         # fixme: use rename instead?  test rename on windows
-        if File.exists?("#{Lich.hosts_file}.bak")
+        if File.exist?("#{Lich.hosts_file}.bak")
           File.open("#{Lich.hosts_file}.bak") { |infile|
             File.open(Lich.hosts_file, 'w') { |outfile|
               outfile.write(infile.read)

@@ -2111,7 +2111,7 @@ def do_client(client_string)
     elsif cmd =~ /^trust\s+(.*)/i
       script_name = $1
       if RUBY_VERSION =~ /^2\.[012]\./
-        if File.exists?("#{SCRIPT_DIR}/#{script_name}.lic")
+        if File.exist?("#{SCRIPT_DIR}/#{script_name}.lic")
           if Script.trust(script_name)
             respond "--- Lich: '#{script_name}' is now a trusted script."
           else
