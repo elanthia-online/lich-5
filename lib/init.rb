@@ -388,10 +388,10 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       elsif (args[:dwType] == REG_MULTI_SZ) and (args[:lpData].class == Array)
         lpData = args[:lpData].join("\x00").concat("\x00\x00")
         cbData = lpData.length
-      elsif (args[:dwType] == REG_DWORD) and (args[:lpData].class == Fixnum)
+      elsif (args[:dwType] == REG_DWORD) and (args[:lpData].class == Integer)
         lpData = [args[:lpData]].pack('L')
         cbData = 4
-      elsif (args[:dwType] == REG_QWORD) and (args[:lpData].class == Fixnum or args[:lpData].class == Bignum)
+      elsif (args[:dwType] == REG_QWORD) and (args[:lpData].class == Integer)
         lpData = [args[:lpData]].pack('Q')
         cbData = 8
       elsif args[:dwType] == REG_BINARY

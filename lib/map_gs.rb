@@ -47,7 +47,7 @@ class Map
   end
   def Map.[](val)
     Map.load unless @@loaded
-    if (val.class == Integer) or (val.class == Bignum) or val =~ /^[0-9]+$/
+    if (val.class == Integer) or val =~ /^[0-9]+$/
       @@list[val.to_i]
     elsif val =~ /^u(-?\d+)$/i
       uid_request = $1.dup.to_i
