@@ -1222,11 +1222,11 @@ def variable
 end
 
 def pause(num = 1)
-  if num =~ /m/
+  if num.to_s =~ /m/
     sleep((num.sub(/m/, '').to_f * 60))
-  elsif num =~ /h/
+  elsif num.to_s =~ /h/
     sleep((num.sub(/h/, '').to_f * 3600))
-  elsif num =~ /d/
+  elsif num.to_s =~ /d/
     sleep((num.sub(/d/, '').to_f * 86400))
   else
     sleep(num.to_f)
