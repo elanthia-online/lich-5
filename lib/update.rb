@@ -132,7 +132,7 @@ module Lich
       def self.prep_update
         installed = Gem::Version.new(@current)
         filename = "https://api.github.com/repos/elanthia-online/lich-5/releases/latest"
-        update_info = open(filename).read
+        update_info = URI.open(filename).read
 
         JSON::parse(update_info).each { |entry|
           if entry.include? 'tag_name'
