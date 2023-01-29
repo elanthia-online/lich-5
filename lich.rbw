@@ -2282,18 +2282,18 @@ module Games
                 ## Fix for nested/non-solo nav tags.
                 ## DR needs the <nav/> tag to be in its own line to properly detect movement
                 ## These two fixes make it so room movement can be detected reliably
-                if $_SERVERSTRING_ =~ /(?!^)<nav\/>/
-                  Lich.log "NAV tag detected not at start of line: #{$_SERVERSTRING_.inspect}"
-                  $_SERVERSTRING_.gsub!("<nav\/>", "\n<nav\/>").chomp!
-                  Lich.log "NAV tag fixed to: #{$_SERVERSTRING_.inspect}"
-                end
-
                 if $_SERVERSTRING_ =~ /^<nav\/>/
                   unless $_SERVERSTRING_.chomp == "<nav\/>"
                     Lich.log "NAV tag detected in nested line: #{$_SERVERSTRING_.inspect}"
                     $_SERVERSTRING_.gsub!("<nav\/>", "<nav\/>\n").chomp!
                     Lich.log "NAV tag fixed to: #{$_SERVERSTRING_.inspect}"
                   end
+                end
+
+                if $_SERVERSTRING_ =~ /(?!^)<nav\/>/
+                  Lich.log "NAV tag detected not at start of line: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_.gsub!("<nav\/>", "\n<nav\/>").chomp!
+                  Lich.log "NAV tag fixed to: #{$_SERVERSTRING_.inspect}"
                 end
 
                 # Fixes xml with \r\n in the middle of it like:
