@@ -2279,7 +2279,7 @@ module Games
                 $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><component id=","<component id=")
                 # $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
 
-                                ## Fix for nested/non-solo nav tags.
+                ## Fix for nested/non-solo nav tags.
                 ## DR needs the <nav/> tag to be in its own line to properly detect movement
                 ## These two fixes make it so room movement can be detected reliably
                 if $_SERVERSTRING_ =~ /(?!^)<nav\/>/
