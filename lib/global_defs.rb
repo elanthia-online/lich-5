@@ -603,6 +603,11 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /^You dive into the fast-moving river, but the current catches you and whips you back to shore, wet and battered\.$|^Running through the swampy terrain, you notice a wet patch in the bog|^You flounder around in the water.$|^You blunder around in the water, barely able|^You struggle against the swift current to swim|^You slap at the water in a sad failure to swim|^You work against the swift current to swim/
       waitrt?
       put_dir.call
+    elsif line =~ /^You notice.* at your feet, and do not wish to leave it behind/
+      fput "lift"
+      fput "stow"
+      sleep 1
+      put_dir.call
     elsif line == "You don't seem to be able to move to do that."
       30.times {
         break if clear.include?('You regain control of your senses!')
