@@ -5186,14 +5186,14 @@ main_thread = Thread.new {
         launcher_cmd = launcher_cmd.tr('/', "\\") if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       end
       begin
-        if custom_launch_dir
+        unless custom_launch_dir.empty?
           Dir.chdir(custom_launch_dir)
         end
 
         if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
           system ("start #{launcher_cmd}")
-        elsif defined?(Wine) and (game != 'AVALON') # Wine on linux
-          spawn "#{Wine::BIN} #{launcher_cmd}"
+        # elsif defined?(Wine) and (game != 'AVALON') # Wine on linux
+        #   spawn "#{Wine::BIN} #{launcher_cmd}"
         else # macOS and linux - does not account for WINE on linux
           spawn launcher_cmd
         end
