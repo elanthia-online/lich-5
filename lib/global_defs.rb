@@ -1226,11 +1226,11 @@ def variable
 end
 
 def pause(num = 1)
-  if num =~ /m/
+  if num.to_s =~ /m/
     sleep((num.sub(/m/, '').to_f * 60))
-  elsif num =~ /h/
+  elsif num.to_s =~ /h/
     sleep((num.sub(/h/, '').to_f * 3600))
-  elsif num =~ /d/
+  elsif num.to_s =~ /d/
     sleep((num.sub(/d/, '').to_f * 86400))
   else
     sleep(num.to_f)
@@ -2115,7 +2115,7 @@ def do_client(client_string)
     elsif cmd =~ /^trust\s+(.*)/i
       script_name = $1
       if RUBY_VERSION =~ /^2\.[012]\./
-        if File.exists?("#{SCRIPT_DIR}/#{script_name}.lic")
+        if File.exist?("#{SCRIPT_DIR}/#{script_name}.lic")
           if Script.trust(script_name)
             respond "--- Lich: '#{script_name}' is now a trusted script."
           else

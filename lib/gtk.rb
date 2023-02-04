@@ -151,7 +151,7 @@ if defined?(Gtk)
     sleep 0.01
   end
 
-  unless File.exists?('logo.png')
+  unless File.exist?('logo.png')
     File.open('logo.png', 'wb') { |f|
       f.write '
       iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAA

@@ -11,12 +11,6 @@ class Map
   @@fuzzy_room_count       ||= -1
   @@current_location       ||= nil
   @@current_location_count ||= -1
-  @@elevated_load            = proc { Map.load }
-  @@elevated_load_dat        = proc { Map.load_dat }
-  @@elevated_load_json       = proc { Map.load_json }
-  @@elevated_load_xml        = proc { Map.load_xml }
-  @@elevated_save            = proc { Map.save }
-  @@elevated_save_xml        = proc { Map.save_xml }
   @@current_room_uid       ||= -1
   @@previous_room_id       ||= -1
   @@uids                     = {}
@@ -58,7 +52,7 @@ class Map
   end
   def Map.[](val)
     Map.load unless @@loaded
-    if (val.class == Integer) or (val.class == Bignum) or val =~ /^[0-9]+$/
+    if (val.class == Integer) or val =~ /^[0-9]+$/
       @@list[val.to_i]
     elsif val =~ /^u(-?\d+)$/i
       uid_request = $1.dup.to_i
@@ -179,9 +173,9 @@ class Map
             1.times {
               @@current_room_count = XMLData.room_count
               foggy_exits = (XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/)
-              if room = @@list.find { |r| r.title.include?(XMLData.room_title) and 
-                  r.description.include?(XMLData.room_description.strip) and 
-                  (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and 
+              if room = @@list.find { |r| r.title.include?(XMLData.room_title) and
+                  r.description.include?(XMLData.room_description.strip) and
+                  (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
                   (foggy_exits or r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and
                   (not r.check_location or r.location == Map.get_location) and check_peer_tag.call(r) and
                   (r.room_objects.nil? || r.room_objects.all?{|obj| /\b#{obj}\b/ =~ Map.last_seen_objects } )
@@ -194,9 +188,9 @@ class Map
                 redo unless @@current_room_count == XMLData.room_count
                 desc_regex = /#{Regexp.escape(XMLData.room_description.strip.sub(/\.+$/, '')).gsub(/\\\.(?:\\\.\\\.)?/, '|')}/
                 if room = @@list.find { |r| r.title.include?(XMLData.room_title) and
-                    (foggy_exits or r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and 
-                    (XMLData.room_window_disabled or r.description.any? { |desc| desc =~ desc_regex }) and 
-                    (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and 
+                    (foggy_exits or r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and
+                    (XMLData.room_window_disabled or r.description.any? { |desc| desc =~ desc_regex }) and
+                    (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
                     (not r.check_location or r.location == Map.get_location) and check_peer_tag.call(r) and
                     (r.room_objects.nil? || r.room_objects.all?{|obj| /\b#{obj}\b/ =~ Map.last_seen_objects } )
                   }
@@ -235,10 +229,10 @@ class Map
           @@fuzzy_room_count = XMLData.room_count
           1.times {
             foggy_exits = (XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/)
-            if (room = @@list.find { |r| r.title.include?(XMLData.room_title) and 
-                r.description.include?(XMLData.room_description.strip) and 
-                (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and 
-                (foggy_exits or r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and 
+            if (room = @@list.find { |r| r.title.include?(XMLData.room_title) and
+                r.description.include?(XMLData.room_description.strip) and
+                (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
+                (foggy_exits or r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and
                 (not r.check_location or r.location == Map.get_location) and
                 (r.room_objects.nil? || r.room_objects.all?{|obj| /\b#{obj}\b/ =~ Map.last_seen_objects } )
               })
@@ -253,10 +247,10 @@ class Map
             else
               redo unless @@fuzzy_room_count == XMLData.room_count
               desc_regex = /#{Regexp.escape(XMLData.room_description.strip.sub(/\.+$/, '')).gsub(/\\\.(?:\\\.\\\.)?/, '|')}/
-              if room = @@list.find { |r| r.title.include?(XMLData.room_title) and 
-                  (foggy_exits or r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and 
-                  (XMLData.room_window_disabled or r.description.any? { |desc| desc =~ desc_regex }) and 
-                  (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and 
+              if room = @@list.find { |r| r.title.include?(XMLData.room_title) and
+                  (foggy_exits or r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and
+                  (XMLData.room_window_disabled or r.description.any? { |desc| desc =~ desc_regex }) and
+                  (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
                   (not r.check_location or r.location == Map.get_location) and
                   (r.room_objects.nil? || r.room_objects.all?{|obj| /\b#{obj}\b/ =~ Map.last_seen_objects } )
                 }
@@ -335,17 +329,17 @@ class Map
       current_location = Map.get_location
       foggy_exits = (XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/)
       if room = @@list.find { |r| (r.location == current_location) and r.title.include?(XMLData.room_title) and
-          r.description.include?(XMLData.room_description.strip) and 
-          (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and 
-          (r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and 
-          check_peer_tag.call(r) 
+          r.description.include?(XMLData.room_description.strip) and
+          (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
+          (r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and
+          check_peer_tag.call(r)
         }
         return room
-      elsif room = @@list.find { |r| r.location.nil? and r.title.include?(XMLData.room_title) and 
-          r.description.include?(XMLData.room_description.strip) and 
-          (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and 
-          (r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and 
-          check_peer_tag.call(r) 
+      elsif room = @@list.find { |r| r.location.nil? and r.title.include?(XMLData.room_title) and
+          r.description.include?(XMLData.room_description.strip) and
+          (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
+          (r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and
+          check_peer_tag.call(r)
         }
         room.location = current_location
         return room
@@ -353,15 +347,15 @@ class Map
         title       = [ XMLData.room_title ]
         description = [ XMLData.room_description.strip ]
         paths       = [ XMLData.room_exits_string.strip ]
-        uid         = [ XMLData.room_id ] 
+        uid         = [ XMLData.room_id ]
         room        = Map.new(Map.get_free_id, title, description, paths, uid, current_location)
-        identical_rooms = @@list.find_all { |r| (r.location != current_location) and 
-            r.title.include?(XMLData.room_title) and 
-            r.description.include?(XMLData.room_description.strip) and 
-            (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and 
-            (r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and 
+        identical_rooms = @@list.find_all { |r| (r.location != current_location) and
+            r.title.include?(XMLData.room_title) and
+            r.description.include?(XMLData.room_description.strip) and
+            (r.unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
+            (r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and
             !r.uid.include?(XMLData.room_id)
-          }       
+          }
         if identical_rooms.length > 0
           room.check_location = true
           identical_rooms.each { |r| r.check_location = true }
@@ -373,10 +367,10 @@ class Map
   def Map.tags
     Map.load unless @@loaded
     if @@tags.empty?
-      @@list.each { |r| 
-        r.tags.each { |t| 
-          @@tags.push(t) unless @@tags.include?(t) 
-        } 
+      @@list.each { |r|
+        r.tags.each { |t|
+          @@tags.push(t) unless @@tags.include?(t)
+        }
       }
     end
     @@tags.dup
@@ -384,8 +378,8 @@ class Map
   def Map.load_uids()
     Map.load unless @@loaded
     @@uids.clear
-    @@list.each { |r| 
-        r.uid.each { |u| 
+    @@list.each { |r|
+        r.uid.each { |u|
         if @@uids[u].nil?
           @@uids[u] = [ r.id ]
         else
@@ -410,7 +404,7 @@ class Map
     Map.clear
     Map.load
   end
-  
+
   def Map.load(filename=nil)
     if filename.nil?
       file_list = Dir.entries("#{DATA_DIR}/#{XMLData.game}").find_all { |filename| filename =~ /^map\-[0-9]+\.(?:dat|xml|json)$/i }.collect { |filename| "#{DATA_DIR}/#{XMLData.game}/#{filename}" }.sort.reverse
@@ -440,249 +434,236 @@ class Map
   end
 
   def Map.load_json(filename=nil)
-    if $SAFE == 0
-      @@load_mutex.synchronize {
-        if @@loaded
-          return true
+    @@load_mutex.synchronize {
+      if @@loaded
+        return true
+      else
+        if filename
+          file_list = [ filename ]
+          #respond "--- loading #{filename}" #if error
         else
-          if filename
-            file_list = [ filename ]
-            #respond "--- loading #{filename}" #if error
-          else
-            file_list = Dir.entries("#{DATA_DIR}/#{XMLData.game}").find_all { |filename|
-              filename =~ /^map\-[0-9]+\.json$/i
-            }.collect { |filename|
-              "#{DATA_DIR}/#{XMLData.game}/#{filename}"
-            }.sort.reverse
-            #respond "--- loading #{filename}" #if error
-          end
-          if file_list.empty?
-            respond "--- Lich: error: no map database found"
-            return false
-          end
-          error = false
-          while filename = file_list.shift
-            if File.exists?(filename)
-              File.open(filename) { |f|
-                JSON.parse(f.read).each { |room|
-                  room['wayto'].keys.each { |k|
-                    if room['wayto'][k][0..2] == ';e '
-                      room['wayto'][k] = StringProc.new(room['wayto'][k][3..-1])
-                    end
-                  }
-                  room['timeto'].keys.each { |k|
-                    if (room['timeto'][k].class == String) and (room['timeto'][k][0..2] == ';e ')
-                      room['timeto'][k] = StringProc.new(room['timeto'][k][3..-1])
-                    end
-                  }
-                  room['tags'] ||= []
-                  room['uid'] ||= []
-                  Map.new(room['id'], room['title'], room['description'], room['paths'], room['uid'], room['location'], room['climate'], room['terrain'], room['wayto'], room['timeto'], room['image'], room['image_coords'], room['tags'], room['check_location'], room['unique_loot'])
-                }
-              }
-              @@tags.clear
-              respond "--- Map loaded #{filename}" #if error
-              @@loaded = true
-              Map.load_uids
-              return true
-            end
-          end
+          file_list = Dir.entries("#{DATA_DIR}/#{XMLData.game}").find_all { |filename|
+            filename =~ /^map\-[0-9]+\.json$/i
+          }.collect { |filename|
+            "#{DATA_DIR}/#{XMLData.game}/#{filename}"
+          }.sort.reverse
+          #respond "--- loading #{filename}" #if error
         end
-      }
-    else
-      @@elevated_load_json.call
-    end
-  end
-  def Map.load_dat(filename=nil)
-    if $SAFE == 0
-      @@load_mutex.synchronize {
-        if @@loaded
-          return true
-        else
-          if filename.nil?
-            file_list = Dir.entries("#{DATA_DIR}/#{XMLData.game}").find_all { |filename| filename =~ /^map\-[0-9]+\.dat$/ }.collect { |filename| "#{DATA_DIR}/#{XMLData.game}/#{filename}" }.sort.reverse
-          else
-            file_list = [ filename ]
-            respond "--- file_list = #{filename.inspect}"
-          end
-          if file_list.empty?
-            respond "--- Lich: error: no map database found"
-            return false
-          end
-          error = false
-          while filename = file_list.shift
-            begin
-              @@list = File.open(filename, 'rb') { |f| Marshal.load(f.read) }
-              respond "--- Map loaded #{filename}" #if error
-              
-              @@loaded = true
-              Map.load_uids
-              return true
-            rescue
-              error = true
-              if file_list.empty?
-                respond "--- Lich: error: failed to load #{filename}: #{$!}"
-              else
-                respond "--- warning: failed to load #{filename}: #{$!}"
-              end
-            end
-          end
+        if file_list.empty?
+          respond "--- Lich: error: no map database found"
           return false
         end
-      }
-    else
-      @@elevated_load_dat.call
-    end
-  end
-  def Map.load_xml(filename="#{DATA_DIR}/#{XMLData.game}/map.xml")
-    if $SAFE == 0
-      @@load_mutex.synchronize {
-        if @@loaded
-          return true
-        else
-          unless File.exists?(filename)
-            raise Exception.exception("MapDatabaseError"), "Fatal error: file `#{filename}' does not exist!"
-          end
-          missing_end = false
-          current_tag = nil
-          current_attributes = nil
-          room = nil
-          buffer = String.new
-          unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
-          tag_start = proc { |element,attributes|
-            current_tag = element
-            current_attributes = attributes
-            if element == 'room'
-              room = Hash.new
-              room['id'] = attributes['id'].to_i
-              room['location'] = attributes['location']
-              room['climate'] = attributes['climate']
-              room['terrain'] = attributes['terrain']
-              room['wayto'] = Hash.new
-              room['timeto'] = Hash.new
-              room['title'] = Array.new
-              room['description'] = Array.new
-              room['paths'] = Array.new
-              room['tags'] = Array.new
-              room['unique_loot'] = Array.new
-              room['uid'] = Array.new
-              room['room_objects'] = Array.new
-            elsif element =~ /^(?:image|tsoran)$/ and attributes['name'] and attributes['x'] and attributes['y'] and attributes['size']
-              room['image'] = attributes['name']
-              room['image_coords'] = [ (attributes['x'].to_i - (attributes['size']/2.0).round), (attributes['y'].to_i - (attributes['size']/2.0).round), (attributes['x'].to_i + (attributes['size']/2.0).round), (attributes['y'].to_i + (attributes['size']/2.0).round) ]
-            elsif (element == 'image') and attributes['name'] and attributes['coords'] and (attributes['coords'] =~ /[0-9]+,[0-9]+,[0-9]+,[0-9]+/)
-              room['image'] = attributes['name']
-              room['image_coords'] = attributes['coords'].split(',').collect { |num| num.to_i }
-            elsif element == 'map'
-              missing_end = true
-            end
-          }
-          text = proc { |text_string|
-            if current_tag == 'tag'
-              room['tags'].push(text_string)
-            elsif current_tag =~ /^(?:title|description|paths|unique_loot|tag|room_objects)$/
-              room[current_tag].push(text_string)
-            elsif current_tag =~ /^(?:uid)$/
-              room[current_tag].push(text_string.to_i)
-            elsif current_tag == 'exit' and current_attributes['target']
-              if current_attributes['type'].downcase == 'string'
-                room['wayto'][current_attributes['target']] = text_string
-              elsif
-                room['wayto'][current_attributes['target']] = StringProc.new(text_string)
-              end
-              if current_attributes['cost'] =~ /^[0-9\.]+$/
-                room['timeto'][current_attributes['target']] = current_attributes['cost'].to_f
-              elsif current_attributes['cost'].length > 0
-                room['timeto'][current_attributes['target']] = StringProc.new(current_attributes['cost'])
-              else
-                room['timeto'][current_attributes['target']] = 0.2
-              end
-            end
-          }
-          tag_end = proc { |element|
-            if element == 'room'
-              room['unique_loot'] = nil if room['unique_loot'].empty?
-              room['room_objects'] = nil if room['room_objects'].empty?
-              Map.new(room['id'], room['title'], room['description'], room['paths'], room['uid'], room['location'], room['climate'], room['terrain'], room['wayto'], room['timeto'], room['image'], room['image_coords'], room['tags'], room['check_location'], room['unique_loot'], room['room_objects'])
-            elsif element == 'map'
-              missing_end = false
-            end
-            current_tag = nil
-          }
-          begin
-            File.open(filename) { |file|
-              while line = file.gets
-                buffer.concat(line)
-                # fixme: remove   (?=<)   ?
-                while str = buffer.slice!(/^<([^>]+)><\/\1>|^[^<]+(?=<)|^<[^<]+>/)
-                  if str[0,1] == '<'
-                    if str[1,1] == '/'
-                      element = /^<\/([^\s>\/]+)/.match(str).captures.first
-                      tag_end.call(element)
-                    else
-                      if str =~ /^<([^>]+)><\/\1>/
-                        element = $1
-                        tag_start.call(element)
-                        text.call('')
-                        tag_end.call(element)
-                      else
-                        element = /^<([^\s>\/]+)/.match(str).captures.first
-                        attributes = Hash.new
-                        str.scan(/([A-z][A-z0-9_\-]*)=(["'])(.*?)\2/).each { |attr| attributes[attr[0]] = attr[2].gsub(/&(#{unescape.keys.join('|')});/) { unescape[$1] } }
-                        tag_start.call(element, attributes)
-                        tag_end.call(element) if str[-2,1] == '/'
-                      end
-                    end
-                  else
-                    text.call(str.gsub(/&(#{unescape.keys.join('|')});/) { unescape[$1] })
+        error = false
+        while filename = file_list.shift
+          if File.exist?(filename)
+            File.open(filename) { |f|
+              JSON.parse(f.read).each { |room|
+                room['wayto'].keys.each { |k|
+                  if room['wayto'][k][0..2] == ';e '
+                    room['wayto'][k] = StringProc.new(room['wayto'][k][3..-1])
                   end
-                end
-              end
+                }
+                room['timeto'].keys.each { |k|
+                  if (room['timeto'][k].class == String) and (room['timeto'][k][0..2] == ';e ')
+                    room['timeto'][k] = StringProc.new(room['timeto'][k][3..-1])
+                  end
+                }
+                room['tags'] ||= []
+                room['uid'] ||= []
+                Map.new(room['id'], room['title'], room['description'], room['paths'], room['uid'], room['location'], room['climate'], room['terrain'], room['wayto'], room['timeto'], room['image'], room['image_coords'], room['tags'], room['check_location'], room['unique_loot'])
+              }
             }
-            if missing_end
-              respond "--- Lich: error: failed to load #{filename}: unexpected end of file"
-              return false
-            end
             @@tags.clear
-            Map.load_uids
+            respond "--- Map loaded #{filename}" #if error
             @@loaded = true
+            Map.load_uids
             return true
-          rescue
-            respond "--- Lich: error: failed to load #{filename}: #{$!}"
-            return false
           end
-        end
-      }
-    else
-      @@elevated_load_xml.call
-    end
-  end
-  def Map.save(filename="#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.dat")
-    if $SAFE == 0
-      if File.exists?(filename)
-        respond "--- Backing up map database"
-        begin
-          # fixme: does this work on all platforms? File.rename(filename, "#{filename}.bak")
-          File.open(filename, 'rb') { |infile|
-            File.open("#{filename}.bak", 'wb') { |outfile|
-              outfile.write(infile.read)
-            }
-          }
-        rescue
-          respond "--- Lich: error: #{$!}"
         end
       end
+    }
+  end
+
+  def Map.load_dat(filename=nil)
+    @@load_mutex.synchronize {
+      if @@loaded
+        return true
+      else
+        if filename.nil?
+          file_list = Dir.entries("#{DATA_DIR}/#{XMLData.game}").find_all { |filename| filename =~ /^map\-[0-9]+\.dat$/ }.collect { |filename| "#{DATA_DIR}/#{XMLData.game}/#{filename}" }.sort.reverse
+        else
+          file_list = [ filename ]
+          respond "--- file_list = #{filename.inspect}"
+        end
+        if file_list.empty?
+          respond "--- Lich: error: no map database found"
+          return false
+        end
+        error = false
+        while filename = file_list.shift
+          begin
+            @@list = File.open(filename, 'rb') { |f| Marshal.load(f.read) }
+            respond "--- Map loaded #{filename}" #if error
+
+            @@loaded = true
+            Map.load_uids
+            return true
+          rescue
+            error = true
+            if file_list.empty?
+              respond "--- Lich: error: failed to load #{filename}: #{$!}"
+            else
+              respond "--- warning: failed to load #{filename}: #{$!}"
+            end
+          end
+        end
+        return false
+      end
+    }
+  end
+  def Map.load_xml(filename="#{DATA_DIR}/#{XMLData.game}/map.xml")
+    @@load_mutex.synchronize {
+      if @@loaded
+        return true
+      else
+        unless File.exist?(filename)
+          raise Exception.exception("MapDatabaseError"), "Fatal error: file `#{filename}' does not exist!"
+        end
+        missing_end = false
+        current_tag = nil
+        current_attributes = nil
+        room = nil
+        buffer = String.new
+        unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
+        tag_start = proc { |element,attributes|
+          current_tag = element
+          current_attributes = attributes
+          if element == 'room'
+            room = Hash.new
+            room['id'] = attributes['id'].to_i
+            room['location'] = attributes['location']
+            room['climate'] = attributes['climate']
+            room['terrain'] = attributes['terrain']
+            room['wayto'] = Hash.new
+            room['timeto'] = Hash.new
+            room['title'] = Array.new
+            room['description'] = Array.new
+            room['paths'] = Array.new
+            room['tags'] = Array.new
+            room['unique_loot'] = Array.new
+            room['uid'] = Array.new
+            room['room_objects'] = Array.new
+          elsif element =~ /^(?:image|tsoran)$/ and attributes['name'] and attributes['x'] and attributes['y'] and attributes['size']
+            room['image'] = attributes['name']
+            room['image_coords'] = [ (attributes['x'].to_i - (attributes['size']/2.0).round), (attributes['y'].to_i - (attributes['size']/2.0).round), (attributes['x'].to_i + (attributes['size']/2.0).round), (attributes['y'].to_i + (attributes['size']/2.0).round) ]
+          elsif (element == 'image') and attributes['name'] and attributes['coords'] and (attributes['coords'] =~ /[0-9]+,[0-9]+,[0-9]+,[0-9]+/)
+            room['image'] = attributes['name']
+            room['image_coords'] = attributes['coords'].split(',').collect { |num| num.to_i }
+          elsif element == 'map'
+            missing_end = true
+          end
+        }
+        text = proc { |text_string|
+          if current_tag == 'tag'
+            room['tags'].push(text_string)
+          elsif current_tag =~ /^(?:title|description|paths|unique_loot|tag|room_objects)$/
+            room[current_tag].push(text_string)
+          elsif current_tag =~ /^(?:uid)$/
+            room[current_tag].push(text_string.to_i)
+          elsif current_tag == 'exit' and current_attributes['target']
+            if current_attributes['type'].downcase == 'string'
+              room['wayto'][current_attributes['target']] = text_string
+            elsif
+              room['wayto'][current_attributes['target']] = StringProc.new(text_string)
+            end
+            if current_attributes['cost'] =~ /^[0-9\.]+$/
+              room['timeto'][current_attributes['target']] = current_attributes['cost'].to_f
+            elsif current_attributes['cost'].length > 0
+              room['timeto'][current_attributes['target']] = StringProc.new(current_attributes['cost'])
+            else
+              room['timeto'][current_attributes['target']] = 0.2
+            end
+          end
+        }
+        tag_end = proc { |element|
+          if element == 'room'
+            room['unique_loot'] = nil if room['unique_loot'].empty?
+            room['room_objects'] = nil if room['room_objects'].empty?
+            Map.new(room['id'], room['title'], room['description'], room['paths'], room['uid'], room['location'], room['climate'], room['terrain'], room['wayto'], room['timeto'], room['image'], room['image_coords'], room['tags'], room['check_location'], room['unique_loot'], room['room_objects'])
+          elsif element == 'map'
+            missing_end = false
+          end
+          current_tag = nil
+        }
+        begin
+          File.open(filename) { |file|
+            while line = file.gets
+              buffer.concat(line)
+              # fixme: remove   (?=<)   ?
+              while str = buffer.slice!(/^<([^>]+)><\/\1>|^[^<]+(?=<)|^<[^<]+>/)
+                if str[0,1] == '<'
+                  if str[1,1] == '/'
+                    element = /^<\/([^\s>\/]+)/.match(str).captures.first
+                    tag_end.call(element)
+                  else
+                    if str =~ /^<([^>]+)><\/\1>/
+                      element = $1
+                      tag_start.call(element)
+                      text.call('')
+                      tag_end.call(element)
+                    else
+                      element = /^<([^\s>\/]+)/.match(str).captures.first
+                      attributes = Hash.new
+                      str.scan(/([A-z][A-z0-9_\-]*)=(["'])(.*?)\2/).each { |attr| attributes[attr[0]] = attr[2].gsub(/&(#{unescape.keys.join('|')});/) { unescape[$1] } }
+                      tag_start.call(element, attributes)
+                      tag_end.call(element) if str[-2,1] == '/'
+                    end
+                  end
+                else
+                  text.call(str.gsub(/&(#{unescape.keys.join('|')});/) { unescape[$1] })
+                end
+              end
+            end
+          }
+          if missing_end
+            respond "--- Lich: error: failed to load #{filename}: unexpected end of file"
+            return false
+          end
+          @@tags.clear
+          Map.load_uids
+          @@loaded = true
+          return true
+        rescue
+          respond "--- Lich: error: failed to load #{filename}: #{$!}"
+          return false
+        end
+      end
+    }
+  end
+
+  def Map.save(filename="#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.dat")
+    if File.exist?(filename)
+      respond "--- Backing up map database"
       begin
-        File.open(filename, 'wb') { |f| f.write(Marshal.dump(@@list)) }
-        @@tags.clear
-        respond "--- Map database saved"
+        # fixme: does this work on all platforms? File.rename(filename, "#{filename}.bak")
+        File.open(filename, 'rb') { |infile|
+          File.open("#{filename}.bak", 'wb') { |outfile|
+            outfile.write(infile.read)
+          }
+        }
       rescue
         respond "--- Lich: error: #{$!}"
       end
-    else
-      @@elevated_save.call
+    end
+    begin
+      File.open(filename, 'wb') { |f| f.write(Marshal.dump(@@list)) }
+      @@tags.clear
+      respond "--- Map database saved"
+    rescue
+      respond "--- Lich: error: #{$!}"
     end
   end
+
   def Map.to_json(*args)
     @@list.delete_if { |r| r.nil? }
     @@list.to_json(args)
@@ -708,7 +689,7 @@ class Map
     JSON.pretty_generate(mapjson);
   end
   def Map.save_json(filename="#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.json")
-    if File.exists?(filename)
+    if File.exist?(filename)
       respond "File exists!  Backing it up before proceeding..."
       begin
         File.open(filename, 'rb') { |infile|
@@ -727,78 +708,75 @@ class Map
     respond "#{filename} saved"
   end
   def Map.save_xml(filename="#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.xml")
-    if $SAFE == 0
-      if File.exists?(filename)
-        respond "File exists!  Backing it up before proceeding..."
-        begin
-          File.open(filename, 'rb') { |infile|
-            File.open("#{filename}.bak", "wb") { |outfile|
-              outfile.write(infile.read)
-            }
-          }
-        rescue
-          respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-          Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-        end
-      end
+    if File.exist?(filename)
+      respond "File exists!  Backing it up before proceeding..."
       begin
-        escape = { '<' => '&lt;', '>' => '&gt;', '"' => '&quot;', "'" => "&apos;", '&' => '&amp;' }
-        File.open(filename, 'w') { |file|
-          file.write "<map>\n"
-          @@list.each { |room|
-            next if room == nil
-            if room.location
-              location = " location=#{(room.location.gsub(/(<|>|"|'|&)/) { escape[$1] }).inspect}"
-            else
-              location = ''
-            end
-            if room.climate
-              climate = " climate=#{(room.climate.gsub(/(<|>|"|'|&)/) { escape[$1] }).inspect}"
-            else
-              climate = ''
-            end
-            if room.terrain
-              terrain = " terrain=#{(room.terrain.gsub(/(<|>|"|'|&)/) { escape[$1] }).inspect}"
-            else
-              terrain = ''
-            end
-            file.write "   <room id=\"#{room.id}\"#{location}#{climate}#{terrain}>\n"
-            room.title.each { |title| file.write "      <title>#{title.gsub(/(<|>|"|'|&)/) { escape[$1] }}</title>\n" }
-            room.description.each { |desc| file.write "      <description>#{desc.gsub(/(<|>|"|'|&)/) { escape[$1] }}</description>\n" }
-            room.paths.each { |paths| file.write "      <paths>#{paths.gsub(/(<|>|"|'|&)/) { escape[$1] }}</paths>\n" }
-            room.tags.each { |tag| file.write "      <tag>#{tag.gsub(/(<|>|"|'|&)/) { escape[$1] }}</tag>\n" }
-            room.uid.each { |u| file.write "      <uid>#{u}</uid>\n" }
-            room.unique_loot.to_a.each { |loot| file.write "      <unique_loot>#{loot.gsub(/(<|>|"|'|&)/) { escape[$1] }}</unique_loot>\n" }
-            room.room_objects.to_a.each { |loot| file.write "      <room_objects>#{loot.gsub(/(<|>|"|'|&)/) { escape[$1] }}</room_objects>\n" }
-            file.write "      <image name=\"#{room.image.gsub(/(<|>|"|'|&)/) { escape[$1] }}\" coords=\"#{room.image_coords.join(',')}\" />\n" if room.image and room.image_coords
-            room.wayto.keys.each { |target|
-              if room.timeto[target].class == Proc
-                cost = " cost=\"#{room.timeto[target]._dump.gsub(/(<|>|"|'|&)/) { escape[$1] }}\""
-              elsif room.timeto[target]
-                cost = " cost=\"#{room.timeto[target]}\""
-              else
-                cost = ''
-              end
-              if room.wayto[target].class == Proc
-                file.write "      <exit target=\"#{target}\" type=\"Proc\"#{cost}>#{room.wayto[target]._dump.gsub(/(<|>|"|'|&)/) { escape[$1] }}</exit>\n"
-              else
-                file.write "      <exit target=\"#{target}\" type=\"#{room.wayto[target].class}\"#{cost}>#{room.wayto[target].gsub(/(<|>|"|'|&)/) { escape[$1] }}</exit>\n"
-              end
-            }
-            file.write "   </room>\n"
+        File.open(filename, 'rb') { |infile|
+          File.open("#{filename}.bak", "wb") { |outfile|
+            outfile.write(infile.read)
           }
-          file.write "</map>\n"
         }
-        @@tags.clear
-        respond "--- map database saved to: #{filename}"
       rescue
-        respond $!
+        respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
+        Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
       end
-      GC.start
-    else
-      @@elevated_save_xml.call
     end
+    begin
+      escape = { '<' => '&lt;', '>' => '&gt;', '"' => '&quot;', "'" => "&apos;", '&' => '&amp;' }
+      File.open(filename, 'w') { |file|
+        file.write "<map>\n"
+        @@list.each { |room|
+          next if room == nil
+          if room.location
+            location = " location=#{(room.location.gsub(/(<|>|"|'|&)/) { escape[$1] }).inspect}"
+          else
+            location = ''
+          end
+          if room.climate
+            climate = " climate=#{(room.climate.gsub(/(<|>|"|'|&)/) { escape[$1] }).inspect}"
+          else
+            climate = ''
+          end
+          if room.terrain
+            terrain = " terrain=#{(room.terrain.gsub(/(<|>|"|'|&)/) { escape[$1] }).inspect}"
+          else
+            terrain = ''
+          end
+          file.write "   <room id=\"#{room.id}\"#{location}#{climate}#{terrain}>\n"
+          room.title.each { |title| file.write "      <title>#{title.gsub(/(<|>|"|'|&)/) { escape[$1] }}</title>\n" }
+          room.description.each { |desc| file.write "      <description>#{desc.gsub(/(<|>|"|'|&)/) { escape[$1] }}</description>\n" }
+          room.paths.each { |paths| file.write "      <paths>#{paths.gsub(/(<|>|"|'|&)/) { escape[$1] }}</paths>\n" }
+          room.tags.each { |tag| file.write "      <tag>#{tag.gsub(/(<|>|"|'|&)/) { escape[$1] }}</tag>\n" }
+          room.uid.each { |u| file.write "      <uid>#{u}</uid>\n" }
+          room.unique_loot.to_a.each { |loot| file.write "      <unique_loot>#{loot.gsub(/(<|>|"|'|&)/) { escape[$1] }}</unique_loot>\n" }
+          room.room_objects.to_a.each { |loot| file.write "      <room_objects>#{loot.gsub(/(<|>|"|'|&)/) { escape[$1] }}</room_objects>\n" }
+          file.write "      <image name=\"#{room.image.gsub(/(<|>|"|'|&)/) { escape[$1] }}\" coords=\"#{room.image_coords.join(',')}\" />\n" if room.image and room.image_coords
+          room.wayto.keys.each { |target|
+            if room.timeto[target].class == Proc
+              cost = " cost=\"#{room.timeto[target]._dump.gsub(/(<|>|"|'|&)/) { escape[$1] }}\""
+            elsif room.timeto[target]
+              cost = " cost=\"#{room.timeto[target]}\""
+            else
+              cost = ''
+            end
+            if room.wayto[target].class == Proc
+              file.write "      <exit target=\"#{target}\" type=\"Proc\"#{cost}>#{room.wayto[target]._dump.gsub(/(<|>|"|'|&)/) { escape[$1] }}</exit>\n"
+            else
+              file.write "      <exit target=\"#{target}\" type=\"#{room.wayto[target].class}\"#{cost}>#{room.wayto[target].gsub(/(<|>|"|'|&)/) { escape[$1] }}</exit>\n"
+            end
+          }
+          file.write "   </room>\n"
+        }
+        file.write "</map>\n"
+      }
+      @@tags.clear
+      respond "--- map database saved to: #{filename}"
+    rescue
+      respond $!
+    end
+    GC.start
   end
+
   def Map.estimate_time(array)
     Map.load unless @@loaded
     unless array.class == Array
@@ -854,7 +832,7 @@ class Map
           visited[v] = true
           @@list[v].wayto.keys.each { |adj_room|
             adj_room_i = adj_room.to_i
-            unless visited[adj_room_i] 
+            unless visited[adj_room_i]
               if @@list[v].timeto[adj_room].class == Proc
                 nd = @@list[v].timeto[adj_room].call
               else
@@ -878,7 +856,7 @@ class Map
           visited[v] = true
           @@list[v].wayto.keys.each { |adj_room|
             adj_room_i = adj_room.to_i
-            unless visited[adj_room_i] 
+            unless visited[adj_room_i]
               if @@list[v].timeto[adj_room].class == Proc
                 nd = @@list[v].timeto[adj_room].call
               else
@@ -903,7 +881,7 @@ class Map
           visited[v] = true
           @@list[v].wayto.keys.each { |adj_room|
             adj_room_i = adj_room.to_i
-            unless visited[adj_room_i] 
+            unless visited[adj_room_i]
               if @@list[v].timeto[adj_room].class == Proc
                 nd = @@list[v].timeto[adj_room].call
               else

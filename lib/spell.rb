@@ -10,7 +10,9 @@ Further modifications are to support the retirement of spell-list.xml.
     version: 1.2.2
 
   changelog:
-    v1.2.2 (2022-10-31)
+    v1.2.2 (2022-11-24)
+      Removed references to $SAFE
+      Removed deprecated reference to "#{SCRIPT_DIR}/spell-list.xml"
       fix for Mental Acuity to only work on MnM spells 1201-1220
       fix for Armored Casting and Spell Hinderance 
     v1.2.1 (2022-05-10)
@@ -37,11 +39,10 @@ module Games
     @@bonus_list ||= Array.new
     @@cost_list ||= Array.new
     @@load_mutex = Mutex.new
-    @@elevated_load = proc { Spell.load }
     @@after_stance = nil
     attr_reader :num, :name, :timestamp, :msgup, :msgdn, :circle, :active, :type, :cast_proc, :real_time, :persist_on_death, :availability, :no_incant
     attr_accessor :stance, :channel
-    
+
     @@prepare_regex = /^You already have a spell readied!  You must RELEASE it if you wish to prepare another!$|^Your spell(?:song)? is ready\.|^You can't think clearly enough to prepare a spell!$|^You are concentrating too intently .*?to prepare a spell\.$|^You are too injured to make that dextrous of a movement|^The searing pain in your throat makes that impossible|^But you don't have any mana!\.$|^You can't make that dextrous of a move!$|^As you begin to prepare the spell the wind blows small objects at you thwarting your attempt\.$|^You do not know that spell!$|^All you manage to do is cough up some blood\.$|The incantations of countless spells swirl through your mind as a golden light flashes before your eyes\./
     @@results_regex = /^(?:Cast|Sing) Roundtime [0-9]+ Seconds?\.$|^Cast at what\?$|^But you don't have any mana!$|^You don't have a spell prepared!$|keeps? the spell from working\.|^Be at peace my child, there is no need for spells of war in here\.$|Spells of War cannot be cast|^As you focus on your magic, your vision swims with a swirling haze of crimson\.$|^Your magic fizzles ineffectually\.$|^All you manage to do is cough up some blood\.$|^And give yourself away!  Never!$|^You are unable to do that right now\.$|^You feel a sudden rush of power as you absorb [0-9]+ mana!$|^You are unable to drain it!$|leaving you casting at nothing but thin air!$|^You don't seem to be able to move to do that\.$|^Provoking a GameMaster is not such a good idea\.$|^You can't think clearly enough to prepare a spell!$|^You do not currently have a target\.$|The incantations of countless spells swirl through your mind as a golden light flashes before your eyes\.|You can only evoke certain spells\.|You can only channel certain spells for extra power\.|That is not something you can prepare\./
 
@@ -122,54 +123,45 @@ module Games
       @@after_stance = val
     end
     def Spell.load(filename=nil)
-      if $SAFE == 0
-        if filename.nil?
-          if File.exists?("#{DATA_DIR}/spell-list.xml")
-            filename = "#{DATA_DIR}/spell-list.xml"
-          elsif File.exists?("#{SCRIPT_DIR}/spell-list.xml") # deprecated
-            filename = "#{SCRIPT_DIR}/spell-list.xml"
-          else
-            filename = "#{DATA_DIR}/spell-list.xml"
-          end
-        end
-        script = Script.current
-        @@load_mutex.synchronize {
-          return true if @loaded
-          begin
-            spell_times = Hash.new
-            # reloading spell data should not reset spell tracking...
-            unless @@list.empty?
-              @@list.each { |spell| spell_times[spell.num] = spell.timeleft if spell.active? }
-              @@list.clear
-            end
-            File.open(filename) { |file|
-              xml_doc = REXML::Document.new(file)
-              xml_root = xml_doc.root
-              xml_root.elements.each { |xml_spell| Spell.new(xml_spell) }
-            }
-            @@list.each { |spell|
-              if spell_times[spell.num]
-                spell.timeleft = spell_times[spell.num]
-                spell.active = true
-              end
-            }
-            @@bonus_list = @@list.collect { |spell| spell._bonus.keys }.flatten
-            @@bonus_list = @@bonus_list | @@bonus_list
-            @@cost_list = @@list.collect { |spell| spell._cost.keys }.flatten
-            @@cost_list = @@cost_list | @@cost_list
-            @@loaded = true
-            return true
-          rescue
-            respond "--- Lich: error: Spell.load: #{$!}"
-            Lich.log "error: Spell.load: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            @@loaded = false
-            return false
-          end
-        }
-      else
-        @@elevated_load.call
+      if filename.nil?
+        filename = "#{DATA_DIR}/spell-list.xml"
       end
+      script = Script.current
+      @@load_mutex.synchronize {
+        return true if @loaded
+        begin
+          spell_times = Hash.new
+          # reloading spell data should not reset spell tracking...
+          unless @@list.empty?
+            @@list.each { |spell| spell_times[spell.num] = spell.timeleft if spell.active? }
+            @@list.clear
+          end
+          File.open(filename) { |file|
+            xml_doc = REXML::Document.new(file)
+            xml_root = xml_doc.root
+            xml_root.elements.each { |xml_spell| Spell.new(xml_spell) }
+          }
+          @@list.each { |spell|
+            if spell_times[spell.num]
+              spell.timeleft = spell_times[spell.num]
+              spell.active = true
+            end
+          }
+          @@bonus_list = @@list.collect { |spell| spell._bonus.keys }.flatten
+          @@bonus_list = @@bonus_list | @@bonus_list
+          @@cost_list = @@list.collect { |spell| spell._cost.keys }.flatten
+          @@cost_list = @@cost_list | @@cost_list
+          @@loaded = true
+          return true
+        rescue
+          respond "--- Lich: error: Spell.load: #{$!}"
+          Lich.log "error: Spell.load: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          @@loaded = false
+          return false
+        end
+      }
     end
+
     def Spell.[](val)
       Spell.load unless @@loaded
       if val.class == Spell
@@ -260,7 +252,7 @@ module Games
       if options[:line]
         line = options[:line]
       end
-      proc { begin; $SAFE = 3; rescue; nil; end; eval(formula) }.call.to_f
+      proc { eval(formula) }.call.to_f
     end
     def timeleft=(val)
       @timeleft = val
@@ -563,7 +555,7 @@ module Games
           waitcastrt?
           check_energy.call
           begin
-            proc { begin; $SAFE = 3; rescue; nil; end; eval(@cast_proc) }.call
+            proc { eval(@cast_proc) }.call
           rescue
             echo "cast: error: #{$!}"
             respond $!.backtrace[0..2]
@@ -582,7 +574,7 @@ module Games
               arg_options = arg_options.join(" ") unless arg_options.empty?
             end
           end
-          
+
           if (((target.nil? || target.to_s.empty?) && !(@no_incant)) && (cast_cmd == "cast" && arg_options.nil?) || cast_cmd == "incant") && cast_cmd !~ /^(?:channel|evoke)/
             cast_cmd = "incant #{@num}"
           elsif (target.nil? or target.to_s.empty?) and (@type =~ /attack/i) and not [410,435,525,912,909,609].include?(@num)
@@ -594,13 +586,13 @@ module Games
           elsif cast_cmd !~ /^incant/
             cast_cmd += " #{target}"
           end
-          
+
           unless (arg_options.nil? || arg_options.empty?)
             cast_cmd += " #{arg_options}"
           end
-          
-          
-          
+
+
+
           cast_result = nil
           loop {
             waitrt?
@@ -729,7 +721,7 @@ module Games
       end
       cast(target, results_of_interest, arg_options)
     end
-    
+
     def force_incant(arg_options=nil, results_of_interest=nil)
       unless arg_options.nil? || arg_options.empty?
         arg_options = "incant #{arg_options}"
@@ -738,7 +730,7 @@ module Games
       end
       cast(nil, results_of_interest, arg_options)
     end
-   
+
     def _bonus
       @bonus.dup
     end
@@ -748,7 +740,7 @@ module Games
     def method_missing(*args)
       if @@bonus_list.include?(args[0].to_s.gsub('_', '-'))
         if @bonus[args[0].to_s.gsub('_', '-')]
-          proc { begin; $SAFE = 3; rescue; nil; end; eval(@bonus[args[0].to_s.gsub('_', '-')]) }.call.to_i
+          proc { eval(@bonus[args[0].to_s.gsub('_', '-')]) }.call.to_i
         else
           0
         end
@@ -782,7 +774,7 @@ module Games
         else
           if formula
             formula.untaint if formula.tainted?
-            proc { begin; $SAFE = 3; rescue; nil; end; eval(formula) }.call.to_i
+            proc { eval(formula) }.call.to_i
           else
             0
           end
