@@ -503,10 +503,10 @@ class XMLParser
         if @game.nil? or @game.empty?
           @game = 'unknown'
         end
-        unless File.exists?("#{DATA_DIR}/#{@game}")
+        unless File.exist?("#{DATA_DIR}/#{@game}")
           Dir.mkdir("#{DATA_DIR}/#{@game}")
         end
-        unless File.exists?("#{DATA_DIR}/#{@game}/#{@name}")
+        unless File.exist?("#{DATA_DIR}/#{@game}/#{@name}")
           Dir.mkdir("#{DATA_DIR}/#{@game}/#{@name}")
         end
         if $frontend =~ /^(?:wizard|avalon)$/

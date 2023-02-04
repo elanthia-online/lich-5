@@ -100,12 +100,6 @@ class Numeric
 end
 
 class String
-  @@elevated_untaint = proc { |what| what.orig_untaint }
-  alias :orig_untaint :untaint
-  def untaint
-    @@elevated_untaint.call(self)
-  end
-
   def to_s
     self.dup
   end
@@ -122,7 +116,6 @@ end
 class StringProc
   def initialize(string)
     @string = string
-    @string.untaint
   end
 
   def kind_of?(type)
@@ -134,7 +127,7 @@ class StringProc
   end
 
   def call(*a)
-    proc { begin; $SAFE = 3; rescue; nil; end; eval(@string) }.call
+    proc { eval(@string) }.call
   end
 
   def _dump(d = nil)
@@ -764,13 +757,6 @@ class Script
       else
         if script_obj.labels.length > 1
           trusted = false
-        elsif proc { begin; $SAFE = 3; true; rescue; false; end }.call
-          begin
-            trusted = Lich.db.get_first_value('SELECT name FROM trusted_scripts WHERE name=?;', script_name.encode('UTF-8'))
-          rescue SQLite3::BusyException
-            sleep 0.1
-            retry
-          end
         else
           trusted = true
         end
@@ -843,7 +829,7 @@ class Script
         else
           begin
             while (script = Script.current) and script.current_label
-              proc { foo = script.labels[script.current_label]; foo.untaint; begin; $SAFE = 3; rescue; nil; end; eval(foo, script_binding, script.name, 1) }.call
+              proc { foo = script.labels[script.current_label]; eval(foo, script_binding, script.name, 1) }.call
               Script.current.get_next_label
             end
           rescue SystemExit
@@ -901,17 +887,17 @@ class Script
     if script_name =~ /\\|\//
       nil
     elsif script_name =~ /\.(?:lic|lich|rb|cmd|wiz)(?:\.gz)?$/i
-      File.exists?("#{SCRIPT_DIR}/#{script_name}") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}")
+      File.exist?("#{SCRIPT_DIR}/#{script_name}") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}")
     else
-      File.exists?("#{SCRIPT_DIR}/#{script_name}.lic") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.lic") ||
-      File.exists?("#{SCRIPT_DIR}/#{script_name}.lich") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.lich") ||
-      File.exists?("#{SCRIPT_DIR}/#{script_name}.rb") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.rb") ||
-      File.exists?("#{SCRIPT_DIR}/#{script_name}.cmd") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.cmd") ||
-      File.exists?("#{SCRIPT_DIR}/#{script_name}.wiz") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.wiz") ||
-      File.exists?("#{SCRIPT_DIR}/#{script_name}.lic.gz") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.lic.gz") ||
-      File.exists?("#{SCRIPT_DIR}/#{script_name}.rb.gz") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.rb.gz") ||
-      File.exists?("#{SCRIPT_DIR}/#{script_name}.cmd.gz") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.cmd.gz") ||
-      File.exists?("#{SCRIPT_DIR}/#{script_name}.wiz.gz") || File.exists?("#{SCRIPT_DIR}/custom/#{script_name}.wiz.gz")
+      File.exist?("#{SCRIPT_DIR}/#{script_name}.lic") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.lic") ||
+      File.exist?("#{SCRIPT_DIR}/#{script_name}.lich") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.lich") ||
+      File.exist?("#{SCRIPT_DIR}/#{script_name}.rb") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.rb") ||
+      File.exist?("#{SCRIPT_DIR}/#{script_name}.cmd") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.cmd") ||
+      File.exist?("#{SCRIPT_DIR}/#{script_name}.wiz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.wiz") ||
+      File.exist?("#{SCRIPT_DIR}/#{script_name}.lic.gz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.lic.gz") ||
+      File.exist?("#{SCRIPT_DIR}/#{script_name}.rb.gz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.rb.gz") ||
+      File.exist?("#{SCRIPT_DIR}/#{script_name}.cmd.gz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.cmd.gz") ||
+      File.exist?("#{SCRIPT_DIR}/#{script_name}.wiz.gz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.wiz.gz")
     end
   }
   @@elevated_log = proc { |data|
@@ -920,7 +906,7 @@ class Script
         nil
       else
         begin
-          Dir.mkdir("#{LICH_DIR}/logs") unless File.exists?("#{LICH_DIR}/logs")
+          Dir.mkdir("#{LICH_DIR}/logs") unless File.exist?("#{LICH_DIR}/logs")
           File.open("#{LICH_DIR}/logs/#{script.name}.log", 'a') { |f| f.puts data }
           true
         rescue
@@ -1167,7 +1153,7 @@ class Script
   if (RUBY_VERSION =~ /^2\.[012]\./)
     def Script.trust(script_name)
       # fixme: case sensitive blah blah
-      if ($SAFE == 0) and not caller.any? { |c| c =~ /eval|run/ }
+      if not caller.any? { |c| c =~ /eval|run/ }
         begin
           Lich.db.execute('INSERT OR REPLACE INTO trusted_scripts(name) values(?);', script_name.encode('UTF-8'))
         rescue SQLite3::BusyException
@@ -1361,11 +1347,11 @@ class Script
   def instance_eval(*a);         nil; end
 
   def labels
-    ($SAFE == 0) ? @labels : nil
+    @labels
   end
 
   def thread_group
-    ($SAFE == 0) ? @thread_group : nil
+    @thread_group
   end
 
   def has_thread?(t)
@@ -1488,8 +1474,10 @@ end
 
 class ExecScript < Script
   @@name_exec_mutex = Mutex.new
-  @@elevated_start = proc { |cmd_data, options|
-    options[:trusted] = false
+  attr_reader :cmd_data
+
+  def ExecScript.start(cmd_data, options = {})
+    options = { :quiet => true } if options == true
     unless new_script = ExecScript.new(cmd_data, options)
       respond '--- Lich: failed to start exec script'
       return false
@@ -1501,9 +1489,9 @@ class ExecScript < Script
         Thread.current.priority = 1
         respond("--- Lich: #{script.name} active.") unless script.quiet
         begin
-          script_binding = Scripting.new.script
+          script_binding = TRUSTED_SCRIPT_BINDING.call
           eval('script = Script.current', script_binding, script.name.to_s)
-          proc { cmd_data.untaint; $SAFE = 3; eval(cmd_data, script_binding, script.name.to_s) }.call
+          eval(cmd_data, script_binding, script.name.to_s)
           Script.current.kill
         rescue SystemExit
           Script.current.kill
@@ -1555,90 +1543,11 @@ class ExecScript < Script
           Script.current.kill
         end
       else
-        respond '--- Lich: error: ExecScript.start: out of cheese'
+        respond 'start_exec_script screwed up...'
       end
     }
     new_script.thread_group.add(new_thread)
     new_script
-  }
-  attr_reader :cmd_data
-
-  def ExecScript.start(cmd_data, options = {})
-    options = { :quiet => true } if options == true
-    if ($SAFE < 2) and (options[:trusted] or (RUBY_VERSION !~ /^2\.[012]\./))
-      unless new_script = ExecScript.new(cmd_data, options)
-        respond '--- Lich: failed to start exec script'
-        return false
-      end
-      new_thread = Thread.new {
-        100.times { break if Script.current == new_script; sleep 0.01 }
-
-        if script = Script.current
-          Thread.current.priority = 1
-          respond("--- Lich: #{script.name} active.") unless script.quiet
-          begin
-            script_binding = TRUSTED_SCRIPT_BINDING.call
-            eval('script = Script.current', script_binding, script.name.to_s)
-            eval(cmd_data, script_binding, script.name.to_s)
-            Script.current.kill
-          rescue SystemExit
-            Script.current.kill
-          rescue SyntaxError
-            respond "--- SyntaxError: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "SyntaxError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue ScriptError
-            respond "--- ScriptError: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "ScriptError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue NoMemoryError
-            respond "--- NoMemoryError: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "NoMemoryError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue LoadError
-            respond("--- LoadError: #{$!}")
-            respond "--- LoadError: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "LoadError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue SecurityError
-            respond "--- SecurityError: #{$!}"
-            respond $!.backtrace[0..1]
-            Lich.log "SecurityError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue ThreadError
-            respond "--- ThreadError: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "ThreadError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue SystemStackError
-            respond "--- SystemStackError: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "SystemStackError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue Exception
-            respond "--- Exception: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "Exception: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          rescue
-            respond "--- Lich: error: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "Error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            Script.current.kill
-          end
-        else
-          respond 'start_exec_script screwed up...'
-        end
-      }
-      new_script.thread_group.add(new_thread)
-      new_script
-    else
-      @@elevated_start.call(cmd_data, options)
-    end
   end
 
   def initialize(cmd_data, flags = Hash.new)
@@ -2154,50 +2063,40 @@ class SpellRanks
   @@list      ||= Array.new
   @@timestamp ||= 0
   @@loaded    ||= false
-  @@elevated_load = proc { SpellRanks.load }
-  @@elevated_save = proc { SpellRanks.save }
   attr_reader :name
   attr_accessor :minorspiritual, :majorspiritual, :cleric, :minorelemental, :majorelemental, :minormental, :ranger, :sorcerer, :wizard, :bard, :empath, :paladin, :arcanesymbols, :magicitemuse, :monk
 
   def SpellRanks.load
-    if $SAFE == 0
-      if File.exists?("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat")
-        begin
-          File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'rb') { |f|
-            @@timestamp, @@list = Marshal.load(f.read)
-          }
-          # minor mental circle added 2012-07-18; old data files will have @minormental as nil
-          @@list.each { |rank_info| rank_info.minormental ||= 0 }
-          # monk circle added 2013-01-15; old data files will have @minormental as nil
-          @@list.each { |rank_info| rank_info.monk ||= 0 }
-          @@loaded = true
-        rescue
-          respond "--- Lich: error: SpellRanks.load: #{$!}"
-          Lich.log "error: SpellRanks.load: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          @@list      = Array.new
-          @@timestamp = 0
-          @@loaded = true
-        end
-      else
+    if File.exist?("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat")
+      begin
+        File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'rb') { |f|
+          @@timestamp, @@list = Marshal.load(f.read)
+        }
+        # minor mental circle added 2012-07-18; old data files will have @minormental as nil
+        @@list.each { |rank_info| rank_info.minormental ||= 0 }
+        # monk circle added 2013-01-15; old data files will have @minormental as nil
+        @@list.each { |rank_info| rank_info.monk ||= 0 }
+        @@loaded = true
+      rescue
+        respond "--- Lich: error: SpellRanks.load: #{$!}"
+        Lich.log "error: SpellRanks.load: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+        @@list      = Array.new
+        @@timestamp = 0
         @@loaded = true
       end
     else
-      @@elevated_load.call
+      @@loaded = true
     end
   end
 
   def SpellRanks.save
-    if $SAFE == 0
-      begin
-        File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'wb') { |f|
-          f.write(Marshal.dump([@@timestamp, @@list]))
-        }
-      rescue
-        respond "--- Lich: error: SpellRanks.save: #{$!}"
-        Lich.log "error: SpellRanks.save: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      end
-    else
-      @@elevated_save.call
+    begin
+      File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'wb') { |f|
+        f.write(Marshal.dump([@@timestamp, @@list]))
+      }
+    rescue
+      respond "--- Lich: error: SpellRanks.save: #{$!}"
+      Lich.log "error: SpellRanks.save: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
     end
   end
 
@@ -2279,6 +2178,23 @@ module Games
                 $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><component id=","<component id=")
                 # $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
 
+                ## Fix for nested/non-solo nav tags.
+                ## DR needs the <nav/> tag to be in its own line to properly detect movement
+                ## These two fixes make it so room movement can be detected reliably
+                if $_SERVERSTRING_ =~ /^<nav\/>/
+                  unless $_SERVERSTRING_.chomp == "<nav\/>"
+                    Lich.log "NAV tag detected in nested line: #{$_SERVERSTRING_.inspect}"
+                    $_SERVERSTRING_.gsub!("<nav\/>", "<nav\/>\n").chomp!
+                    Lich.log "NAV tag fixed to: #{$_SERVERSTRING_.inspect}"
+                  end
+                end
+
+                if $_SERVERSTRING_ =~ /(?!^)<nav\/>/
+                  Lich.log "NAV tag detected not at start of line: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_.gsub!("<nav\/>", "\n<nav\/>").chomp!
+                  Lich.log "NAV tag fixed to: #{$_SERVERSTRING_.inspect}"
+                end
+
                 # Fixes xml with \r\n in the middle of it like:
                 # <component id='room exits'>Obvious paths: clockwise, widdershins.\r\n
                 # <compass></compass></component>\r\n
@@ -2306,7 +2222,7 @@ module Games
                   $_SERVERSTRING_.gsub!("\r\n", "</component>")
                   Lich.log "Open-ended room objects component id tag fixed to: #{$_SERVERSTRING_.inspect}"
                 end
-                # "</component>\r\n"                
+                # "</component>\r\n"
                 if $_SERVERSTRING_ == "</component>\r\n"
                   Lich.log "Extraneous closing tag detected and deleted: #{$_SERVERSTRING_.inspect}"
                   $_SERVERSTRING_ = ""
@@ -2348,9 +2264,6 @@ module Games
                 elsif ($_SERVERSTRING_ =~ /<pushStream id="atmospherics" \/>/)
                   atmospherics = true
                 end
-                #                        while $_SERVERSTRING_.scan('<pushStream').length > $_SERVERSTRING_.scan('<popStream').length
-                #                           $_SERVERSTRING_.concat(@@socket.gets)
-                #                        end
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
 
                 if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
@@ -3242,6 +3155,7 @@ module Games
     require_relative("./lib/armor.rb")
     require_relative("./lib/cman.rb")
     require_relative("./lib/feat.rb")
+    require_relative("./lib/gameobj.rb")
     require_relative("./lib/shield.rb")
     require_relative("./lib/weapon.rb")
 
@@ -3617,403 +3531,6 @@ module Games
         nil
       end
     end
-    class GameObj
-      @@loot          = Array.new
-      @@npcs          = Array.new
-      @@npc_status    = Hash.new
-      @@pcs           = Array.new
-      @@pc_status     = Hash.new
-      @@inv           = Array.new
-      @@contents      = Hash.new
-      @@right_hand    = nil
-      @@left_hand     = nil
-      @@room_desc     = Array.new
-      @@fam_loot      = Array.new
-      @@fam_npcs      = Array.new
-      @@fam_pcs       = Array.new
-      @@fam_room_desc = Array.new
-      @@type_data     = Hash.new
-      @@sellable_data = Hash.new
-      @@elevated_load = proc { GameObj.load_data }
-
-      attr_reader :id
-      attr_accessor :noun, :name, :before_name, :after_name
-
-      def initialize(id, noun, name, before = nil, after = nil)
-        @id = id
-        @noun = noun
-        @noun = 'lapis' if @noun == 'lapis lazuli'
-        @noun = 'hammer' if @noun == "Hammer of Kai"
-        @noun = 'ball' if @noun == "ball and chain" # DR item 'ball and chain' doesn't work.
-        @noun = 'mother-of-pearl' if (@noun == 'pearl') and (@name =~ /mother\-of\-pearl/)
-        @name = name
-        @before_name = before
-        @after_name = after
-      end
-
-      def type
-        GameObj.load_data if @@type_data.empty?
-        list = @@type_data.keys.find_all { |t| (@name =~ @@type_data[t][:name] or @noun =~ @@type_data[t][:noun]) and (@@type_data[t][:exclude].nil? or @name !~ @@type_data[t][:exclude]) }
-        if list.empty?
-          nil
-        else
-          list.join(',')
-        end
-      end
-
-      def sellable
-        GameObj.load_data if @@sellable_data.empty?
-        list = @@sellable_data.keys.find_all { |t| (@name =~ @@sellable_data[t][:name] or @noun =~ @@sellable_data[t][:noun]) and (@@sellable_data[t][:exclude].nil? or @name !~ @@sellable_data[t][:exclude]) }
-        if list.empty?
-          nil
-        else
-          list.join(',')
-        end
-      end
-
-      def status
-        if @@npc_status.keys.include?(@id)
-          @@npc_status[@id]
-        elsif @@pc_status.keys.include?(@id)
-          @@pc_status[@id]
-        elsif @@loot.find { |obj| obj.id == @id } or @@inv.find { |obj| obj.id == @id } or @@room_desc.find { |obj| obj.id == @id } or @@fam_loot.find { |obj| obj.id == @id } or @@fam_npcs.find { |obj| obj.id == @id } or @@fam_pcs.find { |obj| obj.id == @id } or @@fam_room_desc.find { |obj| obj.id == @id } or (@@right_hand.id == @id) or (@@left_hand.id == @id) or @@contents.values.find { |list| list.find { |obj| obj.id == @id } }
-          nil
-        else
-          'gone'
-        end
-      end
-
-      def status=(val)
-        if @@npcs.any? { |npc| npc.id == @id }
-          @@npc_status[@id] = val
-        elsif @@pcs.any? { |pc| pc.id == @id }
-          @@pc_status[@id] = val
-        else
-          nil
-        end
-      end
-
-      def to_s
-        @noun
-      end
-
-      def empty?
-        false
-      end
-
-      def contents
-        @@contents[@id].dup
-      end
-
-      def GameObj.[](val)
-        if val.class == String
-          if val =~ /^\-?[0-9]+$/
-            obj = @@inv.find { |o| o.id == val } || @@loot.find { |o| o.id == val } || @@npcs.find { |o| o.id == val } || @@pcs.find { |o| o.id == val } || [@@right_hand, @@left_hand].find { |o| o.id == val } || @@room_desc.find { |o| o.id == val }
-          elsif val.split(' ').length == 1
-            obj = @@inv.find { |o| o.noun == val } || @@loot.find { |o| o.noun == val } || @@npcs.find { |o| o.noun == val } || @@pcs.find { |o| o.noun == val } || [@@right_hand, @@left_hand].find { |o| o.noun == val } || @@room_desc.find { |o| o.noun == val }
-          else
-            obj = @@inv.find { |o| o.name == val } || @@loot.find { |o| o.name == val } || @@npcs.find { |o| o.name == val } || @@pcs.find { |o| o.name == val } || [@@right_hand, @@left_hand].find { |o| o.name == val } || @@room_desc.find { |o| o.name == val } || @@inv.find { |o| o.name =~ /\b#{Regexp.escape(val.strip)}$/i } || @@loot.find { |o| o.name =~ /\b#{Regexp.escape(val.strip)}$/i } || @@npcs.find { |o| o.name =~ /\b#{Regexp.escape(val.strip)}$/i } || @@pcs.find { |o| o.name =~ /\b#{Regexp.escape(val.strip)}$/i } || [@@right_hand, @@left_hand].find { |o| o.name =~ /\b#{Regexp.escape(val.strip)}$/i } || @@room_desc.find { |o| o.name =~ /\b#{Regexp.escape(val.strip)}$/i } || @@inv.find { |o| o.name =~ /\b#{Regexp.escape(val).sub(' ', ' .*')}$/i } || @@loot.find { |o| o.name =~ /\b#{Regexp.escape(val).sub(' ', ' .*')}$/i } || @@npcs.find { |o| o.name =~ /\b#{Regexp.escape(val).sub(' ', ' .*')}$/i } || @@pcs.find { |o| o.name =~ /\b#{Regexp.escape(val).sub(' ', ' .*')}$/i } || [@@right_hand, @@left_hand].find { |o| o.name =~ /\b#{Regexp.escape(val).sub(' ', ' .*')}$/i } || @@room_desc.find { |o| o.name =~ /\b#{Regexp.escape(val).sub(' ', ' .*')}$/i }
-          end
-        elsif val.class == Regexp
-          obj = @@inv.find { |o| o.name =~ val } || @@loot.find { |o| o.name =~ val } || @@npcs.find { |o| o.name =~ val } || @@pcs.find { |o| o.name =~ val } || [@@right_hand, @@left_hand].find { |o| o.name =~ val } || @@room_desc.find { |o| o.name =~ val }
-        end
-      end
-
-      def GameObj
-        @noun
-      end
-
-      def full_name
-        "#{@before_name}#{' ' unless @before_name.nil? or @before_name.empty?}#{name}#{' ' unless @after_name.nil? or @after_name.empty?}#{@after_name}"
-      end
-
-      def GameObj.new_npc(id, noun, name, status = nil)
-        obj = GameObj.new(id, noun, name)
-        @@npcs.push(obj)
-        @@npc_status[id] = status
-        obj
-      end
-
-      def GameObj.new_loot(id, noun, name)
-        obj = GameObj.new(id, noun, name)
-        @@loot.push(obj)
-        obj
-      end
-
-      def GameObj.new_pc(id, noun, name, status = nil)
-        obj = GameObj.new(id, noun, name)
-        @@pcs.push(obj)
-        @@pc_status[id] = status
-        obj
-      end
-
-      def GameObj.new_inv(id, noun, name, container = nil, before = nil, after = nil)
-        obj = GameObj.new(id, noun, name, before, after)
-        if container
-          @@contents[container].push(obj)
-        else
-          @@inv.push(obj)
-        end
-        obj
-      end
-
-      def GameObj.new_room_desc(id, noun, name)
-        obj = GameObj.new(id, noun, name)
-        @@room_desc.push(obj)
-        obj
-      end
-
-      def GameObj.new_fam_room_desc(id, noun, name)
-        obj = GameObj.new(id, noun, name)
-        @@fam_room_desc.push(obj)
-        obj
-      end
-
-      def GameObj.new_fam_loot(id, noun, name)
-        obj = GameObj.new(id, noun, name)
-        @@fam_loot.push(obj)
-        obj
-      end
-
-      def GameObj.new_fam_npc(id, noun, name)
-        obj = GameObj.new(id, noun, name)
-        @@fam_npcs.push(obj)
-        obj
-      end
-
-      def GameObj.new_fam_pc(id, noun, name)
-        obj = GameObj.new(id, noun, name)
-        @@fam_pcs.push(obj)
-        obj
-      end
-
-      def GameObj.new_right_hand(id, noun, name)
-        @@right_hand = GameObj.new(id, noun, name)
-      end
-
-      def GameObj.right_hand
-        @@right_hand.dup
-      end
-
-      def GameObj.new_left_hand(id, noun, name)
-        @@left_hand = GameObj.new(id, noun, name)
-      end
-
-      def GameObj.left_hand
-        @@left_hand.dup
-      end
-
-      def GameObj.clear_loot
-        @@loot.clear
-      end
-
-      def GameObj.clear_npcs
-        @@npcs.clear
-        @@npc_status.clear
-      end
-
-      def GameObj.clear_pcs
-        @@pcs.clear
-        @@pc_status.clear
-      end
-
-      def GameObj.clear_inv
-        @@inv.clear
-      end
-
-      def GameObj.clear_room_desc
-        @@room_desc.clear
-      end
-
-      def GameObj.clear_fam_room_desc
-        @@fam_room_desc.clear
-      end
-
-      def GameObj.clear_fam_loot
-        @@fam_loot.clear
-      end
-
-      def GameObj.clear_fam_npcs
-        @@fam_npcs.clear
-      end
-
-      def GameObj.clear_fam_pcs
-        @@fam_pcs.clear
-      end
-
-      def GameObj.npcs
-        if @@npcs.empty?
-          nil
-        else
-          @@npcs.dup
-        end
-      end
-
-      def GameObj.loot
-        if @@loot.empty?
-          nil
-        else
-          @@loot.dup
-        end
-      end
-
-      def GameObj.pcs
-        if @@pcs.empty?
-          nil
-        else
-          @@pcs.dup
-        end
-      end
-
-      def GameObj.inv
-        if @@inv.empty?
-          nil
-        else
-          @@inv.dup
-        end
-      end
-
-      def GameObj.room_desc
-        if @@room_desc.empty?
-          nil
-        else
-          @@room_desc.dup
-        end
-      end
-
-      def GameObj.fam_room_desc
-        if @@fam_room_desc.empty?
-          nil
-        else
-          @@fam_room_desc.dup
-        end
-      end
-
-      def GameObj.fam_loot
-        if @@fam_loot.empty?
-          nil
-        else
-          @@fam_loot.dup
-        end
-      end
-
-      def GameObj.fam_npcs
-        if @@fam_npcs.empty?
-          nil
-        else
-          @@fam_npcs.dup
-        end
-      end
-
-      def GameObj.fam_pcs
-        if @@fam_pcs.empty?
-          nil
-        else
-          @@fam_pcs.dup
-        end
-      end
-
-      def GameObj.clear_container(container_id)
-        @@contents[container_id] = Array.new
-      end
-
-      def GameObj.delete_container(container_id)
-        @@contents.delete(container_id)
-      end
-
-      def GameObj.targets
-        a = Array.new
-        XMLData.current_target_ids.each { |id|
-          if (npc = @@npcs.find { |n| n.id == id }) and (npc.status !~ /dead|gone/)
-            a.push(npc)
-          end
-        }
-        a
-      end
-
-      def GameObj.dead
-        dead_list = Array.new
-        for obj in @@npcs
-          dead_list.push(obj) if obj.status == "dead"
-        end
-        return nil if dead_list.empty?
-
-        return dead_list
-      end
-
-      def GameObj.containers
-        @@contents.dup
-      end
-
-      def GameObj.load_data(filename = nil)
-        if $SAFE == 0
-          if filename.nil?
-            if File.exists?("#{DATA_DIR}/gameobj-data.xml")
-              filename = "#{DATA_DIR}/gameobj-data.xml"
-            elsif File.exists?("#{SCRIPT_DIR}/gameobj-data.xml") # deprecated
-              filename = "#{SCRIPT_DIR}/gameobj-data.xml"
-            else
-              filename = "#{DATA_DIR}/gameobj-data.xml"
-            end
-          end
-          if File.exists?(filename)
-            begin
-              @@type_data = Hash.new
-              @@sellable_data = Hash.new
-              File.open(filename) { |file|
-                doc = REXML::Document.new(file.read)
-                doc.elements.each('data/type') { |e|
-                  if type = e.attributes['name']
-                    @@type_data[type] = Hash.new
-                    @@type_data[type][:name]    = Regexp.new(e.elements['name'].text) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
-                    @@type_data[type][:noun]    = Regexp.new(e.elements['noun'].text) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
-                    @@type_data[type][:exclude] = Regexp.new(e.elements['exclude'].text) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
-                  end
-                }
-                doc.elements.each('data/sellable') { |e|
-                  if sellable = e.attributes['name']
-                    @@sellable_data[sellable] = Hash.new
-                    @@sellable_data[sellable][:name]    = Regexp.new(e.elements['name'].text) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
-                    @@sellable_data[sellable][:noun]    = Regexp.new(e.elements['noun'].text) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
-                    @@sellable_data[sellable][:exclude] = Regexp.new(e.elements['exclude'].text) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
-                  end
-                }
-              }
-              true
-            rescue
-              @@type_data = nil
-              @@sellable_data = nil
-              echo "error: GameObj.load_data: #{$!}"
-              respond $!.backtrace[0..1]
-              false
-            end
-          else
-            @@type_data = nil
-            @@sellable_data = nil
-            echo "error: GameObj.load_data: file does not exist: #{filename}"
-            false
-          end
-        else
-          @@elevated_load.call
-        end
-      end
-
-      def GameObj.type_data
-        @@type_data
-      end
-
-      def GameObj.sellable_data
-        @@sellable_data
-      end
-    end
-    #
-    # start deprecated stuff
-    #
-    class RoomObj < GameObj
-    end
-    #
-    # end deprecated stuff
-    #
   end
   module DragonRealms
     # fixme
@@ -4712,12 +4229,12 @@ for arg in ARGV
     nil # already used when defining the Wine module
   elsif arg =~ /\.sal$|Gse\.~xt$/i
     argv_options[:sal] = arg
-    unless File.exists?(argv_options[:sal])
+    unless File.exist?(argv_options[:sal])
       if ARGV.join(' ') =~ /([A-Z]:\\.+?\.(?:sal|~xt))/i
         argv_options[:sal] = $1
       end
     end
-    unless File.exists?(argv_options[:sal])
+    unless File.exist?(argv_options[:sal])
       if defined?(Wine)
         argv_options[:sal] = "#{Wine::PREFIX}/drive_c/#{argv_options[:sal][3..-1].split('\\').join('/')}"
       end
@@ -4733,7 +4250,7 @@ if arg = ARGV.find { |a| a == '--hosts-dir' }
   ARGV.delete_at(i)
   hosts_dir = ARGV[i]
   ARGV.delete_at(i)
-  if hosts_dir and File.exists?(hosts_dir)
+  if hosts_dir and File.exist?(hosts_dir)
     hosts_dir = hosts_dir.tr('\\', '/')
     hosts_dir += '/' unless hosts_dir[-1..-1] == '/'
   else
@@ -4750,7 +4267,7 @@ if arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=[0-9]+$/ }
 end
 
 if argv_options[:sal]
-  unless File.exists?(argv_options[:sal])
+  unless File.exist?(argv_options[:sal])
     Lich.log "error: launch file does not exist: #{argv_options[:sal]}"
     Lich.msgbox "error: launch file does not exist: #{argv_options[:sal]}"
     exit
@@ -4923,7 +4440,7 @@ main_thread = Thread.new {
   require_relative("./lib/eaccess.rb")
 
   if ARGV.include?('--login')
-    if File.exists?("#{DATA_DIR}/entry.dat")
+    if File.exist?("#{DATA_DIR}/entry.dat")
       entry_data = File.open("#{DATA_DIR}/entry.dat", 'r') { |file|
         begin
           Marshal.load(file.read.unpack('m').first)
@@ -4979,6 +4496,12 @@ main_thread = Thread.new {
           Lich.log(msg)
         end
       }
+
+      if ARGV.include?('--gst')
+        data[:game_code] = 'GST'
+      elsif ARGV.include?('--drt')
+        data[:game_code] = 'DRT'
+      end
 
       launch_data_hash = EAccess.auth(
         account: data[:user_id],
@@ -5178,7 +4701,7 @@ main_thread = Thread.new {
         end
         @launch_data.collect! { |line| line.sub(/GAMEPORT=.+/, "GAMEPORT=#{localport}").sub(/GAMEHOST=.+/, "GAMEHOST=#{localhost}") }
         sal_filename = "#{TEMP_DIR}/lich#{rand(10000)}.sal"
-        while File.exists?(sal_filename)
+        while File.exist?(sal_filename)
           sal_filename = "#{TEMP_DIR}/lich#{rand(10000)}.sal"
         end
         File.open(sal_filename, 'w') { |f| f.puts @launch_data }
