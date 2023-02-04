@@ -39,6 +39,53 @@ class Armor
   def Armor.puncture_protection=(val);   @@puncture_protection=val;    end
   def Armor.slash_protection=(val);      @@slash_protection=val;       end
 
+  @@armor_techniques = {
+    "armor_blessing" => {
+      :regex => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i,
+      :usage => "blessing",
+    },
+    "armor_reinforcement" => {
+      :regex => /\w+ adjusts? \w+(?:'s)? [\w\s]+, reinforcing weak spots\./i,
+      :usage => "reinforcement",
+    },
+    "armor_spike_mastery" => {
+      :regex => /Armor Spike Mastery is passive and always active once learned\./i,
+      :usage => "spikemastery",
+    },
+    "armor_support" => {
+      :regex => /\w+ adjusts? \w+(?:'s)? [\w\s]+, improving its ability to support the weight of \w+ gear\./i,
+      :usage => "support",
+    },
+    "armored_casting" => {
+      :regex => /\w+ adjusts? \w+(?:'s)? [\w\s]+, making it easier for \w+ to recover from failed spell casting\./i,
+      :usage => "casting",
+    },
+    "armored_evasion" => {
+      :regex => /\w+ adjusts? \w+(?:'s)? [\w\s]+, improving its comfort and maneuverability\./i,
+      :usage => "evasion",
+    },
+    "armored_fluidity" => {
+      :regex => /\w+ adjusts? \w+(?:'s)? [\w\s]+, making it easier for \w+ to cast spells\./i,
+      :usage => "fluidity",
+    },
+    "armored_stealth" => {
+      :regex => /\w+ adjusts? \w+(?:'s)? [\w\s]+ to cushion \w+ movements\./i,
+      :usage => "stealth",
+    },
+    "crush_protection" => {
+      :regex => /You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\.|You must specify an armor slot\.|You don't seem to have the necessary armor fittings in hand\./i,
+      :usage => "crush",
+    },
+    "puncture_protection" => {
+      :regex => /You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\.|You must specify an armor slot\.|You don't seem to have the necessary armor fittings in hand\./i,
+      :usage => "puncture",
+    },
+    "slash_protection" => {
+      :regex => /You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\.|You must specify an armor slot\.|You don't seem to have the necessary armor fittings in hand\./i,
+      :usage => "slash",
+    },
+  }
+
   def Armor.method_missing(arg1, arg2=nil)
     echo "#{arg1} is not a defined Armor type.  Is it another Ability type?"
   end
@@ -55,10 +102,50 @@ class Armor
 
   ## Armor does not require stamina so costs are zero across the board
   ## the following method is in place simply to make consistent with other
-  ## PSM class definitions.
-
+  ## PSM class definitions.  
   def Armor.affordable?(name)
     return true
+  end
+
+  def Armor.available?(name)
+    Armor.known?(name) and Armor.affordable?(name)
+  end
+
+  def Armor.use(name, target = "")
+    return unless Armor.available?(name)
+    usage = @@armor_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:usage]
+    return if usage.nil?
+    
+    results_regex = Regexp.union(
+      @@armor_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
+      /^#{name} what\?$/i,
+      /^Roundtime: [0-9]+ sec\.$/,
+      /^And give yourself away!  Never!$/,
+      /^You are unable to do that right now\.$/,
+      /^You don't seem to be able to move to do that\.$/,
+      /^Provoking a GameMaster is not such a good idea\.$/,
+      /^You do not currently have a target\.$/,
+    )
+    usage_cmd = "armor #{usage}"
+    if target.class == GameObj
+      usage_cmd += " ##{target.id}"
+    elsif target.class == Integer
+      usage_cmd += " ##{target}"
+    elsif target != ""
+      usage_cmd += " #{target}"
+    end
+    usage_result = nil
+    loop {
+      waitrt?
+      waitcastrt?
+      usage_result = dothistimeout usage_cmd, 5, results_regex
+      if usage_result == "You don't seem to be able to move to do that."
+        100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
+        usage_result = dothistimeout usage_cmd, 5, results_regex
+      end
+      break
+    }
+    usage_result
   end
 
 end

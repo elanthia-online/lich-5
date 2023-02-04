@@ -13,6 +13,8 @@ Further modifications are to support the retirement of spell-list.xml.
     v1.2.2 (2022-11-24)
       Removed references to $SAFE
       Removed deprecated reference to "#{SCRIPT_DIR}/spell-list.xml"
+      fix for Mental Acuity to only work on MnM spells 1201-1220
+      fix for Armored Casting and Spell Hinderance 
     v1.2.1 (2022-05-10)
       add unknown spell result to regex results
     v1.2.0 (2022-03-14)
@@ -42,7 +44,7 @@ module Games
     attr_accessor :stance, :channel
 
     @@prepare_regex = /^You already have a spell readied!  You must RELEASE it if you wish to prepare another!$|^Your spell(?:song)? is ready\.|^You can't think clearly enough to prepare a spell!$|^You are concentrating too intently .*?to prepare a spell\.$|^You are too injured to make that dextrous of a movement|^The searing pain in your throat makes that impossible|^But you don't have any mana!\.$|^You can't make that dextrous of a move!$|^As you begin to prepare the spell the wind blows small objects at you thwarting your attempt\.$|^You do not know that spell!$|^All you manage to do is cough up some blood\.$|The incantations of countless spells swirl through your mind as a golden light flashes before your eyes\./
-    @@results_regex = /^(?:Cast|Sing) Roundtime [0-9]+ Seconds?\.$|^Cast at what\?$|^But you don't have any mana!$|^\[Spell Hindrance for|^You don't have a spell prepared!$|keeps? the spell from working\.|^Be at peace my child, there is no need for spells of war in here\.$|Spells of War cannot be cast|^As you focus on your magic, your vision swims with a swirling haze of crimson\.$|^Your magic fizzles ineffectually\.$|^All you manage to do is cough up some blood\.$|^And give yourself away!  Never!$|^You are unable to do that right now\.$|^You feel a sudden rush of power as you absorb [0-9]+ mana!$|^You are unable to drain it!$|leaving you casting at nothing but thin air!$|^You don't seem to be able to move to do that\.$|^Provoking a GameMaster is not such a good idea\.$|^You can't think clearly enough to prepare a spell!$|^You do not currently have a target\.$|The incantations of countless spells swirl through your mind as a golden light flashes before your eyes\.|You can only evoke certain spells\.|You can only channel certain spells for extra power\.|That is not something you can prepare\./
+    @@results_regex = /^(?:Cast|Sing) Roundtime [0-9]+ Seconds?\.$|^Cast at what\?$|^But you don't have any mana!$|^You don't have a spell prepared!$|keeps? the spell from working\.|^Be at peace my child, there is no need for spells of war in here\.$|Spells of War cannot be cast|^As you focus on your magic, your vision swims with a swirling haze of crimson\.$|^Your magic fizzles ineffectually\.$|^All you manage to do is cough up some blood\.$|^And give yourself away!  Never!$|^You are unable to do that right now\.$|^You feel a sudden rush of power as you absorb [0-9]+ mana!$|^You are unable to drain it!$|leaving you casting at nothing but thin air!$|^You don't seem to be able to move to do that\.$|^Provoking a GameMaster is not such a good idea\.$|^You can't think clearly enough to prepare a spell!$|^You do not currently have a target\.$|The incantations of countless spells swirl through your mind as a golden light flashes before your eyes\.|You can only evoke certain spells\.|You can only channel certain spells for extra power\.|That is not something you can prepare\./
 
     def initialize(xml_spell)
       @num = xml_spell.attributes['number'].to_i
@@ -478,9 +480,9 @@ module Games
         false
       elsif (self.mana_cost(options) > 0)
         ## convert Spell[9699].active? to Effects::Debuffs test (if Debuffs is where it shows)
-        if Feat.known?(:mental_acuity) and (Spell[9699].active? or not checkstamina(self.mana_cost(options)*2))
+        if (Feat.known?(:mental_acuity) and self.num.between?(1201,1220) ) and (Spell[9699].active? or not checkstamina(self.mana_cost(options)*2))
           false
-        elsif ( !Feat.known?(:mental_acuity) ) && ( !checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options)/4, 1].max))  )
+        elsif ( !(Feat.known?(:mental_acuity) and self.num.between?(1201,1220) ) ) and ( !checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options)/4, 1].max))  )
           false
         else
           true
@@ -644,9 +646,15 @@ module Games
               # dothistimeout 'stance offensive', 5, /^You (?:are now in|move into) an? offensive stance|^You are unable to change your stance\.$/
             end
             if results_of_interest.class == Regexp
-              merged_results_regex = /#{@@results_regex}|#{results_of_interest}/
+              merged_results_regex = Regexp.union(@@results_regex, results_of_interest)
             else
               merged_results_regex = @@results_regex
+            end
+            
+            if Effects::Spells.active?("Armored Casting")
+              merged_results_regex = Regexp.union(/^Roundtime: \d+ sec.$/, merged_results_regex)
+            else
+              merged_results_regex = Regexp.union(/^\[Spell Hindrance for/, merged_results_regex)
             end
             cast_result = dothistimeout cast_cmd, 5, merged_results_regex
             if cast_result == "You don't seem to be able to move to do that."

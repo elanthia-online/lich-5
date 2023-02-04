@@ -1,6 +1,7 @@
 backup/
 data/alias.db3
 data/GSIV
+data/DR
 data/entry.dat
 data/simu.pem
 logo.png
@@ -11,6 +12,7 @@ fly64.png
 jinxp
 logs/
 maps/
+scripts/
 temp/
 .pre-commit-config.yaml
 *.swp

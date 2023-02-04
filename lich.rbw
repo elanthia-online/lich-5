@@ -2178,6 +2178,23 @@ module Games
                 $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><component id=","<component id=")
                 # $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
 
+                ## Fix for nested/non-solo nav tags.
+                ## DR needs the <nav/> tag to be in its own line to properly detect movement
+                ## These two fixes make it so room movement can be detected reliably
+                if $_SERVERSTRING_ =~ /^<nav\/>/
+                  unless $_SERVERSTRING_.chomp == "<nav\/>"
+                    Lich.log "NAV tag detected in nested line: #{$_SERVERSTRING_.inspect}"
+                    $_SERVERSTRING_.gsub!("<nav\/>", "<nav\/>\n").chomp!
+                    Lich.log "NAV tag fixed to: #{$_SERVERSTRING_.inspect}"
+                  end
+                end
+
+                if $_SERVERSTRING_ =~ /(?!^)<nav\/>/
+                  Lich.log "NAV tag detected not at start of line: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_.gsub!("<nav\/>", "\n<nav\/>").chomp!
+                  Lich.log "NAV tag fixed to: #{$_SERVERSTRING_.inspect}"
+                end
+
                 # Fixes xml with \r\n in the middle of it like:
                 # <component id='room exits'>Obvious paths: clockwise, widdershins.\r\n
                 # <compass></compass></component>\r\n
@@ -3819,7 +3836,7 @@ module Games
       def GameObj.targets
         a = Array.new
         XMLData.current_target_ids.each { |id|
-          if (npc = @@npcs.find { |n| n.id == id }) and (npc.status !~ /dead|gone/)
+          if (npc = @@npcs.find { |n| n.id == id }) and (npc.status !~ /dead|gone/) and (npc.name !~ /^animated / || npc.name == "animated slush")
             a.push(npc)
           end
         }
@@ -4870,6 +4887,12 @@ main_thread = Thread.new {
           Lich.log(msg)
         end
       }
+
+      if ARGV.include?('--gst')
+        data[:game_code] = 'GST'
+      elsif ARGV.include?('--drt')
+        data[:game_code] = 'DRT'
+      end
 
       launch_data_hash = EAccess.auth(
         account: data[:user_id],
