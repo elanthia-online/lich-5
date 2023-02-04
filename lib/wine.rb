@@ -20,7 +20,7 @@ else
   $wine_prefix = nil
 end
 
-if $wine_bin and File.exists?($wine_bin) and File.file?($wine_bin) and $wine_prefix and File.exists?($wine_prefix) and File.directory?($wine_prefix)
+if $wine_bin and File.exist?($wine_bin) and File.file?($wine_bin) and $wine_prefix and File.exist?($wine_prefix) and File.directory?($wine_prefix)
   module Wine
     BIN = $wine_bin
     PREFIX = $wine_prefix
@@ -56,7 +56,7 @@ if $wine_bin and File.exists?($wine_bin) and File.file?($wine_bin) and $wine_pre
 
     def Wine.registry_puts(key, value)
       hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme ]/
-      if File.exists?(PREFIX)
+      if File.exist?(PREFIX)
         if thingie.nil? or thingie.empty?
           thingie = '@'
         else
