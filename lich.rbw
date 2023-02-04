@@ -3236,6 +3236,7 @@ module Games
     end
 
     require_relative("./lib/spell.rb")
+    require_relative("./lib/bounty.rb")
 
     # #updating PSM3 abilities via breakout - 20210801
     require_relative("./lib/armor.rb")
@@ -4582,6 +4583,12 @@ main_thread = Thread.new {
           Lich.log(msg)
         end
       }
+
+      if ARGV.include?('--gst')
+        data[:game_code] = 'GST'
+      elsif ARGV.include?('--drt')
+        data[:game_code] = 'DRT'
+      end
 
       launch_data_hash = EAccess.auth(
         account: data[:user_id],
