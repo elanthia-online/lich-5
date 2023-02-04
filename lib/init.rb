@@ -4,7 +4,7 @@
 #
 # Report an error if Lich 4.4 data is found
 #
-if File.exists?("#{DATA_DIR}/lich.sav")
+if File.exist?("#{DATA_DIR}/lich.sav")
   Lich.log "error: Archaic Lich 4.4 configuration found: Please remove #{DATA_DIR}/lich.sav"
   Lich.msgbox "error: Archaic Lich 4.4 configuration found: Please remove #{DATA_DIR}/lich.sav"
   exit
@@ -306,10 +306,10 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       elsif (args[:dwType] == REG_MULTI_SZ) and (args[:lpData].class == Array)
         lpData = args[:lpData].join("\x00").concat("\x00\x00")
         cbData = lpData.length
-      elsif (args[:dwType] == REG_DWORD) and (args[:lpData].class == Fixnum)
+      elsif (args[:dwType] == REG_DWORD) and (args[:lpData].class == Integer)
         lpData = [args[:lpData]].pack('L')
         cbData = 4
-      elsif (args[:dwType] == REG_QWORD) and (args[:lpData].class == Fixnum or args[:lpData].class == Bignum)
+      elsif (args[:dwType] == REG_QWORD) and (args[:lpData].class == Integer)
         lpData = [args[:lpData]].pack('Q')
         cbData = 8
       elsif args[:dwType] == REG_BINARY
@@ -422,7 +422,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       if not caller.any? { |c| c =~ /eval|run/ }
         r = Win32.GetModuleFileName
         if r[:return] > 0
-          if File.exists?(r[:lpFilename])
+          if File.exist?(r[:lpFilename])
             Win32.ShellExecuteEx(:lpVerb => 'runas', :lpFile => r[:lpFilename], :lpParameters => "#{File.expand_path($PROGRAM_NAME)} shellexecute #{[Marshal.dump(args)].pack('m').gsub("\n", '')}")
           end
         end
@@ -448,7 +448,7 @@ rescue LoadError
       r = Win32.GetModuleFileName
       if r[:return] > 0
         ruby_bin_dir = File.dirname(r[:lpFilename])
-        if File.exists?("#{ruby_bin_dir}\\gem.bat")
+        if File.exist?("#{ruby_bin_dir}\\gem.bat")
           verb = (Win32.isXP? ? 'open' : 'runas')
           # fixme: using --source http://rubygems.org to avoid https because it has been failing to validate the certificate on Windows
           r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --source http://rubygems.org --no-ri --no-rdoc --version 1.3.13')
@@ -466,7 +466,7 @@ rescue LoadError
             r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
           end
           if r == Win32::IDIOK
-            if File.exists?("#{ruby_bin_dir}\\rubyw.exe")
+            if File.exist?("#{ruby_bin_dir}\\rubyw.exe")
               Win32.ShellExecute(:lpOperation => 'open', :lpFile => "#{ruby_bin_dir}\\rubyw.exe", :lpParameters => "\"#{File.expand_path($PROGRAM_NAME)}\"")
             else
               Win32.MessageBox(:lpText => "error: failed to find rubyw.exe; can't restart Lich for you", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
@@ -502,9 +502,9 @@ if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)) or ENV['DI
           r = Win32.GetModuleFileName
           if r[:return] > 0
             ruby_bin_dir = File.dirname(r[:lpFilename])
-            if File.exists?("#{ruby_bin_dir}\\gem.cmd")
+            if File.exist?("#{ruby_bin_dir}\\gem.cmd")
               gem_file = 'gem.cmd'
-            elsif File.exists?("#{ruby_bin_dir}\\gem.bat")
+            elsif File.exist?("#{ruby_bin_dir}\\gem.bat")
               gem_file = 'gem.bat'
             else
               gem_file = nil
@@ -526,7 +526,7 @@ if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)) or ENV['DI
                 r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
               end
               if r == Win32::IDIOK
-                if File.exists?("#{ruby_bin_dir}\\rubyw.exe")
+                if File.exist?("#{ruby_bin_dir}\\rubyw.exe")
                   Win32.ShellExecute(:lpOperation => 'open', :lpFile => "#{ruby_bin_dir}\\rubyw.exe", :lpParameters => "\"#{File.expand_path($PROGRAM_NAME)}\"")
                 else
                   Win32.MessageBox(:lpText => "error: failed to find rubyw.exe; can't restart Lich for you", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
@@ -559,12 +559,12 @@ else
   @early_gtk_error = "info: DISPLAY environment variable is not set; not trying gtk"
 end
 
-unless File.exists?(LICH_DIR)
+unless File.exist?(LICH_DIR)
   begin
     Dir.mkdir(LICH_DIR)
   rescue
     message = "An error occured while attempting to create directory #{LICH_DIR}\n\n"
-    if not File.exists?(LICH_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
+    if not File.exist?(LICH_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
       message.concat "This was likely because the parent directory (#{LICH_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop}) doesn't exist."
     elsif defined?(Win32) and (Win32.GetVersionEx[:dwMajorVersion] >= 6) and (dir !~ /^[A-z]\:\\(Users|Documents and Settings)/)
       message.concat "This was likely because Lich doesn't have permission to create files and folders here.  It is recommended to put Lich in your Documents folder."
@@ -578,12 +578,12 @@ end
 
 Dir.chdir(LICH_DIR)
 
-unless File.exists?(TEMP_DIR)
+unless File.exist?(TEMP_DIR)
   begin
     Dir.mkdir(TEMP_DIR)
   rescue
     message = "An error occured while attempting to create directory #{TEMP_DIR}\n\n"
-    if not File.exists?(TEMP_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
+    if not File.exist?(TEMP_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
       message.concat "This was likely because the parent directory (#{TEMP_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop}) doesn't exist."
     elsif defined?(Win32) and (Win32.GetVersionEx[:dwMajorVersion] >= 6) and (dir !~ /^[A-z]\:\\(Users|Documents and Settings)/)
       message.concat "This was likely because Lich doesn't have permission to create files and folders here.  It is recommended to put Lich in your Documents folder."
@@ -616,7 +616,7 @@ Lich.log "info: #{RUBY_PLATFORM}"
 Lich.log @early_gtk_error if @early_gtk_error
 @early_gtk_error = nil
 
-unless File.exists?(DATA_DIR)
+unless File.exist?(DATA_DIR)
   begin
     Dir.mkdir(DATA_DIR)
   rescue
@@ -625,7 +625,7 @@ unless File.exists?(DATA_DIR)
     exit
   end
 end
-unless File.exists?(SCRIPT_DIR)
+unless File.exist?(SCRIPT_DIR)
   begin
     Dir.mkdir(SCRIPT_DIR)
   rescue
@@ -634,7 +634,7 @@ unless File.exists?(SCRIPT_DIR)
     exit
   end
 end
-unless File.exists?("#{SCRIPT_DIR}/custom")
+unless File.exist?("#{SCRIPT_DIR}/custom")
   begin
     Dir.mkdir("#{SCRIPT_DIR}/custom")
   rescue
@@ -643,7 +643,7 @@ unless File.exists?("#{SCRIPT_DIR}/custom")
     exit
   end
 end
-unless File.exists?(MAP_DIR)
+unless File.exist?(MAP_DIR)
   begin
     Dir.mkdir(MAP_DIR)
   rescue
@@ -652,7 +652,7 @@ unless File.exists?(MAP_DIR)
     exit
   end
 end
-unless File.exists?(LOG_DIR)
+unless File.exist?(LOG_DIR)
   begin
     Dir.mkdir(LOG_DIR)
   rescue
@@ -661,7 +661,7 @@ unless File.exists?(LOG_DIR)
     exit
   end
 end
-unless File.exists?(BACKUP_DIR)
+unless File.exist?(BACKUP_DIR)
   begin
     Dir.mkdir(BACKUP_DIR)
   rescue
