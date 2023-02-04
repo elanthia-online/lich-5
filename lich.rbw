@@ -2279,6 +2279,23 @@ module Games
                 $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><component id=","<component id=")
                 # $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
 
+                ## Fix for nested/non-solo nav tags.
+                ## DR needs the <nav/> tag to be in its own line to properly detect movement
+                ## These two fixes make it so room movement can be detected reliably
+                if $_SERVERSTRING_ =~ /^<nav\/>/
+                  unless $_SERVERSTRING_.chomp == "<nav\/>"
+                    Lich.log "NAV tag detected in nested line: #{$_SERVERSTRING_.inspect}"
+                    $_SERVERSTRING_.gsub!("<nav\/>", "<nav\/>\n").chomp!
+                    Lich.log "NAV tag fixed to: #{$_SERVERSTRING_.inspect}"
+                  end
+                end
+
+                if $_SERVERSTRING_ =~ /(?!^)<nav\/>/
+                  Lich.log "NAV tag detected not at start of line: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_.gsub!("<nav\/>", "\n<nav\/>").chomp!
+                  Lich.log "NAV tag fixed to: #{$_SERVERSTRING_.inspect}"
+                end
+
                 # Fixes xml with \r\n in the middle of it like:
                 # <component id='room exits'>Obvious paths: clockwise, widdershins.\r\n
                 # <compass></compass></component>\r\n
@@ -2306,7 +2323,7 @@ module Games
                   $_SERVERSTRING_.gsub!("\r\n", "</component>")
                   Lich.log "Open-ended room objects component id tag fixed to: #{$_SERVERSTRING_.inspect}"
                 end
-                # "</component>\r\n"                
+                # "</component>\r\n"
                 if $_SERVERSTRING_ == "</component>\r\n"
                   Lich.log "Extraneous closing tag detected and deleted: #{$_SERVERSTRING_.inspect}"
                   $_SERVERSTRING_ = ""
