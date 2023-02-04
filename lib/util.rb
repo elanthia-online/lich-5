@@ -12,6 +12,7 @@ Entries added here should always be accessible from Lich::Util.feature namespace
   changelog:
     v1.3.0 (2022-03-16)
      * Add Lich::Util.issue_command that allows more fine-tooled control return
+     * Bugfix for Lich::Util.silver_count not using end_pattern properly
     v1.2.0 (2022-03-16)
      * Add Lich::Util.quiet_command to mimic XML version
     v1.1.0 (2022-03-09)
@@ -150,9 +151,9 @@ module Lich
           # non-blocking check, this allows us to
           # check the time even when the buffer is empty
           line = get?
-          break if line && line =~ start_pattern
+          break if line && line =~ end_pattern
           break if Time.now > ttl
-          sleep 0.1 # prevent a tight-loop
+          sleep(0.01) # prevent a tight-loop
         }
 
       ensure
