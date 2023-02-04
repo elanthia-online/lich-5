@@ -174,11 +174,11 @@ module Lich
 
           ## We do not care about local edits from players in the Lich5 / lib location
 
-          lib_update = Dir.children("#{TEMP_DIR}/#{filename}/lib")
+          lib_update = Dir.children(File.join(TEMP_DIR, filename, "lib"))
           lib_update.each { |file|
-            File.delete("#{LIB_DIR}/#{file}") if File.exist?("#{LIB_DIR}/#{file}")
-            File.open("#{TEMP_DIR}/#{filename}/lib/#{file}", 'rb') { |r|
-              File.open("#{LIB_DIR}/#{file}", 'wb') { |w| w.write(r.read) }
+            File.delete(File.join(LIB_DIR, file)) if File.exist?(File.join(LIB_DIR, file))
+            File.open(File.join(TEMP_DIR, filename, "lib", file), 'rb') { |r|
+              File.open(File.join(LIB_DIR, file), 'wb') { |w| w.write(r.read) }
             }
             _respond "lib #{file} has been updated."
           }

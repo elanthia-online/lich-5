@@ -12,6 +12,8 @@ Entries added here should always be accessible from Lich::Messaging.feature name
   changelog:
     v1.1.0 (2022-10-28)
       Add loot window as an option
+    v1.0.2 (2022-11-19)
+      Bugfix for Wizard monsterbold new line
     v1.0.1 (2022-05-05)
       Bugfix for Wizard character encoding
     v1.0.0 (2022-03-15)
@@ -91,7 +93,7 @@ module Lich
         case type
         when "error", "yellow", "bold", "monster", "creature"
           preset_color_before = monsterbold_start
-          preset_color_after = monsterbold_end
+          preset_color_after = (monsterbold_end + " ")
         when "warn", "orange", "gold", "thought"
           preset_color_before = wizard_color["gold"].chr.force_encoding(Encoding::ASCII_8BIT)
           preset_color_after = "\217".force_encoding(Encoding::ASCII_8BIT)
