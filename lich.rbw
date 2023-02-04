@@ -4980,6 +4980,12 @@ main_thread = Thread.new {
         end
       }
 
+      if ARGV.include?('--gst')
+        data[:game_code] = 'GST'
+      elsif ARGV.include?('--drt')
+        data[:game_code] = 'DRT'
+      end
+
       launch_data_hash = EAccess.auth(
         account: data[:user_id],
         password: data[:password],
