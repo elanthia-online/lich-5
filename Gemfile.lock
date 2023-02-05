@@ -1,7 +1,43 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    atk (4.1.0)
+      glib2 (= 4.1.0)
+    cairo (1.17.8)
+      native-package-installer (>= 1.0.3)
+      pkg-config (>= 1.2.2)
+      red-colors
+    cairo-gobject (4.1.0)
+      cairo (>= 1.16.2)
+      glib2 (= 4.1.0)
     diff-lcs (1.5.0)
+    fiddle (1.1.1)
+    gdk3 (4.1.0)
+      cairo-gobject (= 4.1.0)
+      gdk_pixbuf2 (= 4.1.0)
+      pango (= 4.1.0)
+    gdk_pixbuf2 (4.1.0)
+      gio2 (= 4.1.0)
+    gio2 (4.1.0)
+      fiddle
+      gobject-introspection (= 4.1.0)
+    glib2 (4.1.0)
+      native-package-installer (>= 1.0.3)
+      pkg-config (>= 1.3.5)
+    gobject-introspection (4.1.0)
+      glib2 (= 4.1.0)
+    gtk3 (4.1.0)
+      atk (= 4.1.0)
+      gdk3 (= 4.1.0)
+    matrix (0.4.2)
+    native-package-installer (1.1.5)
+    pango (4.1.0)
+      cairo-gobject (= 4.1.0)
+      gobject-introspection (= 4.1.0)
+    pkg-config (1.5.1)
+    rake (13.0.6)
+    red-colors (0.3.0)
+      matrix
     rspec (3.12.0)
       rspec-core (~> 3.12.0)
       rspec-expectations (~> 3.12.0)
@@ -20,6 +56,8 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
+  gtk3
+  rake
   rspec
 
 BUNDLED WITH
