@@ -1,5 +1,6 @@
 # Lich5 carveout for init_db
 
+require 'bundler/setup'
 
 #
 # Report an error if Lich 4.4 data is found
