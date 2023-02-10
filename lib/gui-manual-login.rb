@@ -47,14 +47,14 @@ sw = Gtk::ScrolledWindow.new
 sw.set_policy(:automatic, :automatic)
 sw.add(treeview)
 
-wizard_option = Gtk::RadioButton.new(:label => 'Wizard')
-stormfront_option = Gtk::RadioButton.new(:label => 'Stormfront | Wrayth', :member => wizard_option)
-avalon_option = Gtk::RadioButton.new(:label => 'Avalon', :member => wizard_option)
-suks_option = Gtk::RadioButton.new(:label => 'suks', :member => wizard_option)
+stormfront_option = Gtk::RadioButton.new(:label => 'Stormfront | Wrayth')
+wizard_option = Gtk::RadioButton.new(:label => 'Wizard', :member => stormfront_option)
+avalon_option = Gtk::RadioButton.new(:label => 'Avalon', :member => stormfront_option)
+suks_option = Gtk::RadioButton.new(:label => 'suks', :member => stormfront_option)
 
 frontend_box = Gtk::Box.new(:horizontal, 10)
-frontend_box.pack_start(wizard_option, :expand => false, :fill => false, :padding => 0)
 frontend_box.pack_start(stormfront_option, :expand => false, :fill => false, :padding => 0)
+frontend_box.pack_start(wizard_option, :expand => false, :fill => false, :padding => 0)
 if RUBY_PLATFORM =~ /darwin/i
   frontend_box.pack_start(avalon_option, :expand => false, :fill => false, :padding => 0)
 end
