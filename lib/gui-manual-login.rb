@@ -195,11 +195,11 @@ play_button.signal_connect('clicked') {
       if @custom_launch_dir.child.text.empty? or @custom_launch_dir.child.text == "(enter working directory for command)"
         custom_launch_dir = nil
       else
-        @custom_launch_dir = @custom_launch_dir.child.text
+        custom_launch_dir = @custom_launch_dir.child.text
       end
     else
       custom_launch = nil
-      @custom_launch_dir = nil
+      custom_launch_dir = nil
     end
     @entry_data.push h = { :char_name => treeview.selection.selected[3], :game_code => treeview.selection.selected[0], :game_name => treeview.selection.selected[1], :user_id => user_id_entry.text, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir }
     @save_entry_data = true
