@@ -46,14 +46,24 @@ else
 
       realm = ''
 
-      if login_info[:game_code] =~ /GSX/
-        realm = 'Platinum'
-      elsif login_info[:game_code] =~ /GST/
-        realm = 'Test'
-      elsif login_info[:game_code] =~ /GSF/
-        realm = 'Shattered'
+      if login_info[:game_code]  =~ /^GS3$/
+        realm = 'GS Prime'
+      elsif login_info[:game_code] =~ /^GSX$/
+        realm = 'GS Platinum'
+      elsif login_info[:game_code] =~ /^GST$/
+        realm = 'GS Test'
+      elsif login_info[:game_code] =~ /^GSF$/
+        realm = 'GS Shattered'
+      elsif login_info[:game_code] =~ /^DR$/
+        realm = 'DR Prime'
+      elsif login_info[:game_code] =~ /^DRX$/
+        realm = 'DR Platinum'
+      elsif login_info[:game_code] =~ /^DRT$/
+        realm = 'DR Test'
+      elsif login_info[:game_code] =~ /^DRF$/
+        realm = 'DR Fallen'
       else
-        realm = 'Prime'
+        realm = 'Unknown'
       end
 
         @button_provider = Gtk::CssProvider.new

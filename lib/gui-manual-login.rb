@@ -118,7 +118,7 @@ connect_button.signal_connect('clicked') {
         legacy: true
       )
     end
-    if login_info =~ /error/i
+    if login_info.to_s =~ /error/i
       @msgbox.call "\nSomething went wrong... probably invalid \nuser id and / or password.\n\nserver response: #{login_info}"
       connect_button.sensitive = true
       disconnect_button.sensitive = false
@@ -195,11 +195,11 @@ play_button.signal_connect('clicked') {
       if @custom_launch_dir.child.text.empty?
         custom_launch_dir = nil
       else
-        @custom_launch_dir = @custom_launch_dir.child.text
+        custom_launch_dir = @custom_launch_dir.child.text
       end
     else
       custom_launch = nil
-      @custom_launch_dir = nil
+      custom_launch_dir = nil
     end
     @entry_data.push h = { :char_name => treeview.selection.selected[3], :game_code => treeview.selection.selected[0], :game_name => treeview.selection.selected[1], :user_id => user_id_entry.text, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir }
     @save_entry_data = true
