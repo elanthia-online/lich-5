@@ -2,6 +2,9 @@ backup/
 data/alias.db3
 data/GSIV
 data/DR
+data/DRT
+data/DRF
+data/DRX
 data/entry.dat
 data/simu.pem
 logo.png
