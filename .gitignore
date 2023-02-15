@@ -19,3 +19,5 @@ scripts/
 temp/
 .pre-commit-config.yaml
 *.swp
+vendor/
+.idea/
