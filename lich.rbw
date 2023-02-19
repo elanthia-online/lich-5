@@ -2630,6 +2630,61 @@ module Games
       end
     end
 
+    class Spellsong
+      @@renewed ||= Time.at(Time.now.to_i - 1200)
+      def Spellsong.renewed
+        @@renewed = Time.now
+      end
+
+      def Spellsong.renewed=(val)
+        @@renewed = val
+      end
+
+      def Spellsong.renewed_at
+        @@renewed
+      end
+
+      def Spellsong.timeleft
+        (Spellsong.duration - ((Time.now - @@renewed) % Spellsong.duration)) / 60.to_f
+      end
+
+      def Spellsong.serialize
+        Spellsong.timeleft
+      end
+
+      def Spellsong.load_serialized=(old)
+        Thread.new {
+          n = 0
+          while Stats.level == 0
+            sleep 0.25
+            n += 1
+            break if n >= 4
+          end
+          unless n >= 4
+            @@renewed = Time.at(Time.now.to_f - (Spellsong.duration - old * 60.to_f))
+          else
+            @@renewed = Time.now
+          end
+        }
+        nil
+      end
+
+      def Spellsong.duration
+        total = 120
+        1.upto(Stats.level.to_i) { |n|
+          if n < 26
+            total += 4
+          elsif n < 51
+            total += 3
+          elsif n < 76
+            total += 2
+          else
+            total += 1
+          end
+        }
+        total + Stats.log[1].to_i + (Stats.inf[1].to_i * 3) + (Skills.mltelepathy.to_i * 2)
+      end
+
       def Spellsong.renew_cost
         # fixme: multi-spell penalty?
         total = num_active = 0
