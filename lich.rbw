@@ -2630,61 +2630,6 @@ module Games
       end
     end
 
-    class Spellsong
-      @@renewed ||= Time.at(Time.now.to_i - 1200)
-      def Spellsong.renewed
-        @@renewed = Time.now
-      end
-
-      def Spellsong.renewed=(val)
-        @@renewed = val
-      end
-
-      def Spellsong.renewed_at
-        @@renewed
-      end
-
-      def Spellsong.timeleft
-        (Spellsong.duration - ((Time.now - @@renewed) % Spellsong.duration)) / 60.to_f
-      end
-
-      def Spellsong.serialize
-        Spellsong.timeleft
-      end
-
-      def Spellsong.load_serialized=(old)
-        Thread.new {
-          n = 0
-          while Stats.level == 0
-            sleep 0.25
-            n += 1
-            break if n >= 4
-          end
-          unless n >= 4
-            @@renewed = Time.at(Time.now.to_f - (Spellsong.duration - old * 60.to_f))
-          else
-            @@renewed = Time.now
-          end
-        }
-        nil
-      end
-
-      def Spellsong.duration
-        total = 120
-        1.upto(Stats.level.to_i) { |n|
-          if n < 26
-            total += 4
-          elsif n < 51
-            total += 3
-          elsif n < 76
-            total += 2
-          else
-            total += 1
-          end
-        }
-        total + Stats.log[1].to_i + (Stats.inf[1].to_i * 3) + (Skills.mltelepathy.to_i * 2)
-      end
-
       def Spellsong.renew_cost
         # fixme: multi-spell penalty?
         total = num_active = 0
@@ -2737,6 +2682,81 @@ module Games
 
       def Spellsong.holdingtargets
         1 + ((Spells.bard - 1) / 7).truncate
+      end
+      
+      def Spellsong.cost
+        Spellsong.renew_cost
+      end
+
+      def Spellsong.tonisdodgebonus
+        thresholds = [1, 2, 3, 5, 8, 10, 14, 17, 21, 26, 31, 36, 42, 49, 55, 63, 70, 78, 87, 96]
+        bonus = 20
+        thresholds.each { |val| if Skills.elair >= val then bonus += 1 end }
+        bonus
+      end
+
+      def Spellsong.mirrorsdodgebonus
+        20 + ((Spells.bard - 19) / 2).round
+      end
+
+      def Spellsong.mirrorscost
+        [19 + ((Spells.bard - 19) / 5).truncate, 8 + ((Spells.bard - 19) / 10).truncate]
+      end
+
+      def Spellsong.sonicbonus
+        (Spells.bard / 2).round
+      end
+
+      def Spellsong.sonicarmorbonus
+        Spellsong.sonicbonus + 15
+      end
+
+      def Spellsong.sonicbladebonus
+        Spellsong.sonicbonus + 10
+      end
+
+      def Spellsong.sonicweaponbonus
+        Spellsong.sonicbladebonus
+      end
+
+      def Spellsong.sonicshieldbonus
+        Spellsong.sonicbonus + 10
+      end
+
+      def Spellsong.valorbonus
+        10 + (([Spells.bard, Stats.level].min - 10) / 2).round
+      end
+
+      def Spellsong.valorcost
+        [10 + (Spellsong.valorbonus / 2), 3 + (Spellsong.valorbonus / 5)]
+      end
+
+      def Spellsong.luckcost
+        [6 + ((Spells.bard - 6) / 4), (6 + ((Spells.bard - 6) / 4) / 2).round]
+      end
+
+      def Spellsong.manacost
+        [18, 15]
+      end
+
+      def Spellsong.fortcost
+        [3, 1]
+      end
+
+      def Spellsong.shieldcost
+        [9, 4]
+      end
+
+      def Spellsong.weaponcost
+        [12, 4]
+      end
+
+      def Spellsong.armorcost
+        [14, 5]
+      end
+
+      def Spellsong.swordcost
+        [25, 15]
       end
     end
 
@@ -3676,83 +3696,6 @@ class Script
 
   def Script.namescript_incoming(line)
     Script.new_downstream(line)
-  end
-end
-
-class Spellsong
-  def Spellsong.cost
-    Spellsong.renew_cost
-  end
-
-  def Spellsong.tonisdodgebonus
-    thresholds = [1, 2, 3, 5, 8, 10, 14, 17, 21, 26, 31, 36, 42, 49, 55, 63, 70, 78, 87, 96]
-    bonus = 20
-    thresholds.each { |val| if Skills.elair >= val then bonus += 1 end }
-    bonus
-  end
-
-  def Spellsong.mirrorsdodgebonus
-    20 + ((Spells.bard - 19) / 2).round
-  end
-
-  def Spellsong.mirrorscost
-    [19 + ((Spells.bard - 19) / 5).truncate, 8 + ((Spells.bard - 19) / 10).truncate]
-  end
-
-  def Spellsong.sonicbonus
-    (Spells.bard / 2).round
-  end
-
-  def Spellsong.sonicarmorbonus
-    Spellsong.sonicbonus + 15
-  end
-
-  def Spellsong.sonicbladebonus
-    Spellsong.sonicbonus + 10
-  end
-
-  def Spellsong.sonicweaponbonus
-    Spellsong.sonicbladebonus
-  end
-
-  def Spellsong.sonicshieldbonus
-    Spellsong.sonicbonus + 10
-  end
-
-  def Spellsong.valorbonus
-    10 + (([Spells.bard, Stats.level].min - 10) / 2).round
-  end
-
-  def Spellsong.valorcost
-    [10 + (Spellsong.valorbonus / 2), 3 + (Spellsong.valorbonus / 5)]
-  end
-
-  def Spellsong.luckcost
-    [6 + ((Spells.bard - 6) / 4), (6 + ((Spells.bard - 6) / 4) / 2).round]
-  end
-
-  def Spellsong.manacost
-    [18, 15]
-  end
-
-  def Spellsong.fortcost
-    [3, 1]
-  end
-
-  def Spellsong.shieldcost
-    [9, 4]
-  end
-
-  def Spellsong.weaponcost
-    [12, 4]
-  end
-
-  def Spellsong.armorcost
-    [14, 5]
-  end
-
-  def Spellsong.swordcost
-    [25, 15]
   end
 end
 
