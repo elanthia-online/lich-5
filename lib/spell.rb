@@ -7,9 +7,11 @@ Further modifications are to support the retirement of spell-list.xml.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.0.19
-    version: 1.2.2
+    version: 1.2.3
 
   changelog:
+    v1.2.3 (2023-02-19)
+      Remove .untaint calls for Ruby 3.2 compatibility
     v1.2.2 (2022-11-24)
       Removed references to $SAFE
       Removed deprecated reference to "#{SCRIPT_DIR}/spell-list.xml"
@@ -61,7 +63,6 @@ module Games
       @bonus = Hash.new
       xml_spell.elements.find_all { |e| e.name == 'bonus' }.each { |e|
         @bonus[e.attributes['type']] = e.text
-        @bonus[e.attributes['type']].untaint
       }
       @msgup = xml_spell.elements.find_all { |e| (e.name == 'message') and (e.attributes['type'].downcase == 'start') }.collect { |e| e.text }.join('$|^')
       @msgup = nil if @msgup.empty?
@@ -111,7 +112,6 @@ module Games
         end
       }
       @cast_proc = xml_spell.elements['cast-proc'].text
-      @cast_proc.untaint
       @timestamp = Time.now
       @timeleft = 0
       @active = false
@@ -244,7 +244,6 @@ module Games
           end
         end
       end
-      formula.untaint
       formula
     end
     def time_per(options={})
@@ -773,7 +772,6 @@ module Games
           formula.dup
         else
           if formula
-            formula.untaint if formula.tainted?
             proc { eval(formula) }.call.to_i
           else
             0
