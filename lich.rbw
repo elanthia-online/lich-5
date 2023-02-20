@@ -4209,6 +4209,8 @@ for arg in ARGV
     argv_options[:host] = { :domain => $1, :port => $2.to_i }
   elsif arg =~ /^--hosts-file=(.+)$/i
     argv_options[:hosts_file] = $1
+  elsif arg =~ /^--no-gui$/i
+    argv_options[:gui] = false
   elsif arg =~ /^--gui$/i
     argv_options[:gui] = true
   elsif arg =~ /^--game=(.+)$/i
