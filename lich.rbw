@@ -786,7 +786,9 @@ class Script
         if trusted
           begin
             eval(script.labels[script.current_label].to_s, script_binding, script.name)
-          rescue SystemExit
+          rescue 
+            
+            Exit
             nil
           rescue SyntaxError
             respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
@@ -4713,11 +4715,9 @@ main_thread = Thread.new {
           Dir.chdir(custom_launch_dir)
         end
 
-        if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
-          system ("start #{launcher_cmd}")
-        elsif defined?(Wine) and (game != 'AVALON') # Wine on linux
+        if defined?(Wine) and (game != 'AVALON') # Wine on linux
           spawn "#{Wine::BIN} #{launcher_cmd}"
-        else # macOS and linux - does not account for WINE on linux
+        else # All other OS divert here for Ruby 3.2
           spawn launcher_cmd
         end
       rescue
