@@ -1,1 +1,0 @@
-../lib/cman.rb
