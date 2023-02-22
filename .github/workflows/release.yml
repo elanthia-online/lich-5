@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Build changelog
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@main
+        with:
+          configuration: 'release-changelog-builder-config.json'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install core scripts
+        id: install_core_scripts
+        run: |
+          mkdir lich5
+          mkdir lich5/data
+          mkdir lich5/scripts
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/alias.lic > lich5/scripts/alias.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/autostart.lic > lich5/scripts/autostart.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/go2.lic > lich5/scripts/go2.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/infomon.lic > lich5/scripts/infomon.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/jinx.lic > lich5/scripts/jinx.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/log.lic > lich5/scripts/log.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/repository.lic > lich5/scripts/repository.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/vars.lic > lich5/scripts/vars.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/version.lic > lich5/scripts/version.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/xnarost.lic > lich5/scripts/xnarost.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/spell-list.xml > lich5/data/spell-list.xml
+          cp lich.rbw lich5/
+          cp -r lib lich5/
+          tar -czvf lich.tar.gz lich5/
+          zip -r lich.zip lich5/
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: ${{steps.build_changelog.outputs.changelog}}
+          draft: true
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+          files: |
+            lich.tar.gz
+            lich.zip
+
