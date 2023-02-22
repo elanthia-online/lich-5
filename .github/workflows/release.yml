@@ -50,6 +50,6 @@ jobs:
           body: ${{steps.build_changelog.outputs.changelog}}
           token: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
           files: |
-            lich5.tar.gz
-            lich5.zip
+            lich-5.tar.gz
+            lich-5.zip
 
