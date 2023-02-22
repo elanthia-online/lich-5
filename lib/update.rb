@@ -296,7 +296,7 @@ module Lich
           File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))
           begin
             File.open(File.join(location, requested_file), "wb") do |file|
-              file.write open(File.join(remote_repo, requested_file)).read
+              file.write URI.open(File.join(remote_repo, requested_file)).read
             end
             _respond
             _respond "#{requested_file} has been updated."
