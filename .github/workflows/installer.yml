@@ -1,9 +1,9 @@
 name: Installer
 
-on:
-  push:
-    tags:
-      - "v*.*.*"
+on: push
+  #push:
+  #  tags:
+  #    - "v*.*.*"
       
 permissions:
   contents: write
@@ -43,3 +43,4 @@ jobs:
           cp lich.rbw Lich5/
           cp -r lib Lich5/
           ruby --version
+          gem list
