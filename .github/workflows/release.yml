@@ -1,10 +1,9 @@
 name: Release
 
-on: push
-  #push:
-  #  # Sequence of patterns matched against refs/tags
-  #  tags:
-  #    - "v*.*.*"
+on:
+  push:
+    tags:
+      - "v*.*.*"
 
 jobs:
   release:
