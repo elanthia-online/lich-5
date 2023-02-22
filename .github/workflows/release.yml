@@ -1,7 +1,7 @@
 name: Release
 
 on: push
-  push:
+  #push:
   #  # Sequence of patterns matched against refs/tags
   #  tags:
   #    - "v*.*.*"
