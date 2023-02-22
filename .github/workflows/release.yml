@@ -46,8 +46,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           body: ${{steps.build_changelog.outputs.changelog}}
-          draft: true
-          prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
           files: |
             lich.tar.gz
