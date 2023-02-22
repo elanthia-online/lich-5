@@ -42,6 +42,7 @@ jobs:
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/spell-list.xml > lich5/data/spell-list.xml
           cp lich.rbw lich5/
           cp -r lib lich5/
+          cp -r data lich5/
           tar -czvf lich5.tar.gz lich5/
           zip -r lich5.zip lich5/
           ls -lha
