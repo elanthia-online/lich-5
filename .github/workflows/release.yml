@@ -41,6 +41,7 @@ jobs:
           cp -r lib lich5/
           tar -czvf lich.tar.gz lich5/
           zip -r lich.zip lich5/
+          ls -lha
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
