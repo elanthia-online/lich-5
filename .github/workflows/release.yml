@@ -23,7 +23,7 @@ jobs:
           configuration: 'release-changelog-builder-config.json'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install core scripts
+      - name: Create Core Lich-5 package
         id: install_core_scripts
         run: |
           mkdir lich5
