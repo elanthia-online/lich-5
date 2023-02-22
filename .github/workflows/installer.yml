@@ -43,5 +43,5 @@ jobs:
           #cp lich.rbw Lich5/
           #cp -r lib Lich5/
           #ruby --version
-          gem install ascii_charts concurrent ftools gtk3 json jwt mechanize net-https nokogiri redis rubygems sequel socket sqlite3 terminal-table tzinfo webrick xmpp4r
-          gem list
+          C:\Windows\system32\cmd.exe /D /S /C "C:\hostedtoolcache\windows\Ruby\3.2.1\x64\bin\gem.cmd install ascii_charts concurrent ftools gtk3 json jwt mechanize net-https nokogiri redis rubygems sequel socket sqlite3 terminal-table tzinfo webrick xmpp4r"
+          C:\Windows\system32\cmd.exe /D /S /C "C:\hostedtoolcache\windows\Ruby\3.2.1\x64\bin\gem.cmd list"
