@@ -1,0 +1,45 @@
+name: Installer
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        ruby: ['3.2.1']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Install Ruby 3.2.1
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Create Core Lich-5 package
+        id: install_core_scripts
+        run: |
+          mkdir Lich5
+          mkdir Lich5/data
+          mkdir Lich5/scripts
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/alias.lic > lich5/scripts/alias.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/autostart.lic > lich5/scripts/autostart.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/go2.lic > lich5/scripts/go2.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/infomon.lic > lich5/scripts/infomon.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/jinx.lic > lich5/scripts/jinx.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/log.lic > lich5/scripts/log.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/repository.lic > lich5/scripts/repository.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/vars.lic > lich5/scripts/vars.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/version.lic > lich5/scripts/version.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/xnarost.lic > lich5/scripts/xnarost.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/spell-list.xml > lich5/data/spell-list.xml
+          cp lich.rbw Lich5/
+          cp -r lib Lich5/
