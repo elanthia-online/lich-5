@@ -1,6 +1,6 @@
 name: Installer
 
-on:
+on: 
   push:
     tags:
       - "v*.*.*"
@@ -43,3 +43,12 @@ jobs:
           cp lich.rbw Lich5/
           cp -r lib Lich5/
           gem install ascii_charts concurrent-ruby ftools gtk3 json jwt mechanize nokogiri redis sequel sqlite3 terminal-table tzinfo webrick xmpp4r --no-document
+          iscc "R4LGTK3.iss"
+          mv .\Output\Ruby4Lich5.exe .\Ruby4Lich5.exe
+          ls
+      - name: Add to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+          files: |
+            Ruby4Lich5.exe
