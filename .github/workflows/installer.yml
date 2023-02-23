@@ -49,6 +49,7 @@ jobs:
           ls C:\hostedtoolcache\windows\Ruby\3.2.1\x64\
           ls C:\hostedtoolcache\windows\Ruby\3.2.1\
           ls C:\hostedtoolcache\windows\Ruby\
+          ls C:\msys64\
       #- name: Add to Release
       #  uses: softprops/action-gh-release@v1
       #  with:
