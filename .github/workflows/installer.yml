@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   installer:
-    runs-on: windows-latest
+    runs-on: windows-2019
     strategy:
       matrix:
         ruby: ['3.2.1']
@@ -27,5 +27,5 @@ jobs:
         id: install_core_scripts
         run: |
           ruby --version
-          gem install gem install ascii_charts gtk3 json redis sequel sqlite3 terminal-table
+          gem install ascii_charts concurrent ftools gtk3 json jwt mechanize net-https nokogiri redis rubygems sequel socket sqlite3 terminal-table tzinfo webrick xmpp4r
           gem list
