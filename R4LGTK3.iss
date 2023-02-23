@@ -62,7 +62,7 @@ Name: "rubygem"; 			        Description: "Ruby 3.2.1 (64-bit) with Gems"; 	Types
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: ".\Ruby4Lich5\*";         DestDir: "{app}\";           Components: rubygem;           Flags: ignoreversion createallsubdirs recursesubdirs
+Source: "C:\hostedtoolcache\windows\Ruby\3.2.1\x64\*";         DestDir: "{app}\";           Components: rubygem;           Flags: ignoreversion createallsubdirs recursesubdirs
 Source: ".\fly64.ico";            DestDir: "{app}\R4LInstall"; Components: lich; 	            Flags: ignoreversion
 ; Source: ".\lnchInst.exe";         DestDir: "{app}\R4LInstall"; Components: simu\launcher;     Flags: ignoreversion
 ; Source: ".\wzinst.exe";           DestDir: "{app}\R4LInstall"; Components: simu\wizardfe;     Flags: ignoreversion
