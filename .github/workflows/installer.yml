@@ -27,5 +27,5 @@ jobs:
         id: install_core_scripts
         run: |
           ruby --version
-          gem install ascii_charts ftools gtk3 json jwt mechanize net-https nokogiri redis rubygems sequel socket sqlite3 terminal-table tzinfo webrick xmpp4r
+          gem install ascii_charts concurrent-ruby ftools gtk3 json jwt mechanize nokogiri redis sequel sqlite3 terminal-table tzinfo webrick xmpp4r --no-document
           gem list
