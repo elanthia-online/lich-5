@@ -63,6 +63,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "C:\hostedtoolcache\windows\Ruby\3.2.1\x64\*";         DestDir: "{app}\";           Components: rubygem;           Flags: ignoreversion createallsubdirs recursesubdirs
+Source: "C:\msys64\*";         DestDir: "{app}\msys64";           Components: rubygem;           Flags: ignoreversion createallsubdirs recursesubdirs
 Source: ".\fly64.ico";            DestDir: "{app}\R4LInstall"; Components: lich; 	            Flags: ignoreversion
 ; Source: ".\lnchInst.exe";         DestDir: "{app}\R4LInstall"; Components: simu\launcher;     Flags: ignoreversion
 ; Source: ".\wzinst.exe";           DestDir: "{app}\R4LInstall"; Components: simu\wizardfe;     Flags: ignoreversion
