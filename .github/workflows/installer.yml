@@ -43,4 +43,4 @@ jobs:
           #cp lich.rbw Lich5/
           #cp -r lib Lich5/
           #gem install ascii_charts concurrent-ruby ftools gtk3 json jwt mechanize nokogiri redis sequel sqlite3 terminal-table tzinfo webrick xmpp4r --no-document
-          choco install innosetup
+          iscc /help
