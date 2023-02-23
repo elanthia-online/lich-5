@@ -27,4 +27,5 @@ jobs:
         id: install_core_scripts
         run: |
           ruby --version
+          gem install gem install ascii_charts gtk3 json redis sequel sqlite3 terminal-table
           gem list
