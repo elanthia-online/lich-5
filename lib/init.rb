@@ -613,7 +613,6 @@ rescue LoadError
         ruby_bin_dir = File.dirname(r[:lpFilename])
         if File.exist?("#{ruby_bin_dir}\\gem.bat")
           verb = (Win32.isXP? ? 'open' : 'runas')
-          # fixme: using --source http://rubygems.org to avoid https because it has been failing to validate the certificate on Windows
           r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --no-ri --no-rdoc')
           if r[:return] > 0
             pid = r[:hProcess]
