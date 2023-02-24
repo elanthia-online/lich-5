@@ -83,63 +83,37 @@ module Lich
       end
 
       def self.snapshot
-        _respond; _respond 'Creating a snapshot of current Lich core files ONLY.'
-        _respond; _respond 'You may also wish to copy your entire Lich5 folder to'
+        _respond
+        _respond 'Creating a snapshot of current Lich core files ONLY.'
+        _respond
+        _respond 'You may also wish to copy your entire Lich5 folder to'
         _respond 'another location for additional safety, after any'
         _respond 'additional requested updates are completed.'
         
         ## Let's make the snapshot folder
         
         snapshot_subdir = File.join(BACKUP_DIR, "L5-snapshot-#{Time.now.strftime("%Y-%m-%d-%H-%M-%S")}")
-        unless File.exist?(snapshot_subdir)
-          Dir.mkdir(snapshot_subdir)
-        end
+        FileUtils.mkdir_p(snapshot_subdir)
         
         ## lich.rbw main file backup
         
-        filename = File.join(LICH_DIR, File.basename($PROGRAM_NAME))
-        copyfilename = File.join(snapshot_subdir, File.basename($PROGRAM_NAME))
-        File.open(filename, 'rb') { |r| File.open(copyfilename, 'wb') { |w| w.write(r.read) } }
+        FileUtils.cp(File.join(LICH_DIR, File.basename($PROGRAM_NAME)), File.join(snapshot_subdir, File.basename($PROGRAM_NAME)))
 
         ## LIB folder backup and it's subfolders
         
-        snapshot_lib_subdir = File.join(snapshot_subdir, "lib")
-        unless File.exist?(snapshot_lib_subdir)
-          Dir.mkdir(snapshot_lib_subdir)
-        end
-        
-        snapshot_lib_files =  Dir.chdir(LIB_DIR) { Dir.glob("**/*").map {|path| File.expand_path(path) } }
-        snapshot_lib_files.each { |file|
-          if File.directory?(file)
-            create_folder = file.gsub(LIB_DIR, File.join(snapshot_subdir, "lib"))
-            Dir.mkdir(create_folder) unless File.exist?(create_folder)
-          else
-            create_file = file.gsub(LIB_DIR, File.join(snapshot_subdir, "lib"))
-            File.open(file, 'rb') { |r|
-              File.open(create_file, 'wb') { |w| w.write(r.read) }
-            }
-          end
-        }
+        FileUtils.mkdir_p(File.join(snapshot_subdir, "lib"))
+        FileUtils.cp_r(LIB_DIR, snapshot_subdir)
 
         ## here we should maintain a discrete array of script files (450K versus 10M plus)
         ## we need to find a better way without hving to maintain this list
         
-        snapshot_script_subdir = File.join(snapshot_subdir, "scripts")
-        unless File.exist?(snapshot_script_subdir)
-          Dir.mkdir(snapshot_script_subdir)
-        end
-
+        FileUtils.mkdir_p(File.join(snapshot_subdir, "scripts"))
         @snapshot_core_script.each { |file|
-          if File.exist?(File.join(SCRIPT_DIR, file))
-            File.open(File.join(SCRIPT_DIR, file), 'rb') { |r|
-              File.open(File.join(snapshot_script_subdir, file), 'wb') { |w| w.write(r.read) }
-            }
-          else
-            next
-          end
+          FileUtils.cp(File.join(SCRIPT_DIR, file), File.join(snapshot_subdir, "scripts", file)) if File.exist?(File.join(SCRIPT_DIR, file))
         }
 
-        _respond; _respond 'Current Lich ecosystem files (only) backed up to:'
+        _respond
+        _respond 'Current Lich ecosystem files (only) backed up to:'
         _respond "    #{snapshot_subdir}"
       end
 
@@ -162,39 +136,39 @@ module Lich
       def self.download_update
         ## This is the workhorse routine that does the file moves from an update
 
-        _respond; _respond 'Getting reaady to update.  First we will create a'
-        _respond 'snapshot in case there are problems with the update.'
-
-        self.snapshot
-
         self.prep_update if @update_to.nil? or @update_to.empty?
         if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}")
           _respond ''; _respond "Lich version #{LICH_VERSION} is good.  Enjoy!"; _respond ''
         else
+          _respond; _respond 'Getting reaady to update.  First we will create a'
+          _respond 'snapshot in case there are problems with the update.'
+
+          self.snapshot
           _respond; _respond "Downloading Lich5 version #{@update_to}"; _respond
           filename = "lich5-#{@update_to}"
           File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
-            file.write open("#{@zipfile}").read
+            file.write URI.open("#{@zipfile}").read
           end
-
-          Dir.mkdir(File.join(TEMP_DIR, filename))
-          Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"), "#{TEMP_DIR}/#{filename}")
+          
+          FileUtils.mkdir_p(File.join(TEMP_DIR, filename))
+          Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"), File.join(TEMP_DIR, filename))
+          Dir.children(File.join(TEMP_DIR, filename))
           new_target = Dir.children(File.join(TEMP_DIR, filename))
           FileUtils.cp_r(File.join(TEMP_DIR, filename, new_target[0]), TEMP_DIR)
           FileUtils.remove_dir(File.join(TEMP_DIR, filename))
           FileUtils.mv(File.join(TEMP_DIR, new_target[0]), File.join(TEMP_DIR, filename))
-
+          
           _respond; _respond 'Copying updated lich files to their locations.'
 
           ## We do not care about local edits from players in the Lich5 / lib location
 
-          lib_update = Dir.children(File.join(TEMP_DIR, filename, "lib"))
-          lib_update.each { |file|
-            File.delete(File.join(LIB_DIR, file)) if File.exist?(File.join(LIB_DIR, file))
-            File.open(File.join(TEMP_DIR, filename, "lib", file), 'rb') { |r|
-              File.open(File.join(LIB_DIR, file), 'wb') { |w| w.write(r.read) }
+          FileUtils.remove_dir(LIB_DIR)
+          FileUtils.mkdir_p(LIB_DIR)
+          FileUtils.cp_r(File.join(TEMP_DIR, filename, "lib"), File.join(File.expand_path('..', LIB_DIR)))
+          Dir.chdir(LIB_DIR) {
+            Dir.glob("**/*").each { |file|
+              _respond "lib #{file} has been updated."
             }
-            _respond "lib #{file} has been updated."
           }
 
           ## We do not care about local edits from players to the Lich5 / script location
