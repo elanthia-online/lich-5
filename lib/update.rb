@@ -87,55 +87,51 @@ module Lich
         _respond; _respond 'You may also wish to copy your entire Lich5 folder to'
         _respond 'another location for additional safety, after any'
         _respond 'additional requested updates are completed.'
+        
+        ## Let's make the snapshot folder
+        
         snapshot_subdir = File.join(BACKUP_DIR, "L5-snapshot-#{Time.now.strftime("%Y-%m-%d-%H-%M-%S")}")
         unless File.exist?(snapshot_subdir)
           Dir.mkdir(snapshot_subdir)
         end
+        
+        ## lich.rbw main file backup
+        
         filename = File.join(LICH_DIR, File.basename($PROGRAM_NAME))
         copyfilename = File.join(snapshot_subdir, File.basename($PROGRAM_NAME))
         File.open(filename, 'rb') { |r| File.open(copyfilename, 'wb') { |w| w.write(r.read) } }
 
+        ## LIB folder backup and it's subfolders
+        
         snapshot_lib_subdir = File.join(snapshot_subdir, "lib")
         unless File.exist?(snapshot_lib_subdir)
           Dir.mkdir(snapshot_lib_subdir)
         end
-        ## let's just get the directory (and subdir) contents and back it up
-
-        snapshot_lib_sub_folder = Dir.entries(LIB_DIR).select { |entry| 
-          File.directory? File.join(LIB_DIR,entry) and !(entry =='.' || entry == '..') 
-        }
-        snapshot_lib_files = Dir.children(LIB_DIR)
+        
+        snapshot_lib_files =  Dir.chdir(LIB_DIR) { Dir.glob("**/*").map {|path| File.expand_path(path) } }
         snapshot_lib_files.each { |file|
-        if snapshot_lib_sub_folder.include?(file)
-          snapshot_lib_sub_folder.each { |folder|
-            create_folder = File.join(snapshot_lib_subdir, folder)
-            unless File.exist?(create_folder)
-              Dir.mkdir(create_folder)
-            end
-            snapshot_lib_subfolder_files = Dir.children(File.join(LIB_DIR, folder))
-            snapshot_lib_subfolder_files.each { |file|
-              File.open(File.join(LIB_DIR, folder, file), 'rb') { |r|
-                File.open(File.join(create_folder, file), 'wb') { |w| w.write(r.read) }
-              }
+          if File.directory?(file)
+            create_folder = file.gsub(LIB_DIR, File.join(snapshot_subdir, "lib"))
+            Dir.mkdir(create_folder) unless File.exist?(create_folder)
+          else
+            create_file = file.gsub(LIB_DIR, File.join(snapshot_subdir, "lib"))
+            File.open(file, 'rb') { |r|
+              File.open(create_file, 'wb') { |w| w.write(r.read) }
             }
-          }
-        else
-          File.open(File.join(LICH_DIR, "lib", file), 'rb') { |r|
-          File.open(File.join(snapshot_lib_subdir, file), 'wb') { |w| w.write(r.read) }
-          }
-        end
+          end
         }
 
+        ## here we should maintain a discrete array of script files (450K versus 10M plus)
+        ## we need to find a better way without hving to maintain this list
+        
         snapshot_script_subdir = File.join(snapshot_subdir, "scripts")
         unless File.exist?(snapshot_script_subdir)
           Dir.mkdir(snapshot_script_subdir)
         end
-        ## here we should maintain a discrete array of script files (450K versus 10M plus)
-        ## we need to find a better way without hving to maintain this list
 
         @snapshot_core_script.each { |file|
-          if File.exist?(File.join(LICH_DIR, "scripts", file))
-            File.open(File.join(LICH_DIR, "scripts", file), 'rb') { |r|
+          if File.exist?(File.join(SCRIPT_DIR, file))
+            File.open(File.join(SCRIPT_DIR, file), 'rb') { |r|
               File.open(File.join(snapshot_script_subdir, file), 'wb') { |w| w.write(r.read) }
             }
           else
