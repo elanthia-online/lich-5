@@ -1,4 +1,4 @@
-name: Valid Ruby Syntax
+name: Ruby Syntax
 on: [push, pull_request]
 
 jobs:
