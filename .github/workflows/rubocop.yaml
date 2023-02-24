@@ -1,4 +1,4 @@
-name: Rubocop Syntax Checker
+name: Rubocop
 on: [push, pull_request]
 
 jobs:
