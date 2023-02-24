@@ -152,7 +152,6 @@ module Lich
           
           FileUtils.mkdir_p(File.join(TEMP_DIR, filename))
           Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"), File.join(TEMP_DIR, filename))
-          Dir.children(File.join(TEMP_DIR, filename))
           new_target = Dir.children(File.join(TEMP_DIR, filename))
           FileUtils.cp_r(File.join(TEMP_DIR, filename, new_target[0]), TEMP_DIR)
           FileUtils.remove_dir(File.join(TEMP_DIR, filename))
