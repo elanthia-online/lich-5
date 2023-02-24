@@ -99,13 +99,31 @@ module Lich
         unless File.exist?(snapshot_lib_subdir)
           Dir.mkdir(snapshot_lib_subdir)
         end
-        ## let's just get the directory contents and back it up
+        ## let's just get the directory (and subdir) contents and back it up
 
+        snapshot_lib_sub_folder = Dir.entries(LIB_DIR).select { |entry| 
+          File.directory? File.join(LIB_DIR,entry) and !(entry =='.' || entry == '..') 
+        }
         snapshot_lib_files = Dir.children(LIB_DIR)
         snapshot_lib_files.each { |file|
-          File.open(File.join(LICH_DIR, "lib", file), 'rb') { |r|
-            File.open(File.join(snapshot_lib_subdir, file), 'wb') { |w| w.write(r.read) }
+        if snapshot_lib_sub_folder.include?(file)
+          snapshot_lib_sub_folder.each { |folder|
+            create_folder = File.join(snapshot_lib_subdir, folder)
+            unless File.exist?(create_folder)
+              Dir.mkdir(create_folder)
+            end
+            snapshot_lib_subfolder_files = Dir.children(File.join(LIB_DIR, folder))
+            snapshot_lib_subfolder_files.each { |file|
+              File.open(File.join(LIB_DIR, folder, file), 'rb') { |r|
+                File.open(File.join(create_folder, file), 'wb') { |w| w.write(r.read) }
+              }
+            }
           }
+        else
+          File.open(File.join(LICH_DIR, "lib", file), 'rb') { |r|
+          File.open(File.join(snapshot_lib_subdir, file), 'wb') { |w| w.write(r.read) }
+          }
+        end
         }
 
         snapshot_script_subdir = File.join(snapshot_subdir, "scripts")
