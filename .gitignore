@@ -8,6 +8,7 @@ scripts/
 temp/
 jinxp
 .pre-commit-config.yaml
+.rubocop.yml
 *.swp
 logo.png
 fly64.png
