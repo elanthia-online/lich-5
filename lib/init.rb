@@ -1,6 +1,5 @@
 # Lich5 carveout for init_db
 
-
 #
 # Report an error if Lich 4.4 data is found
 #
