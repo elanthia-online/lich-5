@@ -276,7 +276,7 @@ module Lich
           requested_file =~ /\.rb$/ ? requested_file_ext = ".rb" : requested_file_ext = "bad extension"
         when "data"
           location = DATA_DIR
-          remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/master/data"
+          remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
           requested_file =~ /(\.(?:xml|ui))$/ ? requested_file_ext = $1.dup : requested_file_ext = "bad extension"
         end
         unless requested_file_ext == "bad extension"
