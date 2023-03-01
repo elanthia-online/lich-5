@@ -110,9 +110,6 @@ if $wine_bin and File.exist?($wine_bin) and File.file?($wine_bin) and $wine_pref
     end
   end
 end
-# $wine_bin = nil
-# $wine_prefix = nil
-# end
 
 # find the FE locations for Win and for Linux | WINE
 
