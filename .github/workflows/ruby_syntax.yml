@@ -1,5 +1,15 @@
 name: Ruby Syntax
-on: [push, pull_request]
+on: 
+  push:
+    paths:
+      - "**/*.lic"
+      - "**/*.rb"
+      - "lich.rbw"
+  pull_request:
+    paths:
+      - "**/*.lic"
+      - "**/*.rb"
+      - "lich.rbw"
 
 jobs:
   check_syntax:
@@ -20,6 +30,7 @@ jobs:
           files: |
             **/*.lic
             **/*.rb
+            lich.rbw
             
       - uses: ruby/setup-ruby@v1
         with:
