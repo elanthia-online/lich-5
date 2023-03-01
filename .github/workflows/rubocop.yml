@@ -2,12 +2,12 @@ name: Rubocop
 on: 
   push:
     paths:
-      - "*.lic"
-      - "*.rb"
+      - "**/*.lic"
+      - "**/*.rb"
   pull_request:
     paths:
-      - "*.lic"
-      - "*.rb"
+      - "**/*.lic"
+      - "**/*.rb"
 
 jobs:
   rubocop:
@@ -26,8 +26,8 @@ jobs:
         uses: tj-actions/changed-files@v35
         with:
           files: |
-            *.lic
-            *.rb
+            **/*.lic
+            **/*.rb
         
       - uses: ruby/setup-ruby@v1
         with:
