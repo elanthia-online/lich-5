@@ -653,7 +653,8 @@ rescue LoadError
   exit
 end
 
-if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i) and !ARGV.include?('--no-gui')) or ENV['DISPLAY']
+if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i) or ENV['DISPLAY']) and !ARGV.include?('--no-gui')
+
   begin
     require 'gtk3'
     HAVE_GTK = true
