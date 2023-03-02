@@ -89,24 +89,24 @@ module Lich
         _respond 'You may also wish to copy your entire Lich5 folder to'
         _respond 'another location for additional safety, after any'
         _respond 'additional requested updates are completed.'
-        
+
         ## Let's make the snapshot folder
-        
+
         snapshot_subdir = File.join(BACKUP_DIR, "L5-snapshot-#{Time.now.strftime("%Y-%m-%d-%H-%M-%S")}")
         FileUtils.mkdir_p(snapshot_subdir)
-        
+
         ## lich.rbw main file backup
-        
+
         FileUtils.cp(File.join(LICH_DIR, File.basename($PROGRAM_NAME)), File.join(snapshot_subdir, File.basename($PROGRAM_NAME)))
 
         ## LIB folder backup and it's subfolders
-        
+
         FileUtils.mkdir_p(File.join(snapshot_subdir, "lib"))
         FileUtils.cp_r(LIB_DIR, snapshot_subdir)
 
         ## here we should maintain a discrete array of script files (450K versus 10M plus)
         ## we need to find a better way without hving to maintain this list
-        
+
         FileUtils.mkdir_p(File.join(snapshot_subdir, "scripts"))
         @snapshot_core_script.each { |file|
           FileUtils.cp(File.join(SCRIPT_DIR, file), File.join(snapshot_subdir, "scripts", file)) if File.exist?(File.join(SCRIPT_DIR, file))
@@ -118,9 +118,8 @@ module Lich
       end
 
       def self.prep_update
-        installed = Gem::Version.new(@current)
         filename = "https://api.github.com/repos/elanthia-online/lich-5/releases/latest"
-        update_info = URI.open(filename).read
+        update_info = URI.parse(filename).open.read
 
         JSON::parse(update_info).each { |entry|
           if entry.include? 'tag_name'
@@ -147,16 +146,16 @@ module Lich
           _respond; _respond "Downloading Lich5 version #{@update_to}"; _respond
           filename = "lich5-#{@update_to}"
           File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
-            file.write URI.open("#{@zipfile}").read
+            file.write URI.parse(@zipfile).open.read
           end
-          
+
           FileUtils.mkdir_p(File.join(TEMP_DIR, filename))
           Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"), File.join(TEMP_DIR, filename))
           new_target = Dir.children(File.join(TEMP_DIR, filename))
           FileUtils.cp_r(File.join(TEMP_DIR, filename, new_target[0]), TEMP_DIR)
           FileUtils.remove_dir(File.join(TEMP_DIR, filename))
           FileUtils.mv(File.join(TEMP_DIR, new_target[0]), File.join(TEMP_DIR, filename))
-          
+
           _respond; _respond 'Copying updated lich files to their locations.'
 
           ## We do not care about local edits from players in the Lich5 / lib location
@@ -208,8 +207,8 @@ module Lich
 
           ## And we clen up after ourselves
 
-          FileUtils.remove_dir(File.join(TEMP_DIR, filename))   # we know these exist because
-          FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz"))       # we just processed them
+          FileUtils.remove_dir(File.join(TEMP_DIR, filename)) # we know these exist because
+          FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) # we just processed them
 
           _respond; _respond "Lich5 has been updated to Lich5 version #{@update_to}"
           _respond "You should exit the game, then log back in.  This will start the game"
@@ -264,7 +263,6 @@ module Lich
 
       def self.update_file(type, rf)
         requested_file = rf
-        requested_file_name = requested_file.sub(/\.(?:lic|rb|xml|ui)$/, '')
         case type
         when "script"
           location = SCRIPT_DIR
@@ -283,7 +281,7 @@ module Lich
           File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))
           begin
             File.open(File.join(location, requested_file), "wb") do |file|
-              file.write URI.open(File.join(remote_repo, requested_file)).read
+              file.write URI.parse(File.join(remote_repo, requested_file)).open.read
             end
             _respond
             _respond "#{requested_file} has been updated."
