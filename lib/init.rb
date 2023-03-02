@@ -32,7 +32,7 @@ end
 
 # check for Linux | WINE (and maybe in future MacOS | WINE) first due to low population
 # segment of code unmodified from Lich4 (Tillmen)
-if arg = ARGV.find { |a| a =~ /^--wine=.+$/i }
+if (arg = ARGV.find { |a| a =~ /^--wine=.+$/i })
   $wine_bin = arg.sub(/^--wine=/, '')
 else
   begin
@@ -41,7 +41,7 @@ else
     $wine_bin = nil
   end
 end
-if arg = ARGV.find { |a| a =~ /^--wine-prefix=.+$/i }
+if (arg = ARGV.find { |a| a =~ /^--wine-prefix=.+$/i })
   $wine_prefix = arg.sub(/^--wine-prefix=/, '')
 elsif ENV['WINEPREFIX']
   $wine_prefix = ENV['WINEPREFIX']
@@ -110,9 +110,6 @@ if $wine_bin and File.exist?($wine_bin) and File.file?($wine_bin) and $wine_pref
     end
   end
 end
-#$wine_bin = nil
-#$wine_prefix = nil
-#end
 
 # find the FE locations for Win and for Linux | WINE
 
@@ -145,9 +142,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
     end
   end
 elsif defined?(Wine)
-  paths = ['HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\STORM32\\Directory',
-           'HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\WIZ32\\Directory']
-## Needs improvement - iteration and such.  Quick slam test.
+  ## Needs improvement - iteration and such.  Quick slam test.
   $sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\STORM32\\Directory') || ''
   $wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
   $sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory')
@@ -231,6 +226,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       extern 'int GetLastError()'
       extern 'int CreateProcess(void*, void*, void*, void*, int, int, void*, void*, void*, void*)'
     end
+
     def Win32.GetLastError
       return Kernel32.GetLastError()
     end
@@ -304,6 +300,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       dlload 'user32'
       extern 'int MessageBox(int, char*, char*, int)'
     end
+
     def Win32.MessageBox(args)
       args[:lpCaption] ||= "Lich v#{LICH_VERSION}"
       return User32.MessageBox(args[:hWnd].to_i, args[:lpText], args[:lpCaption], args[:uType].to_i)
@@ -320,6 +317,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       extern 'int RegDeleteValue(int, char*)'
       extern 'int RegCloseKey(int)'
     end
+
     def Win32.GetTokenInformation(args)
       if args[:TokenInformationClass] == TokenElevation
         token_information_length = SIZEOF_LONG
@@ -422,6 +420,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       extern 'int ShellExecuteEx(void*)'
       extern 'int ShellExecute(int, char*, char*, char*, char*, int)'
     end
+
     def Win32.ShellExecuteEx(args)
       #         struct = [ (SIZEOF_LONG * 15), 0, 0, 0, 0, 0, 0, SW_SHOWNORMAL, 0, 0, 0, 0, 0, 0, 0 ]
       struct = [(SIZEOF_LONG * 15), 0, 0, 0, 0, 0, 0, SW_SHOW, 0, 0, 0, 0, 0, 0, 0]
@@ -455,6 +454,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       module Kernel32
         extern 'int EnumProcesses(void*, int, void*)'
       end
+
       def Win32.EnumProcesses(args = {})
         args[:cb] ||= 400
         pProcessIds = Array.new((args[:cb] / SIZEOF_LONG), 0).pack(''.rjust((args[:cb] / SIZEOF_LONG), 'L'))
@@ -469,6 +469,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
         dlload 'psapi'
         extern 'int EnumProcesses(void*, int, void*)'
       end
+
       def Win32.EnumProcesses(args = {})
         args[:cb] ||= 400
         pProcessIds = Array.new((args[:cb] / SIZEOF_LONG), 0).pack(''.rjust((args[:cb] / SIZEOF_LONG), 'L'))
@@ -511,7 +512,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
     end
   end
 else
-  if arg = ARGV.find { |a| a =~ /^--wine=.+$/i }
+  if (arg = ARGV.find { |a| a =~ /^--wine=.+$/i })
     $wine_bin = arg.sub(/^--wine=/, '')
   else
     begin
@@ -520,7 +521,7 @@ else
       $wine_bin = nil
     end
   end
-  if arg = ARGV.find { |a| a =~ /^--wine-prefix=.+$/i }
+  if (arg = ARGV.find { |a| a =~ /^--wine-prefix=.+$/i })
     $wine_prefix = arg.sub(/^--wine-prefix=/, '')
   elsif ENV['WINEPREFIX']
     $wine_prefix = ENV['WINEPREFIX']
@@ -594,7 +595,7 @@ else
 end
 
 if ARGV[0] == 'shellexecute'
-  args = Marshal.load(ARGV[1].unpack('m')[0])
+  args = Marshal.load(Marshal.dump(ARGV[1].unpack('m')[0]))
   Win32.ShellExecute(:lpOperation => args[:op], :lpFile => args[:file], :lpDirectory => args[:dir], :lpParameters => args[:params])
   exit
 end
@@ -657,7 +658,7 @@ if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i) and !ARGV.i
     require 'gtk3'
     HAVE_GTK = true
   rescue LoadError
-    if (ENV['RUN_BY_CRON'].nil? or ENV['RUN_BY_CRON'] == 'false') and ARGV.empty? or ARGV.any? { |arg| arg =~ /^--gui$/ } or not $stdout.isatty
+    if (ENV['RUN_BY_CRON'].nil? or ENV['RUN_BY_CRON'] == 'false') and ARGV.empty? or ARGV.any? { |any_arg| any_arg =~ /^--gui$/ } or not $stdout.isatty
       if defined?(Win32)
         r = Win32.MessageBox(:lpText => "Lich uses gtk3 to create windows, but it is not installed.  You can use Lich from the command line (ruby lich.rbw --help) or you can install gtk3 for a point and click interface.\n\nWould you like to install gtk3 now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
         if r == Win32::IDIYES
