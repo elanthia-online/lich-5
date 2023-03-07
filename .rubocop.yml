@@ -46,3 +46,7 @@ Metrics/PerceivedComplexity:
 
 Metrics/ParameterLists:
   Enabled: false
+
+Security/Eval:
+  Enabled: false
+  
