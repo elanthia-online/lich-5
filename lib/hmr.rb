@@ -5,11 +5,12 @@ module HMR
   end
 
   def self.loaded
-    $LOADED_FEATURES.select {|path| path.end_with?(".rb") }
+    $LOADED_FEATURES.select { |path| path.end_with?(".rb") }
   end
 
   def self.reload(pattern)
-    self.loaded.grep(pattern).each {|file|
+    self.clear_cache
+    self.loaded.grep(pattern).each { |file|
       begin
         load(file)
         _respond "<b>[lich.hmr] reloaded %s</b>" % file
