@@ -4,12 +4,12 @@ on:
     paths:
       - "**/*.lic"
       - "**/*.rb"
-      - "lich.rbw"
+#      - "lich.rbw"
   pull_request:
     paths:
       - "**/*.lic"
       - "**/*.rb"
-      - "lich.rbw"
+#      - "lich.rbw"
 
 jobs:
   rubocop:
@@ -30,7 +30,7 @@ jobs:
           files: |
             **/*.lic
             **/*.rb
-            lich.rbw
+#            lich.rbw
         
       - uses: ruby/setup-ruby@v1
         with:

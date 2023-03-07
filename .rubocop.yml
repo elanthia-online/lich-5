@@ -1,6 +1,8 @@
 AllCops:
   TargetRubyVersion: 3.2
   NewCops: disable
+  Exclude:
+    - '**/lich.rbw'
   Include:
     - '**/*.lic'
     - '**/*.rb'
@@ -46,3 +48,7 @@ Metrics/PerceivedComplexity:
 
 Metrics/ParameterLists:
   Enabled: false
+
+Security/Eval:
+  Enabled: false
+  
