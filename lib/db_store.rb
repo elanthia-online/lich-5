@@ -23,7 +23,7 @@ module DB_Store
 
     return {} unless hash
 
-    Marshal.load(Marshal.dump(hash))
+    Marshal.load(hash)
   end
 
   def self.store_data(scope = "#{XMLData.game}:#{XMLData.name}", script, val)
