@@ -10,7 +10,7 @@ module HMR
         Test = 1
       end
     Ruby
-    
+
     Second = <<~Ruby
       module HMR
         Test = 2
@@ -30,7 +30,7 @@ describe HMR, "#loaded" do
 
       File.write(HMR::Helpers::Filename, HMR::Helpers::First)
       require(HMR::Helpers::Filename)
-      
+
       expect(HMR.loaded.any?(HMR::Helpers::Filename)).to be_truthy
     end
   end
