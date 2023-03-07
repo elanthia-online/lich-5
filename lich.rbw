@@ -58,7 +58,7 @@ require 'lib/front-end'
 # TODO: Need to split out initiatilzation functions to move require to top of file
 require 'lib/gtk'
 require 'lib/gui-login'
-
+require 'lib/db_store'
 class NilClass
   def dup
     nil
@@ -5186,6 +5186,7 @@ main_thread = Thread.new {
   Script.hidden.each { |script| script.kill }
   200.times { sleep 0.1; break if Script.running.empty? and Script.hidden.empty? }
   Lich.log 'info: saving script settings...'
+  Infomon::Monitor.save_proc
   Settings.save
   Vars.save
   Lich.log 'info: closing connections...'
