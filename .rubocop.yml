@@ -4,6 +4,8 @@ AllCops:
   Include:
     - '**/*.lic'
     - '**/*.rb'
+  Exclude:
+    - 'lich.rbw'
 
 Naming:
   Enabled: false
