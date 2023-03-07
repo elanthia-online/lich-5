@@ -64,8 +64,7 @@ module Infomon
     psm_abilities = if Gem::Version.new(LICH_VERSION) < Gem::Version.new('5.0.16')
                       ['CMan']
                     else
-                      %w[Feat
-                         Armor Weapon Shield CMan]
+                      %w[Feat Armor Weapon Shield CMan]
                     end
     need_psm = []
     if $infomon_values['need_psm_update']
@@ -73,7 +72,7 @@ module Infomon
       $infomon_values['need_psm_update'] = false
     else
       psm_abilities.each do |ability|
-        if !defined?(eval(ability.to_s))
+        if !defined?(Kernel.const_get(ability.to_s))
           pp 'Encountered fatal error'
           exit
         elsif $infomon_values[ability.to_s.downcase].nil?
@@ -82,7 +81,7 @@ module Infomon
         else
           begin
             unless $infomon_values[ability.to_s.downcase].empty?
-              $infomon_values[ability.to_s.downcase].each_pair { |psm, rank| eval(ability.to_s).send("#{psm}=", rank) }
+              $infomon_values[ability.to_s.downcase].each_pair { |psm, rank| Kernel.const_get(ability.to_s).send("#{psm}=", rank) }
             end
           rescue StandardError
             pp 'Bad juju happened here.'
@@ -498,10 +497,6 @@ module Infomon
             script.silent = save_silent
             wait_until { done }
           end
-        # rescue Exception
-          # echo $ERROR_INFO
-          # echo $ERROR_INFO.backtrace.first
-          # sleep 1
         rescue ThreadError
           echo $ERROR_INFO
           echo $ERROR_INFO.backtrace.first
