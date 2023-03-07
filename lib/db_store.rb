@@ -15,8 +15,11 @@ module DB_Store
   end
 
   def self.get_data(scope = "#{XMLData.game}:#{XMLData.name}", script)
-    hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;',
-                                    script.encode('UTF-8'), scope.encode('UTF-8'))
+    hash = Lich.db.get_first_value(
+      'SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;',
+      script.encode('UTF-8'),
+      scope.encode('UTF-8')
+    )
 
     return {} unless hash
 
