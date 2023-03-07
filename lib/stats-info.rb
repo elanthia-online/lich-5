@@ -116,7 +116,7 @@ module Lich
           echo rank_psm.to_i if $infomon_debug
           $infomon_values[@psm_category.to_s.downcase][name_psm] = rank_psm.to_i
           begin
-            eval(@psm_category.to_s)[name_psm] = rank_psm
+            Kernel.const_get(@psm_category.to_s)[name_psm] = rank_psm
           rescue StandardError
             nil
           end
