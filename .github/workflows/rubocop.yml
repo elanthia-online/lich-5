@@ -30,7 +30,7 @@ jobs:
           files: |
             **/*.lic
             **/*.rb
-            lich.rbw
+#            lich.rbw
         
       - uses: ruby/setup-ruby@v1
         with:
