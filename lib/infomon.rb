@@ -11,7 +11,6 @@
 #        version: 2.0
 #         Source: https://github.com/elanthia-online/scripts
 
-
 require 'English'
 
 module Infomon
@@ -49,18 +48,6 @@ module Infomon
 
     respond 'Calling need psm update' if $infomon_debug
     $infomon_values['need_psm_update'] = true if $infomon_values['need_psm_update'].nil?
-
-    bank_titles = {
-      "Wehnimer's Landing" => ['[First Elanith Bank, Teller]', '[Clenchfist Bros. Banking, Lobby]'],
-      'Kharam-Dzu' => ['[The Bank of Kharam-Dzu]'],
-      'Icemule Trace' => ['[Icemule Trace, Bank]'],
-      'Vornavis' => ['[Bank of Vornavis, Solhaven]', '[Mercantylers\' Banking Hall]'],
-      "River's Rest" => ["[River's Rest Bank, Teller]"],
-      "Kharag 'doth Dzulthu" => ['[Bank of Zul Logoth]'],
-      'United City-States' => ['[United Bank of City-States]', '[The United Bank of City-States]'],
-      'Isle of the Four Winds Bank' => ['[Mist Harbor Bank, Bank Windows]', '[Mist Harbor Bank, Windows]'],
-      'Cysaegir' => ['[Cysaegir Bank]']
-    }
 
     #
     # Load spell info
@@ -443,29 +430,29 @@ module Infomon
             $infomon_unhidingcreatures = true
 
           when /^\s#{Char.name} \(at level/o
-            _buffer_skills = ''
-            _buffer_skills = "#{line}\r\n"
+            buffer_skills = ''
+            buffer_skills = "#{line}\r\n"
             until (line = get) =~ /\(Use |[0-9]+ days? remain|You started this migration period|Further information can be found in the FAQs./
-              _buffer_skills += "#{line}\r\n"
+              buffer_skills += "#{line}\r\n"
             end
-            Lich::Statsinfo.request('skills', _buffer_skills)
+            Lich::Statsinfo.request('skills', buffer_skills)
           when /^Name:\s+[-A-z\s']+Race:\s+([-A-z\s]+)\s+Profession:\s+([-A-z\s]+)/
-            _buffer_stats = ''
-            _buffer_stats += "#{line}\r\n"
+            buffer_stats = ''
+            buffer_stats += "#{line}\r\n"
             until (line = get) =~ /Mana/
-              _buffer_stats += "#{line}\r\n"
+              buffer_stats += "#{line}\r\n"
             end
-            _buffer_stats += "#{line}\r\n"
-            Lich::Statsinfo.request('info', _buffer_stats)
+            buffer_stats += "#{line}\r\n"
+            Lich::Statsinfo.request('info', buffer_stats)
           when /^You are now level ([0-9]+)!$/
-            _buffer_levelup = ''
-            _buffer_levelup += "#{line}\r\n"
+            buffer_levelup = ''
+            buffer_levelup += "#{line}\r\n"
             get
             until (line = get) =~ /^Physical|\s+Mental|No statistic/
-              _buffer_levelup += "#{line}\r\n"
+              buffer_levelup += "#{line}\r\n"
             end
-            _buffer_levelup += "#{line}\r\n"
-            Lich::Statsinfo.request('levelup', _buffer_levelup)
+            buffer_levelup += "#{line}\r\n"
+            Lich::Statsinfo.request('levelup', buffer_levelup)
           when /#{Char.name}, your (Combat|Armor|Feat|Shield|Weapon).*? are as follows:/
             type_request = ::Regexp.last_match(1).dup.downcase
             type_request = 'cman' if type_request == 'combat'
@@ -511,10 +498,10 @@ module Infomon
             script.silent = save_silent
             wait_until { done }
           end
-        rescue Exception
-          echo $ERROR_INFO
-          echo $ERROR_INFO.backtrace.first
-          sleep 1
+        # rescue Exception
+          # echo $ERROR_INFO
+          # echo $ERROR_INFO.backtrace.first
+          # sleep 1
         rescue ThreadError
           echo $ERROR_INFO
           echo $ERROR_INFO.backtrace.first
