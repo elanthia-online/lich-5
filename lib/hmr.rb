@@ -4,6 +4,12 @@ module HMR
     Gem.clear_paths
   end
 
+  def self.msg(message)
+    return _respond message if Kernel.respond_to?(:_respond) && message.include?("<b>")
+    return respond message if Kernel.respond_to?(:respond)
+    puts message
+  end
+
   def self.loaded
     $LOADED_FEATURES.select { |path| path.end_with?(".rb") }
   end
@@ -13,10 +19,10 @@ module HMR
     self.loaded.grep(pattern).each { |file|
       begin
         load(file)
-        _respond "<b>[lich.hmr] reloaded %s</b>" % file
+        self.msg "<b>[lich.hmr] reloaded %s</b>" % file
       rescue => exception
-        respond exception
-        respond exception.backtrace.join("\n")
+        self.msg exception
+        self.msg exception.backtrace.join("\n")
       end
     }
   end
