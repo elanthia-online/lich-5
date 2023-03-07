@@ -2,7 +2,7 @@ AllCops:
   TargetRubyVersion: 3.2
   NewCops: disable
   Exclude:
-    - 'lich.rbw'
+    - '**/lich.rbw'
   Include:
     - '**/*.lic'
     - '**/*.rb'
