@@ -1,7 +1,6 @@
 module Lich
   module Util
     module Magicinfo
-
       _respond "Landed in Magicinfo" if $infomon_debug
 
       @circle_state = Lich.magicinfo_circle
@@ -11,14 +10,14 @@ module Lich
 
       def self.request(type = 'announce')
         case type
-         when /help/
+        when /help/
           self.help # Ok, that's just wrong.
         when /announce/
           self.announce
         when /clear(?:\s+(.*)|$)/
           if $1.nil?
             self.clear(nil)
-          else 
+          else
             dump = $1.dup
             self.clear(dump)
           end
@@ -59,9 +58,9 @@ module Lich
       end
 
       def self.clear(rd)
-        requested_drop = rd
+        # requested_drop = rd
         if rd.nil? or rd.empty?
-          while spell = Spell.active.first
+          while (spell = Spell.active.first)
             spell.putdown
           end
           Spell.active.clear
@@ -94,13 +93,13 @@ module Lich
       end
 
       def self.messages
-      #  if $infomon_values['show_messages'] == false
-      #    $infomon_values['show_messages'] = true
-      #    respond('Showing spell duration messages after each cast is now on.')
-      #  else
-      #    $infomon_values['show_messages'] = false
-      #    respond('Showing spell duration messages after each cast is now off.')
-      #  end
+        # if $infomon_values['show_messages'] == false
+        #   $infomon_values['show_messages'] = true
+        #   respond('Showing spell duration messages after each cast is now on.')
+        # else
+        #   $infomon_values['show_messages'] = false
+        #   respond('Showing spell duration messages after each cast is now off.')
+        # end
         respond('This command may be coming soon!')
       end
 
@@ -144,12 +143,12 @@ module Lich
             spell = Spell[set_request_elements[0].to_i]
           end
           if spell.nil?
-            respond ("Magic error! Requested spell cannot be found.")
+            respond("Magic error! Requested spell cannot be found.")
           else
             spell.putup
             spell.timeleft = set_request_elements[1].to_i
             respond set_request_elements.length
-            respond("Spell '#{spell.to_s}' is now set as having #{spell.timeleft} minutes left.")
+            respond("Spell '#{spell}' is now set as having #{spell.timeleft} minutes left.")
           end
         end
       end
@@ -164,97 +163,97 @@ module Lich
           total_boltAS, total_physicalAS, total_boltDS, total_physicalDS, total_elementalCS, total_mentalCS, total_spiritCS, total_sorcererCS, total_elementalTD, total_mentalTD, total_spiritTD, total_sorcererTD, total_strength, total_dodging, total_combatmaneuvers, total_damagefactor, total_block, total_constitution, total_health, total_uaf, total_asg, total_fof_offset = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
           Spell.active.sort_by { |spell| spell.num.to_i }.each { |spell|
             if @circle_state and (spell.circle != lastcircle) then output.concat("\r\n- #{spell.circlename}:\r\n") end
-              bonus_string = ' - '
-              if @bonus_state
-                if spell.bolt_as != 0
-                  bonus_string.concat "#{spell.bolt_as} bAS, "
-                  total_boltAS += spell.bolt_as
-                end
-                if spell.physical_as != 0
-                  bonus_string.concat "#{spell.physical_as} pAS, "
-                  total_physicalAS += spell.physical_as
-                end
-                if spell.bolt_ds != 0
-                  bonus_string.concat "#{spell.bolt_ds} bDS, "
-                  total_boltDS += spell.bolt_ds
-                end
-                if spell.physical_ds != 0
-                  bonus_string.concat "#{spell.physical_ds} pDS, "
-                  total_physicalDS += spell.physical_ds
-                end
-                if spell.elemental_cs != 0
-                  bonus_string.concat "#{spell.elemental_cs} elemCS, "
-                  total_elementalCS += spell.elemental_cs
-                end
-                if spell.spirit_cs != 0
-                  bonus_string.concat "#{spell.spirit_cs} spirCS, "
-                  total_spiritCS += spell.spirit_cs
-                end
-                if spell.sorcerer_cs != 0
-                  bonus_string.concat "#{spell.sorcerer_cs} sorcCS, "
-                  total_sorcererCS += spell.sorcerer_cs
-                end
-                if spell.elemental_td != 0
-                  bonus_string.concat "#{spell.elemental_td} elemTD, "
-                  total_elementalTD += spell.elemental_td
-                end
-                if spell.mental_td != 0
-                  bonus_string.concat "#{spell.mental_td} mentTD, "
-                  total_mentalTD += spell.mental_td
-                end
-                if spell.spirit_td != 0
-                  bonus_string.concat "#{spell.spirit_td} spirTD, "
-                  total_spiritTD += spell.spirit_td
-                end
-                if spell.sorcerer_td != 0
-                  bonus_string.concat "#{spell.sorcerer_td} sorcTD, "
-                  total_sorcererTD += spell.sorcerer_td
-                end
-                if spell.strength.to_i != 0
-                  bonus_string.concat "#{spell.strength} str, "
-                  total_strength += spell.strength.to_i
-                end
-                if spell.dodging.to_i != 0
-                  bonus_string.concat "#{spell.dodging} dodge, "
-                  total_dodging += spell.dodging.to_i
-                end
-                if spell.combatmaneuvers.to_i != 0
-                  bonus_string.concat "#{spell.combatmaneuvers} CM, "
-                  total_combatmaneuvers += spell.combatmaneuvers.to_i
-                end
-                if spell.damagefactor.to_i != 0
-                  bonus_string.concat "#{spell.damagefactor}% DF, "
-                  total_damagefactor += spell.damagefactor.to_i
-                end
-                if spell.block.to_i != 0
-                  bonus_string.concat "#{spell.block}% block, "
-                  total_block += spell.block.to_i
-                end
-                if spell.constitution.to_i != 0
-                  bonus_string.concat "#{spell.constitution} con, "
-                  total_constitution += spell.constitution.to_i
-                end
-                if spell.health.to_i != 0
-                  bonus_string.concat "#{spell.health} health, "
-                  total_health += spell.health.to_i
-                end
-                if spell.unarmed_af.to_i != 0
-                  bonus_string.concat "#{spell.unarmed_af} UAF, "
-                  total_uaf += spell.unarmed_af.to_i
-                end
-                if spell.asg.to_i != 0
-                  bonus_string.concat "#{spell.asg} AsG, "
-                  total_asg += spell.asg.to_i
-                end
-                begin
-                  if spell.fof_offset.to_i != 0
-                    bonus_string.concat "#{spell.fof_offset} FoF offset, "
-                    total_fof_offset += spell.fof_offset.to_i
-                  end
-                rescue
-                  nil
-                end
+            bonus_string = ' - '
+            if @bonus_state
+              if spell.bolt_as != 0
+                bonus_string.concat "#{spell.bolt_as} bAS, "
+                total_boltAS += spell.bolt_as
               end
+              if spell.physical_as != 0
+                bonus_string.concat "#{spell.physical_as} pAS, "
+                total_physicalAS += spell.physical_as
+              end
+              if spell.bolt_ds != 0
+                bonus_string.concat "#{spell.bolt_ds} bDS, "
+                total_boltDS += spell.bolt_ds
+              end
+              if spell.physical_ds != 0
+                bonus_string.concat "#{spell.physical_ds} pDS, "
+                total_physicalDS += spell.physical_ds
+              end
+              if spell.elemental_cs != 0
+                bonus_string.concat "#{spell.elemental_cs} elemCS, "
+                total_elementalCS += spell.elemental_cs
+              end
+              if spell.spirit_cs != 0
+                bonus_string.concat "#{spell.spirit_cs} spirCS, "
+                total_spiritCS += spell.spirit_cs
+              end
+              if spell.sorcerer_cs != 0
+                bonus_string.concat "#{spell.sorcerer_cs} sorcCS, "
+                total_sorcererCS += spell.sorcerer_cs
+              end
+              if spell.elemental_td != 0
+                bonus_string.concat "#{spell.elemental_td} elemTD, "
+                total_elementalTD += spell.elemental_td
+              end
+              if spell.mental_td != 0
+                bonus_string.concat "#{spell.mental_td} mentTD, "
+                total_mentalTD += spell.mental_td
+              end
+              if spell.spirit_td != 0
+                bonus_string.concat "#{spell.spirit_td} spirTD, "
+                total_spiritTD += spell.spirit_td
+              end
+              if spell.sorcerer_td != 0
+                bonus_string.concat "#{spell.sorcerer_td} sorcTD, "
+                total_sorcererTD += spell.sorcerer_td
+              end
+              if spell.strength.to_i != 0
+                bonus_string.concat "#{spell.strength} str, "
+                total_strength += spell.strength.to_i
+              end
+              if spell.dodging.to_i != 0
+                bonus_string.concat "#{spell.dodging} dodge, "
+                total_dodging += spell.dodging.to_i
+              end
+              if spell.combatmaneuvers.to_i != 0
+                bonus_string.concat "#{spell.combatmaneuvers} CM, "
+                total_combatmaneuvers += spell.combatmaneuvers.to_i
+              end
+              if spell.damagefactor.to_i != 0
+                bonus_string.concat "#{spell.damagefactor}% DF, "
+                total_damagefactor += spell.damagefactor.to_i
+              end
+              if spell.block.to_i != 0
+                bonus_string.concat "#{spell.block}% block, "
+                total_block += spell.block.to_i
+              end
+              if spell.constitution.to_i != 0
+                bonus_string.concat "#{spell.constitution} con, "
+                total_constitution += spell.constitution.to_i
+              end
+              if spell.health.to_i != 0
+                bonus_string.concat "#{spell.health} health, "
+                total_health += spell.health.to_i
+              end
+              if spell.unarmed_af.to_i != 0
+                bonus_string.concat "#{spell.unarmed_af} UAF, "
+                total_uaf += spell.unarmed_af.to_i
+              end
+              if spell.asg.to_i != 0
+                bonus_string.concat "#{spell.asg} AsG, "
+                total_asg += spell.asg.to_i
+              end
+              begin
+                if spell.fof_offset.to_i != 0
+                  bonus_string.concat "#{spell.fof_offset} FoF offset, "
+                  total_fof_offset += spell.fof_offset.to_i
+                end
+              rescue
+                nil
+              end
+            end
             output.concat(sprintf("  %04s:  %-023s - %s%s\r\n", spell.num.to_s, spell.name, spell.remaining, bonus_string.chop.chop))
             lastcircle = spell.circle
           }
@@ -264,7 +263,7 @@ module Lich
             total_defense_string = ''
             total_stat_string    = ''
             total_skill_string   = ''
-    
+
             total_offense_string = total_offense_string + total_boltAS.to_s + ' bAS, ' if total_boltAS != 0
             total_offense_string = total_offense_string + total_physicalAS.to_s + ' pAS, ' if total_physicalAS != 0
             total_offense_string = total_offense_string + total_elementalCS.to_s + ' elemCS, ' if total_elementalCS != 0
@@ -274,7 +273,7 @@ module Lich
             total_offense_string = total_offense_string + total_damagefactor.to_s + '% DF ' if total_damagefactor != 0
             total_offense_string = total_offense_string + total_uaf.to_s + ' UAF, ' if total_uaf != 0
             total_offense_string.chop!.chop!
-      
+
             total_defense_string = total_defense_string + total_boltDS.to_s + ' bDS, ' if total_boltDS != 0
             total_defense_string = total_defense_string + total_physicalDS.to_s + ' pDS, ' if total_physicalDS != 0
             total_defense_string = total_defense_string + total_elementalTD.to_s + ' elemTD, ' if total_elementalTD != 0
@@ -285,16 +284,16 @@ module Lich
             total_defense_string = total_defense_string + total_asg.to_s + ' AsG, ' if total_asg != 0
             total_defense_string = total_defense_string + total_fof_offset.to_s + ' FoF offset, ' if total_fof_offset != 0
             total_defense_string.chop!.chop!
-      
+
             total_stat_string = total_stat_string + total_strength.to_s + ' str, ' if total_strength != 0
             total_stat_string = total_stat_string + total_constitution.to_s + ' con, ' if total_constitution != 0
             total_stat_string = total_stat_string + total_health.to_s + ' health, ' if total_health != 0
             total_stat_string.chop!.chop!
-      
+
             total_skill_string = total_skill_string + total_dodging.to_s + ' dodge, ' if total_dodging != 0
             total_skill_string = total_skill_string + total_combatmaneuvers.to_s + ' CM, ' if total_combatmaneuvers != 0
             total_skill_string.chop!.chop!
-      
+
             output.concat("- Totals:\r\n")
             output.concat("  Offense: #{total_offense_string}\r\n") if total_offense_string.length > 0
             output.concat("  Defense: #{total_defense_string}\r\n") if total_defense_string.length > 0
@@ -309,7 +308,6 @@ module Lich
           do_client("#{string_to_send}")
         end
       end
-
-    end #Magicinfo
-  end #Util
-end #Lich
+    end # Magicinfo
+  end # Util
+end # Lich
