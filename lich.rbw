@@ -1051,7 +1051,7 @@ module Games
             sleep 0.2
           end
 
-          puts 'l' if !@@autostarted
+          puts 'look' if !@@autostarted
         }
 
         @@thread = Thread.new {
