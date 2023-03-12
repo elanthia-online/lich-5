@@ -4096,9 +4096,6 @@ main_thread = Thread.new {
 
   $_CLIENT_.puts "\n--- Lich v#{LICH_VERSION} is active.  Type #{$clean_lich_char}help for usage info.\n\n"
   
-  sleep(0.1) until XMLData.game =~ /^(?:GS|DR)/
-  require_relative("./lib/infomon.rb") if XMLData.game =~ /^GS/
-
   Game.thread.join
   client_thread.kill rescue nil
   detachable_client_thread.kill rescue nil
