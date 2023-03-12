@@ -1042,6 +1042,18 @@ module Games
         end
         @@socket.sync = true
 
+        # Add check to determine if the game server hung at initial response
+        
+        @@wrap_thread = Thread.new {
+          @last_recv = Time.now
+          while !@@autostarted && (Time.now - @last_recv < 6)
+            break if @@autostarted
+            sleep 0.2
+          end
+
+          puts 'look' if !@@autostarted
+        }
+
         @@thread = Thread.new {
           begin
             atmospherics = false
@@ -1201,6 +1213,7 @@ module Games
                     Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                   end
                   begin
+                    pp $_SERVERSTRING_ if $deep_debug
                     REXML::Document.parse_stream($_SERVERSTRING_, XMLData)
                     # XMLData.parse($_SERVERSTRING_)
                   rescue
@@ -3520,7 +3533,8 @@ main_thread = Thread.new {
         exit(1)
       end
     elsif game =~ /AVALON/i
-      launcher_cmd = "open -n -b Avalon \"%1\""
+      # Simu strikes again
+      launcher_cmd = "open -n -b SimutronicsAvalon \"%1\""
     elsif custom_launch
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
@@ -3845,8 +3859,8 @@ main_thread = Thread.new {
         end
         #
         # client wants to send "GOOD", xml server won't recognize it
-        #
-        $_CLIENT_.gets
+        # Avalon requires 2 gets to clear
+        2.times { $_CLIENT_.gets }
       elsif $frontend =~ /^(?:frostbite)$/
         #
         # send the login key
