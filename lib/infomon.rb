@@ -11,6 +11,7 @@
 #        version: 2.0
 #         Source: https://github.com/elanthia-online/scripts
 
+
 require 'English'
 
 module Infomon
@@ -24,7 +25,7 @@ module Infomon
     if XMLData.game =~ /^(?:GSF|GSIV|GSPlat|GST|Test)$/
       _respond 'Moving forward ho!' if $infomon_debug
     else
-      echo "This script is meant for Gemstone Prime, Platinum, or Shattered.  It will likely cause problems on whatever game you're trying to run it on..."
+      respond "This script is meant for Gemstone Prime, Platinum, or Shattered.  It will likely cause problems on whatever game you're trying to run it on..."
       exit # probably should unload rather than exit, or DR will never get a connection
     end
 
@@ -39,9 +40,9 @@ module Infomon
     # sleep 0.5
     respond 'starting sequence' if $infomon_debug
     respond $infomon_values if $infomon_debug
-    echo $infomon_values['active_spells'] if $infomon_debug
-    echo $infomon_values['need_psm_update'] if $infomon_debug
-    echo $infomon_values['Stats'] if $infomon_debug
+    respond $infomon_values['active_spells'] if $infomon_debug
+    respond $infomon_values['need_psm_update'] if $infomon_debug
+    respond $infomon_values['Stats'] if $infomon_debug
 
     respond 'Calling active spells' if $infomon_debug
     $infomon_values['active_spells'] = {} unless $infomon_values['active_spells'].instance_of?(Hash)
@@ -53,7 +54,7 @@ module Infomon
     # Load spell info
     #
     unless Spell.load
-      echo 'error: failed to load spell list'
+      respond 'error: failed to load spell list'
       exit
     end
 
@@ -72,7 +73,7 @@ module Infomon
       $infomon_values['need_psm_update'] = false
     else
       psm_abilities.each do |ability|
-        if !defined?(Kernel.const_get(ability.to_s))
+        if !defined?(eval(ability.to_s))
           pp 'Encountered fatal error'
           exit
         elsif $infomon_values[ability.to_s.downcase].nil?
@@ -81,7 +82,7 @@ module Infomon
         else
           begin
             unless $infomon_values[ability.to_s.downcase].empty?
-              $infomon_values[ability.to_s.downcase].each_pair { |psm, rank| Kernel.const_get(ability.to_s).send("#{psm}=", rank) }
+              $infomon_values[ability.to_s.downcase].each_pair { |psm, rank| eval(ability.to_s).send("#{psm}=", rank) }
             end
           rescue StandardError
             pp 'Bad juju happened here.'
@@ -91,12 +92,12 @@ module Infomon
       end
     end
 
-    silence_me
-    echo 'checking psms...' unless need_psm.empty?
+              
+    respond 'checking psms...' unless need_psm.empty?
     need_psm.each do |get_ability|
       Lich::Statsinfo.request('psms', get_ability)
     end
-    silence_me
+              
 
     respond 'calling Stats, Skills, Spells, Society, Citizenship' if $infomon_debug
     if $infomon_values['Stats'] &&
@@ -113,12 +114,12 @@ module Infomon
         Society.load_serialized = $infomon_values['Society']
         Char.citizenship        = $infomon_values['citizenship']
       rescue StandardError
-        echo $ERROR_INFO
-        echo $ERROR_INFO.backtrace[0..1]
+        respond $ERROR_INFO
+        respond $ERROR_INFO.backtrace[0..1]
         exit
       end
     else
-      silence_me
+                
       hide_lines = done = false
 
       # FIXME: - update to use Lich silent commands
@@ -138,7 +139,7 @@ module Infomon
         end
       }
       DownstreamHook.add('infomon_info', action)
-      echo 'checking stats...'
+      respond 'checking stats...'
       put 'info'
       wait_until { done }
 
@@ -158,7 +159,7 @@ module Infomon
         end
       }
       DownstreamHook.add('infomon_skills', action)
-      echo 'checking skills...'
+      respond 'checking skills...'
       put 'skills'
       wait_until { done }
 
@@ -178,7 +179,7 @@ module Infomon
         end
       }
       DownstreamHook.add('infomon_society', action)
-      echo 'checking society...'
+      respond 'checking society...'
       put 'society'
       wait_until { done }
 
@@ -193,19 +194,19 @@ module Infomon
         end
       }
       DownstreamHook.add('infomon_citizenship', action)
-      echo 'checking citizenship...'
+      respond 'checking citizenship...'
       put 'citizenship'
       wait_until { done }
 
-      silence_me
+                
 
     end
 
     if $infomon_values['active_spells'].empty?
-      echo 'checking active spells...'
+      respond 'checking active spells...'
       $process_legacy_spell_durations = true
     end
-    echo 'done'
+    respond 'Infomon library loading done.'
 
     #
     # Load spell timers
@@ -223,7 +224,7 @@ module Infomon
           spell.active = true
         end
       else
-        echo "spell not loaded: #{spell_num}"
+        respond "spell not loaded: #{spell_num}"
       end
     end
     Spellsong.load_serialized = $infomon_values['Spellsong'] if $infomon_values['Spellsong']
@@ -264,16 +265,16 @@ module Infomon
         Infomon::Monitor.save_proc
       end
     rescue StandardError
-      echo $ERROR_INFO
-      echo $ERROR_INFO.backtrace[0..1]
+      respond $ERROR_INFO
+      respond $ERROR_INFO.backtrace[0..1]
     end
     #
     # Save current status on exit
     #
-    before_dying do
-      Infomon::Monitor.save_proc
-      # UpstreamHook.remove('infomon')
-    end
+    #before_dying do
+    #  Infomon::Monitor.save_proc
+    #  # UpstreamHook.remove('infomon')
+    #end
     #
     # Death
     #
@@ -292,8 +293,8 @@ module Infomon
         Spell[6666].putdown
       end
     rescue StandardError
-      echo $ERROR_INFO
-      echo $ERROR_INFO.backtrace[0..1]
+      respond $ERROR_INFO
+      respond $ERROR_INFO.backtrace[0..1]
       sleep 0.3
     end
     #
@@ -385,11 +386,11 @@ module Infomon
                                    ((v - Time.now) / 60)
                                  end
               elsif $infomon_debug
-                echo "no spell matches #{k}"
+                respond "no spell matches #{k}"
               end
             end
           rescue StandardError
-            echo 'Error in spell durations thread' if $infomon_debug
+            respond 'Error in spell durations thread' if $infomon_debug
           end
           $process_legacy_spell_durations = false
         end
@@ -429,29 +430,29 @@ module Infomon
             $infomon_unhidingcreatures = true
 
           when /^\s#{Char.name} \(at level/o
-            buffer_skills = ''
-            buffer_skills = "#{line}\r\n"
+            _buffer_skills = ''
+            _buffer_skills = "#{line}\r\n"
             until (line = get) =~ /\(Use |[0-9]+ days? remain|You started this migration period|Further information can be found in the FAQs./
-              buffer_skills += "#{line}\r\n"
+              _buffer_skills += "#{line}\r\n"
             end
-            Lich::Statsinfo.request('skills', buffer_skills)
+            Lich::Statsinfo.request('skills', _buffer_skills)
           when /^Name:\s+[-A-z\s']+Race:\s+([-A-z\s]+)\s+Profession:\s+([-A-z\s]+)/
-            buffer_stats = ''
-            buffer_stats += "#{line}\r\n"
+            _buffer_stats = ''
+            _buffer_stats += "#{line}\r\n"
             until (line = get) =~ /Mana/
-              buffer_stats += "#{line}\r\n"
+              _buffer_stats += "#{line}\r\n"
             end
-            buffer_stats += "#{line}\r\n"
-            Lich::Statsinfo.request('info', buffer_stats)
+            _buffer_stats += "#{line}\r\n"
+            Lich::Statsinfo.request('info', _buffer_stats)
           when /^You are now level ([0-9]+)!$/
-            buffer_levelup = ''
-            buffer_levelup += "#{line}\r\n"
+            _buffer_levelup = ''
+            _buffer_levelup += "#{line}\r\n"
             get
             until (line = get) =~ /^Physical|\s+Mental|No statistic/
-              buffer_levelup += "#{line}\r\n"
+              _buffer_levelup += "#{line}\r\n"
             end
-            buffer_levelup += "#{line}\r\n"
-            Lich::Statsinfo.request('levelup', buffer_levelup)
+            _buffer_levelup += "#{line}\r\n"
+            Lich::Statsinfo.request('levelup', _buffer_levelup)
           when /#{Char.name}, your (Combat|Armor|Feat|Shield|Weapon).*? are as follows:/
             type_request = ::Regexp.last_match(1).dup.downcase
             type_request = 'cman' if type_request == 'combat'
@@ -490,7 +491,7 @@ module Infomon
               end
             }
             DownstreamHook.add('infomon_citizenship', action)
-            # echo 'checking citizenship...'
+            # respond 'checking citizenship...'
             save_silent = script.silent
             script.silent = true
             put 'citizenship'
@@ -498,18 +499,19 @@ module Infomon
             wait_until { done }
           end
         rescue ThreadError
-          echo $ERROR_INFO
-          echo $ERROR_INFO.backtrace.first
+          respond $ERROR_INFO
+          respond $ERROR_INFO.backtrace.first
           sleep 1
         rescue StandardError
-          echo $ERROR_INFO
-          echo $ERROR_INFO.backtrace.first
+          respond $ERROR_INFO
+          respond $ERROR_INFO.backtrace.first
           sleep 1
         end
       end
       sleep 0.01
     end
 
-    Monitor.main
+    ExecScript.start("no_kill_all; hide_me; no_pause_all; Infomon::Monitor.main", { quiet: true })
+    #Monitor.main
   end
 end
