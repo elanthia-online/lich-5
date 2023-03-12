@@ -40,15 +40,21 @@ module Infomon
       String  :key, primary_key: true
       Integer :value
     end
+
+    @db[:state]
   end
 
   def self.get(key)
+    result = self.state.first(key: key.to_s)
+    return result[:value] if result
+    return nil
   end
 
   def self.set(key, value)
+    self.state
+      .insert_conflict(:replace)
+      .insert(key: key.to_s, value: value.to_i)
   end
-
-  
   
 =begin
 
