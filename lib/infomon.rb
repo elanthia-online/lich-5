@@ -36,7 +36,7 @@ module Infomon
 
     @save_value = {}
     $infomon_values = DB_Store.read('infomon')
-    pp $infomon_values if $infomon_debug
+    respond $infomon_values if $infomon_debug
     # sleep 0.5
     respond 'starting sequence' if $infomon_debug
     respond $infomon_values if $infomon_debug
@@ -74,7 +74,7 @@ module Infomon
     else
       psm_abilities.each do |ability|
         if !defined?(eval(ability.to_s))
-          pp 'Encountered fatal error'
+          respond 'Encountered fatal error'
           exit
         elsif $infomon_values[ability.to_s.downcase].nil?
           $infomon_values[ability.to_s.downcase] = {}
@@ -85,7 +85,7 @@ module Infomon
               $infomon_values[ability.to_s.downcase].each_pair { |psm, rank| eval(ability.to_s).send("#{psm}=", rank) }
             end
           rescue StandardError
-            pp 'Bad juju happened here.'
+            respond 'Bad juju happened here.'
             nil
           end
         end
