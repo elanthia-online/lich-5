@@ -511,7 +511,7 @@ module Infomon
       sleep 0.01
     end
 
-    ExecScript.start("no_kill_all; hide_me; no_pause_all; Infomon::Monitor.main", { quiet: true })
-    #Monitor.main
+    # ExecScript.start("no_kill_all; hide_me; no_pause_all; Infomon::Monitor.main", { quiet: true })
+    Monitor.main
   end
 end
