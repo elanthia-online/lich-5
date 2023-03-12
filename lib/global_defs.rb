@@ -2171,6 +2171,11 @@ def do_client(client_string)
     elsif cmd =~ /^(?:lich5-update|l5u)/i
       require 'lib/update.rb'
       Lich::Util::Update.request("--help")
+    elsif cmd =~ /^banks$/ && XMLData.game =~ /^GS/
+      Game._puts "<c>bank account"
+      $_CLIENTBUFFER_.push "<c>bank account"
+    elsif cmd =~ /^magic$/ && XMLData.game =~ /^GS/
+      Effects.display
     elsif cmd =~ /^help$/i
       respond
       respond "Lich v#{LICH_VERSION}"
