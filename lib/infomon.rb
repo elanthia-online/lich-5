@@ -37,8 +37,7 @@ module Infomon
 
   def self.setup!
     @db.create_table?(:state) do
-      primary_key :key
-      String  :key
+      String  :key, primary_key: true
       Integer :value
     end
   end
