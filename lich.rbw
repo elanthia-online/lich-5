@@ -46,6 +46,7 @@ require 'drb'
 require 'resolv'
 require 'digest/md5'
 require 'json'
+require 'terminal-table'
 
 # TODO: Move all local requires to top of file
 require_relative('./lib/constants')
