@@ -2339,6 +2339,42 @@ module Games
       Buffs     = Registry.new("Buffs")
       Debuffs   = Registry.new("Debuffs")
       Cooldowns = Registry.new("Cooldowns")
+
+      def self.display
+        effect_out = Terminal::Table.new :headings => ["ID", "Type", "Name", "Duration"]
+        titles = ["Spells", "Cooldowns", "Buffs", "Debuffs"]
+        circle = nil
+        [Effects::Spells, Effects::Cooldowns, Effects::Buffs, Effects::Debuffs].each { |effect|
+          title = titles.shift
+          id_effects = effect.to_h.select { |k,v| k.is_a?(Integer) }
+          text_effects = effect.to_h.reject { |k,v| k.is_a?(Integer) }
+          if id_effects.length != text_effects.length
+            # has spell names disabled
+            text_effects = id_effects
+          end
+          if id_effects.length == 0
+            effect_out.add_row ["", title, "No #{title.downcase} found!", ""]
+          else
+            id_effects.each { |sn, end_time|
+              stext = text_effects.shift[0]
+              duration = ((end_time - Time.now) / 60.to_f)
+              if duration < 0
+                next
+              elsif duration > 86400
+                duration = "Indefinite"
+              else
+                duration = duration.as_time
+              end
+              if Spell[sn].circlename && circle != Spell[sn].circlename && title == 'Spells'
+                circle = Spell[sn].circlename
+              end
+              effect_out.add_row [sn, title, stext, duration]
+            }
+          end
+          effect_out.add_separator unless title == 'Debuffs'
+        }
+        _respond "<output class=\"mono\"/>\n" + effect_out.to_s + "\n<output class=\"\"/>"
+      end
     end
 
     class Wounds
@@ -4058,6 +4094,9 @@ main_thread = Thread.new {
   client_thread.priority = 3
 
   $_CLIENT_.puts "\n--- Lich v#{LICH_VERSION} is active.  Type #{$clean_lich_char}help for usage info.\n\n"
+  
+  sleep(0.1) until XMLData.game =~ /^(?:GS|DR)/
+  require_relative("./lib/infomon.rb") if XMLData.game =~ /^GS/
 
   Game.thread.join
   client_thread.kill rescue nil
@@ -4068,7 +4107,7 @@ main_thread = Thread.new {
   Script.hidden.each { |script| script.kill }
   200.times { sleep 0.1; break if Script.running.empty? and Script.hidden.empty? }
   Lich.log 'info: saving script settings...'
-  Infomon::Monitor.save_proc
+  Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
   Settings.save
   Vars.save
   Lich.log 'info: closing connections...'
