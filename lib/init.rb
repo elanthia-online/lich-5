@@ -1,6 +1,5 @@
 # Lich5 carveout for init_db
 
-
 #
 # Report an error if Lich 4.4 data is found
 #
@@ -64,9 +63,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
     end
   end
 elsif defined?(Wine)
-  paths = ['HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\STORM32\\Directory',
-           'HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\WIZ32\\Directory']
-## Needs improvement - iteration and such.  Quick slam test.
+  ## Needs improvement - iteration and such.  Quick slam test.
   $sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\STORM32\\Directory') || ''
   $wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
   $sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory')
@@ -150,6 +147,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       extern 'int GetLastError()'
       extern 'int CreateProcess(void*, void*, void*, void*, int, int, void*, void*, void*, void*)'
     end
+
     def Win32.GetLastError
       return Kernel32.GetLastError()
     end
@@ -223,6 +221,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       dlload 'user32'
       extern 'int MessageBox(int, char*, char*, int)'
     end
+
     def Win32.MessageBox(args)
       args[:lpCaption] ||= "Lich v#{LICH_VERSION}"
       return User32.MessageBox(args[:hWnd].to_i, args[:lpText], args[:lpCaption], args[:uType].to_i)
@@ -239,6 +238,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       extern 'int RegDeleteValue(int, char*)'
       extern 'int RegCloseKey(int)'
     end
+
     def Win32.GetTokenInformation(args)
       if args[:TokenInformationClass] == TokenElevation
         token_information_length = SIZEOF_LONG
@@ -341,6 +341,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       extern 'int ShellExecuteEx(void*)'
       extern 'int ShellExecute(int, char*, char*, char*, char*, int)'
     end
+
     def Win32.ShellExecuteEx(args)
       #         struct = [ (SIZEOF_LONG * 15), 0, 0, 0, 0, 0, 0, SW_SHOWNORMAL, 0, 0, 0, 0, 0, 0, 0 ]
       struct = [(SIZEOF_LONG * 15), 0, 0, 0, 0, 0, 0, SW_SHOW, 0, 0, 0, 0, 0, 0, 0]
@@ -374,6 +375,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       module Kernel32
         extern 'int EnumProcesses(void*, int, void*)'
       end
+
       def Win32.EnumProcesses(args = {})
         args[:cb] ||= 400
         pProcessIds = Array.new((args[:cb] / SIZEOF_LONG), 0).pack(''.rjust((args[:cb] / SIZEOF_LONG), 'L'))
@@ -388,6 +390,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
         dlload 'psapi'
         extern 'int EnumProcesses(void*, int, void*)'
       end
+
       def Win32.EnumProcesses(args = {})
         args[:cb] ||= 400
         pProcessIds = Array.new((args[:cb] / SIZEOF_LONG), 0).pack(''.rjust((args[:cb] / SIZEOF_LONG), 'L'))
@@ -432,7 +435,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
 end
 
 if ARGV[0] == 'shellexecute'
-  args = Marshal.load(ARGV[1].unpack('m')[0])
+  args = Marshal.load(Marshal.dump(ARGV[1].unpack('m')[0]))
   Win32.ShellExecute(:lpOperation => args[:op], :lpFile => args[:file], :lpDirectory => args[:dir], :lpParameters => args[:params])
   exit
 end
@@ -450,17 +453,16 @@ rescue LoadError
         ruby_bin_dir = File.dirname(r[:lpFilename])
         if File.exist?("#{ruby_bin_dir}\\gem.bat")
           verb = (Win32.isXP? ? 'open' : 'runas')
-          # fixme: using --source http://rubygems.org to avoid https because it has been failing to validate the certificate on Windows
-          r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --source http://rubygems.org --no-ri --no-rdoc --version 1.3.13')
+          r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --no-ri --no-rdoc')
           if r[:return] > 0
             pid = r[:hProcess]
             sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
             r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
           else
             # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
-            r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --source http://rubygems.org --no-ri --no-rdoc --version 1.3.13')
+            r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --no-ri --no-rdoc')
             if r <= 32
-              Win32.MessageBox(:lpText => "error: failed to start the sqlite3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\#{gem_file}\", :lpParameters => \"install sqlite3 --source http://rubygems.org --no-ri --no-rdoc --version 1.3.13'\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
+              Win32.MessageBox(:lpText => "error: failed to start the sqlite3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\#{gem_file}\", :lpParameters => \"install sqlite3 --no-ri --no-rdoc'\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
               exit
             end
             r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
@@ -490,14 +492,15 @@ rescue LoadError
   exit
 end
 
-if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)) or ENV['DISPLAY']
+if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i) or ENV['DISPLAY']) and !ARGV.include?('--no-gui')
+
   begin
     require 'gtk3'
     HAVE_GTK = true
   rescue LoadError
-    if (ENV['RUN_BY_CRON'].nil? or ENV['RUN_BY_CRON'] == 'false') and ARGV.empty? or ARGV.any? { |arg| arg =~ /^--gui$/ } or not $stdout.isatty
+    if (ENV['RUN_BY_CRON'].nil? or ENV['RUN_BY_CRON'] == 'false') and ARGV.empty? or ARGV.any? { |any_arg| any_arg =~ /^--gui$/ } or not $stdout.isatty
       if defined?(Win32)
-        r = Win32.MessageBox(:lpText => "Lich uses gtk3 to create windows, but it is not installed.  You can use Lich from the command line (ruby lich.rbw --help) or you can install gtk2 for a point and click interface.\n\nWould you like to install gtk2 now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
+        r = Win32.MessageBox(:lpText => "Lich uses gtk3 to create windows, but it is not installed.  You can use Lich from the command line (ruby lich.rbw --help) or you can install gtk3 for a point and click interface.\n\nWould you like to install gtk3 now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
         if r == Win32::IDIYES
           r = Win32.GetModuleFileName
           if r[:return] > 0
@@ -511,16 +514,16 @@ if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)) or ENV['DI
             end
             if gem_file
               verb = (Win32.isXP? ? 'open' : 'runas')
-              r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install cairo:1.14.3 gtk2:2.2.5 --source http://rubygems.org --no-ri --no-rdoc')
+              r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install gtk3 --no-ri --no-rdoc')
               if r[:return] > 0
                 pid = r[:hProcess]
                 sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
                 r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
               else
                 # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
-                r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install cairo:1.14.3 gtk2:2.2.5 --source http://rubygems.org --no-ri --no-rdoc')
+                r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install gtk3 --no-ri --no-rdoc')
                 if r <= 32
-                  Win32.MessageBox(:lpText => "error: failed to start the gtk3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\gem.bat\", :lpParameters => \"install cairo:1.14.3 gtk2:2.2.5 --source http://rubygems.org --no-ri --no-rdoc\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
+                  Win32.MessageBox(:lpText => "error: failed to start the gtk3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\gem.bat\", :lpParameters => \"install gtk3 --no-ri --no-rdoc\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
                   exit
                 end
                 r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
