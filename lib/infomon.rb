@@ -13,10 +13,45 @@
 
 
 require 'English'
+require 'sequel'
+require 'tmpdir'
 
 module Infomon
   $infomon_debug = false
-  setpriority(1)
+  # use temp dir in ci context
+  @root = defined?(DATA_DIR) ? DATA_DIR : Dir.tmpdir
+  @file = File.join(@root, "infomon.db")
+  @db   = Sequel.sqlite(@file)
+  
+  def self.file
+    @file
+  end
+
+  def self.db
+    @db
+  end
+
+  def self.state
+    @_table ||= self.setup!
+  end
+
+  def self.setup!
+    @db.create_table?(:state) do
+      primary_key :key
+      String  :key
+      Integer :value
+    end
+  end
+
+  def self.get(key)
+  end
+
+  def self.set(key, value)
+  end
+
+  
+  
+=begin
 
   class Monitor
     require "#{LIB_DIR}/stats-info.rb"
@@ -514,4 +549,5 @@ module Infomon
     # ExecScript.start("no_kill_all; hide_me; no_pause_all; Infomon::Monitor.main", { quiet: true })
     Monitor.main
   end
+=end
 end
