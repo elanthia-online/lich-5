@@ -54,6 +54,7 @@ module Infomon
   end
 
   def self.set(key, value)
+    raise "Infomon.set(%s, %s) was called with a value that was not Integer|String|NilClass" % [key, value] unless [Integer, String, NilClass].include?(value.class)
     puts "infomon :set %s -> %s(%s)" % [key, value.class.name, value] if $infomon_debug
     self.state
       .insert_conflict(:replace)
