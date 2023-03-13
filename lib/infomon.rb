@@ -45,31 +45,44 @@ module Infomon
   end
 
   def self.get(key)
-    result = self.state.first(key: key.to_s)
+    result = self.state.first(key: key.to_s.downcase)
     return nil unless result
     val = result[:value]
     return nil if val.nil?
-    return val.to_i if val.to_s =~ /^\d+$/
+    return val.to_i if val.to_s =~ /^\d+$/ || val =~ /^-\d+$/
     return val.to_s if val
   end
 
   def self.set(key, value)
+    key = key.to_s.downcase
     raise "Infomon.set(%s, %s) was called with a value that was not Integer|String|NilClass" % [key, value] unless [Integer, String, NilClass].include?(value.class)
     puts "infomon :set %s -> %s(%s)" % [key, value.class.name, value] if $infomon_debug
     self.state
       .insert_conflict(:replace)
-      .insert(key: key.to_s, value: value)
+      .insert(key: key, value: value)
   end
 
   # this module handles all of the logic for parsing game lines that infomon depends on
   module Parser
+    module Pattern
+      Stat = %r[\s+(?<stat>\w+)\s\(\w{3}\):\s+(?<value>\d+)\s\((?<bonus>[\w-]+)\)\s+\.\.\.\s+(?<enhanced_value>\d+)\s\((?<enhanced_bonus>\w+)\)]
+      Citizenship = /^You currently have .*? citizenship in (?<town>.*)\.$/
+      NoCitizenship = /You don't seem to have citizenship\./
+    end
+
     def self.parse(line)
       begin
         case line
-        when /^You currently have .*? citizenship in (.*)\.$/
-          Infomon.set("citizenship", $1)
-        when /You don't seem to have citizenship\./
+        when Pattern::Citizenship
+          Infomon.set("citizenship", Regexp.last_match[:town])
+        when Pattern::NoCitizenship
           Infomon.set("citizenship", nil)
+        when Pattern::Stat
+          match = Regexp.last_match
+          Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
+          Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
+          Infomon.set("stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i)
+          Infomon.set("stat.%s.enhanced_bonus" % match[:stat], match[:enhanced_bonus].to_i)
         end
       rescue => exception
         puts exception

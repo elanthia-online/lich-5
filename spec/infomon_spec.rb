@@ -33,5 +33,26 @@ describe Infomon::Parser, ".parse" do
       Infomon::Parser.parse %[You don't seem to have citizenship.]
       expect(Infomon.get("citizenship")).to eq(nil)
     end
+
+    it "handles stats" do
+      stats = <<~Stats
+            Strength (STR):   110 (30)    ...  110 (30)
+      Constitution (CON):   104 (22)    ...  104 (22)
+        Dexterity (DEX):   100 (35)    ...  100 (35)
+          Agility (AGI):   100 (30)    ...  100 (30)
+        Discipline (DIS):   110 (20)    ...  110 (20)
+              Aura (AUR):   100 (-35)    ...  100 (35)
+            Logic (LOG):   108 (29)    ...  118 (34)
+        Intuition (INT):    99 (29)    ...   99 (29)
+            Wisdom (WIS):    84 (22)    ...   84 (22)
+        Influence (INF):   100 (20)    ...  108 (24)
+      Stats
+      stats.split("\n").each {|line| Infomon::Parser.parse(line)}
+
+      expect(Infomon.get("stat.aura")).to eq(100)
+      expect(Infomon.get("stat.aura.bonus")).to eq(-35)
+      expect(Infomon.get("stat.logic.enhanced")).to eq(118)
+      expect(Infomon.get("stat.logic.enhanced_bonus")).to eq(34)
+    end
   end
 end
