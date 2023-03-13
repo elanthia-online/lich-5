@@ -17,7 +17,7 @@ require 'sequel'
 require 'tmpdir'
 
 module Infomon
-  $infomon_debug = false
+  $infomon_debug = ENV["DEBUG"]
   # use temp dir in ci context
   @root = defined?(DATA_DIR) ? DATA_DIR : Dir.tmpdir
   @file = File.join(@root, "infomon.db")
@@ -37,8 +37,8 @@ module Infomon
 
   def self.setup!
     @db.create_table?(:state) do
-      String  :key, primary_key: true
-      Integer :value
+      string  :key, primary_key: true
+      blob :value
     end
 
     @db[:state]
@@ -51,9 +51,26 @@ module Infomon
   end
 
   def self.set(key, value)
+    puts "infomon :set %s -> %s(%s)" % [key, value.class.name, value] if $infomon_debug
     self.state
       .insert_conflict(:replace)
-      .insert(key: key.to_s, value: value.to_i)
+      .insert(key: key.to_s, value: value)
+  end
+
+  # this module handles all of the logic for parsing game lines that infomon depends on
+  module Parser
+    def self.parse(line)
+      begin
+        case line
+        when /^You currently have .*? citizenship in (.*)\.$/
+          Infomon.set("citizenship", $1)
+        when /You don't seem to have citizenship\./
+          Infomon.set("citizenship", nil)
+        end
+      rescue => exception
+        puts exception
+      end
+    end
   end
   
 =begin
