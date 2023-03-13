@@ -46,8 +46,11 @@ module Infomon
 
   def self.get(key)
     result = self.state.first(key: key.to_s)
-    return result[:value] if result
-    return nil
+    return nil unless result
+    val = result[:value]
+    return nil if val.nil?
+    return val.to_i if val.to_s =~ /^\d+$/
+    return val.to_s if val
   end
 
   def self.set(key, value)

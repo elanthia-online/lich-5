@@ -13,10 +13,10 @@ describe Infomon, ".setup!" do
       k = "stats.influence"
       # handles when value doesn't exist
       Infomon.set(k, 30)
-      expect(Infomon.get(k).to_i).to eq(30)
+      expect(Infomon.get(k)).to eq(30)
       Infomon.set(k, 40)
       # handles upsert on already existing values
-      expect(Infomon.get(k).to_i).to eq(40)
+      expect(Infomon.get(k)).to eq(40)
     end
   end
 end
