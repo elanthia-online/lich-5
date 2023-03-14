@@ -8,3 +8,5 @@ group :development do
 end
 
 gem "sequel", "~> 5.66"
+
+gem "sqlite3", "~> 1.6"
