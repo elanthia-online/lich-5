@@ -49,7 +49,7 @@ describe Infomon::Parser, ".parse" do
 
   context "stats" do
     it "handles stats" do
-      stats = <<~Stats
+      stats = <<-Stats
             Strength (STR):   110 (30)    ...  110 (30)
       Constitution (CON):   104 (22)    ...  104 (22)
         Dexterity (DEX):   100 (35)    ...  100 (35)
@@ -70,7 +70,7 @@ describe Infomon::Parser, ".parse" do
     end
 
     it "handles levelup" do
-      levelup = <<~Levelup
+      levelup = <<-Levelup
             Strength (STR) :  65   +1  ...      7    +1
         Constitution (CON) :  78   +1  ...      9
           Dexterity (DEX) :  37   +1  ...      4
@@ -80,7 +80,7 @@ describe Infomon::Parser, ".parse" do
               Wisdom (WIS) :  66   +1  ...     13
       Levelup
       levelup.split("\n").each {|line| 
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line.inspect)
       }
       
       expect(Infomon.get("stat.dexterity")).to eq(37)
@@ -91,7 +91,7 @@ describe Infomon::Parser, ".parse" do
 
   context "psm" do
     it "handles shield info" do
-      output = <<~Shield
+      output = <<-Shield
           Deflect the Elements deflectelements 1/3   Passive                                        
           Shield Bash          bash            4/5   Setup                                          
           Shield Forward       forward         3/3   Passive                                        
@@ -106,7 +106,7 @@ describe Infomon::Parser, ".parse" do
     end
 
     it "handles cman info" do
-      output = <<~Cman
+      output = <<-Cman
           Cheapshots           cheapshots      6/6   Setup          Rogue Guild                     
           Combat Mobility      mobility        1/1   Passive                                        
           Combat Toughness     toughness       3/3   Passive                                        
@@ -139,7 +139,7 @@ describe Infomon::Parser, ".parse" do
     end
 
     it "handles armor info" do
-      output = <<~Armor
+      output = <<-Armor
         Armor Blessing       blessing        1/5   Buff                                           
         Armor Reinforcement  reinforcement   2/5   Buff                                           
         Armor Spike Mastery  spikemastery    2/2   Passive                                        
@@ -159,7 +159,7 @@ describe Infomon::Parser, ".parse" do
     end
 
     it "handles weapon info" do
-      output = <<~Weapon
+      output = <<-Weapon
         Cripple              cripple         5/5   Setup          Edged Weapons                   
         Flurry               flurry          5/5   Assault        Edged Weapons                   
         Riposte              riposte         5/5   Reaction       Edged Weapons                   
@@ -172,7 +172,7 @@ describe Infomon::Parser, ".parse" do
     end
 
     it "handles feat info" do
-      output = <<~Feat
+      output = <<-Feat
         Light Armor Proficie lightarmor      1/1   Passive                                        
         Martial Mastery      martialmastery  1/1   Passive                                        
         Scale Armor Proficie scalearmor      1/1   Passive                                        
