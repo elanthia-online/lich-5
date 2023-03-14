@@ -118,7 +118,7 @@ describe Infomon::Parser, ".parse" do
           Footstomp            footstomp       6/6   Setup          Rogue Guild
           Hamstring            hamstring       3/5   Setup
           Kneebash             kneebash        6/6   Setup          Rogue Guild
-          Mug                  mug             1/5   Attac
+          Mug                  mug             1/5   Attack
           Nosetweak            nosetweak       6/6   Setup          Rogue Guild
           Predator's Eye       predator        3/3   Martial Stance
           Spike Focus          spikefocus      2/2   Passive
@@ -176,7 +176,7 @@ describe Infomon::Parser, ".parse" do
         Martial Mastery      martialmastery  1/1   Passive
         Scale Armor Proficie scalearmor      1/1   Passive
         Shadow Dance         shadowdance     1/1   Buff
-        Silent Strike        silentstrike    5/5   Attac
+        Silent Strike        silentstrike    5/5   Attack
         Vanish               vanish          1/1   Buff
       Feat
 
