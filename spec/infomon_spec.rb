@@ -205,7 +205,7 @@ describe Infomon::Parser, ".parse" do
     end
 
     it "handles spell spell ranks" do
-      spell_ranks = <<-Spellranks
+      spell_rank = <<-Spellranks
         Your spell lists:
         Minor Elemental...81
         Major Elemental...121
