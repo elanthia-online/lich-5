@@ -1,4 +1,11 @@
-require "infomon"
+require "infomon/infomon"
+
+module Char
+  def self.name
+    "testing"
+  end
+end
+
 
 describe Infomon, ".setup!" do
   context "can set itself up" do
@@ -53,6 +60,86 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get("stat.aura.bonus")).to eq(-35)
       expect(Infomon.get("stat.logic.enhanced")).to eq(118)
       expect(Infomon.get("stat.logic.enhanced_bonus")).to eq(34)
+    end
+  end
+
+  context "psm" do
+    it "handles shield info" do
+      output = <<~Shield
+          Deflect the Elements deflectelements 1/3   Passive                                        
+          Shield Bash          bash            4/5   Setup                                          
+          Shield Forward       forward         3/3   Passive                                        
+          Shield Spike Mastery spikemastery    2/2   Passive                                        
+          Shield Swiftness     swiftness       3/3   Passive                                        
+          Shield Throw         throw           5/5   Area of Effect                                 
+          Small Shield Focus   sfocus          5/5   Passive      
+      Shield
+      output.split("\n").map {|line| Infomon::Parser.parse(line)}.all?(:ok) or fail "something didn't get parsed"
+    end
+
+    it "handles cman info" do
+      output = <<~Cman
+          Cheapshots           cheapshots      6/6   Setup          Rogue Guild                     
+          Combat Mobility      mobility        1/1   Passive                                        
+          Combat Toughness     toughness       3/3   Passive                                        
+          Cutthroat            cutthroat       3/5   Setup                                          
+          Divert               divert          6/6   Setup          Rogue Guild                     
+          Duck and Weave       duckandweave    3/3   Martial Stance                                 
+          Evade Specialization evadespec       3/3   Passive                                        
+          Eviscerate           eviscerate      4/5   Area of Effect                                 
+          Eyepoke              eyepoke         6/6   Setup          Rogue Guild                     
+          Footstomp            footstomp       6/6   Setup          Rogue Guild                     
+          Hamstring            hamstring       3/5   Setup                                          
+          Kneebash             kneebash        6/6   Setup          Rogue Guild                     
+          Mug                  mug             1/5   Attack                                         
+          Nosetweak            nosetweak       6/6   Setup          Rogue Guild                     
+          Predator's Eye       predator        3/3   Martial Stance                                 
+          Spike Focus          spikefocus      2/2   Passive                                        
+          Stun Maneuvers       stunman         6/6   Buff           Rogue Guild                     
+          Subdue               subdue          6/6   Setup          Rogue Guild                     
+          Sweep                sweep           6/6   Setup          Rogue Guild                     
+          Swiftkick            swiftkick       6/6   Setup          Rogue Guild                     
+          Templeshot           templeshot      6/6   Setup          Rogue Guild                     
+          Throatchop           throatchop      6/6   Setup          Rogue Guild                     
+          Weapon Specializatio wspec           5/5   Passive                                        
+          Whirling Dervish     dervish         3/3   Martial Stance                              
+      Cman
+
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line)
+      }.all?(:ok) or fail "something didn't get parsed"
+    end
+
+    it "handles armor info" do
+      output = <<~Armor
+        Armored Evasion      evasion         5/5   Buff             
+      Armor
+
+      output.split("\n").map {|line| Infomon::Parser.parse(line)}.all?(:ok) or fail "something didn't get parsed"
+    end
+
+    it "handles weapon info" do
+      output = <<~Weapon
+        Cripple              cripple         5/5   Setup          Edged Weapons                   
+        Flurry               flurry          5/5   Assault        Edged Weapons                   
+        Riposte              riposte         5/5   Reaction       Edged Weapons                   
+        Whirling Blade       wblade          5/5   Area of Effect Edged Weapons              
+      Weapon
+
+      output.split("\n").map {|line| Infomon::Parser.parse(line)}.all?(:ok) or fail "something didn't get parsed"
+    end
+
+    it "handles feat info" do
+      output = <<~Feat
+        Light Armor Proficie lightarmor      1/1   Passive                                        
+        Martial Mastery      martialmastery  1/1   Passive                                        
+        Scale Armor Proficie scalearmor      1/1   Passive                                        
+        Shadow Dance         shadowdance     1/1   Buff                                           
+        Silent Strike        silentstrike    5/5   Attack                                         
+        Vanish               vanish          1/1   Buff                                           
+      Feat
+
+      output.split("\n").map {|line| Infomon::Parser.parse(line)}.all?(:ok) or fail "something didn't get parsed"
     end
   end
 end
