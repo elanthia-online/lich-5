@@ -213,7 +213,7 @@ describe Infomon::Parser, ".parse" do
 
   context "character information" do
     it "handles character race and profession" do
-      char_info = <<-CharInfo
+      char_info = <<~CharInfo
         Name: Bogint Race: Half-Krolvin  Profession: Monk (not shown)
       CharInfo
       char_info.split("\n").each {|line| 
@@ -222,7 +222,7 @@ describe Infomon::Parser, ".parse" do
     end
 
     it "handles character gender age experience" do
-      char_info = <<-CharInfo
+      char_info = <<~CharInfo
         Gender: Male    Age: 0    Expr: 470,000    Level:  20
       CharInfo
       char_info.split("\n").each {|line| 
