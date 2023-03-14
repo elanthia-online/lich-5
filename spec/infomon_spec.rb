@@ -228,5 +228,6 @@ describe Infomon::Parser, ".parse" do
       char_info.split("\n").each {|line| 
         Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line.inspect)
       }
+    end
   end
 end
