@@ -2,11 +2,11 @@ require "ostruct"
 
 class Stats
   def self.race
-    Infomon.get("race")
+    Infomon.get("stat.race")
   end
 
   def self.profession
-    Infomon.get("profession")
+    Infomon.get("stat.profession")
   end
 
   def self.prof
@@ -14,15 +14,15 @@ class Stats
   end
 
   def self.gender
-    Infomon.get("gender")
+    Infomon.get("stat.gender")
   end
 
   def self.age
-    Infomon.get("age")
+    Infomon.get("stat.age")
   end
 
   def self.level
-    Infomon.get("level")
+    Infomon.get("stat.level")
   end
   @@stats = %i(strength constitution dexterity agility discipline aura logic intuition wisdom influence)
   @@stats.each do |stat|
@@ -64,11 +64,14 @@ class Stats
   end
 
   def self.serialize
-    [@@race, @@prof, @@gender, @@age, Stats.exp, 
-     @@level, @@str, @@con, @@dex, @@agi, @@dis, 
-     @@aur, @@log, @@int, @@wis, @@inf, @@enhanced_str, 
-     @@enhanced_con, @@enhanced_dex, @@enhanced_agi, 
-     @@enhanced_dis, @@enhanced_aur, @@enhanced_log, 
-     @@enhanced_int, @@enhanced_wis, @@enhanced_inf]
+    [self.race, self.prof, self.gender, 
+     self.age, self.exp, self.level, 
+     self.str, self.con, self.dex, 
+     self.agi, self.dis,  self.aur, 
+     self.log, self.int, self.wis, self.inf, 
+     self.enhanced_str, self.enhanced_con, self.enhanced_dex, 
+     self.enhanced_agi, self.enhanced_dis, self.enhanced_aur, 
+     self.enhanced_log, self.enhanced_int, self.enhanced_wis, 
+     self.enhanced_inf]
   end
 end
