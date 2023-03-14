@@ -52,12 +52,12 @@ module Infomon
           # todo: is there a need for ranks?
           # todo: change Elemental Lore - Air to elair (and others)?
           match = Regexp.last_match
-          Infomon.set("skill.%s", % match[:name], match[:bonus].to_i)
+          Infomon.set("skill.%s" % match[:name], match[:bonus].to_i)
           :ok
         when Pattern::Spell
           # todo: capture SK item spells here?
           match = Regexp.last_match
-          Infomon.set("spell.%s", % match[:name], match[:rank].to_i)
+          Infomon.set("spell.%s" % match[:name], match[:rank].to_i)
           :ok
         else
           :noop
