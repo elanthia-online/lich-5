@@ -8,6 +8,9 @@ module Infomon
       Society = /^\s+You are a (?:Master|member) (?:in|of) the (?<society>Order of Voln|Council of Light|Guardians of Sunfist)( at rank (?<rank>[0-9]+)| at step (?<rank>[0-9]+))?\.$/
       NoSociety = %r[^\s+You are not a member of any society at this time.]
       PSM = %r[^\s+(?<name>[\w\s\-']+)\s+(?<command>[a-z]+)\s+(?<ranks>\d)\/(?<max>\d)\s+]
+      Skill = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)]
+      Spell = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+)$|^(?<name>[\w\s\-']+)\.+(?<rank>\d+)$]
+      Levelup = %r[^\s+(?<stat>\w+)\s+\(\w{3}\)\s+:\s+(?<value>\d+)\s+(?:\+1)\s+\.\.\.\s+(?<bonus>\d+)\s+(?:\+1)?$]
     end
 
     def self.parse(line)
@@ -26,6 +29,11 @@ module Infomon
           Infomon.set("stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i)
           Infomon.set("stat.%s.enhanced_bonus" % match[:stat], match[:enhanced_bonus].to_i)
           :ok
+        when Pattern::Levelup
+          match = Regexp.last_match
+          Infomon.set ("stat.%s" % match[:stat], match[:value].to_i)
+          Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
+          :ok
         when Pattern::Society
           match = Regexp.last_match
           Infomon.set("society.status", match[:society])
@@ -39,6 +47,17 @@ module Infomon
         when Pattern::PSM
           match = Regexp.last_match
           Infomon.set("psm.%s" % match[:command], match[:ranks].to_i)
+          :ok
+        when Pattern::Skill
+          # todo: is there a need for ranks?
+          # todo: change Elemental Lore - Air to elair (and others)?
+          match = Regexp.last_match
+          Infomon.set("skill.%s", % match[:name], match[:bonus].to_i)
+          :ok
+        when Pattern::Spell
+          # todo: capture SK item spells here?
+          match = Regexp.last_match
+          Infomon.set("spell.%s", % match[:name], match[:rank].to_i)
           :ok
         else
           :noop
