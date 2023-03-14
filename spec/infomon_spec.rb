@@ -186,4 +186,47 @@ describe Infomon::Parser, ".parse" do
       }
     end
   end
+
+  context "spells" do
+    it "handles skill spell ranks" do
+      spell_rank = <<-Spellranks
+        Spell Lists
+        Major Elemental....................|             121
+      
+        Spell Lists
+          Minor Elemental....................|              81
+        
+        Spell Lists
+          Wizard.............................|             101
+      Spellranks
+      spell_rank.split("\n").each {|line| 
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line.inspect)
+      }
+    end
+
+    it "handles spell spell ranks" do
+      spell_ranks = <<-Spellranks
+        Your spell lists:
+        Minor Elemental...81
+        Major Elemental...121
+        Wizard Base.......101
+        You also know the spells:  211, 215, 604, 1018, 1119
+      Spellranks
+      spell_rank.split("\n").each {|line| 
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line.inspect)
+      }
+    end
+  end
+
+  context "character information" do
+    it "handles character race and profession" do
+      char_info = <<-CharInfo
+        Name: Bogint Race: Half-Krolvin  Profession: Monk (not shown)
+        Gender: Male    Age: 0    Expr: 470,000    Level:  20
+      CharInfo
+      char_info.split("\n").each {|line| 
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line.inspect)
+      }
+    end
+  end
 end
