@@ -40,7 +40,9 @@ describe Infomon::Parser, ".parse" do
       Infomon::Parser.parse %[You don't seem to have citizenship.]
       expect(Infomon.get("citizenship")).to eq(nil)
     end
+  end
 
+  context "stats" do
     it "handles stats" do
       stats = <<~Stats
             Strength (STR):   110 (30)    ...  110 (30)
@@ -60,6 +62,23 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get("stat.aura.bonus")).to eq(-35)
       expect(Infomon.get("stat.logic.enhanced")).to eq(118)
       expect(Infomon.get("stat.logic.enhanced_bonus")).to eq(34)
+    end
+
+    it "handles levelup" do
+      levelup = <<~Levelup
+            Strength (STR) :  65   +1  ...      7    +1
+        Constitution (CON) :  78   +1  ...      9
+          Dexterity (DEX) :  37   +1  ...      4
+            Agility (AGI) :  66   +1  ...     13
+          Discipline (DIS) :  78   +1  ...      4
+          Intuition (INT) :  66   +1  ...     13
+              Wisdom (WIS) :  66   +1  ...     13
+      Levelup
+      levelup.split("\n").each {|line| Infomon:Parser.parse(line)}
+      
+      expect(Infomon.get("stat.dexterity")).to eq(37)
+      expect(Infomon.get("stat.dexterity.bonus")).to eq(4)
+      expect(Infomon.get("stat.strength.bonus")).to eq(7)
     end
   end
 
@@ -112,7 +131,17 @@ describe Infomon::Parser, ".parse" do
 
     it "handles armor info" do
       output = <<~Armor
-        Armored Evasion      evasion         5/5   Buff             
+        Armor Blessing       blessing        1/5   Buff                                           
+        Armor Reinforcement  reinforcement   2/5   Buff                                           
+        Armor Spike Mastery  spikemastery    2/2   Passive                                        
+        Armor Support        support         3/5   Buff                                           
+        Armored Casting      casting         4/5   Buff                                           
+        Armored Evasion      evasion         5/5   Buff                                           
+        Armored Fluidity     fluidity        4/5   Buff                                           
+        Armored Stealth      stealth         3/5   Buff                                           
+        Crush Protection     crush           2/5   Passive                                        
+        Puncture Protection  puncture        1/5   Passive                                        
+        Slash Protection     slash           0/5   Passive                                        
       Armor
 
       output.split("\n").map {|line| Infomon::Parser.parse(line)}.all?(:ok) or fail "something didn't get parsed"
