@@ -1,4 +1,5 @@
 require "infomon/infomon"
+require "stats/stats_gs"
 
 module Char
   def self.name
@@ -67,6 +68,14 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get("stat.aura.bonus")).to eq(-35)
       expect(Infomon.get("stat.logic.enhanced")).to eq(118)
       expect(Infomon.get("stat.logic.enhanced_bonus")).to eq(34)
+
+      expect(Stats.aura.value).to eq(100)
+      expect(Stats.aura.bonus).to eq(-35)
+      expect(Stats.logic.enhanced.value).to eq(118)
+      expect(Stats.logic.enhanced.bonus).to eq(34)
+
+      expect(Stats.aur).to eq([100, -35])
+      expect(Stats.enhanced_log).to eq([118, 34])
     end
 
     it "handles levelup" do
