@@ -31,7 +31,7 @@ module Infomon
           :ok
         when Pattern::Levelup
           match = Regexp.last_match
-          Infomon.set ("stat.%s" % match[:stat], match[:value].to_i)
+          Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
           Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
           :ok
         when Pattern::Society
