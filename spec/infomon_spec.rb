@@ -29,6 +29,12 @@ describe Infomon, ".setup!" do
 end
 
 describe Infomon::Parser, ".parse" do
+  before(:each) do
+    # ensure clean db on every test
+    Infomon.db.drop_table?(:state)
+    Infomon.setup!
+  end
+
   context "citizenship" do
     it "handles citizenship in a town" do
       Infomon::Parser.parse %[You currently have full citizenship in Wehnimer's Landing.]
@@ -74,7 +80,7 @@ describe Infomon::Parser, ".parse" do
           Intuition (INT) :  66   +1  ...     13
               Wisdom (WIS) :  66   +1  ...     13
       Levelup
-      levelup.split("\n").each {|line| Infomon:Parser.parse(line)}
+      levelup.split("\n").each {|line| Infomon::Parser.parse(line)}
       
       expect(Infomon.get("stat.dexterity")).to eq(37)
       expect(Infomon.get("stat.dexterity.bonus")).to eq(4)
