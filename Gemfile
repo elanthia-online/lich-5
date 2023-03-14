@@ -6,3 +6,5 @@ group :development do
   gem "rspec"
   gem 'rubocop'
 end
+
+gem "sequel", "~> 5.66"
