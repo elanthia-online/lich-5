@@ -31,6 +31,11 @@ module Infomon
     @db
   end
 
+  def self.reset!
+    Infomon.db.drop_table?(:state)
+    Infomon.setup!
+  end
+
   def self.state
     @_table ||= self.setup!
   end

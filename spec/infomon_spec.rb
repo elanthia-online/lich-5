@@ -31,8 +31,7 @@ end
 describe Infomon::Parser, ".parse" do
   before(:each) do
     # ensure clean db on every test
-    Infomon.db.drop_table?(:state)
-    Infomon.setup!
+    Infomon.reset!
   end
 
   context "citizenship" do
@@ -80,7 +79,9 @@ describe Infomon::Parser, ".parse" do
           Intuition (INT) :  66   +1  ...     13
               Wisdom (WIS) :  66   +1  ...     13
       Levelup
-      levelup.split("\n").each {|line| Infomon::Parser.parse(line)}
+      levelup.split("\n").each {|line| 
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
       
       expect(Infomon.get("stat.dexterity")).to eq(37)
       expect(Infomon.get("stat.dexterity.bonus")).to eq(4)
@@ -99,7 +100,9 @@ describe Infomon::Parser, ".parse" do
           Shield Throw         throw           5/5   Area of Effect                                 
           Small Shield Focus   sfocus          5/5   Passive      
       Shield
-      output.split("\n").map {|line| Infomon::Parser.parse(line)}.all?(:ok) or fail "something didn't get parsed"
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
     end
 
     it "handles cman info" do
@@ -131,8 +134,8 @@ describe Infomon::Parser, ".parse" do
       Cman
 
       output.split("\n").map {|line|
-        Infomon::Parser.parse(line)
-      }.all?(:ok) or fail "something didn't get parsed"
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
     end
 
     it "handles armor info" do
@@ -150,7 +153,9 @@ describe Infomon::Parser, ".parse" do
         Slash Protection     slash           0/5   Passive                                        
       Armor
 
-      output.split("\n").map {|line| Infomon::Parser.parse(line)}.all?(:ok) or fail "something didn't get parsed"
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
     end
 
     it "handles weapon info" do
@@ -161,7 +166,9 @@ describe Infomon::Parser, ".parse" do
         Whirling Blade       wblade          5/5   Area of Effect Edged Weapons              
       Weapon
 
-      output.split("\n").map {|line| Infomon::Parser.parse(line)}.all?(:ok) or fail "something didn't get parsed"
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
     end
 
     it "handles feat info" do
@@ -174,7 +181,9 @@ describe Infomon::Parser, ".parse" do
         Vanish               vanish          1/1   Buff                                           
       Feat
 
-      output.split("\n").map {|line| Infomon::Parser.parse(line)}.all?(:ok) or fail "something didn't get parsed"
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
     end
   end
 end
