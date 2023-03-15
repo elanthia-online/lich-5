@@ -27,11 +27,10 @@ module Infomon
 
       # Experience Regex Matches
       Fame = %r[^\s+Level: \d+\s+Fame: (?<fame>[\d,]+)$]
-      RealExp = %r[^\s+Experience: (?<experience>[\d,]+)\s+Field Exp: (?<fxp_current>[\d,]+)/(?<fxp_max>[\d,]+)$]
+      RealExp = %r[^\s+Experience: [\d,]+\s+Field Exp: (?<fxp_current>[\d,]+)/(?<fxp_max>[\d,]+)$]
       AscExp = %r[^\s+Ascension Exp: (?<ascension_experience>[\d,]+)\s+Recent Deaths: [\d,]+$]
       TotalExp = %r[^\s+Total Exp: (?<total_experience>[\d,]+)\s+Death's Sting: [\w]+$]
       LTE = %r[^\s+Long-Term Exp: (?<long_term_experience>[\d,]+)\s+Deeds: (?<deeds>\d+)$]
-      TNL = %r[^\s+Exp until lvl: (?<experience_to_next_level>[\d,]+)(?:\s+Exp to next ATP: [\d,]+)?$]
 
       All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell,
                          Levelup, SleepActive, SleepNoActive, BindActive, BindNoActive,
@@ -101,7 +100,6 @@ module Infomon
           :ok
         when Pattern::RealExp
           match = Regexp.last_match
-          Infomon.set("stat.experience", match[:experience].gsub(',', '').to_i)
           Infomon.set("stat.fxp_current", match[:fxp_current].gsub(',', '').to_i)
           Infomon.set("stat.fxp_max", match[:fxp_max].gsub(',', '').to_i)
           :ok
@@ -117,10 +115,6 @@ module Infomon
           match = Regexp.last_match
           Infomon.set("stat.long_term_experience", match[:long_term_experience].gsub(',', '').to_i)
           Infomon.set("stat.deeds", match[:deeds].to_i)
-          :ok
-        when Pattern::TNL
-          match = Regexp.last_match
-          Infomon.set("stat.experience_to_next_level", match[:experience_to_next_level].gsub(',', '').to_i)
           :ok
 
         # todo: refactor / streamline?
