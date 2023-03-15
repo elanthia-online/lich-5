@@ -67,7 +67,7 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get("stat.aura")).to eq(100)
       expect(Infomon.get("stat.aura.bonus")).to eq(-35)
       expect(Infomon.get("stat.logic.enhanced")).to eq(118)
-      expect(Infomon.get("stat.logic.enhanced_bonus")).to eq(34)
+      expect(Infomon.get("stat.logic.enhanced.bonus")).to eq(34)
 
       expect(Stats.aura.value).to eq(100)
       expect(Stats.aura.bonus).to eq(-35)
