@@ -11,8 +11,22 @@ module Infomon
       Skill = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)]
       Spell = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+)$|^(?<name>[\w\s\-']+)\.+(?<rank>\d+)$]
       Levelup = %r[^\s+(?<stat>\w+)\s+\(\w{3}\)\s+:\s+(?<value>\d+)\s+(?:\+1)\s+\.\.\.\s+(?<bonus>\d+)(?:\s+\+1)?$]
+      # adding boolean status detection
+      # todo: refactor / streamline?
+      SleepActive = %r[^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$]
+      SleepNoActive = %r[^Your thoughts slowly come back to you as you find yourself lying on the ground\.  You must have been sleeping\.$|^You wake up from your slumber\.$|^You are awoken|^You awake]
+      BindActive = %r[An unseen force envelops you, restricting all movement\.]
+      BindNoActive = %r[^The restricting force that envelops you dissolves away\.|^You shake off the immobilization that was restricting your movements!]
+      SilenceActive = %r[^A pall of silence settles over you\.|^The pall of silence settles more heavily over you\.]
+      SilenceNoActive = %r[The pall of silence leaves you\.]
+      CalmActive = %r[A calm washes over you\.]
+      CalmNoActive = %r[^You are enraged by .*? attack!|^The feeling of calm leaves you\.]
+      CutthroatActive = %r[slices deep into your vocal cords!$|^All you manage to do is cough up some blood\.$]
+      CutthroatNoActive = %r[^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$]
 
-      All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell, Levelup)
+      All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell,
+                         Levelup, SleepActive, SleepNoActive, BindActive, BindNoActive,
+                         SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive, CutthroatNoActive)
     end
 
     def self.parse(line)
@@ -70,6 +84,37 @@ module Infomon
           # todo: capture SK item spells here?
           match = Regexp.last_match
           Infomon.set("spell.%s" % match[:name], match[:rank].to_i)
+          :ok
+        # todo: refactor / streamline?
+        when Pattern::SleepActive
+          Infomon.set("status.sleeping", true)
+          :ok
+        when Pattern::SleepNoActive
+          Infomon.set("status.sleeping", false)
+          :ok
+        when Pattern::BindActive
+          Infomon.set("status.bound", true)
+          :ok
+        when Pattern::BindNoActive
+          Infomon.set("status.bound", false)
+          :ok
+        when Pattern::SilenceActive
+          Infomon.set("status.silenced", true)
+          :ok
+        when Pattern::SilenceNoActive
+          Infomon.set("status.silenced", false)
+          :ok
+        when Pattern::CalmActive
+          Infomon.set("status.calmed", true)
+          :ok
+        when Pattern::CalmNoActive
+          Infomon.set("status.calmed", false)
+          :ok
+        when Pattern::CutthroatActive
+          Infomon.set("status.cutthroat", true)
+          :ok
+        when Pattern::CutthroatNoActive
+          Infomon.set("status.cutthroat", false)
           :ok
         else
           :noop
