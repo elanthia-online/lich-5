@@ -93,7 +93,7 @@ module Infomon
         when Pattern::LTE
           match = Regexp.last_match
           Infomon.set("stat.long_term_experience", match[:long_term_experience].gsub(',', '').to_i)
-          Infomon.set("stat.deeds", match[:deeds])
+          Infomon.set("stat.deeds", match[:deeds].to_i)
           :ok
         when Pattern::TNL
           match = Regexp.last_match
