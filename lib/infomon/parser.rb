@@ -16,7 +16,7 @@ module Infomon
       AscExp = %r[^\s+Ascension Exp: (?<ascension_experience>[\d,]+)\s+Recent Deaths: [\d,]+$]
       TotalExp = %r[^\s+Total Exp: (?<total_experience>[\d,]+)\s+Death's Sting: [\w]+$]
       LTE = %r[^\s+Long-Term Exp: (?<long_term_experience>[\d,]+)\s+Deeds: (?<deeds>\d+)$]
-      TNL = %r[^\s+Exp until lvl: (?<experience_to_next_level>[\d,]+)(\s+Exp to next ATP: [\d,]+)$]
+      TNL = %r[^\s+Exp until lvl: (?<experience_to_next_level>[\d,]+)(?:\s+Exp to next ATP: [\d,]+)$]
 
       All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell, Levelup, Fame, RealExp, AscExp, TotalExp, LTE, TNL)
     end
@@ -41,11 +41,6 @@ module Infomon
             ["stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i],
             ["stat.%s.enhanced.bonus" % match[:stat], match[:enhanced_bonus].to_i]
           )
-          
-          #Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
-          #Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
-          #Infomon.set("stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i)
-          #Infomon.set("stat.%s.enhanced_bonus" % match[:stat], match[:enhanced_bonus].to_i)
           :ok
         when Pattern::Levelup
           match = Regexp.last_match
@@ -78,30 +73,30 @@ module Infomon
           Infomon.set("spell.%s" % match[:name], match[:rank].to_i)
           :ok
         when Pattern::Fame
-          match - Regexp.last_match
+          match = Regexp.last_match
           Infomon.set("stat.fame", match[:fame])
           :ok
         when Pattern::RealExp
-          match - Regexp.last_match
+          match = Regexp.last_match
           Infomon.set("stat.experience", match[:experience])
           Infomon.set("stat.fxp_current", match[:fxp_current])
           Infomon.set("stat.fxp_max", match[:fxp_max])
           :ok
         when Pattern::AscExp
-          match - Regexp.last_match
+          match = Regexp.last_match
           Infomon.set("stat.ascension_experience", match[:ascension_experience])
           :ok
-        when Pattern::TotalExp 
-          match - Regexp.last_match
+        when Pattern::TotalExp
+          match = Regexp.last_match
           Infomon.set("stat.total_experience", match[:total_experience])
           :ok
-        when Pattern::LTE 
-          match - Regexp.last_match
+        when Pattern::LTE
+          match = Regexp.last_match
           Infomon.set("stat.long_term_experience", match[:long_term_experience])
           Infomon.set("stat.deeds", match[:deeds])
           :ok
-        when Pattern::TNL 
-          match - Regexp.last_match
+        when Pattern::TNL
+          match = Regexp.last_match
           Infomon.set("stat.experience_to_next_level", match[:experience_to_next_level])
           :ok
         else
