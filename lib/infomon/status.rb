@@ -32,6 +32,14 @@ module Status
     Infomon.get("status.sleeping")
   end
 
+  def self.muckled?
+    muckled = checkwebbed || checkdead || checkstunned
+    muckled = muckled || Status.silenced? || Status.sleeping?
+    muckled = muckled || Status.cutthroat? || Status.calmed?
+    muckled = muckled || Status.bound?
+    return muckled
+  end
+
   # todo: does this serve a purpose?
   def self.serialize
     [self.bound?, self.calmed?, self.cutthroat?,
