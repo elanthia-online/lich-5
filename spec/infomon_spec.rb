@@ -310,7 +310,7 @@ describe Infomon::Parser, ".parse" do
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
-    
+
     it "handles cutthroat? boolean false" do
       output = <<~TestInput
         The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat.
