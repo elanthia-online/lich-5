@@ -227,8 +227,8 @@ describe Infomon::Parser, ".parse" do
         You close your eyes and slowly drift off to sleep.
         You slump to the ground and immediately fall asleep.  You must have been exhausted!
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -239,8 +239,8 @@ describe Infomon::Parser, ".parse" do
         You are awoken by a sloth bear!
         You awake
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -248,8 +248,8 @@ describe Infomon::Parser, ".parse" do
       output = <<~TestInput
         An unseen force envelops you, restricting all movement.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -258,8 +258,8 @@ describe Infomon::Parser, ".parse" do
         The restricting force that envelops you dissolves away.
         You shake off the immobilization that was restricting your movements!
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -268,8 +268,8 @@ describe Infomon::Parser, ".parse" do
         A pall of silence settles over you.
         The pall of silence settles more heavily over you.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -277,8 +277,8 @@ describe Infomon::Parser, ".parse" do
       output = <<~TestInput
         The pall of silence leaves you.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -286,8 +286,8 @@ describe Infomon::Parser, ".parse" do
       output = <<~TestInput
         A calm washes over you.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -296,8 +296,8 @@ describe Infomon::Parser, ".parse" do
         You are enraged by Ferenghi Warlord's attack!
         The feeling of calm leaves you.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -306,8 +306,8 @@ describe Infomon::Parser, ".parse" do
         The Ferenghi Warlord slices deep into your vocal cords!
         All you manage to do is cough up some blood.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
     
@@ -315,8 +315,8 @@ describe Infomon::Parser, ".parse" do
       output = <<~TestInput
         The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
   end
