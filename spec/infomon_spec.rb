@@ -96,6 +96,21 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get("stat.dexterity.bonus")).to eq(4)
       expect(Infomon.get("stat.strength.bonus")).to eq(7)
     end
+    
+    it "handles experience info" do
+      output = <<-Experience
+                  Level: 2                           Fame: 72,824
+             Experience: 7,352                  Field Exp: 0/941
+          Ascension Exp: 0                  Recent Deaths: 0
+              Total Exp: 7,352              Death's Sting: None
+          Long-Term Exp: 0                          Deeds: 1
+          Exp until lvl: 2,648
+      Experience
+      
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
   end
 
   context "psm" do
@@ -190,21 +205,6 @@ describe Infomon::Parser, ".parse" do
         Vanish               vanish          1/1   Buff                                           
       Feat
 
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
-      }
-    end
-    
-    it "handles experience info" do
-      output = <<~Experience
-                  Level: 2                           Fame: 72,824
-             Experience: 7,352                  Field Exp: 0/941
-          Ascension Exp: 0                  Recent Deaths: 0
-              Total Exp: 7,352              Death's Sting: None
-          Long-Term Exp: 0                          Deeds: 1
-          Exp until lvl: 2,648
-      Experience
-      
       output.split("\n").map {|line|
         Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
       }
