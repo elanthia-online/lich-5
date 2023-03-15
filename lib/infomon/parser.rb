@@ -11,6 +11,8 @@ module Infomon
       Skill = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)]
       Spell = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+)$|^(?<name>[\w\s\-']+)\.+(?<rank>\d+)$]
       Levelup = %r[^\s+(?<stat>\w+)\s+\(\w{3}\)\s+:\s+(?<value>\d+)\s+(?:\+1)\s+\.\.\.\s+(?<bonus>\d+)(?:\s+\+1)?$]
+      CharRaceProf = %r[^Name:\s+(?<name>[A-z\s']+)\s+Race:\s+(?<race>[-A-z\s]+)\s+Profession:\s+(?<profession>[-A-z\s]+)]
+      CharGenderAgeExpLevel = %r[^Gender:\s+(?<gender>[A-z]+)\s+Age:\s+(?<age>[0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)]
       # adding boolean status detection
       # todo: refactor / streamline?
       SleepActive = %r[^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$]
@@ -49,11 +51,11 @@ module Infomon
             ["stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i],
             ["stat.%s.enhanced.bonus" % match[:stat], match[:enhanced_bonus].to_i]
           )
-          
-          #Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
-          #Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
-          #Infomon.set("stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i)
-          #Infomon.set("stat.%s.enhanced_bonus" % match[:stat], match[:enhanced_bonus].to_i)
+
+          # Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
+          # Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
+          # Infomon.set("stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i)
+          # Infomon.set("stat.%s.enhanced_bonus" % match[:stat], match[:enhanced_bonus].to_i)
           :ok
         when Pattern::Levelup
           match = Regexp.last_match
@@ -84,6 +86,19 @@ module Infomon
           # todo: capture SK item spells here?
           match = Regexp.last_match
           Infomon.set("spell.%s" % match[:name], match[:rank].to_i)
+          :ok
+        when Pattern::CharRaceProf
+          # name captured here, but do not rely on it - use XML instead
+          match = Regexp.last_match
+          Infomon.set("stat.race", match[:race])
+          Infomon.set("stat.profession", match[:profession])
+          :ok
+        when Pattern::CharGenderAgeExpLevel
+          # level captured here, but do not rely on it - use XML instead
+          match = Regexp.last_match
+          Infomon.set("stat.gender", match[:gender])
+          Infomon.set("stat.age", match[:age])
+          Infomon.set("stat.experience", match[:experience])
           :ok
         # todo: refactor / streamline?
         when Pattern::SleepActive
