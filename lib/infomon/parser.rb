@@ -20,7 +20,7 @@ module Infomon
       SilenceActive = %r[^A pall of silence settles over you\.|^The pall of silence settles more heavily over you\.]
       SilenceNoActive = %r[The pall of silence leaves you\.]
       CalmActive = %r[A calm washes over you\.]
-      CalmNoActive = %r[^You are enraged by .*? attack!|^The feeling of calm leaves you\./]
+      CalmNoActive = %r[^You are enraged by .*? attack!|^The feeling of calm leaves you\.]
       CutthroatActive = %r[slices deep into your vocal cords!$|^All you manage to do is cough up some blood\.$]
       CutthroatNoActive = %r[^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$]
 
