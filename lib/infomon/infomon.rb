@@ -59,7 +59,7 @@ module Infomon
 
   def self._validate!(key, value)
     return value if [Integer, String, NilClass, FalseClass, TrueClass].include?(value.class)
-    raise "infomon:insert(%s) was called with a value that was not Integer|String|NilClass\nvalue=%s\ntype=%s" % [key, value, value.class] 
+    raise "infomon:insert(%s) was called with a value that was not Integer|String|NilClass\nvalue=%s\ntype=%s" % [key, value, value.class]
   end
 
   def self.get(key)
@@ -75,8 +75,8 @@ module Infomon
 
   def self.upsert(*args)
     self.table
-      .insert_conflict(:replace)
-      .insert(*args)
+        .insert_conflict(:replace)
+        .insert(*args)
   end
 
   def self.set(key, value)
@@ -85,8 +85,8 @@ module Infomon
 
   def self.batch_set(*pairs)
     pairs
-      .map {|key, value| {key: self._key(key), value: self._validate!(key, value)}}
-      .each {|record| self.upsert(record)}
+      .map { |key, value| { key: self._key(key), value: self._validate!(key, value) } }
+      .each { |record| self.upsert(record) }
   end
 
   require_relative "parser"
