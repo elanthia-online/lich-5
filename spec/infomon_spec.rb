@@ -195,4 +195,133 @@ describe Infomon::Parser, ".parse" do
       }
     end
   end
+
+  context "booleans" do
+    it "handles sleeping? boolean true" do
+      output = <<~TestInput
+        Your mind goes completely blank.
+        You close your eyes and slowly drift off to sleep.
+        You slump to the ground and immediately fall asleep.  You must have been exhausted!
+      TestInput
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+
+    it "handles sleeping? boolean false" do
+      output = <<~TestInput
+        Your thoughts slowly come back to you as you find yourself lying on the ground.  You must have been sleeping.
+        You wake up from your slumber.
+        You are awoken by a sloth bear!
+        You awake
+      TestInput
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+
+    it "handles bound? boolean true" do
+      output = <<~TestInput
+        An unseen force envelops you, restricting all movement.
+      TestInput
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+
+    it "handles bound? boolean false" do
+      output = <<~TestInput
+        The restricting force that envelops you dissolves away.
+        You shake off the immobilization that was restricting your movements!
+      TestInput
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+
+    it "handles silenced? boolean true" do
+      output = <<~TestInput
+        A pall of silence settles over you.
+        The pall of silence settles more heavily over you.
+      TestInput
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+
+    it "handles silenced? boolean false" do
+      output = <<~TestInput
+        The pall of silence leaves you.
+      TestInput
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+
+    it "handles calmed? boolean true" do
+      output = <<~TestInput
+        A calm washes over you.
+      TestInput
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+
+    it "handles calmed? boolean false" do
+      output = <<~TestInput
+        You are enraged by Ferenghi Warlord's attack!
+        The feeling of calm leaves you.
+      TestInput
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+
+    it "handles cutthroat? boolean true" do
+      output = <<~TestInput
+        The Ferenghi Warlord slices deep into your vocal cords!
+        All you manage to do is cough up some blood.
+      TestInput
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+    
+    it "handles cutthroat? boolean false" do
+      output = <<~TestInput
+        The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat.
+      TestInput
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+
+    it "handles hidingNPC? boolean true" do
+      output = <<~TestInput
+        A smooth stone flies out of the shadows at the Ferenghi Warlord!
+        A Lost Romulan Commander slips into hiding.
+        A faint silvery light flickers from the shadows.
+      TestInput
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+
+    it "handles revealedNPC? boolean true" do
+      output = <<~TestInput
+        You reveal a Lost Romulan Commander from hiding.
+        You discover a Wild Rinualdo who was hidden.
+        A Master Tysong leaps from hiding!
+        A Generic Doug leaps out of its hiding place.
+        The Putrid Purple People Eater is revealed from hiding.
+        The Testy Athias springs upon you!
+        You discover the hiding place of the Worthy MahtraDR.
+        The Generic Doug is knocked from hiding.
+        The Generic Doug is forced from hiding.
+      TestInput
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+  end
 end
