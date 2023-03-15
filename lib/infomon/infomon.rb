@@ -11,7 +11,6 @@
 #        version: 2.0
 #         Source: https://github.com/elanthia-online/scripts
 
-
 require 'English'
 require 'sequel'
 require 'tmpdir'
@@ -25,7 +24,7 @@ module Infomon
   @db   = Sequel.sqlite(@file)
   @db.loggers << Logger.new($stdout) if ENV["DEBUG"]
   @table_name = :infomon
-  
+
   def self.file
     @file
   end
@@ -46,6 +45,7 @@ module Infomon
   def self.setup!
     @db.create_table?(@table_name) do
       string :key, primary_key: true
+
       blob :value
       index :key, unique: true
     end
@@ -59,7 +59,7 @@ module Infomon
 
   def self._validate!(key, value)
     return value if [Integer, String, NilClass, FalseClass, TrueClass].include?(value.class)
-    raise "infomon:insert(%s) was called with a value that was not Integer|String|NilClass\nvalue=%s\ntype=%s" % [key, value, value.class] 
+    raise "infomon:insert(%s) was called with a value that was not Integer|String|NilClass\nvalue=%s\ntype=%s" % [key, value, value.class]
   end
 
   def self.get(key)
@@ -75,8 +75,8 @@ module Infomon
 
   def self.upsert(*args)
     self.table
-      .insert_conflict(:replace)
-      .insert(*args)
+        .insert_conflict(:replace)
+        .insert(*args)
   end
 
   def self.set(key, value)
@@ -85,9 +85,8 @@ module Infomon
 
   def self.batch_set(*pairs)
     pairs
-      .map {|key, value| {key: self._key(key), value: self._validate!(key, value)}}
-      .each {|record| self.upsert(record)}
-
+      .map { |key, value| { key: self._key(key), value: self._validate!(key, value) } }
+      .each { |record| self.upsert(record) }
   end
 
   require_relative "parser"

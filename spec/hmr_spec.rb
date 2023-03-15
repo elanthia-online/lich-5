@@ -1,3 +1,18 @@
+def respond(first = "", *messages)
+  str = ''
+  if first.class == Array
+    first.flatten.each { |ln| str += sprintf("%s\r\n", ln.to_s.chomp) }
+  else
+    str += sprintf("%s\r\n", first.to_s.chomp)
+  end
+  messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
+  puts str
+end
+
+def _respond(first = "", *messages)
+  respond(first, messages)
+end
+
 require 'tmpdir'
 require "hmr"
 
