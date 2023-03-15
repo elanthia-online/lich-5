@@ -54,13 +54,15 @@ module Infomon
     return nil unless result
     val = result[:value]
     return nil if val.nil?
+    return true if val.to_s == 'true'
+    return false if val.to_s == 'false'
     return val.to_i if val.to_s =~ /^\d+$/ || val =~ /^-\d+$/
     return val.to_s if val
   end
 
   def self.set(key, value)
     key = key.to_s.downcase
-    raise "Infomon.set(%s, %s) was called with a value that was not Integer|String|NilClass" % [key, value] unless [Integer, String, NilClass].include?(value.class)
+    raise "Infomon.set(%s, %s) was called with a value that was not Integer|String|NilClass|TrueClass|FalseClass" % [key, value] unless [Integer, String, NilClass, TrueClass, FalseClass].include?(value.class)
     puts "infomon(%s) :set %s -> %s(%s)" % [Char.name, key, value.class.name, value] if $infomon_debug
     self.state
         .insert_conflict(:replace)
