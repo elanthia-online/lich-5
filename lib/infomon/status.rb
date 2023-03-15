@@ -35,7 +35,6 @@ module Status
   # todo: does this serve a purpose?
   def self.serialize
     [self.bound?, self.calmed?, self.cutthroat?,
-     self.hiddenNPC?, self.revealedNPC?,
      self.silenced?, self.sleeping?]
   end
 end
