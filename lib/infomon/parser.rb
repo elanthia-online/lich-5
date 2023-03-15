@@ -24,8 +24,9 @@ module Infomon
       CutthroatActive = %r[slices deep into your vocal cords!$|^All you manage to do is cough up some blood\.$]
       CutthroatNoActive = %r[^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$]
 
-      All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell, Levelup, SleepActive, SleepNoActive, BindActive, BindNoActive, SilenceActive, SilenceNoActive,
-      CalmActive, CalmNoActive, CutthroatActive, CutthroatNoActive)
+      All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell,
+                         Levelup, SleepActive, SleepNoActive, BindActive, BindNoActive,
+                         SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive, CutthroatNoActive)
     end
 
     def self.parse(line)
