@@ -13,9 +13,14 @@ module Infomon
       Levelup = %r[^\s+(?<stat>\w+)\s+\(\w{3}\)\s+:\s+(?<value>\d+)\s+(?:\+1)\s+\.\.\.\s+(?<bonus>\d+)(?:\s+\+1)?$]
       CharRaceProf = %r[^Name:\s+(?<name>[A-z\s']+)\s+Race:\s+(?<race>[-A-z\s]+)\s+Profession:\s+(?<profession>[-A-z\s]+)]
       CharGenderAgeExpLevel = %r[^Gender:\s+(?<gender>[A-z]+)\s+Age:\s+(?<age>[0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)]
+
+      All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell, Levelup)
+
     end
 
     def self.parse(line)
+      # O(1) vs O(N)
+      return :noop unless line =~ Pattern::All
       begin
         case line
         when Pattern::Citizenship
@@ -26,10 +31,18 @@ module Infomon
           :ok
         when Pattern::Stat
           match = Regexp.last_match
-          Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
-          Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
-          Infomon.set("stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i)
-          Infomon.set("stat.%s.enhanced_bonus" % match[:stat], match[:enhanced_bonus].to_i)
+
+          Infomon.batch_set(
+            ["stat.%s" % match[:stat], match[:value].to_i],
+            ["stat.%s.bonus" % match[:stat], match[:bonus].to_i],
+            ["stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i],
+            ["stat.%s.enhanced.bonus" % match[:stat], match[:enhanced_bonus].to_i]
+          )
+          
+          #Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
+          #Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
+          #Infomon.set("stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i)
+          #Infomon.set("stat.%s.enhanced_bonus" % match[:stat], match[:enhanced_bonus].to_i)
           :ok
         when Pattern::Levelup
           match = Regexp.last_match

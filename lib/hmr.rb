@@ -5,8 +5,8 @@ module HMR
   end
 
   def self.msg(message)
-    return _respond message if Kernel.respond_to?(:_respond) && message.include?("<b>")
-    return respond message if Kernel.respond_to?(:respond)
+    return _respond message if defined?(:_respond) && message.include?("<b>")
+    return respond message if defined?(:respond)
     puts message
   end
 

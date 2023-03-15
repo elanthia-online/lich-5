@@ -15,6 +15,7 @@
 require 'English'
 require 'sequel'
 require 'tmpdir'
+require 'logger'
 
 module Infomon
   $infomon_debug = ENV["DEBUG"]
@@ -22,6 +23,8 @@ module Infomon
   @root = defined?(DATA_DIR) ? DATA_DIR : Dir.tmpdir
   @file = File.join(@root, "infomon.db")
   @db   = Sequel.sqlite(@file)
+  @db.loggers << Logger.new($stdout) if ENV["DEBUG"]
+  @table_name = :infomon
   
   def self.file
     @file
@@ -32,41 +35,60 @@ module Infomon
   end
 
   def self.reset!
-    Infomon.db.drop_table?(:state)
+    Infomon.db.drop_table?(@table_name)
     Infomon.setup!
   end
 
-  def self.state
+  def self.table
     @_table ||= self.setup!
   end
 
   def self.setup!
-    @db.create_table?(:state) do
-      string  :key, primary_key: true
-      string :char
+    @db.create_table?(@table_name) do
+      string :key, primary_key: true
       blob :value
+      index :key, unique: true
     end
 
-    @db[:state]
+    @_table ||= @db[@table_name]
+  end
+
+  def self._key(key)
+    "%s.%s" % [Char.name, key.to_s.downcase]
+  end
+
+  def self._validate!(key, value)
+    return value if [Integer, String, NilClass, FalseClass, TrueClass].include?(value.class)
+    raise "infomon:insert(%s) was called with a value that was not Integer|String|NilClass\nvalue=%s\ntype=%s" % [key, value, value.class] 
   end
 
   def self.get(key)
-    result = self.state.first(key: key.to_s.downcase, char: Char.name)
+    result = self.table[key: self._key(key)]
     return nil unless result
     val = result[:value]
     return nil if val.nil?
+    return true if val.to_s == "true"
+    return false if val.to_s == "false"
     return val.to_i if val.to_s =~ /^\d+$/ || val =~ /^-\d+$/
     return val.to_s if val
   end
 
-  def self.set(key, value)
-    key = key.to_s.downcase
-    raise "Infomon.set(%s, %s) was called with a value that was not Integer|String|NilClass" % [key, value] unless [Integer, String, NilClass].include?(value.class)
-    puts "infomon(%s) :set %s -> %s(%s)" % [Char.name, key, value.class.name, value] if $infomon_debug
-    self.state
+  def self.upsert(*args)
+    self.table
       .insert_conflict(:replace)
-      .insert(key: key, value: value, char: Char.name)
+      .insert(*args)
   end
 
-  require "infomon/parser"
+  def self.set(key, value)
+    self.upsert(key: self._key(key), value: self._validate!(key, value))
+  end
+
+  def self.batch_set(*pairs)
+    pairs
+      .map {|key, value| {key: self._key(key), value: self._validate!(key, value)}}
+      .each {|record| self.upsert(record)}
+
+  end
+
+  require_relative "parser"
 end
