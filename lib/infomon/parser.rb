@@ -59,6 +59,11 @@ module Infomon
             ["stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i],
             ["stat.%s.enhanced.bonus" % match[:stat], match[:enhanced_bonus].to_i]
           )
+
+          # Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
+          # Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
+          # Infomon.set("stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i)
+          # Infomon.set("stat.%s.enhanced_bonus" % match[:stat], match[:enhanced_bonus].to_i)          
           :ok
         when Pattern::Levelup
           match = Regexp.last_match
