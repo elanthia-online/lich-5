@@ -15,6 +15,7 @@
 require 'English'
 require 'sequel'
 require 'tmpdir'
+require 'logger'
 
 module Infomon
   $infomon_debug = ENV["DEBUG"]
@@ -22,6 +23,7 @@ module Infomon
   @root = defined?(DATA_DIR) ? DATA_DIR : Dir.tmpdir
   @file = File.join(@root, "infomon.db")
   @db   = Sequel.sqlite(@file)
+  @db.loggers << Logger.new($stdout) if ENV["DEBUG"]
   
   def self.file
     @file
@@ -62,7 +64,7 @@ module Infomon
   def self.set(key, value)
     key = key.to_s.downcase
     raise "Infomon.set(%s, %s) was called with a value that was not Integer|String|NilClass" % [key, value] unless [Integer, String, NilClass].include?(value.class)
-    puts "infomon(%s) :set %s -> %s(%s)" % [Char.name, key, value.class.name, value] if $infomon_debug
+    #puts "infomon(%s) :set %s -> %s(%s)" % [Char.name, key, value.class.name, value] if $infomon_debug
     self.state
       .insert_conflict(:replace)
       .insert(key: key, value: value, char: Char.name)

@@ -1254,7 +1254,7 @@ module Games
                     end
                     unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
                       unless line.empty?
-                        Infomon::Parser.parse(line)
+                        Infomon::Parser.parse(line.dup)
                         Script.new_downstream(line)
                       end
                     end

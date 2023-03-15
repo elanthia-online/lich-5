@@ -11,9 +11,13 @@ module Infomon
       Skill = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)]
       Spell = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+)$|^(?<name>[\w\s\-']+)\.+(?<rank>\d+)$]
       Levelup = %r[^\s+(?<stat>\w+)\s+\(\w{3}\)\s+:\s+(?<value>\d+)\s+(?:\+1)\s+\.\.\.\s+(?<bonus>\d+)(?:\s+\+1)?$]
+
+      All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell, Levelup)
     end
 
     def self.parse(line)
+      # O(1) vs O(N)
+      return :noop unless line =~ Pattern::All
       begin
         case line
         when Pattern::Citizenship
