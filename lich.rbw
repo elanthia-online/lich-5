@@ -2136,7 +2136,7 @@ module Games
     require_relative("./lib/infomon/infomon.rb")
     require_relative("./lib/stats/stats.rb")
     require_relative("./lib/infomon/status.rb")
-
+    require_relative("./lib/infomon/spellactive.rb")
 
     class Gift
       @@gift_start ||= Time.now
