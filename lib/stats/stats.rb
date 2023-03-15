@@ -1,6 +1,6 @@
 require "ostruct"
 
-class Stats
+module Stats
   def self.race
     Infomon.get("stat.race")
   end
@@ -22,11 +22,12 @@ class Stats
   end
 
   def self.level
-    Infomon.get("stat.level")
+    XMLData.level
   end
+
   @@stats = %i(strength constitution dexterity agility discipline aura logic intuition wisdom influence)
   @@stats.each do |stat|
-    Stats.class.send(:define_method, stat) do
+    self.define_singleton_method(stat) do
       enhanced = OpenStruct.new(
         value: Infomon.get("stat.%s.enhanced" % stat),
         bonus: Infomon.get("stat.%s.enhanced_bonus" % stat)
@@ -43,12 +44,12 @@ class Stats
   %i[str con dex agi dis aur log int wis inf].each do |shorthand|
     # find the long-hand method we want to use as a source for this data
     long_hand = @@stats.find {|method| method.to_s.start_with?(shorthand.to_s)}
-    Stats.class.send(:define_method, shorthand) do
+    self.define_singleton_method(shorthand) do
       stat = Stats.send(long_hand)
       [stat.value, stat.bonus]
     end
     # next we need to polyfill `enhanced_<shorthand>` for backwards compat
-    Stats.class.send(:define_method, "enhanced_%s" % shorthand) do
+    self.define_singleton_method("enhanced_%s" % shorthand) do
       stat = Stats.send(long_hand)
       [stat.enhanced.value, stat.enhanced.bonus]
     end

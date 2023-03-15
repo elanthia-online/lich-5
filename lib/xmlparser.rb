@@ -468,7 +468,7 @@ class XMLParser
         end
       elsif name == 'label'
         if attributes['id'] == 'yourLvl'
-          @level = Stats.level = attributes['value'].slice(/\d+/).to_i
+          @level = attributes['value'].slice(/\d+/).to_i
         elsif attributes['id'] == 'encumblurb'
           @encumbrance_full_text = attributes['value']
         elsif @active_tags[-2] == 'dialogData' and PSM_3_DIALOG_IDS.include?(@active_ids[-2])

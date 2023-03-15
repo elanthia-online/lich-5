@@ -1253,7 +1253,10 @@ module Games
                       Map.last_seen_objects = $1  # DR only: copy loot line to Map.last_seen_objects
                     end
                     unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
-                      Script.new_downstream(line) unless line.empty?
+                      unless line.empty?
+                        Infomon::Parser.parse(line)
+                        Script.new_downstream(line)
+                      end
                     end
                   }
                 end
@@ -2130,7 +2133,8 @@ module Games
     require_relative("./lib/gameobj.rb")
     require_relative("./lib/shield.rb")
     require_relative("./lib/weapon.rb")
-    require_relative("./lib/stats.rb")
+    require_relative("./lib/infomon/infomon.rb")
+    require_relative("./lib/stats/stats.rb")
 
 
     class Gift

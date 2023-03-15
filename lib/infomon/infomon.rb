@@ -68,5 +68,5 @@ module Infomon
       .insert(key: key, value: value, char: Char.name)
   end
 
-  require "infomon/parser"
+  require_relative "parser"
 end

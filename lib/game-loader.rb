@@ -1,12 +1,11 @@
+# handles instances of modules that are game dependent
 module GameLoader
   def self.gemstone
     require 'lib/map/map_gs.rb'
-    require 'lib/stats/stats_gs.rb'
   end
 
   def self.dragon_realms
     require 'lib/map/map_dr.rb'
-    require 'lib/stats/stats_dr.rb'
   end
 
   def self.load!
