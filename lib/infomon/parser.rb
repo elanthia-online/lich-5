@@ -23,10 +23,9 @@ module Infomon
       CalmNoActive = %r[^You are enraged by .*? attack!|^The feeling of calm leaves you\./]
       CutthroatActive = %r[slices deep into your vocal cords!$|^All you manage to do is cough up some blood\.$]
       CutthroatNoActive = %r[^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$]
-      HidingNPCActive = %r[flies (?:from|out of) the shadows (?:at|toward)|A .+ slips into hiding|A faint silvery light flickers from the shadows]
-      HidingNPCRevealed = %r[You reveal a .+ from hiding|who was hidden|leaps from hiding|leaps out of .+ hiding|revealed from hiding|springs upon|discover the hiding place|knocked from hiding|forced from hiding]
 
-      All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell, Levelup)
+      All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell, Levelup, SleepActive, SleepNoActive, BindActive, BindNoActive, SilenceActive, SilenceNoActive,
+      CalmActive, CalmNoActive, CutthroatActive, CutthroatNoActive)
     end
 
     def self.parse(line)
@@ -107,12 +106,6 @@ module Infomon
           :ok
         when Pattern::CutthroatNoActive
           Infomon.set("status.cutthroat", false)
-          :ok
-        when Pattern::HidingNPCActive
-          Infomon.set("status.hidingNPC", true)
-          :ok
-        when Pattern::HidingNPCRevealed
-          Infomon.set("status.revealedNPC", true)
           :ok
         else
           :noop

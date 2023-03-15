@@ -1,5 +1,5 @@
 require "infomon/infomon"
-require "stats/stats_gs"
+require "stats/stats"
 
 module Char
   def self.name
@@ -290,34 +290,6 @@ describe Infomon::Parser, ".parse" do
     it "handles cutthroat? boolean false" do
       output = <<~TestInput
         The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat.
-      TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
-      }
-    end
-
-    it "handles hidingNPC? boolean true" do
-      output = <<~TestInput
-        A smooth stone flies out of the shadows at the Ferenghi Warlord!
-        A Lost Romulan Commander slips into hiding.
-        A faint silvery light flickers from the shadows.
-      TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
-      }
-    end
-
-    it "handles revealedNPC? boolean true" do
-      output = <<~TestInput
-        You reveal a Lost Romulan Commander from hiding.
-        You discover a Wild Rinualdo who was hidden.
-        A Master Tysong leaps from hiding!
-        A Generic Doug leaps out of its hiding place.
-        The Putrid Purple People Eater is revealed from hiding.
-        The Testy Athias springs upon you!
-        You discover the hiding place of the Worthy MahtraDR.
-        The Generic Doug is knocked from hiding.
-        The Generic Doug is forced from hiding.
       TestInput
       output.split("\n").map {|line|
         Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)

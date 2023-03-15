@@ -16,14 +16,6 @@ module Status
     Infomon.get("status.cutthroat")
   end
 
-  def self.hiddenNPC?
-    Infomon.get("status.hiddenNPC")
-  end
-
-  def self.revealedNPC?
-    Infomon.get("status.revealedNPC")
-  end
-
   def self.silenced?
     Infomon.get("status.silenced")
   end
