@@ -2,7 +2,7 @@ module Infomon
   # this module handles all of the logic for parsing game lines that infomon depends on
   module Parser
     module Pattern
-      Stat = %r[\s+(?<stat>\w+)\s\(\w{3}\):\s+(?<value>\d+)\s\((?<bonus>[\w-]+)\)\s+\.\.\.\s+(?<enhanced_value>\d+)\s\((?<enhanced_bonus>\w+)\)]
+      Stat = %r[^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)]
       Citizenship = /^You currently have .*? citizenship in (?<town>.*)\.$/
       NoCitizenship = /You don't seem to have citizenship\./
       Society = /^\s+You are a (?:Master|member) (?:in|of) the (?<society>Order of Voln|Council of Light|Guardians of Sunfist)(?: at rank (?<rank>[0-9]+)| at step (?<rank>[0-9]+))?\.$/
@@ -11,8 +11,14 @@ module Infomon
       Skill = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)]
       Spell = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+)$|^(?<name>[\w\s\-']+)\.+(?<rank>\d+)$]
       Levelup = %r[^\s+(?<stat>\w+)\s+\(\w{3}\)\s+:\s+(?<value>\d+)\s+(?:\+1)\s+\.\.\.\s+(?<bonus>\d+)(?:\s+\+1)?$]
+      Fame = %r[^\s+Level: \d+\s+Fame: (?<fame>[\d,]+)$]
+      RealExp = %r[^\s+Experience: (?<experience>[\d,]+)\s+Field Exp: (?<fxp_current>[\d,]+)/(?<fxp_max>[\d,]+)$]
+      AscExp = %r[^\s+Ascension Exp: (?<ascension_experience>[\d,]+)\s+Recent Deaths: [\d,]+$]
+      TotalExp = %r[^\s+Total Exp: (?<total_experience>[\d,]+)\s+Death's Sting: [\w]+$]
+      LTE = %r[^\s+Long-Term Exp: (?<long_term_experience>[\d,]+)\s+Deeds: (?<deeds>\d+)$]
+      TNL = %r[^\s+Exp until lvl: (?<experience_to_next_level>[\d,]+)(\s+Exp to next ATP: [\d,]+)$]
 
-      All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell, Levelup)
+      All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell, Levelup, Fame, RealExp, AscExp, TotalExp, LTE, TNL)
     end
 
     def self.parse(line)
@@ -70,6 +76,33 @@ module Infomon
           # todo: capture SK item spells here?
           match = Regexp.last_match
           Infomon.set("spell.%s" % match[:name], match[:rank].to_i)
+          :ok
+        when Pattern::Fame
+          match - Regexp.last_match
+          Infomon.set("stat.fame", match[:fame])
+          :ok
+        when Pattern::RealExp
+          match - Regexp.last_match
+          Infomon.set("stat.experience", match[:experience])
+          Infomon.set("stat.fxp_current", match[:fxp_current])
+          Infomon.set("stat.fxp_max", match[:fxp_max])
+          :ok
+        when Pattern::AscExp
+          match - Regexp.last_match
+          Infomon.set("stat.ascension_experience", match[:ascension_experience])
+          :ok
+        when Pattern::TotalExp 
+          match - Regexp.last_match
+          Infomon.set("stat.total_experience", match[:total_experience])
+          :ok
+        when Pattern::LTE 
+          match - Regexp.last_match
+          Infomon.set("stat.long_term_experience", match[:long_term_experience])
+          Infomon.set("stat.deeds", match[:deeds])
+          :ok
+        when Pattern::TNL 
+          match - Regexp.last_match
+          Infomon.set("stat.experience_to_next_level", match[:experience_to_next_level])
           :ok
         else
           :noop
