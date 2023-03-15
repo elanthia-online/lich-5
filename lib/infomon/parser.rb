@@ -29,7 +29,6 @@ module Infomon
       All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell,
                          Levelup, SleepActive, SleepNoActive, BindActive, BindNoActive,
                          SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive, CutthroatNoActive)
-
     end
 
     def self.parse(line)
@@ -52,7 +51,7 @@ module Infomon
             ["stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i],
             ["stat.%s.enhanced.bonus" % match[:stat], match[:enhanced_bonus].to_i]
           )
-          
+
           # Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
           # Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
           # Infomon.set("stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i)
