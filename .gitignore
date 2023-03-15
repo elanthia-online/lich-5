@@ -17,3 +17,4 @@ R4LGTK3.iss
 # handle symlinks since these are files on *nix
 data
 scripts
+.vscode

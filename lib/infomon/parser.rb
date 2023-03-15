@@ -28,10 +28,18 @@ module Infomon
           :ok
         when Pattern::Stat
           match = Regexp.last_match
-          Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
-          Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
-          Infomon.set("stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i)
-          Infomon.set("stat.%s.enhanced_bonus" % match[:stat], match[:enhanced_bonus].to_i)
+
+          Infomon.batch_set(
+            ["stat.%s" % match[:stat], match[:value].to_i],
+            ["stat.%s.bonus" % match[:stat], match[:bonus].to_i],
+            ["stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i],
+            ["stat.%s.enhanced.bonus" % match[:stat], match[:enhanced_bonus].to_i]
+          )
+          
+          #Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
+          #Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
+          #Infomon.set("stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i)
+          #Infomon.set("stat.%s.enhanced_bonus" % match[:stat], match[:enhanced_bonus].to_i)
           :ok
         when Pattern::Levelup
           match = Regexp.last_match
