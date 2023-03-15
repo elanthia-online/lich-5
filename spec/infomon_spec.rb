@@ -116,7 +116,7 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get("stat.fxp_max")).to eq(1_010)
       expect(Infomon.get("stat.ascension_experience")).to eq(4_170_132)
       expect(Infomon.get("stat.total_experience")).to eq(41_307_131)
-      expect(Infomon.get("stat.long_term_experience")).to eq(26_000)
+      expect(Infomon.get("stat.long_term_experience")).to eq(26_266)
       expect(Infomon.get("stat.deeds")).to eq(20)
       expect(Infomon.get("stat.experience_to_next_level")).to eq(2_648)
     end
