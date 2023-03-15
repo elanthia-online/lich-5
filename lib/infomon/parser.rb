@@ -35,7 +35,7 @@ module Infomon
       All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell,
                          Levelup, SleepActive, SleepNoActive, BindActive, BindNoActive,
                          SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive, CutthroatNoActive,
-                         Fame, RealExp, AscExp, TotalExp, LTE, TNL)
+                         Fame, RealExp, AscExp, TotalExp, LTE)
     end
 
     def self.parse(line)
