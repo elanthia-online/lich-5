@@ -16,7 +16,7 @@ module Infomon
       AscExp = %r[^\s+Ascension Exp: (?<ascension_experience>[\d,]+)\s+Recent Deaths: [\d,]+$]
       TotalExp = %r[^\s+Total Exp: (?<total_experience>[\d,]+)\s+Death's Sting: [\w]+$]
       LTE = %r[^\s+Long-Term Exp: (?<long_term_experience>[\d,]+)\s+Deeds: (?<deeds>\d+)$]
-      TNL = %r[^\s+Exp until lvl: (?<experience_to_next_level>[\d,]+)(?:\s+Exp to next ATP: [\d,]+)$]
+      TNL = %r[^\s+Exp until lvl: (?<experience_to_next_level>[\d,]+)(?:\s+Exp to next ATP: [\d,]+)?$]
 
       All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell, Levelup, Fame, RealExp, AscExp, TotalExp, LTE, TNL)
     end
