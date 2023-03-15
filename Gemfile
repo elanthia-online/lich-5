@@ -6,3 +6,11 @@ group :development do
   gem "rspec"
   gem 'rubocop'
 end
+
+gem "sequel", "~> 5.66"
+
+gem "sqlite3", "~> 1.6"
+
+gem "terminal-table", "~> 3.0"
+
+gem "ascii_charts", "~> 0.9.1"
