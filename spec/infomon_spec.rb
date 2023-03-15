@@ -51,16 +51,16 @@ describe Infomon::Parser, ".parse" do
   context "stats" do
     it "handles stats" do
       stats = <<-Stats
-            Strength (STR):   110 (30)    ...  110 (30)
+          Strength (STR):   110 (30)    ...  110 (30)
       Constitution (CON):   104 (22)    ...  104 (22)
-        Dexterity (DEX):   100 (35)    ...  100 (35)
-          Agility (AGI):   100 (30)    ...  100 (30)
+         Dexterity (DEX):   100 (35)    ...  100 (35)
+           Agility (AGI):   100 (30)    ...  100 (30)
         Discipline (DIS):   110 (20)    ...  110 (20)
-              Aura (AUR):   100 (-35)    ...  100 (35)
-            Logic (LOG):   108 (29)    ...  118 (34)
-        Intuition (INT):    99 (29)    ...   99 (29)
+              Aura (AUR):   100 (-35)   ...  100 (35)
+             Logic (LOG):   108 (29)    ...  118 (34)
+         Intuition (INT):    99 (29)    ...   99 (29)
             Wisdom (WIS):    84 (22)    ...   84 (22)
-        Influence (INF):   100 (20)    ...  108 (24)
+         Influence (INF):   100 (20)    ...  108 (24)
       Stats
       stats.split("\n").each {|line| Infomon::Parser.parse(line)}
 
@@ -82,10 +82,10 @@ describe Infomon::Parser, ".parse" do
       levelup = <<-Levelup
             Strength (STR) :  65   +1  ...      7    +1
         Constitution (CON) :  78   +1  ...      9
-          Dexterity (DEX) :  37   +1  ...      4
-            Agility (AGI) :  66   +1  ...     13
+           Dexterity (DEX) :  37   +1  ...      4
+             Agility (AGI) :  66   +1  ...     13
           Discipline (DIS) :  78   +1  ...      4
-          Intuition (INT) :  66   +1  ...     13
+           Intuition (INT) :  66   +1  ...     13
               Wisdom (WIS) :  66   +1  ...     13
       Levelup
       levelup.split("\n").each {|line| 
@@ -190,6 +190,21 @@ describe Infomon::Parser, ".parse" do
         Vanish               vanish          1/1   Buff                                           
       Feat
 
+      output.split("\n").map {|line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      }
+    end
+    
+    it "handles experience info" do
+      output = <<~Experience
+                  Level: 100                         Fame: 654,804,958
+             Experience: 37,136,999             Field Exp: 0/1,010
+          Ascension Exp: 4,170,132          Recent Deaths: 0
+              Total Exp: 41,307,131         Death's Sting: None
+          Long-Term Exp: 26,266                     Deeds: 20
+         Exp to next TP: 501              Exp to next ATP: 29,868
+      Experience
+      
       output.split("\n").map {|line|
         Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
       }
