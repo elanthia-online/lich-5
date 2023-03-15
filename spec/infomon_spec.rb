@@ -197,12 +197,12 @@ describe Infomon::Parser, ".parse" do
     
     it "handles experience info" do
       output = <<~Experience
-                  Level: 100                         Fame: 654,804,958
-             Experience: 37,136,999             Field Exp: 0/1,010
-          Ascension Exp: 4,170,132          Recent Deaths: 0
-              Total Exp: 41,307,131         Death's Sting: None
-          Long-Term Exp: 26,266                     Deeds: 20
-         Exp to next TP: 501              Exp to next ATP: 29,868
+                  Level: 2                           Fame: 72,824
+             Experience: 7,352                  Field Exp: 0/941
+          Ascension Exp: 0                  Recent Deaths: 0
+              Total Exp: 7,352              Death's Sting: None
+          Long-Term Exp: 0                          Deeds: 1
+          Exp until lvl: 2,648
       Experience
       
       output.split("\n").map {|line|
