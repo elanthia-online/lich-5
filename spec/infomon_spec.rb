@@ -109,7 +109,7 @@ describe Infomon::Parser, ".parse" do
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
-      
+
       expect(Infomon.get("stat.fame")).to eq(4_804_958)
       expect(Infomon.get("stat.experience")).to eq(37_136_999)
       expect(Infomon.get("stat.fxp_current")).to eq(1_350)
