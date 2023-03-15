@@ -1,5 +1,5 @@
 require "infomon/infomon"
-require "stats/stats_gs"
+require "stats/stats"
 
 module Char
   def self.name

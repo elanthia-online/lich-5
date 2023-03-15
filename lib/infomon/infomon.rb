@@ -11,7 +11,6 @@
 #        version: 2.0
 #         Source: https://github.com/elanthia-online/scripts
 
-
 require 'English'
 require 'sequel'
 require 'tmpdir'
@@ -44,7 +43,7 @@ module Infomon
 
   def self.setup!
     @db.create_table?(:state) do
-      string  :key, primary_key: true
+      string :key, primary_key: true
       string :char
       blob :value
     end
@@ -57,6 +56,8 @@ module Infomon
     return nil unless result
     val = result[:value]
     return nil if val.nil?
+    return true if val.to_s == 'true'
+    return false if val.to_s == 'false'
     return val.to_i if val.to_s =~ /^\d+$/ || val =~ /^-\d+$/
     return val.to_s if val
   end
@@ -66,8 +67,8 @@ module Infomon
     raise "Infomon.set(%s, %s) was called with a value that was not Integer|String|NilClass" % [key, value] unless [Integer, String, NilClass].include?(value.class)
     #puts "infomon(%s) :set %s -> %s(%s)" % [Char.name, key, value.class.name, value] if $infomon_debug
     self.state
-      .insert_conflict(:replace)
-      .insert(key: key, value: value, char: Char.name)
+        .insert_conflict(:replace)
+        .insert(key: key, value: value, char: Char.name)
   end
 
   require_relative "parser"
