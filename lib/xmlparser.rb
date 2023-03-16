@@ -32,7 +32,7 @@ class XMLParser
               :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
               :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
               :dialogs, :room_id, :previous_nav_rm, :room_objects, :concentration, :max_concentration
-  attr_accessor :send_fake_tags
+  attr_accessor :send_fake_tags, :process_spell_durations
 
   @@warned_deprecated_spellfront = 0
 
@@ -123,6 +123,9 @@ class XMLParser
     # real id updates
     @room_id = nil
     @previous_nav_rm = nil
+
+    # infomon rewrite (activespells)
+    @process_spell_durations = false
   end
 
   # for backwards compatibility
@@ -230,7 +233,7 @@ class XMLParser
         @dialogs[attributes["id"]] ||= {}
         @dialogs[attributes["id"]].clear
         # detect a clear board request for effects, and send to activespell
-        $process_legacy_spell_durations = true
+        @process_spell_durations = true
       elsif name == 'resource'
         nil
       elsif name == 'nav'
@@ -302,11 +305,13 @@ class XMLParser
           @mana, @max_mana = attributes['text'].scan(/-?\d+/).collect { |num| num.to_i }
           difference = @mana - last_mana
           # fixme: enhancives screw this up
-          if (difference == noded_pulse) or (difference == unnoded_pulse) or ((@mana == @max_mana) and (last_mana + noded_pulse > @max_mana))
-            @last_pulse = Time.now.to_i
-            if @send_fake_tags
-              $_CLIENT_.puts "\034GSZ#{sprintf('%010d', (@mana + 1))}\n"
-              $_CLIENT_.puts "\034GSZ#{sprintf('%010d', @mana)}\n"
+          unless XMLData.name.empty?
+            if (difference == noded_pulse) or (difference == unnoded_pulse) or ((@mana == @max_mana) and (last_mana + noded_pulse > @max_mana))
+              @last_pulse = Time.now.to_i
+              if @send_fake_tags
+                $_CLIENT_.puts "\034GSZ#{sprintf('%010d', (@mana + 1))}\n"
+                $_CLIENT_.puts "\034GSZ#{sprintf('%010d', @mana)}\n"
+              end
             end
           end
           if @send_fake_tags
@@ -339,7 +344,7 @@ class XMLParser
           # puts "kind=(%s) name=%s attributes=%s" % [@active_ids[-2], name, attributes]
           self.parse_psm3_progressbar(@active_ids[-2], attributes)
           # since we received an updated spell duration, let's signal infomon to update
-          $process_legacy_spell_durations = true
+          @process_spell_durations = true
         end
       elsif name == 'roundTime'
         @roundtime_end = attributes['value'].to_i
