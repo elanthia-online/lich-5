@@ -68,7 +68,7 @@ module Stats
     [self.race, self.prof, self.gender,
      self.age, self.exp, self.level,
      self.str, self.con, self.dex,
-     self.agi, self.dis,  self.aur,
+     self.agi, self.dis, self.aur,
      self.log, self.int, self.wis, self.inf,
      self.enhanced_str, self.enhanced_con, self.enhanced_dex,
      self.enhanced_agi, self.enhanced_dis, self.enhanced_aur,
