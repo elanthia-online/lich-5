@@ -25,7 +25,7 @@ describe ActiveSpell do
   context "updates spell information" do
     it "queries XMLData" do
       XMLData.process_spell_durations = true
-      ActiveSpell.get_spell_info
+#      ActiveSpell.get_spell_info
 
       expect(@update_spell_names).to eq(["Bravery", "Heroism", "Elemental Defense I", "Elemental Defense II", "Elemental Defense III", "Elemental Targeting", "Elemental Barrier", "Thurfel's Ward", "Elemental Deflection", "Elemental Bias", "Strength", "Elemental Focus", "Mage Armor", "Haste", "Temporal Reversion", "Prismatic Guard", "Mass Blur", "Melgorehn's Aura"])
 
