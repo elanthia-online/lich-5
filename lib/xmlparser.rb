@@ -229,6 +229,8 @@ class XMLParser
       elsif name == 'dialogData' and attributes['clear'] == 't' and PSM_3_DIALOG_IDS.include?(attributes["id"])
         @dialogs[attributes["id"]] ||= {}
         @dialogs[attributes["id"]].clear
+        # detect a clear board request for effects, and send to activespell
+        $process_legacy_spell_durations = true
       elsif name == 'resource'
         nil
       elsif name == 'nav'
