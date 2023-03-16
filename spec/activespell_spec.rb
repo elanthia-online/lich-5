@@ -1,4 +1,4 @@
-require 'infomon/activespells'
+require 'infomon/activespell'
 
 # actual format of XMLData.active_spells is a hash represented as
 # "Spell.name"=>String where string is a Time obj converted to string.
