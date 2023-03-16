@@ -2136,6 +2136,7 @@ module Games
     require_relative("./lib/infomon/infomon.rb")
     require_relative("./lib/stats/stats.rb")
     require_relative("./lib/infomon/status.rb")
+    require_relative("./lib/experience.rb")
 
 
     class Gift
