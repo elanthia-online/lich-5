@@ -11,9 +11,13 @@ module XMLData
 
     return testbed
   end
+  
+  def self.process_spell_durations
+    true
+  end
 end
 
-describe ActiveSpells do
+describe ActiveSpell do
   context "updates spell information" do
     it "queries XMLData" do
       ActiveSpell.get_spell_info
