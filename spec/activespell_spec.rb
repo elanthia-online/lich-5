@@ -27,7 +27,7 @@ describe ActiveSpell do
       XMLData.process_spell_durations = true
 #      ActiveSpell.get_spell_info
 
-      expect(@update_spell_names).to eq(["Bravery", "Heroism", "Elemental Defense I", "Elemental Defense II", "Elemental Defense III", "Elemental Targeting", "Elemental Barrier", "Thurfel's Ward", "Elemental Deflection", "Elemental Bias", "Strength", "Elemental Focus", "Mage Armor", "Haste", "Temporal Reversion", "Prismatic Guard", "Mass Blur", "Melgorehn's Aura"])
+      expect("#{@update_spell_names}").to eq(["Bravery", "Heroism", "Elemental Defense I", "Elemental Defense II", "Elemental Defense III", "Elemental Targeting", "Elemental Barrier", "Thurfel's Ward", "Elemental Deflection", "Elemental Bias", "Strength", "Elemental Focus", "Mage Armor", "Haste", "Temporal Reversion", "Prismatic Guard", "Mass Blur", "Melgorehn's Aura"])
 
       expect(@update_spell_durations.keys[0]).to eq(%[Bravery])
       expect(@update_spell_durations.values[2]).to eq(%[2023-03-16 18:35:20.205097 -0400])
