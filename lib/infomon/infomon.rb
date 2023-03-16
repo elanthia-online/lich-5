@@ -22,7 +22,6 @@ module Infomon
   @file = File.join(@root, "infomon.db")
   @db   = Sequel.sqlite(@file)
   @db.loggers << Logger.new($stdout) if ENV["DEBUG"]
-  @table_name = :infomon
 
   def self.file
     @file
@@ -32,8 +31,12 @@ module Infomon
     @db
   end
 
+  def self.table_name
+    ("%s.%s" % [XMLData.game, Char.name]).to_sym
+  end
+
   def self.reset!
-    Infomon.db.drop_table?(@table_name)
+    Infomon.db.drop_table?(self.table_name)
     Infomon.setup!
   end
 
@@ -42,18 +45,18 @@ module Infomon
   end
 
   def self.setup!
-    @db.create_table?(@table_name) do
+    @db.create_table?(self.table_name) do
       string :key, primary_key: true
 
       blob :value
       index :key, unique: true
     end
 
-    @_table ||= @db[@table_name]
+    @_table ||= @db[self.table_name]
   end
 
   def self._key(key)
-    "%s.%s" % [Char.name, key.to_s.downcase]
+    key.to_s.downcase
   end
 
   def self._validate!(key, value)
@@ -85,7 +88,8 @@ module Infomon
   def self.batch_set(*pairs)
     upserts = pairs.map {|key, value| 
       value.is_a?(Integer) or fail "batch_set only works with Integer values"
-      %[INSERT OR REPLACE INTO `infomon` (`key`, `value`) VALUES (%s, %s);] % [
+      %[INSERT OR REPLACE INTO %s (`key`, `value`) VALUES (%s, %s);] % [
+        self.db.literal(self.table_name),
         self.db.literal(self._key(key)), 
         self.db.literal(value)
       ]

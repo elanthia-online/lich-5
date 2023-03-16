@@ -7,6 +7,12 @@ module Char
   end
 end
 
+module XMLData
+  def self.game
+    "rspec"
+  end
+end
+
 describe Infomon, ".setup!" do
   context "can set itself up" do
     it "creates a db" do
