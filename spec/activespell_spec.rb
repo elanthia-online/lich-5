@@ -11,9 +11,13 @@ module XMLData
 
     return testbed
   end
-  
+
   def self.process_spell_durations
     true
+  end
+
+  def self.process_spell_durations=(val)
+    val
   end
 end
 
