@@ -43,7 +43,7 @@ module Stats
   # these are here for backwards compat
   %i[str con dex agi dis aur log int wis inf].each do |shorthand|
     # find the long-hand method we want to use as a source for this data
-    long_hand = @@stats.find {|method| method.to_s.start_with?(shorthand.to_s)}
+    long_hand = @@stats.find { |method| method.to_s.start_with?(shorthand.to_s) }
     self.define_singleton_method(shorthand) do
       stat = Stats.send(long_hand)
       [stat.value, stat.bonus]
@@ -65,14 +65,14 @@ module Stats
   end
 
   def self.serialize
-    [self.race, self.prof, self.gender, 
-     self.age, self.exp, self.level, 
-     self.str, self.con, self.dex, 
-     self.agi, self.dis,  self.aur, 
-     self.log, self.int, self.wis, self.inf, 
-     self.enhanced_str, self.enhanced_con, self.enhanced_dex, 
-     self.enhanced_agi, self.enhanced_dis, self.enhanced_aur, 
-     self.enhanced_log, self.enhanced_int, self.enhanced_wis, 
+    [self.race, self.prof, self.gender,
+     self.age, self.exp, self.level,
+     self.str, self.con, self.dex,
+     self.agi, self.dis,  self.aur,
+     self.log, self.int, self.wis, self.inf,
+     self.enhanced_str, self.enhanced_con, self.enhanced_dex,
+     self.enhanced_agi, self.enhanced_dis, self.enhanced_aur,
+     self.enhanced_log, self.enhanced_int, self.enhanced_wis,
      self.enhanced_inf]
   end
 end
