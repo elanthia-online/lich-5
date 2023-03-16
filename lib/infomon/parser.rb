@@ -35,7 +35,7 @@ module Infomon
       LTE = %r[^\s+Long-Term Exp: (?<long_term_experience>[\d,]+)\s+Deeds: (?<deeds>\d+)$]
 
       All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell,
-                         Levelup, SleepActive, SleepNoActive, BindActive, BindNoActive,
+                         Levelup, SleepActive, SleepNoActive, BindActive, BindNoActive, CharRaceProf, CharGenderAgeExpLevel,
                          SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive, CutthroatNoActive,
                          Fame, RealExp, AscExp, TotalExp, LTE)
     end
