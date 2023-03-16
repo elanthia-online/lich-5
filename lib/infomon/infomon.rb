@@ -11,7 +11,6 @@
 #        version: 2.0
 #         Source: https://github.com/elanthia-online/scripts
 
-require 'English'
 require 'sequel'
 require 'tmpdir'
 require 'logger'
@@ -84,9 +83,18 @@ module Infomon
   end
 
   def self.batch_set(*pairs)
-    pairs
-      .map { |key, value| { key: self._key(key), value: self._validate!(key, value) } }
-      .each { |record| self.upsert(record) }
+    upserts = pairs.map {|key, value| 
+      value.is_a?(Integer) or fail "batch_set only works with Integer values"
+      %[INSERT OR REPLACE INTO `infomon` (`key`, `value`) VALUES (%s, %s);] % [
+        self.db.literal(self._key(key)), 
+        self.db.literal(value)
+      ]
+    }.join("\n") 
+    self.db.run <<~Sql
+      BEGIN TRANSACTION;
+      #{upserts}
+      COMMIT
+    Sql
   end
 
   require_relative "parser"
