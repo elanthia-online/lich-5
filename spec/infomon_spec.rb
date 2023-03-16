@@ -109,13 +109,13 @@ describe Infomon::Parser, ".parse" do
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
 
-      expect(Infomon.get("stat.fame")).to eq(4_804_958)
-      expect(Infomon.get("stat.fxp_current")).to eq(1_350)
-      expect(Infomon.get("stat.fxp_max")).to eq(1_010)
-      expect(Infomon.get("stat.ascension_experience")).to eq(4_170_132)
-      expect(Infomon.get("stat.total_experience")).to eq(41_307_131)
-      expect(Infomon.get("stat.long_term_experience")).to eq(26_266)
-      expect(Infomon.get("stat.deeds")).to eq(20)
+      expect(Infomon.get("experience.fame")).to eq(4_804_958)
+      expect(Infomon.get("experience.fxp_current")).to eq(1_350)
+      expect(Infomon.get("experience.fxp_max")).to eq(1_010)
+      expect(Infomon.get("experience.ascension_experience")).to eq(4_170_132)
+      expect(Infomon.get("experience.total_experience")).to eq(41_307_131)
+      expect(Infomon.get("experience.long_term_experience")).to eq(26_266)
+      expect(Infomon.get("experience.deeds")).to eq(20)
     end
   end
 
