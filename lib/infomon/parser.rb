@@ -2,7 +2,7 @@ module Infomon
   # this module handles all of the logic for parsing game lines that infomon depends on
   module Parser
     module Pattern
-      Stat = %r[\s+(?<stat>\w+)\s\(\w{3}\):\s+(?<value>\d+)\s\((?<bonus>[\w-]+)\)\s+\.\.\.\s+(?<enhanced_value>\d+)\s\((?<enhanced_bonus>\w+)\)]
+      Stat = %r[^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)]
       Citizenship = /^You currently have .*? citizenship in (?<town>.*)\.$/
       NoCitizenship = /You don't seem to have citizenship\./
       Society = /^\s+You are a (?:Master|member) (?:in|of) the (?<society>Order of Voln|Council of Light|Guardians of Sunfist)(?: at rank (?<rank>[0-9]+)| at step (?<rank>[0-9]+))?\.$/
@@ -13,6 +13,7 @@ module Infomon
       Levelup = %r[^\s+(?<stat>\w+)\s+\(\w{3}\)\s+:\s+(?<value>\d+)\s+(?:\+1)\s+\.\.\.\s+(?<bonus>\d+)(?:\s+\+1)?$]
       CharRaceProf = %r[^Name:\s+(?<name>[A-z\s']+)\s+Race:\s+(?<race>[-A-z\s]+)\s+Profession:\s+(?<profession>[-A-z\s]+)]
       CharGenderAgeExpLevel = %r[^Gender:\s+(?<gender>[A-z]+)\s+Age:\s+(?<age>[0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)]
+
       # adding boolean status detection
       # todo: refactor / streamline?
       SleepActive = %r[^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$]
@@ -26,9 +27,17 @@ module Infomon
       CutthroatActive = %r[slices deep into your vocal cords!$|^All you manage to do is cough up some blood\.$]
       CutthroatNoActive = %r[^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$]
 
+      # Experience Regex Matches
+      Fame = %r[^\s+Level: \d+\s+Fame: (?<fame>[\d,]+)$]
+      RealExp = %r[^\s+Experience: [\d,]+\s+Field Exp: (?<fxp_current>[\d,]+)/(?<fxp_max>[\d,]+)$]
+      AscExp = %r[^\s+Ascension Exp: (?<ascension_experience>[\d,]+)\s+Recent Deaths: [\d,]+$]
+      TotalExp = %r[^\s+Total Exp: (?<total_experience>[\d,]+)\s+Death's Sting: [\w]+$]
+      LTE = %r[^\s+Long-Term Exp: (?<long_term_experience>[\d,]+)\s+Deeds: (?<deeds>\d+)$]
+
       All = Regexp.union(Stat, Citizenship, NoCitizenship, Society, NoSociety, PSM, Skill, Spell,
-                         Levelup, SleepActive, SleepNoActive, BindActive, BindNoActive,
-                         SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive, CutthroatNoActive)
+                         Levelup, SleepActive, SleepNoActive, BindActive, BindNoActive, CharRaceProf, CharGenderAgeExpLevel,
+                         SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive, CutthroatNoActive,
+                         Fame, RealExp, AscExp, TotalExp, LTE)
     end
 
     def self.parse(line)
@@ -87,6 +96,28 @@ module Infomon
           match = Regexp.last_match
           Infomon.set("spell.%s" % match[:name], match[:rank].to_i)
           :ok
+        when Pattern::Fame
+          match = Regexp.last_match
+          Infomon.set("stat.fame", match[:fame].gsub(',', '').to_i)
+          :ok
+        when Pattern::RealExp
+          match = Regexp.last_match
+          Infomon.set("stat.fxp_current", match[:fxp_current].gsub(',', '').to_i)
+          Infomon.set("stat.fxp_max", match[:fxp_max].gsub(',', '').to_i)
+          :ok
+        when Pattern::AscExp
+          match = Regexp.last_match
+          Infomon.set("stat.ascension_experience", match[:ascension_experience].gsub(',', '').to_i)
+          :ok
+        when Pattern::TotalExp
+          match = Regexp.last_match
+          Infomon.set("stat.total_experience", match[:total_experience].gsub(',', '').to_i)
+          :ok
+        when Pattern::LTE
+          match = Regexp.last_match
+          Infomon.set("stat.long_term_experience", match[:long_term_experience].gsub(',', '').to_i)
+          Infomon.set("stat.deeds", match[:deeds].to_i)
+          :ok
         when Pattern::CharRaceProf
           # name captured here, but do not rely on it - use XML instead
           match = Regexp.last_match
@@ -100,6 +131,7 @@ module Infomon
           Infomon.set("stat.age", match[:age])
           Infomon.set("stat.experience", match[:experience])
           :ok
+
         # todo: refactor / streamline?
         when Pattern::SleepActive
           Infomon.set("status.sleeping", true)
