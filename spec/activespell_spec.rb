@@ -27,11 +27,11 @@ describe ActiveSpell do
       XMLData.process_spell_durations = true
       ActiveSpell.get_spell_info
 
-      expect(ActiveSpell.instance_variable_get("@update_spell_names")).to eq(["Bravery", "Heroism", "Elemental Defense I", "Elemental Defense II", "Elemental Defense III", "Elemental Targeting", "Elemental Barrier", "Thurfel's Ward", "Elemental Deflection", "Elemental Bias", "Strength", "Elemental Focus", "Mage Armor", "Haste", "Temporal Reversion", "Prismatic Guard", "Mass Blur", "Melgorehn's Aura"])
+      expect(ActiveSpell.instance_variable_get("@update_spell_names")).to eql(["Bravery", "Heroism", "Elemental Defense I", "Elemental Defense II", "Elemental Defense III", "Elemental Targeting", "Elemental Barrier", "Thurfel's Ward", "Elemental Deflection", "Elemental Bias", "Strength", "Elemental Focus", "Mage Armor", "Haste", "Temporal Reversion", "Prismatic Guard", "Mass Blur", "Melgorehn's Aura"])
 
-      expect(ActiveSpell.instance_variable_get("@update_spell_durations").keys[0]).to eq(%[Bravery])
-      expect(ActiveSpell.instance_variable_get("@update_spell_durations").values[2]).to eq(%[2023-03-16 18:35:20.205097 -0400])
-      expect(ActiveSpell.instance_variable_get("@update_spell_durations").keys[17]).to eq(%[Mage Armor])
+      expect(ActiveSpell.instance_variable_get("@update_spell_durations").keys[0]).to eql(%[Bravery])
+      expect(ActiveSpell.instance_variable_get("@update_spell_durations").values[2]).to eql(%[2023-03-16 18:35:20.205097 -0400])
+      expect(ActiveSpell.instance_variable_get("@update_spell_durations").keys[17]).to eql(%[Mage Armor])
     end
   end
 end
