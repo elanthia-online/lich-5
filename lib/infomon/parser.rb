@@ -86,10 +86,11 @@ module Infomon
           Infomon.set("psm.%s" % match[:command], match[:ranks].to_i)
           :ok
         when Pattern::Skill
-          # todo: is there a need for ranks?
-          # todo: change Elemental Lore - Air to elair (and others)?
           match = Regexp.last_match
-          Infomon.set("skill.%s" % match[:name], match[:bonus].to_i)
+          Infomon.set("skill.%s" % match[:name].gsub(' ', '_').gsub('_-_', '').gsub('-', '_'),
+            match[:ranks].to_i)
+          Infomon.set("skill.%s.bonus" % match[:name].gsub(' ', '_').gsub('_-_', '').gsub('-', '_'),
+            match[:bonus].to_i)
           :ok
         when Pattern::Spell
           # todo: capture SK item spells here?
