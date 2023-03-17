@@ -88,9 +88,9 @@ module Infomon
         when Pattern::Skill
           match = Regexp.last_match
           Infomon.set("skill.%s" % match[:name].gsub(' ', '_').gsub('_-_', '').gsub('-', '_'),
-            match[:ranks].to_i)
+                      match[:ranks].to_i)
           Infomon.set("skill.%s.bonus" % match[:name].gsub(' ', '_').gsub('_-_', '').gsub('-', '_'),
-            match[:bonus].to_i)
+                      match[:bonus].to_i)
           :ok
         when Pattern::Spell
           # todo: capture SK item spells here?
