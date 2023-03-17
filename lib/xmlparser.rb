@@ -283,9 +283,6 @@ class XMLParser
         elsif attributes['id'] == 'room desc'
           @room_description = String.new
           GameObj.clear_room_desc
-          # @room_count += 1
-          # $room_count += 1
-          # elsif attributes['id'] == 'sprite'
         end
       elsif name == 'clearContainer'
         if attributes['id'] == 'stow'
@@ -477,8 +474,6 @@ class XMLParser
           @level = attributes['value'].slice(/\d+/).to_i
         elsif attributes['id'] == 'encumblurb'
           @encumbrance_full_text = attributes['value']
-          # deprecated: labels do not have the required data in psm 3.0 dialogdata
-          #             instead we must parse the <progressBar/> element
         end
       elsif (name == 'container') and (attributes['id'] == 'stow')
         @stow_container_id = attributes['target'].sub('#', '')

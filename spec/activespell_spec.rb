@@ -7,7 +7,7 @@ require 'infomon/activespell'
 
 module XMLData
   def self.active_spells
-    testbed = {"Spirit Warding I"=>"2023-03-16 20:53:54.138611 -0400", "Iron Skin"=>"2023-03-16 21:01:58.138801 -0400", "Foresight"=>"2023-03-16 21:02:26.139419 -0400", "Mindward"=>"2023-03-16 21:02:32.139583 -0400", "Dragonclaw"=>"2023-03-16 21:02:38.139756 -0400", "Rolling Krynch Stance"=>"2033-03-13 20:33:39.139986 -0400" }
+    testbed = { "Spirit Warding I" => "2023-03-16 20:53:54.138611 -0400", "Iron Skin" => "2023-03-16 21:01:58.138801 -0400", "Foresight" => "2023-03-16 21:02:26.139419 -0400", "Mindward" => "2023-03-16 21:02:32.139583 -0400", "Dragonclaw" => "2023-03-16 21:02:38.139756 -0400", "Rolling Krynch Stance" => "2033-03-13 20:33:39.139986 -0400" }
 
     return testbed
   end
