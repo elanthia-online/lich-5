@@ -11,7 +11,6 @@
 #        version: 2.0
 #         Source: https://github.com/elanthia-online/scripts
 
-require 'English'
 require 'sequel'
 require 'tmpdir'
 require 'logger'
@@ -23,7 +22,6 @@ module Infomon
   @file = File.join(@root, "infomon.db")
   @db   = Sequel.sqlite(@file)
   @db.loggers << Logger.new($stdout) if ENV["DEBUG"]
-  @table_name = :infomon
 
   def self.file
     @file
@@ -33,8 +31,19 @@ module Infomon
     @db
   end
 
+  def self.context!
+    return unless XMLData.name.empty? or XMLData.name.nil?
+    puts Exception.new.backtrace
+    fail "cannot access Infomon before XMLData.name is loaded"
+  end
+
+  def self.table_name
+    self.context!
+    ("%s.%s" % [XMLData.game, XMLData.name]).to_sym
+  end
+
   def self.reset!
-    Infomon.db.drop_table?(@table_name)
+    Infomon.db.drop_table?(self.table_name)
     Infomon.setup!
   end
 
@@ -43,18 +52,18 @@ module Infomon
   end
 
   def self.setup!
-    @db.create_table?(@table_name) do
+    @db.create_table?(self.table_name) do
       string :key, primary_key: true
 
       blob :value
       index :key, unique: true
     end
 
-    @_table ||= @db[@table_name]
+    @_table ||= @db[self.table_name]
   end
 
   def self._key(key)
-    "%s.%s" % [Char.name, key.to_s.downcase]
+    key.to_s.downcase
   end
 
   def self._validate!(key, value)
@@ -84,9 +93,19 @@ module Infomon
   end
 
   def self.batch_set(*pairs)
-    pairs
-      .map { |key, value| { key: self._key(key), value: self._validate!(key, value) } }
-      .each { |record| self.upsert(record) }
+    upserts = pairs.map {|key, value| 
+      value.is_a?(Integer) or fail "batch_set only works with Integer values"
+      %[INSERT OR REPLACE INTO %s (`key`, `value`) VALUES (%s, %s);] % [
+        self.db.literal(self.table_name),
+        self.db.literal(self._key(key)), 
+        self.db.literal(value)
+      ]
+    }.join("\n") 
+    self.db.run <<~Sql
+      BEGIN TRANSACTION;
+      #{upserts}
+      COMMIT
+    Sql
   end
 
   require_relative "parser"

@@ -7,11 +7,17 @@ module Char
   end
 end
 
+module XMLData
+  def self.game
+    "rspec"
+  end
+end
+
 describe Infomon, ".setup!" do
   context "can set itself up" do
     it "creates a db" do
       Infomon.setup!
-      File.exist?(Infomon.file) or fail "infomon sqlite db was not created"
+      File.exist?(Infomon.file) or fail("infomon sqlite db was not created")
     end
   end
 
@@ -51,15 +57,15 @@ describe Infomon::Parser, ".parse" do
     it "handles stats" do
       stats = <<-Stats
             Strength (STR):   110 (30)    ...  110 (30)
-      Constitution (CON):   104 (22)    ...  104 (22)
-        Dexterity (DEX):   100 (35)    ...  100 (35)
-          Agility (AGI):   100 (30)    ...  100 (30)
-        Discipline (DIS):   110 (20)    ...  110 (20)
-              Aura (AUR):   100 (-35)    ...  100 (35)
-            Logic (LOG):   108 (29)    ...  118 (34)
-        Intuition (INT):    99 (29)    ...   99 (29)
-            Wisdom (WIS):    84 (22)    ...   84 (22)
-        Influence (INF):   100 (20)    ...  108 (24)
+        Constitution (CON):   104 (22)    ...  104 (22)
+           Dexterity (DEX):   100 (35)    ...  100 (35)
+             Agility (AGI):   100 (30)    ...  100 (30)
+          Discipline (DIS):   110 (20)    ...  110 (20)
+                Aura (AUR):   100 (-35)   ...  100 (35)
+               Logic (LOG):   108 (29)    ...  118 (34)
+           Intuition (INT):    99 (29)    ...   99 (29)
+              Wisdom (WIS):    84 (22)    ...   84 (22)
+           Influence (INF):   100 (20)    ...  108 (24)
       Stats
       stats.split("\n").each { |line| Infomon::Parser.parse(line) }
 
@@ -81,10 +87,10 @@ describe Infomon::Parser, ".parse" do
       levelup = <<-Levelup
             Strength (STR) :  65   +1  ...      7    +1
         Constitution (CON) :  78   +1  ...      9
-          Dexterity (DEX) :  37   +1  ...      4
-            Agility (AGI) :  66   +1  ...     13
+           Dexterity (DEX) :  37   +1  ...      4
+             Agility (AGI) :  66   +1  ...     13
           Discipline (DIS) :  78   +1  ...      4
-          Intuition (INT) :  66   +1  ...     13
+           Intuition (INT) :  66   +1  ...     13
               Wisdom (WIS) :  66   +1  ...     13
       Levelup
       levelup.split("\n").each { |line|
@@ -94,6 +100,28 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get("stat.dexterity")).to eq(37)
       expect(Infomon.get("stat.dexterity.bonus")).to eq(4)
       expect(Infomon.get("stat.strength.bonus")).to eq(7)
+    end
+
+    it "handles experience info" do
+      output = <<-Experience
+                  Level: 100                         Fame: 4,804,958
+             Experience: 37,136,999             Field Exp: 1,350/1,010
+          Ascension Exp: 4,170,132          Recent Deaths: 0
+              Total Exp: 41,307,131         Death's Sting: None
+          Long-Term Exp: 26,266                     Deeds: 20
+      Experience
+
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
+      }
+
+      expect(Infomon.get("stat.fame")).to eq(4_804_958)
+      expect(Infomon.get("stat.fxp_current")).to eq(1_350)
+      expect(Infomon.get("stat.fxp_max")).to eq(1_010)
+      expect(Infomon.get("stat.ascension_experience")).to eq(4_170_132)
+      expect(Infomon.get("stat.total_experience")).to eq(41_307_131)
+      expect(Infomon.get("stat.long_term_experience")).to eq(26_266)
+      expect(Infomon.get("stat.deeds")).to eq(20)
     end
   end
 
@@ -189,8 +217,8 @@ describe Infomon::Parser, ".parse" do
         Vanish               vanish          1/1   Buff
       Feat
 
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
   end
@@ -202,8 +230,8 @@ describe Infomon::Parser, ".parse" do
         You close your eyes and slowly drift off to sleep.
         You slump to the ground and immediately fall asleep.  You must have been exhausted!
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -214,8 +242,8 @@ describe Infomon::Parser, ".parse" do
         You are awoken by a sloth bear!
         You awake
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -223,8 +251,8 @@ describe Infomon::Parser, ".parse" do
       output = <<~TestInput
         An unseen force envelops you, restricting all movement.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -233,8 +261,8 @@ describe Infomon::Parser, ".parse" do
         The restricting force that envelops you dissolves away.
         You shake off the immobilization that was restricting your movements!
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -243,8 +271,8 @@ describe Infomon::Parser, ".parse" do
         A pall of silence settles over you.
         The pall of silence settles more heavily over you.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -252,8 +280,8 @@ describe Infomon::Parser, ".parse" do
       output = <<~TestInput
         The pall of silence leaves you.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -261,8 +289,8 @@ describe Infomon::Parser, ".parse" do
       output = <<~TestInput
         A calm washes over you.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -271,8 +299,8 @@ describe Infomon::Parser, ".parse" do
         You are enraged by Ferenghi Warlord's attack!
         The feeling of calm leaves you.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
 
@@ -281,17 +309,17 @@ describe Infomon::Parser, ".parse" do
         The Ferenghi Warlord slices deep into your vocal cords!
         All you manage to do is cough up some blood.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
-    
+
     it "handles cutthroat? boolean false" do
       output = <<~TestInput
         The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat.
       TestInput
-      output.split("\n").map {|line|
-        Infomon::Parser.parse(line).eql?(:ok) or fail ("did not parse:\n%s" % line)
+      output.split("\n").map { |line|
+        Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
     end
   end

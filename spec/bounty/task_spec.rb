@@ -113,19 +113,21 @@ class Bounty
 
     describe "#any?" do
       let(:predicate) { :any? }
-      let(:truthy_types) { [
-        :bandit, :bandit_assignment,
-        :creature_assignment, :cull, :dangerous, :dangerous_spawned,
-        :escort,
-        :failed,
-        :gem, :gem_assignment,
-        :guard,
-        :heirloom, :heirloom_assignment, :heirloom_found,
-        :herb, :herb_assignment,
-        :rescue, :rescue_assignment, :rescue_spawned,
-        :skin, :skin_assignment,
-        :taskmaster
-      ] }
+      let(:truthy_types) {
+        [
+          :bandit, :bandit_assignment,
+          :creature_assignment, :cull, :dangerous, :dangerous_spawned,
+          :escort,
+          :failed,
+          :gem, :gem_assignment,
+          :guard,
+          :heirloom, :heirloom_assignment, :heirloom_found,
+          :herb, :herb_assignment,
+          :rescue, :rescue_assignment, :rescue_spawned,
+          :skin, :skin_assignment,
+          :taskmaster
+        ]
+      }
     end
 
     describe "#guard?" do
@@ -144,7 +146,7 @@ class Bounty
 
     describe "#ready?" do
       let(:predicate) { :ready? }
-      let(:truthy_types) { [ :bandit_assignment, :escort_assignment, :cull, :dangerous, :gem, :herb, :skin, :heirloom ] }
+      let(:truthy_types) { [:bandit_assignment, :escort_assignment, :cull, :dangerous, :gem, :herb, :skin, :heirloom] }
 
       include_examples "task predicate examples"
     end
