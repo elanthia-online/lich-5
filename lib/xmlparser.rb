@@ -300,12 +300,14 @@ class XMLParser
           last_mana = @mana
           @mana, @max_mana = attributes['text'].scan(/-?\d+/).collect { |num| num.to_i }
           difference = @mana - last_mana
-          # fixme: enhancives screw this up
-          if (difference == noded_pulse) or (difference == unnoded_pulse) or ((@mana == @max_mana) and (last_mana + noded_pulse > @max_mana))
-            @last_pulse = Time.now.to_i
-            if @send_fake_tags
-              $_CLIENT_.puts "\034GSZ#{sprintf('%010d', (@mana + 1))}\n"
-              $_CLIENT_.puts "\034GSZ#{sprintf('%010d', @mana)}\n"
+          unless XMLData.name.empty?
+            # fixme: enhancives screw this up
+            if (difference == noded_pulse) or (difference == unnoded_pulse) or ((@mana == @max_mana) and (last_mana + noded_pulse > @max_mana))
+              @last_pulse = Time.now.to_i
+              if @send_fake_tags
+                $_CLIENT_.puts "\034GSZ#{sprintf('%010d', (@mana + 1))}\n"
+                $_CLIENT_.puts "\034GSZ#{sprintf('%010d', @mana)}\n"
+              end
             end
           end
           if @send_fake_tags

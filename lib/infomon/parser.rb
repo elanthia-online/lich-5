@@ -8,7 +8,7 @@ module Infomon
       Society = /^\s+You are a (?:Master|member) (?:in|of) the (?<society>Order of Voln|Council of Light|Guardians of Sunfist)(?: at rank (?<rank>[0-9]+)| at step (?<rank>[0-9]+))?\.$/
       NoSociety = %r[^\s+You are not a member of any society at this time.]
       PSM = %r[^\s+(?<name>[\w\s\-']+)\s+(?<command>[a-z]+)\s+(?<ranks>\d)\/(?<max>\d)\s+]
-      Skill = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)]
+      Skill = %r[^\s+(?<name>[[a-zA-Z]\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)]
       Spell = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+)$|^(?<name>[\w\s\-']+)\.+(?<rank>\d+)$]
       Levelup = %r[^\s+(?<stat>\w+)\s+\(\w{3}\)\s+:\s+(?<value>\d+)\s+(?:\+1)\s+\.\.\.\s+(?<bonus>\d+)(?:\s+\+1)?$]
       CharRaceProf = %r[^Name:\s+(?<name>[A-z\s']+)\s+Race:\s+(?<race>[-A-z\s]+)\s+Profession:\s+(?<profession>[-A-z\s]+)]
@@ -60,11 +60,6 @@ module Infomon
             ["stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i],
             ["stat.%s.enhanced.bonus" % match[:stat], match[:enhanced_bonus].to_i]
           )
-
-          # Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
-          # Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
-          # Infomon.set("stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i)
-          # Infomon.set("stat.%s.enhanced_bonus" % match[:stat], match[:enhanced_bonus].to_i)
           :ok
         when Pattern::Levelup
           match = Regexp.last_match

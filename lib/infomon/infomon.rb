@@ -31,8 +31,15 @@ module Infomon
     @db
   end
 
+  def self.context!
+    return unless XMLData.name.empty? or XMLData.name.nil?
+    puts Exception.new.backtrace
+    fail "cannot access Infomon before XMLData.name is loaded"
+  end
+
   def self.table_name
-    ("%s.%s" % [XMLData.game, Char.name]).to_sym
+    self.context!
+    ("%s.%s" % [XMLData.game, XMLData.name]).to_sym
   end
 
   def self.reset!
