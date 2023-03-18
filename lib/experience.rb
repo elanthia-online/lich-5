@@ -32,10 +32,4 @@ module Experience
   def self.deeds
     Infomon.get("experience.deeds")
   end
-
-  def self.serialize
-    [self.fame, self.fxp_current, self.fxp_max,
-     self.exp, self.axp, self.txp,
-     self.lte, self.deeds]
-  end
 end
