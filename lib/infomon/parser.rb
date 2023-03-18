@@ -49,7 +49,7 @@ module Infomon
           Infomon.set("citizenship", Regexp.last_match[:town])
           :ok
         when Pattern::NoCitizenship
-          Infomon.set("citizenship", nil)
+          Infomon.set("citizenship", "None")
           :ok
         when Pattern::Stat
           match = Regexp.last_match
