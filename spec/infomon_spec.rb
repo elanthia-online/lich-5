@@ -49,7 +49,7 @@ describe Infomon::Parser, ".parse" do
 
     it "handles no citizenship" do
       Infomon::Parser.parse %[You don't seem to have citizenship.]
-      expect(Infomon.get("citizenship")).to eq(nil)
+      expect(Infomon.get("citizenship")).to eq("None")
     end
   end
 
