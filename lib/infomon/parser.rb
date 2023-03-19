@@ -96,24 +96,24 @@ module Infomon
           :ok
         when Pattern::Fame
           match = Regexp.last_match
-          Infomon.set("stat.fame", match[:fame].to_i)
+          Infomon.set("stat.fame", match[:fame].gsub!(',', '').to_i)
           :ok
         when Pattern::RealExp
           match = Regexp.last_match
-          Infomon.set("stat.fxp_current", match[:fxp_current].to_i)
-          Infomon.set("stat.fxp_max", match[:fxp_max].to_i)
+          Infomon.set("stat.fxp_current", match[:fxp_current].gsub!(',', '').to_i)
+          Infomon.set("stat.fxp_max", match[:fxp_max].gsub!(',', '').to_i)
           :ok
         when Pattern::AscExp
           match = Regexp.last_match
-          Infomon.set("stat.ascension_experience", match[:ascension_experience].to_i)
+          Infomon.set("stat.ascension_experience", match[:ascension_experience].gsub!(',', '').to_i)
           :ok
         when Pattern::TotalExp
           match = Regexp.last_match
-          Infomon.set("stat.total_experience", match[:total_experience].to_i)
+          Infomon.set("stat.total_experience", match[:total_experience].gsub!(',', '').to_i)
           :ok
         when Pattern::LTE
           match = Regexp.last_match
-          Infomon.set("stat.long_term_experience", match[:long_term_experience].to_i)
+          Infomon.set("stat.long_term_experience", match[:long_term_experience].gsub!(',', '').to_i)
           Infomon.set("stat.deeds", match[:deeds].to_i)
           :ok
         when Pattern::CharRaceProf
