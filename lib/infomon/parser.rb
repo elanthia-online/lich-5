@@ -49,16 +49,16 @@ module Infomon
           Infomon.set("citizenship", Regexp.last_match[:town])
           :ok
         when Pattern::NoCitizenship
-          Infomon.set("citizenship", nil)
+          Infomon.set("citizenship", "None")
           :ok
         when Pattern::Stat
           match = Regexp.last_match
 
           Infomon.batch_set(
             ["stat.%s" % match[:stat], match[:value].to_i],
-            ["stat.%s.bonus" % match[:stat], match[:bonus].to_i],
+            ["stat.%s_bonus" % match[:stat], match[:bonus].to_i],
             ["stat.%s.enhanced" % match[:stat], match[:enhanced_value].to_i],
-            ["stat.%s.enhanced.bonus" % match[:stat], match[:enhanced_bonus].to_i]
+            ["stat.%s.enhanced_bonus" % match[:stat], match[:enhanced_bonus].to_i]
           )
 
           # Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
@@ -69,7 +69,7 @@ module Infomon
         when Pattern::Levelup
           match = Regexp.last_match
           Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
-          Infomon.set("stat.%s.bonus" % match[:stat], match[:bonus].to_i)
+          Infomon.set("stat.%s_bonus" % match[:stat], match[:bonus].to_i)
           :ok
         when Pattern::Society
           match = Regexp.last_match
@@ -77,7 +77,6 @@ module Infomon
           Infomon.set("society.rank", match[:rank])
           :ok
         when Pattern::NoSociety
-          # todo: should this be nil?
           Infomon.set("society.status", "None")
           Infomon.set("society.rank", 0)
           :ok
@@ -87,10 +86,8 @@ module Infomon
           :ok
         when Pattern::Skill
           match = Regexp.last_match
-          Infomon.set("skill.%s" % match[:name].gsub(' ', '_').gsub('_-_', '').gsub('-', '_'),
-                      match[:ranks].to_i)
-          Infomon.set("skill.%s.bonus" % match[:name].gsub(' ', '_').gsub('_-_', '').gsub('-', '_'),
-                      match[:bonus].to_i)
+          Infomon.set("skill.%s" % match[:name], match[:ranks].to_i)
+          Infomon.set("skill.%s_bonus" % match[:name], match[:bonus].to_i)
           :ok
         when Pattern::Spell
           # todo: capture SK item spells here?
@@ -99,24 +96,24 @@ module Infomon
           :ok
         when Pattern::Fame
           match = Regexp.last_match
-          Infomon.set("stat.fame", match[:fame].gsub(',', '').to_i)
+          Infomon.set("stat.fame", match[:fame].to_i)
           :ok
         when Pattern::RealExp
           match = Regexp.last_match
-          Infomon.set("stat.fxp_current", match[:fxp_current].gsub(',', '').to_i)
-          Infomon.set("stat.fxp_max", match[:fxp_max].gsub(',', '').to_i)
+          Infomon.set("stat.fxp_current", match[:fxp_current].to_i)
+          Infomon.set("stat.fxp_max", match[:fxp_max].to_i)
           :ok
         when Pattern::AscExp
           match = Regexp.last_match
-          Infomon.set("stat.ascension_experience", match[:ascension_experience].gsub(',', '').to_i)
+          Infomon.set("stat.ascension_experience", match[:ascension_experience].to_i)
           :ok
         when Pattern::TotalExp
           match = Regexp.last_match
-          Infomon.set("stat.total_experience", match[:total_experience].gsub(',', '').to_i)
+          Infomon.set("stat.total_experience", match[:total_experience].to_i)
           :ok
         when Pattern::LTE
           match = Regexp.last_match
-          Infomon.set("stat.long_term_experience", match[:long_term_experience].gsub(',', '').to_i)
+          Infomon.set("stat.long_term_experience", match[:long_term_experience].to_i)
           Infomon.set("stat.deeds", match[:deeds].to_i)
           :ok
         when Pattern::CharRaceProf
