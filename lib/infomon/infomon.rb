@@ -56,8 +56,8 @@ module Infomon
   end
 
   def self._key(key)
-    key.gsub!(' ', '_').gsub!('_-_', '').gsub!('-', '_') # for spell list / skills
-    key.gsub!(',', '') # for exper
+    key.gsub!(' ', '_').gsub!('_-_', '').gsub!('-', '_') if key =~ /\s|-/
+    key.gsub!(',', '') if key =~ /,/
     key.to_s.downcase
   end
 
