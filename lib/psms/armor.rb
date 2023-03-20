@@ -1,46 +1,25 @@
 ## breakout for Armor released with PSM3
-## new code for 5.0.16
-## includes new functions .known? and .affordable?
+## updated for Ruby 3.2.1 and new Infomon module
 
-class Armor
-  @@armor_blessing                ||= 0
-  @@armor_reinforcement           ||= 0
-  @@armor_spike_mastery           ||= 0
-  @@armor_support                 ||= 0
-  @@armored_casting               ||= 0
-  @@armored_evasion               ||= 0
-  @@armored_fluidity              ||= 0
-  @@armored_stealth               ||= 0
-  @@crush_protection              ||= 0
-  @@puncture_protection           ||= 0
-  @@slash_protection              ||= 0
-
-  def Armor.armor_blessing;              @@armor_blessing;             end
-  def Armor.armor_reinforcement;         @@armor_reinforcement;        end
-  def Armor.armor_spike_mastery;         @@armor_spike_mastery;        end
-  def Armor.armor_support;               @@armor_support;              end
-  def Armor.armored_casting;             @@armored_casting;            end
-  def Armor.armored_evasion;             @@armored_evasion;            end
-  def Armor.armored_fluidity;            @@armored_fluidity;           end
-  def Armor.armored_stealth;             @@armored_stealth;            end
-  def Armor.crush_protection;            @@crush_protection;           end
-  def Armor.puncture_protection;         @@puncture_protection;        end
-  def Armor.slash_protection;            @@slash_protection;           end
-
-  def Armor.armor_blessing=(val);        @@armor_blessing=val;         end
-  def Armor.armor_reinforcement=(val);   @@armor_reinforcement=val;    end
-  def Armor.armor_spike_mastery=(val);   @@armor_spike_mastery=val;    end
-  def Armor.armor_support=(val);         @@armor_support=val;          end
-  def Armor.armored_casting=(val);       @@armored_casting=val;        end
-  def Armor.armored_evasion=(val);       @@armored_evasion=val;        end
-  def Armor.armored_fluidity=(val);      @@armored_fluidity=val;       end
-  def Armor.armored_stealth=(val);       @@armored_stealth=val;        end
-  def Armor.crush_protection=(val);      @@crush_protection=val;       end
-  def Armor.puncture_protection=(val);   @@puncture_protection=val;    end
-  def Armor.slash_protection=(val);      @@slash_protection=val;       end
-
+module Armor
+  # rubocop:disable Layout/HashAlignment, Layout/ExtraSpacing
+  def self.armor_lookups 
+    [ { long_name: 'armor_blessing',	        short_name: 'blessing',	        cost:	 0 },
+      { long_name: 'armor_reinforcement',	    short_name: 'reinforcement',	  cost:	 0 },
+      { long_name: 'armor_spike_mastery',	    short_name: 'spikemastery',	    cost:	 0 },
+      { long_name: 'armor_support',	          short_name: 'support',	        cost:	 0 },
+      { long_name: 'armored_casting',	        short_name: 'casting',	        cost:	 0 },
+      { long_name: 'armored_evasion',	        short_name: 'evasion',	        cost:	 0 },
+      { long_name: 'armored_fluidity',	      short_name: 'fluidity',	        cost:	 0 },
+      { long_name: 'armored_stealth',	        short_name: 'stealth',	        cost:	 0 },
+      { long_name: 'crush_protection',	      short_name: 'crush',	          cost:	 0 },
+      { long_name: 'puncture_protection',	    short_name: 'puncture',	        cost:	 0 },
+      { long_name: 'slash_protection',	      short_name: 'slash',	          cost:	 0 }
+    ]
+  end
+  
   @@armor_techniques = {
-    "armor_blessing" => {
+    "armor_blessing"      => {
       :regex => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i,
       :usage => "blessing",
     },
@@ -52,27 +31,27 @@ class Armor
       :regex => /Armor Spike Mastery is passive and always active once learned\./i,
       :usage => "spikemastery",
     },
-    "armor_support" => {
+    "armor_support"       => {
       :regex => /\w+ adjusts? \w+(?:'s)? [\w\s]+, improving its ability to support the weight of \w+ gear\./i,
       :usage => "support",
     },
-    "armored_casting" => {
+    "armored_casting"     => {
       :regex => /\w+ adjusts? \w+(?:'s)? [\w\s]+, making it easier for \w+ to recover from failed spell casting\./i,
       :usage => "casting",
     },
-    "armored_evasion" => {
+    "armored_evasion"     => {
       :regex => /\w+ adjusts? \w+(?:'s)? [\w\s]+, improving its comfort and maneuverability\./i,
       :usage => "evasion",
     },
-    "armored_fluidity" => {
+    "armored_fluidity"    => {
       :regex => /\w+ adjusts? \w+(?:'s)? [\w\s]+, making it easier for \w+ to cast spells\./i,
       :usage => "fluidity",
     },
-    "armored_stealth" => {
+    "armored_stealth"     => {
       :regex => /\w+ adjusts? \w+(?:'s)? [\w\s]+ to cushion \w+ movements\./i,
       :usage => "stealth",
     },
-    "crush_protection" => {
+    "crush_protection"    => {
       :regex => /You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\.|You must specify an armor slot\.|You don't seem to have the necessary armor fittings in hand\./i,
       :usage => "crush",
     },
@@ -80,42 +59,35 @@ class Armor
       :regex => /You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\.|You must specify an armor slot\.|You don't seem to have the necessary armor fittings in hand\./i,
       :usage => "puncture",
     },
-    "slash_protection" => {
+    "slash_protection"    => {
       :regex => /You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\.|You must specify an armor slot\.|You don't seem to have the necessary armor fittings in hand\./i,
       :usage => "slash",
     },
   }
+  # rubocop:enable Layout/HashAlignment, Layout/ExtraSpacing
 
-  def Armor.method_missing(arg1, arg2=nil)
-    echo "#{arg1} is not a defined Armor type.  Is it another Ability type?"
-  end
   def Armor.[](name)
-    Armor.send(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)
-  end
-  def Armor.[]=(name,val)
-    Armor.send("#{name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase}=", val.to_i)
+    return PSM.assess(name, 'Armor')
   end
 
   def Armor.known?(name)
-    Armor.send(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase) > 0
+    return Armor[name] > 0
   end
 
-  ## Armor does not require stamina so costs are zero across the board
-  ## the following method is in place simply to make consistent with other
-  ## PSM class definitions.  
   def Armor.affordable?(name)
-    return true
+    return PSM.affordable?(name, 'Armor')
   end
 
   def Armor.available?(name)
-    Armor.known?(name) and Armor.affordable?(name)
+    Armor.known?(name) and Armor.affordable?(name) and
+      !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
   end
 
   def Armor.use(name, target = "")
     return unless Armor.available?(name)
     usage = @@armor_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:usage]
     return if usage.nil?
-    
+
     results_regex = Regexp.union(
       @@armor_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
       /^#{name} what\?$/i,
@@ -147,5 +119,4 @@ class Armor
     }
     usage_result
   end
-
 end
