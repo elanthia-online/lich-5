@@ -5,8 +5,7 @@
 module Shield
   # rubocop:disable Layout/HashAlignment, Layout/ExtraSpacing
   def self.shield_lookups
-    [ { long_name: 'acrobats_leap',           short_name: 'acrobatsleap',     cost:  0 },
-      { long_name: 'adamantine_bulwark', 	    short_name: 'bulwark', 	        cost:  0 },
+    [ { long_name: 'adamantine_bulwark', 	    short_name: 'bulwark', 	        cost:  0 },
       { long_name: 'block_the_elements', 	    short_name: 'blockelements',	  cost:  0 },
       { long_name: 'deflect_magic',           short_name: 'deflectmagic',     cost:  0 },
       { long_name: 'deflect_missiles', 	      short_name: 'deflectmissiles', 	cost:  0 },

@@ -23,10 +23,11 @@ module PSM
   def self.assess(name, type)
     name = self._name_normal(name)
     seek_psm = Object.const_get("#{type}")
-                      .method("#{type.downcase}_lookups").call
-                      .find { |h| h[:long_name].eql?(name) ||
-                                  h[:short_name].eql?(name)
-                            }
+                     .method("#{type.downcase}_lookups").call
+                     .find { |h|
+      h[:long_name].eql?(name) ||
+        h[:short_name].eql?(name)
+    }
     return Infomon.get("psm.#{seek_psm[:short_name]}") unless seek_psm.nil?
     return self.method_missing(name, type) if seek_psm[:short_name].nil?
   end
@@ -35,9 +36,10 @@ module PSM
     name = self._name_normal(name)
     check = Object.const_get("#{type}")
                   .method("#{type.downcase}_lookups").call
-                  .find { |h| h[:long_name].eql?(name.to_s) ||
-                              h[:short_name].eql?(name.to_s)
-                        }
+                  .find { |h|
+      h[:long_name].eql?(name.to_s) ||
+        h[:short_name].eql?(name.to_s)
+    }
     return self.method_missing(name, type) if check[:cost].nil?
     check[:cost] < XMLData.stamina
   end
