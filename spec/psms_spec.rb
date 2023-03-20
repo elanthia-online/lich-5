@@ -95,7 +95,7 @@ describe PSM, "assess(name, type)" do
       expect(Feat.known?("Martial MASTERY")).to be(true)
     end
     it "determines if an unknown PSM (error) is requested" do
-      expect(CMan.known?["Doug Spell"]).to eq("doug_spell is not a defined CMan.  Was it moved to another Ability?")
+      expect(CMan.known?("Doug Spell")).to eq("doug_spell is not a defined CMan.  Was it moved to another Ability?")
       expect(Armor.known?(:favorite_dessert)).to eq("favorite_dessert is not a defined Armor.  Was it moved to another Ability")
     end
   end
