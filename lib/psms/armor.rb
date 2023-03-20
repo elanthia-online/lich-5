@@ -2,22 +2,21 @@
 ## updated for Ruby 3.2.1 and new Infomon module
 
 module Armor
-  # rubocop:disable Layout/HashAlignment, Layout/ExtraSpacing
-  def self.armor_lookups 
-    [ { long_name: 'armor_blessing',	        short_name: 'blessing',	        cost:	 0 },
-      { long_name: 'armor_reinforcement',	    short_name: 'reinforcement',	  cost:	 0 },
-      { long_name: 'armor_spike_mastery',	    short_name: 'spikemastery',	    cost:	 0 },
-      { long_name: 'armor_support',	          short_name: 'support',	        cost:	 0 },
-      { long_name: 'armored_casting',	        short_name: 'casting',	        cost:	 0 },
-      { long_name: 'armored_evasion',	        short_name: 'evasion',	        cost:	 0 },
-      { long_name: 'armored_fluidity',	      short_name: 'fluidity',	        cost:	 0 },
-      { long_name: 'armored_stealth',	        short_name: 'stealth',	        cost:	 0 },
-      { long_name: 'crush_protection',	      short_name: 'crush',	          cost:	 0 },
-      { long_name: 'puncture_protection',	    short_name: 'puncture',	        cost:	 0 },
-      { long_name: 'slash_protection',	      short_name: 'slash',	          cost:	 0 }
-    ]
+  # rubocop:disable Layout/ExtraSpacing
+  def self.armor_lookups
+    [{ long_name: 'armor_blessing',	        short_name: 'blessing',	        cost:	 0 },
+     { long_name: 'armor_reinforcement',	    short_name: 'reinforcement',	  cost:	 0 },
+     { long_name: 'armor_spike_mastery',	    short_name: 'spikemastery',	    cost:	 0 },
+     { long_name: 'armor_support',	          short_name: 'support',	        cost:	 0 },
+     { long_name: 'armored_casting',	        short_name: 'casting',	        cost:	 0 },
+     { long_name: 'armored_evasion',	        short_name: 'evasion',	        cost:	 0 },
+     { long_name: 'armored_fluidity',	      short_name: 'fluidity',	        cost:	 0 },
+     { long_name: 'armored_stealth',	        short_name: 'stealth',	        cost:	 0 },
+     { long_name: 'crush_protection',	      short_name: 'crush',	          cost:	 0 },
+     { long_name: 'puncture_protection',	    short_name: 'puncture',	        cost:	 0 },
+     { long_name: 'slash_protection',	      short_name: 'slash',	          cost:	 0 }]
   end
-  
+
   @@armor_techniques = {
     "armor_blessing"      => {
       :regex => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i,
@@ -64,7 +63,7 @@ module Armor
       :usage => "slash",
     },
   }
-  # rubocop:enable Layout/HashAlignment, Layout/ExtraSpacing
+  # rubocop:enable Layout/ExtraSpacing
 
   def Armor.[](name)
     return PSM.assess(name, 'Armor')
