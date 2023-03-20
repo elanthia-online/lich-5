@@ -16,6 +16,7 @@ module XMLData
   def self.game
     "rspec"
   end
+
   def self.stamina
     return 20 # some PSM require 30, so we should have negative testing ability
   end
@@ -62,7 +63,7 @@ describe PSM, "._name_normal(name)" do
       expect(PSM._name_normal("Rolling Krynch Stance")).to eq(%w[rolling_krynch_stance])
     end
     it "normalizes symbol full name PSM requests" do
-      expect(PSM._name_normal(:vault_kick])).to eq(%w[vault_kick])
+      expect(PSM._name_normal(:vault_kick)).to eq(%w[vault_kick])
     end
     it "normalizes text with underscore name PSM requests" do
       expect(PSM._name_normal("sunder_shield")).to eq(%w[sunder_shield])
@@ -78,7 +79,6 @@ describe PSM, "._name_normal(name)" do
     end
   end
 end
-
 
 describe PSM, "assess(name, type)" do
   context "<psm>.name should return rank known" do
@@ -99,17 +99,17 @@ describe PSM, "assess(name, type)" do
       expect(Armor.known?(:favorite_dessert)).to eq(%[favorite_dessert is not a defined Armor.  Was it moved to another Ability?])
     end
   end
+end
 
-  describe PSM, ".affordable?(name)" do
-    context "<psm>, name should determine available (cost < stamina)" do
-      it "returns erroneous requests as above" do
-        expect(Feat.affordable?("Touch this!")).to eq(%[touch_this! is not a defined Feat.  Was it moved to another Ability?])
-      end
-      it "checks to see if the PSM cost < current stamina" do
-        # it does not distinguish at this phase if PSM is known or not known
-        expect(Armor.affordable?(:support)).to eq(TRUE)
-        expect(CMan.affordable?("rolling_krynch_stance").to eq(FALSE)
-      end
+describe PSM, ".affordable?(name)" do
+  context "<psm>, name should determine available (cost < stamina)" do
+    it "returns erroneous requests as above" do
+      expect(Feat.affordable?("Touch this!")).to eq(%[touch_this! is not a defined Feat.  Was it moved to another Ability?])
+    end
+    it "checks to see if the PSM cost < current stamina" do
+      # it does not distinguish at this phase if PSM is known or not known
+      expect(Armor.affordable?(:support)).to eq(TRUE)
+      expect(CMan.affordable?("rolling_krynch_stance")).to eq(FALSE)
     end
   end
 end
