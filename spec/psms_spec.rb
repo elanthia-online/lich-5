@@ -60,22 +60,22 @@ end
 describe PSM, "._name_normal(name)" do
   context "it normalizes PSM name requests" do
     it "normalizes text full name PSM requests" do
-      expect(PSM._name_normal("Rolling Krynch Stance")).to eq(%w[rolling_krynch_stance])
+      expect(PSM._name_normal("Rolling Krynch Stance")).to eq("rolling_krynch_stance")
     end
     it "normalizes symbol full name PSM requests" do
-      expect(PSM._name_normal(:vault_kick)).to eq(%w[vault_kick])
+      expect(PSM._name_normal(:vault_kick)).to eq("vault_kick")
     end
     it "normalizes text with underscore name PSM requests" do
-      expect(PSM._name_normal("sunder_shield")).to eq(%w[sunder_shield])
+      expect(PSM._name_normal("sunder_shield")).to eq("sunder_shield")
     end
     it "normalizes simple symbol name PSM requests" do
-      expect(PSM._name_normal(:blessings)).to eq(%w[blessings])
+      expect(PSM._name_normal(:blessings)).to eq("blessings")
     end
     it "does not attempt to compare validity, just normalize requests" do
-      expect(PSM._name_normal("this is my request")).to eq(%w[this_is_my_request])
+      expect(PSM._name_normal("this is my request")).to eq("this_is_my_request")
     end
     it "has intake of all case character types and will perform the function" do
-      expect(PSM._name_normal("THIS simply CANNOT be")).to eq(%w[this_simply_cannot_be])
+      expect(PSM._name_normal("THIS simply CANNOT be")).to eq("this_simply_cannot_be")
     end
   end
 end
@@ -89,14 +89,14 @@ describe PSM, "assess(name, type)" do
       expect(Feat[:mystical_tattoo]).to eq(1)
     end
     it "checks if PSM known (rank > 0) and returns true / false" do
-      expect(CMan.known?(:bearhug)).to eq(FALSE)
-      expect(Weapon.known?(:twin_hammerfists)).to eq(TRUE)
-      expect(Armor.known?("blessings")).to eq(FALSE)
-      expect(Feat.known?("Martial MASTERY")).to eq(TRUE)
+      expect(CMan.known?(:bearhug)).to be(false)
+      expect(Weapon.known?(:twin_hammerfists)).to be(true)
+      expect(Armor.known?("blessings")).to be(false)
+      expect(Feat.known?("Martial MASTERY")).to be(true)
     end
     it "determines if an unknown PSM (error) is requested" do
-      expect(CMan["Doug Spell"]).to eq(%[doug_spell is not a defined CMan.  Was it moved to another Ability?])
-      expect(Armor.known?(:favorite_dessert)).to eq(%[favorite_dessert is not a defined Armor.  Was it moved to another Ability?])
+      expect(CMan["Doug Spell"]).to eq("doug_spell is not a defined CMan.  Was it moved to another Ability?")
+      expect(Armor.known?(:favorite_dessert)).to eq("favorite_dessert is not a defined Armor.  Was it moved to another Ability")
     end
   end
 end
@@ -104,12 +104,12 @@ end
 describe PSM, ".affordable?(name)" do
   context "<psm>, name should determine available (cost < stamina)" do
     it "returns erroneous requests as above" do
-      expect(Feat.affordable?("Touch this!")).to eq(%[touch_this! is not a defined Feat.  Was it moved to another Ability?])
+      expect(Feat.affordable?("Touch this!")).to eq("touch_this! is not a defined Feat.  Was it moved to another Ability?")
     end
     it "checks to see if the PSM cost < current stamina" do
       # it does not distinguish at this phase if PSM is known or not known
-      expect(Armor.affordable?(:support)).to eq(TRUE)
-      expect(CMan.affordable?("rolling_krynch_stance")).to eq(FALSE)
+      expect(Armor.affordable?(:support)).to be(true)
+      expect(CMan.affordable?("rolling_krynch_stance")).to be(false)
     end
   end
 end
