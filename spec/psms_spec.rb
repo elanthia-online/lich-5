@@ -86,12 +86,12 @@ describe PSM, "assess(name, type)" do
       expect(CMan[:vaultkick]).to eq(1)
       expect(Weapon["Twin Hammerfists"]).to eq(1)
       expect(Armor["reinforcement"]).to eq(0)
-      expect(Feat[:mystical_tattoo]).to eq(1)
+      expect(Feat[:mystic_tattoo]).to eq(1)
     end
     it "checks if PSM known (rank > 0) and returns true / false" do
       expect(CMan.known?(:bearhug)).to be(false)
       expect(Weapon.known?(:twin_hammerfists)).to be(true)
-      expect(Armor.known?("blessings")).to be(false)
+      expect(Armor.known?("blessing")).to be(false)
       expect(Feat.known?("Martial MASTERY")).to be(true)
     end
     it "determines if an unknown PSM (error) is requested" do
