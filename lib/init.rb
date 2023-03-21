@@ -844,7 +844,7 @@ DELETE_CANDIDATES = %r[^debug-\d+-\d+-\d+-\d+-\d+-\d+\.log$]
 if Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.length > 20 # avoid NIL response
   Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.sort.reverse[20..-1].each { |oldfile|
     begin
-      File.delete("#{TEMP_DIR}/#{oldfile}")
+      File.delete(File.join(TEMP_DIR, oldfile))
     rescue
       Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
     end
