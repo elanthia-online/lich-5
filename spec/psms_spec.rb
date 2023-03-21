@@ -90,9 +90,8 @@ describe PSMS, "assess(name, type)" do
       expect(Feat.known?("Martial MASTERY")).to be(true)
     end
     it "or determines if an unknown PSM (error) is requested" do
-      expect(CMan["Doug Spell"]).to raise_error(StandardError, "Aborting script - The referenced CMan skill doug_spell is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Weapon) and your spelling of doug_spell.")
-      puts $@
-      expect(Armor.known?(:favorite_dessert)).to raise_error(StandardError, "Aborting script - The referenced Armor skill favorite_dessert is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Weapon) and your spelling of favorite_dessert.")
+      expect { CMan["Doug Spell"] }.to raise_error(StandardError, "Aborting script - The referenced CMan skill doug_spell is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Weapon) and your spelling of doug_spell.")
+      expect { Armor.known?(:favorite_dessert) }.to raise_error(StandardError, "Aborting script - The referenced Armor skill favorite_dessert is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Weapon) and your spelling of favorite_dessert.")
     end
   end
 end
@@ -105,9 +104,7 @@ describe PSMS, ".affordable?(name)" do
       expect(CMan.affordable?("rolling_krynch_stance")).to be(false)
     end
     it "or returns erroneous requests as above" do
-      expect(Feat.affordable?("Touch this!")).to raise_error(StandardError, "Aborting script - The referenced Feat skill touch_this! is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Weapon) and your spelling of touch_this!.")
+      expect { Feat.affordable?("Touch this!") }.to raise_error(StandardError, "Aborting script - The referenced Feat skill touch_this! is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Weapon) and your spelling of touch_this!.")
     end
   end
 end
-
-# each PSM type still does the .available? check, but the check depends on PSM module assses and affordable, in addition to Effects Debuffs checks.  These two methods are the heart of all PSM queries.

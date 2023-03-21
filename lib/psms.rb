@@ -20,8 +20,11 @@ module PSMS
     seek_psm = Object.const_get("#{type}").method("#{type.downcase}_lookups").call
                      .find { |h| h[:long_name].eql?(name) || h[:short_name].eql?(name) }
     # this logs then raises an exception to stop (kill) the offending script
-    Lich.log("error: PSMS request: #{$!}\n\t#{$!.backtrace.join("\n\t")}") if seek_psm.nil?
-    raise StandardError.new("Aborting script - The referenced #{type} skill #{name} is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Weapon) and your spelling of #{name}.") if seek_psm.nil?
+    if seek_psm.nil?
+      Lich.log("error: PSMS request: #{$!}\n\t")
+      raise StandardError.new "Aborting script - The referenced #{type} skill #{name} is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Weapon) and your spelling of #{name}."
+    end
+    # otherwise process request
     case costcheck
     when true
       seek_psm[:cost] < XMLData.stamina

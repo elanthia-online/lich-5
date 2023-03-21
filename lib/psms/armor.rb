@@ -78,7 +78,7 @@ module Armor
   end
 
   def Armor.available?(name)
-    Armor.known?(name) and Armor.affordable?(name)  and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+    Armor.known?(name) and Armor.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
   end
 
   def Armor.use(name, target = "")
