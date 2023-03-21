@@ -50,7 +50,7 @@ describe Infomon::Parser, ".parse" do
 
     it "handles no citizenship" do
       Infomon::Parser.parse %[You don't seem to have citizenship.]
-      expect(Infomon.get("citizenship")).to eq(nil)
+      expect(Infomon.get("citizenship")).to eq("None")
     end
   end
 
@@ -71,9 +71,9 @@ describe Infomon::Parser, ".parse" do
       stats.split("\n").each { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("stat.aura")).to eq(100)
-      expect(Infomon.get("stat.aura.bonus")).to eq(-35)
+      expect(Infomon.get("stat.aura_bonus")).to eq(-35)
       expect(Infomon.get("stat.logic.enhanced")).to eq(118)
-      expect(Infomon.get("stat.logic.enhanced.bonus")).to eq(34)
+      expect(Infomon.get("stat.logic.enhanced_bonus")).to eq(34)
 
       expect(Stats.aura.value).to eq(100)
       expect(Stats.aura.bonus).to eq(-35)
@@ -99,8 +99,8 @@ describe Infomon::Parser, ".parse" do
       }
 
       expect(Infomon.get("stat.dexterity")).to eq(37)
-      expect(Infomon.get("stat.dexterity.bonus")).to eq(4)
-      expect(Infomon.get("stat.strength.bonus")).to eq(7)
+      expect(Infomon.get("stat.dexterity_bonus")).to eq(4)
+      expect(Infomon.get("stat.strength_bonus")).to eq(7)
     end
 
     it "handles experience info" do
