@@ -205,14 +205,7 @@ def checkreallybleeding
 end
 
 def muckled?
-  muckled = checkwebbed || checkdead || checkstunned
-  if defined?(checksleeping)
-    muckled = muckled || checksleeping
-  end
-  if defined?(checkbound)
-    muckled = muckled || checkbound
-  end
-  return muckled
+  return Status.muckled?
 end
 
 def checkhidden
@@ -1181,43 +1174,43 @@ def checkbounty
 end
 
 def checksleeping
-  return $infomon_sleeping
+  return Status.sleeping?
 end
 
 def sleeping?
-  return $infomon_sleeping
+  return Status.sleeping?
 end
 
 def checkbound
-  return $infomon_bound
+  return Status.bound?
 end
 
 def bound?
-  return $infomon_bound
+  return Status.bound?
 end
 
 def checksilenced
-  $infomon_silenced
+  return Status.silenced?
 end
 
 def silenced?
-  $infomon_silenced
+  return Status.silenced?
 end
 
 def checkcalmed
-  $infomon_calmed
+  return Status.calmed?
 end
 
 def calmed?
-  $infomon_calmed
+  return Status.calmed?
 end
 
 def checkcutthroat
-  $infomon_cutthroat
+  return Status.cutthroat?
 end
 
 def cutthroat?
-  $infomon_cutthroat
+  return Status.cutthroat?
 end
 
 def variable
@@ -2174,7 +2167,7 @@ def do_client(client_string)
     elsif cmd =~ /^(?:lich5-update|l5u|update)/i
       require 'lib/update.rb'
       Lich::Util::Update.request("--help")
-    elsif cmd =~ /^infomon (help|reset|sync|show)$/i
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon (help|reset|sync|show)$/i
       case $1.downcase.dup
       when "help"
         Infomon::CLI.help
@@ -2185,13 +2178,13 @@ def do_client(client_string)
       when "show"
         Infomon::CLI.show
       end
-    elsif cmd =~ /^infomon\b/i
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon\b/i
       respond 'Running this command is no longer necessary. Infomon is now part of Lich-5 as a library.'
       Infomon::CLI.help
-    elsif cmd =~ /^banks$/ && XMLData.game =~ /^GS/
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^banks$/
       Game._puts "<c>bank account"
       $_CLIENTBUFFER_.push "<c>bank account"
-    elsif cmd =~ /^magic$/ && XMLData.game =~ /^GS/
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^magic$/
       Effects.display
     elsif cmd =~ /^help$/i
       respond
