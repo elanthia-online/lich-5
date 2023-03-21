@@ -34,7 +34,7 @@ module CMan
      { long_name: 'garrote',                 short_name: 'garrote',          cost: 10 },
      { long_name: 'grappel_specialization',  short_name: 'grapplespec',      cost:  0 },
      { long_name: 'griffins_voice',          short_name: 'griffin',          cost: 20 },
-     { long_name: 'groin_kick',              short_name: 'gkick',            cost:	 7 },
+     { long_name: 'groin_kick',              short_name: 'gkick',            cost:	7 },
      { long_name: 'hamstring',               short_name: 'hamstring',        cost:  9 },
      { long_name: 'haymaker',                short_name: 'haymaker',         cost:  9 },
      { long_name: 'headbutt',                short_name: 'headbutt',         cost:  9 },
@@ -85,19 +85,18 @@ module CMan
   end
 
   def CMan.[](name)
-    return PSM.assess(name, 'CMan')
+    return PSMS.assess(name, 'CMan')
   end
 
   def CMan.known?(name)
-    return CMan[name] > 0
+    CMan[name] > 0
   end
 
   def CMan.affordable?(name)
-    return PSM.affordable?(name, 'CMan')
+    return PSMS.assess(name, 'CMan', true)
   end
 
   def CMan.available?(name)
-    CMan.known?(name) and CMan.affordable?(name) and
-      !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+    CMan.known?(name) and CMan.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
   end
 end

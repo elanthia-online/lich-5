@@ -3,40 +3,42 @@
 ## includes new functions .known? and .affordable?
 
 module Shield
-  # rubocop:disable Layout/ExtraSpacing
   def self.shield_lookups
-    [{ long_name: 'adamantine_bulwark', 	    short_name: 'bulwark', 	        cost:  0 },
-     { long_name: 'block_the_elements', 	    short_name: 'blockelements',	  cost:  0 },
-     { long_name: 'deflect_magic',           short_name: 'deflectmagic',     cost:  0 },
-     { long_name: 'deflect_missiles', 	      short_name: 'deflectmissiles', 	cost:  0 },
-     { long_name: 'deflect_the_elements', 	  short_name: 'deflectelements', 	cost:  0 },
-     { long_name: 'disarming_presence', 	    short_name: 'dpresence', 	      cost: 20 },
-     { long_name: 'guard_mastery',           short_name: 'gmastery',         cost:  0 },
-     { long_name: 'large_shield_focus',      short_name: 'lfocus',           cost:  0 },
-     { long_name: 'medium_shield_focus', 	  short_name: 'mfocus',           cost:  0 },
-     { long_name: 'phalanx', 	              short_name: 'phalanx',          cost:  0 },
-     { long_name: 'prop_up', 	              short_name: 'prop',             cost:  0 },
-     { long_name: 'protective_wall', 	      short_name: 'pwall',            cost:  0 },
-     { long_name: 'shield_bash', 	          short_name: 'bash', 	          cost:  9 },
-     { long_name: 'shield_charge', 	        short_name: 'charge', 	        cost: 14 },
-     { long_name: 'shield_forward',          short_name: 'forward',          cost:  0 },
-     { long_name: 'shield_mind',             short_name: 'mind',             cost: 10 },
-     { long_name: 'shield_pin',              short_name: 'pin',              cost: 15 },
-     { long_name: 'shield_push',             short_name: 'push',             cost:  7 },
-     { long_name: 'shield_riposte', 	        short_name: 'riposte',          cost: 20 },
-     { long_name: 'shield_spike_mastery', 	  short_name: 'spikemastery',     cost:  0 },
-     { long_name: 'shield_strike', 	        short_name: 'strike',           cost: 15 },
-     { long_name: 'shield_strike_mastery', 	short_name: 'strikemastery',    cost:  0 },
-     { long_name: 'shield_swiftness', 	      short_name: 'swiftness', 	      cost:  0 },
-     { long_name: 'shield_throw', 	          short_name: 'throw', 	          cost: 20 },
-     { long_name: 'shield_trample', 	        short_name: 'trample', 	        cost: 14 },
-     { long_name: 'shielded_brawler', 	      short_name: 'brawler', 	        cost:  0 },
-     { long_name: 'small_shield_focus', 	    short_name: 'sfocus',           cost:  0 },
-     { long_name: 'spell_block', 	          short_name: 'spellblock', 	    cost:  0 },
-     { long_name: 'steady_shield', 	        short_name: 'steady', 	        cost:  0 },
-     { long_name: 'steely_resolve',          short_name: 'resolve',          cost: 30 },
-     { long_name: 'tortoise_stance',         short_name: 'tortoise',         cost: 20 },
-     { long_name: 'tower_shield_focus',      short_name: 'tfocus',           cost:  0 }]
+    # rubocop:disable Layout/ExtraSpacing
+    [{ long_name: 'acrobats_leap',           short_name: 'acrobatsleap',    cost:  0 },
+     { long_name: 'adamantine_bulwark', 	   short_name: 'bulwark', 	      cost:  0 },
+     { long_name: 'block_the_elements', 	   short_name: 'blockelements',	  cost:  0 },
+     { long_name: 'deflect_magic',           short_name: 'deflectmagic',    cost:  0 },
+     { long_name: 'deflect_missiles', 	     short_name: 'deflectmissiles', cost:  0 },
+     { long_name: 'deflect_the_elements', 	 short_name: 'deflectelements', cost:  0 },
+     { long_name: 'disarming_presence', 	   short_name: 'dpresence', 	    cost: 20 },
+     { long_name: 'guard_mastery',           short_name: 'gmastery',        cost:  0 },
+     { long_name: 'large_shield_focus',      short_name: 'lfocus',          cost:  0 },
+     { long_name: 'medium_shield_focus', 	   short_name: 'mfocus',          cost:  0 },
+     { long_name: 'phalanx', 	               short_name: 'phalanx',         cost:  0 },
+     { long_name: 'prop_up', 	               short_name: 'prop',            cost:  0 },
+     { long_name: 'protective_wall', 	       short_name: 'pwall',           cost:  0 },
+     { long_name: 'shield_bash', 	           short_name: 'bash', 	          cost:  9 },
+     { long_name: 'shield_charge', 	         short_name: 'charge', 	        cost: 14 },
+     { long_name: 'shield_forward',          short_name: 'forward',         cost:  0 },
+     { long_name: 'shield_mind',             short_name: 'mind',            cost: 10 },
+     { long_name: 'shield_pin',              short_name: 'pin',             cost: 15 },
+     { long_name: 'shield_push',             short_name: 'push',            cost:  7 },
+     { long_name: 'shield_riposte', 	       short_name: 'riposte',         cost: 20 },
+     { long_name: 'shield_spike_mastery', 	 short_name: 'spikemastery',    cost:  0 },
+     { long_name: 'shield_strike', 	         short_name: 'strike',          cost: 15 },
+     { long_name: 'shield_strike_mastery', 	 short_name: 'strikemastery',   cost:  0 },
+     { long_name: 'shield_swiftness', 	     short_name: 'swiftness', 	    cost:  0 },
+     { long_name: 'shield_throw', 	         short_name: 'throw', 	        cost: 20 },
+     { long_name: 'shield_trample', 	       short_name: 'trample', 	      cost: 14 },
+     { long_name: 'shielded_brawler', 	     short_name: 'brawler', 	      cost:  0 },
+     { long_name: 'small_shield_focus', 	   short_name: 'sfocus',          cost:  0 },
+     { long_name: 'spell_block', 	           short_name: 'spellblock', 	    cost:  0 },
+     { long_name: 'steady_shield', 	         short_name: 'steady', 	        cost:  0 },
+     { long_name: 'steely_resolve',          short_name: 'resolve',         cost: 30 },
+     { long_name: 'tortoise_stance',         short_name: 'tortoise',        cost: 20 },
+     { long_name: 'tower_shield_focus',      short_name: 'tfocus',          cost:  0 }]
+    # rubocop:enable Layout/ExtraSpacing
   end
   # unmodified from 5.6.2
   @@shield_techniques = {
@@ -201,23 +203,20 @@ module Shield
       :usage => nil,
     },
   }
-  # rubocop:enable Layout/ExtraSpacing
-
   def Shield.[](name)
-    return PSM.assess(name, 'Shield')
+    return PSMS.assess(name, 'Shield')
   end
 
   def Shield.known?(name)
-    return Shield[name] > 0
+    Shield[name] > 0
   end
 
   def Shield.affordable?(name)
-    return PSM.affordable?(name, 'Shield')
+    return PSMS.assess(name, 'Shield', true)
   end
 
   def Shield.available?(name)
-    Shield.known?(name) and Shield.affordable?(name) and
-      !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+    Shield.known?(name) and Shield.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
   end
 
   # unmodified from 5.6.2

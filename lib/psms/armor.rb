@@ -5,16 +5,17 @@ module Armor
   # rubocop:disable Layout/ExtraSpacing
   def self.armor_lookups
     [{ long_name: 'armor_blessing',	        short_name: 'blessing',	        cost:	 0 },
-     { long_name: 'armor_reinforcement',	    short_name: 'reinforcement',	  cost:	 0 },
-     { long_name: 'armor_spike_mastery',	    short_name: 'spikemastery',	    cost:	 0 },
-     { long_name: 'armor_support',	          short_name: 'support',	        cost:	 0 },
-     { long_name: 'armored_casting',	        short_name: 'casting',	        cost:	 0 },
-     { long_name: 'armored_evasion',	        short_name: 'evasion',	        cost:	 0 },
+     { long_name: 'armor_reinforcement',	  short_name: 'reinforcement',	  cost:	 0 },
+     { long_name: 'armor_spike_mastery',	  short_name: 'spikemastery',	    cost:	 0 },
+     { long_name: 'armor_support',	        short_name: 'support',	        cost:	 0 },
+     { long_name: 'armored_casting',	      short_name: 'casting',	        cost:	 0 },
+     { long_name: 'armored_evasion',	      short_name: 'evasion',	        cost:	 0 },
      { long_name: 'armored_fluidity',	      short_name: 'fluidity',	        cost:	 0 },
-     { long_name: 'armored_stealth',	        short_name: 'stealth',	        cost:	 0 },
+     { long_name: 'armored_stealth',	      short_name: 'stealth',	        cost:	 0 },
      { long_name: 'crush_protection',	      short_name: 'crush',	          cost:	 0 },
-     { long_name: 'puncture_protection',	    short_name: 'puncture',	        cost:	 0 },
+     { long_name: 'puncture_protection',	  short_name: 'puncture',	        cost:	 0 },
      { long_name: 'slash_protection',	      short_name: 'slash',	          cost:	 0 }]
+    # rubocop:enable Layout/ExtraSpacing
   end
 
   @@armor_techniques = {
@@ -63,23 +64,21 @@ module Armor
       :usage => "slash",
     },
   }
-  # rubocop:enable Layout/ExtraSpacing
 
   def Armor.[](name)
-    return PSM.assess(name, 'Armor')
+    return PSMS.assess(name, 'Armor')
   end
 
   def Armor.known?(name)
-    return Armor[name] > 0
+    Armor[name] > 0
   end
 
   def Armor.affordable?(name)
-    return PSM.affordable?(name, 'Armor')
+    return PSMS.assess(name, 'Armor', true)
   end
 
   def Armor.available?(name)
-    Armor.known?(name) and Armor.affordable?(name) and
-      !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+    Armor.known?(name) and Armor.affordable?(name)  and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
   end
 
   def Armor.use(name, target = "")

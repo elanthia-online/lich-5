@@ -30,19 +30,18 @@ module Feat
   end
 
   def Feat.[](name)
-    return PSM.assess(name, 'Feat')
+    return PSMS.assess(name, 'Feat')
   end
 
   def Feat.known?(name)
-    return Feat[name] > 0
+    Feat[name] > 0
   end
 
   def Feat.affordable?(name)
-    return PSM.affordable?(name, 'Feat')
+    return PSMS.assess(name, 'Feat', true)
   end
 
   def Feat.available?(name)
-    Feat.known?(name) and Feat.affordable?(name) and
-      !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+    Feat.known?(name) and Feat.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
   end
 end
