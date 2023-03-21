@@ -65,11 +65,6 @@ module Lich
 
   Example usage:
 
-  [One time suggestions]
-    ;autostart add --global lich5-update --announce    Check for new version at login
-    ;autostart add --global lich5-update --update      To auto accept all updates at login
-
-  [On demand suggestions]
     ;lich5-update --announce                  Check to see if a new version is available
     ;lich5-update --update                    Update the Lich5 ecosystem to the current release
     ;lich5-update --revert                    Roll the Lich5 ecosystem back to latest snapshot
@@ -77,8 +72,6 @@ module Lich
     ;lich5-update --library=<NAME>            Update an individual library file found in Lich-5
     ;lich5-update --data=<NAME>               Update an individual data file found in Lich-5
 
-    *NOTE* If you use '--snapshot' in ';autostart' you will create a new
-                snapshot folder every time you log a character in.  NOT recommended.
     "
       end
 
