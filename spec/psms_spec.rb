@@ -17,6 +17,16 @@ module XMLData
   end
 end
 
+module Lich
+  def self.log(msg)
+    debug_filename = "debug-#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}.log"
+    $stderr = File.open(debug_filename, 'w')
+    begin
+      $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"
+    end
+  end
+end
+
 # we need to set up some test data, stealing from infomon_spec.rb
 describe Infomon, ".setup!" do
   context "can set itself up" do
