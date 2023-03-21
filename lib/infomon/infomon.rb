@@ -63,7 +63,9 @@ module Infomon
   end
 
   def self._key(key)
-    key.to_s.downcase
+    key = key.to_s.downcase
+    key.gsub!(' ', '_').gsub!('_-_', '').gsub!('-', '_') if key =~ /\s|-/
+    return key
   end
 
   def self._validate!(key, value)
