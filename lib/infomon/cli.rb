@@ -51,5 +51,16 @@ module Infomon
       end
       respond response.uniq
     end
+
+    def self.help
+      _respond "
+  Additional options for infomon related functions below.
+
+  ;infomon help  - display this message
+  ;infomon reset - resets and syncs infomon values
+  ;infomon sync  - force a resync of all values
+  ;infomon show  - shows existing values infomon tracks
+    "
+    end
   end
 end
