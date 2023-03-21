@@ -68,7 +68,7 @@ describe Infomon::Parser, ".parse" do
            Influence (INF):   100 (20)    ...  108 (24)
       Stats
       stats.split("\n").each { |line| Infomon::Parser.parse(line) }
-      sleep 0.1
+      sleep 1
       expect(Infomon.get("stat.aura")).to eq(100)
       expect(Infomon.get("stat.aura_bonus")).to eq(-35)
       expect(Infomon.get("stat.logic.enhanced")).to eq(118)
