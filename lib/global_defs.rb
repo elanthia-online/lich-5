@@ -2164,16 +2164,30 @@ def do_client(client_string)
       respond("--- Lich: toggle #{toggle_var} set #{set_state}") if did_something
       did_something = false
       nil
-    elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
-      update_parameter = $1.dup
-      require 'lib/update.rb'
-      Lich::Util::Update.request("#{update_parameter}")
     elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
       require "lib/hmr"
       HMR.reload %r{#{Regexp.last_match[:pattern]}}
-    elsif cmd =~ /^(?:lich5-update|l5u)/i
+    elsif cmd =~ /^(?:lich5-update|l5u|update)\s+(.*)/i
+      update_parameter = $1.dup
+      require 'lib/update.rb'
+      Lich::Util::Update.request("#{update_parameter}")
+    elsif cmd =~ /^(?:lich5-update|l5u|update)/i
       require 'lib/update.rb'
       Lich::Util::Update.request("--help")
+    elsif cmd =~ /^infomon (help|reset|sync|show)$/i
+      case $1.downcase.dup
+      when "help"
+        Infomon::CLI.help
+      when "reset"
+        Infomon::CLI.redo!
+      when "sync"
+        Infomon::CLI.sync
+      when "show"
+        Infomon::CLI.show
+      end
+    elsif cmd =~ /^infomon\b/i
+      respond 'Running this command is no longer necessary. Infomon is now part of Lich-5 as a library.'
+      Infomon::CLI.help
     elsif cmd =~ /^banks$/ && XMLData.game =~ /^GS/
       Game._puts "<c>bank account"
       $_CLIENTBUFFER_.push "<c>bank account"
