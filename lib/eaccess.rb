@@ -3,20 +3,20 @@ require "socket"
 
 module EAccess
   PEM = File.join("#{DATA_DIR}/", "simu.pem")
-#  pp PEM
+  # pp PEM
   PACKET_SIZE = 8192
-  
+
   @@account_name = nil
   @@account_type = nil
 
   def self.pem_exist?
     File.exist? PEM
   end
-  
+
   def self.account_name
     @@account_name
   end
-  
+
   def self.account_type
     if @@account_type =~ /(NORMAL|PREMIUM|TRIAL|INTERNAL|FREE)/
       return Regexp.last_match(1)
@@ -37,14 +37,14 @@ module EAccess
   end
 
   def self.verify_pem(conn)
-    #return if conn.peer_cert.to_s = File.read(EAccess::PEM)
+    # return if conn.peer_cert.to_s = File.read(EAccess::PEM)
     if !(conn.peer_cert.to_s == File.read(EAccess::PEM))
       Lich.log "Exception, \nssl peer certificate did not match #{EAccess::PEM}\nwas:\n#{conn.peer_cert}"
       download_pem
     else
       return true
-  end
-#     fail Exception, "\nssl peer certificate did not match #{EAccess::PEM}\nwas:\n#{conn.peer_cert}"
+    end
+    #     fail Exception, "\nssl peer certificate did not match #{EAccess::PEM}\nwas:\n#{conn.peer_cert}"
   end
 
   def self.socket(hostname = "eaccess.play.net", port = 7910)
@@ -69,58 +69,58 @@ module EAccess
     EAccess.verify_pem(conn)
     conn.puts "K\n"
     hashkey = EAccess.read(conn)
-    #pp "hash=%s" % hashkey
+    # pp "hash=%s" % hashkey
     password = password.split('').map { |c| c.getbyte(0) }
     hashkey = hashkey.split('').map { |c| c.getbyte(0) }
-    password.each_index { |i| password[i] = ((password[i]-32)^hashkey[i])+32 }
+    password.each_index { |i| password[i] = ((password[i] - 32) ^ hashkey[i]) + 32 }
     password = password.map { |c| c.chr }.join
     conn.puts "A\t#{account}\t#{password}\n"
     response = EAccess.read(conn)
-    unless login = /KEY\t(?<key>.*)\t/.match(response)
+    unless /KEY\t(?<key>.*)\t/.match(response)
       eaccess_error = "Error(%s)" % response.split(/\s+/).last
       return eaccess_error
     end
-    #pp "A:response=%s" % response
+    # pp "A:response=%s" % response
     conn.puts "M\n"
     response = EAccess.read(conn)
-    fail Exception, response unless response =~ /^M\t/
-    #pp "M:response=%s" % response
+    fail StandardError, response unless response =~ /^M\t/
+    # pp "M:response=%s" % response
 
     unless legacy
       conn.puts "F\t#{game_code}\n"
       response = EAccess.read(conn)
-      fail Exception, response unless response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
+      fail StandardError, response unless response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
       @@account_type = response
-      #pp "F:response=%s" % response
+      # pp "F:response=%s" % response
       conn.puts "G\t#{game_code}\n"
       EAccess.read(conn)
-      #pp "G:response=%s" % response
+      # pp "G:response=%s" % response
       conn.puts "P\t#{game_code}\n"
       EAccess.read(conn)
-      #pp "P:response=%s" % response
+      # pp "P:response=%s" % response
       conn.puts "C\n"
       response = EAccess.read(conn)
-      #pp "C:response=%s" % response
+      # pp "C:response=%s" % response
       char_code = response.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '')
-        .scan(/[^\t]+\t[^\t^\n]+/)
-        .find { |c| c.split("\t")[1] == character }
-        .split("\t")[0]
+                          .scan(/[^\t]+\t[^\t^\n]+/)
+                          .find { |c| c.split("\t")[1] == character }
+                          .split("\t")[0]
       conn.puts "L\t#{char_code}\tSTORM\n"
       response = EAccess.read(conn)
-      fail Exception, response unless response =~ /^L\t/
-      #pp "L:response=%s" % response
+      fail StandardError, response unless response =~ /^L\t/
+      # pp "L:response=%s" % response
       conn.close unless conn.closed?
       login_info = Hash[response.sub(/^L\tOK\t/, '')
-        .split("\t")
-        .map {|kv|
-          k,v = kv.split("=")
-          [k.downcase, v]
-        }]
+                                .split("\t")
+                                .map { |kv|
+                          k, v = kv.split("=")
+                          [k.downcase, v]
+                        }]
     else
       login_info = Array.new
       for game in response.sub(/^M\t/, '').scan(/[^\t]+\t[^\t^\n]+/)
-          game_code, game_name = game.split("\t")
-        #pp "M:response = %s" % response
+        game_code, game_name = game.split("\t")
+        # pp "M:response = %s" % response
         conn.puts "N\t#{game_code}\n"
         response = EAccess.read(conn)
         if response =~ /STORM/
@@ -135,9 +135,9 @@ module EAccess
             conn.puts "C\n"
             response = EAccess.read(conn)
             for code_name in response.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '').scan(/[^\t]+\t[^\t^\n]+/)
-                char_code, char_name = code_name.split("\t")
-              hash = {:game_code => "#{game_code}", :game_name => "#{game_name}",
-                      :char_code => "#{char_code}", :char_name => "#{char_name}"}
+              char_code, char_name = code_name.split("\t")
+              hash = { :game_code => "#{game_code}", :game_name => "#{game_name}",
+                      :char_code => "#{char_code}", :char_name => "#{char_name}" }
               login_info.push(hash)
             end
           end
