@@ -1,7 +1,7 @@
 module Account
   @@name ||= nil
-  @@type ||= nil
-  @@game ||= nil
+  @@subscription ||= nil
+  @@game_code ||= nil
   @@members ||= []
 
   def self.name
@@ -12,22 +12,22 @@ module Account
     @@name = value
   end
 
-  def self.type
-    @@type
+  def self.subscription
+    @@subscription
   end
 
-  def self.type=(value)
+  def self.subscription=(value)
     if value =~ /(NORMAL|PREMIUM|TRIAL|INTERNAL|FREE)/
-      @@type = Regexp.last_match(1)
+      @@subscription = Regexp.last_match(1)
     end
   end
 
-  def self.game
-    @@game
+  def self.game_code
+    @@game_code
   end
 
-  def self.game=(value)
-    @@game = value
+  def self.game_code=(value)
+    @@game_code = value
   end
 
   def self.members
