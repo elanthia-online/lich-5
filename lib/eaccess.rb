@@ -90,6 +90,7 @@ module EAccess
       conn.puts "C\n"
       response = EAccess.read(conn)
       # pp "C:response=%s" % response
+      Account.members = response
       char_code = response.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '')
                           .scan(/[^\t]+\t[^\t^\n]+/)
                           .find { |c| c.split("\t")[1] == character }
@@ -123,6 +124,7 @@ module EAccess
             EAccess.read(conn)
             conn.puts "C\n"
             response = EAccess.read(conn)
+            Account.members = response
             for code_name in response.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '').scan(/[^\t]+\t[^\t^\n]+/)
               char_code, char_name = code_name.split("\t")
               hash = { :game_code => "#{game_code}", :game_name => "#{game_name}",
