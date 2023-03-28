@@ -51,7 +51,7 @@ module EAccess
 
   def self.auth(password:, account:, character: nil, game_code: nil, legacy: false)
     Account.name = account
-    Account.game = game_code
+    Account.game_code = game_code
     conn = EAccess.socket()
     # it is vitally important to verify self-signed certs
     # because there is no chain-of-trust for them
@@ -79,7 +79,7 @@ module EAccess
       conn.puts "F\t#{game_code}\n"
       response = EAccess.read(conn)
       fail StandardError, response unless response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
-      Account.type = response
+      Account.subscription = response
       # pp "F:response=%s" % response
       conn.puts "G\t#{game_code}\n"
       EAccess.read(conn)
@@ -117,7 +117,7 @@ module EAccess
           conn.puts "F\t#{game_code}\n"
           response = EAccess.read(conn)
           if response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
-            Account.type = response
+            Account.subscription = response
             conn.puts "G\t#{game_code}\n"
             EAccess.read(conn)
             conn.puts "P\t#{game_code}\n"
