@@ -5,9 +5,22 @@ module EAccess
   PEM = File.join("#{DATA_DIR}/", "simu.pem")
 #  pp PEM
   PACKET_SIZE = 8192
+  
+  @@account_name = nil
+  @@account_type = nil
 
   def self.pem_exist?
     File.exist? PEM
+  end
+  
+  def self.account_name
+    @@account_name
+  end
+  
+  def self.account_type
+    if @@account_type =~ /(NORMAL|PREMIUM|TRIAL|INTERNAL|FREE)/
+      return Regexp.last_match(1)
+    end
   end
 
   def self.download_pem(hostname = "eaccess.play.net", port = 7910)
@@ -49,6 +62,7 @@ module EAccess
   end
 
   def self.auth(password:, account:, character: nil, game_code: nil, legacy: false)
+    @@account_name = account
     conn = EAccess.socket()
     # it is vitally important to verify self-signed certs
     # because there is no chain-of-trust for them
@@ -76,6 +90,7 @@ module EAccess
       conn.puts "F\t#{game_code}\n"
       response = EAccess.read(conn)
       fail Exception, response unless response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
+      @@account_type = response
       #pp "F:response=%s" % response
       conn.puts "G\t#{game_code}\n"
       EAccess.read(conn)
@@ -112,6 +127,7 @@ module EAccess
           conn.puts "F\t#{game_code}\n"
           response = EAccess.read(conn)
           if response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
+            @@account_type = response
             conn.puts "G\t#{game_code}\n"
             EAccess.read(conn)
             conn.puts "P\t#{game_code}\n"
