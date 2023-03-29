@@ -85,7 +85,9 @@ module Games
         /You can only evoke certain spells\./,
         /You can only channel certain spells for extra power\./,
         /That is not something you can prepare\./,
-        /^\[Spell preparation time: \d seconds?\]$/
+        /^\[Spell preparation time: \d seconds?\]$/,
+        /^You are too injured to make that dextrous of a movement/,
+        /^You can't make that dextrous of a move!$/
       )
 
       def initialize(xml_spell)
