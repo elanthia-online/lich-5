@@ -42,4 +42,8 @@ module Account
     end
     @@members = potential_members
   end
+
+  def self.characters
+    @@members.values
+  end
 end
