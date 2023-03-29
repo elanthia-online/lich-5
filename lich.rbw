@@ -2591,7 +2591,7 @@ reconnect_if_wanted = proc {
     sleep reconnect_delay
     Lich.log 'info: reconnecting...'
     if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
-      if $frontend == 'stormfront'
+      if $frontend == 'wrayth'
         system 'taskkill /FI "WINDOWTITLE eq [GSIV: ' + Char.name + '*"' # fixme: window title changing to Gemstone IV: Char.name # name optional
       end
       args = ['start rubyw.exe']
@@ -2617,7 +2617,7 @@ reconnect_if_wanted = proc {
 $version = LICH_VERSION
 $room_count = 0
 $psinet = false
-$stormfront = true
+$wrayth = true
 
 class Script
   def Script.self
@@ -2983,7 +2983,7 @@ for arg in ARGV
     puts '      --temp-dir      Set the directory where Lich will store temporary files.'
     puts ''
     puts '  -w, --wizard        Run in Wizard mode (default)'
-    puts '  -s, --stormfront    Run in StormFront mode.'
+    puts '  -s, --wrayth    Run in StormFront mode.'
     puts '      --avalon        Run in Avalon mode.'
     puts '      --frostbite     Run in Frosbite mode.'
     puts ''
@@ -3198,8 +3198,8 @@ end
 if arg = ARGV.find { |a| (a == '-g') or (a == '--game') }
   game_host, game_port = ARGV[ARGV.index(arg) + 1].split(':')
   game_port = game_port.to_i
-  if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-    $frontend = 'stormfront'
+  if ARGV.any? { |arg| (arg == '-s') or (arg == '--wrayth') }
+    $frontend = 'wrayth'
   elsif ARGV.any? { |arg| (arg == '-w') or (arg == '--wizard') }
     $frontend = 'wizard'
   elsif ARGV.any? { |arg| arg == '--avalon' }
@@ -3212,10 +3212,10 @@ if arg = ARGV.find { |a| (a == '-g') or (a == '--game') }
 elsif ARGV.include?('--gemstone')
   if ARGV.include?('--platinum')
     $platinum = true
-    if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+    if ARGV.any? { |arg| (arg == '-s') or (arg == '--wrayth') }
       game_host = 'storm.gs4.game.play.net'
       game_port = 10124
-      $frontend = 'stormfront'
+      $frontend = 'wrayth'
     else
       game_host = 'gs-plat.simutronics.net'
       game_port = 10121
@@ -3227,10 +3227,10 @@ elsif ARGV.include?('--gemstone')
     end
   else
     $platinum = false
-    if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+    if ARGV.any? { |arg| (arg == '-s') or (arg == '--wrayth') }
       game_host = 'storm.gs4.game.play.net'
       game_port = 10024
-      $frontend = 'stormfront'
+      $frontend = 'wrayth'
     else
       game_host = 'gs3.simutronics.net'
       game_port = 4900
@@ -3243,10 +3243,10 @@ elsif ARGV.include?('--gemstone')
   end
 elsif ARGV.include?('--shattered')
   $platinum = false
-  if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+  if ARGV.any? { |arg| (arg == '-s') or (arg == '--wrayth') }
     game_host = 'storm.gs4.game.play.net'
     game_port = 10324
-    $frontend = 'stormfront'
+    $frontend = 'wrayth'
   else
     game_host = 'gs4.simutronics.net'
     game_port = 10321
@@ -3259,8 +3259,8 @@ elsif ARGV.include?('--shattered')
 elsif ARGV.include?('--fallen')
   $platinum = false
   # Not sure what the port info is for anything else but Genie :(
-  if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-    $frontend = 'stormfront'
+  if ARGV.any? { |arg| (arg == '-s') or (arg == '--wrayth') }
+    $frontend = 'wrayth'
     $stdout.puts "fixme"
     Lich.log "fixme"
     exit
@@ -3276,11 +3276,11 @@ elsif ARGV.include?('--fallen')
 elsif ARGV.include?('--dragonrealms')
   if ARGV.include?('--platinum')
     $platinum = true
-    if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+    if ARGV.any? { |arg| (arg == '-s') or (arg == '--wrayth') }
       $stdout.puts "fixme"
       Lich.log "fixme"
       exit
-      $frontend = 'stormfront'
+      $frontend = 'wrayth'
     elsif ARGV.grep(/--genie/).any?
       game_host = 'dr.simutronics.net'
       game_port = 11124
@@ -3297,8 +3297,8 @@ elsif ARGV.include?('--dragonrealms')
     end
   else
     $platinum = false
-    if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-      $frontend = 'stormfront'
+    if ARGV.any? { |arg| (arg == '-s') or (arg == '--wrayth') }
+      $frontend = 'wrayth'
       $stdout.puts "fixme"
       Lich.log "fixme"
       exit
@@ -3485,7 +3485,6 @@ main_thread = Thread.new {
         custom_launch = "Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
         custom_launch = "Wrayth.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /Wrayth/
-        custom_launch = "Stormfront.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
       end
     elsif defined?(Wine)
       Lich.log("info: Working against a Linux | WINE Platform")
@@ -3493,7 +3492,6 @@ main_thread = Thread.new {
         custom_launch = "Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
         custom_launch = "Wrayth.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /Wrayth/
-        custom_launch = "Stormfront.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
       end
     end
     if custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ }
@@ -3504,7 +3502,7 @@ main_thread = Thread.new {
       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
         custom_launch_dir = Lich.seek('wizard') # #HERE I AM
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
-        custom_launch_dir = Lich.seek('stormfront') # #HERE I AM
+        custom_launch_dir = Lich.seek('wrayth') # #HERE I AM
       end
       Lich.log "info: Current Windows working directory is #{custom_launch_dir}"
     elsif defined?(Wine)
@@ -3513,7 +3511,7 @@ main_thread = Thread.new {
         custom_launch_dir_temp = Lich.seek('wizard') # #HERE I AM
         custom_launch_dir = custom_launch_dir_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
-        custom_launch_dir_temp = Lich.seek('stormfront') # #HERE I AM
+        custom_launch_dir_temp = Lich.seek('wrayth') # #HERE I AM
         custom_launch_dir = custom_launch_dir_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
       end
       Lich.log "info: Current WINE working directory is #{custom_launch_dir}"
@@ -3569,7 +3567,7 @@ main_thread = Thread.new {
       if game =~ /WIZ/i
         $frontend = 'wizard'
       elsif game =~ /STORM/i
-        $frontend = 'stormfront'
+        $frontend = 'wrayth'
       elsif game =~ /AVALON/i
         $frontend = 'avalon'
       else
@@ -3771,9 +3769,9 @@ main_thread = Thread.new {
 
   # backward compatibility
   if $frontend =~ /^(?:wizard|avalon)$/
-    $fake_stormfront = true
+    $fake_wrayth = true
   else
-    $fake_stormfront = false
+    $fake_wrayth = false
   end
 
   undef :exit!
@@ -3839,7 +3837,7 @@ main_thread = Thread.new {
         # take the version string from the client, ignore it, and ask the server for xml
         #
         $_CLIENT_.gets
-        client_string = "/FE:STORMFRONT /VERSION:1.0.1.26 /P:#{RUBY_PLATFORM} /XML"
+        client_string = "/FE:WRAYTH /VERSION:1.0.1.26 /P:#{RUBY_PLATFORM} /XML"
         $_CLIENTBUFFER_.push(client_string.dup)
         Game._puts(client_string)
         #
@@ -3872,7 +3870,7 @@ main_thread = Thread.new {
         # take the version string from the client, ignore it, and ask the server for xml
         #
         $_CLIENT_.gets
-        client_string = "/FE:STORMFRONT /VERSION:1.0.1.26 /P:#{RUBY_PLATFORM} /XML"
+        client_string = "/FE:WRAYTH /VERSION:1.0.1.26 /P:#{RUBY_PLATFORM} /XML"
         $_CLIENTBUFFER_.push(client_string.dup)
         Game._puts(client_string)
         #

@@ -47,7 +47,7 @@ module Lich
       
       stream_window_before_txt = ""
       stream_window_after_txt = ""
-      if $frontend =~ /stormfront|profanity/i && allowed_streams.include?(window)
+      if $frontend =~ /wrayth|profanity/i && allowed_streams.include?(window)
         stream_window_before_txt = "<pushStream id=\"#{window}\" ifClosedStyle=\"watching\"/>"
         stream_window_after_txt = "<popStream/>\r\n"
       else
@@ -72,7 +72,7 @@ module Lich
         "dark red"=>133, "purple"=>134, "gold"=>135, "light grey"=>136, "blue"=>137,
         "bright green"=>138, "teal"=>139, "red"=>140, "pink"=>141, "yellow"=>142}
       
-      if $frontend =~ /^(?:stormfront|frostbite|profanity)$/
+      if $frontend =~ /^(?:wrayth|frostbite|profanity)$/
         case type
         when "error", "yellow", "bold", "monster", "creature"
           preset_color_before = monsterbold_start

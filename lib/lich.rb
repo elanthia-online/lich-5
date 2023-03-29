@@ -21,7 +21,7 @@ module Lich
   def Lich.seek(fe)
     if fe =~ /wizard/
       return $wiz_fe_loc
-    elsif fe =~ /stormfront/
+    elsif fe =~ /wrayth/
       return $sf_fe_loc
     end
     pp "Landed in get_simu_launcher method"

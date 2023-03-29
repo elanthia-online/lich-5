@@ -48,13 +48,13 @@ sw.set_policy(:automatic, :automatic)
 sw.add(treeview)
 
 wizard_option = Gtk::RadioButton.new(:label => 'Wizard')
-stormfront_option = Gtk::RadioButton.new(:label => 'Stormfront | Wrayth', :member => wizard_option)
+wrayth_option = Gtk::RadioButton.new(:label => 'wrayth | Wrayth', :member => wizard_option)
 avalon_option = Gtk::RadioButton.new(:label => 'Avalon', :member => wizard_option)
 suks_option = Gtk::RadioButton.new(:label => 'suks', :member => wizard_option)
 
 frontend_box = Gtk::Box.new(:horizontal, 10)
 frontend_box.pack_start(wizard_option, :expand => false, :fill => false, :padding => 0)
-frontend_box.pack_start(stormfront_option, :expand => false, :fill => false, :padding => 0)
+frontend_box.pack_start(wrayth_option, :expand => false, :fill => false, :padding => 0)
 if RUBY_PLATFORM =~ /darwin/i
   frontend_box.pack_start(avalon_option, :expand => false, :fill => false, :padding => 0)
 end
@@ -64,11 +64,11 @@ custom_launch_option = Gtk::CheckButton.new('Custom launch command')
 @custom_launch_entry = Gtk::ComboBoxEntry.new()
 @custom_launch_entry.child.text = "(enter custom launch command)"
 @custom_launch_entry.append_text("Wizard.Exe /GGS /H127.0.0.1 /P%port% /K%key%")
-@custom_launch_entry.append_text("Stormfront.exe /GGS/Hlocalhost/P%port%/K%key%")
+@custom_launch_entry.append_text("wrayth.exe /GGS/Hlocalhost/P%port%/K%key%")
 @custom_launch_dir = Gtk::ComboBoxEntry.new()
 @custom_launch_dir.child.text = "(enter working directory for command)"
 @custom_launch_dir.append_text("../wizard")
-@custom_launch_dir.append_text("../StormFront")
+@custom_launch_dir.append_text("../wrayth")
 
 @make_quick_option = Gtk::CheckButton.new('Save this info for quick game entry')
 
@@ -183,8 +183,8 @@ play_button.signal_connect('clicked') {
   if @make_quick_option.active?
     if wizard_option.active?
       frontend = 'wizard'
-    elsif stormfront_option.active?
-      frontend = 'stormfront'
+    elsif wrayth_option.active?
+      frontend = 'wrayth'
     elsif avalon_option.active?
       frontend = 'avalon'
     else

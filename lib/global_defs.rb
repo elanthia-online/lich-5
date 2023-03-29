@@ -1598,7 +1598,7 @@ def respond(first = "", *messages)
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
     # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
-    if $frontend == 'stormfront' || $frontend == 'genie'
+    if $frontend == 'wrayth' || $frontend == 'genie'
       str = "<output class=\"mono\"/>\r\n#{str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')}<output class=\"\"/>\r\n"
     elsif $frontend == 'profanity'
       str = str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
@@ -1991,7 +1991,7 @@ end
 def monsterbold_start
   if $frontend =~ /^(?:wizard|avalon)$/
     "\034GSL\r\n"
-  elsif $frontend =~ /^(?:stormfront|frostbite)$/
+  elsif $frontend =~ /^(?:wrayth|frostbite)$/
     '<pushBold/>'
   elsif $frontend == 'profanity'
     '<b>'
@@ -2003,7 +2003,7 @@ end
 def monsterbold_end
   if $frontend =~ /^(?:wizard|avalon)$/
     "\034GSM\r\n"
-  elsif $frontend =~ /^(?:stormfront|frostbite)$/
+  elsif $frontend =~ /^(?:wrayth|frostbite)$/
     '<popBold/>'
   elsif $frontend == 'profanity'
     '</b>'

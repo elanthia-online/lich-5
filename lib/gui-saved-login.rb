@@ -290,9 +290,9 @@ else
   add_instance_pane.add1(add_inst_label)
   add_instance_pane.add2(add_inst_select)
 
-  q_stormfront_option = Gtk::RadioButton.new(:label => 'Stormfront')
-  q_wizard_option = Gtk::RadioButton.new(:label => 'Wizard', :member => q_stormfront_option)
-  q_avalon_option = Gtk::RadioButton.new(:label => 'Avalon', :member => q_stormfront_option)
+  q_wrayth_option = Gtk::RadioButton.new(:label => 'wrayth')
+  q_wizard_option = Gtk::RadioButton.new(:label => 'Wizard', :member => q_wrayth_option)
+  q_avalon_option = Gtk::RadioButton.new(:label => 'Avalon', :member => q_wrayth_option)
 
   add_char_button = Gtk::Button.new(:label => "Add to this account")
   q_frontend_box = Gtk::Box.new(:horizontal, 10)
@@ -300,7 +300,7 @@ else
     q_frontend_box.pack_end(q_avalon_option, :expand => false, :fill => false, :padding => 0)
   else
     q_frontend_box.pack_end(q_wizard_option, :expand => false, :fill => false, :padding => 0)
-    q_frontend_box.pack_end(q_stormfront_option, :expand => false, :fill => false, :padding => 0)
+    q_frontend_box.pack_end(q_wrayth_option, :expand => false, :fill => false, :padding => 0)
   end
 
   @bonded_pair_char = Gtk::Paned.new(:horizontal)
