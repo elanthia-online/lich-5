@@ -50,18 +50,18 @@ module Lich
       "Util::#{prefix}-#{now}-#{Random.rand(10000)}"
     end
 
-    def self.issue_command(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true, usexml = true, quiet = false)
+    def self.issue_command(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = nil, usexml = true, quiet = false)
       result = []
       name = self.anon_hook
       filter = false
-      if silent
-        save_script_silent = Script.current.silent
-        Script.current.silent = true
-      end
+      
+      save_script_silent = Script.current.silent
       save_want_downstream = Script.current.want_downstream
       save_want_downstream_xml = Script.current.want_downstream_xml
-      usexml ? Script.current.want_downstream = false : Script.current.want_downstream = true
-      usexml ? Script.current.want_downstream_xml = true : Script.current.want_downstream_xml = false
+      
+      Script.current.silent = silent if !silent.nil?
+      Script.current.want_downstream = !usexml
+      Script.current.want_downstream_xml = usexml
 
       begin
         Timeout::timeout(timeout, Interrupt) {
@@ -103,9 +103,9 @@ module Lich
         nil
       ensure
         DownstreamHook.remove(name)
-        Script.current.want_downstream_xml = save_want_downstream_xml
+        Script.current.silent = save_script_silent if !silent.nil?
         Script.current.want_downstream = save_want_downstream
-        Script.current.silent = save_script_silent if silent
+        Script.current.want_downstream_xml = save_want_downstream_xml
       end
       return result
     end
