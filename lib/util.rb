@@ -22,8 +22,6 @@ Entries added here should always be accessible from Lich::Util.feature namespace
 
 =end
 
-
-
 module Lich
   module Util
     include Enumerable
@@ -54,11 +52,11 @@ module Lich
       result = []
       name = self.anon_hook
       filter = false
-      
+
       save_script_silent = Script.current.silent
       save_want_downstream = Script.current.want_downstream
       save_want_downstream_xml = Script.current.want_downstream_xml
-      
+
       Script.current.silent = silent if !silent.nil?
       Script.current.want_downstream = !usexml
       Script.current.want_downstream_xml = usexml
@@ -71,7 +69,7 @@ module Lich
                 DownstreamHook.remove(name)
                 filter = false
               else
-                if quiet 
+                if quiet
                   next(nil)
                 else
                   line
@@ -113,13 +111,13 @@ module Lich
     def self.quiet_command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true)
       return issue_command(command, start_pattern, end_pattern, include_end, timeout, silent, true, true)
     end
-    
+
     def self.quiet_command(command, start_pattern, end_pattern, include_end = true, timeout = 5, silent = true)
       return issue_command(command, start_pattern, end_pattern, include_end, timeout, silent, false, true)
     end
 
     def self.silver_count(timeout = 3)
-      silence_me unless undo_silence = silence_me
+      silence_me unless (undo_silence = silence_me)
       result = ''
       name = self.anon_hook
       filter = false
@@ -155,13 +153,11 @@ module Lich
           break if Time.now > ttl
           sleep(0.01) # prevent a tight-loop
         }
-
       ensure
         DownstreamHook.remove(name)
         silence_me if undo_silence
       end
       return result.gsub(',', '').to_i
     end
-
   end
 end
