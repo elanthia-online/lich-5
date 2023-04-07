@@ -13,6 +13,7 @@ Further modifications are to support the retirement of spell-list.xml.
     v1.2.4 (2023-03-22)
       Rubocop code cleanup
       Add spell preparation time detection from debuffs to recast after prep time.
+      Fix for affordable? to check Overexerted on stamina checks
     v1.2.3 (2023-02-19)
       Remove .untaint calls for Ruby 3.2 compatibility
     v1.2.2 (2022-11-24)
@@ -544,13 +545,13 @@ module Games
         # fixme: deal with them dirty bards!
         release_options = options.dup
         release_options[:multicast] = nil
-        if (self.stamina_cost(options) > 0) and (Spell[9699].active? or not checkstamina(self.stamina_cost(options)))
+        if (self.stamina_cost(options) > 0) and (Spell[9699].active? or not checkstamina(self.stamina_cost(options)) or Effects::Debuffs.active?("Overexerted"))
           false
         elsif (self.spirit_cost(options) > 0) and not checkspirit(self.spirit_cost(options) + 1 + [9912, 9913, 9914, 9916, 9916, 9916].delete_if { |num| !Spell[num].active? }.length)
           false
         elsif (self.mana_cost(options) > 0)
           ## convert Spell[9699].active? to Effects::Debuffs test (if Debuffs is where it shows)
-          if (Feat.known?(:mental_acuity) and self.num.between?(1201, 1220)) and (Spell[9699].active? or not checkstamina(self.mana_cost(options) * 2))
+          if (Feat.known?(:mental_acuity) and self.num.between?(1201, 1220)) and (Spell[9699].active? or not checkstamina(self.mana_cost(options) * 2) or Effects::Debuffs.active?("Overexerted"))
             false
           elsif (!(Feat.known?(:mental_acuity) and self.num.between?(1201, 1220))) and (!checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options) / 4, 1].max)))
             false
