@@ -3353,7 +3353,8 @@ main_thread = Thread.new {
       elsif ARGV.include?('--shattered')
         data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
       elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GST') }
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
+        data[:game_code] = 'GST'
       else
         data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
       end
@@ -3365,7 +3366,8 @@ main_thread = Thread.new {
       elsif ARGV.include?('--fallen')
         data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
       elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRT') }
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
+        data[:game_code] = 'DRT'
       else
         data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
       end
