@@ -68,10 +68,10 @@ class Bounty
           expect(bounty[:type]).to eq(:bandit)
           expect(bounty[:town]).to eq("Wehnimer's Landing and Solhaven")
           expect(bounty[:requirements]).to include({
-            :area => "grasslands",
-            :creature => "bandit",
-            :number => 18,
-          })
+                                                     :area     => "grasslands",
+                                                     :creature => "bandit",
+                                                     :number   => 18,
+                                                   })
         end
       end
 
@@ -102,9 +102,11 @@ class Bounty
           bounty = described_class.parse "You have been tasked to recover a dainty pearl string bracelet that an unfortunate citizen lost after being attacked by a festering taint in Old Ta'Faendryl.  The heirloom can be identified by the initials VF engraved upon it.  Hunt down the creature and LOOT the item from its corpse."
           expect(bounty[:type]).to eq(:heirloom)
           expect(bounty[:requirements]).to include({
-            :action => "loot", :area => "Old Ta'Faendryl", :creature => "festering taint",
-            :item => "dainty pearl string bracelet"
-          })
+                                                     :action   => "loot",
+                                                     :area     => "Old Ta'Faendryl",
+                                                     :creature => "festering taint",
+                                                     :item     => "dainty pearl string bracelet"
+                                                   })
         end
 
         it "can parse a loot task" do
@@ -112,9 +114,11 @@ class Bounty
           expect(bounty[:type]).to eq(:heirloom)
           expect(bounty[:town]).to eq("Wehnimer's Landing")
           expect(bounty[:requirements]).to include({
-            :action => "loot", :area => "Darkstone Castle", :creature => "centaur",
-            :item => "onyx-inset copper torc"
-          })
+                                                     :action   => "loot",
+                                                     :area     => "Darkstone Castle",
+                                                     :creature => "centaur",
+                                                     :item     => "onyx-inset copper torc"
+                                                   })
         end
 
         it "can parse a loot task between two towns" do
@@ -122,50 +126,53 @@ class Bounty
           expect(bounty[:type]).to eq(:heirloom)
           expect(bounty[:town]).to eq("Wehnimer's Landing and Solhaven")
           expect(bounty[:requirements]).to include({
-            :action => "loot", :area => "Central Caravansary", :creature => "swamp troll",
-            :item => "gold-trimmed mithril circlet"
-          })
+                                                     :action   => "loot",
+                                                     :area     => "Central Caravansary",
+                                                     :creature => "swamp troll",
+                                                     :item     => "gold-trimmed mithril circlet"
+                                                   })
         end
-
 
         it "can parse a search task" do
           bounty = described_class.parse "You have been tasked to recover an interlaced gold and ora ring that an unfortunate citizen lost after being attacked by a black forest viper in the Blighted Forest near Ta'Illistim.  The heirloom can be identified by the initials MS engraved upon it.  SEARCH the area until you find it."
           expect(bounty[:type]).to eq(:heirloom)
           expect(bounty[:town]).to eq("Ta'Illistim")
           expect(bounty[:requirements]).to include({
-            :action => "search", :area => "Blighted Forest", :creature => "black forest viper",
-            :item => "interlaced gold and ora ring"
-          })
+                                                     :action   => "search",
+                                                     :area     => "Blighted Forest",
+                                                     :creature => "black forest viper",
+                                                     :item     => "interlaced gold and ora ring"
+                                                   })
         end
 
         it "can tell we have an unfinished assist heirloom by culling task" do
           bounty = described_class.parse "You have been tasked to help Someguy retrieve an heirloom by suppressing emaciated hierophant activity in Temple Wyneb near Ta'Illistim during the retrieval effort.  You need to kill 19 of them to complete your task."
           expect(bounty[:type]).to eq(:cull)
           expect(bounty[:requirements]).to include({
-            :area => "Temple Wyneb",
-            :number => 19,
-            :creature => "emaciated hierophant"
-          })
+                                                     :area     => "Temple Wyneb",
+                                                     :number   => 19,
+                                                     :creature => "emaciated hierophant"
+                                                   })
         end
 
         it "can tell we have an unfinished assist heirloom by culling task in OTF ducts" do
           bounty = described_class.parse "You have been tasked to help Thisdude retrieve an heirloom by suppressing gnarled being activity in Old Ta'Faendryl during the retrieval effort.  You need to kill 2 more of them to complete your task."
           expect(bounty[:type]).to eq(:cull)
           expect(bounty[:requirements]).to include({
-            :area => "Old Ta'Faendryl",
-            :number => 2,
-            :creature => "being"
-          })
+                                                     :area     => "Old Ta'Faendryl",
+                                                     :number   => 2,
+                                                     :creature => "being"
+                                                   })
         end
 
         it "can tell we have an unfinished assist heirloom by culling task" do
           bounty = described_class.parse "You have been tasked to help Friendo retrieve an heirloom by suppressing nedum vereri activity near the Temple of Love near Wehnimer's Landing during the retrieval effort.  You need to kill 4 more of them to complete your task."
           expect(bounty[:type]).to eq(:cull)
           expect(bounty[:requirements]).to include({
-            :area => "Temple of Love",
-            :number => 4,
-            :creature => "nedum vereri"
-          })
+                                                     :area     => "Temple of Love",
+                                                     :number   => 4,
+                                                     :creature => "nedum vereri"
+                                                   })
         end
       end
 
@@ -175,12 +182,12 @@ class Bounty
           expect(bounty[:type]).to eq(:skin)
           expect(bounty[:town]).to eq("Ta'Illistim")
           expect(bounty[:requirements]).to include({
-            :creature => "snow madrinol",
-            :quality => "fair",
-            :number => 8,
-            :skin => "madrinol skin",
-            :town => "Ta'Illistim",
-          })
+                                                     :creature => "snow madrinol",
+                                                     :quality  => "fair",
+                                                     :number   => 8,
+                                                     :skin     => "madrinol skin",
+                                                     :town     => "Ta'Illistim",
+                                                   })
         end
 
         it "with a multipart town name" do
@@ -188,12 +195,12 @@ class Bounty
           expect(bounty[:type]).to eq(:skin)
           expect(bounty[:town]).to eq("Kharam-Dzu")
           expect(bounty[:requirements]).to include({
-            :creature => "red-scaled thrak",
-            :quality => "exceptional",
-            :number => 5,
-            :skin => "thrak tail",
-            :town => "Kharam-Dzu",
-          })
+                                                     :creature => "red-scaled thrak",
+                                                     :quality  => "exceptional",
+                                                     :number   => 5,
+                                                     :skin     => "thrak tail",
+                                                     :town     => "Kharam-Dzu",
+                                                   })
         end
       end
 
@@ -224,44 +231,44 @@ class Bounty
           bounty = described_class.parse "The herbalist's assistant in Ta'Illistim, Jhiseth, is working on a concoction that requires a sprig of holly found in Griffin's Keen near Ta'Illistim.  These samples must be in pristine condition.  You have been tasked to retrieve 6 samples."
           expect(bounty[:type]).to eq(:herb)
           expect(bounty[:requirements]).to include({
-            :herb   => "sprig of holly",
-            :area   => "Griffin's Keen",
-            :number => 6,
-            :town   => "Ta'Illistim",
-          })
+                                                     :herb   => "sprig of holly",
+                                                     :area   => "Griffin's Keen",
+                                                     :number => 6,
+                                                     :town   => "Ta'Illistim",
+                                                   })
         end
 
         it 'can parse an Icemule herb task' do
           bounty = described_class.parse "The healer in Icemule Trace, Mirtag, is working on a concoction that requires a withered deathblossom found in the Rift.  These samples must be in pristine condition.  You have been tasked to retrieve 7 samples."
           expect(bounty[:type]).to eq(:herb)
           expect(bounty[:requirements]).to include({
-            :herb   => "withered deathblossom",
-            :area   => "Rift",
-            :number => 7,
-            :town   => "Icemule Trace",
-          })
+                                                     :herb   => "withered deathblossom",
+                                                     :area   => "Rift",
+                                                     :number => 7,
+                                                     :town   => "Icemule Trace",
+                                                   })
         end
 
         it 'can parse an Icemule herb task' do
           bounty = described_class.parse "The healer in Icemule Trace, Mirtag, is working on a concoction that requires a withered black mushroom found in the subterranean tunnels under Icemule Trace.  These samples must be in pristine condition.  You have been tasked to retrieve 5 samples."
           expect(bounty[:type]).to eq(:herb)
           expect(bounty[:requirements]).to include({
-            :herb   => "withered black mushroom",
-            :area   => "subterranean tunnels",
-            :number => 5,
-            :town   => "Icemule Trace",
-          })
+                                                     :herb   => "withered black mushroom",
+                                                     :area   => "subterranean tunnels",
+                                                     :number => 5,
+                                                     :town   => "Icemule Trace",
+                                                   })
         end
 
         it "can parse an Icemule task for an area between two towns" do
           bounty = described_class.parse "The healer in Icemule Trace, Mirtag, is working on a concoction that requires some bolmara lichen found on the Icemule Trail between Wehnimer's Landing and Icemule Trace.  These samples must be in pristine condition.  You have been tasked to retrieve 9 samples."
           expect(bounty[:type]).to eq(:herb)
           expect(bounty[:requirements]).to include({
-            :herb   => "bolmara lichen",
-            :area   => "Icemule Trail",
-            :number => 9,
-            :town   => "Icemule Trace",
-          })
+                                                     :herb   => "bolmara lichen",
+                                                     :area   => "Icemule Trail",
+                                                     :number => 9,
+                                                     :town   => "Icemule Trace",
+                                                   })
         end
       end
 
@@ -282,20 +289,20 @@ class Bounty
           bounty = described_class.parse "You have been tasked to help Someguy kill a dangerous creature by suppressing gnarled being activity in Old Ta'Faendryl during the hunt.  You need to kill 20 of them to complete your task."
           expect(bounty[:type]).to eq(:cull)
           expect(bounty[:requirements]).to include({
-            :area => "Old Ta'Faendryl",
-            :number => 20,
-            :creature => "being"
-          })
+                                                     :area     => "Old Ta'Faendryl",
+                                                     :number   => 20,
+                                                     :creature => "being"
+                                                   })
         end
 
         it "can tell we have an unfinished assist dangerous by culling task" do
           bounty = described_class.parse "You have been tasked to help Someguy kill a dangerous creature by suppressing emaciated hierophant activity in Temple Wyneb near Ta'Illistim during the hunt.  You need to kill 12 of them to complete your task."
           expect(bounty[:type]).to eq(:cull)
           expect(bounty[:requirements]).to include({
-            :area => "Temple Wyneb",
-            :number => 12,
-            :creature => "emaciated hierophant"
-          })
+                                                     :area     => "Temple Wyneb",
+                                                     :number   => 12,
+                                                     :creature => "emaciated hierophant"
+                                                   })
         end
       end
 
@@ -334,10 +341,10 @@ class Bounty
           bounty = described_class.parse "You have been tasked to help Someguy rescue a missing child by suppressing emaciated hierophant activity in Temple Wyneb near Ta'Illistim during the rescue attempt.  You need to kill 7 more of them to complete your task."
           expect(bounty[:type]).to eq(:cull)
           expect(bounty[:requirements]).to include({
-            :area => "Temple Wyneb",
-            :number => 7,
-            :creature => "emaciated hierophant"
-          })
+                                                     :area     => "Temple Wyneb",
+                                                     :number   => 7,
+                                                     :creature => "emaciated hierophant"
+                                                   })
         end
       end
     end
@@ -443,7 +450,7 @@ class Bounty
         ["Ta'Illistim", "You succeeded in your task and should report back to one of the guardsmen just inside the Ta'Illistim City Gate."],
         ["Icemule Trace", "You succeeded in your task and should report back to one of the Icemule Trace gate guards."],
         ["Ta'Vaalor", "You succeeded in your task and should report back to one of the Ta'Vaalor gate guards."],
-        ["Vornavis" , "You succeeded in your task and should report back to one of the Vornavis gate guards."],
+        ["Vornavis", "You succeeded in your task and should report back to one of the Vornavis gate guards."],
         ["Wehnimer's Landing", "You succeeded in your task and should report back to Quin Telaren of Wehnimer's Landing."],
         ["Kharam-Dzu", "You succeeded in your task and should report back to the dwarven militia sergeant near the Kharam-Dzu town gates."],
         ["Kraken's Fall", "You succeeded in your task and should report back to the sentry just outside Kraken's Fall."],
