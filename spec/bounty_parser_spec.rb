@@ -449,6 +449,7 @@ class Bounty
         ["Kraken's Fall", "You succeeded in your task and should report back to the sentry just outside Kraken's Fall."],
         ["Kraken's Fall", "You succeeded in your task and should report back to the sentry just outside town."],
         ["Zul Logoth", "You succeeded in your task and should report back to one of the Zul Logoth tunnel guards."],
+        ["River's Rest", "You succeeded in your task and should report back to the purser of River's Rest."],
       ].each do |(town, task_desc)|
         it "can tell we have a completed bounty in #{town}" do
           bounty = described_class.parse task_desc

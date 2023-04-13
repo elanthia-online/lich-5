@@ -11,6 +11,7 @@ class Bounty
       /the dwarven militia sergeant near the (?<town>Kharam-Dzu) town gates/,
       /the sentry just outside town/,
       /the sentry just outside (?<town>Kraken's Fall)/,
+      /the purser of (?<town>River's Rest)/,
     )
 
     TASK_MATCHERS = {
