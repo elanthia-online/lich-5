@@ -11,22 +11,23 @@ class Bounty
       /the dwarven militia sergeant near the (?<town>Kharam-Dzu) town gates/,
       /the sentry just outside town/,
       /the sentry just outside (?<town>Kraken's Fall)/,
+      /the purser of (?<town>River's Rest)/,
     )
 
     TASK_MATCHERS = {
       none: /^You are not currently assigned a task/,
-      bandit_assignment:   /It appears they have a bandit problem they'd like you to solve/,
-      creature_assignment:     /It appears they have a creature problem they'd like you to solve/,
-      gem_assignment:      /The local gem dealer, [^,]+, has an order to fill and wants our help/,
+      bandit_assignment: /It appears they have a bandit problem they'd like you to solve/,
+      creature_assignment: /It appears they have a creature problem they'd like you to solve/,
+      gem_assignment: /The local gem dealer, [^,]+, has an order to fill and wants our help/,
       heirloom_assignment: /It appears they need your help in tracking down some kind of lost heirloom/,
-      herb_assignment:     /Hmm, I've got a task here from the town of (?<town>[^.]+?).  The local [^,]+?, [^,]+, has asked for our aid.  Head over there and see what you can do.  Be sure to ASK about BOUNTIES./,
-      rescue_assignment:   /It appears that a local resident urgently needs our help in some matter/,
-      skin_assignment:    /The local furrier .+ has an order to fill and wants our help/,
+      herb_assignment: /Hmm, I've got a task here from the town of (?<town>[^.]+?).  The local [^,]+?, [^,]+, has asked for our aid.  Head over there and see what you can do.  Be sure to ASK about BOUNTIES./,
+      rescue_assignment: /It appears that a local resident urgently needs our help in some matter/,
+      skin_assignment: /The local furrier .+ has an order to fill and wants our help/,
       taskmaster: /^You have succeeded in your task and can return to the Adventurer's Guild/,
-      heirloom_found:   /^You have located (?:an?|some) (?<item>.+) and should bring it back to #{GUARD_REGEX}\.$/,
-      guard:       /^You succeeded in your task and should report back to #{GUARD_REGEX}\.$/,
+      heirloom_found: /^You have located (?:an?|some) (?<item>.+) and should bring it back to #{GUARD_REGEX}\.$/,
+      guard: /^You succeeded in your task and should report back to #{GUARD_REGEX}\.$/,
       dangerous_spawned: /^You have been tasked to hunt down and kill a particularly dangerous (?<creature>[^.]+) that has established a territory #{LOCATION_REGEX}\.  You have provoked (?:his|her|its) attention and now you must(?: return to where you left (?:him|her|it) and)? kill (?:him|her|it)!$/,
-      rescue_spawned:    /^You have made contact with the child you are to rescue and you must get (?:him|her) back alive to #{GUARD_REGEX}\.$/,
+      rescue_spawned: /^You have made contact with the child you are to rescue and you must get (?:him|her) back alive to #{GUARD_REGEX}\.$/,
       bandit: /^You have been tasked to(?: help \w+)? suppress (?<creature>bandit) activity #{LOCATION_REGEX}\.  You need to kill (?<number>\d+) (?:more\s+)?of them to complete your task\.$/,
       dangerous: /^You have been tasked to hunt down and kill a (?:particularly )?dangerous (?<creature>[^.]+) that has established a territory #{LOCATION_REGEX}\.  You can get its attention by killing other creatures of the same type in its territory\.$/,
       escort: /^(?:The taskmaster told you:  ")?I've got a special mission for you\.  A certain client has hired us to provide a protective escort on (?:his|her) upcoming journey\.  Go to (?<start>[^.]+) and WAIT for (?:him|her) to meet you there\.  You must guarantee (?:his|her) safety to (?<destination>[^.]+) as soon as you can, being ready for any dangers that the two of you may face\.  Good luck!"?$/,
@@ -55,7 +56,7 @@ class Bounty
 
     def parse
       TASK_MATCHERS.each do |(task_type, regex)|
-        if md = regex.match(description)
+        if (md = regex.match(description))
           return (
             {
               type: task_type,
@@ -71,7 +72,7 @@ class Bounty
       {
         requirements: {}
       }.tap do |task_details|
-        if town = determine_town(captures["town"])
+        if (town = determine_town(captures["town"]))
           task_details[:town] = town
           task_details[:requirements][:town] = town
         end
@@ -113,7 +114,7 @@ class Bounty
       end
     end
 
-    def self.parse(desc=checkbounty)
+    def self.parse(desc = checkbounty)
       if desc&.empty?
         return
       else
@@ -122,4 +123,3 @@ class Bounty
     end
   end
 end
-
