@@ -251,7 +251,7 @@ class Map
       foggy_exits = (XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/)
       if (room = @@list.find { |r|
             r.title.include?(XMLData.room_title) and
-     rescription.include?(XMLData.room_description.strip) and
+     description.include?(XMLData.room_description.strip) and
      (unique_loot.nil? or (r.unique_loot.to_a - GameObj.loot.to_a.collect { |obj| obj.name }).empty?) and
      (ggy_exits or r.paths.include?(XMLData.room_exits_string.strip) or r.tags.include?('random-paths')) and
      (t r.check_location or r.location == Map.get_location)
