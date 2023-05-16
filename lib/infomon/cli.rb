@@ -5,17 +5,17 @@ module Infomon
   def self.sync
     # since none of this information is 3rd party displayed, silence is golden.
     echo 'Infomon sync requested. . . '
-    request = { 'info'        => /<a exist=.+#{Char.name}/,
-                'skill'       => /<a exist=.+#{Char.name}/,
-                'spell'       => %r{<output class="mono"/>},
-                'experience'  => %r{<output class="mono"/>},
-                'society'     => %r{<pushBold/>},
-                'citizenship' => /^You don't seem|^You currently have .+ in/,
-                'armor info'  => /<a exist=.+#{Char.name}/,
-                'cman info'   => /<a exist=.+#{Char.name}/,
-                'feat info'   => /<a exist=.+#{Char.name}/,
-                'shield info' => /<a exist=.+#{Char.name}/,
-                'weapon info' => /<a exist=.+#{Char.name}/ }
+    request = { 'info'            => /<a exist=.+#{Char.name}/,
+                'skill'           => /<a exist=.+#{Char.name}/,
+                'spell'           => %r{<output class="mono"/>},
+                'experience'      => %r{<output class="mono"/>},
+                'society'         => %r{<pushBold/>},
+                'citizenship'     => /^You don't seem|^You currently have .+ in/,
+                'armor list all'  => /<a exist=.+#{Char.name}/,
+                'cman list all'   => /<a exist=.+#{Char.name}/,
+                'feat list all'   => /<a exist=.+#{Char.name}/,
+                'shield list all' => /<a exist=.+#{Char.name}/,
+                'weapon list all' => /<a exist=.+#{Char.name}/ }
 
     request.each do |command, start_capture|
       echo "Retreiving character #{command}. . ." if $infomon_debug
