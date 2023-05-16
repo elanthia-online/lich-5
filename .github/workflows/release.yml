@@ -31,6 +31,7 @@ jobs:
           mkdir lich5/scripts
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/alias.lic > lich5/scripts/alias.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/autostart.lic > lich5/scripts/autostart.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/version.lic > lich5/scripts/ewaggle.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/go2.lic > lich5/scripts/go2.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/infomon.lic > lich5/scripts/infomon.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/jinx.lic > lich5/scripts/jinx.lic

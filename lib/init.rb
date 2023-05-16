@@ -839,16 +839,19 @@ Lich.init_db
 #
 # only keep the last 20 debug files
 #
-if Dir.entries(TEMP_DIR).length > 20 # avoid NIL response
-  Dir.entries(TEMP_DIR).find_all { |fn| fn =~ /^debug-\d+-\d+-\d+-\d+-\d+-\d+\.log$/ }.sort.reverse[20..-1].each { |oldfile|
+
+DELETE_CANDIDATES = %r[^debug-\d+-\d+-\d+-\d+-\d+-\d+\.log$]
+if Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.length > 20 # avoid NIL response
+  Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.sort.reverse[20..-1].each { |oldfile|
     begin
-      File.delete("#{TEMP_DIR}/#{oldfile}")
+      File.delete(File.join(TEMP_DIR, oldfile))
     rescue
       Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
     end
   }
 end
 
+# todo: deprecate / remove for Ruby 3.2.1?
 if (RUBY_VERSION =~ /^2\.[012]\./)
   begin
     did_trusted_defaults = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='did_trusted_defaults';")

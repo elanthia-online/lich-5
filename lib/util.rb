@@ -22,8 +22,6 @@ Entries added here should always be accessible from Lich::Util.feature namespace
 
 =end
 
-
-
 module Lich
   module Util
     include Enumerable
@@ -50,18 +48,18 @@ module Lich
       "Util::#{prefix}-#{now}-#{Random.rand(10000)}"
     end
 
-    def self.issue_command(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true, usexml = true, quiet = false)
+    def self.issue_command(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = nil, usexml = true, quiet = false)
       result = []
       name = self.anon_hook
       filter = false
-      if silent
-        save_script_silent = Script.current.silent
-        Script.current.silent = true
-      end
+
+      save_script_silent = Script.current.silent
       save_want_downstream = Script.current.want_downstream
       save_want_downstream_xml = Script.current.want_downstream_xml
-      usexml ? Script.current.want_downstream = false : Script.current.want_downstream = true
-      usexml ? Script.current.want_downstream_xml = true : Script.current.want_downstream_xml = false
+
+      Script.current.silent = silent if !silent.nil?
+      Script.current.want_downstream = !usexml
+      Script.current.want_downstream_xml = usexml
 
       begin
         Timeout::timeout(timeout, Interrupt) {
@@ -71,7 +69,7 @@ module Lich
                 DownstreamHook.remove(name)
                 filter = false
               else
-                if quiet 
+                if quiet
                   next(nil)
                 else
                   line
@@ -103,9 +101,9 @@ module Lich
         nil
       ensure
         DownstreamHook.remove(name)
-        Script.current.want_downstream_xml = save_want_downstream_xml
+        Script.current.silent = save_script_silent if !silent.nil?
         Script.current.want_downstream = save_want_downstream
-        Script.current.silent = save_script_silent if silent
+        Script.current.want_downstream_xml = save_want_downstream_xml
       end
       return result
     end
@@ -113,13 +111,13 @@ module Lich
     def self.quiet_command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true)
       return issue_command(command, start_pattern, end_pattern, include_end, timeout, silent, true, true)
     end
-    
+
     def self.quiet_command(command, start_pattern, end_pattern, include_end = true, timeout = 5, silent = true)
       return issue_command(command, start_pattern, end_pattern, include_end, timeout, silent, false, true)
     end
 
     def self.silver_count(timeout = 3)
-      silence_me unless undo_silence = silence_me
+      silence_me unless (undo_silence = silence_me)
       result = ''
       name = self.anon_hook
       filter = false
@@ -155,13 +153,11 @@ module Lich
           break if Time.now > ttl
           sleep(0.01) # prevent a tight-loop
         }
-
       ensure
         DownstreamHook.remove(name)
         silence_me if undo_silence
       end
       return result.gsub(',', '').to_i
     end
-
   end
 end

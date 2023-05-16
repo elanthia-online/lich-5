@@ -2785,9 +2785,12 @@ else
   hosts_dir = nil
 end
 
+detachable_client_host = '127.0.0.1'
 detachable_client_port = nil
 if arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=[0-9]+$/ }
   detachable_client_port = /^\-\-detachable\-client=([0-9]+)$/.match(arg).captures.first
+elsif arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/ }
+  detachable_client_host, detachable_client_port = /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/.match(arg).captures
 end
 
 if argv_options[:sal]
@@ -2982,7 +2985,8 @@ main_thread = Thread.new {
       elsif ARGV.include?('--shattered')
         data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
       elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GST') }
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
+        data[:game_code] = 'GST'
       else
         data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
       end
@@ -2994,7 +2998,8 @@ main_thread = Thread.new {
       elsif ARGV.include?('--fallen')
         data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
       elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRT') }
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
+        data[:game_code] = 'DRT'
       else
         data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
       end
@@ -3605,7 +3610,7 @@ main_thread = Thread.new {
     detachable_client_thread = Thread.new {
       loop {
         begin
-          server = TCPServer.new('127.0.0.1', detachable_client_port)
+          server = TCPServer.new(detachable_client_host, detachable_client_port)
           char_name = ARGV[ARGV.index('--login')+1].capitalize
           Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
 
