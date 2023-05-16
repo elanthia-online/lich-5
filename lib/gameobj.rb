@@ -18,7 +18,6 @@ module Games
       @@type_data     = Hash.new
       @@type_cache    = Hash.new
       @@sellable_data = Hash.new
-      @@elevated_load = proc { GameObj.load_data }
 
       attr_reader :id
       attr_accessor :noun, :name, :before_name, :after_name
@@ -335,56 +334,52 @@ module Games
       end
       
       def GameObj.load_data(filename = nil)
-        if $SAFE == 0
-          if filename.nil?
-            if File.exists?("#{DATA_DIR}/gameobj-data.xml")
-              filename = "#{DATA_DIR}/gameobj-data.xml"
-            elsif File.exists?("#{SCRIPT_DIR}/gameobj-data.xml") # deprecated
-              filename = "#{SCRIPT_DIR}/gameobj-data.xml"
-            else
-              filename = "#{DATA_DIR}/gameobj-data.xml"
-            end
-          end
-          if File.exists?(filename)
-            begin
-              @@type_data = Hash.new
-              @@sellable_data = Hash.new
-              @@type_cache = Hash.new
-              File.open(filename) { |file|
-                doc = REXML::Document.new(file.read)
-                doc.elements.each('data/type') { |e|
-                  if type = e.attributes['name']
-                    @@type_data[type] = Hash.new
-                    @@type_data[type][:name]    = Regexp.new(e.elements['name'].text) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
-                    @@type_data[type][:noun]    = Regexp.new(e.elements['noun'].text) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
-                    @@type_data[type][:exclude] = Regexp.new(e.elements['exclude'].text) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
-                  end
-                }
-                doc.elements.each('data/sellable') { |e|
-                  if sellable = e.attributes['name']
-                    @@sellable_data[sellable] = Hash.new
-                    @@sellable_data[sellable][:name]    = Regexp.new(e.elements['name'].text) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
-                    @@sellable_data[sellable][:noun]    = Regexp.new(e.elements['noun'].text) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
-                    @@sellable_data[sellable][:exclude] = Regexp.new(e.elements['exclude'].text) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
-                  end
-                }
-              }
-              true
-            rescue
-              @@type_data = nil
-              @@sellable_data = nil
-              echo "error: GameObj.load_data: #{$!}"
-              respond $!.backtrace[0..1]
-              false
-            end
+        if filename.nil?
+          if File.exist?("#{DATA_DIR}/gameobj-data.xml")
+            filename = "#{DATA_DIR}/gameobj-data.xml"
+          elsif File.exist?("#{SCRIPT_DIR}/gameobj-data.xml") # deprecated
+            filename = "#{SCRIPT_DIR}/gameobj-data.xml"
           else
+            filename = "#{DATA_DIR}/gameobj-data.xml"
+          end
+        end
+        if File.exist?(filename)
+          begin
+            @@type_data = Hash.new
+            @@sellable_data = Hash.new
+            @@type_cache = Hash.new
+            File.open(filename) { |file|
+              doc = REXML::Document.new(file.read)
+              doc.elements.each('data/type') { |e|
+                if type = e.attributes['name']
+                  @@type_data[type] = Hash.new
+                  @@type_data[type][:name]    = Regexp.new(e.elements['name'].text) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
+                  @@type_data[type][:noun]    = Regexp.new(e.elements['noun'].text) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
+                  @@type_data[type][:exclude] = Regexp.new(e.elements['exclude'].text) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
+                end
+              }
+              doc.elements.each('data/sellable') { |e|
+                if sellable = e.attributes['name']
+                  @@sellable_data[sellable] = Hash.new
+                  @@sellable_data[sellable][:name]    = Regexp.new(e.elements['name'].text) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
+                  @@sellable_data[sellable][:noun]    = Regexp.new(e.elements['noun'].text) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
+                  @@sellable_data[sellable][:exclude] = Regexp.new(e.elements['exclude'].text) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
+                end
+              }
+            }
+            true
+          rescue
             @@type_data = nil
             @@sellable_data = nil
-            echo "error: GameObj.load_data: file does not exist: #{filename}"
+            echo "error: GameObj.load_data: #{$!}"
+            respond $!.backtrace[0..1]
             false
           end
         else
-          @@elevated_load.call
+          @@type_data = nil
+          @@sellable_data = nil
+          echo "error: GameObj.load_data: file does not exist: #{filename}"
+          false
         end
       end
 
