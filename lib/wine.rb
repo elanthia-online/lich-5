@@ -1,6 +1,6 @@
 # check for Linux | WINE (and maybe in future MacOS | WINE) first due to low population
 # segment of code unmodified from Lich4 (Tillmen)
-if arg = ARGV.find { |a| a =~ /^--wine=.+$/i }
+if (arg = ARGV.find { |a| a =~ /^--wine=.+$/i })
   $wine_bin = arg.sub(/^--wine=/, '')
 else
   begin
@@ -10,7 +10,7 @@ else
   end
 end
 
-if arg = ARGV.find { |a| a =~ /^--wine-prefix=.+$/i }
+if (arg = ARGV.find { |a| a =~ /^--wine-prefix=.+$/i })
   $wine_prefix = arg.sub(/^--wine-prefix=/, '')
 elsif ENV['WINEPREFIX']
   $wine_prefix = ENV['WINEPREFIX']
