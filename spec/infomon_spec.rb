@@ -1,5 +1,6 @@
 require "infomon/infomon"
 require "stats/stats"
+require "experience"
 
 module Char
   def self.name
@@ -49,7 +50,7 @@ describe Infomon::Parser, ".parse" do
 
     it "handles no citizenship" do
       Infomon::Parser.parse %[You don't seem to have citizenship.]
-      expect(Infomon.get("citizenship")).to eq(nil)
+      expect(Infomon.get("citizenship")).to eq("None")
     end
   end
 
@@ -70,9 +71,9 @@ describe Infomon::Parser, ".parse" do
       stats.split("\n").each { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("stat.aura")).to eq(100)
-      expect(Infomon.get("stat.aura.bonus")).to eq(-35)
+      expect(Infomon.get("stat.aura_bonus")).to eq(-35)
       expect(Infomon.get("stat.logic.enhanced")).to eq(118)
-      expect(Infomon.get("stat.logic.enhanced.bonus")).to eq(34)
+      expect(Infomon.get("stat.logic.enhanced_bonus")).to eq(34)
 
       expect(Stats.aura.value).to eq(100)
       expect(Stats.aura.bonus).to eq(-35)
@@ -98,8 +99,8 @@ describe Infomon::Parser, ".parse" do
       }
 
       expect(Infomon.get("stat.dexterity")).to eq(37)
-      expect(Infomon.get("stat.dexterity.bonus")).to eq(4)
-      expect(Infomon.get("stat.strength.bonus")).to eq(7)
+      expect(Infomon.get("stat.dexterity_bonus")).to eq(4)
+      expect(Infomon.get("stat.strength_bonus")).to eq(7)
     end
 
     it "handles experience info" do
@@ -115,13 +116,21 @@ describe Infomon::Parser, ".parse" do
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
 
-      expect(Infomon.get("stat.fame")).to eq(4_804_958)
-      expect(Infomon.get("stat.fxp_current")).to eq(1_350)
-      expect(Infomon.get("stat.fxp_max")).to eq(1_010)
-      expect(Infomon.get("stat.ascension_experience")).to eq(4_170_132)
-      expect(Infomon.get("stat.total_experience")).to eq(41_307_131)
-      expect(Infomon.get("stat.long_term_experience")).to eq(26_266)
-      expect(Infomon.get("stat.deeds")).to eq(20)
+      expect(Infomon.get("experience.fame")).to eq(4_804_958)
+      expect(Infomon.get("experience.fxp_current")).to eq(1_350)
+      expect(Infomon.get("experience.fxp_max")).to eq(1_010)
+      expect(Infomon.get("experience.ascension_experience")).to eq(4_170_132)
+      expect(Infomon.get("experience.total_experience")).to eq(41_307_131)
+      expect(Infomon.get("experience.long_term_experience")).to eq(26_266)
+      expect(Infomon.get("experience.deeds")).to eq(20)
+
+      expect(Experience.fame).to eq(4_804_958)
+      expect(Experience.fxp_current).to eq(1_350)
+      expect(Experience.fxp_max).to eq(1_010)
+      expect(Experience.axp).to eq(4_170_132)
+      expect(Experience.txp).to eq(41_307_131)
+      expect(Experience.lte).to eq(26_266)
+      expect(Experience.deeds).to eq(20)
     end
   end
 

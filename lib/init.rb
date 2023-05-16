@@ -19,6 +19,8 @@ if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
   exit
 end
 
+require 'lib/wine'
+
 begin
   # stupid workaround for Windows
   # seems to avoid a 10 second lag when starting lnet, without adding a 10 second lag at startup
@@ -28,87 +30,6 @@ rescue LoadError
   nil # not required for basic Lich; however, lnet and repository scripts will fail without openssl
 rescue
   nil
-end
-
-# check for Linux | WINE (and maybe in future MacOS | WINE) first due to low population
-# segment of code unmodified from Lich4 (Tillmen)
-if (arg = ARGV.find { |a| a =~ /^--wine=.+$/i })
-  $wine_bin = arg.sub(/^--wine=/, '')
-else
-  begin
-    $wine_bin = `which wine`.strip
-  rescue
-    $wine_bin = nil
-  end
-end
-if (arg = ARGV.find { |a| a =~ /^--wine-prefix=.+$/i })
-  $wine_prefix = arg.sub(/^--wine-prefix=/, '')
-elsif ENV['WINEPREFIX']
-  $wine_prefix = ENV['WINEPREFIX']
-elsif ENV['HOME']
-  $wine_prefix = ENV['HOME'] + '/.wine'
-else
-  $wine_prefix = nil
-end
-if $wine_bin and File.exist?($wine_bin) and File.file?($wine_bin) and $wine_prefix and File.exist?($wine_prefix) and File.directory?($wine_prefix)
-  module Wine
-    BIN = $wine_bin
-    PREFIX = $wine_prefix
-    def Wine.registry_gets(key)
-      hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme: stupid highlights ]/
-      if File.exist?(PREFIX + '/system.reg')
-        if hkey == 'HKEY_LOCAL_MACHINE'
-          subkey = "[#{subkey.gsub('\\', '\\\\\\')}]"
-          if thingie.nil? or thingie.empty?
-            thingie = '@'
-          else
-            thingie = "\"#{thingie}\""
-          end
-          lookin = result = false
-          File.open(PREFIX + '/system.reg') { |f| f.readlines }.each { |line|
-            if line[0...subkey.length] == subkey
-              lookin = true
-            elsif line =~ /^\[/
-              lookin = false
-            elsif lookin and line =~ /^#{thingie}="(.*)"$/i
-              result = $1.split('\\"').join('"').split('\\\\').join('\\').sub(/\\0$/, '')
-              break
-            end
-          }
-          return result
-        else
-          return false
-        end
-      else
-        return false
-      end
-    end
-
-    def Wine.registry_puts(key, value)
-      hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme ]/
-      if File.exist?(PREFIX)
-        if thingie.nil? or thingie.empty?
-          thingie = '@'
-        else
-          thingie = "\"#{thingie}\""
-        end
-        # gsub sucks for this..
-        value = value.split('\\').join('\\\\')
-        value = value.split('"').join('\"')
-        begin
-          regedit_data = "REGEDIT4\n\n[#{hkey}\\#{subkey}]\n#{thingie}=\"#{value}\"\n\n"
-          filename = "#{TEMP_DIR}/wine-#{Time.now.to_i}.reg"
-          File.open(filename, 'w') { |f| f.write(regedit_data) }
-          system("#{BIN} regedit #{filename}")
-          sleep 0.2
-          File.delete(filename)
-        rescue
-          return false
-        end
-        return true
-      end
-    end
-  end
 end
 
 # find the FE locations for Win and for Linux | WINE
@@ -511,87 +432,6 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       end
     end
   end
-else
-  if (arg = ARGV.find { |a| a =~ /^--wine=.+$/i })
-    $wine_bin = arg.sub(/^--wine=/, '')
-  else
-    begin
-      $wine_bin = `which wine`.strip
-    rescue
-      $wine_bin = nil
-    end
-  end
-  if (arg = ARGV.find { |a| a =~ /^--wine-prefix=.+$/i })
-    $wine_prefix = arg.sub(/^--wine-prefix=/, '')
-  elsif ENV['WINEPREFIX']
-    $wine_prefix = ENV['WINEPREFIX']
-  elsif ENV['HOME']
-    $wine_prefix = ENV['HOME'] + '/.wine'
-  else
-    $wine_prefix = nil
-  end
-  if $wine_bin and File.exist?($wine_bin) and File.file?($wine_bin) and $wine_prefix and File.exist?($wine_prefix) and File.directory?($wine_prefix)
-    module Wine
-      BIN = $wine_bin
-      PREFIX = $wine_prefix
-      def Wine.registry_gets(key)
-        hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme: stupid highlights ]/
-        if File.exist?(PREFIX + '/system.reg')
-          if hkey == 'HKEY_LOCAL_MACHINE'
-            subkey = "[#{subkey.gsub('\\', '\\\\\\')}]"
-            if thingie.nil? or thingie.empty?
-              thingie = '@'
-            else
-              thingie = "\"#{thingie}\""
-            end
-            lookin = result = false
-            File.open(PREFIX + '/system.reg') { |f| f.readlines }.each { |line|
-              if line[0...subkey.length] == subkey
-                lookin = true
-              elsif line =~ /^\[/
-                lookin = false
-              elsif lookin and line =~ /^#{thingie}="(.*)"$/i
-                result = $1.split('\\"').join('"').split('\\\\').join('\\').sub(/\\0$/, '')
-                break
-              end
-            }
-            return result
-          else
-            return false
-          end
-        else
-          return false
-        end
-      end
-
-      def Wine.registry_puts(key, value)
-        hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme ]/
-        if File.exist?(PREFIX)
-          if thingie.nil? or thingie.empty?
-            thingie = '@'
-          else
-            thingie = "\"#{thingie}\""
-          end
-          # gsub sucks for this..
-          value = value.split('\\').join('\\\\')
-          value = value.split('"').join('\"')
-          begin
-            regedit_data = "REGEDIT4\n\n[#{hkey}\\#{subkey}]\n#{thingie}=\"#{value}\"\n\n"
-            filename = "#{TEMP_DIR}/wine-#{Time.now.to_i}.reg"
-            File.open(filename, 'w') { |f| f.write(regedit_data) }
-            system("#{BIN} regedit #{filename}")
-            sleep 0.2
-            File.delete(filename)
-          rescue
-            return false
-          end
-          return true
-        end
-      end
-    end
-  end
-  $wine_bin = nil
-  $wine_prefix = nil
 end
 
 if ARGV[0] == 'shellexecute'
@@ -839,16 +679,19 @@ Lich.init_db
 #
 # only keep the last 20 debug files
 #
-if Dir.entries(TEMP_DIR).length > 20 # avoid NIL response
-  Dir.entries(TEMP_DIR).find_all { |fn| fn =~ /^debug-\d+-\d+-\d+-\d+-\d+-\d+\.log$/ }.sort.reverse[20..-1].each { |oldfile|
+
+DELETE_CANDIDATES = %r[^debug-\d+-\d+-\d+-\d+-\d+-\d+\.log$]
+if Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.length > 20 # avoid NIL response
+  Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.sort.reverse[20..-1].each { |oldfile|
     begin
-      File.delete("#{TEMP_DIR}/#{oldfile}")
+      File.delete(File.join(TEMP_DIR, oldfile))
     rescue
       Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
     end
   }
 end
 
+# todo: deprecate / remove for Ruby 3.2.1?
 if (RUBY_VERSION =~ /^2\.[012]\./)
   begin
     did_trusted_defaults = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='did_trusted_defaults';")

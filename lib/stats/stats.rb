@@ -30,12 +30,12 @@ module Stats
     self.define_singleton_method(stat) do
       enhanced = OpenStruct.new(
         value: Infomon.get("stat.%s.enhanced" % stat),
-        bonus: Infomon.get("stat.%s.enhanced.bonus" % stat)
+        bonus: Infomon.get("stat.%s.enhanced_bonus" % stat)
       )
 
       return OpenStruct.new(
         value: Infomon.get("stat.%s" % stat),
-        bonus: Infomon.get("stat.%s.bonus" % stat),
+        bonus: Infomon.get("stat.%s_bonus" % stat),
         enhanced: enhanced
       )
     end

@@ -31,8 +31,15 @@ module Infomon
     @db
   end
 
+  def self.context!
+    return unless XMLData.name.empty? or XMLData.name.nil?
+    puts Exception.new.backtrace
+    fail "cannot access Infomon before XMLData.name is loaded"
+  end
+
   def self.table_name
-    ("%s.%s" % [XMLData.game, Char.name]).to_sym
+    self.context!
+    ("%s.%s" % [XMLData.game, XMLData.name]).to_sym
   end
 
   def self.reset!
@@ -56,7 +63,9 @@ module Infomon
   end
 
   def self._key(key)
-    key.to_s.downcase
+    key = key.to_s.downcase
+    key.gsub!(' ', '_').gsub!('_-_', '').gsub!('-', '_') if key =~ /\s|-/
+    return key
   end
 
   def self._validate!(key, value)
@@ -86,14 +95,14 @@ module Infomon
   end
 
   def self.batch_set(*pairs)
-    upserts = pairs.map {|key, value| 
+    upserts = pairs.map { |key, value|
       value.is_a?(Integer) or fail "batch_set only works with Integer values"
       %[INSERT OR REPLACE INTO %s (`key`, `value`) VALUES (%s, %s);] % [
         self.db.literal(self.table_name),
-        self.db.literal(self._key(key)), 
+        self.db.literal(self._key(key)),
         self.db.literal(value)
       ]
-    }.join("\n") 
+    }.join("\n")
     self.db.run <<~Sql
       BEGIN TRANSACTION;
       #{upserts}
@@ -102,4 +111,5 @@ module Infomon
   end
 
   require_relative "parser"
+  require_relative "cli"
 end

@@ -1715,290 +1715,19 @@ module Games
       end
     end
 
-    class Skills
-      @@twoweaponcombat ||= 0
-      @@armoruse ||= 0
-      @@shielduse ||= 0
-      @@combatmaneuvers ||= 0
-      @@edgedweapons ||= 0
-      @@bluntweapons ||= 0
-      @@twohandedweapons ||= 0
-      @@rangedweapons ||= 0
-      @@thrownweapons ||= 0
-      @@polearmweapons ||= 0
-      @@brawling ||= 0
-      @@ambush ||= 0
-      @@multiopponentcombat ||= 0
-      @@combatleadership ||= 0
-      @@physicalfitness ||= 0
-      @@dodging ||= 0
-      @@arcanesymbols ||= 0
-      @@magicitemuse ||= 0
-      @@spellaiming ||= 0
-      @@harnesspower ||= 0
-      @@emc ||= 0
-      @@mmc ||= 0
-      @@smc ||= 0
-      @@elair ||= 0
-      @@elearth ||= 0
-      @@elfire ||= 0
-      @@elwater ||= 0
-      @@slblessings ||= 0
-      @@slreligion ||= 0
-      @@slsummoning ||= 0
-      @@sldemonology ||= 0
-      @@slnecromancy ||= 0
-      @@mldivination ||= 0
-      @@mlmanipulation ||= 0
-      @@mltelepathy ||= 0
-      @@mltransference ||= 0
-      @@mltransformation ||= 0
-      @@survival ||= 0
-      @@disarmingtraps ||= 0
-      @@pickinglocks ||= 0
-      @@stalkingandhiding ||= 0
-      @@perception ||= 0
-      @@climbing ||= 0
-      @@swimming ||= 0
-      @@firstaid ||= 0
-      @@trading ||= 0
-      @@pickpocketing ||= 0
-
-      def Skills.twoweaponcombat;           @@twoweaponcombat; end
-
-      def Skills.twoweaponcombat=(val);     @@twoweaponcombat = val; end
-
-      def Skills.armoruse;                  @@armoruse; end
-
-      def Skills.armoruse=(val);            @@armoruse = val; end
-
-      def Skills.shielduse;                 @@shielduse; end
-
-      def Skills.shielduse=(val);           @@shielduse = val; end
-
-      def Skills.combatmaneuvers;           @@combatmaneuvers; end
-
-      def Skills.combatmaneuvers=(val);     @@combatmaneuvers = val; end
-
-      def Skills.edgedweapons;              @@edgedweapons; end
-
-      def Skills.edgedweapons=(val);        @@edgedweapons = val; end
-
-      def Skills.bluntweapons;              @@bluntweapons; end
-
-      def Skills.bluntweapons=(val);        @@bluntweapons = val; end
-
-      def Skills.twohandedweapons;          @@twohandedweapons; end
-
-      def Skills.twohandedweapons=(val);    @@twohandedweapons = val; end
-
-      def Skills.rangedweapons;             @@rangedweapons; end
-
-      def Skills.rangedweapons=(val);       @@rangedweapons = val; end
-
-      def Skills.thrownweapons;             @@thrownweapons; end
-
-      def Skills.thrownweapons=(val);       @@thrownweapons = val; end
-
-      def Skills.polearmweapons;            @@polearmweapons; end
-
-      def Skills.polearmweapons=(val);      @@polearmweapons = val; end
-
-      def Skills.brawling;                  @@brawling; end
-
-      def Skills.brawling=(val);            @@brawling = val; end
-
-      def Skills.ambush;                    @@ambush; end
-
-      def Skills.ambush=(val);              @@ambush = val; end
-
-      def Skills.multiopponentcombat;       @@multiopponentcombat; end
-
-      def Skills.multiopponentcombat=(val); @@multiopponentcombat = val; end
-
-      def Skills.combatleadership;          @@combatleadership; end
-
-      def Skills.combatleadership=(val);    @@combatleadership = val; end
-
-      def Skills.physicalfitness;           @@physicalfitness; end
-
-      def Skills.physicalfitness=(val);     @@physicalfitness = val; end
-
-      def Skills.dodging;                   @@dodging; end
-
-      def Skills.dodging=(val);             @@dodging = val; end
-
-      def Skills.arcanesymbols;             @@arcanesymbols; end
-
-      def Skills.arcanesymbols=(val);       @@arcanesymbols = val; end
-
-      def Skills.magicitemuse;              @@magicitemuse; end
-
-      def Skills.magicitemuse=(val);        @@magicitemuse = val; end
-
-      def Skills.spellaiming;               @@spellaiming; end
-
-      def Skills.spellaiming=(val);         @@spellaiming = val; end
-
-      def Skills.harnesspower;              @@harnesspower; end
-
-      def Skills.harnesspower=(val);        @@harnesspower = val; end
-
-      def Skills.emc;                       @@emc; end
-
-      def Skills.emc=(val);                 @@emc = val; end
-
-      def Skills.mmc;                       @@mmc; end
-
-      def Skills.mmc=(val);                 @@mmc = val; end
-
-      def Skills.smc;                       @@smc; end
-
-      def Skills.smc=(val);                 @@smc = val; end
-
-      def Skills.elair;                     @@elair; end
-
-      def Skills.elair=(val);               @@elair = val; end
-
-      def Skills.elearth;                   @@elearth; end
-
-      def Skills.elearth=(val);             @@elearth = val; end
-
-      def Skills.elfire;                    @@elfire; end
-
-      def Skills.elfire=(val);              @@elfire = val; end
-
-      def Skills.elwater;                   @@elwater; end
-
-      def Skills.elwater=(val);             @@elwater = val; end
-
-      def Skills.slblessings;               @@slblessings; end
-
-      def Skills.slblessings=(val);         @@slblessings = val; end
-
-      def Skills.slreligion;                @@slreligion; end
-
-      def Skills.slreligion=(val);          @@slreligion = val; end
-
-      def Skills.slsummoning;               @@slsummoning; end
-
-      def Skills.slsummoning=(val);         @@slsummoning = val; end
-
-      def Skills.sldemonology;              @@sldemonology; end
-
-      def Skills.sldemonology=(val);        @@sldemonology = val; end
-
-      def Skills.slnecromancy;              @@slnecromancy; end
-
-      def Skills.slnecromancy=(val);        @@slnecromancy = val; end
-
-      def Skills.mldivination;              @@mldivination; end
-
-      def Skills.mldivination=(val);        @@mldivination = val; end
-
-      def Skills.mlmanipulation;            @@mlmanipulation; end
-
-      def Skills.mlmanipulation=(val);      @@mlmanipulation = val; end
-
-      def Skills.mltelepathy;               @@mltelepathy; end
-
-      def Skills.mltelepathy=(val);         @@mltelepathy = val; end
-
-      def Skills.mltransference;            @@mltransference; end
-
-      def Skills.mltransference=(val);      @@mltransference = val; end
-
-      def Skills.mltransformation;          @@mltransformation; end
-
-      def Skills.mltransformation=(val);    @@mltransformation = val; end
-
-      def Skills.survival;                  @@survival; end
-
-      def Skills.survival=(val);            @@survival = val; end
-
-      def Skills.disarmingtraps;            @@disarmingtraps; end
-
-      def Skills.disarmingtraps=(val);      @@disarmingtraps = val; end
-
-      def Skills.pickinglocks;              @@pickinglocks; end
-
-      def Skills.pickinglocks=(val);        @@pickinglocks = val; end
-
-      def Skills.stalkingandhiding;         @@stalkingandhiding; end
-
-      def Skills.stalkingandhiding=(val);   @@stalkingandhiding = val; end
-
-      def Skills.perception;                @@perception; end
-
-      def Skills.perception=(val);          @@perception = val; end
-
-      def Skills.climbing;                  @@climbing; end
-
-      def Skills.climbing=(val);            @@climbing = val; end
-
-      def Skills.swimming;                  @@swimming; end
-
-      def Skills.swimming=(val);            @@swimming = val; end
-
-      def Skills.firstaid;                  @@firstaid; end
-
-      def Skills.firstaid=(val);            @@firstaid = val; end
-
-      def Skills.trading;                   @@trading; end
-
-      def Skills.trading=(val);             @@trading = val; end
-
-      def Skills.pickpocketing;             @@pickpocketing; end
-
-      def Skills.pickpocketing=(val);       @@pickpocketing = val; end
-
-      def Skills.serialize
-        [@@twoweaponcombat, @@armoruse, @@shielduse, @@combatmaneuvers, @@edgedweapons, @@bluntweapons, @@twohandedweapons, @@rangedweapons, @@thrownweapons, @@polearmweapons, @@brawling, @@ambush, @@multiopponentcombat, @@combatleadership, @@physicalfitness, @@dodging, @@arcanesymbols, @@magicitemuse, @@spellaiming, @@harnesspower, @@emc, @@mmc, @@smc, @@elair, @@elearth, @@elfire, @@elwater, @@slblessings, @@slreligion, @@slsummoning, @@sldemonology, @@slnecromancy, @@mldivination, @@mlmanipulation, @@mltelepathy, @@mltransference, @@mltransformation, @@survival, @@disarmingtraps, @@pickinglocks, @@stalkingandhiding, @@perception, @@climbing, @@swimming, @@firstaid, @@trading, @@pickpocketing]
-      end
-
-      def Skills.load_serialized=(array)
-        @@twoweaponcombat, @@armoruse, @@shielduse, @@combatmaneuvers, @@edgedweapons, @@bluntweapons, @@twohandedweapons, @@rangedweapons, @@thrownweapons, @@polearmweapons, @@brawling, @@ambush, @@multiopponentcombat, @@combatleadership, @@physicalfitness, @@dodging, @@arcanesymbols, @@magicitemuse, @@spellaiming, @@harnesspower, @@emc, @@mmc, @@smc, @@elair, @@elearth, @@elfire, @@elwater, @@slblessings, @@slreligion, @@slsummoning, @@sldemonology, @@slnecromancy, @@mldivination, @@mlmanipulation, @@mltelepathy, @@mltransference, @@mltransformation, @@survival, @@disarmingtraps, @@pickinglocks, @@stalkingandhiding, @@perception, @@climbing, @@swimming, @@firstaid, @@trading, @@pickpocketing = array
-      end
-
-      def Skills.to_bonus(ranks)
-        bonus = 0
-        while ranks > 0
-          if ranks > 40
-            bonus += (ranks - 40)
-            ranks = 40
-          elsif ranks > 30
-            bonus += (ranks - 30) * 2
-            ranks = 30
-          elsif ranks > 20
-            bonus += (ranks - 20) * 3
-            ranks = 20
-          elsif ranks > 10
-            bonus += (ranks - 10) * 4
-            ranks = 10
-          else
-            bonus += (ranks * 5)
-            ranks = 0
-          end
-        end
-        bonus
-      end
-    end
-
     require_relative("./lib/spell.rb")
     require_relative("./lib/bounty.rb")
-
-    # #updating PSM3 abilities via breakout - 20210801
-    require_relative("./lib/armor.rb")
-    require_relative("./lib/cman.rb")
-    require_relative("./lib/feat.rb")
     require_relative("./lib/gameobj.rb")
-    require_relative("./lib/shield.rb")
-    require_relative("./lib/weapon.rb")
     require_relative("./lib/infomon/infomon.rb")
     require_relative("./lib/stats/stats.rb")
     require_relative("./lib/stats/spells.rb")
+    require_relative("./lib/stats/skills.rb")
     require_relative("./lib/infomon/status.rb")
-
+    require_relative("./lib/experience.rb")
+    require_relative("./lib/infomon/activespell.rb")
+    # PSMS (armor, cman, feat, shield, weapon) have moved
+    # to ./lib/psms and are now called by psms.rb
+    require_relative("./lib/psms.rb")
 
     class Gift
       @@gift_start ||= Time.now
@@ -2913,9 +2642,12 @@ else
   hosts_dir = nil
 end
 
+detachable_client_host = '127.0.0.1'
 detachable_client_port = nil
 if arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=[0-9]+$/ }
   detachable_client_port = /^\-\-detachable\-client=([0-9]+)$/.match(arg).captures.first
+elsif arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/ }
+  detachable_client_host, detachable_client_port = /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/.match(arg).captures
 end
 
 if argv_options[:sal]
@@ -3110,7 +2842,8 @@ main_thread = Thread.new {
       elsif ARGV.include?('--shattered')
         data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
       elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GST') }
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
+        data[:game_code] = 'GST'
       else
         data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
       end
@@ -3122,7 +2855,8 @@ main_thread = Thread.new {
       elsif ARGV.include?('--fallen')
         data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
       elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRT') }
+        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
+        data[:game_code] = 'DRT'
       else
         data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
       end
@@ -3733,7 +3467,7 @@ main_thread = Thread.new {
     detachable_client_thread = Thread.new {
       loop {
         begin
-          server = TCPServer.new('127.0.0.1', detachable_client_port)
+          server = TCPServer.new(detachable_client_host, detachable_client_port)
           char_name = ARGV[ARGV.index('--login')+1].capitalize
           Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
 
