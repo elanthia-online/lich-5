@@ -1856,21 +1856,16 @@ module Games
 
     require_relative("./lib/spell.rb")
     require_relative("./lib/bounty.rb")
-
-    # #updating PSM3 abilities via breakout - 20210801
-    require_relative("./lib/armor.rb")
-    require_relative("./lib/cman.rb")
-    require_relative("./lib/feat.rb")
     require_relative("./lib/gameobj.rb")
-    require_relative("./lib/shield.rb")
-    require_relative("./lib/weapon.rb")
-    # adding infomon as lib function - 20230315
     require_relative("./lib/infomon/infomon.rb")
     require_relative("./lib/stats/stats.rb")
     require_relative("./lib/stats/skills.rb")
     require_relative("./lib/infomon/status.rb")
     require_relative("./lib/experience.rb")
     require_relative("./lib/infomon/activespell.rb")
+    # PSMS (armor, cman, feat, shield, weapon) have moved
+    # to ./lib/psms and are now called by psms.rb
+    require_relative("./lib/psms.rb")
 
     class Gift
       @@gift_start ||= Time.now
