@@ -169,7 +169,7 @@ module Games
 
       def Spell.load(filename = nil)
         if filename.nil?
-          #filename = "#{DATA_DIR}/spell-list.xml" #switching to effects-list.xml for EOL ownership
+          # filename = "#{DATA_DIR}/spell-list.xml" #switching to effects-list.xml for EOL ownership
           filename = "#{DATA_DIR}/effect-list.xml"
         end
         # script = Script.current #rubocop useless assignment to variable - script
