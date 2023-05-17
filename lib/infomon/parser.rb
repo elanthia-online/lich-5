@@ -87,7 +87,7 @@ module Infomon
         when Pattern::Spell
           # todo: capture SK item spells here?
           match = Regexp.last_match
-          Infomon.set("spell.%s" % match[:name], match[:rank].to_i)
+          Infomon.set("spell.%s" % match[:name].gsub(' ', '_'), match[:rank].to_i)
           :ok
         when Pattern::Fame
           match = Regexp.last_match
