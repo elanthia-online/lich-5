@@ -1,5 +1,5 @@
 ; Original script generated for Inno Setup by Doug (doug@play.net).
-; Contains Ruby 3.2.1 64 bit with msys2 libraries and key gems
+; Contains Ruby 3.2.2 64 bit with msys2 libraries and key gems
 ; to support the Lich scripting environment for Simutronics games
 
 #define MyAppName "Ruby4Lich5"
@@ -52,7 +52,7 @@ Name: "compact"; 	            Description: "Ruby Installation Only"
 
 [Components]
 Name: "lich"; 				        Description: "Lich Files"; 				              Types: full
-Name: "rubygem"; 			        Description: "Ruby 3.2.1 (64-bit) with Gems"; 	Types: full compact
+Name: "rubygem"; 			        Description: "Ruby 3.2.2 (64-bit) with Gems"; 	Types: full compact
 ; Name: "simu"; 				        Description: "Simutronics Files"; 				      Types: launch
 ; Name: "simu\launcher"; 		    Description: "Simu Game Launcher"; 				      Types: launch
 ; Name: "simu\wizardfe"; 		    Description: "Simu Wizard Front End"; 			    Flags: exclusive
@@ -62,7 +62,7 @@ Name: "rubygem"; 			        Description: "Ruby 3.2.1 (64-bit) with Gems"; 	Types
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "C:\hostedtoolcache\windows\Ruby\3.2.1\x64\*";         DestDir: "{app}\";           Components: rubygem;           Flags: ignoreversion createallsubdirs recursesubdirs
+Source: "C:\hostedtoolcache\windows\Ruby\3.2.2\x64\*";         DestDir: "{app}\";           Components: rubygem;           Flags: ignoreversion createallsubdirs recursesubdirs
 Source: "C:\msys64\*";         DestDir: "{app}\msys64";           Components: rubygem;           Flags: ignoreversion createallsubdirs recursesubdirs
 Source: ".\fly64.ico";            DestDir: "{app}\R4LInstall"; Components: lich; 	            Flags: ignoreversion
 ; Source: ".\lnchInst.exe";         DestDir: "{app}\R4LInstall"; Components: simu\launcher;     Flags: ignoreversion
