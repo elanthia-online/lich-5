@@ -56,6 +56,7 @@ class Char
         result = klass.__send__(meth, *args)
         return result
       rescue
+        nil
       end
     }
     respond 'missing method: ' + meth
