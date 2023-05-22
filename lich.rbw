@@ -1337,198 +1337,6 @@ module Games
         @@_buffer
       end
     end
-    class Char
-      @@name ||= nil
-      @@citizenship ||= nil
-      private_class_method :new
-      def Char.init(blah)
-        echo 'Char.init is no longer used.  Update or fix your script.'
-      end
-
-      def Char.name
-        XMLData.name
-      end
-
-      def Char.name=(name)
-        nil
-      end
-
-      def Char.health(*args)
-        health(*args)
-      end
-
-      def Char.mana(*args)
-        checkmana(*args)
-      end
-
-      def Char.spirit(*args)
-        checkspirit(*args)
-      end
-
-      def Char.maxhealth
-        Object.module_eval { maxhealth }
-      end
-
-      def Char.maxmana
-        Object.module_eval { maxmana }
-      end
-
-      def Char.maxspirit
-        Object.module_eval { maxspirit }
-      end
-
-      def Char.stamina(*args)
-        checkstamina(*args)
-      end
-
-      def Char.maxstamina
-        Object.module_eval { maxstamina }
-      end
-
-      def Char.cha(val = nil)
-        nil
-      end
-
-      def Char.dump_info
-        Marshal.dump([
-                       Spell.detailed?,
-                       Spell.serialize,
-                       Spellsong.serialize,
-                       Stats.serialize,
-                       Skills.serialize,
-                       Spells.serialize,
-                       Gift.serialize,
-                       Society.serialize,
-                     ])
-      end
-
-      def Char.load_info(string)
-        save = Char.dump_info
-        begin
-          Spell.load_detailed,
-            Spell.load_active,
-            Spellsong.load_serialized,
-            Stats.load_serialized,
-            Skills.load_serialized,
-            Spells.load_serialized,
-            Gift.load_serialized,
-            Society.load_serialized = Marshal.load(string)
-        rescue
-          raise $! if string == save
-
-          string = save
-          retry
-        end
-      end
-
-      def Char.method_missing(meth, *args)
-        [Stats, Skills, Spellsong, Society].each { |klass|
-          begin
-            result = klass.__send__(meth, *args)
-            return result
-          rescue
-          end
-        }
-        respond 'missing method: ' + meth
-        raise NoMethodError
-      end
-
-      def Char.info
-        ary = []
-        ary.push sprintf("Name: %s  Race: %s  Profession: %s", XMLData.name, Stats.race, Stats.prof)
-        ary.push sprintf("Gender: %s    Age: %d    Expr: %d    Level: %d", Stats.gender, Stats.age, Stats.exp, Stats.level)
-        ary.push sprintf("%017.17s Normal (Bonus)  ...  Enhanced (Bonus)", "")
-        %w[Strength Constitution Dexterity Agility Discipline Aura Logic Intuition Wisdom Influence].each { |stat|
-          val, bon = Stats.send(stat[0..2].downcase)
-          enh_val, enh_bon = Stats.send("enhanced_#{stat[0..2].downcase}")
-          spc = " " * (4 - bon.to_s.length)
-          ary.push sprintf("%012s (%s): %05s (%d) %s ... %05s (%d)", stat, stat[0..2].upcase, val, bon, spc, enh_val, enh_bon)
-        }
-        ary.push sprintf("Mana: %04s", mana)
-        ary
-      end
-
-      def Char.skills
-        ary = []
-        ary.push sprintf("%s (at level %d), your current skill bonuses and ranks (including all modifiers) are:", XMLData.name, Stats.level)
-        ary.push sprintf("  %-035s| Current Current", 'Skill Name')
-        ary.push sprintf("  %-035s|%08s%08s", '', 'Bonus', 'Ranks')
-        fmt = [['Two Weapon Combat', 'Armor Use', 'Shield Use', 'Combat Maneuvers', 'Edged Weapons', 'Blunt Weapons', 'Two-Handed Weapons', 'Ranged Weapons', 'Thrown Weapons', 'Polearm Weapons', 'Brawling', 'Ambush', 'Multi Opponent Combat', 'Combat Leadership', 'Physical Fitness', 'Dodging', 'Arcane Symbols', 'Magic Item Use', 'Spell Aiming', 'Harness Power', 'Elemental Mana Control', 'Mental Mana Control', 'Spirit Mana Control', 'Elemental Lore - Air', 'Elemental Lore - Earth', 'Elemental Lore - Fire', 'Elemental Lore - Water', 'Spiritual Lore - Blessings', 'Spiritual Lore - Religion', 'Spiritual Lore - Summoning', 'Sorcerous Lore - Demonology', 'Sorcerous Lore - Necromancy', 'Mental Lore - Divination', 'Mental Lore - Manipulation', 'Mental Lore - Telepathy', 'Mental Lore - Transference', 'Mental Lore - Transformation', 'Survival', 'Disarming Traps', 'Picking Locks', 'Stalking and Hiding', 'Perception', 'Climbing', 'Swimming', 'First Aid', 'Trading', 'Pickpocketing'], ['twoweaponcombat', 'armoruse', 'shielduse', 'combatmaneuvers', 'edgedweapons', 'bluntweapons', 'twohandedweapons', 'rangedweapons', 'thrownweapons', 'polearmweapons', 'brawling', 'ambush', 'multiopponentcombat', 'combatleadership', 'physicalfitness', 'dodging', 'arcanesymbols', 'magicitemuse', 'spellaiming', 'harnesspower', 'emc', 'mmc', 'smc', 'elair', 'elearth', 'elfire', 'elwater', 'slblessings', 'slreligion', 'slsummoning', 'sldemonology', 'slnecromancy', 'mldivination', 'mlmanipulation', 'mltelepathy', 'mltransference', 'mltransformation', 'survival', 'disarmingtraps', 'pickinglocks', 'stalkingandhiding', 'perception', 'climbing', 'swimming', 'firstaid', 'trading', 'pickpocketing']]
-        0.upto(fmt.first.length - 1) { |n|
-          dots = '.' * (35 - fmt[0][n].length)
-          rnk = Skills.send(fmt[1][n])
-          ary.push sprintf("  %s%s|%08s%08s", fmt[0][n], dots, Skills.to_bonus(rnk), rnk) unless rnk.zero?
-        }
-        %[Minor Elemental,Major Elemental,Minor Spirit,Major Spirit,Minor Mental,Bard,Cleric,Empath,Paladin,Ranger,Sorcerer,Wizard].split(',').each { |circ|
-          rnk = Spells.send(circ.gsub(" ", '').downcase)
-          if rnk.nonzero?
-            ary.push ''
-            ary.push "Spell Lists"
-            dots = '.' * (35 - circ.length)
-            ary.push sprintf("  %s%s|%016s", circ, dots, rnk)
-          end
-        }
-        ary
-      end
-
-      def Char.citizenship
-        @@citizenship
-      end
-
-      def Char.citizenship=(val)
-        @@citizenship = val.to_s
-      end
-    end
-
-    class Society
-      @@status ||= String.new
-      @@rank ||= 0
-      def Society.serialize
-        [@@status, @@rank]
-      end
-
-      def Society.load_serialized=(val)
-        @@status, @@rank = val
-      end
-
-      def Society.status=(val)
-        @@status = val
-      end
-
-      def Society.status
-        @@status.dup
-      end
-
-      def Society.rank=(val)
-        if val =~ /Master/
-          if @@status =~ /Voln/
-            @@rank = 26
-          elsif @@status =~ /Council of Light|Guardians of Sunfist/
-            @@rank = 20
-          else
-            @@rank = val.to_i
-          end
-        else
-          @@rank = val.slice(/[0-9]+/).to_i
-        end
-      end
-
-      def Society.step
-        @@rank
-      end
-
-      def Society.member
-        @@status.dup
-      end
-
-      def Society.rank
-        @@rank
-      end
-
-      def Society.task
-        XMLData.society_task
-      end
-    end
 
     class Spellsong
       @@renewed ||= Time.at(Time.now.to_i - 1200)
@@ -1722,12 +1530,14 @@ module Games
     require_relative("./lib/stats/stats.rb")
     require_relative("./lib/stats/spells.rb")
     require_relative("./lib/stats/skills.rb")
+    require_relative("./lib/stats/society.rb")
     require_relative("./lib/infomon/status.rb")
     require_relative("./lib/experience.rb")
-    require_relative("./lib/infomon/activespell.rb")
+    #require_relative("./lib/infomon/activespell.rb")
     # PSMS (armor, cman, feat, shield, weapon) have moved
     # to ./lib/psms and are now called by psms.rb
     require_relative("./lib/psms.rb")
+    require_relative("./lib/stats/char.rb")
 
     class Gift
       @@gift_start ||= Time.now
@@ -2062,6 +1872,7 @@ ICONMAP = {
 }
 
 XMLData = XMLParser.new
+require_relative("./lib/infomon/activespell.rb")
 
 reconnect_if_wanted = proc {
   if ARGV.include?('--reconnect') and ARGV.include?('--login') and not $_CLIENTBUFFER_.any? { |cmd| cmd =~ /^(?:\[.*?\])?(?:<c>)?(?:quit|exit)/i }
