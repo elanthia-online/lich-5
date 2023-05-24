@@ -1527,17 +1527,17 @@ module Games
     require_relative("./lib/bounty.rb")
     require_relative("./lib/gameobj.rb")
     require_relative("./lib/infomon/infomon.rb")
-    require_relative("./lib/stats/stats.rb")
-    require_relative("./lib/stats/spells.rb")
-    require_relative("./lib/stats/skills.rb")
-    require_relative("./lib/stats/society.rb")
+    require_relative("./lib/attributes/stats.rb")
+    require_relative("./lib/attributes/spells.rb")
+    require_relative("./lib/attributes/skills.rb")
+    require_relative("./lib/attributes/society.rb")
     require_relative("./lib/infomon/status.rb")
     require_relative("./lib/experience.rb")
     #require_relative("./lib/infomon/activespell.rb")
     # PSMS (armor, cman, feat, shield, weapon) have moved
     # to ./lib/psms and are now called by psms.rb
     require_relative("./lib/psms.rb")
-    require_relative("./lib/stats/char.rb")
+    require_relative("./lib/attributes/char.rb")
 
     class Gift
       @@gift_start ||= Time.now
