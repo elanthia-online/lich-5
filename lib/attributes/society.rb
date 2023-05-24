@@ -24,8 +24,4 @@ class Society
   def self.serialize
     [self.status, self.rank]
   end
-
-  def self.serialize
-    [self.status, self.rank]
-  end
 end
