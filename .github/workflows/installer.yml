@@ -13,13 +13,13 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        ruby: ['3.2.1']
+        ruby: ['3.2.2']
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - name: Install Ruby 3.2.1
+      - name: Install Ruby 3.2.2
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
@@ -41,7 +41,7 @@ jobs:
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/version.lic > lich5/scripts/version.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/xnarost.lic > lich5/scripts/xnarost.lic
           curl https://raw.githubusercontent.com/rpherbig/dr-scripts/master/dependency.lic > lich5/scripts/dependency.lic
-          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/spell-list.xml > lich5/data/spell-list.xml
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml > lich5/data/effect-list.xml
           cp lich.rbw Lich5/
           cp -r lib Lich5/
           gem install ascii_charts concurrent-ruby ftools gtk3 json jwt mechanize nokogiri redis sequel sqlite3 terminal-table tzinfo webrick xmpp4r --no-document
