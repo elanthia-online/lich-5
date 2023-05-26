@@ -1,5 +1,5 @@
 require "infomon/infomon"
-require "stats/stats"
+require "attributes/stats"
 require "experience"
 
 module Char
