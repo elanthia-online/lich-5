@@ -3096,7 +3096,7 @@ main_thread = Thread.new {
         launcher_cmd = launcher_cmd.tr('/', "\\") if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       end
       begin
-        if custom_launch_dir
+        unless custom_launch_dir.nil? || custom_launch_dir.empty?
           Dir.chdir(custom_launch_dir)
         end
 
