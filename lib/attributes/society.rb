@@ -14,7 +14,7 @@ class Society
   end
 
   def self.member
-    self.stastus.dup
+    self.status.dup
   end
 
   def self.task
