@@ -33,7 +33,6 @@ jobs:
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/autostart.lic > lich5/scripts/autostart.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/version.lic > lich5/scripts/ewaggle.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/go2.lic > lich5/scripts/go2.lic
-          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/infomon.lic > lich5/scripts/infomon.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/jinx.lic > lich5/scripts/jinx.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/log.lic > lich5/scripts/log.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/repository.lic > lich5/scripts/repository.lic
