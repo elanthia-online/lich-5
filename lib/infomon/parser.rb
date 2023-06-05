@@ -69,7 +69,8 @@ module Infomon
         when Pattern::Society
           match = Regexp.last_match
           Infomon.set("society.status", match[:society])
-          Infomon.set("society.rank", match[:rank])
+          # If no rank detected, character is a master of society, set rank to 26 for Voln, otherwise set to 20 for GOS & COL
+          Infomon.set("society.rank", match[:rank].nil? ? (match[:society] == 'Order of Voln' ? 26 : 20) : match[:rank])
           :ok
         when Pattern::NoSociety
           Infomon.set("society.status", "None")
