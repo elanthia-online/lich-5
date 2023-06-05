@@ -4,6 +4,7 @@
 
 #define MyAppName "Ruby4Lich5"
 #define MyAppVersion "5.7.0"
+#define RubyVersion "3.2.2"
 #define MyAppPublisher "Ruby Installer"
 #define MyAppURL "https://www.rubyinstaller.org"
 #define MyAppExeName "Ruby4Lich5.exe"
@@ -47,47 +48,31 @@ WizardStyle=modern
 [Types]
 Name: "full"; 		            Description: "Ruby and Lich Files"
 Name: "compact"; 	            Description: "Ruby Installation Only"
-;Name: "launch";               Description: "Simutronics Game Files"
-;Name: "custom"; 	            Description: "Custom Installation"; 			      Flags: iscustom
 
 [Components]
 Name: "lich"; 				        Description: "Lich Files"; 				              Types: full
-Name: "rubygem"; 			        Description: "Ruby 3.2.2 (64-bit) with Gems"; 	Types: full compact
-; Name: "simu"; 				        Description: "Simutronics Files"; 				      Types: launch
-; Name: "simu\launcher"; 		    Description: "Simu Game Launcher"; 				      Types: launch
-; Name: "simu\wizardfe"; 		    Description: "Simu Wizard Front End"; 			    Flags: exclusive
-; Name: "simu\stormfrontfe"; 	  Description: "Simu StormFront Front End"; 		  Flags: exclusive
+Name: "rubygem"; 			        Description: "Ruby {#RubyVersion} (64-bit) with Gems"; 	Types: full compact
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "C:\hostedtoolcache\windows\Ruby\3.2.2\x64\*";         DestDir: "{app}\";           Components: rubygem;           Flags: ignoreversion createallsubdirs recursesubdirs
-Source: "C:\msys64\*";         DestDir: "{app}\msys64";           Components: rubygem;           Flags: ignoreversion createallsubdirs recursesubdirs
-Source: ".\fly64.ico";            DestDir: "{app}\R4LInstall"; Components: lich; 	            Flags: ignoreversion
-; Source: ".\lnchInst.exe";         DestDir: "{app}\R4LInstall"; Components: simu\launcher;     Flags: ignoreversion
-; Source: ".\wzinst.exe";           DestDir: "{app}\R4LInstall"; Components: simu\wizardfe;     Flags: ignoreversion
-; Source: ".\StormFront.exe";       DestDir: "{app}\R4LInstall"; Components: simu\stormfrontfe; Flags: ignoreversion
-Source: ".\Lich5\*";              DestDir: "{app}\R4LInstall\Lich5";      Components: lich;              Flags: ignoreversion createallsubdirs recursesubdirs   
-
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
-
-;[Icons]
-;Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Source: "C:\hostedtoolcache\windows\Ruby\{#RubyVersion}\x64\*";         DestDir: "{app}\{#RubyVersion}";           Components: rubygem;           Flags: ignoreversion createallsubdirs recursesubdirs
+Source: "C:\msys64\*";         DestDir: "{app}\{#RubyVersion}\msys64";           Components: rubygem;           Flags: ignoreversion createallsubdirs recursesubdirs
+Source: ".\fly64.ico";            DestDir: "{app}\R4LInstall"; Components: lich; 	            Flags: ignoreversion
+Source: ".\Lich5\*";              DestDir: "{app}\R4LInstall\Lich{#MyAppVersion}";      Components: lich;              Flags: ignoreversion createallsubdirs recursesubdirs   
 
 [Registry]
 Root: HKCU; Subkey: "SOFTWARE\Classes\.rb"; ValueType: string; ValueName: ""; ValueData: "RubyFile"; Flags: uninsdeletevalue uninsdeletekeyifempty
 Root: HKCU; Subkey: "SOFTWARE\Classes\.rbw"; ValueType: string; ValueName: ""; ValueData: "RubyWFile"; Flags: uninsdeletevalue uninsdeletekeyifempty
 Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile"; ValueType: string; ValueName: ""; ValueData: "RubyFile"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile"; ValueType: string; ValueName: ""; ValueData: "RubyWFile"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\bin\ruby.exe,0"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\bin\rubyw.exe,0"; Flags: uninsdeletekey 
-Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\bin\ruby.exe"" ""%1"" %*"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\bin\rubyw.exe"" ""%1"" %*"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"; ValueType: string; ValueName: "{app}\bin\rubyw.exe"; ValueData: "~ WIN7RTM"; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#RubyVersion}\bin\ruby.exe,0"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#RubyVersion}\bin\rubyw.exe,0"; Flags: uninsdeletekey 
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\ruby.exe"" ""%1"" %*"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\rubyw.exe"" ""%1"" %*"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"; ValueType: string; ValueName: "{app}\{#RubyVersion}\bin\rubyw.exe"; ValueData: "~ WIN7RTM"; Flags: uninsdeletevalue
 
 [RUN]
-;Filename: "{app}\R4LInstall\lnchInst.exe"; Parameters: "/verysilent /tasks=assocfiles"; Components: simu\launcher
-;Filename: "{app}\R4LInstall\wzinst.exe"; Parameters: "/verysilent"; Components: simu\wizardfe
-;Filename: "{app}\R4LInstall\stormfront.exe"; Parameters: "/verysilent"; Components: simu\stormfrontfe
-Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s ""{app}\R4LInstall\Lich5"" ""{userdesktop}\Lich5"""""; Components: lich
+Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s ""{app}\R4LInstall\Lich{#MyAppVersion}"" ""{userdesktop}\Lich5"""""; Components: lich
