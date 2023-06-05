@@ -5,8 +5,8 @@
 #define MyAppName "Ruby4Lich5"
 #define MyAppVersion "5.7.0"
 #define RubyVersion "3.2.2"
-#define MyAppPublisher "Ruby Installer"
-#define MyAppURL "https://www.rubyinstaller.org"
+#define MyAppPublisher "Elanthia-Online"
+#define MyAppURL "https://github.com/elanthia-online/lich-5/"
 #define MyAppExeName "Ruby4Lich5.exe"
 
 [Setup]
@@ -15,7 +15,7 @@
 AppId= {{15FD652E-E37B-444B-AC7C-BBDDD25713EE}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName={#MyAppName} {#MyAppVersion}
+AppVerName={#MyAppName} Ruby {#RubyVersion} & Lich {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
