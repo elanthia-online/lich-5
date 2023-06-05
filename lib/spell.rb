@@ -7,9 +7,11 @@ Further modifications are to support the retirement of spell-list.xml.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.0.19
-    version: 1.2.4
+    version: 1.2.5
 
   changelog:
+    v1.2.5 (2023-06-05)
+      bugfix for known? if ranks nil
     v1.2.4 (2023-03-22)
       Rubocop code cleanup
       Add spell preparation time detection from debuffs to recast after prep time.
@@ -468,7 +470,7 @@ module Games
         else
           return false
         end
-        if (@num % 100) <= ranks
+        if (@num % 100) <= ranks.to_i
           return true
         else
           return false
