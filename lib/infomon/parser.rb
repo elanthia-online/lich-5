@@ -73,9 +73,9 @@ module Infomon
           case match[:standing] # if Master in society the rank match is nil
           when 'Master'
             if match[:society] =~ /Voln/
-                Infomon.set("society.rank", 26)
+              Infomon.set("society.rank", 26)
             elsif match[:society] =~ /Council of Light|Guardians of Sunfist/
-                Infomon.set("society.rank", 20)
+              Infomon.set("society.rank", 20)
             end
           end
           :ok
