@@ -12,7 +12,7 @@ module Infomon
       Spell = %r[^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+)$|^(?<name>[\w\s\-']+)\.+(?<rank>\d+)$]
       Levelup = %r[^\s+(?<stat>\w+)\s+\(\w{3}\)\s+:\s+(?<value>\d+)\s+(?:\+1)\s+\.\.\.\s+(?<bonus>\d+)(?:\s+\+1)?$]
       CharRaceProf = %r[^Name:\s+(?<name>[A-z\s']+)\s+Race:\s+(?<race>[A-z]+|[A-z]+(?: |-)[A-z]+)\s+Profession:\s+(?<profession>[-A-z]+)]
-      CharGenderAgeExpLevel = %r[^Gender:\s+(?<gender>[A-z]+)\s+Age:\s+(?<age>[0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)]
+      CharGenderAgeExpLevel = %r[^Gender:\s+(?<gender>[A-z]+)\s+Age:\s+(?<age>[,0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)]
 
       # adding boolean status detection
       # todo: refactor / streamline?
@@ -129,8 +129,8 @@ module Infomon
           # level captured here, but do not rely on it - use XML instead
           match = Regexp.last_match
           Infomon.set("stat.gender", match[:gender])
-          Infomon.set("stat.age", match[:age])
-          Infomon.set("stat.experience", match[:experience])
+          Infomon.set("stat.age", match[:age].gsub(',', '').to_i)
+          Infomon.set("stat.experience", match[:experience].gsub(',', '').to_i)
           :ok
 
         # todo: refactor / streamline?
