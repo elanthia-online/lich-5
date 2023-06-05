@@ -12,7 +12,9 @@
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
-AppId= {{15FD652E-E37B-444B-AC7C-BBDDD25713EE}
+AppId= {{edd9ccd7-33cb-4577-a470-fe8fd087eac8}
+; AppId History
+; Ruby 3.2.2 Lich 5.7.0 - edd9ccd7-33cb-4577-a470-fe8fd087eac8
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} Ruby {#RubyVersion} & Lich {#MyAppVersion}
