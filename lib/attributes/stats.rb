@@ -2,11 +2,11 @@ require "ostruct"
 
 module Stats
   def self.race
-    Infomon.get("stat.race")
+    Infomon.get("stat.race").to_s
   end
 
   def self.profession
-    Infomon.get("stat.profession")
+    Infomon.get("stat.profession").to_s
   end
 
   def self.prof
@@ -14,11 +14,11 @@ module Stats
   end
 
   def self.gender
-    Infomon.get("stat.gender")
+    Infomon.get("stat.gender").to_s
   end
 
   def self.age
-    Infomon.get("stat.age")
+    Infomon.get("stat.age").to_i
   end
 
   def self.level
@@ -29,13 +29,13 @@ module Stats
   @@stats.each do |stat|
     self.define_singleton_method(stat) do
       enhanced = OpenStruct.new(
-        value: Infomon.get("stat.%s.enhanced" % stat),
-        bonus: Infomon.get("stat.%s.enhanced_bonus" % stat)
+        value: Infomon.get("stat.%s.enhanced" % stat).to_i,
+        bonus: Infomon.get("stat.%s.enhanced_bonus" % stat).to_i
       )
 
       return OpenStruct.new(
-        value: Infomon.get("stat.%s" % stat),
-        bonus: Infomon.get("stat.%s_bonus" % stat),
+        value: Infomon.get("stat.%s" % stat).to_i,
+        bonus: Infomon.get("stat.%s_bonus" % stat).to_i,
         enhanced: enhanced
       )
     end
