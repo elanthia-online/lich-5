@@ -5,7 +5,7 @@ module Infomon
       Stat = %r[^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)]
       Citizenship = /^You currently have .*? citizenship in (?<town>.*)\.$/
       NoCitizenship = /You don't seem to have citizenship\./
-      Society = /^\s+You are a (?:Master|member) (?:in|of) the (?<society>Order of Voln|Council of Light|Guardians of Sunfist)(?: at rank (?<rank>[0-9]+)| at step (?<rank>[0-9]+))?\.$/
+      Society = /^\s+You are a (?<standing>Master|member) (?:in|of) the (?<society>Order of Voln|Council of Light|Guardians of Sunfist)(?: at rank (?<rank>[0-9]+)| at step (?<rank>[0-9]+))?\.$/
       NoSociety = %r[^\s+You are not a member of any society at this time.]
       PSM = %r[^\s+(?<name>[\w\s\-']+)\s+(?<command>[a-z]+)\s+(?<ranks>\d)\/(?<max>\d)\s+]
       Skill = %r[^\s+(?<name>[[a-zA-Z]\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)]
@@ -70,6 +70,14 @@ module Infomon
           match = Regexp.last_match
           Infomon.set("society.status", match[:society])
           Infomon.set("society.rank", match[:rank])
+          case match[:standing] # if Master in society the rank match is nil
+          when 'Master' 
+            if match[:society] =~ /Voln/
+                Infomon.set("society.rank", 26)
+            elsif match[:society] =~ /Council of Light|Guardians of Sunfist/
+                Infomon.set("society.rank", 20)
+            end
+          end
           :ok
         when Pattern::NoSociety
           Infomon.set("society.status", "None")
