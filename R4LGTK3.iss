@@ -1,5 +1,5 @@
 ; Original script generated for Inno Setup by Doug (doug@play.net).
-; Contains Ruby 3.2.2 64 bit with msys2 libraries and key gems
+; Contains Ruby 64 bit with msys2 libraries and key gems
 ; to support the Lich scripting environment for Simutronics games
 
 #define MyAppName "Ruby4Lich5"
