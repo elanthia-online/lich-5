@@ -74,7 +74,7 @@ Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\DefaultIcon"; ValueType: string; 
 Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#RubyVersion}\bin\rubyw.exe,0"; Flags: uninsdeletekey 
 Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\ruby.exe"" ""%1"" %*"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\rubyw.exe"" ""%1"" %*"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"; ValueType: string; ValueName: "{app}\{#RubyVersion}\bin\rubyw.exe"; ValueData: "~ WIN7RTM"; Flags: uninsdeletevalue
+;Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"; ValueType: string; ValueName: "{app}\{#RubyVersion}\bin\rubyw.exe"; ValueData: "~ WIN7RTM"; Flags: uninsdeletevalue
 
 [RUN]
 Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s ""{app}\R4LInstall\Lich{#MyAppVersion}"" ""{userdesktop}\Lich5"""""; Components: lich
