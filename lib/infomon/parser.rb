@@ -130,8 +130,8 @@ module Infomon
         when Pattern::CharRaceProf
           # name captured here, but do not rely on it - use XML instead
           match = Regexp.last_match
-          Infomon.set("stat.race", match[:race].to_s)
-          Infomon.set("stat.profession", match[:profession].to_s)
+          Infomon.set("stat.race", match[:race])
+          Infomon.set("stat.profession", match[:profession])
           :ok
         when Pattern::CharGenderAgeExpLevel
           # level captured here, but do not rely on it - use XML instead
