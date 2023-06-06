@@ -2,11 +2,11 @@
 
 class Society
   def self.status
-    Infomon.get("society.status").to_s
+    Infomon.get("society.status")
   end
 
   def self.rank
-    Infomon.get("society.rank").to_i
+    Infomon.get("society.rank")
   end
 
   def self.step
