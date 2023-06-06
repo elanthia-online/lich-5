@@ -28,7 +28,7 @@ module Skills
       end
       bonus
     when String, Symbol
-      Infomon.get("skill.%s.bonus" % ranks).to_i
+      Infomon.get("skill.%s.bonus" % ranks)
     else
       echo "You're trying to move the cheese!"
     end
