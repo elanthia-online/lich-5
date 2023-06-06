@@ -63,8 +63,10 @@ module Infomon
           :ok
         when Pattern::Levelup
           match = Regexp.last_match
-          Infomon.set("stat.%s" % match[:stat], match[:value].to_i)
-          Infomon.set("stat.%s_bonus" % match[:stat], match[:bonus].to_i)
+          Infomon.batch_set(
+            ["stat.%s" % match[:stat], match[:value].to_i],
+            ["stat.%s_bonus" % match[:stat], match[:bonus].to_i]
+          )
           :ok
         when Pattern::Society
           match = Regexp.last_match
@@ -89,8 +91,10 @@ module Infomon
           :ok
         when Pattern::Skill
           match = Regexp.last_match
-          Infomon.set("skill.%s" % match[:name], match[:ranks].to_i)
-          Infomon.set("skill.%s_bonus" % match[:name], match[:bonus].to_i)
+          Infomon.batch_set(
+            ["skill.%s" % match[:name], match[:ranks].to_i],
+            ["skill.%s_bonus" % match[:name], match[:bonus].to_i]
+          )
           :ok
         when Pattern::Spell
           # todo: capture SK item spells here?
@@ -103,8 +107,10 @@ module Infomon
           :ok
         when Pattern::RealExp
           match = Regexp.last_match
-          Infomon.set("experience.fxp_current", match[:fxp_current].gsub(',', '').to_i)
-          Infomon.set("experience.fxp_max", match[:fxp_max].gsub(',', '').to_i)
+          Infomon.batch_set(
+            ["experience.fxp_current", match[:fxp_current].gsub(',', '').to_i],
+            ["experience.fxp_max", match[:fxp_max].gsub(',', '').to_i]
+          )
           :ok
         when Pattern::AscExp
           match = Regexp.last_match
@@ -116,21 +122,25 @@ module Infomon
           :ok
         when Pattern::LTE
           match = Regexp.last_match
-          Infomon.set("experience.long_term_experience", match[:long_term_experience].gsub(',', '').to_i)
-          Infomon.set("experience.deeds", match[:deeds].to_i)
+          Infomon.batch_set(
+            ["experience.long_term_experience", match[:long_term_experience].gsub(',', '').to_i],
+            ["experience.deeds", match[:deeds].to_i]
+          )
           :ok
         when Pattern::CharRaceProf
           # name captured here, but do not rely on it - use XML instead
           match = Regexp.last_match
-          Infomon.set("stat.race", match[:race])
-          Infomon.set("stat.profession", match[:profession])
+          Infomon.set("stat.race", match[:race].to_s)
+          Infomon.set("stat.profession", match[:profession].to_s)
           :ok
         when Pattern::CharGenderAgeExpLevel
           # level captured here, but do not rely on it - use XML instead
           match = Regexp.last_match
           Infomon.set("stat.gender", match[:gender])
-          Infomon.set("stat.age", match[:age].gsub(',', '').to_i)
-          Infomon.set("stat.experience", match[:experience].gsub(',', '').to_i)
+          Infomon.batch_set(
+            ["stat.age", match[:age].gsub(',', '').to_i],
+            ["stat.experience", match[:experience].gsub(',', '').to_i]
+          )
           :ok
 
         # todo: refactor / streamline?
