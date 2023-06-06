@@ -5,6 +5,7 @@ module CMan
   def self.cman_lookups
     [{ long_name: 'acrobats_leap',           short_name: 'acrobatsleap',     cost:  0 },
      { long_name: 'bearhug',                 short_name: 'bearhug',          cost: 10 },
+     { long_name: 'berserk',                 short_name: 'berserk',          cost: 20 },
      { long_name: 'block_specialization',    short_name: 'blockspec',        cost:  0 },
      { long_name: 'bull_rush',               short_name: 'bullrush',         cost: 14 },
      { long_name: 'burst_of_swiftness',      short_name: 'burst',            cost: 30 },
