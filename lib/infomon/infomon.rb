@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Replacement for the veneable infomon.lic script used in Lich4 and Lich5 (03/01/23)
+# Replacement for the venerable infomon.lic script used in Lich4 and Lich5 (03/01/23)
 # Supports Ruby 3.X builds
 #
 #     maintainer: elanthia-online
