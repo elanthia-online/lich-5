@@ -57,7 +57,7 @@ describe Infomon::Parser, ".parse" do
   context "stats" do
     it "handles stats" do
       stats = <<-Stats
-      Name: Frankie Race: Half-Krolvin  Profession: Monk (not shown)
+      Name: testing Race: Half-Krolvin  Profession: Monk (not shown)
       Gender: Male    Age: 0    Expr: 167,500    Level:  12
                           Normal (Bonus)  ...  Enhanced (Bonus)
 
@@ -71,7 +71,7 @@ describe Infomon::Parser, ".parse" do
            Intuition (INT):    99 (29)    ...   99 (29)
               Wisdom (WIS):    84 (22)    ...   84 (22)
            Influence (INF):   100 (20)    ...  108 (24)
-        Mana:  415   Silver: 0
+      Mana:  415   Silver: 0
       Stats
       stats.split("\n").each { |line| Infomon::Parser.parse(line) }
 
@@ -143,7 +143,7 @@ describe Infomon::Parser, ".parse" do
   context "psm" do
     it "handles shield info" do
       output = <<-Shield
-        Frankie, the following Shield Specializations are available:
+        testing, the following Shield Specializations are available:
 
           Skill                Mnemonic        Ranks Type           Category        Subcategory
           -------------------------------------------------------------------------------------
@@ -167,7 +167,7 @@ describe Infomon::Parser, ".parse" do
 
     it "handles cman info" do
       output = <<-Cman
-        Frankie, the following Combat Maneuvers are available:
+        testing, the following Combat Maneuvers are available:
 
           Skill                Mnemonic        Ranks Type           Category        Subcategory
           -------------------------------------------------------------------------------------
@@ -209,7 +209,7 @@ describe Infomon::Parser, ".parse" do
 
     it "handles armor info" do
       output = <<-Armor
-      Tsetem, the following Armor Specializations are available:
+      testing, the following Armor Specializations are available:
 
         Skill                Mnemonic        Ranks Type           Category        Subcategory
         -------------------------------------------------------------------------------------
@@ -238,7 +238,7 @@ describe Infomon::Parser, ".parse" do
 
     it "handles weapon info" do
       output = <<-Weapon
-      Frankie, the following Weapon Techniques are available:
+      testing, the following Weapon Techniques are available:
 
       Skill                Mnemonic        Ranks Type           Category        Subcategory
       -------------------------------------------------------------------------------------
@@ -260,7 +260,7 @@ describe Infomon::Parser, ".parse" do
 
     it "handles feat info" do
       output = <<-Feat
-      Frankie, the following Feats are available:
+      testing, the following Feats are available:
 
         Skill                Mnemonic        Ranks Type           Category        Subcategory
         -------------------------------------------------------------------------------------
