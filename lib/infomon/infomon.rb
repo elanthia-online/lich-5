@@ -4,7 +4,7 @@
 # Supports Ruby 3.X builds
 #
 #     maintainer: elanthia-online
-#   contributers: Tillmen, Shaelun, Athias
+#   contributors: Tillmen, Shaelun, Athias
 #           game: Gemstone
 #           tags: core
 #       required: Lich > 5.6.2
