@@ -1179,7 +1179,7 @@ module Games
 
                 if alt_string = DownstreamHook.run($_SERVERSTRING_)
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if (Lich.display_lichid == true or Lich.display_uid == true) and XMLData.game =~ /^GS/ and alt_string =~ /<resource picture=.*roomName/
+                  if (Lich.display_lichid == true or Lich.display_uid == true) and XMLData.game =~ /^GS/ and alt_string =~ /^<resource picture=.*roomName/
                     if (Lich.display_lichid == true and Lich.display_uid == true)
                       alt_string.sub!(']') {" - #{Map.current.id}] (u#{XMLData.room_id})"}
                     elsif Lich.display_lichid == true
