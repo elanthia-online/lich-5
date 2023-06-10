@@ -1168,7 +1168,7 @@ module Games
                   @@autostarted = true
                 end
 
-                if @@autostarted and $_SERVERSTRING_ =~ /roomDesc/ and !@@cli_scripts
+                if @@autostarted and !@@cli_scripts and $_SERVERSTRING_ =~ /roomDesc/
                   if arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ }
                     for script_name in arg.sub('--start-scripts=', '').split(',')
                       Script.start(script_name)
