@@ -1,7 +1,6 @@
 require "infomon/infomon"
 require "infomon/parser"
 require "attributes/stats"
-require "attributes/char"
 require "attributes/skills"
 require "attributes/society"
 require "attributes/spells"
