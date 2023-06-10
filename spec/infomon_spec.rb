@@ -153,7 +153,7 @@ testing, the following Shield Specializations are available:
                   Type: all
               Category: all
    Subcategory: all
-      Shield
+Shield
       output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.bash")).to eq(4)
@@ -228,7 +228,7 @@ testing, the following Armor Specializations are available:
    Subcategory: all
 Armor
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse (line) }
+      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.support")).to eq(3)
       expect(Infomon.get("psm.crush")).to eq(2)
