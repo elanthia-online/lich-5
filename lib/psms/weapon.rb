@@ -138,7 +138,7 @@ module Weapon
     Weapon.known?(name) and Weapon.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
   end
 
-  def Weapon.buffActive?(name)
+  def Weapon.active?(name)
     name = PSMS.name_normal(name)
     return unless @@weapon_techniques.fetch(name).key?(:buff)
     Effects::Buffs.active?(@@weapon_techniques.fetch(name)[:buff])
