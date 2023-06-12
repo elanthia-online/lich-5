@@ -32,92 +32,92 @@ module Weapon
   end
 
   @@weapon_techniques = {
-    "barrage"               => {
-      :regex => /Drawing several arrows from your (?:.+), you grip them loosely between your fingers in preparation for a rapid barrage\./,
+    "barrage"          => {
+      :regex      => /Drawing several arrows from your (?:.+), you grip them loosely between your fingers in preparation for a rapid barrage\./,
       :assault_rx => /Your satisfying display of dexterity bolsters you and inspires those around you\!/,
-      :buff => "Enh. Dexterity (+10)",
+      :buff       => "Enh. Dexterity (+10)",
     },
-    "charge"                => {
+    "charge"           => {
       :regex => /You rush forward at (?:.+) with your (?:.+) and attempt a charge\!/,
     },
-    "clash"                 => {
+    "clash"            => {
       :regex => /Steeling yourself for a brawl, you plunge into the fray\!/,
     },
-    "clobber"               => {
+    "clobber"          => {
       :regex => /You redirect the momentum of your parry, hauling your (?:.+) around to clobber (?:.+)\!/,
     },
-    "cripple"               => {
+    "cripple"          => {
       :regex => /You reverse your grip on your (?:.+) and dart toward (?:.+) at an angle\!/,
     },
-    "cyclone"               => {
+    "cyclone"          => {
       :regex => /You weave your (?:.+) in an under arm spin, swiftly picking up speed until it becomes a blurred cyclone of (?:.+)\!/,
     },
-    "dizzying_swing"        => {
+    "dizzying_swing"   => {
       :regex => /You heft your (?:.+) and, looping it once to build momentum, lash out in a strike at (?:.+) head\!/,
       :usage => "dizzyingswing",
     },
-    "flurry"                => {
-      :regex => /You rotate your wrist, your (?:.+) executing a casual spin to establish your flow as you advance upon (?:.+)\!/,
+    "flurry"           => {
+      :regex      => /You rotate your wrist, your (?:.+) executing a casual spin to establish your flow as you advance upon (?:.+)\!/,
       :assault_rx => /The mesmerizing sway of body and blade glides to its inevitable end with one final twirl of your (.+)\./,
-      :buff => "Slashing Strikes",
+      :buff       => "Slashing Strikes",
     },
-    "fury"                  => {
-      :regex => /With a percussive snap, you shake out your arms in quick succession and bear down on a human brigand in a fury\!/,
+    "fury"             => {
+      :regex      => /With a percussive snap, you shake out your arms in quick succession and bear down on a human brigand in a fury\!/,
       :assault_rx => /Your furious assault bolsters you and inspires those around you\!/,
-      :buff => "Enh. Constitution (+10)",
+      :buff       => "Enh. Constitution (+10)",
     },
-    "guardant_thrusts"      => {
+    "guardant_thrusts" => {
       :regex => /Retaining a defensive profile, you raise your (?:.+) in a hanging guard and prepare to unleash a barrage of guardant thrusts upon (?:.+)\!/,
       :usage => "gthrusts",
     },
-    "overpower"             => {
+    "overpower"        => {
       :regex => /On the heels of (?:.+) parry, you erupt into motion, determined to overpower (?:.+) defenses\!/,
     },
-    "pin_down"              => {
+    "pin_down"         => {
       :regex => /You take quick assessment and raise your (?:.+), several arrows nocked to your string in parallel\./,
       :usage => "pindown",
     },
-    "pulverize"             => {
+    "pulverize"        => {
       :regex => /You wheel your (?:.+) overhead before slamming it around in a wide arc to pulverize your foes\!/,
     },
-    "pummel"                => {
-      :regex => /You take a menacing step toward (?:.+), sweeping your (?:.+) out low to your side in your advance\./,
+    "pummel"           => {
+      :regex      => /You take a menacing step toward (?:.+), sweeping your (?:.+) out low to your side in your advance\./,
       :assault_rx => /With a final snap of your wrist, you sweep your (.+) back to the ready, your assault complete\./,
-      :buff => "Concussive Blows",
+      :buff       => "Concussive Blows",
     },
-    "radial_sweep"          => {
+    "radial_sweep"     => {
       :regex => /Crouching low, you sweep your (?:.+) in a broad arc\!/,
       :usage => "radialsweep",
     },
-    "reactive_shot"         => {
+    "reactive_shot"    => {
       :regex => /You fire off a quick shot at the (?:.+), then make a hasty retreat\!/,
       :usage => "reactiveshot",
     },
-    "reverse_strike"        => {
+    "reverse_strike"   => {
       :regex => /Spotting an opening in (?:.+) defenses, you quickly reverse the direction of your (?:.+) and strike from a different angle\!/,
       :usage => "reversestrike",
     },
-    "riposte"               => {
+    "riposte"          => {
       :regex => /Before (?:.+) can recover, you smoothly segue from parry to riposte\!/,
     },
-    "spin_kick"             => {
+    "spin_kick"        => {
       :regex => /Stepping with deliberation, you wheel into a leaping spin\!/,
       :usage => "spinkick",
     },
-    "thrash"                => {
+    "thrash"           => {
       :regex => /You rush (?:.+), raising your (?:.+) high to deliver a sound thrashing\!/,
     },
-    "twin_hammerfists"      => {
+    "twin_hammerfists" => {
       :regex => /You raise your hands high, lace them together and bring them crashing down towards the (?:.+)\!/,
     },
-    "volley"                => {
+    "volley"           => {
       :regex => /Raising your (?:.+) high, you loose arrow after arrow as fast as you can, filling the sky with a volley of deadly projectiles\!/,
     },
-    "whirling_blade"        => {
+    "whirling_blade"   => {
       :regex => /With a broad flourish, you sweep your (?:.+) into a whirling display of keen-edged menace\!/,
       :usage => "wblade",
     },
-    "whirlwind"             => {
+    "whirlwind"        => {
       :regex => /Twisting and spinning among your foes, you lash out again and again with the force of a reaping whirlwind\!/,
     },
   }
@@ -149,7 +149,7 @@ module Weapon
     name = PSMS.name_normal(name)
     technique = @@weapon_techniques.fetch(name)
     usage = technique.key?(:usage) ? technique[:usage] : name
-    
+
     in_cooldown_regex = /^#{name} is still in cooldown/
     results_regex = Regexp.union(
       technique[:regex],
@@ -173,7 +173,7 @@ module Weapon
     end
     usage_result = nil
     if (technique.key?(:assault_rx))
-      timeout = 10
+      # timeout = 10
       results_regex = Regexp.union(results_regex, technique[:assault_rx])
 
       break_out = Time.now() + 12
@@ -190,16 +190,13 @@ module Weapon
         sleep 0.25
       }
     else
-      loop {
-        waitrt?
-        waitcastrt?
+      waitrt?
+      waitcastrt?
+      usage_result = dothistimeout(usage_cmd, 5, results_regex)
+      if usage_result == "You don't seem to be able to move to do that."
+        100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
         usage_result = dothistimeout(usage_cmd, 5, results_regex)
-        if usage_result == "You don't seem to be able to move to do that."
-          100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
-          usage_result = dothistimeout(usage_cmd, 5, results_regex)
-        end
-        break
-      }
+      end
     end
     usage_result
   end
