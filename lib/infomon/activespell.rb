@@ -80,9 +80,12 @@ module ActiveSpell
           puts "#{update_spell_durations}\r\n" if $infomon_debug
 
           existing_spell_names = []
-          ignore_spells = ['Berserk']
+          ignore_spells = ["Berserk", "Council Task", "Council Punishment", "Briar Betrayer"]
           Spell.active.each { |s| existing_spell_names << s.name }
           inactive_spells = existing_spell_names - ignore_spells - update_spell_names
+          inactive_spells.reject! do |s|
+            s =~ /^Aspect of the \w+ Cooldown/
+          end
           inactive_spells.each do |s|
             badspell = Spell[s].num
             Spell[badspell].putdown if Spell[s].active?
