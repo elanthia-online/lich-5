@@ -14,6 +14,7 @@
 require 'sequel'
 require 'tmpdir'
 require 'logger'
+require 'concurrent'
 
 module Infomon
   $infomon_debug = ENV["DEBUG"]
@@ -22,6 +23,8 @@ module Infomon
   @file = File.join(@root, "infomon.db")
   @db   = Sequel.sqlite(@file)
   @db.loggers << Logger.new($stdout) if ENV["DEBUG"]
+  @sql_pool = Concurrent::FixedThreadPool.new(1)
+  @sql_mutex = Mutex.new
 
   def self.file
     @file
@@ -29,6 +32,10 @@ module Infomon
 
   def self.db
     @db
+  end
+  
+  def self.mutex
+    @sql_mutex
   end
 
   def self.context!
@@ -77,7 +84,7 @@ module Infomon
   end
 
   def self.get(key)
-    result = self.table[key: self._key(key)]
+    result = Infomon.mutex.synchronize { self.table[key: self._key(key)] }
     return nil unless result
 
     val = result[:value]
@@ -95,7 +102,11 @@ module Infomon
   end
 
   def self.set(key, value)
-    self.upsert(key: self._key(key), value: self._validate!(key, value))
+    @sql_pool.post do
+      Infomon.mutex.synchronize {
+        self.upsert(key: self._key(key), value: self._validate!(key, value))
+      }
+    end
   end
 
   def self.upsert_batch(*blob)
