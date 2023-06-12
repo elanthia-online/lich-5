@@ -59,6 +59,7 @@ module Infomon
         when Pattern::CharRaceProf
           # name captured here, but do not rely on it - use XML instead
           @stat_hold = []
+          Infomon.mutex.lock
           match = Regexp.last_match
           @stat_hold.push(['stat.race', match[:race].to_s],
                           ['stat.profession', match[:profession].to_s])
@@ -79,9 +80,11 @@ module Infomon
           :ok
         when Pattern::StatEnd
           Infomon.upsert_batch(@stat_hold)
+          Infomon.mutex.unlock
           :ok
         when Pattern::Fame # serves as ExprStart
           @expr_hold = []
+          Infomon.mutex.lock
           match = Regexp.last_match
           @expr_hold.push(['experience.fame', match[:fame].gsub(',', '').to_i])
           :ok
@@ -105,9 +108,11 @@ module Infomon
           :ok
         when Pattern::ExprEnd
           Infomon.upsert_batch(@expr_hold)
+          Infomon.mutex.unlock
           :ok
         when Pattern::SkillStart
           @skills_hold = []
+          Infomon.mutex.lock
           :ok
         when Pattern::Skill
           match = Regexp.last_match
@@ -120,9 +125,11 @@ module Infomon
           :ok
         when Pattern::SkillEnd
           Infomon.upsert_batch(@skills_hold)
+          Infomon.mutex.unlock
           :ok
         when Pattern::PSMStart
           @psm_hold = []
+          Infomon.mutex.lock
           :ok
         when Pattern::PSM
           match = Regexp.last_match
@@ -130,12 +137,15 @@ module Infomon
           :ok
         when Pattern::PSMEnd
           Infomon.upsert_batch(@psm_hold)
+          Infomon.mutex.unlock
           :ok
         # end of blob saves
         when Pattern::Levelup
           match = Regexp.last_match
+          Infomon.mutex.lock
           Infomon.upsert_batch([['stat.%s' % match[:stat], match[:value].to_i],
                                 ['stat.%s_bonus' % match[:stat], match[:bonus].to_i]])
+          Infomon.mutex.unlock
           :ok
         when Pattern::SpellsSolo
           match = Regexp.last_match
