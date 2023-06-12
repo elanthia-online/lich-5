@@ -98,10 +98,10 @@ module Infomon
     self.upsert(key: self._key(key), value: self._validate!(key, value))
   end
 
-  def self.blob_set(*blob)
+  def self.upsert_batch(*blob)
     upserts = blob.map { |pairs|
       pairs.map { |key, value|
-        (value.is_a?(Integer) or value.is_a?(String)) or fail "blob_set only works with Integer or String types"
+        (value.is_a?(Integer) or value.is_a?(String)) or fail "upsert_batch only works with Integer or String types"
         %[INSERT OR REPLACE INTO %s (`key`, `value`) VALUES (%s, %s);] % [
           self.db.literal(self.table_name),
           self.db.literal(self._key(key)),

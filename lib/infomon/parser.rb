@@ -4,7 +4,7 @@ module Infomon
   # this module handles all of the logic for parsing game lines that infomon depends on
   module Parser
     module Pattern
-      # Regex patterns grouped for Info, Exp, Skill and PSM parsing - calls blob_set to reduce db impact
+      # Regex patterns grouped for Info, Exp, Skill and PSM parsing - calls upsert_batch to reduce db impact
       CharRaceProf = /^Name:\s+(?<name>[A-z\s']+)\s+Race:\s+(?<race>[A-z]+|[A-z]+(?: |-)[A-z]+)\s+Profession:\s+(?<profession>[-A-z]+)/.freeze
       CharGenderAgeExpLevel = /^Gender:\s+(?<gender>[A-z]+)\s+Age:\s+(?<age>[,0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)/.freeze
       Stat = /^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)/.freeze
@@ -78,7 +78,7 @@ module Infomon
                           ['stat.%s.enhanced_bonus' % match[:stat], match[:enhanced_bonus].to_i])
           :ok
         when Pattern::StatEnd
-          Infomon.blob_set(@stat_hold)
+          Infomon.upsert_batch(@stat_hold)
           :ok
         when Pattern::Fame # serves as ExprStart
           @expr_hold = []
@@ -104,7 +104,7 @@ module Infomon
                           ['experience.deeds', match[:deeds].to_i])
           :ok
         when Pattern::ExprEnd
-          Infomon.blob_set(@expr_hold)
+          Infomon.upsert_batch(@expr_hold)
           :ok
         when Pattern::SkillStart
           @skills_hold = []
@@ -119,7 +119,7 @@ module Infomon
           @skills_hold.push(['spell.%s' % match[:name].downcase, match[:rank].to_i])
           :ok
         when Pattern::SkillEnd
-          Infomon.blob_set(@skills_hold)
+          Infomon.upsert_batch(@skills_hold)
           :ok
         when Pattern::PSMStart
           @psm_hold = []
@@ -129,12 +129,12 @@ module Infomon
           @psm_hold.push(['psm.%s' % match[:command], match[:ranks].to_i])
           :ok
         when Pattern::PSMEnd
-          Infomon.blob_set(@psm_hold)
+          Infomon.upsert_batch(@psm_hold)
           :ok
         # end of blob saves
         when Pattern::Levelup
           match = Regexp.last_match
-          Infomon.blob_set(
+          Infomon.upsert_batch(
             [['stat.%s' % match[:stat], match[:value].to_i],
             ['stat.%s_bonus' % match[:stat], match[:bonus].to_i]]
           )
