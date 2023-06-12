@@ -109,31 +109,11 @@ module Infomon
         ]
       }
     }.join("\n")
-    Thread.new do
-      self.db.run <<~Sql
-        BEGIN TRANSACTION;
-        #{upserts}
-        COMMIT
-      Sql
-    end
-  end
-
-  def self.batch_set(*pairs)
-    upserts = pairs.map { |key, value|
-      value.is_a?(Integer) or fail "batch_set only works with Integer values"
-      %[INSERT OR REPLACE INTO %s (`key`, `value`) VALUES (%s, %s);] % [
-        self.db.literal(self.table_name),
-        self.db.literal(self._key(key)),
-        self.db.literal(value)
-      ]
-    }.join("\n")
-    Thread.new do
-      self.db.run <<~Sql
-        BEGIN TRANSACTION;
-        #{upserts}
-        COMMIT
-      Sql
-    end
+    self.db.run <<~Sql
+      BEGIN TRANSACTION;
+      #{upserts}
+      COMMIT
+    Sql
   end
 
   require_relative "parser"
