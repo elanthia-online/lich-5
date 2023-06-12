@@ -34,7 +34,7 @@ module Skills
     end
   end
 
-  @@skills = %i(two_weapon_combat armor_use shield_use combat_maneuvers edged_weapons blunt_weapons two_handed_weapons ranged_weapons thrown_weapons polearm_weapons brawling ambush multi_opponent_combat physical_fitness dodging arcane_symbols magic_item_use spell_aiming harness_power elemental_mana_control mental_mana_control spirit_mana_control elemental_lore_air elemental_lore_earth elemental_lore_fire elemental_lore_water spiritual_lore_blessings spiritual_lore_religion spiritual_lore_summoning sorcerous_lore_demonology sorcerous_lore_necromancy mental_lore_divination mental_lore_manipulation mental_lore_telepathy mental_lore_transference mental_lore_transformation survival disarming_traps picking_locks stalking_and_hiding perception climbing swimming first_aid trading pickpocketing)
+  @@skills = %i(two_weapon_combat armor_use shield_use combat_maneuvers edged_weapons blunt_weapons two_handed_weapons ranged_weapons thrown_weapons polearm_weapons brawling ambush multi_opponent_combat physical_fitness dodging arcane_symbols magic_item_use spell_aiming harness_power elemental_mana_control mental_mana_control spirit_mana_control elemental_loreair elemental_loreearth elemental_lorefire elemental_lorewater spiritual_loreblessings spiritual_lorereligion spiritual_loresummoning sorcerous_loredemonology sorcerous_lorenecromancy mental_loredivination mental_loremanipulation mental_loretelepathy mental_loretransference mental_loretransformation survival disarming_traps picking_locks stalking_and_hiding perception climbing swimming first_aid trading pickpocketing)
   # todo: lich up through 5.6.2 returns rank as integer - should we extend to include bonus?
   @@skills.each do |skill|
     self.define_singleton_method(skill) do
