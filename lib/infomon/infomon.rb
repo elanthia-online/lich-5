@@ -33,6 +33,7 @@ module Infomon
 
   def self.context!
     return unless XMLData.name.empty? or XMLData.name.nil?
+
     puts Exception.new.backtrace
     fail "cannot access Infomon before XMLData.name is loaded"
   end
@@ -70,12 +71,15 @@ module Infomon
 
   def self._validate!(key, value)
     return value if [Integer, String, NilClass, FalseClass, TrueClass].include?(value.class)
-    raise "infomon:insert(%s) was called with a value that was not Integer|String|NilClass\nvalue=%s\ntype=%s" % [key, value, value.class]
+
+    raise "infomon:insert(%s) was called with non-Integer|String|NilClass\nvalue=%s\ntype=%s" % [key, value,
+                                                                                                 value.class]
   end
 
   def self.get(key)
     result = self.table[key: self._key(key)]
     return nil unless result
+
     val = result[:value]
     return nil if val.nil?
     return true if val.to_s == "true"
@@ -94,14 +98,16 @@ module Infomon
     self.upsert(key: self._key(key), value: self._validate!(key, value))
   end
 
-  def self.batch_set(*pairs)
-    upserts = pairs.map { |key, value|
-      value.is_a?(Integer) or fail "batch_set only works with Integer values"
-      %[INSERT OR REPLACE INTO %s (`key`, `value`) VALUES (%s, %s);] % [
-        self.db.literal(self.table_name),
-        self.db.literal(self._key(key)),
-        self.db.literal(value)
-      ]
+  def self.upsert_batch(*blob)
+    upserts = blob.map { |pairs|
+      pairs.map { |key, value|
+        (value.is_a?(Integer) or value.is_a?(String)) or fail "upsert_batch only works with Integer or String types"
+        %[INSERT OR REPLACE INTO %s (`key`, `value`) VALUES (%s, %s);] % [
+          self.db.literal(self.table_name),
+          self.db.literal(self._key(key)),
+          self.db.literal(value)
+        ]
+      }
     }.join("\n")
     self.db.run <<~Sql
       BEGIN TRANSACTION;
