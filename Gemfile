@@ -14,3 +14,5 @@ gem "sqlite3", "~> 1.6"
 gem "terminal-table", "~> 3.0"
 
 gem "ascii_charts", "~> 0.9.1"
+
+gem "concurrent-ruby", "~> 1.2"
