@@ -135,8 +135,7 @@ module Infomon
         when Pattern::Levelup
           match = Regexp.last_match
           Infomon.upsert_batch([['stat.%s' % match[:stat], match[:value].to_i],
-                               ['stat.%s_bonus' % match[:stat], match[:bonus].to_i]]
-          )
+                               ['stat.%s_bonus' % match[:stat], match[:bonus].to_i]])
           :ok
         when Pattern::SpellsSolo
           match = Regexp.last_match
