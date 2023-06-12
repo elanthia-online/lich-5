@@ -53,6 +53,7 @@ DEPENDENCIES
   sequel (~> 5.66)
   sqlite3 (~> 1.6)
   terminal-table (~> 3.0)
+  concurrent-ruby (~> 1.2)
 
 BUNDLED WITH
    2.4.6
