@@ -26,9 +26,13 @@ describe Infomon, ".setup!" do
     it "upserts a new key/value pair" do
       k = "stats.influence"
       # handles when value doesn't exist
-      pp Infomon.set(k, 30)
+      pp "Infomon.mutex preset  state: #{Infomon.mutex.locked?}"
+      pp "Infomon.set(k, 30): #{Infomon.set(k, 30)}"
+      pp "Infomon.mutex postset state: #{Infomon.mutex.locked?}"
       expect(Infomon.get(k)).to eq(30)
-      pp Infomon.set(k, 40)
+      pp "Infomon.mutex preset  state: #{Infomon.mutex.locked?}"
+      pp "Infomon.set(k, 40): #{Infomon.set(k, 40)}"
+      pp "Infomon.mutex postset state: #{Infomon.mutex.locked?}"
       # handles upsert on already existing values
       expect(Infomon.get(k)).to eq(40)
     end
