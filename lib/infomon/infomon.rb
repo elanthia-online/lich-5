@@ -40,7 +40,7 @@ module Infomon
 
   def self.table_name
     self.context!
-    ("%s.%s" % [XMLData.game, XMLData.name]).to_sym
+    ("%s_%s" % [XMLData.game, XMLData.name]).to_sym
   end
 
   def self.reset!
