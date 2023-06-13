@@ -102,10 +102,10 @@ module Infomon
   end
 
   def self.set(key, value)
-    @sql_pool.post do
-      Infomon.mutex.synchronize {
+    Infomon.mutex.synchronize do
+      @sql_pool.post do
         self.upsert(key: self._key(key), value: self._validate!(key, value))
-      }
+      end
     end
   end
 
