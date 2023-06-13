@@ -114,7 +114,7 @@ Stuffed
           Exp until lvl: 30,000
       Experience
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) } 
+      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
 
       expect(Infomon.get("experience.fame")).to eq(4_804_958)
       expect(Infomon.get("experience.fxp_current")).to eq(1_350)
