@@ -33,7 +33,7 @@ module Infomon
   def self.db
     @db
   end
-  
+
   def self.mutex
     @sql_mutex
   end
