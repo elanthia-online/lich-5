@@ -14,7 +14,6 @@
 require 'sequel'
 require 'tmpdir'
 require 'logger'
-require 'concurrent'
 
 module Infomon
   $infomon_debug = ENV["DEBUG"]
@@ -23,7 +22,7 @@ module Infomon
   @file = File.join(@root, "infomon.db")
   @db   = Sequel.sqlite(@file)
   @db.loggers << Logger.new($stdout) if ENV["DEBUG"]
-  @sql_pool = Concurrent::FixedThreadPool.new(1)
+  @sql_queue = Queue.new
   @sql_mutex = Mutex.new
 
   def self.file
@@ -36,6 +35,10 @@ module Infomon
 
   def self.mutex
     @sql_mutex
+  end
+  
+  def self.queue
+    @sql_queue
   end
 
   def self.context!
@@ -102,11 +105,7 @@ module Infomon
   end
 
   def self.set(key, value)
-    Infomon.mutex.synchronize do
-      @sql_pool.post do
-        self.upsert(key: self._key(key), value: self._validate!(key, value))
-      end
-    end
+      self.upsert(key: self._key(key), value: self._validate!(key, value))
   end
 
   def self.upsert_batch(*blob)
@@ -125,6 +124,18 @@ module Infomon
       #{upserts}
       COMMIT
     Sql
+  end
+  
+  Thread.new do
+    loop do
+      current_job = Infomon.queue.pop
+      case current_job[:type]
+      when "set"
+        Infomon.mutex.synchronize { Infomon.set(current_job[:value][0], current_job[:value][1]) }
+      when "upsert_batch"
+        Infomon.mutex.synchronize { Infomon.upsert_batch(current_job[:value]) }
+      end
+    end
   end
 
   require_relative "parser"
