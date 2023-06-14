@@ -43,19 +43,13 @@ describe Infomon::Parser, ".parse" do
 
   context "citizenship" do
     it "handles citizenship in a town" do
-      pp "Queue: #{Infomon.queue.empty?}; Mutex: #{Infomon.mutex.locked?}; Time: #{Time.now}"
       pp Infomon::Parser.parse %[You currently have full citizenship in Wehnimer's Landing.]
-      pp "Queue: #{Infomon.queue.empty?}; Mutex: #{Infomon.mutex.locked?}; Time: #{Time.now}"
       expect(Infomon.get("citizenship")).to eq(%[Wehnimer's Landing])
-      pp "Queue: #{Infomon.queue.empty?}; Mutex: #{Infomon.mutex.locked?}; Time: #{Time.now}"
     end
 
     it "handles no citizenship" do
-      pp "Queue: #{Infomon.queue.empty?}; Mutex: #{Infomon.mutex.locked?}; Time: #{Time.now}"
       pp Infomon::Parser.parse %[You don't seem to have citizenship.]
-      pp "Queue: #{Infomon.queue.empty?}; Mutex: #{Infomon.mutex.locked?}; Time: #{Time.now}"
       expect(Infomon.get("citizenship")).to eq("None")
-      pp "Queue: #{Infomon.queue.empty?}; Mutex: #{Infomon.mutex.locked?}; Time: #{Time.now}"
     end
   end
 
