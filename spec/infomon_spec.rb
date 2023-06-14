@@ -12,6 +12,9 @@ module XMLData
   def self.game
     "rspec"
   end
+  def self.name
+    "testing"
+  end
 end
 
 describe Infomon, ".setup!" do
