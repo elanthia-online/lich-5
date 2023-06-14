@@ -15,7 +15,7 @@ module Infomon
       TotalExp = /^\s+Total Exp: (?<total_experience>[\d,]+)\s+Death's Sting: \w+$/.freeze
       LTE = /^\s+Long-Term Exp: (?<long_term_experience>[\d,]+)\s+Deeds: (?<deeds>\d+)$/.freeze
       ExprEnd = /^\s+Exp until lvl:.*$/.freeze
-      SkillStart = /\(at level \d+\), your current skill bonuses and ranks/.freeze
+      SkillStart = /^\s\w+\s\(at level \d+\), your current skill bonuses and ranks/.freeze
       Skill = /^\s+(?<name>[[a-zA-Z]\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)/.freeze
       Spell = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
       SkillEnd = /^Training Points: \d+ Phy \d+ Mnt/.freeze
@@ -27,17 +27,17 @@ module Infomon
       Levelup = /^\s+(?<stat>\w+)\s+\(\w{3}\)\s+:\s+(?<value>\d+)\s+(?:\+1)\s+\.\.\.\s+(?<bonus>\d+)(?:\s+\+1)?$/.freeze
       SpellsSolo = /^(?<name>[\w\s]+)\.+(?<rank>\d+).*$/.freeze # from SPELL command
       Citizenship = /^You currently have .*? citizenship in (?<town>.*)\.$/.freeze
-      NoCitizenship = /You don't seem to have citizenship\./.freeze
+      NoCitizenship = /^You don't seem to have citizenship\./.freeze
       Society = /^\s+You are a (?<standing>Master|member) (?:in|of) the (?<society>Order of Voln|Council of Light|Guardians of Sunfist)(?: at (?:rank|step) (?<rank>[0-9]+))?\.$/.freeze
       NoSociety = /^\s+You are not a member of any society at this time./.freeze
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
       SleepNoActive = /^Your thoughts slowly come back to you as you find yourself lying on the ground\.  You must have been sleeping\.$|^You wake up from your slumber\.$|^You are awoken|^You awake/.freeze
-      BindActive = /An unseen force envelops you, restricting all movement\./.freeze
+      BindActive = /^An unseen force envelops you, restricting all movement\./.freeze
       BindNoActive = /^The restricting force that envelops you dissolves away\.|^You shake off the immobilization that was restricting your movements!/.freeze
       SilenceActive = /^A pall of silence settles over you\.|^The pall of silence settles more heavily over you\./.freeze
-      SilenceNoActive = /The pall of silence leaves you\./.freeze
-      CalmActive = /A calm washes over you\./.freeze
+      SilenceNoActive = /^The pall of silence leaves you\./.freeze
+      CalmActive = /^A calm washes over you\./.freeze
       CalmNoActive = /^You are enraged by .*? attack!|^The feeling of calm leaves you\./.freeze
       CutthroatActive = /slices deep into your vocal cords!$|^All you manage to do is cough up some blood\.$/.freeze
       CutthroatNoActive = /^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$/.freeze
