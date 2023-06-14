@@ -144,7 +144,7 @@ module Infomon
           match = Regexp.last_match
           Infomon.mutex.lock
           Infomon.queue.push(:type => 'upsert_batch', :value => [['stat.%s' % match[:stat], match[:value].to_i],
-                                ['stat.%s_bonus' % match[:stat], match[:bonus].to_i]])
+                                                                 ['stat.%s_bonus' % match[:stat], match[:bonus].to_i]])
           Infomon.mutex.unlock
           :ok
         when Pattern::SpellsSolo
