@@ -129,12 +129,14 @@ module Infomon
   Thread.new do
     loop do
       current_job = Infomon.queue.pop
+      pp "QUEUE POP - Mutex#{Infomon.mutex.locked?} - #{Time.now}"
       case current_job[:type]
       when "set"
         Infomon.mutex.synchronize { Infomon.set(current_job[:value][0], current_job[:value][1]) }
       when "upsert_batch"
         Infomon.mutex.synchronize { Infomon.upsert_batch(current_job[:value]) }
       end
+      pp "QUEUE POP - Mutex#{Infomon.mutex.locked?} - #{Time.now}"
     end
   end
 
