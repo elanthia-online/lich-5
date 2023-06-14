@@ -105,7 +105,7 @@ module Infomon
   end
 
   def self.set(key, value)
-      self.upsert(key: self._key(key), value: self._validate!(key, value))
+    self.upsert(key: self._key(key), value: self._validate!(key, value))
   end
 
   def self.upsert_batch(*blob)
