@@ -39,7 +39,6 @@ describe Infomon::Parser, ".parse" do
   before(:each) do
     # ensure clean db on every test
     Infomon.reset!
-    pp 'DB reset complete'
   end
 
   context "citizenship" do
