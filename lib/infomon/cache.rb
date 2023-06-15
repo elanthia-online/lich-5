@@ -2,6 +2,7 @@ module Infomon
   # in-memory cache with db read fallbacks
   class Cache
     attr_reader :records
+    
     def initialize()
       @records = {}
     end
