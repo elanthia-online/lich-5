@@ -27,7 +27,7 @@ describe Infomon, ".setup!" do
 
   context "can manipulate data" do
     it "upserts a new key/value pair" do
-      k = "stats.influence"
+      k = "stat.influence"
       # handles when value doesn't exist
       Infomon.queue.push(:type => 'set', :value => [k, 30])
       expect(Infomon.get(k)).to eq(30)
