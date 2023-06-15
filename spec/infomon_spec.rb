@@ -242,7 +242,7 @@ testing, the following Weapon Techniques are available:
 
       Skill                Mnemonic        Ranks Type           Category        Subcategory
       -------------------------------------------------------------------------------------
-        Crile                cripple         5/5   Setup          Edged Weapons
+        Cripple              cripple         5/5   Setup          Edged Weapons
         Flurry               flurry          5/5   Assault        Edged Weapons
         Riposte              riposte         5/5   Reaction       Edged Weapons
         Whirling Blade       wblade          5/5   Area of Effect Edged Weapons
