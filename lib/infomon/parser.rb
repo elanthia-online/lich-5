@@ -79,7 +79,7 @@ module Infomon
                           ['stat.%s.enhanced_bonus' % match[:stat], match[:enhanced_bonus].to_i])
           :ok
         when Pattern::StatEnd
-          Infomon.queue.push(:type => 'upsert_batch', :value => @stat_hold)
+          Infomon.upsert_batch(@stat_hold)
           Infomon.mutex.unlock
           :ok
         when Pattern::Fame # serves as ExprStart
@@ -107,7 +107,7 @@ module Infomon
                           ['experience.deeds', match[:deeds].to_i])
           :ok
         when Pattern::ExprEnd
-          Infomon.queue.push(:type => 'upsert_batch', :value => @expr_hold)
+          Infomon.upsert_batch(@expr_hold)
           Infomon.mutex.unlock
           :ok
         when Pattern::SkillStart
@@ -124,7 +124,7 @@ module Infomon
           @skills_hold.push(['spell.%s' % match[:name].downcase, match[:rank].to_i])
           :ok
         when Pattern::SkillEnd
-          Infomon.queue.push(:type => 'upsert_batch', :value => @skills_hold)
+          Infomon.upsert_batch(@skills_hold)
           Infomon.mutex.unlock
           :ok
         when Pattern::PSMStart
@@ -136,72 +136,72 @@ module Infomon
           @psm_hold.push(['psm.%s' % match[:command], match[:ranks].to_i])
           :ok
         when Pattern::PSMEnd
-          Infomon.queue.push(:type => 'upsert_batch', :value => @psm_hold)
+          Infomon.upsert_batch(@psm_hold)
           Infomon.mutex.unlock
           :ok
         # end of blob saves
         when Pattern::Levelup
           match = Regexp.last_match
-          Infomon.queue.push(:type => 'upsert_batch', :value => [['stat.%s' % match[:stat], match[:value].to_i],
+          Infomon.upsert_batch([['stat.%s' % match[:stat], match[:value].to_i],
                                                                  ['stat.%s_bonus' % match[:stat], match[:bonus].to_i]])
           :ok
         when Pattern::SpellsSolo
           match = Regexp.last_match
-          Infomon.queue.push(:type => 'set', :value => ['spell.%s' % match[:name].downcase, match[:rank].to_i])
+          Infomon.set('spell.%s' % match[:name].downcase, match[:rank].to_i)
           :ok
         when Pattern::Citizenship
-          Infomon.queue.push(:type => 'set', :value => ['citizenship', Regexp.last_match[:town]])
+          Infomon.set('citizenship', Regexp.last_match[:town])
           :ok
         when Pattern::NoCitizenship
-          Infomon.queue.push(:type => 'set', :value => ['citizenship', 'None'])
+          Infomon.set('citizenship', 'None')
           :ok
         when Pattern::Society
           match = Regexp.last_match
-          Infomon.queue.push(:type => 'set', :value => ['society.status', match[:society]])
-          Infomon.queue.push(:type => 'set', :value => ['society.rank', match[:rank]])
+          Infomon.set('society.status', match[:society])
+          Infomon.set('society.rank', match[:rank])
           case match[:standing] # if Master in society the rank match is nil
           when 'Master'
             if match[:society] =~ /Voln/
-              Infomon.queue.push(:type => 'set', :value => ['society.rank', 26])
+              Infomon.set('society.rank', 26)
             elsif match[:society] =~ /Council of Light|Guardians of Sunfist/
-              Infomon.queue.push(:type => 'set', :value => ['society.rank', 20])
+              Infomon.set('society.rank', 20)
             end
           end
           :ok
         when Pattern::NoSociety
-          Infomon.queue.push(:type => 'set', :value => ['society.status', 'None'])
-          Infomon.queue.push(:type => 'set', :value => ['society.rank', 0])
+          Infomon.set('society.status', 'None')
+          Infomon.set('society.rank', 0)
           :ok
         # TODO: refactor / streamline?
         when Pattern::SleepActive
-          Infomon.queue.push(:type => 'set', :value => ['status.sleeping', true])
+          Infomon.set('status.sleeping', true)
           :ok
         when Pattern::SleepNoActive
-          Infomon.queue.push(:type => 'set', :value => ['status.sleeping', false])
+          Infomon.set('status.sleeping', false)
           :ok
         when Pattern::BindActive
-          Infomon.queue.push(:type => 'set', :value => ['status.bound', true])
+          Infomon.set('status.bound', true)
           :ok
         when Pattern::BindNoActive
-          Infomon.queue.push(:type => 'set', :value => ['status.bound', false])
+          Infomon.set('status.bound', false)
           :ok
         when Pattern::SilenceActive
-          Infomon.queue.push(:type => 'set', :value => ['status.silenced', true])
+          Infomon.set('status.silenced', true)
           :ok
         when Pattern::SilenceNoActive
-          Infomon.queue.push(:type => 'set', :value => ['status.silenced', false])
+          Infomon.set('status.silenced', false)
           :ok
         when Pattern::CalmActive
-          Infomon.queue.push(:type => 'set', :value => ['status.calmed', true])
+          Infomon.set('status.calmed', true)
           :ok
         when Pattern::CalmNoActive
-          Infomon.queue.push(:type => 'set', :value => ['status.calmed', false])
+          Infomon.set('status.calmed', false)
           :ok
         when Pattern::CutthroatActive
-          Infomon.queue.push(:type => 'set', :value => ['status.cutthroat', true])
+          Infomon.set('status.cutthroat', true)
           :ok
         when Pattern::CutthroatNoActive
-          Infomon.queue.push(:type => 'set', :value => ['status.cutthroat', false])
+          Infomon.set('status.cutthroat', false)
           :ok
         else
           :noop

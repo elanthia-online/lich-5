@@ -29,9 +29,9 @@ describe Infomon, ".setup!" do
     it "upserts a new key/value pair" do
       k = "stats.influence"
       # handles when value doesn't exist
-      Infomon.queue.push(:type => 'set', :value => [k, 30])
+      Infomon.set(*[k, 30])
       expect(Infomon.get(k)).to eq(30)
-      Infomon.queue.push(:type => 'set', :value => [k, 40])
+      Infomon.set(*[k, 40])
       # handles upsert on already existing values
       expect(Infomon.get(k)).to eq(40)
     end
@@ -46,12 +46,12 @@ describe Infomon::Parser, ".parse" do
 
   context "citizenship" do
     it "handles citizenship in a town" do
-      pp Infomon::Parser.parse %[You currently have full citizenship in Wehnimer's Landing.]
+       Infomon::Parser.parse %[You currently have full citizenship in Wehnimer's Landing.]
       expect(Infomon.get("citizenship")).to eq(%[Wehnimer's Landing])
     end
 
     it "handles no citizenship" do
-      pp Infomon::Parser.parse %[You don't seem to have citizenship.]
+       Infomon::Parser.parse %[You don't seem to have citizenship.]
       expect(Infomon.get("citizenship")).to eq("None")
     end
   end
@@ -73,7 +73,7 @@ Gender: Male    Age: 0    Expr: 167,500    Level:  12
              Influence (INF):   100 (20)    ...  108 (24)
 Mana:  415   Silver: 0
 Stuffed
-      test_stats.split("\n").each { |line| pp Infomon::Parser.parse(line) }
+      test_stats.split("\n").each { |line|  Infomon::Parser.parse(line) }
 
       expect(Infomon.get("stat.aura")).to eq(100)
       expect(Infomon.get("stat.aura_bonus")).to eq(-35)
@@ -99,7 +99,7 @@ Stuffed
            Intuition (INT) :  66   +1  ...     13
               Wisdom (WIS) :  66   +1  ...     13
       Levelup
-      levelup.split("\n").each { |line| pp Infomon::Parser.parse(line) }
+      levelup.split("\n").each { |line|  Infomon::Parser.parse(line) }
 
       expect(Infomon.get("stat.dexterity")).to eq(37)
       expect(Infomon.get("stat.dexterity_bonus")).to eq(4)
@@ -116,7 +116,7 @@ Stuffed
           Exp until lvl: 30,000
       Experience
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("experience.fame")).to eq(4_804_958)
       expect(Infomon.get("experience.fxp_current")).to eq(1_350)
@@ -156,7 +156,7 @@ testing, the following Shield Specializations are available:
               Category: all
    Subcategory: all
 Shield
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+      output.split("\n").map { |line|  Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.bash")).to eq(4)
       expect(Infomon.get("psm.throw")).to eq(5)
@@ -200,7 +200,7 @@ testing, the following Combat Maneuvers are available:
    Subcategory: all
 Cman
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+      output.split("\n").map { |line|  Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.toughness")).to eq(3)
       expect(Infomon.get("psm.subdue")).to eq(6)
@@ -215,7 +215,7 @@ testing, the following Armor Specializations are available:
         Armor Blessing       blessing        1/5   Buff
         Armor Reinforcement  reinforcement   2/5   Buff
         Armor Spike Mastery  spikemastery    2/2   Passive
-        Armor Support        support         3/5   Buff
+        Armor Suort        suort         3/5   Buff
         Armored Casting      casting         4/5   Buff
         Armored Evasion      evasion         5/5   Buff
         Armored Fluidity     fluidity        4/5   Buff
@@ -230,9 +230,9 @@ testing, the following Armor Specializations are available:
    Subcategory: all
 Armor
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+      output.split("\n").map { |line|  Infomon::Parser.parse(line) }
 
-      expect(Infomon.get("psm.support")).to eq(3)
+      expect(Infomon.get("psm.suort")).to eq(3)
       expect(Infomon.get("psm.crush")).to eq(2)
     end
 
@@ -242,7 +242,7 @@ testing, the following Weapon Techniques are available:
 
       Skill                Mnemonic        Ranks Type           Category        Subcategory
       -------------------------------------------------------------------------------------
-        Cripple              cripple         5/5   Setup          Edged Weapons
+        Crile              crile         5/5   Setup          Edged Weapons
         Flurry               flurry          5/5   Assault        Edged Weapons
         Riposte              riposte         5/5   Reaction       Edged Weapons
         Whirling Blade       wblade          5/5   Area of Effect Edged Weapons
@@ -253,7 +253,7 @@ testing, the following Weapon Techniques are available:
    Subcategory: all
 Weapon
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+      output.split("\n").map { |line|  Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.flurry")).to eq(5)
       expect(Infomon.get("psm.riposte")).to eq(5)
@@ -278,7 +278,7 @@ testing, the following Feats are available:
    Subcategory: all
 Feat
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+      output.split("\n").map { |line|  Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.martialmastery")).to eq(1)
       expect(Infomon.get("psm.silentstrike")).to eq(5)
