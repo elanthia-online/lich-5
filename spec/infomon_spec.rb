@@ -27,7 +27,7 @@ describe Infomon, ".setup!" do
 
   context "can manipulate data" do
     it "upserts a new key/value pair" do
-      k = "stats.influence"
+      k = "stat.influence"
       # handles when value doesn't exist
       Infomon.set(*[k, 30])
       expect(Infomon.get(k)).to eq(30)
@@ -215,7 +215,7 @@ testing, the following Armor Specializations are available:
         Armor Blessing       blessing        1/5   Buff
         Armor Reinforcement  reinforcement   2/5   Buff
         Armor Spike Mastery  spikemastery    2/2   Passive
-        Armor Suort        suort         3/5   Buff
+        Armor Support        support         3/5   Buff
         Armored Casting      casting         4/5   Buff
         Armored Evasion      evasion         5/5   Buff
         Armored Fluidity     fluidity        4/5   Buff
@@ -232,7 +232,7 @@ Armor
 
       output.split("\n").map { |line|  Infomon::Parser.parse(line) }
 
-      expect(Infomon.get("psm.suort")).to eq(3)
+      expect(Infomon.get("psm.support")).to eq(3)
       expect(Infomon.get("psm.crush")).to eq(2)
     end
 
@@ -242,7 +242,7 @@ testing, the following Weapon Techniques are available:
 
       Skill                Mnemonic        Ranks Type           Category        Subcategory
       -------------------------------------------------------------------------------------
-        Crile              crile         5/5   Setup          Edged Weapons
+        Crile                cripple         5/5   Setup          Edged Weapons
         Flurry               flurry          5/5   Assault        Edged Weapons
         Riposte              riposte         5/5   Reaction       Edged Weapons
         Whirling Blade       wblade          5/5   Area of Effect Edged Weapons
