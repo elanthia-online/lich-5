@@ -381,11 +381,12 @@ Feat
     end
 
     it "has a cache that will lazily load" do
-      # big sample size so we can be sure about thread-safeness
-      100.times do 
+      k = "answer.life"
+      # big sample size so we can be sure about some sane access rules
+      100.times do
         Infomon.reset!
         Infomon.cache.flush!
-        k = "answer.life"
+        
         expect(Infomon.get(k)).to be_nil
         Infomon.set(k, 42)
         expect(Infomon.get(k)).to eq(42)
@@ -398,6 +399,22 @@ Feat
         # is now back in cache
         expect(Infomon.cache.include?(k)).to be(true)
       end
+    end
+
+    it "can handle 100 scripts accessing it simultaneously" do
+      k = "answer.life"
+      # if this ever breaks, we have a problem with the way this interacts with scripts
+      scripts = (0..99).to_a.map { |n|
+        Thread.new {
+          Infomon.set(k, n)
+          expect((0..99).include?(n)).to be(true)
+          sleep rand
+          Infomon.set(k, n)
+          expect((0..99).include?(n)).to be(true)
+        }
+      }
+
+      scripts.map(&:value)
     end
   end
 end
