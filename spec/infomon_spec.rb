@@ -2,12 +2,6 @@ require "infomon/infomon"
 require "attributes/stats"
 require "experience"
 
-module Char
-  def self.name
-    "testing"
-  end
-end
-
 module XMLData
   def self.game
     "rspec"
@@ -384,6 +378,26 @@ Feat
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+    end
+
+    it "has a cache that will lazily load" do
+      # big sample size so we can be sure about thread-safeness
+      100.times do 
+        Infomon.reset!
+        Infomon.cache.flush!
+        k = "answer.life"
+        expect(Infomon.get(k)).to be_nil
+        Infomon.set(k, 42)
+        expect(Infomon.get(k)).to eq(42)
+        expect(Infomon.cache.include?(k)).to be(true)
+        Infomon.cache.flush!
+        # no longer in cache
+        expect(Infomon.cache.include?(k)).to be(false)
+        # will load from DB
+        expect(Infomon.get(k)).to eq(42)
+        # is now back in cache
+        expect(Infomon.cache.include?(k)).to be(true)
+      end
     end
   end
 end

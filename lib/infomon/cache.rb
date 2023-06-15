@@ -12,13 +12,21 @@ module Infomon
       self
     end
 
+    def include?(key)
+      @records.include?(key)
+    end
+
+    def flush!
+      @records.clear
+    end
+
     def delete(key)
       @records.delete(key)
     end
 
     def get(key)
-      return @records[key] if @records.include?(key)
-      miss = yield
+      return @records[key] if self.include?(key)
+      miss = yield(key)
       # don't cache nils
       return miss if miss.nil?
       @records[key] = miss

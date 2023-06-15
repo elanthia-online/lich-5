@@ -49,17 +49,17 @@ module Infomon
 
   def self.context!
     return unless XMLData.name.empty? or XMLData.name.nil?
-
     puts Exception.new.backtrace
     fail "cannot access Infomon before XMLData.name is loaded"
   end
 
   def self.table_name
     self.context!
-    ("%s.%s" % [XMLData.game, XMLData.name]).to_sym
+    ("%s_%s" % [XMLData.game, XMLData.name]).to_sym
   end
 
   def self.reset!
+    self.mutex.lock
     Infomon.db.drop_table?(self.table_name)
     Infomon.setup!
   end
@@ -69,13 +69,15 @@ module Infomon
   end
 
   def self.setup!
+    self.mutex.lock unless self.mutex.owned?
     @db.create_table?(self.table_name) do
       string :key, primary_key: true
       string :value
       index :key, unique: true
     end
 
-    @_table ||= @db[self.table_name]
+    @_table = @db[self.table_name]
+    self.mutex.unlock
   end
 
   def self._key(key)
@@ -92,9 +94,10 @@ module Infomon
 
   def self.get(key)
     key = self._key(key)
-    val = self.cache.get(key) { |k| 
+    val = self.cache.get(key) {
+      sleep 0.1 until self.queue.empty?
       self.mutex.synchronize do
-        db_result = self.table[key: k]
+        db_result = self.table[key: key]
         if db_result
           db_result[:value]
         else
@@ -154,7 +157,6 @@ module Infomon
           pp(e)
         end
       end
-      sleep 0.1
     end
   end
 
