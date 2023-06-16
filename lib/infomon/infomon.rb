@@ -75,7 +75,7 @@ module Infomon
       string :value
       index :key, unique: true
     end
-    self.mutex.unlock
+    self.mutex.unlock if self.mutex.owned?
     @_table = @db[self.table_name]
   end
 
@@ -94,7 +94,7 @@ module Infomon
   def self.get(key)
     key = self._key(key)
     val = self.cache.get(key) {
-      sleep 0.1 until self.queue.empty?
+      sleep 0.01 until self.queue.empty?
       self.mutex.synchronize do
         begin
           db_result = self.table[key: key]
