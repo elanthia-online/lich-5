@@ -31,5 +31,20 @@ module Infomon
       return miss if miss.nil?
       @records[key] = miss
     end
+
+    def merge!(h)
+      @records.merge!(h)
+    end
+
+    def to_a()
+      @records.to_a
+    end
+
+    def to_h()
+      @records
+    end
+
+    alias :clear :flush!
+    alias :key? :include?
   end
 end
