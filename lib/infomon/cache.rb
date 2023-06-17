@@ -26,7 +26,8 @@ module Infomon
 
     def get(key)
       return @records[key] if self.include?(key)
-      miss = yield(key)
+      miss = nil
+      miss = yield(key) if block_given?
       # don't cache nils
       return miss if miss.nil?
       @records[key] = miss
