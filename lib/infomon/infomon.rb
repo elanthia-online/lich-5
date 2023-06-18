@@ -74,8 +74,8 @@ module Infomon
   def self.setup!
     self.mutex.lock unless self.mutex.owned?
     @db.create_table?(self.table_name) do
-      string :key, primary_key: true
-      string :value
+      text :key, primary_key: true
+      numeric :value
     end
     self.mutex.unlock if self.mutex.owned?
     @_table = @db[self.table_name]
@@ -91,7 +91,7 @@ module Infomon
 
   def self._key(key)
     key = key.to_s.downcase
-    key.gsub!(' ', '_').gsub!('_-_', '_').gsub!('-', '_') if key =~ /\s|-/
+    key.tr!(' ', '_').gsub!('_-_', '_').tr!('-', '_') if /\s|-/.match?(key)
     return key
   end
 
