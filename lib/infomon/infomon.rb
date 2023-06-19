@@ -75,7 +75,7 @@ module Infomon
     self.mutex.lock unless self.mutex.owned?
     @db.create_table?(self.table_name) do
       text :key, primary_key: true
-      numeric :value
+      any :value
     end
     self.mutex.unlock if self.mutex.owned?
     @_table = @db[self.table_name]
