@@ -205,14 +205,7 @@ def checkreallybleeding
 end
 
 def muckled?
-  muckled = checkwebbed || checkdead || checkstunned
-  if defined?(checksleeping)
-    muckled = muckled || checksleeping
-  end
-  if defined?(checkbound)
-    muckled = muckled || checkbound
-  end
-  return muckled
+  return Status.muckled?
 end
 
 def checkhidden
@@ -1181,43 +1174,43 @@ def checkbounty
 end
 
 def checksleeping
-  return $infomon_sleeping
+  return Status.sleeping?
 end
 
 def sleeping?
-  return $infomon_sleeping
+  return Status.sleeping?
 end
 
 def checkbound
-  return $infomon_bound
+  return Status.bound?
 end
 
 def bound?
-  return $infomon_bound
+  return Status.bound?
 end
 
 def checksilenced
-  $infomon_silenced
+  return Status.silenced?
 end
 
 def silenced?
-  $infomon_silenced
+  return Status.silenced?
 end
 
 def checkcalmed
-  $infomon_calmed
+  return Status.calmed?
 end
 
 def calmed?
-  $infomon_calmed
+  return Status.calmed?
 end
 
 def checkcutthroat
-  $infomon_cutthroat
+  return Status.cutthroat?
 end
 
 def cutthroat?
-  $infomon_cutthroat
+  return Status.cutthroat?
 end
 
 def variable
