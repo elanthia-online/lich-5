@@ -15,7 +15,8 @@ module Infomon
                 'cman list all'   => /<a exist=.+#{XMLData.name}/,
                 'feat list all'   => /<a exist=.+#{XMLData.name}/,
                 'shield list all' => /<a exist=.+#{XMLData.name}/,
-                'weapon list all' => /<a exist=.+#{XMLData.name}/ }
+                'weapon list all' => /<a exist=.+#{XMLData.name}/,
+                'warcry'          => /^You have learned the following War Cries:|^You must be an active member of the Warrior Guild to use this skill/ }
 
     request.each do |command, start_capture|
       respond "Retrieving character #{command}." if $infomon_debug
