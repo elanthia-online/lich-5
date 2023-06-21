@@ -1,5 +1,6 @@
 require "infomon/infomon"
 require "attributes/stats"
+require "spell"
 require "experience"
 
 module XMLData
