@@ -5,23 +5,23 @@ require "ostruct"
 
 module Status
   def self.bound?
-    Infomon.get("status.bound")
+    Infomon.get_bool("status.bound")
   end
 
   def self.calmed?
-    Infomon.get("status.calmed")
+    Infomon.get_bool("status.calmed")
   end
 
   def self.cutthroat?
-    Infomon.get("status.cutthroat")
+    Infomon.get_bool("status.cutthroat")
   end
 
   def self.silenced?
-    Infomon.get("status.silenced")
+    Infomon.get_bool("status.silenced")
   end
 
   def self.sleeping?
-    Infomon.get("status.sleeping")
+    Infomon.get_bool("status.sleeping")
   end
 
   def self.muckled?
