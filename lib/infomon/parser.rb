@@ -45,11 +45,15 @@ module Infomon
       CutthroatActive = /slices deep into your vocal cords!$|^All you manage to do is cough up some blood\.$/.freeze
       CutthroatNoActive = /^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$|^That tingles, but there are no head injuries to repair\.$/.freeze
 
+      # Adding spell regexes.  These do not write to infomon.db, they are used by Spell, Spells and ActiveSpells.
+      SpellUpMsgs = /^#{Games::Gemstone::Spell.upmsgs.join('$|^')}$/o.freeze
+      SpellDnMsgs = /^#{Games::Gemstone::Spell.dnmsgs.join('$|^')}$/o.freeze
+
       All = Regexp.union(CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
                          ExprEnd, SkillStart, Skill, Spell, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
                          Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
                          BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
-                         CutthroatNoActive, Warcries, NoWarcries)
+                         CutthroatNoActive, Warcries, NoWarcries, SpellUpMsgs, SpellDnMsgs)
     end
 
     def self.parse(line)
@@ -219,6 +223,20 @@ module Infomon
           :ok
         when Pattern::CutthroatNoActive
           Infomon.set('status.cutthroat', false)
+          :ok
+        when Pattern::SpellUpMsgs
+          spell = Spell.list.find do |s|
+            line =~ /^#{s.msgup}$/
+          end
+          spell.putup unless spell.active?
+          # add various cooldowns back without affecting parse speed
+          Spells.require_cooldown(spell)
+          :ok
+        when Pattern::SpellDnMsgs
+          spell = Spell.list.find do |s|
+            line =~ /^#{s.msgdn}$/
+          end
+          spell.putdown if spell.active?
           :ok
         else
           :noop
