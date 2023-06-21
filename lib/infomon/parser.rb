@@ -30,8 +30,8 @@ module Infomon
       NoCitizenship = /^You don't seem to have citizenship\./.freeze
       Society = /^\s+You are a (?<standing>Master|member) (?:in|of) the (?<society>Order of Voln|Council of Light|Guardians of Sunfist)(?: at (?:rank|step) (?<rank>[0-9]+))?\.$/.freeze
       NoSociety = /^\s+You are not a member of any society at this time./.freeze
-      Warcries = %r[^\s+(?<name>(?:Bertrandt's Bellow|Yertie's Yowlp|Gerrelle's Growl|Seanette's Shout|Carn's Cry|Horland's Holler))$]
-      NoWarcries = %r[^You must be an active member of the Warrior Guild to use this skill\.$]
+      Warcries = /^\s+(?<name>(?:Bertrandt's Bellow|Yertie's Yowlp|Gerrelle's Growl|Seanette's Shout|Carn's Cry|Horland's Holler))$/.freeze
+      NoWarcries = /^You must be an active member of the Warrior Guild to use this skill\.$/.freeze
 
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
