@@ -280,6 +280,25 @@ Feat
     end
   end
 
+  context "warcry" do
+    it "handles warcry info" do
+      output = <<-Warcry
+You have learned the following War Cries:
+     Bertrandt's Bellow
+     Yertie's Yowlp
+     Gerrelle's Growl
+     Seanette's Shout
+     Carn's Cry
+     Horland's Holler
+Warcry
+
+      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+
+      expect(Infomon.get("psm.carns_cry")).to eq(1)
+      expect(Infomon.get("psm.yerties yowlp")).to eq(1)
+    end
+  end
+
   context "booleans" do
     it "handles sleeping? boolean true" do
       output = <<~TestInput
