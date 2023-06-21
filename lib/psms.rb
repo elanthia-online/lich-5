@@ -5,6 +5,7 @@ require_relative('./psms/cman.rb')
 require_relative('./psms/feat.rb')
 require_relative('./psms/shield.rb')
 require_relative('./psms/weapon.rb')
+require_relative('./psms/warcry.rb')
 
 module PSMS
   def self.name_normal(name)
