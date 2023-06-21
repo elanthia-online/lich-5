@@ -294,8 +294,8 @@ Warcry
 
       output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
 
-      expect(Infomon.get("psm.carns_cry")).to eq(1)
-      expect(Infomon.get("psm.yerties yowlp")).to eq(1)
+      expect(Infomon.get("psm.cry")).to eq(1)
+      expect(Infomon.get("psm.yowlp")).to eq(1)
     end
   end
 
