@@ -14,6 +14,7 @@
 require 'sequel'
 require 'tmpdir'
 require 'logger'
+require_relative './cache'
 
 module Infomon
   $infomon_debug = ENV["DEBUG"]
@@ -21,7 +22,15 @@ module Infomon
   @root = defined?(DATA_DIR) ? DATA_DIR : Dir.tmpdir
   @file = File.join(@root, "infomon.db")
   @db   = Sequel.sqlite(@file)
+  @cache = Infomon::Cache.new
+  @cache_loaded = false
   @db.loggers << Logger.new($stdout) if ENV["DEBUG"]
+  @sql_queue = Queue.new
+  @sql_mutex = Mutex.new
+
+  def self.cache
+    @cache
+  end
 
   def self.file
     @file
@@ -31,20 +40,30 @@ module Infomon
     @db
   end
 
+  def self.mutex
+    @sql_mutex
+  end
+
+  def self.queue
+    @sql_queue
+  end
+
   def self.context!
     return unless XMLData.name.empty? or XMLData.name.nil?
-
     puts Exception.new.backtrace
     fail "cannot access Infomon before XMLData.name is loaded"
   end
 
   def self.table_name
     self.context!
-    ("%s.%s" % [XMLData.game, XMLData.name]).to_sym
+    ("%s_%s" % [XMLData.game, XMLData.name]).to_sym
   end
 
   def self.reset!
+    self.mutex.lock
     Infomon.db.drop_table?(self.table_name)
+    self.cache.clear
+    @cache_loaded = false
     Infomon.setup!
   end
 
@@ -53,39 +72,61 @@ module Infomon
   end
 
   def self.setup!
+    self.mutex.lock unless self.mutex.owned?
     @db.create_table?(self.table_name) do
-      string :key, primary_key: true
-
-      blob :value
-      index :key, unique: true
+      text :key, primary_key: true
+      any :value
     end
+    self.mutex.unlock if self.mutex.owned?
+    @_table = @db[self.table_name]
+  end
 
-    @_table ||= @db[self.table_name]
+  def self.cache_load
+    sleep(0.01) if XMLData.name.empty?
+    dataset = Infomon.table
+    h = Hash[dataset.map(:key).zip(dataset.map(:value))]
+    self.cache.merge!(h)
+    @cache_loaded = true
   end
 
   def self._key(key)
     key = key.to_s.downcase
-    key.gsub!(' ', '_').gsub!('_-_', '_').gsub!('-', '_') if key =~ /\s|-/
+    key.tr!(' ', '_').gsub!('_-_', '_').tr!('-', '_') if /\s|-/.match?(key)
     return key
   end
 
-  def self._validate!(key, value)
-    return value if [Integer, String, NilClass, FalseClass, TrueClass].include?(value.class)
+  def self._value(val)
+    return true if val.to_s == "true"
+    return false if val.to_s == "false"
+    return val
+  end
 
-    raise "infomon:insert(%s) was called with non-Integer|String|NilClass\nvalue=%s\ntype=%s" % [key, value,
-                                                                                                 value.class]
+  AllowedTypes = [Integer, String, NilClass, FalseClass, TrueClass]
+  def self._validate!(key, value)
+    return self._value(value) if AllowedTypes.include?(value.class)
+    raise "infomon:insert(%s) was called with %s\nmust be %s\nvalue=%s" % [key, value.class, AllowedTypes.map(&:name).join("|"), value]
   end
 
   def self.get(key)
-    result = self.table[key: self._key(key)]
-    return nil unless result
-
-    val = result[:value]
-    return nil if val.nil?
-    return true if val.to_s == "true"
-    return false if val.to_s == "false"
-    return val.to_i if val.to_s =~ /^\d+$/ || val =~ /^-\d+$/
-    return "#{val}" if val
+    self.cache_load if !@cache_loaded
+    key = self._key(key)
+    val = self.cache.get(key) {
+      sleep 0.01 until self.queue.empty?
+      self.mutex.synchronize do
+        begin
+          db_result = self.table[key: key]
+          if db_result
+            db_result[:value]
+          else
+            nil
+          end
+        rescue => exception
+          pp(exception)
+          nil
+        end
+      end
+    }
+    return self._value(val)
   end
 
   def self.upsert(*args)
@@ -95,25 +136,39 @@ module Infomon
   end
 
   def self.set(key, value)
-    self.upsert(key: self._key(key), value: self._validate!(key, value))
+    key = self._key(key)
+    value = self._validate!(key, value)
+    return :noop if self.cache.get(key) == value
+    self.cache.put(key, value)
+    self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`) VALUES (%s, %s)
+      on conflict(`key`) do update set value = excluded.value;" % [self.db.literal(self.table_name), self.db.literal(key), self.db.literal(value)]
   end
 
   def self.upsert_batch(*blob)
-    upserts = blob.map { |pairs|
-      pairs.map { |key, value|
-        (value.is_a?(Integer) or value.is_a?(String)) or fail "upsert_batch only works with Integer or String types"
-        %[INSERT OR REPLACE INTO %s (`key`, `value`) VALUES (%s, %s);] % [
-          self.db.literal(self.table_name),
-          self.db.literal(self._key(key)),
-          self.db.literal(value)
-        ]
-      }
-    }.join("\n")
-    self.db.run <<~Sql
-      BEGIN TRANSACTION;
-      #{upserts}
-      COMMIT
-    Sql
+    updated = (blob.first.map { |k, v| [self._key(k), self._validate!(k, v)] } - self.cache.to_a)
+    return :noop if updated.empty?
+    pairs = updated.map { |key, value|
+      (value.is_a?(Integer) or value.is_a?(String)) or fail "upsert_batch only works with Integer or String types"
+      # add the value to the cache
+      self.cache.put(key, value)
+      %[(%s, %s)] % [self.db.literal(key), self.db.literal(value)]
+    }.join(", ")
+    # queue sql statement to run async
+    self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`) VALUES %s
+      on conflict(`key`) do update set value = excluded.value;" % [self.db.literal(self.table_name), pairs]
+  end
+
+  Thread.new do
+    loop do
+      sql_statement = Infomon.queue.pop
+      Infomon.mutex.synchronize do
+        begin
+          Infomon.db.run(sql_statement)
+        rescue StandardError => e
+          pp(e)
+        end
+      end
+    end
   end
 
   require_relative "parser"

@@ -8,13 +8,13 @@ module Infomon
       CharRaceProf = /^Name:\s+(?<name>[A-z\s']+)\s+Race:\s+(?<race>[A-z]+|[A-z]+(?: |-)[A-z]+)\s+Profession:\s+(?<profession>[-A-z]+)/.freeze
       CharGenderAgeExpLevel = /^Gender:\s+(?<gender>[A-z]+)\s+Age:\s+(?<age>[,0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)/.freeze
       Stat = /^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)/.freeze
-      StatEnd = /^Mana:\s+\d+\s+Silver:\s[\d,]+$/.freeze
+      StatEnd = /^Mana:\s+\d+\s+Silver:\s(?<silver>[\d,]+)$/.freeze
       Fame = /^\s+Level: \d+\s+Fame: (?<fame>[\d,]+)$/.freeze # serves as ExprStart
       RealExp = %r{^\s+Experience: [\d,]+\s+Field Exp: (?<fxp_current>[\d,]+)/(?<fxp_max>[\d,]+)$}.freeze
       AscExp = /^\s+Ascension Exp: (?<ascension_experience>[\d,]+)\s+Recent Deaths: [\d,]+$/.freeze
       TotalExp = /^\s+Total Exp: (?<total_experience>[\d,]+)\s+Death's Sting: \w+$/.freeze
       LTE = /^\s+Long-Term Exp: (?<long_term_experience>[\d,]+)\s+Deeds: (?<deeds>\d+)$/.freeze
-      ExprEnd = /^\s+Exp until lvl:.*$/.freeze
+      ExprEnd = /^\s+Exp (?:until lvl|to next TP): [\d,]+/.freeze
       SkillStart = /^\s\w+\s\(at level \d+\), your current skill bonuses and ranks/.freeze
       Skill = /^\s+(?<name>[[a-zA-Z]\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)/.freeze
       Spell = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
@@ -59,6 +59,7 @@ module Infomon
         when Pattern::CharRaceProf
           # name captured here, but do not rely on it - use XML instead
           @stat_hold = []
+          Infomon.mutex.lock
           match = Regexp.last_match
           @stat_hold.push(['stat.race', match[:race].to_s],
                           ['stat.profession', match[:profession].to_s])
@@ -67,8 +68,8 @@ module Infomon
           # level captured here, but do not rely on it - use XML instead
           match = Regexp.last_match
           @stat_hold.push(['stat.gender', match[:gender]],
-                          ['stat.age', match[:age].gsub(',', '').to_i],
-                          ['stat.experience', match[:experience].gsub(',', '').to_i])
+                          ['stat.age', match[:age].delete(',').to_i],
+                          ['stat.experience', match[:experience].delete(',').to_i])
           :ok
         when Pattern::Stat
           match = Regexp.last_match
@@ -78,36 +79,42 @@ module Infomon
                           ['stat.%s.enhanced_bonus' % match[:stat], match[:enhanced_bonus].to_i])
           :ok
         when Pattern::StatEnd
+          match = Regexp.last_match
+          @stat_hold.push(['stat.silver', match[:silver].delete(',').to_i])
           Infomon.upsert_batch(@stat_hold)
+          Infomon.mutex.unlock
           :ok
         when Pattern::Fame # serves as ExprStart
           @expr_hold = []
+          Infomon.mutex.lock
           match = Regexp.last_match
-          @expr_hold.push(['experience.fame', match[:fame].gsub(',', '').to_i])
+          @expr_hold.push(['experience.fame', match[:fame].delete(',').to_i])
           :ok
         when Pattern::RealExp
           match = Regexp.last_match
-          @expr_hold.push(['experience.fxp_current', match[:fxp_current].gsub(',', '').to_i],
-                          ['experience.fxp_max', match[:fxp_max].gsub(',', '').to_i])
+          @expr_hold.push(['experience.fxp_current', match[:fxp_current].delete(',').to_i],
+                          ['experience.fxp_max', match[:fxp_max].delete(',').to_i])
           :ok
         when Pattern::AscExp
           match = Regexp.last_match
-          @expr_hold.push(['experience.ascension_experience', match[:ascension_experience].gsub(',', '').to_i])
+          @expr_hold.push(['experience.ascension_experience', match[:ascension_experience].delete(',').to_i])
           :ok
         when Pattern::TotalExp
           match = Regexp.last_match
-          @expr_hold.push(['experience.total_experience', match[:total_experience].gsub(',', '').to_i])
+          @expr_hold.push(['experience.total_experience', match[:total_experience].delete(',').to_i])
           :ok
         when Pattern::LTE
           match = Regexp.last_match
-          @expr_hold.push(['experience.long_term_experience', match[:long_term_experience].gsub(',', '').to_i],
+          @expr_hold.push(['experience.long_term_experience', match[:long_term_experience].delete(',').to_i],
                           ['experience.deeds', match[:deeds].to_i])
           :ok
         when Pattern::ExprEnd
           Infomon.upsert_batch(@expr_hold)
+          Infomon.mutex.unlock
           :ok
         when Pattern::SkillStart
           @skills_hold = []
+          Infomon.mutex.lock
           :ok
         when Pattern::Skill
           match = Regexp.last_match
@@ -120,9 +127,11 @@ module Infomon
           :ok
         when Pattern::SkillEnd
           Infomon.upsert_batch(@skills_hold)
+          Infomon.mutex.unlock
           :ok
         when Pattern::PSMStart
           @psm_hold = []
+          Infomon.mutex.lock
           :ok
         when Pattern::PSM
           match = Regexp.last_match
@@ -130,6 +139,7 @@ module Infomon
           :ok
         when Pattern::PSMEnd
           Infomon.upsert_batch(@psm_hold)
+          Infomon.mutex.unlock
           :ok
         # end of blob saves
         when Pattern::Levelup
@@ -153,9 +163,9 @@ module Infomon
           Infomon.set('society.rank', match[:rank])
           case match[:standing] # if Master in society the rank match is nil
           when 'Master'
-            if match[:society] =~ /Voln/
+            if /Voln/.match?(match[:society])
               Infomon.set('society.rank', 26)
-            elsif match[:society] =~ /Council of Light|Guardians of Sunfist/
+            elsif /Council of Light|Guardians of Sunfist/.match?(match[:society])
               Infomon.set('society.rank', 20)
             end
           end

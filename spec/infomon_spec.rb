@@ -2,15 +2,13 @@ require "infomon/infomon"
 require "attributes/stats"
 require "experience"
 
-module Char
-  def self.name
-    "testing"
-  end
-end
-
 module XMLData
   def self.game
     "rspec"
+  end
+
+  def self.name
+    "testing"
   end
 end
 
@@ -24,7 +22,7 @@ describe Infomon, ".setup!" do
 
   context "can manipulate data" do
     it "upserts a new key/value pair" do
-      k = "stats.influence"
+      k = "stat.influence"
       # handles when value doesn't exist
       Infomon.set(k, 30)
       expect(Infomon.get(k)).to eq(30)
@@ -44,8 +42,7 @@ describe Infomon::Parser, ".parse" do
   context "citizenship" do
     it "handles citizenship in a town" do
       Infomon::Parser.parse %[You currently have full citizenship in Wehnimer's Landing.]
-      citizenship = Infomon.get("citizenship")
-      expect(citizenship).to eq(%[Wehnimer's Landing])
+      expect(Infomon.get("citizenship")).to eq(%[Wehnimer's Landing])
     end
 
     it "handles no citizenship" do
@@ -71,7 +68,7 @@ Gender: Male    Age: 0    Expr: 167,500    Level:  12
              Influence (INF):   100 (20)    ...  108 (24)
 Mana:  415   Silver: 0
 Stuffed
-      test_stats.split("\n").each { |line| pp Infomon::Parser.parse(line) }
+      test_stats.split("\n").each { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("stat.aura")).to eq(100)
       expect(Infomon.get("stat.aura_bonus")).to eq(-35)
@@ -97,7 +94,7 @@ Stuffed
            Intuition (INT) :  66   +1  ...     13
               Wisdom (WIS) :  66   +1  ...     13
       Levelup
-      levelup.split("\n").each { |line| pp Infomon::Parser.parse(line) }
+      levelup.split("\n").each { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("stat.dexterity")).to eq(37)
       expect(Infomon.get("stat.dexterity_bonus")).to eq(4)
@@ -114,7 +111,7 @@ Stuffed
           Exp until lvl: 30,000
       Experience
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) } 
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("experience.fame")).to eq(4_804_958)
       expect(Infomon.get("experience.fxp_current")).to eq(1_350)
@@ -154,7 +151,7 @@ testing, the following Shield Specializations are available:
               Category: all
    Subcategory: all
 Shield
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.bash")).to eq(4)
       expect(Infomon.get("psm.throw")).to eq(5)
@@ -198,7 +195,7 @@ testing, the following Combat Maneuvers are available:
    Subcategory: all
 Cman
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.toughness")).to eq(3)
       expect(Infomon.get("psm.subdue")).to eq(6)
@@ -228,7 +225,7 @@ testing, the following Armor Specializations are available:
    Subcategory: all
 Armor
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.support")).to eq(3)
       expect(Infomon.get("psm.crush")).to eq(2)
@@ -251,7 +248,7 @@ testing, the following Weapon Techniques are available:
    Subcategory: all
 Weapon
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.flurry")).to eq(5)
       expect(Infomon.get("psm.riposte")).to eq(5)
@@ -276,7 +273,7 @@ testing, the following Feats are available:
    Subcategory: all
 Feat
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.martialmastery")).to eq(1)
       expect(Infomon.get("psm.silentstrike")).to eq(5)
@@ -381,6 +378,43 @@ Feat
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+    end
+
+    it "has a cache that will lazily load" do
+      k = "answer.life"
+      # big sample size so we can be sure about some sane access rules
+      100.times do
+        Infomon.reset!
+        Infomon.cache.flush!
+        
+        expect(Infomon.get(k)).to be_nil
+        Infomon.set(k, 42)
+        expect(Infomon.get(k)).to eq(42)
+        expect(Infomon.cache.include?(k)).to be(true)
+        Infomon.cache.flush!
+        # no longer in cache
+        expect(Infomon.cache.include?(k)).to be(false)
+        # will load from DB
+        expect(Infomon.get(k)).to eq(42)
+        # is now back in cache
+        expect(Infomon.cache.include?(k)).to be(true)
+      end
+    end
+
+    it "can handle 100 scripts accessing it simultaneously" do
+      k = "answer.life"
+      # if this ever breaks, we have a problem with the way this interacts with scripts
+      scripts = (0..99).to_a.map { |n|
+        Thread.new {
+          Infomon.set(k, n)
+          expect((0..99).include?(n)).to be(true)
+          sleep rand
+          Infomon.set(k, n)
+          expect((0..99).include?(n)).to be(true)
+        }
+      }
+
+      scripts.map(&:value)
     end
   end
 end
