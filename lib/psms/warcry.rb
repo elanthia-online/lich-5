@@ -9,31 +9,31 @@ class Warcry
      { long_name: 'seanettes_shout',          short_name: 'shout',          cost: 20 },
      { long_name: 'yerties_yowlp',            short_name: 'yowlp',          cost: 10 }]
   end
-  
+
   @@warcries = {
     "bellow" => {
       :regex => /You glare at .+ and let out a nerve-shattering bellow! /i,
     },
-    "yowlp" => {
+    "yowlp"  => {
       :regex => /You throw back your shoulders and let out a resounding yowlp!/i,
-      :buff => /Yertie's Yowlp/,
+      :buff  => /Yertie's Yowlp/,
     },
-    "growl"         => {
+    "growl"  => {
       :regex => /Your face contorts as you unleash a guttural, deep-throated growl at .+!/i,
     },
-    "shout" => {
+    "shout"  => {
       :regex => /You let loose an echoing shout!/i,
-      :buff => 'Empowered (+20)',
+      :buff  => 'Empowered (+20)',
     },
-    "cry" => {
+    "cry"    => {
       :regex => /You stare down .+ and let out an eerie, modulating cry!/i,
     },
     "holler" => {
       :regex => /You throw back your head and let out a thundering holler!/i,
-      :buff => 'Enh. Health (+20)',
+      :buff  => 'Enh. Health (+20)',
     },
   }
-    
+
   def Warcry.[](name)
     return PSMS.assess(name, 'Warcry')
   end
@@ -60,7 +60,7 @@ class Warcry
     return unless Warcry.available?(name)
     return if Warcry.buffActive?(name)
     name = PSMS.name_normal(name)
-    
+
     results_regex = Regexp.union(
       @@warcries.fetch(name)[:regex],
       /^#{name} what\?$/i,
@@ -79,17 +79,13 @@ class Warcry
     elsif target != ""
       usage_cmd += " #{target}"
     end
-    usage_result = nil
-    loop {
-      waitrt?
-      waitcastrt?
+    waitrt?
+    waitcastrt?
+    usage_result = dothistimeout(usage_cmd, 5, results_regex)
+    if usage_result == "You don't seem to be able to move to do that."
+      100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
       usage_result = dothistimeout(usage_cmd, 5, results_regex)
-      if usage_result == "You don't seem to be able to move to do that."
-        100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
-        usage_result = dothistimeout(usage_cmd, 5, results_regex)
-      end
-      break
-    }
+    end
     usage_result
   end
 end
