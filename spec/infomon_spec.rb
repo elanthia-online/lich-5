@@ -387,7 +387,7 @@ Feat
       100.times do
         Infomon.reset!
         Infomon.cache.flush!
-        
+
         expect(Infomon.get(k)).to be_nil
         Infomon.set(k, 42)
         expect(Infomon.get(k)).to eq(42)
