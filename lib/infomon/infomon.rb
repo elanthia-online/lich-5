@@ -88,6 +88,17 @@ module Infomon
     return "#{val}" if val
   end
 
+  def self.get_bool(key)
+    value = Infomon.get(key)
+    if value.is_a?(TrueClass) || value.is_a?(FalseClass)
+      return value
+    elsif value == 1
+      return true
+    else
+      return false
+    end
+  end
+
   def self.upsert(*args)
     self.table
         .insert_conflict(:replace)
