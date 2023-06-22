@@ -14,6 +14,8 @@ module Lich
   end
 end
 
+require 'rexml/document'
+require 'rexml/streamlistener'
 require 'open-uri'
 require "spell"
 download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml')
