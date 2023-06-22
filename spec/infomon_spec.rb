@@ -3,7 +3,7 @@ require "spell"
 download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml')
 FileUtils.mkdir_p('/home/runner/work/lich-5/lich-5/data')
 File.write('/home/runner/work/lich-5/lich-5/data/effect-list.xml', download)
-Gmaes::Gemstone::Spell.load('/home/runner/work/lich-5/lich-5/data/effect-list.xml')
+Games::Gemstone::Spell.load('/home/runner/work/lich-5/lich-5/data/effect-list.xml')
 
 require "infomon/infomon"
 require "attributes/stats"
