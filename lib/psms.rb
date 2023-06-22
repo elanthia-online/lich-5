@@ -5,6 +5,7 @@ require_relative('./psms/cman.rb')
 require_relative('./psms/feat.rb')
 require_relative('./psms/shield.rb')
 require_relative('./psms/weapon.rb')
+require_relative('./psms/warcry.rb')
 
 module PSMS
   def self.name_normal(name)
@@ -22,7 +23,7 @@ module PSMS
     # this logs then raises an exception to stop (kill) the offending script
     if seek_psm.nil?
       Lich.log("error: PSMS request: #{$!}\n\t")
-      raise StandardError.new "Aborting script - The referenced #{type} skill #{name} is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Weapon) and your spelling of #{name}."
+      raise StandardError.new "Aborting script - The referenced #{type} skill #{name} is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of #{name}."
     end
     # otherwise process request
     case costcheck
