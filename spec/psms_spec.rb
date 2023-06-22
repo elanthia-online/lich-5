@@ -4,6 +4,16 @@ class Script
   end
 end
 
+module Lich
+  def self.log(msg)
+    debug_filename = "debug-#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}.log"
+    $stderr = File.open(debug_filename, 'w')
+    begin
+      $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"
+    end
+  end
+end
+
 require 'open-uri'
 require "spell"
 download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml')
@@ -27,16 +37,6 @@ module XMLData
 
   def self.stamina
     return 20 # some PSM require 30, so we should have negative testing ability
-  end
-end
-
-module Lich
-  def self.log(msg)
-    debug_filename = "debug-#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}.log"
-    $stderr = File.open(debug_filename, 'w')
-    begin
-      $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"
-    end
   end
 end
 
