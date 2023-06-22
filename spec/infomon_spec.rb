@@ -1,3 +1,9 @@
+class Script
+  def Script.current
+    nil
+  end
+end
+
 require 'open-uri'
 require "spell"
 download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml')
