@@ -92,8 +92,8 @@ module Infomon
           :ok
         when Pattern::RealExp
           match = Regexp.last_match
-          @expr_hold.push(['experience.fxp_current', match[:fxp_current].delete(',').to_i],
-                          ['experience.fxp_max', match[:fxp_max].delete(',').to_i])
+          @expr_hold.push(['experience.field_experience_current', match[:fxp_current].delete(',').to_i],
+                          ['experience.field_experience_max', match[:fxp_max].delete(',').to_i])
           :ok
         when Pattern::AscExp
           match = Regexp.last_match
