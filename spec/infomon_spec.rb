@@ -15,32 +15,8 @@ module Lich
 end
 
 class NilClass
-  def dup
-    nil
-  end
-
   def method_missing(*)
     nil
-  end
-
-  def split(*)
-    Array.new
-  end
-
-  def to_s
-    ""
-  end
-
-  def strip
-    ""
-  end
-
-  def +(val)
-    val
-  end
-
-  def closed?
-    true
   end
 end
 
