@@ -39,6 +39,17 @@ module Spells
     return known_spells
   end
 
+  def self.require_cooldown(spell)
+    if (spell.num.to_i > 9013) && (spell.num.to_i < 9042) # Assume Aspect: Ranger
+      cooldown_spell = Spell[spell.num + 1]
+      cooldown_spell.putup
+    elsif (spell.num == 515) && (recovery = Spell[599]) # Rapid Fire: Major Elemental
+      recovery.putup
+    else
+      :ok
+    end
+  end
+
   def self.serialize
     [self.minor_elemental, self.major_elemental, self.minor_spiritual, self.major_spiritual, self.wizard, self.sorcerer, self.ranger, self.paladin, self.empath, self.cleric, self.bard, self.minormental]
   end
