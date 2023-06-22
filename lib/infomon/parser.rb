@@ -17,7 +17,7 @@ module Infomon
       ExprEnd = /^\s+Exp (?:until lvl|to next TP): [\d,]+/.freeze
       SkillStart = /^\s\w+\s\(at level \d+\), your (?:current|base) skill bonuses(?: and ranks|, ranks and goals)/.freeze
       Skill = /^\s+(?<name>[[a-zA-Z]\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)/.freeze
-      Spell = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
+      SpellRanks = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
       SkillEnd = /^Training Points: \d+ Phy \d+ Mnt/.freeze
       PSMStart = /^\w+, the following (?:Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
       PSM = /^\s+(?<name>[A-z\s\-']+)\s+(?<command>[a-z]+)\s+(?<ranks>\d)\/(?<max>\d).*$/.freeze
@@ -42,11 +42,15 @@ module Infomon
       CutthroatActive = /slices deep into your vocal cords!$|^All you manage to do is cough up some blood\.$/.freeze
       CutthroatNoActive = /^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$|^That tingles, but there are no head injuries to repair\.$/.freeze
 
+      # Adding spell regexes.  Does not save to infomon.db.  Used by Spell and by ActiveSpells
+      SpellUpMsgs = /^#{Games::Gemstone::Spell.upmsgs.join('$|^')}$/o.freeze
+      SpellDnMsgs = /^#{Games::Gemstone::Spell.dnmsgs.join('$|^')}$/o.freeze
+
       All = Regexp.union(CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
-                         ExprEnd, SkillStart, Skill, Spell, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
+                         ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
                          Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
                          BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
-                         CutthroatNoActive)
+                         CutthroatNoActive, SpellUpMsgs, SpellDnMsgs)
     end
 
     def self.parse(line)
@@ -121,7 +125,7 @@ module Infomon
           @skills_hold.push(['skill.%s' % match[:name].downcase, match[:ranks].to_i],
                             ['skill.%s_bonus' % match[:name], match[:bonus].to_i])
           :ok
-        when Pattern::Spell
+        when Pattern::SpellRanks
           match = Regexp.last_match
           @skills_hold.push(['spell.%s' % match[:name].downcase, match[:rank].to_i])
           :ok
@@ -204,6 +208,20 @@ module Infomon
           :ok
         when Pattern::CutthroatNoActive
           Infomon.set('status.cutthroat', false)
+          :ok
+        when Pattern::SpellUpMsgs
+          spell = Spell.list.find do |s|
+            line =~ /^#{s.msgup}$/
+          end
+          spell.putup unless spell.active?
+          # add various cooldowns back without affecting parse speed
+          Spells.require_cooldown(spell)
+          :ok
+        when Pattern::SpellDnMsgs
+          spell = Spell.list.find do |s|
+            line =~ /^#{s.msgdn}$/
+          end
+          spell.putdown if spell.active?
           :ok
         else
           :noop

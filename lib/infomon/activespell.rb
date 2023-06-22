@@ -84,7 +84,7 @@ module ActiveSpell
           Spell.active.each { |s| existing_spell_names << s.name }
           inactive_spells = existing_spell_names - ignore_spells - update_spell_names
           inactive_spells.reject! do |s|
-            s =~ /^Aspect of the \w+ Cooldown/
+            s =~ /^Aspect of the \w+ Cooldown|^[\w\s]+ Recovery/
           end
           inactive_spells.each do |s|
             badspell = Spell[s].num
