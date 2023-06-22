@@ -19,11 +19,11 @@ class NilClass
     nil
   end
 
-  def method_missing(*args)
+  def method_missing(*)
     nil
   end
 
-  def split(*val)
+  def split(*)
     Array.new
   end
 
