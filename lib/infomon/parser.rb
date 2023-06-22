@@ -43,8 +43,8 @@ module Infomon
       CutthroatNoActive = /^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$|^That tingles, but there are no head injuries to repair\.$/.freeze
 
       # Adding spell regexes.  Does not save to infomon.db.  Used by Spell and by ActiveSpells
-      SpellUpMsgs = /^#{Spell.upmsgs.join('$|^')}$/o.freeze
-      SpellDnMsgs = /^#{Spell.dnmsgs.join('$|^')}$/o.freeze
+      SpellUpMsgs = /^#{Games::Gemstone::Spell.upmsgs.join('$|^')}$/o.freeze
+      SpellDnMsgs = /^#{Games::Gemstone::Spell.dnmsgs.join('$|^')}$/o.freeze
 
       All = Regexp.union(CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
                          ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
