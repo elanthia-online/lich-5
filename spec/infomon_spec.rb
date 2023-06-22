@@ -5,18 +5,12 @@ class Script
 end
 
 module Lich
-  def Lich.log(msg)
-    $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"
-  end
-end
-
-module XMLData
-  def self.game
-    "rspec"
-  end
-
-  def self.name
-    "testing"
+  def self.log(msg)
+    debug_filename = "debug-#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}.log"
+    $stderr = File.open(debug_filename, 'w')
+    begin
+      $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"
+    end
   end
 end
 
@@ -30,6 +24,16 @@ Games::Gemstone::Spell.load('/home/runner/work/lich-5/lich-5/data/effect-list.xm
 require "infomon/infomon"
 require "attributes/stats"
 require "experience"
+
+module XMLData
+  def self.game
+    "rspec"
+  end
+
+  def self.name
+    "testing"
+  end
+end
 
 describe Infomon, ".setup!" do
   context "can set itself up" do
