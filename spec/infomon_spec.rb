@@ -1,6 +1,10 @@
+require "spell"
+download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml')
+File.write('~/effect-list.xml', download)
+Spell.load('~/effect-list.xml')
+
 require "infomon/infomon"
 require "attributes/stats"
-require "spell"
 require "experience"
 
 module XMLData
