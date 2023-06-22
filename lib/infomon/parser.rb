@@ -15,7 +15,7 @@ module Infomon
       TotalExp = /^\s+Total Exp: (?<total_experience>[\d,]+)\s+Death's Sting: \w+$/.freeze
       LTE = /^\s+Long-Term Exp: (?<long_term_experience>[\d,]+)\s+Deeds: (?<deeds>\d+)$/.freeze
       ExprEnd = /^\s+Exp (?:until lvl|to next TP): [\d,]+/.freeze
-      SkillStart = /^\s\w+\s\(at level \d+\), your current skill bonuses and ranks/.freeze
+      SkillStart = /^\s\w+\s\(at level \d+\), your (?:current|base) skill bonuses(?: and ranks|, ranks and goals)/.freeze
       Skill = /^\s+(?<name>[[a-zA-Z]\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)/.freeze
       Spell = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
       SkillEnd = /^Training Points: \d+ Phy \d+ Mnt/.freeze
