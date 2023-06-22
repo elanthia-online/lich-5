@@ -51,7 +51,6 @@ require "spell"
 download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml').read
 FileUtils.mkdir_p('/home/runner/work/lich-5/lich-5/data')
 File.write('/home/runner/work/lich-5/lich-5/data/effect-list.xml', download)
-pp "Data Files: #{Dir.children('/home/runner/work/lich-5/lich-5/data/')}"
 Games::Gemstone::Spell.load('/home/runner/work/lich-5/lich-5/data/effect-list.xml')
 
 require "infomon/infomon"
