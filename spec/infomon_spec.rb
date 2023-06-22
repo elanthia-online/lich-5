@@ -121,8 +121,8 @@ Stuffed
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("experience.fame")).to eq(4_804_958)
-      expect(Infomon.get("experience.fxp_current")).to eq(1_350)
-      expect(Infomon.get("experience.fxp_max")).to eq(1_010)
+      expect(Infomon.get("experience.field_experience_current")).to eq(1_350)
+      expect(Infomon.get("experience.field_experience_max")).to eq(1_010)
       expect(Infomon.get("experience.ascension_experience")).to eq(4_170_132)
       expect(Infomon.get("experience.total_experience")).to eq(41_307_131)
       expect(Infomon.get("experience.long_term_experience")).to eq(26_266)

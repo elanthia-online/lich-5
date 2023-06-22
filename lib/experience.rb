@@ -6,11 +6,11 @@ module Experience
   end
 
   def self.fxp_current
-    Infomon.get("experience.fxp_current")
+    Infomon.get("experience.field_experience_current")
   end
 
   def self.fxp_max
-    Infomon.get("experience.fxp_max")
+    Infomon.get("experience.field_experience_max")
   end
 
   def self.exp
