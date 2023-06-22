@@ -1,3 +1,4 @@
+require 'uri'
 require "spell"
 download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml')
 File.write('~/effect-list.xml', download)
