@@ -14,11 +14,41 @@ module Lich
   end
 end
 
+class NilClass
+  def dup
+    nil
+  end
+
+  def method_missing(*args)
+    nil
+  end
+
+  def split(*val)
+    Array.new
+  end
+
+  def to_s
+    ""
+  end
+
+  def strip
+    ""
+  end
+
+  def +(val)
+    val
+  end
+
+  def closed?
+    true
+  end
+end
+
 require 'rexml/document'
 require 'rexml/streamlistener'
 require 'open-uri'
 require "spell"
-download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml')
+download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml').read
 FileUtils.mkdir_p('/home/runner/work/lich-5/lich-5/data')
 File.write('/home/runner/work/lich-5/lich-5/data/effect-list.xml', download)
 Games::Gemstone::Spell.load('/home/runner/work/lich-5/lich-5/data/effect-list.xml')
