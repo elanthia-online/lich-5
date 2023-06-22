@@ -17,7 +17,7 @@ module Infomon
       ExprEnd = /^\s+Exp (?:until lvl|to next TP): [\d,]+/.freeze
       SkillStart = /^\s\w+\s\(at level \d+\), your current skill bonuses and ranks/.freeze
       Skill = /^\s+(?<name>[[a-zA-Z]\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)/.freeze
-      Spell = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
+      SpellRanks = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
       SkillEnd = /^Training Points: \d+ Phy \d+ Mnt/.freeze
       PSMStart = /^\w+, the following (?:Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
       PSM = /^\s+(?<name>[A-z\s\-']+)\s+(?<command>[a-z]+)\s+(?<ranks>\d)\/(?<max>\d).*$/.freeze
@@ -47,7 +47,7 @@ module Infomon
       SpellDnMsgs = /^#{Spell.dnmsgs.join('$|^')}$/o.freeze
 
       All = Regexp.union(CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
-                         ExprEnd, SkillStart, Skill, Spell, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
+                         ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
                          Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
                          BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
                          CutthroatNoActive, SpellUpMsgs, SpellDnMsgs)
@@ -125,7 +125,7 @@ module Infomon
           @skills_hold.push(['skill.%s' % match[:name].downcase, match[:ranks].to_i],
                             ['skill.%s_bonus' % match[:name], match[:bonus].to_i])
           :ok
-        when Pattern::Spell
+        when Pattern::SpellRanks
           match = Regexp.last_match
           @skills_hold.push(['spell.%s' % match[:name].downcase, match[:rank].to_i])
           :ok
