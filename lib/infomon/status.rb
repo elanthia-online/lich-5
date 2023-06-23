@@ -23,7 +23,8 @@ module Status
   def self.sleeping?
     Infomon.get_bool("status.sleeping")
   end
-# deprecate these in global_defs after warning, consider bringing other status maps over
+
+  # deprecate these in global_defs after warning, consider bringing other status maps over
   def self.webbed?
     XMLData.indicator['IconDEAD'] == 'y'
   end

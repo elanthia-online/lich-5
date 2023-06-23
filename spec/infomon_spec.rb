@@ -51,9 +51,9 @@ module XMLData
 
   def self.indicator
     # shimming together a hash to test 'muckled?' results
-    {'IconSTUNNED' => 'n',
-    'IconDEAD' => 'n',
-    'IconWEBBED' => false}
+    { 'IconSTUNNED' => 'n',
+      'IconDEAD'    => 'n',
+      'IconWEBBED'  => false }
   end
 end
 
@@ -412,20 +412,17 @@ Warcry
       Infomon.set('skill.swimming', 0)
       Infomon.set('society.status', 'None')
       test_results = Infomon.show(true)
-      expect(test_results.any?{ |s| s.include?('psm.krynch : 1') }).to be(true)
-      expect(test_results.any?{ |s| s.include?('skill.swimming : 0') }).to be(true)
-      expect(test_results.any?{ |s| s.include?('society.status : "None"') }).to be(true)
+      expect(test_results.any? { |s| s.include?('psm.krynch : 1') }).to be(true)
+      expect(test_results.any? { |s| s.include?('skill.swimming : 0') }).to be(true)
+      expect(test_results.any? { |s| s.include?('society.status : "None"') }).to be(true)
       test2_results = Infomon.show
-      expect(test2_results.any?{ |s| s.include?('psm.krynch : 1') }).to be(true)
-      expect(test2_results.any?{ |s| s.include?('skill.ambush : 1') }).to be(true)
-      expect(test2_results.any?{ |s| s.include?('skill.swimming : 0') }).to be(false)
+      expect(test2_results.any? { |s| s.include?('psm.krynch : 1') }).to be(true)
+      expect(test2_results.any? { |s| s.include?('skill.ambush : 1') }).to be(true)
+      expect(test2_results.any? { |s| s.include?('skill.swimming : 0') }).to be(false)
     end
   end
 
-
-
-
-# booleen status checks below
+  # booleen status checks below
 
   context "booleans" do
     it "handles sleeping? boolean true" do

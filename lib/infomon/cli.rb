@@ -42,7 +42,7 @@ module Infomon
       response << "#{k} : #{v.inspect}\n"
     }
     unless full
-      response.each { |line|
+      response.each { |_line|
         response.reject! do |line|
           line.match?(/\s:\s0$/)
         end
