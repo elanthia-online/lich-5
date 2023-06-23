@@ -422,6 +422,24 @@ Warcry
     end
   end
 
+  context "db feature method - Infomon.delete!(key)" do
+    it "allows for selective deletion of a row in the infomon.db" do
+      Infomon.set('skill.edged_weapon', 1)
+      Infomon.set('psm.pummel', 5)
+      Infomon.set('stat.aura_bonus', 18)
+      expect(Infomon.get('skill.edged_weapon')).to eq(1)
+      expect(Infomon.get('psm.pummel')).to eq(5)
+      expect(Infomon.get('stat.aura_bonus')).to eq(18)
+      Infomon.delete!('psm.pummel')
+      expect(Infomon.get('skill.edged_weapon')).to eq(1)
+      expect(Infomon.get('psm.pummel')).to be(nil)
+      expect(Infomon.get('stat.aura_bonus')).to eq(18)
+      Infomon.delete!('stat.aura_bonus')
+      expect(Infomon.get('skill.edged_weapon')).to eq(1)
+      expect(Infomon.get('stat.aura_bonus')).to be(nil)
+    end
+  end
+
   # booleen status checks below
 
   context "booleans" do
