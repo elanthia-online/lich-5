@@ -179,7 +179,7 @@ module Infomon
         when Pattern::Society
           match = Regexp.last_match
           Infomon.set('society.status', match[:society])
-          Infomon.set('society.rank', match[:rank])
+          Infomon.set('society.rank', match[:rank].to_i)
           case match[:standing] # if Master in society the rank match is nil
           when 'Master'
             if /Voln/.match?(match[:society])
