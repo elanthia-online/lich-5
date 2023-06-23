@@ -23,9 +23,21 @@ module Status
   def self.sleeping?
     Infomon.get_bool("status.sleeping")
   end
+# deprecate these in global_defs after warning, consider bringing other status maps over
+  def self.webbed?
+    XMLData.indicator['IconDEAD'] == 'y'
+  end
+
+  def self.dead?
+    XMLData.indicator['IconDEAD'] == 'y'
+  end
+
+  def self.stunned?
+    XMLData.indicator['IconSTUNNED'] == 'y'
+  end
 
   def self.muckled?
-    muckled = checkwebbed || checkdead || checkstunned
+    muckled = Status.webbed? || Status.dead? || Status.stunned?
     muckled = muckled || Status.silenced? || Status.sleeping?
     muckled = muckled || Status.cutthroat? || Status.calmed?
     muckled = muckled || Status.bound?
