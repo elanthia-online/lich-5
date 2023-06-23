@@ -34,13 +34,20 @@ module Infomon
     respond 'Infomon reset is now complete.'
   end
 
-  def self.show
+  def self.show(full = false)
     response = []
     # display all stored db values
     respond "Displaying stored information for #{XMLData.name}"
     Infomon.table.map([:key, :value]).each { |k, v|
       response << "#{k} : #{v.inspect}\n"
     }
+    unless full
+      response.each { |line|
+        response.reject! do |line|
+          line.match?(/\s:\s0$/)
+        end
+      }
+    end
     respond response
   end
 end
