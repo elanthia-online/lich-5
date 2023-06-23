@@ -31,7 +31,14 @@ Games::Gemstone::Spell.load('/home/runner/work/lich-5/lich-5/data/effect-list.xm
 
 require "infomon/infomon"
 require "attributes/stats"
+require "infomon/status"
 require "experience"
+module Infomon
+  # cheat definition of `respond` to prevent having to load global_defs with dependenciesw
+  def self.respond(msg)
+    pp msg
+  end
+end
 
 module XMLData
   def self.game
@@ -40,6 +47,13 @@ module XMLData
 
   def self.name
     "testing"
+  end
+
+  def self.indicator
+    # shimming together a hash to test 'muckled?' results
+    {'IconSTUNNED' => 'n',
+    'IconDEAD' => 'n',
+    'IconWEBBED' => false}
   end
 end
 
@@ -323,12 +337,95 @@ You have learned the following War Cries:
      Horland's Holler
 Warcry
 
-      output.split("\n").map { |line| pp Infomon::Parser.parse(line) }
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.cry")).to eq(1)
       expect(Infomon.get("psm.yowlp")).to eq(1)
     end
   end
+
+  context "Society status" do
+    it "handles no society" do
+      output = <<~SocietyCommand
+      Current society status:
+         You are not a member of any society at this time.
+      SocietyCommand
+
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+      expect(Infomon.get('society.status')).to eq('None')
+    end
+
+    it "handles member of society" do
+      output = <<~SocietyStatus
+      Current society status:
+         You are a member in the Order of Voln at step 13.
+      SocietyStatus
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+      expect(Infomon.get('society.status')).to eq('Order of Voln')
+      expect(Infomon.get('society.rank')).to eq(13)
+    end
+
+    it "handles master of society" do
+      output = <<~SocietyMaster
+      Current society status:
+         You are a Master in the Council of Light.
+      SocietyMaster
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+      expect(Infomon.get('society.status')).to eq('Council of Light')
+      expect(Infomon.get('society.rank')).to eq(20)
+    end
+  end
+
+  context "Society Join or Resign" do
+    it "handles joining a society" do
+      output = <<~SocietyJoin
+      The Grandmaster says, "Welcome to the Order of Voln."
+      SocietyJoin
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+      expect(Infomon.get('society.status')).to eq('Order of Voln')
+      expect(Infomon.get('society.rank')).to eq(1)
+    end
+
+    it "handles joining a society (test2)" do
+      output = <<~SocietyJoin
+      The Grandmaster says, "You are now a member of the Guardians of Sunfist."
+      SocietyJoin
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+      expect(Infomon.get('society.status')).to eq('Guardians of Sunfist')
+      expect(Infomon.get('society.rank')).to eq(0)
+    end
+
+    it "handles resigning froim a society" do
+      output = <<~SocietyResign
+      The Grandmaster says, "I'm sorry to hear that.  You are no longer in our service.
+      SocietyResign
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+      expect(Infomon.get('society.status')).to eq('None')
+      expect(Infomon.get('society.rank')).to eq(0)
+    end
+  end
+
+  context "Infomon.show displays 0 values, or not" do
+    it "handles Infomon.show(full = true) and (full = false)" do
+      Infomon.set('psm.krynch', 1)
+      Infomon.set('skill.ambush', 1)
+      Infomon.set('skill.swimming', 0)
+      Infomon.set('society.status', 'None')
+      test_results = Infomon.show(true)
+      expect(test_results.any?{ |s| s.include?('psm.krynch : 1') }).to be(true)
+      expect(test_results.any?{ |s| s.include?('skill.swimming : 0') }).to be(true)
+      expect(test_results.any?{ |s| s.include?('society.status : "None"') }).to be(true)
+      test2_results = Infomon.show
+      expect(test2_results.any?{ |s| s.include?('psm.krynch : 1') }).to be(true)
+      expect(test2_results.any?{ |s| s.include?('skill.ambush : 1') }).to be(true)
+      expect(test2_results.any?{ |s| s.include?('skill.swimming : 0') }).to be(false)
+    end
+  end
+
+
+
+
+# booleen status checks below
 
   context "booleans" do
     it "handles sleeping? boolean true" do
@@ -340,6 +437,8 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      expect(Status.sleeping?).to be(true)
+      expect(Status.muckled?).to be(true) # discount IconMAP presently - future update
     end
 
     it "handles sleeping? boolean false" do
@@ -352,6 +451,8 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      expect(Status.sleeping?).to be(false)
+      expect(Status.muckled?).to be(false)
     end
 
     it "handles bound? boolean true" do
@@ -361,6 +462,8 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      expect(Status.bound?).to be(true)
+      expect(Status.muckled?).to be(true)
     end
 
     it "handles bound? boolean false" do
@@ -371,6 +474,8 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      expect(Status.bound?).to be(false)
+      expect(Status.muckled?).to be(false)
     end
 
     it "handles silenced? boolean true" do
@@ -381,6 +486,8 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      expect(Status.silenced?).to be(true)
+      expect(Status.muckled?).to be(true)
     end
 
     it "handles silenced? boolean false" do
@@ -390,6 +497,8 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      expect(Status.silenced?).to be(false)
+      expect(Status.muckled?).to be(false)
     end
 
     it "handles calmed? boolean true" do
@@ -399,6 +508,8 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      expect(Status.calmed?).to be(true)
+      expect(Status.muckled?).to be(true)
     end
 
     it "handles calmed? boolean false" do
@@ -409,6 +520,8 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      expect(Status.calmed?).to be(false)
+      expect(Status.muckled?).to be(false)
     end
 
     it "handles cutthroat? boolean true" do
@@ -419,6 +532,8 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      expect(Status.cutthroat?).to be(true)
+      expect(Status.muckled?).to be(true)
     end
 
     it "handles cutthroat? boolean false" do
@@ -428,6 +543,8 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      expect(Status.cutthroat?).to be(false)
+      expect(Status.muckled?).to be(false)
     end
 
     it "has a cache that will lazily load" do
