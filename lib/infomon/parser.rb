@@ -74,7 +74,7 @@ module Infomon
         when Pattern::CharGenderAgeExpLevel
           # level captured here, but do not rely on it - use XML instead
           match = Regexp.last_match
-          @stat_hold.push(['stat.gender', match[:gender].to_s],
+          @stat_hold.push(['stat.gender', match[:gender]],
                           ['stat.age', match[:age].delete(',').to_i],
                           ['stat.experience', match[:experience].delete(',').to_i])
           :ok
@@ -171,20 +171,20 @@ module Infomon
           Infomon.set('spell.%s' % match[:name].downcase, match[:rank].to_i)
           :ok
         when Pattern::Citizenship
-          Infomon.set('citizenship', Regexp.last_match[:town].to_s)
+          Infomon.set('citizenship', Regexp.last_match[:town])
           :ok
         when Pattern::NoCitizenship
           Infomon.set('citizenship', 'None')
           :ok
         when Pattern::Society
           match = Regexp.last_match
-          Infomon.set('society.status', match[:society].to_s)
+          Infomon.set('society.status', match[:society])
           Infomon.set('society.rank', match[:rank].to_i)
           case match[:standing] # if Master in society the rank match is nil
           when 'Master'
             if /Voln/.match?(match[:society])
               Infomon.set('society.rank', 26)
-            elsif /Council of Light|Guardians of Sunfist/.match?(match[:society].)
+            elsif /Council of Light|Guardians of Sunfist/.match?(match[:society])
               Infomon.set('society.rank', 20)
             end
           end
