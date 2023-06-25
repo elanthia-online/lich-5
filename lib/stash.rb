@@ -80,8 +80,18 @@ module Lich
 
       # extending to use sheath / 2sheath wherever possible
       Stash.sheath_bags unless @checked_sheaths
-      sheath = @sheath.fetch(:sheath)
-      second_sheath = @sheath.fetch(:secondary_sheath)
+      if @sheath.has_key?(:sheath)
+        unless @sheath.has_key?(:secondary_sheath)
+          sheath = second_sheath = @sheath.fetch(:sheath)
+        else
+          sheath = @sheath.fetch(:sheath) if @sheath.has_key?(:sheath)
+          second_sheath = @sheath.fetch(:secondary_sheath) if @sheath.has_key?(:secondary_sheath)
+        end
+      elsif @sheath.has_key?(:secondary_sheath)
+        sheath = second_sheath = @sheath.fetch(:secondary_sheath)
+      else
+        sheath = second_sheath = nil
+      end
 
       if UserVars.lootsack.nil? or UserVars.lootsack.empty?
         lootsack = nil
@@ -127,7 +137,7 @@ module Lich
               dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
             end
           }
-          if @checked_sheaths && GameObj.left_hand.type =~ /weapon/
+          if !second_sheath.nil? && GameObj.left_hand.type =~ /weapon/
             result = Lich::Stash.add_to_bag(second_sheath, GameObj.left_hand)
           elsif weaponsack && GameObj.left_hand.type =~ /weapon/
             result = Lich::Stash::add_to_bag(weaponsack, GameObj.left_hand)
@@ -162,7 +172,7 @@ module Lich
         if UserVars.weapon and UserVars.weaponsack and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
           weaponsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack).sub(' ', ' .*')}/i }
         end
-        if @checked_sheaths && GameObj.right_hand.type =~ /weapon/
+        if !sheath.nil? && GameObj.right_hand.type =~ /weapon/
           result = Lich::Stash.add_to_bag(sheath, GameObj.right_hand)
         elsif weaponsack && GameObj.right_hand.type =~ /weapon/
           result = Lich::Stash::add_to_bag(weaponsack, GameObj.right_hand)
