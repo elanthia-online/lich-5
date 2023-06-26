@@ -1281,7 +1281,7 @@ module Games
                         Script.new_downstream(line)
                       else
                         unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
-                          # Infomon::Parser.parse(line.dup) # unsure if needed when XMLData.game is not populated or GS yet.
+
                           Script.new_downstream(line)
                         end
                       end
@@ -1551,21 +1551,8 @@ module Games
       end
     end
 
-    require_relative("./lib/spell.rb")
-    require_relative("./lib/bounty.rb")
+
     require_relative("./lib/gameobj.rb")
-    require_relative("./lib/infomon/infomon.rb")
-    require_relative("./lib/attributes/stats.rb")
-    require_relative("./lib/attributes/spells.rb")
-    require_relative("./lib/attributes/skills.rb")
-    require_relative("./lib/attributes/society.rb")
-    require_relative("./lib/infomon/status.rb")
-    require_relative("./lib/experience.rb")
-    # require_relative("./lib/infomon/activespell.rb")
-    # PSMS (armor, cman, feat, shield, weapon) have moved
-    # to ./lib/psms and are now called by psms.rb
-    require_relative("./lib/psms.rb")
-    require_relative("./lib/attributes/char.rb")
 
     class Gift
       @@gift_start ||= Time.now
@@ -1901,7 +1888,6 @@ ICONMAP = {
 }
 
 XMLData = XMLParser.new
-require_relative("./lib/infomon/activespell.rb")
 
 reconnect_if_wanted = proc {
   if ARGV.include?('--reconnect') and ARGV.include?('--login') and not $_CLIENTBUFFER_.any? { |cmd| cmd =~ /^(?:\[.*?\])?(?:<c>)?(?:quit|exit)/i }
