@@ -1281,7 +1281,7 @@ module Games
                         Script.new_downstream(line)
                       else
                         unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
-                          Infomon::Parser.parse(line.dup)
+                          # Infomon::Parser.parse(line.dup) # unsure if needed when XMLData.game is not populated or GS yet.
                           Script.new_downstream(line)
                         end
                       end
