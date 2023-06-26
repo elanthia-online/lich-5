@@ -65,11 +65,11 @@ class NilClass
     nil
   end
 
-  def method_missing(*_args)
+  def method_missing(*args)
     nil
   end
 
-  def split(*_val)
+  def split(*val)
     Array.new
   end
 
@@ -127,11 +127,11 @@ class StringProc
     Proc
   end
 
-  def call(*_a)
+  def call(*a)
     proc { eval(@string) }.call
   end
 
-  def _dump(_d = nil)
+  def _dump(d = nil)
     @string
   end
 
@@ -153,24 +153,22 @@ class SynchronizedSocket
 
   def puts(*args, &block)
     @mutex.synchronize {
-      @delegate.puts(*args, &block)
+      @delegate.puts *args, &block
     }
   end
-
   def puts_if(*args)
     @mutex.synchronize {
       if yield
-        @delegate.puts(*args)
-        return true
-      else
-        return false
-      end
-    }
+         @delegate.puts *args
+         return true
+       else
+          return false
+       end
+      }
   end
-
   def write(*args, &block)
     @mutex.synchronize {
-      @delegate.write(*args, &block)
+      @delegate.write *args, &block
     }
   end
 
@@ -271,7 +269,7 @@ end
 
 module Setting
   @@load = proc { |args|
-    unless (script = Script.current)
+    unless script = Script.current
       respond '--- error: Setting.load: calling script is unknown'
       respond $!.backtrace[0..2]
       next nil
@@ -318,7 +316,7 @@ module Setting
     end
   }
   @@save = proc { |hash|
-    unless (script = Script.current)
+    unless script = Script.current
       respond '--- error: Setting.save: calling script is unknown'
       respond $!.backtrace[0..2]
       next nil
@@ -384,7 +382,7 @@ module Setting
     true
   }
   @@list = proc {
-    unless (script = Script.current)
+    unless script = Script.current
       respond '--- error: Setting: unknown calling script'
       next nil
     end
@@ -448,7 +446,7 @@ module Settings
   md5_at_load = Hash.new
   mutex       = Mutex.new
   @@settings = proc { |scope|
-    unless (script = Script.current)
+    unless script = Script.current
       respond '--- error: Settings: unknown calling script'
       next nil
     end
@@ -459,17 +457,17 @@ module Settings
     mutex.synchronize {
       unless settings[script.name] and settings[script.name][scope]
         begin
-          marshal_hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', script.name.encode('UTF-8'), scope.encode('UTF-8'))
+          _hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', script.name.encode('UTF-8'), scope.encode('UTF-8'))
         rescue SQLite3::BusyException
           sleep 0.1
           retry
         end
         settings[script.name] ||= Hash.new
-        if marshal_hash.nil?
+        if _hash.nil?
           settings[script.name][scope] = Hash.new
         else
           begin
-            hash = Marshal.load(marshal_hash)
+            hash = Marshal.load(_hash)
           rescue
             respond "--- Lich: error: #{$!}"
             respond $!.backtrace[0..1]
@@ -685,7 +683,7 @@ require_relative('./lib/script.rb')
 
 class Watchfor
   def initialize(line, theproc = nil, &block)
-    return nil unless (script = Script.current)
+    return nil unless script = Script.current
 
     if line.class == String
       line = Regexp.new(Regexp.escape(line))
@@ -842,8 +840,8 @@ module Buffer
   end
 
   def Buffer.cleanup
-    @@index.delete_if { |k, _v| not Thread.list.any? { |t| t.object_id == k } }
-    @@streams.delete_if { |k, _v| not Thread.list.any? { |t| t.object_id == k } }
+    @@index.delete_if { |k, v| not Thread.list.any? { |t| t.object_id == k } }
+    @@streams.delete_if { |k, v| not Thread.list.any? { |t| t.object_id == k } }
     return self
   end
 end
@@ -939,7 +937,7 @@ class SharedBuffer
   end
 
   def cleanup_threads
-    @buffer_index.delete_if { |k, _v| not Thread.list.any? { |t| t.object_id == k } }
+    @buffer_index.delete_if { |k, v| not Thread.list.any? { |t| t.object_id == k } }
     return self
   end
 end
@@ -1023,7 +1021,6 @@ module Games
     module Game
     end
   end
-
   module Gemstone
     module Game
       @@socket    = nil
@@ -1035,115 +1032,6 @@ module Games
       @@_buffer.max_size = 1000
       @@autostarted = false
       @@cli_scripts = false
-
-      def self.clean_gs_serverstring(server_string)
-        # The Rift, Scatter is broken...
-        if server_string =~ /<compDef id='room text'><\/compDef>/
-          server_string.sub!(/(.*)\s\s<compDef id='room text'><\/compDef>/) { "<compDef id='room desc'>#{$1}</compDef>" }
-        end
-        return server_string
-      end
-
-      @atmospherics = false
-      @combat_count = 0
-      @end_combat_tags = ["<prompt", "<clearStream", "<component", "<pushStream id=\"percWindow"]
-
-      def self.clean_dr_serverstring(server_string)
-        ## Clear out superfluous tags
-        server_string = server_string.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />", "")
-        server_string = server_string.gsub("<popStream id=\"combat\" /><pushStream id=\"combat\" />", "")
-
-        ## Fix combat wrapping components - Why, DR, Why?
-        server_string = server_string.gsub("<pushStream id=\"combat\" /><component id=", "<component id=")
-        # server_string = server_string.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
-
-        ## Fix for nested/non-solo nav tags.
-        ## DR needs the <nav/> tag to be in its own line to properly detect movement
-        ## These two fixes make it so room movement can be detected reliably
-        if server_string =~ /^<nav\/>/
-          unless server_string.chomp == "<nav\/>"
-            Lich.log "NAV tag detected in nested line: #{server_string.inspect}"
-            server_string.gsub!("<nav\/>", "<nav\/>\n").chomp!
-            Lich.log "NAV tag fixed to: #{server_string.inspect}"
-          end
-        end
-
-        if server_string =~ /(?!^)<nav\/>/
-          Lich.log "NAV tag detected not at start of line: #{server_string.inspect}"
-          server_string.gsub!("<nav\/>", "\n<nav\/>").chomp!
-          Lich.log "NAV tag fixed to: #{server_string.inspect}"
-        end
-
-        # Fixes xml with \r\n in the middle of it like:
-        # <component id='room exits'>Obvious paths: clockwise, widdershins.\r\n
-        # <compass></compass></component>\r\n
-        # We close the first line and in the next segment, we remove the trailing bits
-        # Because we can only match line by line, this couldn't be fixed in one matching block...
-        if server_string == "<component id='room exits'>Obvious paths: clockwise, widdershins.\r\n"
-          Lich.log "Unclosed component tag detected: #{server_string.inspect}"
-          server_string = "<component id='room exits'>Obvious paths: <d>clockwise</d>, <d>widdershins</d>.<compass></compass></component>"
-          Lich.log "Unclosed component tag fixed to: #{server_string.inspect}"
-          # retry
-        end
-        # This is an actual DR line "<compass></compass></component>\r\n" which happens when the above is sent... subbing it out since we fix the tag above.
-        if server_string == "<compass></compass></component>\r\n"
-          Lich.log "Extraneous closed tag detected: #{server_string.inspect}"
-          server_string = ""
-          Lich.log "Extraneous closed tag fixed: #{server_string.inspect}"
-        end
-
-        # "<component id='room objs'>  You also see a granite altar with several candles and a water jug on it, and a granite font.\r\n"
-        # "<component id='room extra'>Placed around the interior, you see: some furniture and other bits of interest.\r\n
-        # Followed by in a new line.
-        # "</component>\r\n"
-        if server_string =~ /^<component id='room (?:objs|extra)'>[^<]*(?!<\/component>)\r\n/
-          Lich.log "Open-ended room objects component id tag: #{server_string.inspect}"
-          server_string.gsub!("\r\n", "</component>")
-          Lich.log "Open-ended room objects component id tag fixed to: #{server_string.inspect}"
-        end
-        # "</component>\r\n"
-        if server_string == "</component>\r\n"
-          Lich.log "Extraneous closing tag detected and deleted: #{server_string.inspect}"
-          server_string = ""
-        end
-
-        ## Fix duplicate pushStrings
-        while server_string.include?("<pushStream id=\"combat\" /><pushStream id=\"combat\" />")
-          server_string = server_string.gsub("<pushStream id=\"combat\" /><pushStream id=\"combat\" />", "<pushStream id=\"combat\" />")
-        end
-
-        if @combat_count > 0
-          end_combat_tags.each do |tag|
-            # server_string = "<!-- looking for tag: #{tag}" + server_string
-            if server_string.include?(tag)
-              server_string = server_string.gsub(tag, "<popStream id=\"combat\" />" + tag) unless server_string.include?("<popStream id=\"combat\" />")
-              @combat_count -= 1
-            end
-            if server_string.include?("<pushStream id=\"combat\" />")
-              server_string = server_string.gsub("<pushStream id=\"combat\" />", "")
-            end
-          end
-        end
-
-        @combat_count += server_string.scan("<pushStream id=\"combat\" />").length
-        @combat_count -= server_string.scan("<popStream id=\"combat\" />").length
-        @combat_count = 0 if @combat_count < 0
-
-        if @atmospherics
-          @atmospherics = false
-          server_string.prepend('<popStream id="atmospherics" \/>') unless server_string =~ /<popStream id="atmospherics" \/>/
-        end
-        if server_string =~ /<pushStream id="familiar" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # Cry For Help spell is broken...
-          server_string.sub!('<pushStream id="familiar" />', '')
-        elsif server_string =~ /<pushStream id="atmospherics" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # pet pigs in DragonRealms are broken...
-          server_string.sub!('<pushStream id="atmospherics" />', '')
-        elsif (server_string =~ /<pushStream id="atmospherics" \/>/)
-          @atmospherics = true
-        end
-
-        return server_string
-      end
-
       def Game.open(host, port)
         @@socket = TCPSocket.open(host, port)
         begin
@@ -1156,7 +1044,7 @@ module Games
         @@socket.sync = true
 
         # Add check to determine if the game server hung at initial response
-
+        
         @@wrap_thread = Thread.new {
           @last_recv = Time.now
           while !@@autostarted && (Time.now - @last_recv < 6)
@@ -1169,18 +1057,108 @@ module Games
 
         @@thread = Thread.new {
           begin
-            while ($_SERVERSTRING_ = @@socket.gets)
+            atmospherics = false
+            combat_count = 0
+            end_combat_tags = [ "<prompt", "<clearStream", "<component", "<pushStream id=\"percWindow" ]
+            while $_SERVERSTRING_ = @@socket.gets
               @@last_recv = Time.now
               @@_buffer.update($_SERVERSTRING_) if TESTING
               begin
                 $cmd_prefix = String.new if $_SERVERSTRING_ =~ /^\034GSw/
+                ## Clear out superfluous tags
+                $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />","")
+                $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<popStream id=\"combat\" /><pushStream id=\"combat\" />","")
 
-                if XMLData.game =~ /^GS/
-                  $_SERVERSTRING_ = self.clean_gs_serverstring($_SERVERSTRING_)
-                else
-                  $_SERVERSTRING_ = self.clean_dr_serverstring($_SERVERSTRING_)
+                ## Fix combat wrapping components - Why, DR, Why?
+                $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><component id=","<component id=")
+                # $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
+
+                ## Fix for nested/non-solo nav tags.
+                ## DR needs the <nav/> tag to be in its own line to properly detect movement
+                ## These two fixes make it so room movement can be detected reliably
+                if $_SERVERSTRING_ =~ /^<nav\/>/
+                  unless $_SERVERSTRING_.chomp == "<nav\/>"
+                    Lich.log "NAV tag detected in nested line: #{$_SERVERSTRING_.inspect}"
+                    $_SERVERSTRING_.gsub!("<nav\/>", "<nav\/>\n").chomp!
+                    Lich.log "NAV tag fixed to: #{$_SERVERSTRING_.inspect}"
+                  end
                 end
 
+                if $_SERVERSTRING_ =~ /(?!^)<nav\/>/
+                  Lich.log "NAV tag detected not at start of line: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_.gsub!("<nav\/>", "\n<nav\/>").chomp!
+                  Lich.log "NAV tag fixed to: #{$_SERVERSTRING_.inspect}"
+                end
+
+                # Fixes xml with \r\n in the middle of it like:
+                # <component id='room exits'>Obvious paths: clockwise, widdershins.\r\n
+                # <compass></compass></component>\r\n
+                # We close the first line and in the next segment, we remove the trailing bits
+                # Because we can only match line by line, this couldn't be fixed in one matching block...
+                if $_SERVERSTRING_ == "<component id='room exits'>Obvious paths: clockwise, widdershins.\r\n"
+                  Lich.log "Unclosed component tag detected: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_ = "<component id='room exits'>Obvious paths: <d>clockwise</d>, <d>widdershins</d>.<compass></compass></component>"
+                  Lich.log "Unclosed component tag fixed to: #{$_SERVERSTRING_.inspect}"
+                  # retry
+                end
+                # This is an actual DR line "<compass></compass></component>\r\n" which happens when the above is sent... subbing it out since we fix the tag above.
+                if $_SERVERSTRING_ == "<compass></compass></component>\r\n"
+                  Lich.log "Extraneous closed tag detected: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_ = ""
+                  Lich.log "Extraneous closed tag fixed: #{$_SERVERSTRING_.inspect}"
+                end
+
+                # "<component id='room objs'>  You also see a granite altar with several candles and a water jug on it, and a granite font.\r\n"
+                # "<component id='room extra'>Placed around the interior, you see: some furniture and other bits of interest.\r\n
+                # Followed by in a new line.
+                # "</component>\r\n"
+                if $_SERVERSTRING_ =~ /^<component id='room (?:objs|extra)'>[^<]*(?!<\/component>)\r\n/
+                  Lich.log "Open-ended room objects component id tag: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_.gsub!("\r\n", "</component>")
+                  Lich.log "Open-ended room objects component id tag fixed to: #{$_SERVERSTRING_.inspect}"
+                end
+                # "</component>\r\n"
+                if $_SERVERSTRING_ == "</component>\r\n"
+                  Lich.log "Extraneous closing tag detected and deleted: #{$_SERVERSTRING_.inspect}"
+                  $_SERVERSTRING_ = ""
+                end
+
+                ## Fix duplicate pushStrings
+                while $_SERVERSTRING_.include?("<pushStream id=\"combat\" /><pushStream id=\"combat\" />")
+                  $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" /><pushStream id=\"combat\" />","<pushStream id=\"combat\" />")
+                end
+
+                if combat_count >0
+                  end_combat_tags.each do | tag |
+                    # $_SERVERSTRING_ = "<!-- looking for tag: #{tag}" + $_SERVERSTRING_
+                    if $_SERVERSTRING_.include?(tag)
+                      $_SERVERSTRING_ = $_SERVERSTRING_.gsub(tag,"<popStream id=\"combat\" />" + tag) unless $_SERVERSTRING_.include?("<popStream id=\"combat\" />")
+                      combat_count -= 1
+                    end
+                    if $_SERVERSTRING_.include?("<pushStream id=\"combat\" />")
+                      $_SERVERSTRING_ = $_SERVERSTRING_.gsub("<pushStream id=\"combat\" />","")
+                    end
+                  end
+                end
+
+                combat_count += $_SERVERSTRING_.scan("<pushStream id=\"combat\" />").length
+                combat_count -= $_SERVERSTRING_.scan("<popStream id=\"combat\" />").length
+                combat_count = 0 if combat_count < 0
+                # The Rift, Scatter is broken...
+                if $_SERVERSTRING_ =~ /<compDef id='room text'><\/compDef>/
+                  $_SERVERSTRING_.sub!(/(.*)\s\s<compDef id='room text'><\/compDef>/) { "<compDef id='room desc'>#{$1}</compDef>" }
+                end
+                if atmospherics
+                  atmospherics = false
+                  $_SERVERSTRING.prepend('<popStream id="atmospherics" \/>') unless $_SERVERSTRING =~ /<popStream id="atmospherics" \/>/
+                end
+                if $_SERVERSTRING_ =~ /<pushStream id="familiar" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # Cry For Help spell is broken...
+                  $_SERVERSTRING_.sub!('<pushStream id="familiar" />', '')
+                elsif $_SERVERSTRING_ =~ /<pushStream id="atmospherics" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # pet pigs in DragonRealms are broken...
+                  $_SERVERSTRING_.sub!('<pushStream id="atmospherics" />', '')
+                elsif ($_SERVERSTRING_ =~ /<pushStream id="atmospherics" \/>/)
+                  atmospherics = true
+                end
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
 
                 if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
@@ -1191,7 +1169,7 @@ module Games
                 end
 
                 if @@autostarted and !@@cli_scripts and $_SERVERSTRING_ =~ /roomDesc/
-                  if (arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ })
+                  if arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ }
                     for script_name in arg.sub('--start-scripts=', '').split(',')
                       Script.start(script_name)
                     end
@@ -1199,17 +1177,17 @@ module Games
                   @@cli_scripts = true
                 end
 
-                if (alt_string = DownstreamHook.run($_SERVERSTRING_))
+                if alt_string = DownstreamHook.run($_SERVERSTRING_)
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
                   if (Lich.display_lichid == true or Lich.display_uid == true) and XMLData.game =~ /^GS/ and alt_string =~ /^<resource picture=.*roomName/
                     if (Lich.display_lichid == true and Lich.display_uid == true)
-                      alt_string.sub!(']') { " - #{Map.current.id}] (u#{XMLData.room_id})" }
+                      alt_string.sub!(']') {" - #{Map.current.id}] (u#{XMLData.room_id})"}
                     elsif Lich.display_lichid == true
-                      alt_string.sub!(']') { " - #{Map.current.id}]" }
+                      alt_string.sub!(']') {" - #{Map.current.id}]"}
                     elsif Lich.display_uid == true
-                      alt_string.sub!(']') { "] (u#{XMLData.room_id})" }
+                      alt_string.sub!(']') {"] (u#{XMLData.room_id})"}
+                      end
                     end
-                  end
                   if $frontend =~ /^(?:wizard|avalon)$/
                     alt_string = sf_to_wiz(alt_string)
                   end
@@ -1247,7 +1225,7 @@ module Games
                       # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
                       # From GS
                       # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
-                      while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
+                      while data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/)
                         Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
                         $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
                         Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
@@ -1255,7 +1233,7 @@ module Games
                       end
                       # Fixes invalid XML with nested double quotes in it such as:
                       # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
-                      while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
+                      while data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/)
                         Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
                         $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
                         Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
@@ -1272,18 +1250,12 @@ module Games
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
                     if defined?(Map) and Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
-                      Map.last_seen_objects = $1 # DR only: copy loot line to Map.last_seen_objects
+                      Map.last_seen_objects = $1  # DR only: copy loot line to Map.last_seen_objects
                     end
-
-                    if !line.empty?
-                      if XMLData.game =~ /^GS/
+                    unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
+                      unless line.empty?
                         Infomon::Parser.parse(line.dup)
                         Script.new_downstream(line)
-                      else
-                        unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
-                          Infomon::Parser.parse(line.dup)
-                          Script.new_downstream(line)
-                        end
                       end
                     end
                   }
@@ -1336,7 +1308,7 @@ module Games
 
       def Game.puts(str)
         $_SCRIPTIDLETIMESTAMP_ = Time.now
-        if (script = Script.current)
+        if script = Script.current
           script_name = script.name
         else
           script_name = '(unknown script)'
@@ -1425,7 +1397,7 @@ module Games
         # fixme: multi-spell penalty?
         total = num_active = 0
         [1003, 1006, 1009, 1010, 1012, 1014, 1018, 1019, 1025].each { |song_num|
-          if (song = Spell[song_num])
+          if song = Spell[song_num]
             if song.active?
               total += song.renew_cost
               num_active += 1
@@ -1474,7 +1446,7 @@ module Games
       def Spellsong.holdingtargets
         1 + ((Spells.bard - 1) / 7).truncate
       end
-
+      
       def Spellsong.cost
         Spellsong.renew_cost
       end
@@ -1561,7 +1533,7 @@ module Games
     require_relative("./lib/attributes/society.rb")
     require_relative("./lib/infomon/status.rb")
     require_relative("./lib/experience.rb")
-    # require_relative("./lib/infomon/activespell.rb")
+    #require_relative("./lib/infomon/activespell.rb")
     # PSMS (armor, cman, feat, shield, weapon) have moved
     # to ./lib/psms and are now called by psms.rb
     require_relative("./lib/psms.rb")
@@ -1647,8 +1619,8 @@ module Games
         circle = nil
         [Effects::Spells, Effects::Cooldowns, Effects::Buffs, Effects::Debuffs].each { |effect|
           title = titles.shift
-          id_effects = effect.to_h.select { |k, _v| k.is_a?(Integer) }
-          text_effects = effect.to_h.reject { |k, _v| k.is_a?(Integer) }
+          id_effects = effect.to_h.select { |k,v| k.is_a?(Integer) }
+          text_effects = effect.to_h.reject { |k,v| k.is_a?(Integer) }
           if id_effects.length != text_effects.length
             # has spell names disabled
             text_effects = id_effects
@@ -1746,7 +1718,7 @@ module Games
         [XMLData.injuries['rightEye']['wound'], XMLData.injuries['leftEye']['wound'], XMLData.injuries['chest']['wound'], XMLData.injuries['abdomen']['wound'], XMLData.injuries['back']['wound']].max
       end
 
-      def Wounds.method_missing(_arg = nil)
+      def Wounds.method_missing(arg = nil)
         echo "Wounds: Invalid area, try one of these: arms, limbs, torso, #{XMLData.injuries.keys.join(', ')}"
         nil
       end
@@ -1820,13 +1792,12 @@ module Games
         [XMLData.injuries['rightEye']['scar'], XMLData.injuries['leftEye']['scar'], XMLData.injuries['chest']['scar'], XMLData.injuries['abdomen']['scar'], XMLData.injuries['back']['scar']].max
       end
 
-      def Scars.method_missing(_arg = nil)
+      def Scars.method_missing(arg = nil)
         echo "Scars: Invalid area, try one of these: arms, limbs, torso, #{XMLData.injuries.keys.join(', ')}"
         nil
       end
     end
   end
-
   module DragonRealms
     # fixme
   end
@@ -1838,66 +1809,66 @@ JUMP = Exception.exception('JUMP')
 JUMP_ERROR = Exception.exception('JUMP_ERROR')
 
 DIRMAP = {
-  'out'  => 'K',
-  'ne'   => 'B',
-  'se'   => 'D',
-  'sw'   => 'F',
-  'nw'   => 'H',
-  'up'   => 'I',
+  'out' => 'K',
+  'ne' => 'B',
+  'se' => 'D',
+  'sw' => 'F',
+  'nw' => 'H',
+  'up' => 'I',
   'down' => 'J',
-  'n'    => 'A',
-  'e'    => 'C',
-  's'    => 'E',
-  'w'    => 'G',
+  'n' => 'A',
+  'e' => 'C',
+  's' => 'E',
+  'w' => 'G',
 }
 SHORTDIR = {
-  'out'       => 'out',
+  'out' => 'out',
   'northeast' => 'ne',
   'southeast' => 'se',
   'southwest' => 'sw',
   'northwest' => 'nw',
-  'up'        => 'up',
-  'down'      => 'down',
-  'north'     => 'n',
-  'east'      => 'e',
-  'south'     => 's',
-  'west'      => 'w',
+  'up' => 'up',
+  'down' => 'down',
+  'north' => 'n',
+  'east' => 'e',
+  'south' => 's',
+  'west' => 'w',
 }
 LONGDIR = {
-  'out'  => 'out',
-  'ne'   => 'northeast',
-  'se'   => 'southeast',
-  'sw'   => 'southwest',
-  'nw'   => 'northwest',
-  'up'   => 'up',
+  'out' => 'out',
+  'ne' => 'northeast',
+  'se' => 'southeast',
+  'sw' => 'southwest',
+  'nw' => 'northwest',
+  'up' => 'up',
   'down' => 'down',
-  'n'    => 'north',
-  'e'    => 'east',
-  's'    => 'south',
-  'w'    => 'west',
+  'n' => 'north',
+  'e' => 'east',
+  's' => 'south',
+  'w' => 'west',
 }
 MINDMAP = {
   'clear as a bell' => 'A',
   'fresh and clear' => 'B',
-  'clear'           => 'C',
-  'muddled'         => 'D',
+  'clear' => 'C',
+  'muddled' => 'D',
   'becoming numbed' => 'E',
-  'numbed'          => 'F',
-  'must rest'       => 'G',
-  'saturated'       => 'H',
+  'numbed' => 'F',
+  'must rest' => 'G',
+  'saturated' => 'H',
 }
 ICONMAP = {
-  'IconKNEELING'  => 'GH',
-  'IconPRONE'     => 'G',
-  'IconSITTING'   => 'H',
-  'IconSTANDING'  => 'T',
-  'IconSTUNNED'   => 'I',
-  'IconHIDDEN'    => 'N',
+  'IconKNEELING' => 'GH',
+  'IconPRONE' => 'G',
+  'IconSITTING' => 'H',
+  'IconSTANDING' => 'T',
+  'IconSTUNNED' => 'I',
+  'IconHIDDEN' => 'N',
   'IconINVISIBLE' => 'D',
-  'IconDEAD'      => 'B',
-  'IconWEBBED'    => 'C',
-  'IconJOINED'    => 'P',
-  'IconBLEEDING'  => 'O',
+  'IconDEAD' => 'B',
+  'IconWEBBED' => 'C',
+  'IconJOINED' => 'P',
+  'IconBLEEDING' => 'O',
 }
 
 XMLData = XMLParser.new
@@ -1905,7 +1876,7 @@ require_relative("./lib/infomon/activespell.rb")
 
 reconnect_if_wanted = proc {
   if ARGV.include?('--reconnect') and ARGV.include?('--login') and not $_CLIENTBUFFER_.any? { |cmd| cmd =~ /^(?:\[.*?\])?(?:<c>)?(?:quit|exit)/i }
-    if (reconnect_arg = ARGV.find { |arg| arg =~ /^\-\-reconnect\-delay=[0-9]+(?:\+[0-9]+)?$/ })
+    if reconnect_arg = ARGV.find { |arg| arg =~ /^\-\-reconnect\-delay=[0-9]+(?:\+[0-9]+)?$/ }
       reconnect_arg =~ /^\-\-reconnect\-delay=([0-9]+)(\+[0-9]+)?/
       reconnect_delay = $1.to_i
       reconnect_step = $2.to_i
@@ -2142,15 +2113,15 @@ module UserVars
     Vars.method_missing(arg1, arg2)
   end
 
-  def UserVars.change(var_name, value, _t = nil)
+  def UserVars.change(var_name, value, t = nil)
     Vars[var_name] = value
   end
 
-  def UserVars.add(var_name, value, _t = nil)
+  def UserVars.add(var_name, value, t = nil)
     Vars[var_name] = Vars[var_name].split(', ').push(value).join(', ')
   end
 
-  def UserVars.delete(var_name, _t = nil)
+  def UserVars.delete(var_name, t = nil)
     Vars[var_name] = nil
   end
 
@@ -2176,11 +2147,10 @@ module Setting
     Settings[name] = value
   end
 
-  def Setting.to_hash(_scope = ':')
+  def Setting.to_hash(scope = ':')
     Settings.to_hash
   end
 end
-
 module GameSetting
   def GameSetting.[](name)
     GameSettings[name]
@@ -2190,11 +2160,10 @@ module GameSetting
     GameSettings[name] = value
   end
 
-  def GameSetting.to_hash(_scope = ':')
+  def GameSetting.to_hash(scope = ':')
     GameSettings.to_hash
   end
 end
-
 module CharSetting
   def CharSetting.[](name)
     CharSettings[name]
@@ -2204,17 +2173,15 @@ module CharSetting
     CharSettings[name] = value
   end
 
-  def CharSetting.to_hash(_scope = ':')
+  def CharSetting.to_hash(scope = ':')
     CharSettings.to_hash
   end
 end
-
 class StringProc
   def StringProc._load(string)
     StringProc.new(string)
   end
 end
-
 class String
   def to_a # for compatibility with Ruby 1.8
     [self]
@@ -2470,7 +2437,7 @@ for arg in ARGV
   end
 end
 
-if (arg = ARGV.find { |a| a == '--hosts-dir' })
+if arg = ARGV.find { |a| a == '--hosts-dir' }
   i = ARGV.index(arg)
   ARGV.delete_at(i)
   hosts_dir = ARGV[i]
@@ -2488,9 +2455,9 @@ end
 
 detachable_client_host = '127.0.0.1'
 detachable_client_port = nil
-if (arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=[0-9]+$/ })
+if arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=[0-9]+$/ }
   detachable_client_port = /^\-\-detachable\-client=([0-9]+)$/.match(arg).captures.first
-elsif (arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/ })
+elsif arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/ }
   detachable_client_host, detachable_client_port = /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/.match(arg).captures
 end
 
@@ -2502,7 +2469,7 @@ if argv_options[:sal]
   end
   Lich.log "info: launch file: #{argv_options[:sal]}"
   if argv_options[:sal] =~ /SGE\.sal/i
-    unless (launcher_cmd = Lich.get_simu_launcher)
+    unless launcher_cmd = Lich.get_simu_launcher
       $stdout.puts 'error: failed to find the Simutronics launcher'
       Lich.log 'error: failed to find the Simutronics launcher'
       exit
@@ -2528,7 +2495,7 @@ if argv_options[:sal]
   end
 end
 
-if (arg = ARGV.find { |a| (a == '-g') or (a == '--game') })
+if arg = ARGV.find { |a| (a == '-g') or (a == '--game') }
   game_host, game_port = ARGV[ARGV.index(arg) + 1].split(':')
   game_port = game_port.to_i
   if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
@@ -2610,10 +2577,10 @@ elsif ARGV.include?('--dragonrealms')
   if ARGV.include?('--platinum')
     $platinum = true
     if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-      $frontend = 'stormfront'
       $stdout.puts "fixme"
       Lich.log "fixme"
       exit
+      $frontend = 'stormfront'
     elsif ARGV.grep(/--genie/).any?
       game_host = 'dr.simutronics.net'
       game_port = 11124
@@ -2623,10 +2590,10 @@ elsif ARGV.include?('--dragonrealms')
       game_port = 11124
       $frontend = 'frostbite'
     else
-      $frontend = 'wizard'
       $stdout.puts "fixme"
       Lich.log "fixme"
       exit
+      $frontend = 'wizard'
     end
   else
     $platinum = false
@@ -2669,9 +2636,9 @@ main_thread = Thread.new {
 
   if ARGV.include?('--login')
     if File.exist?("#{DATA_DIR}/entry.dat")
-      entry_data = File.open("#{DATA_DIR}/entry.dat", 'r') { |blob|
+      entry_data = File.open("#{DATA_DIR}/entry.dat", 'r') { |file|
         begin
-          Marshal.load(blob.read.unpack('m').first)
+          Marshal.load(file.read.unpack('m').first)
         rescue
           Array.new
         end
@@ -2776,7 +2743,7 @@ main_thread = Thread.new {
 
   if argv_options[:sal]
     begin
-      @launch_data = File.open(argv_options[:sal]) { |sal_file| sal_file.readlines }.collect { |line| line.chomp }
+      @launch_data = File.open(argv_options[:sal]) { |file| file.readlines }.collect { |line| line.chomp }
     rescue
       $stdout.puts "error: failed to read launch_file: #{$!}"
       Lich.log "info: launch_file: #{argv_options[:sal]}"
@@ -2791,27 +2758,27 @@ main_thread = Thread.new {
     else
       gamecodeshort = "GS"
     end
-    unless (gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ })
+    unless gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ }
       $stdout.puts "error: launch_data contains no GAMECODE info"
       Lich.log "error: launch_data contains no GAMECODE info"
       exit(1)
     end
-    unless (gameport = @launch_data.find { |line| line =~ /GAMEPORT=/ })
+    unless gameport = @launch_data.find { |line| line =~ /GAMEPORT=/ }
       $stdout.puts "error: launch_data contains no GAMEPORT info"
       Lich.log "error: launch_data contains no GAMEPORT info"
       exit(1)
     end
-    unless (gamehost = @launch_data.find { |opt| opt =~ /GAMEHOST=/ })
+    unless gamehost = @launch_data.find { |opt| opt =~ /GAMEHOST=/ }
       $stdout.puts "error: launch_data contains no GAMEHOST info"
       Lich.log "error: launch_data contains no GAMEHOST info"
       exit(1)
     end
-    unless (game = @launch_data.find { |opt| opt =~ /GAME=/ })
+    unless game = @launch_data.find { |opt| opt =~ /GAME=/ }
       $stdout.puts "error: launch_data contains no GAME info"
       Lich.log "error: launch_data contains no GAME info"
       exit(1)
     end
-    if (custom_launch = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCH=/ })
+    if custom_launch = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCH=/ }
       custom_launch.sub!(/^.*?\=/, '')
       Lich.log "info: using custom launch command: #{custom_launch}"
     elsif (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
@@ -2831,7 +2798,7 @@ main_thread = Thread.new {
         custom_launch = "Stormfront.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
       end
     end
-    if (custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ })
+    if custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ }
       custom_launch_dir.sub!(/^.*?\=/, '')
       Lich.log "info: using working directory for custom launch command: #{custom_launch_dir}"
     elsif (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
@@ -2877,7 +2844,7 @@ main_thread = Thread.new {
         exit(1)
       end
     else
-      unless (launcher_cmd = Lich.get_simu_launcher)
+      unless launcher_cmd = Lich.get_simu_launcher
         $stdout.puts 'error: failed to find the Simutronics launcher'
         Lich.log 'error: failed to find the Simutronics launcher'
         exit(1)
@@ -3221,7 +3188,7 @@ main_thread = Thread.new {
         #
         # set up some stuff
         #
-        for client_string in ["#{$cmd_prefix}_injury 2", "#{$cmd_prefix}_flag Display Inventory Boxes 1", "#{$cmd_prefix}_flag Display Dialog Boxes 0"]
+        for client_string in [ "#{$cmd_prefix}_injury 2", "#{$cmd_prefix}_flag Display Inventory Boxes 1", "#{$cmd_prefix}_flag Display Dialog Boxes 0" ]
           $_CLIENTBUFFER_.push(client_string)
           Game._puts(client_string)
         end
@@ -3280,13 +3247,13 @@ main_thread = Thread.new {
       end
 
       begin
-        while (client_string = $_CLIENT_.gets)
+        while client_string = $_CLIENT_.gets
           if $frontend =~ /^(?:wizard|avalon)$/
             client_string = "#{$cmd_prefix}#{client_string}"
           elsif $frontend =~ /^(?:frostbite)$/
             client_string = fb_to_sf(client_string)
           end
-          # Lich.log(client_string)
+          #Lich.log(client_string)
           begin
             $_IDLETIMESTAMP_ = Time.now
             do_client(client_string)
@@ -3312,7 +3279,7 @@ main_thread = Thread.new {
       loop {
         begin
           server = TCPServer.new(detachable_client_host, detachable_client_port)
-          char_name = ARGV[ARGV.index('--login') + 1].capitalize
+          char_name = ARGV[ARGV.index('--login')+1].capitalize
           Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
 
           $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(server.accept)
@@ -3357,7 +3324,7 @@ main_thread = Thread.new {
                 init_str.concat '<compass>'
                 shorten_dir = { 'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se', 'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw', 'up' => 'up', 'down' => 'down', 'out' => 'out' }
                 for dir in XMLData.room_exits
-                  if (short_dir = shorten_dir[dir])
+                  if short_dir = shorten_dir[dir]
                     init_str.concat "<dir value='#{short_dir}'/>"
                   end
                 end
@@ -3366,7 +3333,7 @@ main_thread = Thread.new {
                 init_str = nil
               }
             end
-            while (client_string = $_DETACHABLE_CLIENT_.gets)
+            while client_string = $_DETACHABLE_CLIENT_.gets
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
               begin
                 $_IDLETIMESTAMP_ = Time.now
@@ -3407,7 +3374,7 @@ main_thread = Thread.new {
   client_thread.priority = 3
 
   $_CLIENT_.puts "\n--- Lich v#{LICH_VERSION} is active.  Type #{$clean_lich_char}help for usage info.\n\n"
-
+  
   Game.thread.join
   client_thread.kill rescue nil
   detachable_client_thread.kill rescue nil
@@ -3441,3 +3408,5 @@ else
   main_thread.join
 end
 exit
+
+# Webhook Test No.2
