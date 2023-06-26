@@ -38,14 +38,11 @@ module Status
   end
 
   def self.muckled?
-    muckled = Status.webbed? || Status.dead? || Status.stunned?
-    muckled = muckled || Status.bound? || Status.sleeping?
-    return muckled
+    return Status.webbed? || Status.dead? || Status.stunned? || Status.bound? || Status.sleeping?
   end
 
   # todo: does this serve a purpose?
   def self.serialize
-    [self.bound?, self.calmed?, self.cutthroat?,
-     self.silenced?, self.sleeping?]
+    [self.bound?, self.calmed?, self.cutthroat?, self.silenced?, self.sleeping?]
   end
 end
