@@ -1113,7 +1113,7 @@ module Games
         end
 
         if @combat_count > 0
-          end_combat_tags.each do |tag|
+          @end_combat_tags.each do |tag|
             # server_string = "<!-- looking for tag: #{tag}" + server_string
             if server_string.include?(tag)
               server_string = server_string.gsub(tag, "<popStream id=\"combat\" />" + tag) unless server_string.include?("<popStream id=\"combat\" />")
