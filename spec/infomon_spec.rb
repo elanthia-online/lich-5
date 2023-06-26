@@ -574,7 +574,7 @@ describe Infomon::Parser, ".parse" do
       }
       XMLData.save_dialogs("Debuffs", { 'Silenced' => true }) # to test if Effects has this key
       expect(Status.silenced?).to be(true)
-      expect(Status.muckled?).to be(true)
+      expect(Status.muckled?).to be(false)
     end
 
     it "handles silenced? boolean false" do
@@ -597,7 +597,7 @@ describe Infomon::Parser, ".parse" do
       }
       XMLData.save_dialogs("Debuffs", { 'Calm' => true }) # to test if Effects has this key
       expect(Status.calmed?).to be(true)
-      expect(Status.muckled?).to be(true)
+      expect(Status.muckled?).to be(false)
     end
 
     it "handles calmed? boolean false" do
@@ -622,7 +622,7 @@ describe Infomon::Parser, ".parse" do
       }
       XMLData.save_dialogs("Debuffs", { 'Major Bleed' => true }) # to test if Effects has this key
       expect(Status.cutthroat?).to be(true)
-      expect(Status.muckled?).to be(true)
+      expect(Status.muckled?).to be(false)
     end
 
     it "handles cutthroat? boolean false" do

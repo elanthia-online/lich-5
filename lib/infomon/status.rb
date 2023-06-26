@@ -39,9 +39,7 @@ module Status
 
   def self.muckled?
     muckled = Status.webbed? || Status.dead? || Status.stunned?
-    muckled = muckled || Status.silenced? || Status.sleeping?
-    muckled = muckled || Status.cutthroat? || Status.calmed?
-    muckled = muckled || Status.bound?
+    muckled = muckled || Status.bound? || Status.sleeping?
     return muckled
   end
 
