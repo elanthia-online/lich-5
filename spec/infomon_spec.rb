@@ -33,6 +33,7 @@ require "infomon/infomon"
 require "attributes/stats"
 require "infomon/status"
 require "experience"
+require "psms"
 module Infomon
   # cheat definition of `respond` to prevent having to load global_defs with dependenciesw
   def self.respond(msg)
@@ -41,6 +42,7 @@ module Infomon
 end
 
 module XMLData
+  @dialogs = {}
   def self.game
     "rspec"
   end
@@ -55,6 +57,37 @@ module XMLData
       'IconDEAD'    => 'n',
       'IconWEBBED'  => false }
   end
+
+  def self.save_dialogs(kind, attributes)
+    # shimming together response for testing status checks
+    @dialogs[kind] ||= {}
+    return @dialogs[kind] = attributes
+  end
+
+  def self.dialogs
+    @dialogs ||= {}
+  end
+end
+
+# stub in Effects module for testing - not suitable for testing Effects itself
+module Effects
+  class Registry
+    include Enumerable
+
+    def initialize(dialog)
+      @dialog = dialog
+    end
+
+    def to_h
+      XMLData.dialogs.fetch(@dialog, {})
+    end
+
+    def each()
+      to_h.each { |k, v| yield(k, v) }
+    end
+  end
+
+  Debuffs = Registry.new("Debuffs")
 end
 
 describe Infomon, ".setup!" do
@@ -98,9 +131,9 @@ describe Infomon::Parser, ".parse" do
 
   context "stats" do
     it "handles stats" do
-      test_stats = <<-Stuffed
-Name: testing Race: Half-Krolvin  Profession: Monk (not shown)
-Gender: Male    Age: 0    Expr: 167,500    Level:  12
+      test_stats = <<~Stuffed
+        Name: testing Race: Half-Krolvin  Profession: Monk (not shown)
+        Gender: Male    Age: 0    Expr: 167,500    Level:  12
               Strength (STR):   110 (30)    ...  110 (30)
           Constitution (CON):   104 (22)    ...  104 (22)
              Dexterity (DEX):   100 (35)    ...  100 (35)
@@ -111,8 +144,8 @@ Gender: Male    Age: 0    Expr: 167,500    Level:  12
              Intuition (INT):    99 (29)    ...   99 (29)
                 Wisdom (WIS):    84 (22)    ...   84 (22)
              Influence (INF):   100 (20)    ...  108 (24)
-Mana:  415   Silver: 0
-Stuffed
+        Mana:  415   Silver: 0
+      Stuffed
       test_stats.split("\n").each { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("stat.aura")).to eq(100)
@@ -178,24 +211,24 @@ Stuffed
 
   context "psm" do
     it "handles shield info" do
-      output = <<-Shield
-testing, the following Shield Specializations are available:
+      output = <<~Shield
+        testing, the following Shield Specializations are available:
 
-          Skill                Mnemonic        Ranks Type           Category        Subcategory
-          -------------------------------------------------------------------------------------
-          Deflect the Elements deflectelements 1/3   Passive
-          Shield Bash          bash            4/5   Setup
-          Shield Forward       forward         3/3   Passive
-          Shield Spike Mastery spikemastery    2/2   Passive
-          Shield Swiftness     swiftness       3/3   Passive
-          Shield Throw         throw           5/5   Area of Effect
-          Small Shield Focus   sfocus          5/5   Passive
+            Skill                Mnemonic        Ranks Type           Category        Subcategory
+            -------------------------------------------------------------------------------------
+            Deflect the Elements deflectelements 1/3   Passive
+            Shield Bash          bash            4/5   Setup
+            Shield Forward       forward         3/3   Passive
+            Shield Spike Mastery spikemastery    2/2   Passive
+            Shield Swiftness     swiftness       3/3   Passive
+            Shield Throw         throw           5/5   Area of Effect
+            Small Shield Focus   sfocus          5/5   Passive
         The output listed above was generated based on the following filters:
-          Availability: profession
+            Availability: profession
                   Type: all
               Category: all
-   Subcategory: all
-Shield
+           Subcategory: all
+        Shield
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
       expect(Infomon.get("psm.bash")).to eq(4)
@@ -203,42 +236,42 @@ Shield
     end
 
     it "handles cman info" do
-      output = <<-Cman
-testing, the following Combat Maneuvers are available:
+      output = <<~Cman
+        testing, the following Combat Maneuvers are available:
 
-                  Skill                Mnemonic        Ranks Type           Category        Subcategory
-                  -------------------------------------------------------------------------------------
-                  Cheapshots           cheapshots      6/6   Setup          Rogue Guild
-                  Combat Mobility      mobility        1/1   Passive
-                  Combat Toughness     toughness       3/3   Passive
-                  Cutthroat            cutthroat       3/5   Setup
-                  Divert               divert          6/6   Setup          Rogue Guild
-                  Duck and Weave       duckandweave    3/3   Martial Stance
-                  Evade Specialization evadespec       3/3   Passive
-                  Eviscerate           eviscerate      4/5   Area of Effect
-                  Eyepoke              eyepoke         6/6   Setup          Rogue Guild
-                  Footstomp            footstomp       6/6   Setup          Rogue Guild
-                  Hamstring            hamstring       3/5   Setup
-                  Kneebash             kneebash        6/6   Setup          Rogue Guild
-                  Mug                  mug             1/5   Attack
-                  Nosetweak            nosetweak       6/6   Setup          Rogue Guild
-                  Predator's Eye       predator        3/3   Martial Stance
-                  Spike Focus          spikefocus      2/2   Passive
-                  Stun Maneuvers       stunman         6/6   Buff           Rogue Guild
-                  Subdue               subdue          6/6   Setup          Rogue Guild
-                  Sweep                sweep           6/6   Setup          Rogue Guild
-                  Swiftkick            swiftkick       6/6   Setup          Rogue Guild
-                  Templeshot           templeshot      6/6   Setup          Rogue Guild
-                  Throatchop           throatchop      6/6   Setup          Rogue Guild
-                  Weapon Specializatio wspec           5/5   Passive
-                  Whirling Dervish     dervish         3/3   Martial Stance
+              Skill                Mnemonic        Ranks Type           Category        Subcategory
+              -------------------------------------------------------------------------------------
+              Cheapshots           cheapshots      6/6   Setup          Rogue Guild
+              Combat Mobility      mobility        1/1   Passive
+              Combat Toughness     toughness       3/3   Passive
+              Cutthroat            cutthroat       3/5   Setup
+              Divert               divert          6/6   Setup          Rogue Guild
+              Duck and Weave       duckandweave    3/3   Martial Stance
+              Evade Specialization evadespec       3/3   Passive
+              Eviscerate           eviscerate      4/5   Area of Effect
+              Eyepoke              eyepoke         6/6   Setup          Rogue Guild
+              Footstomp            footstomp       6/6   Setup          Rogue Guild
+              Hamstring            hamstring       3/5   Setup
+              Kneebash             kneebash        6/6   Setup          Rogue Guild
+              Mug                  mug             1/5   Attack
+              Nosetweak            nosetweak       6/6   Setup          Rogue Guild
+              Predator's Eye       predator        3/3   Martial Stance
+              Spike Focus          spikefocus      2/2   Passive
+              Stun Maneuvers       stunman         6/6   Buff           Rogue Guild
+              Subdue               subdue          6/6   Setup          Rogue Guild
+              Sweep                sweep           6/6   Setup          Rogue Guild
+              Swiftkick            swiftkick       6/6   Setup          Rogue Guild
+              Templeshot           templeshot      6/6   Setup          Rogue Guild
+              Throatchop           throatchop      6/6   Setup          Rogue Guild
+              Weapon Specializatio wspec           5/5   Passive
+              Whirling Dervish     dervish         3/3   Martial Stance
 
-                The output listed above was generated based on the following filters:
-                  Availability: profession
-                          Type: all
-                      Category: all
-   Subcategory: all
-Cman
+        The output listed above was generated based on the following filters:
+          Availability: profession
+                  Type: all
+              Category: all
+           Subcategory: all
+        Cman
 
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
@@ -247,98 +280,134 @@ Cman
     end
 
     it "handles armor info" do
-      output = <<-Armor
-testing, the following Armor Specializations are available:
+      output = <<~Armor
+        testing, the following Armor Specializations are available:
 
-        Skill                Mnemonic        Ranks Type           Category        Subcategory
-        -------------------------------------------------------------------------------------
-        Armor Blessing       blessing        1/5   Buff
-        Armor Reinforcement  reinforcement   2/5   Buff
-        Armor Spike Mastery  spikemastery    2/2   Passive
-        Armor Support        support         3/5   Buff
-        Armored Casting      casting         4/5   Buff
-        Armored Evasion      evasion         5/5   Buff
-        Armored Fluidity     fluidity        4/5   Buff
-        Armored Stealth      stealth         3/5   Buff
-        Crush Protection     crush           2/5   Passive
-        Puncture Protection  puncture        1/5   Passive
-        Slash Protection     slash           0/5   Passive
-      The output listed above was generated based on the following filters:
-        Availability: profession
-                Type: all
-            Category: all
-   Subcategory: all
-Armor
-
+          Skill                Mnemonic        Ranks Type           Category        Subcategory
+          -------------------------------------------------------------------------------------
+          Armor Blessing       blessing        1/5   Buff
+          Armor Reinforcement  reinforcement   2/5   Buff
+          Armor Spike Mastery  spikemastery    2/2   Passive
+          Armor Support        support         3/5   Buff
+          Armored Casting      casting         4/5   Buff
+          Armored Evasion      evasion         5/5   Buff
+          Armored Fluidity     fluidity        4/5   Buff
+          Armored Stealth      stealth         3/5   Buff
+          Crush Protection     crush           2/5   Passive
+          Puncture Protection  puncture        1/5   Passive
+          Slash Protection     slash           0/5   Passive
+        The output listed above was generated based on the following filters:
+          Availability: profession
+                  Type: all
+              Category: all
+           Subcategory: all
+        Armor
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
-
       expect(Infomon.get("psm.support")).to eq(3)
       expect(Infomon.get("psm.crush")).to eq(2)
     end
 
     it "handles weapon info" do
-      output = <<-Weapon
-testing, the following Weapon Techniques are available:
+      output = <<~Weapon
+        testing, the following Weapon Techniques are available:
 
-      Skill                Mnemonic        Ranks Type           Category        Subcategory
-      -------------------------------------------------------------------------------------
-        Cripple              cripple         5/5   Setup          Edged Weapons
-        Flurry               flurry          5/5   Assault        Edged Weapons
-        Riposte              riposte         5/5   Reaction       Edged Weapons
-        Whirling Blade       wblade          5/5   Area of Effect Edged Weapons
-      The output listed above was generated based on the following filters:
-       Availability: profession
-                Type: all
-            Category: all
-   Subcategory: all
-Weapon
-
+          Skill                Mnemonic        Ranks Type           Category        Subcategory
+          -------------------------------------------------------------------------------------
+            Cripple              cripple         5/5   Setup          Edged Weapons
+            Flurry               flurry          5/5   Assault        Edged Weapons
+            Riposte              riposte         5/5   Reaction       Edged Weapons
+            Whirling Blade       wblade          5/5   Area of Effect Edged Weapons
+        The output listed above was generated based on the following filters:
+          Availability: profession
+                  Type: all
+              Category: all
+           Subcategory: all
+        Weapon
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
-
       expect(Infomon.get("psm.flurry")).to eq(5)
       expect(Infomon.get("psm.riposte")).to eq(5)
     end
 
     it "handles feat info" do
-      output = <<-Feat
-testing, the following Feats are available:
+      output = <<~Feat
+        testing, the following Feats are available:
 
-        Skill                Mnemonic        Ranks Type           Category        Subcategory
-        -------------------------------------------------------------------------------------
-        Light Armor Proficie lightarmor      1/1   Passive
-        Martial Mastery      martialmastery  1/1   Passive
-        Scale Armor Proficie scalearmor      1/1   Passive
-        Shadow Dance         shadowdance     1/1   Buff
-        Silent Strike        silentstrike    5/5   Attack
-        Vanish               vanish          1/1   Buff
-      The output listed above was generated based on the following filters:
-        Availability: profession
-                Type: all
-            Category: all
-   Subcategory: all
-Feat
-
+          Skill                Mnemonic        Ranks Type           Category        Subcategory
+          -------------------------------------------------------------------------------------
+          Light Armor Proficie lightarmor      1/1   Passive
+          Martial Mastery      martialmastery  1/1   Passive
+          Scale Armor Proficie scalearmor      1/1   Passive
+          Shadow Dance         shadowdance     1/1   Buff
+          Silent Strike        silentstrike    5/5   Attack
+          Vanish               vanish          1/1   Buff
+        The output listed above was generated based on the following filters:
+          Availability: profession
+                  Type: all
+              Category: all
+           Subcategory: all
+        Feat
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
-
       expect(Infomon.get("psm.martialmastery")).to eq(1)
       expect(Infomon.get("psm.silentstrike")).to eq(5)
+    end
+
+    it "handles Learning a new PSM" do
+      # Check LearnPSM
+      Infomon.set('psm.krynch', 1)
+      Infomon.set('psm.vaultkick', 0)
+      # Check LearnTechnique
+      Infomon.set('psm.perfectself', 0)
+      Infomon.set('psm.pin', 2)
+      output = <<~Learning
+        You have now achieved rank 2 of Rolling Krynch Stance, costing 6 Combat Maneuver points.
+        You have now achieved rank 1 of Vault Kick, costing 2 Combat Maneuver points.
+        [You have gained rank 1 of Feat: Perfect Self.]
+        [You have increased to rank 3 of Shield Specialization: Pin.]
+      Learning
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+      expect(Infomon.get("psm.krynch")).to eq(2)
+      expect(Infomon.get("psm.vaultkick")).to eq(1)
+      expect(Infomon.get("psm.perfectself")).to eq(1)
+      expect(Infomon.get("psm.pin")).to eq(3)
+    end
+
+    it "handles Unlearning an existing PSM" do
+      # Check UnlearnPSM
+      Infomon.set('psm.krynch', 1)
+      Infomon.set('psm.vaultkick', 5)
+      # Check UnlearnTechnique
+      Infomon.set('psm.stealth', 2)
+      Infomon.set('psm.pin', 2)
+      # Check LostTechnique
+      Infomon.set("psm.fury", 1)
+      output = <<~Unlearnings
+        You decide to unlearn rank 5 of Vault Kick, regaining 20 Combat Maneuver points.
+        You decide to unlearn rank 1 of Rolling Krynch Stance, regaining 2 Combat Maneuver points.
+        [You have decreased to rank 1 of Armor Specialization: Armored Stealth.]
+        [You have decreased to rank 1 of Shield Specialization: Pin.]
+        [You are no longer trained in Weapon Technique: Fury.]
+      Unlearnings
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+      expect(Infomon.get("psm.krynch")).to eq(0)
+      expect(Infomon.get('psm.vaultkick')).to eq(4)
+      expect(Infomon.get("psm.stealth")).to eq(1)
+      expect(Infomon.get("psm.pin")).to eq(1)
+      expect(Infomon.get("psm.fury")).to eq(0)
     end
   end
 
   context "warcry" do
     it "handles warcry info" do
-      output = <<-Warcry
-You have learned the following War Cries:
-     Bertrandt's Bellow
-     Yertie's Yowlp
-     Gerrelle's Growl
-     Seanette's Shout
-     Carn's Cry
-     Horland's Holler
-Warcry
-
+      output = <<~Warcry
+        You have learned the following War Cries:
+            Bertrandt's Bellow
+            Yertie's Yowlp
+            Gerrelle's Growl
+            Seanette's Shout
+            Carn's Cry
+            Horland's Holler
+        Warcry
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
-
       expect(Infomon.get("psm.cry")).to eq(1)
       expect(Infomon.get("psm.yowlp")).to eq(1)
     end
@@ -452,6 +521,7 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      XMLData.save_dialogs("Debuffs", { 'Sleep' => true }) # to test if Effects has this key
       expect(Status.sleeping?).to be(true)
       expect(Status.muckled?).to be(true) # discount IconMAP presently - future update
     end
@@ -477,6 +547,7 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      XMLData.save_dialogs("Debuffs", { 'Bind' => true }) # to test if Effects has this key
       expect(Status.bound?).to be(true)
       expect(Status.muckled?).to be(true)
     end
@@ -501,6 +572,7 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      XMLData.save_dialogs("Debuffs", { 'Silenced' => true }) # to test if Effects has this key
       expect(Status.silenced?).to be(true)
       expect(Status.muckled?).to be(true)
     end
@@ -523,6 +595,7 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      XMLData.save_dialogs("Debuffs", { 'Calm' => true }) # to test if Effects has this key
       expect(Status.calmed?).to be(true)
       expect(Status.muckled?).to be(true)
     end
@@ -547,6 +620,7 @@ Warcry
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
+      XMLData.save_dialogs("Debuffs", { 'Major Bleed' => true }) # to test if Effects has this key
       expect(Status.cutthroat?).to be(true)
       expect(Status.muckled?).to be(true)
     end
@@ -561,7 +635,9 @@ Warcry
       expect(Status.cutthroat?).to be(false)
       expect(Status.muckled?).to be(false)
     end
+  end
 
+  context "db performance" do
     it "has a cache that will lazily load" do
       k = "answer.life"
       # big sample size so we can be sure about some sane access rules
@@ -595,7 +671,6 @@ Warcry
           expect((0..99).include?(n)).to be(true)
         }
       }
-
       scripts.map(&:value)
     end
   end

@@ -35,6 +35,12 @@ module Infomon
       SocietyResign = /^The Grandmaster says, "I'm sorry to hear that.  You are no longer in our service.|^The Poohbah looks at you sternly.  "I had high hopes for you," he says, "but if this be your decision, so be it\.  I hereby strip you of membership|^The Grandmaster says, "I'm sorry to hear that,.+I wish you well with any of your future endeavors./.freeze
       Warcries = /^\s+(?<name>(?:Bertrandt's Bellow|Yertie's Yowlp|Gerrelle's Growl|Seanette's Shout|Carn's Cry|Horland's Holler))$/.freeze
       NoWarcries = /^You must be an active member of the Warrior Guild to use this skill\.$/.freeze
+      LearnPSM = /^You have now achieved rank (?<rank>\d) of (?<psm>[A-z\s]+), costing \d+ (?<cat>[A-z]+) .*?points\.$/
+      # Technique covers Specialization (Armor and Shield), Technique (Weapon), and Feat
+      LearnTechnique = /^\[You have (?:gained|increased to) rank (?<rank>\d) of (?<cat>[A-z]+).*: (?<psm>[A-z\s]+)\.\]$/.freeze
+      UnlearnPSM = /^You decide to unlearn rank (?<rank>\d) of (?<psm>[A-z\s]+), regaining \d+ (?<cat>[A-z]+) .*?points\.$/
+      UnlearnTechnique = /^\[You have decreased to rank (?<rank>\d) of (?<cat>[A-z]+).*: (?<psm>[A-z\s]+)\.\]$/.freeze
+      LostTechnique = /^\[You are no longer trained in (?<cat>[A-z]+) .*: (?<psm>[A-z\s]+)\.\]$/.freeze
 
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
@@ -57,7 +63,7 @@ module Infomon
                          Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
                          BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
                          CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
-                         SocietyResign)
+                         SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique)
     end
 
     def self.parse(line)
@@ -217,6 +223,31 @@ module Infomon
         when Pattern::SocietyResign
           Infomon.set('society.status', 'None')
           Infomon.set('society.rank', 0)
+          :ok
+        when Pattern::LearnPSM, Pattern::LearnTechnique
+          match = Regexp.last_match
+          category = match[:cat]
+          category = "CMan" if category =~ /Combat/
+          seek_name = PSMS.name_normal(match[:psm])
+          db_name = PSMS.find_name(seek_name, category)
+          Infomon.set("psm.#{db_name[:short_name]}", match[:rank].to_i)
+          :ok
+        when Pattern::UnlearnPSM, Pattern::UnlearnTechnique
+          match = Regexp.last_match
+          category = match[:cat]
+          category = "CMan" if category =~ /Combat/
+          seek_name = PSMS.name_normal(match[:psm])
+          no_decrement = (match.string =~ /have decreased to/)
+          db_name = PSMS.find_name(seek_name, category)
+          Infomon.set("psm.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
+          :ok
+        when Pattern::LostTechnique
+          match = Regexp.last_match
+          category = match[:cat]
+          category = "CMan" if category =~ /Combat/
+          seek_name = PSMS.name_normal(match[:psm])
+          db_name = PSMS.find_name(seek_name, category)
+          Infomon.set("psm.#{db_name[:short_name]}", 0)
           :ok
 
         # TODO: refactor / streamline?
