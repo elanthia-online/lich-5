@@ -174,7 +174,7 @@ module Games
       def Spell.load(filename = nil)
         if filename.nil?
           filename = File.join(DATA_DIR, 'effect-list.xml')
-          File.open(filename), "wb") do |file|
+          File.open(filename, "wb") do |file|
             file.write URI.parse("https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml").open.read
           end unless File.exist?(filename)
         end
