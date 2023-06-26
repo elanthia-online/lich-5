@@ -7,9 +7,11 @@ Entries added here should always be accessible from Lich::Util.feature namespace
     game: Gemstone
     tags: CORE, util, utilities
     required: Lich > 5.0.19
-    version: 1.3.0
+    version: 1.3.1
 
   changelog:
+    v1.3.1 (2022-06-26)
+     * Fix to not squelch the end_pattern for issue_command if not a quiet command
     v1.3.0 (2022-03-16)
      * Add Lich::Util.issue_command that allows more fine-tooled control return
      * Bugfix for Lich::Util.silver_count not using end_pattern properly
@@ -68,6 +70,11 @@ module Lich
               if line =~ end_pattern
                 DownstreamHook.remove(name)
                 filter = false
+                if quiet
+                  next(nil)
+                else
+                  line
+                end
               else
                 if quiet
                   next(nil)
