@@ -7,9 +7,11 @@ Further modifications are to support the retirement of spell-list.xml.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.0.19
-    version: 1.2.5
+    version: 1.2.6
 
   changelog:
+    v1.2.6 (2023-06-26)
+      download missing effect-list.xml if not found
     v1.2.5 (2023-06-05)
       bugfix for known? if ranks nil
     v1.2.4 (2023-03-22)
@@ -172,6 +174,9 @@ module Games
       def Spell.load(filename = nil)
         if filename.nil?
           filename = File.join(DATA_DIR, 'effect-list.xml')
+          File.open(filename), "wb") do |file|
+            file.write URI.parse("https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml").open.read
+          end unless File.exist?(filename)
         end
         # script = Script.current #rubocop useless assignment to variable - script
         Script.current
