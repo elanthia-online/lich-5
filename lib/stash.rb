@@ -60,7 +60,7 @@ module Lich
       @checked_sheaths = false
       sheath_list_match = /(?:sheath|secondary sheath):\s+<d\scmd="store\s(\w+)\sclear">[^<]+<a\sexist="(\d+)"\snoun="[^"]+">([^<]+)<\/a>(?:\s[^<]+)?<\/d>/
 
-      ready_lines = Lich::Util.quiet_command_xml("ready list", /Your current settings are/)
+      ready_lines = Lich::Util.issue_command("ready list", /Your current settings are/, /To change your default item for a category that is already set/, true, 5, true, true, true)
       ready_lines.each { |line|
         if line =~ sheath_list_match
           sheath_obj = Regexp.last_match(3).to_s.downcase
