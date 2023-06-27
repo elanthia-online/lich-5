@@ -1175,6 +1175,11 @@ module Games
               begin
                 $cmd_prefix = String.new if $_SERVERSTRING_ =~ /^\034GSw/
 
+                unless XMLData.game.nil? or XMLData.game.empty?
+                  require 'lib/game-loader'
+                  GameLoader.load!
+                end
+
                 if XMLData.game =~ /^GS/
                   $_SERVERSTRING_ = self.clean_gs_serverstring($_SERVERSTRING_)
                 else
@@ -1184,8 +1189,6 @@ module Games
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
 
                 if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
-                  require 'lib/game-loader'
-                  GameLoader.load!
                   Script.start('autostart') if Script.exists?('autostart')
                   @@autostarted = true
                 end
