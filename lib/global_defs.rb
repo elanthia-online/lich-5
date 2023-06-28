@@ -295,7 +295,6 @@ def selectput(string, success, failure, timeout = nil)
   failure.flatten!
   regex = /#{(success + failure).join('|')}/i
   successre = /#{success.join('|')}/i
-  failurere = /#{failure.join('|')}/i
   thr = Thread.current
 
   timethr = Thread.new {
@@ -685,7 +684,7 @@ def checkpaths(dir = "none")
     if XMLData.room_exits.empty?
       return false
     else
-      return XMLData.room_exits.collect { |dir| SHORTDIR[dir] }
+      return XMLData.room_exits.collect { |room_exits| SHORTDIR[room_exits] }
     end
   else
     XMLData.room_exits.include?(dir) || XMLData.room_exits.include?(SHORTDIR[dir])
@@ -2046,14 +2045,14 @@ def do_client(client_string)
         Script.running.last.kill
       end
     elsif cmd =~ /^p$|^pause$/
-      if (s = Script.running.reverse.find { |s| not s.paused? })
+      if (s = Script.running.reverse.find { |s_check| not s_check.paused? })
         s.pause
       else
         respond '--- Lich: no scripts to pause'
       end
       nil
     elsif cmd =~ /^u$|^unpause$/
-      if (s = Script.running.reverse.find { |s| s.paused? })
+      if (s = Script.running.reverse.find { |s_check| s_check.paused? })
         s.unpause
       else
         respond '--- Lich: no scripts to unpause'
@@ -2061,20 +2060,20 @@ def do_client(client_string)
       nil
     elsif cmd =~ /^ka$|^kill\s?all$|^stop\s?all$/
       did_something = false
-      Script.running.find_all { |s| not s.no_kill_all }.each { |s| s.kill; did_something = true }
+      Script.running.find_all { |s_check| not s_check.no_kill_all }.each { |s_check| s_check.kill; did_something = true }
       respond('--- Lich: no scripts to kill') unless did_something
     elsif cmd =~ /^pa$|^pause\s?all$/
       did_something = false
-      Script.running.find_all { |s| not s.paused? and not s.no_pause_all }.each { |s| s.pause; did_something = true }
+      Script.running.find_all { |s_check| not s_check.paused? and not s_check.no_pause_all }.each { |s_check| s_check.pause; did_something = true }
       respond('--- Lich: no scripts to pause') unless did_something
     elsif cmd =~ /^ua$|^unpause\s?all$/
       did_something = false
-      Script.running.find_all { |s| s.paused? and not s.no_pause_all }.each { |s| s.unpause; did_something = true }
+      Script.running.find_all { |s_check| s_check.paused? and not s_check.no_pause_all }.each { |s_check| s_check.unpause; did_something = true }
       respond('--- Lich: no scripts to unpause') unless did_something
     elsif cmd =~ /^(k|kill|stop|p|pause|u|unpause)\s(.+)/
       action = $1
       target = $2
-      script = Script.running.find { |s| s.name == target } || Script.hidden.find { |s| s.name == target } || Script.running.find { |s| s.name =~ /^#{target}/i } || Script.hidden.find { |s| s.name =~ /^#{target}/i }
+      script = Script.running.find { |s_running| s_running.name == target } || Script.hidden.find { |s_hidden| s_hidden.name == target } || Script.running.find { |s_running| s_running.name =~ /^#{target}/i } || Script.hidden.find { |s_hidden| s_hidden.name =~ /^#{target}/i }
       if script.nil?
         respond "--- Lich: #{target} does not appear to be running! Use ';list' or ';listall' to see what's active."
       elsif action =~ /^(?:k|kill|stop)$/
@@ -2084,7 +2083,7 @@ def do_client(client_string)
       elsif action =~ /^(?:u|unpause)$/
         script.unpause
       end
-      action = target = script = nil
+      target = nil
     elsif cmd =~ /^list\s?(?:all)?$|^l(?:a)?$/i
       if cmd =~ /a(?:ll)?/i
         list = Script.running + Script.hidden
@@ -2094,7 +2093,7 @@ def do_client(client_string)
       if list.empty?
         respond '--- Lich: no active scripts'
       else
-        respond "--- Lich: #{list.collect { |s| s.paused? ? "#{s.name} (paused)" : s.name }.join(", ")}"
+        respond "--- Lich: #{list.collect { |active| active.paused? ? "#{active.name} (paused)" : active.name }.join(", ")}"
       end
       nil
     elsif cmd =~ /^force\s+[^\s]+/
@@ -2294,12 +2293,12 @@ def report_errors(&block)
   rescue SystemStackError
     respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-  rescue Exception
+  rescue StandardError
     respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-  rescue ScriptError
-    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+  #  rescue ScriptError
+  #    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
+  #    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
   rescue LoadError
     respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
