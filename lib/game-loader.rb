@@ -20,6 +20,7 @@ module GameLoader
 
   def self.dragon_realms
     require 'lib/map/map_dr.rb'
+    require 'lib/attributes/char'
   end
 
   def self.load!
