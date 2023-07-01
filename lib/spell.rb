@@ -176,7 +176,15 @@ module Games
       def Spell.load(filename = nil)
         if filename.nil?
           filename = File.join(DATA_DIR, 'effect-list.xml')
-          File.write(filename, URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml').read) unless File.exist?(filename)
+          unless File.exist?(filename)
+            begin
+              File.write(filename, URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml').read)
+              Lich.log('effect-list.xml missing from DATA dir. Downloaded of effect-list.xml from EO\Scripts GitHub.')
+            rescue StandardError
+              Lich.log('Github retrieval of effect-list.xml failed, trying ;repository instead.')
+              Script.run('repository', 'download effect-list.xml --game=gs')
+            end
+          end
         end
         # script = Script.current #rubocop useless assignment to variable - script
         Script.current
