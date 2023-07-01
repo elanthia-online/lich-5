@@ -2159,13 +2159,11 @@ def do_client(client_string)
       nil
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
-      require 'lib/update.rb'
       Lich::Util::Update.request("#{update_parameter}")
     elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
       require "lib/hmr"
       HMR.reload %r{#{Regexp.last_match[:pattern]}}
     elsif cmd =~ /^(?:lich5-update|l5u)/i
-      require 'lib/update.rb'
       Lich::Util::Update.request("--help")
     elsif cmd =~ /^banks$/ && XMLData.game =~ /^GS/
       Game._puts "<c>bank account"
