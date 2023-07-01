@@ -55,7 +55,7 @@ require 'lib/version'
 require 'lib/lich'
 require 'lib/init'
 require 'lib/front-end'
-require 'lib/update.rb'
+require 'lib/update'
 
 # TODO: Need to split out initiatilzation functions to move require to top of file
 require 'lib/gtk'
