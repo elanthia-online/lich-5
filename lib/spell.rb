@@ -179,10 +179,13 @@ module Games
           unless File.exist?(filename)
             begin
               File.write(filename, URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml').read)
-              Lich.log('effect-list.xml missing from DATA dir. Downloaded of effect-list.xml from EO\Scripts GitHub.')
+              Lich.log('effect-list.xml missing from DATA dir. Downloaded effect-list.xml from EO\Scripts GitHub complete.')
             rescue StandardError
+              respond "--- Lich: error: Spell.load: #{$!}"
+              Lich.log "error: Spell.load: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
               Lich.log('Github retrieval of effect-list.xml failed, trying ;repository instead.')
               Script.run('repository', 'download effect-list.xml --game=gs')
+              return false unless File.exist?(filename)
             end
           end
         end
