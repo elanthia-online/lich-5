@@ -7,9 +7,11 @@ Further modifications are to support the retirement of spell-list.xml.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.0.19
-    version: 1.2.5
+    version: 1.2.6
 
   changelog:
+    v1.2.6 (2023-06-26)
+      download missing effect-list.xml if not found
     v1.2.5 (2023-06-05)
       bugfix for known? if ranks nil
     v1.2.4 (2023-03-22)
@@ -36,6 +38,8 @@ Further modifications are to support the retirement of spell-list.xml.
       initial release and subsequent modifications as SIMU changes warranted
 
 =end
+
+require 'open-uri'
 
 module Games
   module Gemstone
@@ -172,6 +176,18 @@ module Games
       def Spell.load(filename = nil)
         if filename.nil?
           filename = File.join(DATA_DIR, 'effect-list.xml')
+          unless File.exist?(filename)
+            begin
+              File.write(filename, URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml').read)
+              Lich.log('effect-list.xml missing from DATA dir. Downloaded effect-list.xml from EO\Scripts GitHub complete.')
+            rescue StandardError
+              respond "--- Lich: error: Spell.load: #{$!}"
+              Lich.log "error: Spell.load: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+              Lich.log('Github retrieval of effect-list.xml failed, trying ;repository instead.')
+              Script.run('repository', 'download effect-list.xml --game=gs')
+              return false unless File.exist?(filename)
+            end
+          end
         end
         # script = Script.current #rubocop useless assignment to variable - script
         Script.current
