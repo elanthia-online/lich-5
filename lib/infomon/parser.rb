@@ -228,7 +228,6 @@ module Infomon
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
-          category = "Ascension" if category =~ /Ascension/
           seek_name = PSMS.name_normal(match[:psm])
           db_name = PSMS.find_name(seek_name, category)
           Infomon.set("psm.#{db_name[:short_name]}", match[:rank].to_i)
@@ -237,7 +236,6 @@ module Infomon
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
-          category = "Ascension" if category =~ /Ascension/
           seek_name = PSMS.name_normal(match[:psm])
           no_decrement = (match.string =~ /have decreased to/)
           db_name = PSMS.find_name(seek_name, category)
