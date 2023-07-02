@@ -22,11 +22,11 @@ module Infomon
   @root = defined?(DATA_DIR) ? DATA_DIR : Dir.tmpdir
   @file = File.join(@root, "infomon.db")
   @db   = Sequel.sqlite(@file)
-  @cache = Infomon::Cache.new
+  @cache ||= Infomon::Cache.new
   @cache_loaded = false
   @db.loggers << Logger.new($stdout) if ENV["DEBUG"]
-  @sql_queue = Queue.new
-  @sql_mutex = Mutex.new
+  @sql_queue ||= Queue.new
+  @sql_mutex ||= Mutex.new
 
   def self.cache
     @cache
@@ -153,6 +153,12 @@ module Infomon
     self.cache.put(key, value)
     self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`) VALUES (%s, %s)
       on conflict(`key`) do update set value = excluded.value;" % [self.db.literal(self.table_name), self.db.literal(key), self.db.literal(value)]
+  end
+
+  def self.delete!(key)
+    key = self._key(key)
+    self.cache.delete(key)
+    self.queue << "DELETE FROM %s WHERE key = (%s);" % [self.db.literal(self.table_name), self.db.literal(key)]
   end
 
   def self.upsert_batch(*blob)

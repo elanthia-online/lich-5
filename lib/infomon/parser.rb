@@ -30,8 +30,17 @@ module Infomon
       NoCitizenship = /^You don't seem to have citizenship\./.freeze
       Society = /^\s+You are a (?<standing>Master|member) (?:in|of) the (?<society>Order of Voln|Council of Light|Guardians of Sunfist)(?: at (?:rank|step) (?<rank>[0-9]+))?\.$/.freeze
       NoSociety = /^\s+You are not a member of any society at this time./.freeze
+      SocietyStep = /^(?:Zarak|Faylanna|Draelox|Marl|Vindar|Taryn|Meaha|Oxanna|Cyndelle) traces the outline of a sigil into the air before you and says|^The High Taskmaster looks at you, consults (?:her|his) notes, and then announces in a loud voice|^The monk concludes ceremoniously,/.freeze
+      SocietyJoin = /^The Grandmaster says, "Welcome to the Order|^The Grandmaster says, "You are now a member of the Guardians of Sunfist|^The Grand Poohbah smiles broadly.  "Welcome to the Lodge," he cries/.freeze
+      SocietyResign = /^The Grandmaster says, "I'm sorry to hear that.  You are no longer in our service.|^The Poohbah looks at you sternly.  "I had high hopes for you," he says, "but if this be your decision, so be it\.  I hereby strip you of membership|^The Grandmaster says, "I'm sorry to hear that,.+I wish you well with any of your future endeavors./.freeze
       Warcries = /^\s+(?<name>(?:Bertrandt's Bellow|Yertie's Yowlp|Gerrelle's Growl|Seanette's Shout|Carn's Cry|Horland's Holler))$/.freeze
       NoWarcries = /^You must be an active member of the Warrior Guild to use this skill\.$/.freeze
+      LearnPSM = /^You have now achieved rank (?<rank>\d) of (?<psm>[A-z\s]+), costing \d+ (?<cat>[A-z]+) .*?points\.$/
+      # Technique covers Specialization (Armor and Shield), Technique (Weapon), and Feat
+      LearnTechnique = /^\[You have (?:gained|increased to) rank (?<rank>\d) of (?<cat>[A-z]+).*: (?<psm>[A-z\s]+)\.\]$/.freeze
+      UnlearnPSM = /^You decide to unlearn rank (?<rank>\d) of (?<psm>[A-z\s]+), regaining \d+ (?<cat>[A-z]+) .*?points\.$/
+      UnlearnTechnique = /^\[You have decreased to rank (?<rank>\d) of (?<cat>[A-z]+).*: (?<psm>[A-z\s]+)\.\]$/.freeze
+      LostTechnique = /^\[You are no longer trained in (?<cat>[A-z]+) .*: (?<psm>[A-z\s]+)\.\]$/.freeze
 
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
@@ -53,7 +62,8 @@ module Infomon
                          ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
                          Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
                          BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
-                         CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries)
+                         CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
+                         SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique)
     end
 
     def self.parse(line)
@@ -193,6 +203,53 @@ module Infomon
           Infomon.set('society.status', 'None')
           Infomon.set('society.rank', 0)
           :ok
+        when Pattern::SocietyJoin
+          match = Regexp.last_match.to_s
+          case match[/Order|Council|Guardians/]
+          when 'Order'
+            Infomon.set('society.status', 'Order of Voln')
+            Infomon.set('society.rank', 1)
+          when 'Guardians'
+            Infomon.set('society.status', "Guardians of Sunfist")
+            Infomon.set('society.rank', 0)
+          when 'Lodge'
+            Infomon.set('society.status', 'Council of Light')
+            Infomon.set('society.rank', 1)
+          end
+          :ok
+        when Pattern::SocietyStep
+          Infomon.set('society.rank', Infomon.get('society.rank') + 1)
+          :ok
+        when Pattern::SocietyResign
+          Infomon.set('society.status', 'None')
+          Infomon.set('society.rank', 0)
+          :ok
+        when Pattern::LearnPSM, Pattern::LearnTechnique
+          match = Regexp.last_match
+          category = match[:cat]
+          category = "CMan" if category =~ /Combat/
+          seek_name = PSMS.name_normal(match[:psm])
+          db_name = PSMS.find_name(seek_name, category)
+          Infomon.set("psm.#{db_name[:short_name]}", match[:rank].to_i)
+          :ok
+        when Pattern::UnlearnPSM, Pattern::UnlearnTechnique
+          match = Regexp.last_match
+          category = match[:cat]
+          category = "CMan" if category =~ /Combat/
+          seek_name = PSMS.name_normal(match[:psm])
+          no_decrement = (match.string =~ /have decreased to/)
+          db_name = PSMS.find_name(seek_name, category)
+          Infomon.set("psm.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
+          :ok
+        when Pattern::LostTechnique
+          match = Regexp.last_match
+          category = match[:cat]
+          category = "CMan" if category =~ /Combat/
+          seek_name = PSMS.name_normal(match[:psm])
+          db_name = PSMS.find_name(seek_name, category)
+          Infomon.set("psm.#{db_name[:short_name]}", 0)
+          :ok
+
         # TODO: refactor / streamline?
         when Pattern::SleepActive
           Infomon.set('status.sleeping', true)

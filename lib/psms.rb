@@ -16,10 +16,14 @@ module PSMS
     name.to_s.downcase
   end
 
+  def self.find_name(name, type)
+    Object.const_get("#{type}").method("#{type.downcase}_lookups").call
+          .find { |h| h[:long_name].eql?(name) || h[:short_name].eql?(name) }
+  end
+
   def self.assess(name, type, costcheck = false)
     name = self.name_normal(name)
-    seek_psm = Object.const_get("#{type}").method("#{type.downcase}_lookups").call
-                     .find { |h| h[:long_name].eql?(name) || h[:short_name].eql?(name) }
+    seek_psm = self.find_name(name, type)
     # this logs then raises an exception to stop (kill) the offending script
     if seek_psm.nil?
       Lich.log("error: PSMS request: #{$!}\n\t")

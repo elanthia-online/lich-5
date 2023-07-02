@@ -143,7 +143,12 @@ class XMLParser
             z.merge!("#{k} Cooldown" => v) if k.instance_of?(String)
           end
         when /Debuffs/
-          z.merge!("#{k} Debuff" => v) if k.instance_of?(String)
+
+          # need to deal with that pesky 'Silenced' versus 'Silence' from XML
+          if k == "Silenced"
+            k = 'Silence'
+          end
+          z.merge!(k => v) if k.instance_of?(String)
         end
       end
     end
