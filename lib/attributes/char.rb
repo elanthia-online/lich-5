@@ -110,7 +110,7 @@ class Char
   end
 
   def Char.citizenship
-    Infomon.get('citizenship')
+    Infomon.get('citizenship') if XMLData.game =~ /GS/
   end
 
   def Char.citizenship=(_val)

@@ -2,10 +2,25 @@
 module GameLoader
   def self.gemstone
     require 'lib/map/map_gs.rb'
+    require 'lib/spell'
+    require 'lib/bounty'
+    require 'lib/infomon/infomon'
+    require 'lib/attributes/stats'
+    require 'lib/attributes/spells'
+    require 'lib/attributes/skills'
+    require 'lib/attributes/society'
+    require 'lib/infomon/status'
+    require 'lib/experience'
+    require 'lib/infomon/activespell'
+    # PSMS (armor, cman, feat, shield, weapon) have moved
+    # to ./lib/psms and are now called by psms.rb
+    require 'lib/psms'
+    require 'lib/attributes/char'
   end
 
   def self.dragon_realms
     require 'lib/map/map_dr.rb'
+    require 'lib/attributes/char'
   end
 
   def self.load!
