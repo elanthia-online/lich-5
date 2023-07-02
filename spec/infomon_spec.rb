@@ -244,7 +244,7 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get("ascension.regenstamina")).to eq(19)
       expect(Infomon.get("ascension.swimming")).to eq(2)
       expect(Ascension['thrownweapons']).to eq(4)
-      expect(Ascension['Spiritual Lore - Summoning'].to eq(1)
+      expect(Ascension['Spiritual Lore - Summoning']).to eq(1)
     end
   end
 
