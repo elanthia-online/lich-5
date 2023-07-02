@@ -19,7 +19,7 @@ module Infomon
       Skill = /^\s+(?<name>[[a-zA-Z]\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)/.freeze
       SpellRanks = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
       SkillEnd = /^Training Points: \d+ Phy \d+ Mnt/.freeze
-      PSMStart = /^\w+, the following (?:Ascension Abilities|Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
+      PSMStart = /^\w+, the following (?<cat>Ascension Abilities|Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
       PSM = /^\s+(?<name>[A-z\s\-']+)\s+(?<command>[a-z]+)\s+(?<ranks>\d)\/(?<max>\d).*$/.freeze
       PSMEnd = /^   Subcategory: all$/.freeze
 
@@ -147,12 +147,19 @@ module Infomon
           Infomon.mutex.unlock
           :ok
         when Pattern::PSMStart
+          match = Regexp.last_match
           @psm_hold = []
+          echo match[:cat]
+          if match[:cat] =~ /Ascension/
+            @psm_cat = 'ascension'
+          else
+            @psm_cat = 'psm'
+          end
           Infomon.mutex.lock
           :ok
         when Pattern::PSM
           match = Regexp.last_match
-          @psm_hold.push(['psm.%s' % match[:command], match[:ranks].to_i])
+          @psm_hold.push(["#{@psm_cat}.%s" % match[:command], match[:ranks].to_i])
           :ok
         when Pattern::PSMEnd
           Infomon.upsert_batch(@psm_hold)
@@ -228,9 +235,14 @@ module Infomon
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
+          if category =~ /Ascesion/
+            @psm_cat = 'ascension'
+          else
+            @psm_cat = 'psm'
+          end
           seek_name = PSMS.name_normal(match[:psm])
           db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("psm.#{db_name[:short_name]}", match[:rank].to_i)
+          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", match[:rank].to_i)
           :ok
         when Pattern::UnlearnPSM, Pattern::UnlearnTechnique
           match = Regexp.last_match
