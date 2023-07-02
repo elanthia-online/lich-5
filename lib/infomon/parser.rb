@@ -19,7 +19,7 @@ module Infomon
       Skill = /^\s+(?<name>[[a-zA-Z]\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)/.freeze
       SpellRanks = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
       SkillEnd = /^Training Points: \d+ Phy \d+ Mnt/.freeze
-      PSMStart = /^\w+, the following (?:Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
+      PSMStart = /^\w+, the following (?:Ascension Abilities|Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
       PSM = /^\s+(?<name>[A-z\s\-']+)\s+(?<command>[a-z]+)\s+(?<ranks>\d)\/(?<max>\d).*$/.freeze
       PSMEnd = /^   Subcategory: all$/.freeze
 
@@ -228,6 +228,7 @@ module Infomon
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
+          category = "Ascension" if category =~ /Ascension/
           seek_name = PSMS.name_normal(match[:psm])
           db_name = PSMS.find_name(seek_name, category)
           Infomon.set("psm.#{db_name[:short_name]}", match[:rank].to_i)
@@ -236,6 +237,7 @@ module Infomon
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
+          category = "Ascension" if category =~ /Ascension/
           seek_name = PSMS.name_normal(match[:psm])
           no_decrement = (match.string =~ /have decreased to/)
           db_name = PSMS.find_name(seek_name, category)
