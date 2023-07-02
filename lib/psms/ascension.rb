@@ -73,7 +73,7 @@ module Ascension
      { long_name: 'thrown_weapons',            short_name: 'thrownweapons',   cost: 0 },
      { long_name: 'trading',                   short_name: 'trading',         cost: 0 },
      { long_name: 'two_weapon_combat',         short_name: 'twoweaponcombat', cost: 0 },
-     { long_name: 'two_handed_weapons',         short_name: 'twohandedweapon', cost: 0 },
+     { long_name: 'two_handed_weapons',        short_name: 'twohandedweapon', cost: 0 },
      { long_name: 'unbalance_resistance',      short_name: 'resistunbalance', cost: 0 },
      { long_name: 'vacuum_resistance',         short_name: 'resistvacuum',    cost: 0 },
      { long_name: 'wisdom',                    short_name: 'wisdom',          cost: 0 }]
