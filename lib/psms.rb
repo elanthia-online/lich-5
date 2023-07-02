@@ -36,7 +36,11 @@ module PSMS
     when true
       seek_psm[:cost] < XMLData.stamina
     else
-      Infomon.get("psm.#{seek_psm[:short_name]}")
+      if type =~ /Ascension/
+        Infomon.get("ascension.#{seek_psm[:short_name]}")
+      else
+        Infomon.get("psm.#{seek_psm[:short_name]}")
+      end
     end
   end
 end
