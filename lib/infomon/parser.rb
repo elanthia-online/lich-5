@@ -20,7 +20,7 @@ module Infomon
       SpellRanks = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
       SkillEnd = /^Training Points: \d+ Phy \d+ Mnt/.freeze
       PSMStart = /^\w+, the following (?<cat>Ascension Abilities|Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
-      PSM = /^\s+(?<name>[A-z\s\-']+)\s+(?<command>[a-z]+)\s+(?<ranks>\d)\/(?<max>\d).*$/.freeze
+      PSM = /^\s+(?<name>[A-z\s\-']+)\s+(?<command>[a-z]+)\s+(?<ranks>\d+)\/(?<max>\d).*$/.freeze
       PSMEnd = /^   Subcategory: all$/.freeze
 
       # Single / low impact - single db write
