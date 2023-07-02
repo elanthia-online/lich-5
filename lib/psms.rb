@@ -10,10 +10,11 @@ require_relative('./psms/ascension.rb')
 
 module PSMS
   def self.name_normal(name)
-    # there are four cases to normalize
-    # "vault_kick", "vault kick", :vault_kick, :vaultkick
+    # there are five cases to normalize
+    # "vault_kick", "vault kick", "vault-kick", :vault_kick, :vaultkick
     # if present, convert spaces to underscore; convert all to downcase string
     name.gsub!(' ', '_') if name =~ (/\s/)
+    name.gsub!('-', '_') if name =~ (/-/)
     name.to_s.downcase
   end
 
