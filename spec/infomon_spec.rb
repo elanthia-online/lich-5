@@ -212,7 +212,7 @@ describe Infomon::Parser, ".parse" do
   context "ascension" do
     it "handles ascension info" do
       output = <<~Ascension
-        testing, , the following Ascension Abilities are available:
+        testing, the following Ascension Abilities are available:
 
             Skill                Mnemonic        Ranks Type           Category        Subcategory
             -------------------------------------------------------------------------------------
