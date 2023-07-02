@@ -149,7 +149,6 @@ module Infomon
         when Pattern::PSMStart
           match = Regexp.last_match
           @psm_hold = []
-          echo match[:cat]
           if match[:cat] =~ /Ascension/
             @psm_cat = 'ascension'
           else
