@@ -37,7 +37,7 @@ module Infomon
       NoWarcries = /^You must be an active member of the Warrior Guild to use this skill\.$/.freeze
       LearnPSM = /^You have now achieved rank (?<rank>\d+) of (?<psm>[A-z\s]+), costing \d+ (?<cat>[A-z]+) .*?points\.$/
       # Technique covers Specialization (Armor and Shield), Technique (Weapon), and Feat
-      LearnTechnique = /^\[You have (?:gained|increased to) rank (?<rank>\d) of (?<cat>[A-z]+).*: (?<psm>[A-z\s]+)\.\]$/.freeze
+      LearnTechnique = /^\[You have (?:gained|increased to) rank (?<rank>\d+) of (?<cat>[A-z]+).*: (?<psm>[A-z\s]+)\.\]$/.freeze
       UnlearnPSM = /^You decide to unlearn rank (?<rank>\d+) of (?<psm>[A-z\s]+), regaining \d+ (?<cat>[A-z]+) .*?points\.$/
       UnlearnTechnique = /^\[You have decreased to rank (?<rank>\d+) of (?<cat>[A-z]+).*: (?<psm>[A-z\s]+)\.\]$/.freeze
       LostTechnique = /^\[You are no longer trained in (?<cat>[A-z]+) .*: (?<psm>[A-z\s]+)\.\]$/.freeze
