@@ -204,13 +204,8 @@ module Lich
           _respond; _respond 'Copying updated lich files to their locations.'
 
           ## We do not care about local edits from players in the Lich5 / lib location
-          lib_update = Dir.children(File.join(TEMP_DIR, filename, "lib"))
-          echo lib_update
-          lib_update.each { |file|
-            FileUtils.remove_entry(File.join(LIB_DIR, file)) if File.exist?(File.join(LIB_DIR, file))
-            FileUtils.copy_entry(File.join(TEMP_DIR, filename, "lib"), File.join(LIB_DIR))
-            _respond "lib #{file} has been updated."
-          }
+          FileUtils.copy_entry(File.join(TEMP_DIR, filename, "lib"), File.join(LIB_DIR))
+          _respond; _respond "All Lich lib files have been updated."; _respond
 
           ## We do not care about local edits from players to the Lich5 / script location
           ## for CORE scripts (those required to run Lich5 properly)
@@ -227,6 +222,7 @@ module Lich
           ## specifically gameobj-data.xml and spell-list.xml.
           ## Let's be a little more purposeful and gentle with these two files.
           data_update = Dir.children(File.join(TEMP_DIR, filename, "data"))
+          _respond # intentional spacer to separate categories of files
           data_update.each { |file|
             transition_filename = "#{file}".sub(".xml", '')
             newfilename = File.join(DATA_DIR, "#{transition_filename}-#{Time.now.to_i}.xml")
