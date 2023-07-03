@@ -44,6 +44,24 @@ module Infomon
     @sql_mutex
   end
 
+  def self.mutex_lock
+    begin
+      self.mutex.lock unless self.mutex.owned?
+    rescue StandardError
+      respond "--- Lich: error: mutex_lock: #{$!}"
+      Lich.log "error: mutex_lock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    end
+  end
+
+  def self.mutex_unlock
+    begin
+      self.mutex.unlock if self.mutex.owned?
+    rescue StandardError
+      respond "--- Lich: error: mutex_ulock: #{$!}"
+      Lich.log "error: mutex_ulock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    end
+  end
+
   def self.queue
     @sql_queue
   end
@@ -60,12 +78,7 @@ module Infomon
   end
 
   def self.reset!
-    begin
-      self.mutex.lock
-    rescue StandardError
-      respond "--- Lich: error: self.reset!: #{$!}"
-      Lich.log "error: self.reset!: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    end
+    self.mutex_lock
     Infomon.db.drop_table?(self.table_name)
     self.cache.clear
     @cache_loaded = false
@@ -77,22 +90,12 @@ module Infomon
   end
 
   def self.setup!
-    begin
-      self.mutex.lock unless self.mutex.owned?
-    rescue StandardError
-      respond "--- Lich: error: self.setup! lock: #{$!}"
-      Lich.log "error: self.setup! lock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    end
+    self.mutex_lock
     @db.create_table?(self.table_name) do
       text :key, primary_key: true
       any :value
     end
-    begin
-      self.mutex.unlock if self.mutex.owned?
-    rescue StandardError
-      respond "--- Lich: error: self.setup! unlock: #{$!}"
-      Lich.log "error: self.setup! unlock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    end
+    self.mutex_unlock
     @_table = @db[self.table_name]
   end
 
