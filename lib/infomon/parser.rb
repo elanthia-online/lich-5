@@ -76,7 +76,12 @@ module Infomon
         when Pattern::CharRaceProf
           # name captured here, but do not rely on it - use XML instead
           @stat_hold = []
-          Infomon.mutex.lock
+          begin
+            Infomon.mutex.lock
+          rescue StandardError
+            respond "--- Lich: error: Pattern::CharRaceProf: #{$!}"
+            Lich.log "error: Pattern::CharRaceProf: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          end
           match = Regexp.last_match
           @stat_hold.push(['stat.race', match[:race].to_s],
                           ['stat.profession', match[:profession].to_s])
@@ -99,11 +104,21 @@ module Infomon
           match = Regexp.last_match
           @stat_hold.push(['stat.silver', match[:silver].delete(',').to_i])
           Infomon.upsert_batch(@stat_hold)
-          Infomon.mutex.unlock
+          begin
+            Infomon.mutex.unlock
+          rescue StandardError
+            respond "--- Lich: error: Pattern::StatEnd: #{$!}"
+            Lich.log "error: Pattern::StatEnd: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          end
           :ok
         when Pattern::Fame # serves as ExprStart
           @expr_hold = []
-          Infomon.mutex.lock
+          begin
+            Infomon.mutex.lock
+          rescue StandardError
+            respond "--- Lich: error: Pattern::Fame: #{$!}"
+            Lich.log "error: Pattern::Fame: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          end
           match = Regexp.last_match
           @expr_hold.push(['experience.fame', match[:fame].delete(',').to_i])
           :ok
@@ -127,11 +142,21 @@ module Infomon
           :ok
         when Pattern::ExprEnd
           Infomon.upsert_batch(@expr_hold)
-          Infomon.mutex.unlock
+          begin
+            Infomon.mutex.unlock
+          rescue StandardError
+            respond "--- Lich: error: Pattern::ExprEnd: #{$!}"
+            Lich.log "error: Pattern::ExprEnd: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          end
           :ok
         when Pattern::SkillStart
           @skills_hold = []
-          Infomon.mutex.lock
+          begin
+            Infomon.mutex.lock
+          rescue StandardError
+            respond "--- Lich: error: Pattern::SkillStart: #{$!}"
+            Lich.log "error: Pattern::SkillStart: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          end
           :ok
         when Pattern::Skill
           match = Regexp.last_match
@@ -143,9 +168,18 @@ module Infomon
           @skills_hold.push(['spell.%s' % match[:name].downcase, match[:rank].to_i])
           :ok
         when Pattern::SkillEnd
-          Infomon.upsert_batch(@skills_hold)
-          Infomon.mutex.unlock
-          :ok
+          if Infomon.mutex.owned?
+            Infomon.upsert_batch(@skills_hold)
+            begin
+              Infomon.mutex.unlock
+            rescue StandardError
+              respond "--- Lich: error: Pattern::SkillEnd: #{$!}"
+              Lich.log "error: Pattern::SkillEnd: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            end
+            :ok
+          else
+            :noop
+          end
         when Pattern::PSMStart
           match = Regexp.last_match
           @psm_hold = []
@@ -154,7 +188,12 @@ module Infomon
           else
             @psm_cat = 'psm'
           end
-          Infomon.mutex.lock
+          begin
+            Infomon.mutex.lock
+          rescue StandardError
+            respond "--- Lich: error: Pattern::PSMStart: #{$!}"
+            Lich.log "error: Pattern::PSMStart: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          end
           :ok
         when Pattern::PSM
           match = Regexp.last_match
@@ -162,7 +201,12 @@ module Infomon
           :ok
         when Pattern::PSMEnd
           Infomon.upsert_batch(@psm_hold)
-          Infomon.mutex.unlock
+          begin
+            Infomon.mutex.unlock
+          rescue StandardError
+            respond "--- Lich: error: Pattern::PSMEnd: #{$!}"
+            Lich.log "error: Pattern::PSMEnd: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          end
           :ok
         when Pattern::NoWarcries
           Infomon.upsert_batch([['psm.bertrandts_bellow', 0],
@@ -247,28 +291,18 @@ module Infomon
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
-          if category =~ /Ascesion/
-            @psm_cat = 'ascension'
-          else
-            @psm_cat = 'psm'
-          end
           seek_name = PSMS.name_normal(match[:psm])
           no_decrement = (match.string =~ /have decreased to/)
           db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
+          Infomon.set("psm.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
           :ok
         when Pattern::LostTechnique
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
-          if category =~ /Ascesion/
-            @psm_cat = 'ascension'
-          else
-            @psm_cat = 'psm'
-          end
           seek_name = PSMS.name_normal(match[:psm])
           db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", 0)
+          Infomon.set("psm.#{db_name[:short_name]}", 0)
           :ok
 
         # TODO: refactor / streamline?
