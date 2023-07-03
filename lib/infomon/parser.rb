@@ -76,12 +76,7 @@ module Infomon
         when Pattern::CharRaceProf
           # name captured here, but do not rely on it - use XML instead
           @stat_hold = []
-          begin
-            Infomon.mutex.lock
-          rescue StandardError
-            respond "--- Lich: error: Pattern::CharRaceProf: #{$!}"
-            Lich.log "error: Pattern::CharRaceProf: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          end
+          Infomon.mutex_lock
           match = Regexp.last_match
           @stat_hold.push(['stat.race', match[:race].to_s],
                           ['stat.profession', match[:profession].to_s])
@@ -104,21 +99,11 @@ module Infomon
           match = Regexp.last_match
           @stat_hold.push(['stat.silver', match[:silver].delete(',').to_i])
           Infomon.upsert_batch(@stat_hold)
-          begin
-            Infomon.mutex.unlock
-          rescue StandardError
-            respond "--- Lich: error: Pattern::StatEnd: #{$!}"
-            Lich.log "error: Pattern::StatEnd: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          end
+          Infomon.mutex_unlock
           :ok
         when Pattern::Fame # serves as ExprStart
           @expr_hold = []
-          begin
-            Infomon.mutex.lock
-          rescue StandardError
-            respond "--- Lich: error: Pattern::Fame: #{$!}"
-            Lich.log "error: Pattern::Fame: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          end
+          Infomon.mutex_lock
           match = Regexp.last_match
           @expr_hold.push(['experience.fame', match[:fame].delete(',').to_i])
           :ok
@@ -142,21 +127,11 @@ module Infomon
           :ok
         when Pattern::ExprEnd
           Infomon.upsert_batch(@expr_hold)
-          begin
-            Infomon.mutex.unlock
-          rescue StandardError
-            respond "--- Lich: error: Pattern::ExprEnd: #{$!}"
-            Lich.log "error: Pattern::ExprEnd: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          end
+          Infomon.mutex_unlock
           :ok
         when Pattern::SkillStart
           @skills_hold = []
-          begin
-            Infomon.mutex.lock
-          rescue StandardError
-            respond "--- Lich: error: Pattern::SkillStart: #{$!}"
-            Lich.log "error: Pattern::SkillStart: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          end
+          Infomon.mutex_lock
           :ok
         when Pattern::Skill
           match = Regexp.last_match
@@ -170,12 +145,7 @@ module Infomon
         when Pattern::SkillEnd
           if Infomon.mutex.owned?
             Infomon.upsert_batch(@skills_hold)
-            begin
-              Infomon.mutex.unlock
-            rescue StandardError
-              respond "--- Lich: error: Pattern::SkillEnd: #{$!}"
-              Lich.log "error: Pattern::SkillEnd: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            end
+            Infomon.mutex_unlock
             :ok
           else
             :noop
@@ -188,12 +158,7 @@ module Infomon
           else
             @psm_cat = 'psm'
           end
-          begin
-            Infomon.mutex.lock
-          rescue StandardError
-            respond "--- Lich: error: Pattern::PSMStart: #{$!}"
-            Lich.log "error: Pattern::PSMStart: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          end
+          Infomon.mutex_lock
           :ok
         when Pattern::PSM
           match = Regexp.last_match
@@ -201,12 +166,7 @@ module Infomon
           :ok
         when Pattern::PSMEnd
           Infomon.upsert_batch(@psm_hold)
-          begin
-            Infomon.mutex.unlock
-          rescue StandardError
-            respond "--- Lich: error: Pattern::PSMEnd: #{$!}"
-            Lich.log "error: Pattern::PSMEnd: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          end
+          Infomon.mutex_unlock
           :ok
         when Pattern::NoWarcries
           Infomon.upsert_batch([['psm.bertrandts_bellow', 0],
@@ -363,8 +323,11 @@ module Infomon
         else
           :noop
         end
-      rescue StandardError => e
-        puts e
+      rescue StandardError
+        respond "--- Lich: error: Infomon::Parser.parse: #{$!}"
+        respond "--- Lich: error: line: #{line}"
+        Lich.log "error: Infomon::Parser.parse: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+        Lich.log "error: line: #{line}\n\t"
       end
     end
   end
