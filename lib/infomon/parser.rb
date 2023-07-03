@@ -278,7 +278,7 @@ module Infomon
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
-          if category =~ /Ascesion/
+          if category =~ /Ascension/
             @psm_cat = 'ascension'
           else
             @psm_cat = 'psm'
@@ -291,7 +291,7 @@ module Infomon
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
-          if category =~ /Ascesion/
+          if category =~ /Ascension/
             @psm_cat = 'ascension'
           else
             @psm_cat = 'psm'
@@ -305,7 +305,7 @@ module Infomon
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
-          if category =~ /Ascesion/
+          if category =~ /Ascension/
             @psm_cat = 'ascension'
           else
             @psm_cat = 'psm'
