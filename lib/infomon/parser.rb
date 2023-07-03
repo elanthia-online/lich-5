@@ -291,18 +291,28 @@ module Infomon
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
+          if category =~ /Ascesion/
+            @psm_cat = 'ascension'
+          else
+            @psm_cat = 'psm'
+          end
           seek_name = PSMS.name_normal(match[:psm])
           no_decrement = (match.string =~ /have decreased to/)
           db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("psm.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
+          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
           :ok
         when Pattern::LostTechnique
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
+          if category =~ /Ascesion/
+            @psm_cat = 'ascension'
+          else
+            @psm_cat = 'psm'
+          end
           seek_name = PSMS.name_normal(match[:psm])
           db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("psm.#{db_name[:short_name]}", 0)
+          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", 0)
           :ok
 
         # TODO: refactor / streamline?
