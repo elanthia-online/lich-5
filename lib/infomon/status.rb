@@ -26,7 +26,7 @@ module Status
 
   # deprecate these in global_defs after warning, consider bringing other status maps over
   def self.webbed?
-    XMLData.indicator['IconDEAD'] == 'y'
+    XMLData.indicator['IconWEBBED'] == 'y'
   end
 
   def self.dead?
