@@ -44,6 +44,24 @@ module Infomon
     @sql_mutex
   end
 
+  def self.mutex_lock
+    begin
+      self.mutex.lock unless self.mutex.owned?
+    rescue StandardError
+      respond "--- Lich: error: mutex_lock: #{$!}"
+      Lich.log "error: mutex_lock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    end
+  end
+
+  def self.mutex_unlock
+    begin
+      self.mutex.unlock if self.mutex.owned?
+    rescue StandardError
+      respond "--- Lich: error: mutex_ulock: #{$!}"
+      Lich.log "error: mutex_ulock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    end
+  end
+
   def self.queue
     @sql_queue
   end
@@ -60,7 +78,7 @@ module Infomon
   end
 
   def self.reset!
-    self.mutex.lock
+    self.mutex_lock
     Infomon.db.drop_table?(self.table_name)
     self.cache.clear
     @cache_loaded = false
@@ -72,12 +90,12 @@ module Infomon
   end
 
   def self.setup!
-    self.mutex.lock unless self.mutex.owned?
+    self.mutex_lock
     @db.create_table?(self.table_name) do
       text :key, primary_key: true
       any :value
     end
-    self.mutex.unlock if self.mutex.owned?
+    self.mutex_unlock
     @_table = @db[self.table_name]
   end
 
@@ -112,18 +130,23 @@ module Infomon
     key = self._key(key)
     val = self.cache.get(key) {
       sleep 0.01 until self.queue.empty?
-      self.mutex.synchronize do
-        begin
-          db_result = self.table[key: key]
-          if db_result
-            db_result[:value]
-          else
+      begin
+        self.mutex.synchronize do
+          begin
+            db_result = self.table[key: key]
+            if db_result
+              db_result[:value]
+            else
+              nil
+            end
+          rescue => exception
+            pp(exception)
             nil
           end
-        rescue => exception
-          pp(exception)
-          nil
         end
+      rescue StandardError
+        respond "--- Lich: error: self.get(key): #{$!}"
+        Lich.log "error: self.get(key): #{$!}\n\t#{$!.backtrace.join("\n\t")}"
       end
     }
     return self._value(val)
@@ -178,12 +201,17 @@ module Infomon
   Thread.new do
     loop do
       sql_statement = Infomon.queue.pop
-      Infomon.mutex.synchronize do
-        begin
-          Infomon.db.run(sql_statement)
-        rescue StandardError => e
-          pp(e)
+      begin
+        Infomon.mutex.synchronize do
+          begin
+            Infomon.db.run(sql_statement)
+          rescue StandardError => e
+            pp(e)
+          end
         end
+      rescue StandardError
+        respond "--- Lich: error: ThreadQueue: #{$!}"
+        Lich.log "error: ThreadQueue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
       end
     end
   end

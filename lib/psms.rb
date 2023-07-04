@@ -6,13 +6,15 @@ require_relative('./psms/feat.rb')
 require_relative('./psms/shield.rb')
 require_relative('./psms/weapon.rb')
 require_relative('./psms/warcry.rb')
+require_relative('./psms/ascension.rb')
 
 module PSMS
   def self.name_normal(name)
-    # there are four cases to normalize
-    # "vault_kick", "vault kick", :vault_kick, :vaultkick
+    # there are five cases to normalize
+    # "vault_kick", "vault kick", "vault-kick", :vault_kick, :vaultkick
     # if present, convert spaces to underscore; convert all to downcase string
     name.gsub!(' ', '_') if name =~ (/\s/)
+    name.gsub!('-', '_') if name =~ (/-/)
     name.to_s.downcase
   end
 
@@ -34,7 +36,11 @@ module PSMS
     when true
       seek_psm[:cost] < XMLData.stamina
     else
-      Infomon.get("psm.#{seek_psm[:short_name]}")
+      if type =~ /Ascension/
+        Infomon.get("ascension.#{seek_psm[:short_name]}")
+      else
+        Infomon.get("psm.#{seek_psm[:short_name]}")
+      end
     end
   end
 end

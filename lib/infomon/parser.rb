@@ -19,8 +19,8 @@ module Infomon
       Skill = /^\s+(?<name>[[a-zA-Z]\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)/.freeze
       SpellRanks = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
       SkillEnd = /^Training Points: \d+ Phy \d+ Mnt/.freeze
-      PSMStart = /^\w+, the following (?:Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
-      PSM = /^\s+(?<name>[A-z\s\-']+)\s+(?<command>[a-z]+)\s+(?<ranks>\d)\/(?<max>\d).*$/.freeze
+      PSMStart = /^\w+, the following (?<cat>Ascension Abilities|Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
+      PSM = /^\s+(?<name>[A-z\s\-']+)\s+(?<command>[a-z]+)\s+(?<ranks>\d+)\/(?<max>\d+).*$/.freeze
       PSMEnd = /^   Subcategory: all$/.freeze
 
       # Single / low impact - single db write
@@ -35,11 +35,11 @@ module Infomon
       SocietyResign = /^The Grandmaster says, "I'm sorry to hear that.  You are no longer in our service.|^The Poohbah looks at you sternly.  "I had high hopes for you," he says, "but if this be your decision, so be it\.  I hereby strip you of membership|^The Grandmaster says, "I'm sorry to hear that,.+I wish you well with any of your future endeavors./.freeze
       Warcries = /^\s+(?<name>(?:Bertrandt's Bellow|Yertie's Yowlp|Gerrelle's Growl|Seanette's Shout|Carn's Cry|Horland's Holler))$/.freeze
       NoWarcries = /^You must be an active member of the Warrior Guild to use this skill\.$/.freeze
-      LearnPSM = /^You have now achieved rank (?<rank>\d) of (?<psm>[A-z\s]+), costing \d+ (?<cat>[A-z]+) .*?points\.$/
+      LearnPSM = /^You have now achieved rank (?<rank>\d+) of (?<psm>[A-z\s]+), costing \d+ (?<cat>[A-z]+) .*?points\.$/
       # Technique covers Specialization (Armor and Shield), Technique (Weapon), and Feat
-      LearnTechnique = /^\[You have (?:gained|increased to) rank (?<rank>\d) of (?<cat>[A-z]+).*: (?<psm>[A-z\s]+)\.\]$/.freeze
-      UnlearnPSM = /^You decide to unlearn rank (?<rank>\d) of (?<psm>[A-z\s]+), regaining \d+ (?<cat>[A-z]+) .*?points\.$/
-      UnlearnTechnique = /^\[You have decreased to rank (?<rank>\d) of (?<cat>[A-z]+).*: (?<psm>[A-z\s]+)\.\]$/.freeze
+      LearnTechnique = /^\[You have (?:gained|increased to) rank (?<rank>\d+) of (?<cat>[A-z]+).*: (?<psm>[A-z\s]+)\.\]$/.freeze
+      UnlearnPSM = /^You decide to unlearn rank (?<rank>\d+) of (?<psm>[A-z\s]+), regaining \d+ (?<cat>[A-z]+) .*?points\.$/
+      UnlearnTechnique = /^\[You have decreased to rank (?<rank>\d+) of (?<cat>[A-z]+).*: (?<psm>[A-z\s]+)\.\]$/.freeze
       LostTechnique = /^\[You are no longer trained in (?<cat>[A-z]+) .*: (?<psm>[A-z\s]+)\.\]$/.freeze
 
       # TODO: refactor / streamline?
@@ -76,7 +76,7 @@ module Infomon
         when Pattern::CharRaceProf
           # name captured here, but do not rely on it - use XML instead
           @stat_hold = []
-          Infomon.mutex.lock
+          Infomon.mutex_lock
           match = Regexp.last_match
           @stat_hold.push(['stat.race', match[:race].to_s],
                           ['stat.profession', match[:profession].to_s])
@@ -99,11 +99,11 @@ module Infomon
           match = Regexp.last_match
           @stat_hold.push(['stat.silver', match[:silver].delete(',').to_i])
           Infomon.upsert_batch(@stat_hold)
-          Infomon.mutex.unlock
+          Infomon.mutex_unlock
           :ok
         when Pattern::Fame # serves as ExprStart
           @expr_hold = []
-          Infomon.mutex.lock
+          Infomon.mutex_lock
           match = Regexp.last_match
           @expr_hold.push(['experience.fame', match[:fame].delete(',').to_i])
           :ok
@@ -127,11 +127,11 @@ module Infomon
           :ok
         when Pattern::ExprEnd
           Infomon.upsert_batch(@expr_hold)
-          Infomon.mutex.unlock
+          Infomon.mutex_unlock
           :ok
         when Pattern::SkillStart
           @skills_hold = []
-          Infomon.mutex.lock
+          Infomon.mutex_lock
           :ok
         when Pattern::Skill
           match = Regexp.last_match
@@ -143,20 +143,30 @@ module Infomon
           @skills_hold.push(['spell.%s' % match[:name].downcase, match[:rank].to_i])
           :ok
         when Pattern::SkillEnd
-          Infomon.upsert_batch(@skills_hold)
-          Infomon.mutex.unlock
-          :ok
+          if Infomon.mutex.owned?
+            Infomon.upsert_batch(@skills_hold)
+            Infomon.mutex_unlock
+            :ok
+          else
+            :noop
+          end
         when Pattern::PSMStart
+          match = Regexp.last_match
           @psm_hold = []
-          Infomon.mutex.lock
+          if match[:cat] =~ /Ascension/
+            @psm_cat = 'ascension'
+          else
+            @psm_cat = 'psm'
+          end
+          Infomon.mutex_lock
           :ok
         when Pattern::PSM
           match = Regexp.last_match
-          @psm_hold.push(['psm.%s' % match[:command], match[:ranks].to_i])
+          @psm_hold.push(["#{@psm_cat}.%s" % match[:command], match[:ranks].to_i])
           :ok
         when Pattern::PSMEnd
           Infomon.upsert_batch(@psm_hold)
-          Infomon.mutex.unlock
+          Infomon.mutex_unlock
           :ok
         when Pattern::NoWarcries
           Infomon.upsert_batch([['psm.bertrandts_bellow', 0],
@@ -228,26 +238,41 @@ module Infomon
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
+          if category =~ /Ascension/
+            @psm_cat = 'ascension'
+          else
+            @psm_cat = 'psm'
+          end
           seek_name = PSMS.name_normal(match[:psm])
           db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("psm.#{db_name[:short_name]}", match[:rank].to_i)
+          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", match[:rank].to_i)
           :ok
         when Pattern::UnlearnPSM, Pattern::UnlearnTechnique
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
+          if category =~ /Ascension/
+            @psm_cat = 'ascension'
+          else
+            @psm_cat = 'psm'
+          end
           seek_name = PSMS.name_normal(match[:psm])
           no_decrement = (match.string =~ /have decreased to/)
           db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("psm.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
+          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
           :ok
         when Pattern::LostTechnique
           match = Regexp.last_match
           category = match[:cat]
           category = "CMan" if category =~ /Combat/
+          if category =~ /Ascension/
+            @psm_cat = 'ascension'
+          else
+            @psm_cat = 'psm'
+          end
           seek_name = PSMS.name_normal(match[:psm])
           db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("psm.#{db_name[:short_name]}", 0)
+          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", 0)
           :ok
 
         # TODO: refactor / streamline?
@@ -298,8 +323,11 @@ module Infomon
         else
           :noop
         end
-      rescue StandardError => e
-        puts e
+      rescue StandardError
+        respond "--- Lich: error: Infomon::Parser.parse: #{$!}"
+        respond "--- Lich: error: line: #{line}"
+        Lich.log "error: Infomon::Parser.parse: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+        Lich.log "error: line: #{line}\n\t"
       end
     end
   end

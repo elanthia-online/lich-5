@@ -209,6 +209,45 @@ describe Infomon::Parser, ".parse" do
     end
   end
 
+  context "ascension" do
+    it "handles ascension info" do
+      output = <<~Ascension
+        testing, the following Ascension Abilities are available:
+
+            Skill                Mnemonic        Ranks Type           Category        Subcategory
+            -------------------------------------------------------------------------------------
+            Spirit Mana Control  spiritmc        0/50  Passive        Common          Skill
+            Spiritual Lore - Ble slblessings     0/50  Passive        Common          Skill
+            Spiritual Lore - Rel slreligion      0/50  Passive        Common          Skill
+            Spiritual Lore - Sum slsummoning     1/50  Passive        Common          Skill
+            Stalking and Hiding  stalking        0/50  Passive        Common          Skill
+            Stamina Regeneration regenstamina    19/50 Passive        Common          Regen
+            Steam Resistance     resiststeam     0/40  Passive        Common          Resist
+            Strength             strength        0/40  Passive        Common          Stat
+            Survival             survival        0/50  Passive        Common          Skill
+            Swimming             swimming        2/50  Passive        Common          Skill
+            Thrown Weapons       thrownweapons   4/50  Passive        Common          Skill
+            Trading              trading         0/50  Passive        Common          Skill
+            Two Weapon Combat    twoweaponcombat 0/50  Passive        Common          Skill
+            Two-Handed Weapons   twohandedweapon 0/50  Passive        Common          Skill
+            Unbalance Resistance resistunbalance 0/40  Passive        Common          Resist
+            Vacuum Resistance    resistvacuum    0/40  Passive        Common          Resist
+            Wisdom               wisdom          0/40  Passive        Common          Stat
+        The output listed above was generated based on the following filters:
+            Availability: profession
+                  Type: all
+              Category: all
+           Subcategory: all
+        Ascension
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+
+      expect(Infomon.get("ascension.regenstamina")).to eq(19)
+      expect(Infomon.get("ascension.swimming")).to eq(2)
+      expect(Ascension['thrownweapons']).to eq(4)
+      expect(Ascension['Spiritual Lore Summoning']).to eq(1)
+    end
+  end
+
   context "psm" do
     it "handles shield info" do
       output = <<~Shield
