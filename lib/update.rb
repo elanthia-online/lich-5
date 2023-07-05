@@ -159,7 +159,7 @@ module Lich
             respond
           end
         else
-          self.update_file('beta', type, requested_file)
+          self.update_file(type, requested_file, 'beta')
         end
       end
 
@@ -299,7 +299,7 @@ module Lich
         end
       end
 
-      def self.update_file(version = 'production', type, rf)
+      def self.update_file(type, rf, version = 'production')
         requested_file = rf
         case type
         when "script"
