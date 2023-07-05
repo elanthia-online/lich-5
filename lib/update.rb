@@ -119,7 +119,7 @@ module Lich
         _respond "    #{snapshot_subdir}"
       end
 
-      def self.prep_betatest(type=nil, requested_file=nil)
+      def self.prep_betatest(type = nil, requested_file = nil)
         if type.nil?
           respond 'You are electing to participate in the beta testing of the next Lich release.'
           respond 'This beta test will include only Lich code, and does not include Ruby upates.'
@@ -159,7 +159,7 @@ module Lich
             respond
           end
         else
-          self.update_file(version = 'beta', type, requested_file)
+          self.update_file('beta', type, requested_file)
         end
       end
 
