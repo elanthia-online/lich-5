@@ -17,6 +17,8 @@ module Lich
         case type
         when /--announce|-a/
           self.announce
+        when /--(?:beta|test)(?: --(?:(script|library|data))=(.*))?/
+          self.prep_betatest($1.dup, $2.dup)
         when /--help|-h/
           self.help # Ok, that's just wrong.
         when /--update|-u/
@@ -117,6 +119,50 @@ module Lich
         _respond "    #{snapshot_subdir}"
       end
 
+      def self.prep_betatest(type = nil, requested_file = nil)
+        if type.nil?
+          respond 'You are electing to participate in the beta testing of the next Lich release.'
+          respond 'This beta test will include only Lich code, and does not include Ruby upates.'
+          respond 'While we will do everything we can to ensure you have a smooth experience, '
+          respond 'it is a test, and untoward things can result.  Please confirm your choice:'
+          respond 'Please confirm your participation:  ;send Y or ;send N'
+          line = nil
+          line = $_CLIENT_.gets until line.strip =~ /^;send |^;s /i
+          if line =~ /send Y|s Y/i
+            @beta_response = 'accepted'
+            respond 'Beta test installation accepted.  Thank you for considering!'
+          else
+            @beta_response = 'rejected'
+            respond 'Aboarding beta test installation request.  Thank you for considering!'
+            respond
+          end
+          if @beta_response =~ /accepted/
+            filename = "https://api.github.com/repos/elanthia-online/lich-5/releases"
+            update_info = URI.parse(filename).open.read
+            record = JSON::parse(update_info).first # assumption: Latest beta release always first record in API
+            record.each { |entry, value|
+              if entry.include? 'tag_name'
+                @update_to = value.sub('v', '')
+              elsif entry.include? 'assets'
+                @holder = value
+              elsif entry.include? 'body'
+                @new_features = value.gsub(/\#\# What's Changed.+$/m, '')
+              end
+            }
+            beta_asset = @holder.find { |x| x['name'] =~ /lich-5.tar.gz/ }
+            @zipfile = beta_asset.fetch('browser_download_url')
+            Lich::Util::Update.download_update
+          elsif @beta_response =~ /rejected/
+            nil
+          else
+            respond 'This is not where I want to be on a beta test request.'
+            respond
+          end
+        else
+          self.update_file(type, requested_file, 'beta')
+        end
+      end
+
       def self.prep_update
         filename = "https://api.github.com/repos/elanthia-online/lich-5/releases/latest"
         update_info = URI.parse(filename).open.read
@@ -134,7 +180,6 @@ module Lich
 
       def self.download_update
         ## This is the workhorse routine that does the file moves from an update
-
         self.prep_update if @update_to.nil? or @update_to.empty?
         if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}")
           _respond ''; _respond "Lich version #{LICH_VERSION} is good.  Enjoy!"; _respond ''
@@ -143,12 +188,15 @@ module Lich
           _respond 'snapshot in case there are problems with the update.'
 
           self.snapshot
+
+          # download the requested update (can be prod release, or beta)
           _respond; _respond "Downloading Lich5 version #{@update_to}"; _respond
           filename = "lich5-#{@update_to}"
           File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
             file.write URI.parse(@zipfile).open.read
           end
 
+          # unpack and prepare to use the requested update
           FileUtils.mkdir_p(File.join(TEMP_DIR, filename))
           Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"), File.join(TEMP_DIR, filename))
           new_target = Dir.children(File.join(TEMP_DIR, filename))
@@ -159,19 +207,11 @@ module Lich
           _respond; _respond 'Copying updated lich files to their locations.'
 
           ## We do not care about local edits from players in the Lich5 / lib location
-
-          FileUtils.remove_dir(LIB_DIR)
-          FileUtils.mkdir_p(LIB_DIR)
-          FileUtils.cp_r(File.join(TEMP_DIR, filename, "lib"), File.join(File.expand_path('..', LIB_DIR)))
-          Dir.chdir(LIB_DIR) {
-            Dir.glob("**/*").each { |file|
-              _respond "lib #{file} has been updated."
-            }
-          }
+          FileUtils.copy_entry(File.join(TEMP_DIR, filename, "lib"), File.join(LIB_DIR))
+          _respond; _respond "All Lich lib files have been updated."; _respond
 
           ## We do not care about local edits from players to the Lich5 / script location
           ## for CORE scripts (those required to run Lich5 properly)
-
           core_update = Dir.children(File.join(TEMP_DIR, filename, "scripts"))
           core_update.each { |file|
             File.delete(File.join(SCRIPT_DIR, file)) if File.exist?(File.join(SCRIPT_DIR, file))
@@ -184,8 +224,8 @@ module Lich
           ## We DO care about local edits from players to the Lich5 / data files
           ## specifically gameobj-data.xml and spell-list.xml.
           ## Let's be a little more purposeful and gentle with these two files.
-
           data_update = Dir.children(File.join(TEMP_DIR, filename, "data"))
+          _respond # intentional spacer to separate categories of files
           data_update.each { |file|
             transition_filename = "#{file}".sub(".xml", '')
             newfilename = File.join(DATA_DIR, "#{transition_filename}-#{Time.now.to_i}.xml")
@@ -200,13 +240,11 @@ module Lich
           ## Finally we move the lich.rbw file into place to complete the update.  We do
           ## not need to save a copy of this in the TEMP_DIR as previously done, since we
           ## took the snapshot at the beginning.
-
           lich_to_update = File.join(LICH_DIR, File.basename($PROGRAM_NAME))
           update_to_lich = File.join(TEMP_DIR, filename, "lich.rbw")
           File.open(update_to_lich, 'rb') { |r| File.open(lich_to_update, 'wb') { |w| w.write(r.read) } }
 
           ## And we clen up after ourselves
-
           FileUtils.remove_dir(File.join(TEMP_DIR, filename)) # we know these exist because
           FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) # we just processed them
 
@@ -261,7 +299,7 @@ module Lich
         end
       end
 
-      def self.update_file(type, rf)
+      def self.update_file(type, rf, version = 'production')
         requested_file = rf
         case type
         when "script"
@@ -270,7 +308,12 @@ module Lich
           requested_file =~ /\.lic$/ ? requested_file_ext = ".lic" : requested_file_ext = "bad extension"
         when "library"
           location = LIB_DIR
-          remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/master/lib"
+          case version
+          when "production"
+            remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/master/lib"
+          when "beta"
+            remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/staging/lib"
+          end
           requested_file =~ /\.rb$/ ? requested_file_ext = ".rb" : requested_file_ext = "bad extension"
         when "data"
           location = DATA_DIR
