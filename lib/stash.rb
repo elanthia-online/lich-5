@@ -34,8 +34,8 @@ module Lich
       @weapon_displayer = []
       container = find_container(param)
       result = Lich::Util.quiet_command_xml("look in my #{container}", /In the .*$|That is closed\.|^You glance at/) if container.contents.nil?
-      @weapon_displayer.push(container.id) if result.grep(/^You glance at/).any?
       fput "open my #{container}" if result.include?('That is closed.')
+      @weapon_displayer.push(container.id) if GameObj.containers.find { |item| item[0] == container.id }.nil?
       return container
     end
 
