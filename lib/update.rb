@@ -126,7 +126,6 @@ module Lich
           respond 'While we will do everything we can to ensure you have a smooth experience, '
           respond 'it is a test, and untoward things can result.  Please confirm your choice:'
           respond 'Please confirm your participation:  ;send Y or ;send N'
-          line = nil
           # we are only going to get the next client-input line, and if it does not confirm, we bail
           # we are doing this to prevent hanging the client with various other inputs by the user
           line = $_CLIENT_.gets
