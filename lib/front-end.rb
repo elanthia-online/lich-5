@@ -21,4 +21,13 @@ module Frontend
     return if @session_file.nil?
     File.delete(@session_file) if File.exist? @session_file
   end
+
+  def self.client
+    return $_CLIENT_ if $_CLIENT_
+    return $_DETACHABLE_CLIENT_ if $_DETACHABLE_CLIENT_
+  end
+
+  def self.name
+    return $frontend
+  end
 end
