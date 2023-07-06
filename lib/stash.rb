@@ -8,7 +8,7 @@ stash.rb: Core lich file for extending free_hands, empty_hands functions in
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.0.19
-    version: 1.2.0
+    version: 1.2.1
 
   changelog:
     version 1.2.1
