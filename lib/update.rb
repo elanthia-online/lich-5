@@ -127,7 +127,9 @@ module Lich
           respond 'it is a test, and untoward things can result.  Please confirm your choice:'
           respond 'Please confirm your participation:  ;send Y or ;send N'
           line = nil
-          line = $_CLIENT_.gets until line.strip =~ /^;send |^;s /i
+          # we are only going to get the next client-input line, and if it does not confirm, we bail
+          # we are doing this to prevent hanging the client with various other inputs by the user
+          line = $_CLIENT_.gets
           if line =~ /send Y|s Y/i
             @beta_response = 'accepted'
             respond 'Beta test installation accepted.  Thank you for considering!'
