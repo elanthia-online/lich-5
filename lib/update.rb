@@ -128,8 +128,7 @@ module Lich
           respond 'Please confirm your participation:  ;send Y or ;send N'
           # we are only going to get the next client-input line, and if it does not confirm, we bail
           # we are doing this to prevent hanging the client with various other inputs by the user
-          sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_
-          line = sync_thread.gets until line.strip =~ /^;send |^;s /i
+          line = Frontend.client.gets until line.strip =~ /^;send |^;s /i
           if line =~ /send Y|s Y/i
             @beta_response = 'accepted'
             respond 'Beta test installation accepted.  Thank you for considering!'
