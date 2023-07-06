@@ -8,9 +8,11 @@ stash.rb: Core lich file for extending free_hands, empty_hands functions in
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.0.19
-    version: 1.2.0
+    version: 1.2.1
 
   changelog:
+    version 1.2.1
+     * Added support for weapon displayers
     version 1.2.0
      * Added sheath support and TWC support
     version 1.1.0
@@ -29,9 +31,13 @@ module Lich
     end
 
     def self.container(param)
+      @weapon_displayer ||= []
       container = find_container(param)
-      result = Lich::Util.quiet_command_xml("look in my #{container}", /In the .*$|That is closed\./) if container.contents.nil?
-      fput "open my #{container}" if result.include?('That is closed.')
+      unless @weapon_displayer.include?(container.id)
+        result = Lich::Util.quiet_command_xml("look in ##{container.id}", /In the .*$|That is closed\.|^You glance at/) if container.contents.nil?
+        fput "open ##{container.id}" if result.include?('That is closed.')
+        @weapon_displayer.push(container.id) if GameObj.containers.find { |item| item[0] == container.id }.nil?
+      end
       return container
     end
 
@@ -46,6 +52,7 @@ module Lich
       bag = container(bag)
       try_or_fail(command: "_drag ##{item.id} ##{bag.id}") do
         20.times {
+          return true if ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) && @weapon_displayer.include?(bag.id)
           return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) and bag.contents.to_a.map(&:id).include?(item.id))
           return true if item.name =~ /^ethereal \w+$/ && ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id)
           sleep 0.1
