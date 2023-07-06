@@ -31,11 +31,13 @@ module Lich
     end
 
     def self.container(param)
-      @weapon_displayer = []
+      @weapon_displayer ||= []
       container = find_container(param)
-      result = Lich::Util.quiet_command_xml("look in my #{container}", /In the .*$|That is closed\.|^You glance at/) if container.contents.nil?
-      fput "open my #{container}" if result.include?('That is closed.')
-      @weapon_displayer.push(container.id) if GameObj.containers.find { |item| item[0] == container.id }.nil?
+      unless @weapon_displayer.include?(container.id)
+        result = Lich::Util.quiet_command_xml("look in ##{container.id}", /In the .*$|That is closed\.|^You glance at/) if container.contents.nil?
+        fput "open ##{container.id}" if result.include?('That is closed.')
+        @weapon_displayer.push(container.id) if GameObj.containers.find { |item| item[0] == container.id }.nil?
+      end
       return container
     end
 
