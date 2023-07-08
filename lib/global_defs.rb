@@ -1979,11 +1979,6 @@ def strip_xml(line)
   return line if line == "\r\n"
 
   if $strip_xml_multiline
-    if $strip_xml_multiline =~ /^<pushStream id="atmospherics" \/>/ && line =~ /^<prompt time=/
-      # Dragonrealms serves up malformed atmospherics, a lot.
-      # If this multiline is for an atmospheric the next occurence of a prompt SHOULD be closing the stream.
-      line = '<popStream id="atmospherics" />' + line
-    end
     $strip_xml_multiline = $strip_xml_multiline + line
     line = $strip_xml_multiline
   end
