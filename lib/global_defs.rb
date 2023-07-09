@@ -1978,7 +1978,7 @@ end
 def strip_xml(line)
   return line if line == "\r\n"
 
-  if $strip_xml_multiline && XMLData.game =~ /GS/
+  if $strip_xml_multiline
     $strip_xml_multiline = $strip_xml_multiline + line
     line = $strip_xml_multiline
   end
