@@ -1132,7 +1132,7 @@ module Games
 
         if @atmospherics
           @atmospherics = false
-          server_string.prepend('<popStream id="atmospherics" \/>') unless server_string =~ /<popStream id="atmospherics" \/>/
+          server_string.prepend('<popStream id="atmospherics" />') unless server_string =~ /<popStream id="atmospherics" \/>/
         end
         if server_string =~ /<pushStream id="familiar" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # Cry For Help spell is broken...
           server_string.sub!('<pushStream id="familiar" />', '')
@@ -3332,8 +3332,8 @@ main_thread = Thread.new {
                 init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
                 init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{XMLData.mind_text}'/>"
                 init_str.concat "<spell>#{XMLData.prepared_spell}</spell>"
-                init_str.concat "<right>#{GameObj.right_hand.name}</right>"
-                init_str.concat "<left>#{GameObj.left_hand.name}</left>"
+                init_str.concat "<right>#{GameObj.right_hand.name}</right>" if XMLData.game =~ /GS/
+                init_str.concat "<left>#{GameObj.left_hand.name}</left>" if XMLData.game =~ /GS/
                 for indicator in ['IconBLEEDING', 'IconPOISONED', 'IconDISEASED', 'IconSTANDING', 'IconKNEELING', 'IconSITTING', 'IconPRONE']
                   init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
                 end
