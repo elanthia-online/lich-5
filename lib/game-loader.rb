@@ -5,6 +5,7 @@ module GameLoader
     require 'lib/spell'
     require 'lib/bounty'
     require 'lib/infomon/infomon'
+    require 'lib/attributes/resource'
     require 'lib/attributes/stats'
     require 'lib/attributes/spells'
     require 'lib/attributes/skills'
