@@ -34,7 +34,7 @@ module Lich
       @weapon_displayer ||= []
       container = find_container(param)
       unless @weapon_displayer.include?(container.id)
-        result = Lich::Util.quiet_command_xml("look in ##{container.id}", /In the .*$|That is closed\.|^You glance at/) if container.contents.nil?
+        result = Lich::Util.issue_command("look in ##{container.id}", /In the .*$|That is closed\.|^You glance at/, silent: true, quiet: true) if container.contents.nil?
         fput "open ##{container.id}" if result.include?('That is closed.')
         @weapon_displayer.push(container.id) if GameObj.containers.find { |item| item[0] == container.id }.nil?
       end
@@ -67,7 +67,7 @@ module Lich
       @checked_sheaths = false
       sheath_list_match = /(?:sheath|secondary sheath):\s+<d\scmd="store\s(\w+)\sclear">[^<]+<a\sexist="(\d+)"\snoun="[^"]+">([^<]+)<\/a>(?:\s[^<]+)?<\/d>/
 
-      ready_lines = Lich::Util.issue_command("ready list", /Your current settings are/, /To change your default item for a category that is already set/, true, 5, true, true, true)
+      ready_lines = Lich::Util.issue_command("ready list", /Your current settings are/, /To change your default item for a category that is already set/, silent: true, quiet: true)
       ready_lines.each { |line|
         if line =~ sheath_list_match
           sheath_obj = Regexp.last_match(3).to_s.downcase
@@ -114,13 +114,7 @@ module Lich
       # finding another container if needed
       other_containers_var = nil
       other_containers = proc {
-        results = Lich::Util.quiet_command_xml(
-          'inventory containers',
-          /^(?:You are carrying nothing at this time|You are wearing)/,
-          /<prompt time/,
-          false,
-          5
-        )
+        results = Lich::Util.issue_command('inventory containers', /^(?:You are carrying nothing at this time|You are wearing)/, silent: true, quiet: true)
         other_containers_ids = results.to_s.scan(/exist=\\"(.*?)\\"/).flatten - [lootsack.id]
         other_containers_var = GameObj.inv.find_all { |obj| other_containers_ids.include?(obj.id) }
         other_containers_var
