@@ -262,9 +262,11 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get("resource.weekly")).to eq(34000)
       expect(Infomon.get("resource.total")).to eq(78507)
       expect(Infomon.get("resource.suffused")).to eq(1678)
+      expect(Infomon.get("resource.type")).to eq("Essence")
       expect(Resource.weekly).to eq(34000)
       expect(Resource.total).to eq(78507)
       expect(Resource.suffused).to eq(1678)
+      expect(Resource.type).to eq("Essence")
     end
   end
 
