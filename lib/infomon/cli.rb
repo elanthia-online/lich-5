@@ -20,7 +20,7 @@ module Infomon
 
     request.each do |command, start_capture|
       respond "Retrieving character #{command}." if $infomon_debug
-      Lich::Util.issue_command(command.to_s, start_capture, /<prompt/, true, 5, false, true, true)
+      Lich::Util.issue_command(command.to_s, start_capture, /<prompt/, include_end: true, timeout: 5, silent: false, usexml: true, quiet: true)
       respond "Did #{command}." if $infomon_debug
     end
     respond 'Requested Infomon sync complete.'
