@@ -31,6 +31,7 @@ Games::Gemstone::Spell.load('/home/runner/work/lich-5/lich-5/data/effect-list.xm
 
 require "infomon/infomon"
 require "attributes/stats"
+require "attributes/resource"
 require "infomon/status"
 require "experience"
 require "psms"
@@ -245,6 +246,27 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get("ascension.swimming")).to eq(2)
       expect(Ascension['thrownweapons']).to eq(4)
       expect(Ascension['Spiritual Lore Summoning']).to eq(1)
+    end
+  end
+
+  context "resource" do
+    it "handles resource info" do
+      output = <<~Resource
+        Health: 140/140     Mana: 407/407     Stamina: 110/110     Spirit: 11/11
+        Voln Favor: 39,613,200
+        Essence: 34,000/50,000 (Weekly)     78,507/200,000 (Total)
+        Suffused Essence: 1,678
+      Resource
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+
+      expect(Infomon.get("resource.weekly")).to eq(34000)
+      expect(Infomon.get("resource.total")).to eq(78507)
+      expect(Infomon.get("resource.suffused")).to eq(1678)
+      expect(Infomon.get("resource.type")).to eq("Essence")
+      expect(Resource.weekly).to eq(34000)
+      expect(Resource.total).to eq(78507)
+      expect(Resource.suffused).to eq(1678)
+      expect(Resource.type).to eq("Essence")
     end
   end
 

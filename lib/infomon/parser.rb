@@ -41,6 +41,8 @@ module Infomon
       UnlearnPSM = /^You decide to unlearn rank (?<rank>\d+) of (?<psm>[A-z\s]+), regaining \d+ (?<cat>[A-z]+) .*?points\.$/
       UnlearnTechnique = /^\[You have decreased to rank (?<rank>\d+) of (?<cat>[A-z]+).*: (?<psm>[A-z\s]+)\.\]$/.freeze
       LostTechnique = /^\[You are no longer trained in (?<cat>[A-z]+) .*: (?<psm>[A-z\s]+)\.\]$/.freeze
+      Resource = /^(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck|Guile): (?<weekly>[0-9,]+)\/50,000 \(Weekly\)\s+(?<total>[0-9,]+)\/200,000 \(Total\)$/.freeze
+      Suffused = /^Suffused (?<type>(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck|Guile)): (?<suffused>[0-9,]+)$/.freeze
 
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
@@ -63,7 +65,8 @@ module Infomon
                          Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
                          BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
                          CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
-                         SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique)
+                         SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
+                         Resource, Suffused)
     end
 
     def self.parse(line)
@@ -273,6 +276,16 @@ module Infomon
           seek_name = PSMS.name_normal(match[:psm])
           db_name = PSMS.find_name(seek_name, category)
           Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", 0)
+          :ok
+        when Pattern::Resource
+          match = Regexp.last_match
+          Infomon.set('resource.weekly', match[:weekly].delete(',').to_i)
+          Infomon.set('resource.total', match[:total].delete(',').to_i)
+          :ok
+        when Pattern::Suffused
+          match = Regexp.last_match
+          Infomon.set('resource.type', match[:type].to_s)
+          Infomon.set('resource.suffused', match[:suffused].delete(',').to_i)
           :ok
 
         # TODO: refactor / streamline?
