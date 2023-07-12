@@ -50,7 +50,7 @@ module Lich
       "Util::#{prefix}-#{now}-#{Random.rand(10000)}"
     end
 
-    def self.issue_command(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = nil, usexml = true, quiet = false)
+    def self.issue_command(command, start_pattern, end_pattern = /<prompt/, include_end: true, timeout: 5, silent: nil, usexml: true, quiet: false)
       result = []
       name = self.anon_hook
       filter = false
@@ -116,11 +116,11 @@ module Lich
     end
 
     def self.quiet_command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true)
-      return issue_command(command, start_pattern, end_pattern, include_end, timeout, silent, true, true)
+      return issue_command(command, start_pattern, end_pattern, include_end: include_end, timeout: timeout, silent: silent, usexml: true, quiet: true)
     end
 
     def self.quiet_command(command, start_pattern, end_pattern, include_end = true, timeout = 5, silent = true)
-      return issue_command(command, start_pattern, end_pattern, include_end, timeout, silent, false, true)
+      return issue_command(command, start_pattern, end_pattern, include_end: include_end, timeout: timeout, silent: silent, usexml: false, quiet: true)
     end
 
     def self.silver_count(timeout = 3)
