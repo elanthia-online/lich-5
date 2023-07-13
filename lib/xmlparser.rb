@@ -236,17 +236,6 @@ class XMLParser
         end
       end
 
-      if name == 'compass' and $nav_seen
-        $nav_seen = false
-        @second_compass = true
-      end
-
-      if name == 'compass' and @second_compass
-        @second_compass = false
-        @room_count += 1
-        $room_count += 1
-      end
-
       if name =~ /^(?:a|right|left)$/
         @obj_exist = attributes['exist']
         @obj_noun = attributes['noun']
@@ -729,6 +718,18 @@ class XMLParser
 
   def tag_end(name)
     begin
+
+      if name == 'compass' and $nav_seen
+        $nav_seen = false
+        @second_compass = true
+      end
+
+      if name == 'compass' and @second_compass
+        @second_compass = false
+        @room_count += 1
+        $room_count += 1
+      end
+
       if name == 'inv'
         if @obj_exist == @obj_location
           if @obj_after_name == 'is closed.'
