@@ -222,7 +222,6 @@ class XMLParser
       @active_ids.push(attributes['id'].to_s)
 
       if name == 'nav'
-        Lich.log("01 NAV detected!")
         @previous_nav_rm = @room_id
         @room_id = attributes['rm'].to_i
         $nav_seen = true
@@ -230,7 +229,6 @@ class XMLParser
       end
 
       if name == 'compass'
-        Lich.log("02 COMPASS detected!")
         if @current_stream == 'familiar'
           @fam_mode = String.new
         elsif @room_window_disabled
@@ -239,13 +237,11 @@ class XMLParser
       end
 
       if name == 'compass' and $nav_seen
-        Lich.log("03 COMPASS & NAV SEEN")
         $nav_seen = false
         @second_compass = true
       end
 
       if name == 'compass' and @second_compass
-        Lich.log("04 COMPASS & SECOND COMPASS")
         @second_compass = false
         @room_count += 1
         $room_count += 1
