@@ -722,9 +722,7 @@ class XMLParser
       if name == 'compass' and $nav_seen
         $nav_seen = false
         @second_compass = true
-      end
-
-      if name == 'compass' and @second_compass
+      elsif name == 'compass' and @second_compass
         @second_compass = false
         @room_count += 1
         $room_count += 1
