@@ -719,13 +719,16 @@ class XMLParser
   def tag_end(name)
     begin
 
-      if name == 'compass' and $nav_seen
-        $nav_seen = false
-        @second_compass = true
-      elsif name == 'compass' and @second_compass
-        @second_compass = false
-        @room_count += 1
-        $room_count += 1
+      if @game =~ /^DR/
+        if name == 'compass' and $nav_seen
+          $nav_seen = false
+          @second_compass = true
+        end
+        if name == 'compass' and @second_compass
+          @second_compass = false
+          @room_count += 1
+          $room_count += 1
+        end
       end
 
       if name == 'inv'
