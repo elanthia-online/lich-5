@@ -36,6 +36,25 @@
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
 
+# process ARGV for constants before loading constants.rb: issue #304
+for arg in ARGV
+  if arg =~ /^--(?:home)=(.+)[\\\/]?$/i
+    LICH_DIR = $1
+  elsif arg =~ /^--temp=(.+)[\\\/]?$/i
+    TEMP_DIR = $1
+  elsif arg =~ /^--scripts=(.+)[\\\/]?$/i
+    SCRIPT_DIR = $1
+  elsif arg =~ /^--maps=(.+)[\\\/]?$/i
+    MAP_DIR = $1
+  elsif arg =~ /^--logs=(.+)[\\\/]?$/i
+    LOG_DIR = $1
+  elsif arg =~ /^--backup=(.+)[\\\/]?$/i
+    BACKUP_DIR = $1
+  elsif arg =~ /^--data=(.+)[\\\/]?$/i
+    DATA_DIR = $1
+  end
+end
+
 require 'time'
 require 'socket'
 require 'rexml/document'
@@ -2398,20 +2417,6 @@ for arg in ARGV
       Lich.log 'Uninstall failed.'
     end
     exit
-  elsif arg =~ /^--(?:home)=(.+)$/i
-    LICH_DIR = $1.sub(/[\\\/]$/, '')
-  elsif arg =~ /^--temp=(.+)$/i
-    TEMP_DIR = $1.sub(/[\\\/]$/, '')
-  elsif arg =~ /^--scripts=(.+)$/i
-    SCRIPT_DIR = $1.sub(/[\\\/]$/, '')
-  elsif arg =~ /^--maps=(.+)$/i
-    MAP_DIR = $1.sub(/[\\\/]$/, '')
-  elsif arg =~ /^--logs=(.+)$/i
-    LOG_DIR = $1.sub(/[\\\/]$/, '')
-  elsif arg =~ /^--backup=(.+)$/i
-    BACKUP_DIR = $1.sub(/[\\\/]$/, '')
-  elsif arg =~ /^--data=(.+)$/i
-    DATA_DIR = $1.sub(/[\\\/]$/, '')
   elsif arg =~ /^--start-scripts=(.+)$/i
     argv_options[:start_scripts] = $1
   elsif arg =~ /^--reconnect$/i
