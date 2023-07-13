@@ -1058,23 +1058,6 @@ module Games
         server_string = server_string.gsub("<pushStream id=\"combat\" /><component id=", "<component id=")
         # server_string = server_string.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
 
-        ## Fix for nested/non-solo nav tags.
-        ## DR needs the <nav/> tag to be in its own line to properly detect movement
-        ## These two fixes make it so room movement can be detected reliably
-        if server_string =~ /^<nav\/>/
-          unless server_string.chomp == "<nav\/>"
-            Lich.log "NAV tag detected in nested line: #{server_string.inspect}"
-            server_string.gsub!("<nav\/>", "<nav\/>\n").chomp!
-            Lich.log "NAV tag fixed to: #{server_string.inspect}"
-          end
-        end
-
-        if server_string =~ /(?!^)<nav\/>/
-          Lich.log "NAV tag detected not at start of line: #{server_string.inspect}"
-          server_string.gsub!("<nav\/>", "\n<nav\/>").chomp!
-          Lich.log "NAV tag fixed to: #{server_string.inspect}"
-        end
-
         # Fixes xml with \r\n in the middle of it like:
         # <component id='room exits'>Obvious paths: clockwise, widdershins.\r\n
         # <compass></compass></component>\r\n

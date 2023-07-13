@@ -220,6 +220,37 @@ class XMLParser
     begin
       @active_tags.push(name)
       @active_ids.push(attributes['id'].to_s)
+
+      if name == 'nav'
+        Lich.log("01 NAV detected!")
+        @previous_nav_rm = @room_id
+        @room_id = attributes['rm'].to_i
+        $nav_seen = true
+        Map.last_seen_objects = nil if Map.method_defined?(:last_seen_objects); # DR Only
+      end
+
+      if name == 'compass'
+        Lich.log("02 COMPASS detected!")
+        if @current_stream == 'familiar'
+          @fam_mode = String.new
+        elsif @room_window_disabled
+          @room_exits = Array.new
+        end
+      end
+
+      if name == 'compass' and $nav_seen
+        Lich.log("03 COMPASS & NAV SEEN")
+        $nav_seen = false
+        @second_compass = true
+      end
+
+      if name == 'compass' and @second_compass
+        Lich.log("04 COMPASS & SECOND COMPASS")
+        @second_compass = false
+        @room_count += 1
+        $room_count += 1
+      end
+
       if name =~ /^(?:a|right|left)$/
         @obj_exist = attributes['exist']
         @obj_noun = attributes['noun']
@@ -241,11 +272,6 @@ class XMLParser
         @process_spell_durations = true
       elsif name == 'resource'
         nil
-      elsif name == 'nav'
-        @previous_nav_rm = @room_id
-        @room_id = attributes['rm'].to_i
-        $nav_seen = true
-        Map.last_seen_objects = nil if Map.method_defined?(:last_seen_objects); # DR Only
       elsif name == 'pushStream'
         @in_stream = true
         @current_stream = attributes['id'].to_s
@@ -734,13 +760,6 @@ class XMLParser
         @room_exits.each { |exit| gsl_exits.concat(DIRMAP[SHORTDIR[exit]].to_s) }
         $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
         gsl_exits = nil
-        @room_count += 1
-        $room_count += 1
-      elsif name == 'compass' and $nav_seen
-        $nav_seen = false
-        @second_compass = true
-      elsif name == 'compass' and @second_compass
-        @second_compass = false
         @room_count += 1
         $room_count += 1
       end
