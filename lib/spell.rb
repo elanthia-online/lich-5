@@ -611,7 +611,7 @@ module Games
               return false
             end
           end
-          unless (self.spirit_cost > 0) or checkspirit(self.spirit_cost + 1 + [9912, 9913, 9914, 9916, 9916, 9916].delete_if { |num| !Spell[num].active? }.length)
+          unless (self.spirit_cost <= 0) or checkspirit(self.spirit_cost + 1 + [9912, 9913, 9914, 9916, 9916, 9916].delete_if { |num| !Spell[num].active? }.length)
             echo 'cast: not enough spirit'
             sleep 0.1
             return false
