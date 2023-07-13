@@ -480,12 +480,6 @@ class XMLParser
           end
         end
         $_CLIENT_.puts "\034GSV#{sprintf('%010d%010d%010d%010d%010d%010d%010d%010d', @max_health.to_i, @health.to_i, @max_spirit.to_i, @spirit.to_i, @max_mana.to_i, @mana.to_i, make_wound_gsl, make_scar_gsl)}\r\n" if @send_fake_tags
-      elsif name == 'compass'
-        if @current_stream == 'familiar'
-          @fam_mode = String.new
-        elsif @room_window_disabled
-          @room_exits = Array.new
-        end
       elsif @room_window_disabled and (name == 'dir') and @active_tags.include?('compass')
         @room_exits.push(LONGDIR[attributes['value']])
       elsif name == 'radio'
@@ -749,7 +743,6 @@ class XMLParser
         $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
         gsl_exits = nil
       elsif @room_window_disabled and (name == 'compass')
-        #            @room_window_disabled = false
         @room_description = @room_description.strip
         @room_exits_string.concat " #{@room_exits.join(', ')}" unless @room_exits.empty?
         gsl_exits = String.new
