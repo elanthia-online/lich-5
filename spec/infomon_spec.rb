@@ -259,14 +259,14 @@ describe Infomon::Parser, ".parse" do
       Resource
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
-      expect(Infomon.get("resource.weekly")).to eq(34000)
-      expect(Infomon.get("resource.total")).to eq(78507)
-      expect(Infomon.get("resource.suffused")).to eq(1678)
-      expect(Infomon.get("resource.type")).to eq("Essence")
-      expect(Resource.weekly).to eq(34000)
-      expect(Resource.total).to eq(78507)
-      expect(Resource.suffused).to eq(1678)
-      expect(Resource.type).to eq("Essence")
+      expect(Infomon.get("resources.weekly")).to eq(34000)
+      expect(Infomon.get("resources.total")).to eq(78507)
+      expect(Infomon.get("resources.suffused")).to eq(1678)
+      expect(Infomon.get("resources.type")).to eq("Essence")
+      expect(Lich::Resources.weekly).to eq(34000)
+      expect(Lich::Resources.total).to eq(78507)
+      expect(Lich::Resources.suffused).to eq(1678)
+      expect(Lich::Resources.type).to eq("Essence")
     end
   end
 
