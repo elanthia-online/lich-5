@@ -31,7 +31,7 @@ Games::Gemstone::Spell.load('/home/runner/work/lich-5/lich-5/data/effect-list.xm
 
 require "infomon/infomon"
 require "attributes/stats"
-require "attributes/resource"
+require "attributes/resources"
 require "infomon/status"
 require "experience"
 require "psms"
