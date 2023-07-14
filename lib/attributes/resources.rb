@@ -1,19 +1,19 @@
 module Lich
   module Resources
     def self.weekly
-      Infomon.get('resource.weekly')
+      Infomon.get('resources.weekly')
     end
 
     def self.total
-      Infomon.get('resource.total')
+      Infomon.get('resources.total')
     end
 
     def self.suffused
-      Infomon.get('resource.suffused')
+      Infomon.get('resources.suffused')
     end
 
     def self.type
-      Infomon.get('resource.type')
+      Infomon.get('resources.type')
     end
 
     def self.check(quiet = false)
