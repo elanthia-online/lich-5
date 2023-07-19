@@ -1073,6 +1073,16 @@ module Games
         server_string = server_string.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />", "")
         server_string = server_string.gsub("<popStream id=\"combat\" /><pushStream id=\"combat\" />", "")
 
+        # DR occasionally has poor encoding in text, which causes parsing errors.
+        # One example of this is in the discern text for the spell Membrach's Greed
+        # which gets sent as Membrach\x92s Greed. This fixes the bad encoding until
+        # Simu fixes it.
+        if server_string =~ /\x92/
+          Lich.log "Detected poorly encoded apostrophe: #{server_string.inspect}"
+          server_string.gsub!("\x92", "'")
+          Lich.log "Changed poorly encoded apostrophe to: #{server_string.inspect}"
+        end
+
         ## Fix combat wrapping components - Why, DR, Why?
         server_string = server_string.gsub("<pushStream id=\"combat\" /><component id=", "<component id=")
         # server_string = server_string.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
