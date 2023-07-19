@@ -279,13 +279,13 @@ module Infomon
           :ok
         when Pattern::Resource
           match = Regexp.last_match
-          Infomon.set('resource.weekly', match[:weekly].delete(',').to_i)
-          Infomon.set('resource.total', match[:total].delete(',').to_i)
+          Infomon.set('resources.weekly', match[:weekly].delete(',').to_i)
+          Infomon.set('resources.total', match[:total].delete(',').to_i)
           :ok
         when Pattern::Suffused
           match = Regexp.last_match
-          Infomon.set('resource.type', match[:type].to_s)
-          Infomon.set('resource.suffused', match[:suffused].delete(',').to_i)
+          Infomon.set('resources.type', match[:type].to_s)
+          Infomon.set('resources.suffused', match[:suffused].delete(',').to_i)
           :ok
 
         # TODO: refactor / streamline?
