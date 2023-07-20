@@ -231,8 +231,10 @@ module Lich
           data_update.each { |file|
             transition_filename = "#{file}".sub(".xml", '')
             newfilename = File.join(DATA_DIR, "#{transition_filename}-#{Time.now.to_i}.xml")
-            File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
-            File.delete(File.join(DATA_DIR, file)) if File.exist?(File.join(DATA_DIR, file))
+            if File.exist?(File.join(DATA_DIR, file))
+              File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
+              File.delete(File.join(DATA_DIR, file))
+            end
             File.open(File.join(TEMP_DIR, filename, "data", file), 'rb') { |r|
               File.open(File.join(DATA_DIR, file), 'wb') { |w| w.write(r.read) }
             }
