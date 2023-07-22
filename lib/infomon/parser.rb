@@ -51,7 +51,8 @@ module Infomon
       TicketEtherealScrip = /^            Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
       TicketSoulShards = /^       Ebon Gate - (?<soul_shards>[\d,]+) soul shards\.$/.freeze
       TicketRaikhen = /^     Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
-      WealthSilver = /^You have (?<silver>but one|no silver|[\d,]+) coins? with you\.$/.freeze
+      WealthSilver = /^You have (?<silver>no silver|but one|[\d,]+) coins? with you\.$/.freeze
+      WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) coins? stored within your (?:coin pouch|coin hand|gambling kit)\.$/.freeze
 
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
@@ -76,7 +77,8 @@ module Infomon
                          CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
                          SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
                          Resource, Suffused, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketBlackscrip,
-                         TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen, WealthSilver)
+                         TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
+                         WealthSilver, WealthSilverContainer)
     end
 
     def self.parse(line)
@@ -339,6 +341,10 @@ module Infomon
           else
             Infomon.set('currency.silver', match[:silver].delete(',').to_i)
           end
+          :ok
+        when Pattern::WealthSilverContainer
+          match = Regexp.last_match
+          Infomon.set('currency.silver_container', match[:silver].delete(',').to_i)
           :ok
 
         # TODO: refactor / streamline?
