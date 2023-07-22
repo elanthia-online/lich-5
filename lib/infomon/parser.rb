@@ -51,7 +51,7 @@ module Infomon
       TicketEtherealScrip = /^            Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
       TicketSoulShards = /^       Ebon Gate - (?<soul_shards>[\d,]+) soul shards\.$/.freeze
       TicketRaikhen = /^     Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
-      WealthSilver = /^You have (?:but one|no silver|[\d,]+) coins? with you\.$/.freeze
+      WealthSilver = /^You have (?<silver>but one|no silver|[\d,]+) coins? with you\.$/.freeze
 
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
@@ -296,6 +296,49 @@ module Infomon
           match = Regexp.last_match
           Infomon.set('resources.type', match[:type].to_s)
           Infomon.set('resources.suffused', match[:suffused].delete(',').to_i)
+          :ok
+        when Pattern::GigasArtifactFragments
+          match = Regexp.last_match
+          Infomon.set('currency.gigas_artifact_fragments', match[:gigas_artifact_fragments].delete(',').to_i)
+          :ok
+        when Pattern::RedsteelMarks
+          match = Regexp.last_match
+          Infomon.set('currency.redsteel_marks', match[:redsteel_marks].delete(',').to_i)
+          :ok
+        when Pattern::TicketGeneral
+          match = Regexp.last_match
+          Infomon.set('currency.tickets', match[:tickets].delete(',').to_i)
+          :ok
+        when Pattern::TicketBlackscrip
+          match = Regexp.last_match
+          Infomon.set('currency.blackscrip', match[:blackscrip].delete(',').to_i)
+          :ok
+        when Pattern::TicketBloodscrip
+          match = Regexp.last_match
+          Infomon.set('currency.bloodscrip', match[:bloodscrip].delete(',').to_i)
+          :ok
+        when Pattern::TicketEtherealScrip
+          match = Regexp.last_match
+          Infomon.set('currency.ethereal_scrip', match[:ethereal_scrip].delete(',').to_i)
+          :ok
+        when Pattern::TicketSoulShards
+          match = Regexp.last_match
+          Infomon.set('currency.soul_shards', match[:soul_shards].delete(',').to_i)
+          :ok
+        when Pattern::TicketRaikhen
+          match = Regexp.last_match
+          Infomon.set('currency.raikhen', match[:raikhen].delete(',').to_i)
+          :ok
+        when Pattern::WealthSilver
+          match = Regexp.last_match
+          case match[:silver]
+          when 'no silver'
+            Infomon.set('currency.silver', 0)
+          when 'but one'
+            Infomon.set('currency.silver', 1)
+          else
+            Infomon.set('currency.silver', match[:silver].delete(',').to_i)
+          end
           :ok
 
         # TODO: refactor / streamline?
