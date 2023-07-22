@@ -43,6 +43,15 @@ module Infomon
       LostTechnique = /^\[You are no longer trained in (?<cat>[A-z]+) .*: (?<psm>[A-z\s]+)\.\]$/.freeze
       Resource = /^(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck|Guile): (?<weekly>[0-9,]+)\/50,000 \(Weekly\)\s+(?<total>[0-9,]+)\/200,000 \(Total\)$/.freeze
       Suffused = /^Suffused (?<type>(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck|Guile)): (?<suffused>[0-9,]+)$/.freeze
+      GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments\.$/.freeze
+      RedsteelMarks = /^You have (?<redsteel_marks>[\d,]+) redsteel marks\.$/.freeze
+      TicketGeneral = /^         General - (?<tickets>[\d,]+) tickets\.$/.freeze
+      TicketBlackscrip = /^ Troubled Waters - (?<blackscrip>[\d,]+) blackscrip\.$/.freeze
+      TicketBloodscrip = /^  Duskruin Arena - (?<bloodscrip>[\d,]+) bloodscrip\.$/.freeze
+      TicketEtherealScrip = /^            Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
+      TicketSoulShards = /^       Ebon Gate - (?<soul_shards>[\d,]+) soul shards\.$/.freeze
+      TicketRaikhen = /^     Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
+      WealthSilver = /^You have (?:but one|no silver|[\d,]+) coins? with you\.$/.freeze
 
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
@@ -66,7 +75,8 @@ module Infomon
                          BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
                          CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
                          SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
-                         Resource, Suffused)
+                         Resource, Suffused, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketBlackscrip,
+                         TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen, WealthSilver)
     end
 
     def self.parse(line)
@@ -100,7 +110,7 @@ module Infomon
           :ok
         when Pattern::StatEnd
           match = Regexp.last_match
-          @stat_hold.push(['stat.silver', match[:silver].delete(',').to_i])
+          @stat_hold.push(['currency.silver', match[:silver].delete(',').to_i])
           Infomon.upsert_batch(@stat_hold)
           Infomon.mutex_unlock
           :ok
