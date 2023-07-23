@@ -45,12 +45,12 @@ module Infomon
       Suffused = /^Suffused (?<type>(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck|Guile)): (?<suffused>[0-9,]+)$/.freeze
       GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments\.$/.freeze
       RedsteelMarks = /^You have (?<redsteel_marks>[\d,]+) redsteel marks\.$/.freeze
-      TicketGeneral = /^         General - (?<tickets>[\d,]+) tickets\.$/.freeze
-      TicketBlackscrip = /^ Troubled Waters - (?<blackscrip>[\d,]+) blackscrip\.$/.freeze
-      TicketBloodscrip = /^  Duskruin Arena - (?<bloodscrip>[\d,]+) bloodscrip\.$/.freeze
-      TicketEtherealScrip = /^            Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
-      TicketSoulShards = /^       Ebon Gate - (?<soul_shards>[\d,]+) soul shards\.$/.freeze
-      TicketRaikhen = /^     Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
+      TicketGeneral = /^\s+General - (?<tickets>[\d,]+) tickets\.$/.freeze
+      TicketBlackscrip = /^\s+Troubled Waters - (?<blackscrip>[\d,]+) blackscrip\.$/.freeze
+      TicketBloodscrip = /^\s+Duskruin Arena - (?<bloodscrip>[\d,]+) bloodscrip\.$/.freeze
+      TicketEtherealScrip = /^\s+Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
+      TicketSoulShards = /^\s+Ebon Gate - (?<soul_shards>[\d,]+) soul shards\.$/.freeze
+      TicketRaikhen = /^\s+Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
       WealthSilver = /^You have (?<silver>no silver|but one|[\d,]+) coins? with you\.$/.freeze
       WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) coins? stored within your (?:coin pouch|coin hand|gambling kit)\.$/.freeze
 
