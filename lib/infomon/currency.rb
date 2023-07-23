@@ -4,6 +4,10 @@ module Lich
       Infomon.get('currency.silver')
     end
 
+    def self.silver_container
+      Infomon.get('currency.silver_container')
+    end
+
     def self.redsteel_marks
       Infomon.get('currency.redsteel_marks')
     end
