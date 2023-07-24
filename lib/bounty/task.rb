@@ -105,7 +105,7 @@ class Bounty
     def guard?
       [
         :guard,
-        :bandit_assignment, :creature_assignment, :heirloom_assignment, :rescue_assignment
+        :bandit_assignment, :creature_assignment, :heirloom_assignment, :heirloom_found, :rescue_assignment
       ].include?(type)
     end
 
