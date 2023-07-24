@@ -5,18 +5,20 @@ module Infomon
   def self.sync
     # since none of this information is 3rd party displayed, silence is golden.
     respond 'Infomon sync requested.'
-    request = { 'info'            => /<a exist=.+#{XMLData.name}/,
-                'skill'           => /<a exist=.+#{XMLData.name}/,
-                'spell'           => %r{<output class="mono"/>},
-                'experience'      => %r{<output class="mono"/>},
-                'society'         => %r{<pushBold/>},
-                'citizenship'     => /^You don't seem|^You currently have .+ in/,
-                'armor list all'  => /<a exist=.+#{XMLData.name}/,
-                'cman list all'   => /<a exist=.+#{XMLData.name}/,
-                'feat list all'   => /<a exist=.+#{XMLData.name}/,
-                'shield list all' => /<a exist=.+#{XMLData.name}/,
-                'weapon list all' => /<a exist=.+#{XMLData.name}/,
-                'warcry'          => /^You have learned the following War Cries:|^You must be an active member of the Warrior Guild to use this skill/ }
+    request = { 'info'               => /<a exist=.+#{XMLData.name}/,
+                'skill'              => /<a exist=.+#{XMLData.name}/,
+                'spell'              => %r{<output class="mono"/>},
+                'experience'         => %r{<output class="mono"/>},
+                'society'            => %r{<pushBold/>},
+                'citizenship'        => /^You don't seem|^You currently have .+ in/,
+                'armor list all'     => /<a exist=.+#{XMLData.name}/,
+                'cman list all'      => /<a exist=.+#{XMLData.name}/,
+                'feat list all'      => /<a exist=.+#{XMLData.name}/,
+                'shield list all'    => /<a exist=.+#{XMLData.name}/,
+                'weapon list all'    => /<a exist=.+#{XMLData.name}/,
+                'ascension list all' => /<a exist=.+#{XMLData.name}/,
+                'resource'           => /Health: \d+\/\d+     Mana: \d+\/\d+     Stamina: \d+\/\d+     Spirit: \d+\/\d+/,
+                'warcry'             => /^You have learned the following War Cries:|^You must be an active member of the Warrior Guild to use this skill/ }
 
     request.each do |command, start_capture|
       respond "Retrieving character #{command}." if $infomon_debug
