@@ -1,6 +1,6 @@
 class Bounty
   class Task
-    def initialize(options={})
+    def initialize(options = {})
       @description    = options[:description]
       @type           = options[:type]
       @requirements   = options[:requirements] || {}
@@ -123,19 +123,25 @@ class Bounty
     def help?
       description.start_with?("You have been tasked to help")
     end
-    def assist?; help?; end
-    def group?; help? ;end
+
+    def assist?
+      help?
+    end
+
+    def group?
+      help?
+    end
 
     def method_missing(symbol, *args, &blk)
-      if requirements&.keys.include?(symbol)
+      if requirements&.keys&.include?(symbol)
         requirements[symbol]
       else
         super
       end
     end
 
-    def respond_to_missing?(symbol, include_private=false)
-      requirements&.keys.include?(symbol) || super
+    def respond_to_missing?(symbol, include_private = false)
+      requirements&.keys&.include?(symbol) || super
     end
   end
 end
