@@ -17,7 +17,7 @@ module Infomon
                 'shield list all'    => /<a exist=.+#{XMLData.name}/,
                 'weapon list all'    => /<a exist=.+#{XMLData.name}/,
                 'ascension list all' => /<a exist=.+#{XMLData.name}/,
-                'resource'           => /Health: \d+\/\d+     Mana: \d+\/\d+     Stamina: \d+\/\d+     Spirit: \d+\/\d+/,
+                'resource'           => /^Health: \d+\/(?:<pushBold\/>)?\d+\s+Mana: \d+\/(?:<pushBold\/>)?\d+\s+Stamina: \d+\/(?:<pushBold\/>)?\d+\s+Spirit: \d+\/(?:<pushBold\/>)?\d+/,
                 'warcry'             => /^You have learned the following War Cries:|^You must be an active member of the Warrior Guild to use this skill/ }
 
     request.each do |command, start_capture|
