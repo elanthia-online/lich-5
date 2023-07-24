@@ -132,7 +132,7 @@ class Bounty
 
     describe "#guard?" do
       let(:predicate) { :guard? }
-      let(:truthy_types) { [:guard, :bandit_assignment, :creature_assignment, :heirloom_assignment, :rescue_assignment] }
+      let(:truthy_types) { [:guard, :bandit_assignment, :creature_assignment, :heirloom_assignment, :heirloom_found, :rescue_assignment] }
 
       include_examples "task predicate examples"
     end
