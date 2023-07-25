@@ -41,7 +41,7 @@ DisableReadyPage=Yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 PrivilegesRequired=lowest
 ;PrivilegesRequiredOverridesAllowed=commandline dialog
-OutputBaseFilename=Ruby4Lich5
+OutputBaseFilename=Ruby4Lich{#MyAppVersion}
 SetupIconFile=.\fly64.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
