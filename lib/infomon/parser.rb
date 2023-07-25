@@ -8,8 +8,8 @@ module Infomon
       CharRaceProf = /^Name:\s+(?<name>[A-z\s']+)\s+Race:\s+(?<race>[A-z]+|[A-z]+(?: |-)[A-z]+)\s+Profession:\s+(?<profession>[-A-z]+)/.freeze
       CharGenderAgeExpLevel = /^Gender:\s+(?<gender>[A-z]+)\s+Age:\s+(?<age>[,0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)/.freeze
       Stat = /^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)/.freeze
-      StatEnd = /^Mana:\s+-?\d+\s+Silver:\s(?<silver>[\d,]+)$/.freeze
-      Fame = /^\s+Level: \d+\s+Fame: (?<fame>[\d,]+)$/.freeze # serves as ExprStart
+      StatEnd = /^Mana:\s+-?\d+\s+Silver:\s(?<silver>[-\d,]+)$/.freeze
+      Fame = /^\s+Level: \d+\s+Fame: (?<fame>[-\d,]+)$/.freeze # serves as ExprStart
       RealExp = %r{^\s+Experience: [\d,]+\s+Field Exp: (?<fxp_current>[\d,]+)/(?<fxp_max>[\d,]+)$}.freeze
       AscExp = /^\s+Ascension Exp: (?<ascension_experience>[\d,]+)\s+Recent Deaths: [\d,]+$/.freeze
       TotalExp = /^\s+Total Exp: (?<total_experience>[\d,]+)\s+Death's Sting: \w+$/.freeze
