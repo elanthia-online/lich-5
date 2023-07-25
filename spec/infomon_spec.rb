@@ -32,6 +32,7 @@ Games::Gemstone::Spell.load('/home/runner/work/lich-5/lich-5/data/effect-list.xm
 require "infomon/infomon"
 require "attributes/stats"
 require "attributes/resources"
+require "infomon/currency"
 require "infomon/status"
 require "experience"
 require "psms"
@@ -267,6 +268,54 @@ describe Infomon::Parser, ".parse" do
       expect(Lich::Resources.total).to eq(78507)
       expect(Lich::Resources.suffused).to eq(1678)
       expect(Lich::Resources.type).to eq("Essence")
+    end
+  end
+
+  context "currency" do
+    it "handles wealth info" do
+      output = <<~Wealth
+        You have 5,585 coins with you.
+        You are carrying 6,112 coins stored within your coin pouch.
+
+        You are carrying 16 gigas artifact fragments.
+
+        You have 211 redsteel marks.
+      Wealth
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+
+      expect(Infomon.get("currency.redsteel_marks")).to eq(211)
+      expect(Infomon.get("currency.silver")).to eq(5585)
+      expect(Infomon.get("currency.silver_container")).to eq(6112)
+      expect(Infomon.get("currency.gigas_artifact_fragments")).to eq(16)
+      expect(Lich::Currency.redsteel_marks).to eq(211)
+      expect(Lich::Currency.silver).to eq(5585)
+      expect(Lich::Currency.silver_container).to eq(6112)
+      expect(Lich::Currency.gigas_artifact_fragments).to eq(16)
+    end
+
+    it "handles ticket balance info" do
+      output = <<~Ticket
+                 General - 1,417 tickets.
+         Troubled Waters - 95 blackscrip.
+          Duskruin Arena - 78,634 bloodscrip.
+                    Reim - 295,702 ethereal scrip.
+               Ebon Gate - 53,058 soul shards.
+             Rumor Woods - 38,847 raikhen.
+      Ticket
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+
+      expect(Infomon.get("currency.tickets")).to eq(1417)
+      expect(Infomon.get("currency.blackscrip")).to eq(95)
+      expect(Infomon.get("currency.bloodscrip")).to eq(78634)
+      expect(Infomon.get("currency.ethereal_scrip")).to eq(295702)
+      expect(Infomon.get("currency.soul_shards")).to eq(53058)
+      expect(Infomon.get("currency.raikhen")).to eq(38847)
+      expect(Lich::Currency.tickets).to eq(1417)
+      expect(Lich::Currency.blackscrip).to eq(95)
+      expect(Lich::Currency.bloodscrip).to eq(78634)
+      expect(Lich::Currency.ethereal_scrip).to eq(295702)
+      expect(Lich::Currency.soul_shards).to eq(53058)
+      expect(Lich::Currency.raikhen).to eq(38847)
     end
   end
 

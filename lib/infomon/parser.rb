@@ -43,6 +43,16 @@ module Infomon
       LostTechnique = /^\[You are no longer trained in (?<cat>[A-z]+) .*: (?<psm>[A-z\s]+)\.\]$/.freeze
       Resource = /^(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck|Guile): (?<weekly>[0-9,]+)\/50,000 \(Weekly\)\s+(?<total>[0-9,]+)\/200,000 \(Total\)$/.freeze
       Suffused = /^Suffused (?<type>(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck|Guile)): (?<suffused>[0-9,]+)$/.freeze
+      GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments\.$/.freeze
+      RedsteelMarks = /^You have (?<redsteel_marks>[\d,]+) redsteel marks\.$/.freeze
+      TicketGeneral = /^\s*General - (?<tickets>[\d,]+) tickets\.$/.freeze
+      TicketBlackscrip = /^\s*Troubled Waters - (?<blackscrip>[\d,]+) blackscrip\.$/.freeze
+      TicketBloodscrip = /^\s*Duskruin Arena - (?<bloodscrip>[\d,]+) bloodscrip\.$/.freeze
+      TicketEtherealScrip = /^\s*Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
+      TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards\.$/.freeze
+      TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
+      WealthSilver = /^You have (?<silver>no silver|but one|[\d,]+) coins? with you\.$/.freeze
+      WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) coins? stored within your (?:coin pouch|coin hand|gambling kit)\.$/.freeze
 
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
@@ -66,7 +76,9 @@ module Infomon
                          BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
                          CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
                          SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
-                         Resource, Suffused)
+                         Resource, Suffused, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketBlackscrip,
+                         TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
+                         WealthSilver, WealthSilverContainer)
     end
 
     def self.parse(line)
@@ -100,7 +112,7 @@ module Infomon
           :ok
         when Pattern::StatEnd
           match = Regexp.last_match
-          @stat_hold.push(['stat.silver', match[:silver].delete(',').to_i])
+          @stat_hold.push(['currency.silver', match[:silver].delete(',').to_i])
           Infomon.upsert_batch(@stat_hold)
           Infomon.mutex_unlock
           :ok
@@ -286,6 +298,53 @@ module Infomon
           match = Regexp.last_match
           Infomon.set('resources.type', match[:type].to_s)
           Infomon.set('resources.suffused', match[:suffused].delete(',').to_i)
+          :ok
+        when Pattern::GigasArtifactFragments
+          match = Regexp.last_match
+          Infomon.set('currency.gigas_artifact_fragments', match[:gigas_artifact_fragments].delete(',').to_i)
+          :ok
+        when Pattern::RedsteelMarks
+          match = Regexp.last_match
+          Infomon.set('currency.redsteel_marks', match[:redsteel_marks].delete(',').to_i)
+          :ok
+        when Pattern::TicketGeneral
+          match = Regexp.last_match
+          Infomon.set('currency.tickets', match[:tickets].delete(',').to_i)
+          :ok
+        when Pattern::TicketBlackscrip
+          match = Regexp.last_match
+          Infomon.set('currency.blackscrip', match[:blackscrip].delete(',').to_i)
+          :ok
+        when Pattern::TicketBloodscrip
+          match = Regexp.last_match
+          Infomon.set('currency.bloodscrip', match[:bloodscrip].delete(',').to_i)
+          :ok
+        when Pattern::TicketEtherealScrip
+          match = Regexp.last_match
+          Infomon.set('currency.ethereal_scrip', match[:ethereal_scrip].delete(',').to_i)
+          :ok
+        when Pattern::TicketSoulShards
+          match = Regexp.last_match
+          Infomon.set('currency.soul_shards', match[:soul_shards].delete(',').to_i)
+          :ok
+        when Pattern::TicketRaikhen
+          match = Regexp.last_match
+          Infomon.set('currency.raikhen', match[:raikhen].delete(',').to_i)
+          :ok
+        when Pattern::WealthSilver
+          match = Regexp.last_match
+          case match[:silver]
+          when 'no silver'
+            Infomon.set('currency.silver', 0)
+          when 'but one'
+            Infomon.set('currency.silver', 1)
+          else
+            Infomon.set('currency.silver', match[:silver].delete(',').to_i)
+          end
+          :ok
+        when Pattern::WealthSilverContainer
+          match = Regexp.last_match
+          Infomon.set('currency.silver_container', match[:silver].delete(',').to_i)
           :ok
 
         # TODO: refactor / streamline?
