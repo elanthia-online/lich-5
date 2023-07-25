@@ -17,6 +17,7 @@ module GameLoader
     # to ./lib/psms and are now called by psms.rb
     require 'lib/psms'
     require 'lib/attributes/char'
+    require 'lib/infomon/currency'
   end
 
   def self.dragon_realms
