@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  LICH_VERSION: ${{GITHUB_REF_NAME#v}}
+
 jobs:
   installer:
     runs-on: windows-latest
@@ -49,6 +52,12 @@ jobs:
           rm -r -fo C:\msys64\var\cache\pacman\pkg\*
           iscc "R4LGTK3.iss"
           mv .\Output\Ruby4Lich5.exe .\Ruby4Lich5.exe
+          echo Test1$LICHVERSION.exe
+          echo Test2$env.LICHVERSION.exe
+          echo Test3${LICHVERSION}.exe
+          echo Test4${env.LICHVERSION}.exe
+          echo Test5${{LICHVERSION}}.exe
+          echo Test6${{env.LICHVERSION}}.exe
       - name: Add to Release
         uses: softprops/action-gh-release@v1
         with:
