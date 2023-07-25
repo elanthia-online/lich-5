@@ -3182,8 +3182,9 @@ main_thread = Thread.new {
         end
         #
         # client wants to send "GOOD", xml server won't recognize it
-        # Avalon requires 2 gets to clear
-        2.times { $_CLIENT_.gets }
+        # Avalon requires 2 gets to clear / Wizard only 1
+        2.times { $_CLIENT_.gets } if $frontend =~ /avalon/i
+        $_CLIENT_.gets if $frontend =~ /wizard/i
       elsif $frontend =~ /^(?:frostbite)$/
         #
         # send the login key
