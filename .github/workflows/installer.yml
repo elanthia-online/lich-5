@@ -23,6 +23,12 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
+      # Store the version, stripping any v-prefix
+      - name: Write release version
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo Version: $VERSION
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
       - name: Create Core Lich-5 package
         id: install_core_scripts
         run: |
@@ -48,10 +54,10 @@ jobs:
           rm -r -fo C:\msys64\usr\share\man\*
           rm -r -fo C:\msys64\var\cache\pacman\pkg\*
           iscc "R4LGTK3.iss"
-          mv .\Output\Ruby4Lich5.exe .\Ruby4Lich5.exe
+          mv .\Output\Ruby4Lich${VERSION}.exe .\Ruby4Lich${VERSION}.exe
       - name: Add to Release
         uses: softprops/action-gh-release@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
           files: |
-            Ruby4Lich5.exe
+            Ruby4Lich${VERSION}.exe
