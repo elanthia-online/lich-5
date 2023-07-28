@@ -172,7 +172,7 @@ module Lich
         JSON::parse(update_info).each { |entry|
           if entry.include? 'tag_name'
             @update_to = entry[1].sub('v', '')
-          elsif entry.include? 'tarball_url'
+          elsif entry.include? 'zipball_url'
             @zipfile = entry[1]
           elsif entry.include? 'body'
             @new_features = entry[1].gsub(/\#\# What's Changed.+$/m, '')
