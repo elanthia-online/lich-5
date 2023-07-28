@@ -110,5 +110,4 @@ module ActiveSpell
       end
     end
   end
-  ActiveSpell.watch!
 end

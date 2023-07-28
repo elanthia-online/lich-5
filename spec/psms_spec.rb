@@ -24,10 +24,16 @@ require 'rexml/document'
 require 'rexml/streamlistener'
 require 'open-uri'
 require "spell"
-download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml').read
-FileUtils.mkdir_p('/home/runner/work/lich-5/lich-5/data')
-File.write('/home/runner/work/lich-5/lich-5/data/effect-list.xml', download)
-Games::Gemstone::Spell.load('/home/runner/work/lich-5/lich-5/data/effect-list.xml')
+require 'tmpdir'
+
+Dir.mktmpdir do |dir|
+  local_filename = File.join(dir, "effect-list.xml")
+  print "Downloading effect-list.xml..."
+  download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml').read
+  File.write(local_filename, download)
+  Games::Gemstone::Spell.load(local_filename)
+  puts " Done!"
+end
 
 require "psms"
 require "infomon/infomon"
