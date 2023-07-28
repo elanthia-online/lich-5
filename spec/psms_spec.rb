@@ -27,7 +27,7 @@ require "spell"
 require 'tmpdir'
 
 Dir.mktmpdir do |dir|
-  local_filename = File.join(dir, "eefect-list.xml")
+  local_filename = File.join(dir, "effect-list.xml")
   print "Downloading effect-list.xml..."
   download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml').read
   File.write(local_filename, download)
