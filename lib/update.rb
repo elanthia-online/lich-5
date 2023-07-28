@@ -172,12 +172,14 @@ module Lich
         JSON::parse(update_info).each { |entry|
           if entry.include? 'tag_name'
             @update_to = entry[1].sub('v', '')
-          elsif entry.include? 'tarball_url'
-            @zipfile = entry[1]
+          elsif entry.include? 'assets'
+            @holder = value
           elsif entry.include? 'body'
-            @new_features = entry[1].gsub(/\#\# What's Changed.+$/m, '')
+            @new_features = value.gsub(/\#\# What's Changed.+$/m, '')
           end
         }
+        beta_asset = @holder.find { |x| x['name'] =~ /lich-5.tar.gz/ }
+        @zipfile = beta_asset.fetch('browser_download_url')
       end
 
       def self.download_update
