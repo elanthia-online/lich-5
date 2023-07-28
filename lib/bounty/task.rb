@@ -71,18 +71,24 @@ class Bounty
     end
 
     def search_heirloom?
-      heirloom &&
+      [:heirloom].include?(type) &&
         requirements[:action] == "search"
     end
 
     def loot_heirloom?
-      heirloom &&
+      [:heirloom].include?(type) &&
         requirements[:action] == "loot"
+    end
+
+    def heirloom_found?
+      [
+        :heirloom_found
+      ].include?(type)
     end
 
     def done?
       [
-        :failed, :guard, :taskmaster
+        :failed, :guard, :taskmaster, :heirloom_found
       ].include?(type)
     end
 
@@ -116,7 +122,7 @@ class Bounty
     def ready?
       [
         :bandit_assignment, :escort_assignment,
-        :cull, :dangerous, :gem, :herb, :skin, :heirloom
+        :bandit, :cull, :dangerous, :escort, :gem, :heirloom, :herb, :rescue, :skin
       ].include?(type)
     end
 
