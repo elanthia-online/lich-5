@@ -171,7 +171,7 @@ class Bounty
 
     describe "#ready?" do
       let(:predicate) { :ready? }
-      let(:truthy_types) { [:bandit, :escort, :escort_assignment, :cull, :dangerous, :gem, :herb, :skin, :heirloom, :rescue] }
+      let(:truthy_types) { [:bandit, :bandit_assignment, :escort, :escort_assignment, :cull, :dangerous, :gem, :herb, :skin, :heirloom, :rescue] }
 
       include_examples "task predicate examples"
     end

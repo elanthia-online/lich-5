@@ -121,7 +121,7 @@ class Bounty
 
     def ready?
       [
-        :escort_assignment,
+        :bandit_assignment, :escort_assignment,
         :bandit, :cull, :dangerous, :escort, :gem, :heirloom, :herb, :rescue, :skin
       ].include?(type)
     end
