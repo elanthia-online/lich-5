@@ -81,7 +81,7 @@ class Bounty
     describe "#search_heirloom?" do
       let(:predicate) { :search_heirloom? }
       let(:truthy_types) { [:heirloom] }
-      let(:requirements) { {action: "search"}}
+      let(:requirements) { { action: "search" } }
 
       include_examples "task predicate examples"
     end
@@ -89,7 +89,7 @@ class Bounty
     describe "#loot_heirloom?" do
       let(:predicate) { :loot_heirloom? }
       let(:truthy_types) { [:heirloom] }
-      let(:requirements) { {action: "loot"}}
+      let(:requirements) { { action: "loot" } }
 
       include_examples "task predicate examples"
     end
