@@ -26,6 +26,7 @@ module Infomon
       respond "Did #{command}." if $infomon_debug
     end
     respond 'Requested Infomon sync complete.'
+    Infomon.set('infomon.last_sync', Time.now.to_i)
   end
 
   def self.redo!
