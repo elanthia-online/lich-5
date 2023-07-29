@@ -169,7 +169,7 @@ module Lich
         filename = "https://api.github.com/repos/elanthia-online/lich-5/releases/latest"
         update_info = URI.parse(filename).open.read
 
-        JSON::parse(update_info).each { |entry|
+        JSON::parse(update_info).each { |entry, value|
           if entry.include? 'tag_name'
             @update_to = entry[1].sub('v', '')
           elsif entry.include? 'assets'
