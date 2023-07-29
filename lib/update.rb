@@ -178,8 +178,8 @@ module Lich
             @new_features = value.gsub(/\#\# What's Changed.+$/m, '')
           end
         }
-        beta_asset = @holder.find { |x| x['name'] =~ /lich-5.tar.gz/ }
-        @zipfile = beta_asset.fetch('browser_download_url')
+        release_asset = @holder.find { |x| x['name'] =~ /lich-5.tar.gz/ }
+        @zipfile = release_asset.fetch('browser_download_url')
       end
 
       def self.download_update
