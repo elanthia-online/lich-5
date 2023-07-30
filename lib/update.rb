@@ -171,7 +171,7 @@ module Lich
 
         JSON::parse(update_info).each { |entry, value|
           if entry.include? 'tag_name'
-            @update_to = entry[1].sub('v', '')
+            @update_to = value.sub('v', '')
           elsif entry.include? 'assets'
             @holder = value
           elsif entry.include? 'body'
