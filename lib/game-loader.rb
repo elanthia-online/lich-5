@@ -13,7 +13,6 @@ module GameLoader
     require 'lib/infomon/status'
     require 'lib/experience'
     require 'lib/infomon/activespell'
-    ActiveSpell.watch!
     # PSMS (armor, cman, feat, shield, weapon) have moved
     # to ./lib/psms and are now called by psms.rb
     require 'lib/psms'

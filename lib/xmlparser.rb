@@ -32,7 +32,7 @@ class XMLParser
               :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
               :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
               :dialogs, :room_id, :previous_nav_rm, :room_objects, :concentration, :max_concentration
-  attr_accessor :send_fake_tags, :process_spell_durations
+  attr_accessor :send_fake_tags
 
   @@warned_deprecated_spellfront = 0
 
@@ -123,9 +123,6 @@ class XMLParser
     # real id updates
     @room_id = nil
     @previous_nav_rm = nil
-
-    # infomon rewrite (activespells)
-    @process_spell_durations = false
   end
 
   # for backwards compatibility
@@ -254,7 +251,7 @@ class XMLParser
         @dialogs[attributes["id"]] ||= {}
         @dialogs[attributes["id"]].clear
         # detect a clear board request for effects, and send to activespell
-        @process_spell_durations = true
+        ActiveSpell.update_spell_durations
       elsif name == 'resource'
         nil
       elsif name == 'pushStream'
@@ -357,7 +354,7 @@ class XMLParser
           # puts "kind=(%s) name=%s attributes=%s" % [@active_ids[-2], name, attributes]
           self.parse_psm3_progressbar(@active_ids[-2], attributes)
           # since we received an updated spell duration, let's signal infomon to update
-          @process_spell_durations = true
+          ActiveSpell.update_spell_durations
         end
       elsif name == 'roundTime'
         @roundtime_end = attributes['value'].to_i
