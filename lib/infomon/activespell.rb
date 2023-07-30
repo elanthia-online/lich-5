@@ -117,10 +117,10 @@ module ActiveSpell
   def self.update_in_background?
     @update_in_background
   end
- 
+
   def self.request_update
     if update_in_background?
-      enqueue_update 
+      enqueue_update
     else
       update_spell_durations
     end
@@ -141,7 +141,7 @@ module ActiveSpell
   end
 
   def self.watch!
-    Thread.new do |thread|
+    Thread.new do
       loop do
         block_until_update_requested
         update_spell_durations
