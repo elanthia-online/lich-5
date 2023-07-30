@@ -251,7 +251,7 @@ class XMLParser
         @dialogs[attributes["id"]] ||= {}
         @dialogs[attributes["id"]].clear
         # detect a clear board request for effects, and send to activespell
-        ActiveSpell.update_spell_durations
+        ActiveSpell.request_update
       elsif name == 'resource'
         nil
       elsif name == 'pushStream'
@@ -354,7 +354,7 @@ class XMLParser
           # puts "kind=(%s) name=%s attributes=%s" % [@active_ids[-2], name, attributes]
           self.parse_psm3_progressbar(@active_ids[-2], attributes)
           # since we received an updated spell duration, let's signal infomon to update
-          ActiveSpell.update_spell_durations
+          ActiveSpell.request_update
         end
       elsif name == 'roundTime'
         @roundtime_end = attributes['value'].to_i

@@ -108,4 +108,49 @@ module ActiveSpell
       end
     end
   end
+
+  def self.update_in_background=(val)
+    @update_in_background = val
+  end
+  self.update_in_background = true
+
+  def self.update_in_background?
+    @update_in_background
+  end
+ 
+  def self.request_update
+    if update_in_background?
+      enqueue_update 
+    else
+      update_spell_durations
+    end
+  end
+
+  def self.queue
+    @queue ||= Queue.new
+  end
+
+  def self.enqueue_update
+    queue << Time.now
+  end
+
+  def self.block_until_update_requested
+    event = queue.pop
+    queue.clear
+    event
+  end
+
+  def self.watch!
+    Thread.new do |thread|
+      loop do
+        block_until_update_requested
+        update_spell_durations
+      rescue StandardError => e
+        if $infomon_debug
+          respond 'Error in spell durations thread'
+          respond e.inspect
+        end
+      end
+    end
+  end
 end
