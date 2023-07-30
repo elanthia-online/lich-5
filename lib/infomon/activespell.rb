@@ -93,10 +93,10 @@ module ActiveSpell
         if (spell = Spell.list.find { |s| (s.name.downcase == k.strip.downcase) || (s.num.to_s == k.strip) })
           spell.active = true
           spell.timeleft = if v - Time.now > 300 * 60
-                            600.01
-                          else
-                            ((v - Time.now) / 60)
-                          end
+                             600.01
+                           else
+                             ((v - Time.now) / 60)
+                           end
         elsif $infomon_debug
           respond "no spell matches #{k}"
         end
