@@ -50,12 +50,12 @@ class Char
   end
 
   def Char.respond_to?(m, *args)
-    [Stats, Skills, Spellsong].any? {|k| k.respond_to?(m)} or super(m, *args)
+    [Stats, Skills, Spellsong].any? { |k| k.respond_to?(m) } or super(m, *args)
   end
 
   def Char.method_missing(meth, *args)
-    polyfill = [Stats, Skills, Spellsong].find { |klass| 
-      klass.respond_to?(meth, *args) 
+    polyfill = [Stats, Skills, Spellsong].find { |klass|
+      klass.respond_to?(meth, *args)
     }
     return polyfill.send(meth, *args) if polyfill
     super(meth, *args)
