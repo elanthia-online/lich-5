@@ -141,15 +141,13 @@ module ActiveSpell
   end
 
   def self.watch!
-    Thread.new do
+    @thread ||= Thread.new do
       loop do
         block_until_update_requested
         update_spell_durations
       rescue StandardError => e
-        if $infomon_debug
-          respond 'Error in spell durations thread'
-          respond e.inspect
-        end
+        respond 'Error in spell durations thread'
+        respond e.inspect
       end
     end
   end
