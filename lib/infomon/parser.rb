@@ -25,7 +25,7 @@ module Infomon
 
       # Single / low impact - single db write
       Levelup = /^\s+(?<stat>\w+)\s+\(\w{3}\)\s+:\s+(?<value>\d+)\s+(?:\+1)\s+\.\.\.\s+(?<bonus>\d+)(?:\s+\+1)?$/.freeze
-      SpellsSolo = /^(?<name>[\w\s]+)\.+(?<rank>\d+).*$/.freeze # from SPELL command
+      SpellsSolo = /^(?<name>Bard|Cleric|Empath|Minor (?:Elemental|Mental|Spiritual)|Major (?:Elemental|Mental|Spiritual)|Paladin|Ranger|Savant|Sorcerer|Wizard)(?: Base)?\.+(?<rank>\d+).*$/.freeze # from SPELL command
       Citizenship = /^You currently have .*? citizenship in (?<town>.*)\.$/.freeze
       NoCitizenship = /^You don't seem to have citizenship\./.freeze
       Society = /^\s+You are a (?<standing>Master|member) (?:in|of) the (?<society>Order of Voln|Council of Light|Guardians of Sunfist)(?: at (?:rank|step) (?<rank>[0-9]+))?\.$/.freeze
