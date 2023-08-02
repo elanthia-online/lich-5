@@ -70,43 +70,67 @@ module ActiveSpell
     [update_spell_names, update_spell_durations]
   end
 
-  def self.watch!
-    Thread.new do
-      loop do
-        begin
-          sleep 0.01 until XMLData.process_spell_durations
-          update_spell_names, update_spell_durations = ActiveSpell.get_spell_info
-          puts "#{update_spell_names}\r\n" if $infomon_debug
-          puts "#{update_spell_durations}\r\n" if $infomon_debug
+  def self.update_spell_durations
+    begin
+      respond "[infomon] updating spell durations..." if $infomon_debug
+      update_spell_names, update_spell_durations = ActiveSpell.get_spell_info
+      puts "#{update_spell_names}\r\n" if $infomon_debug
+      puts "#{update_spell_durations}\r\n" if $infomon_debug
 
-          existing_spell_names = []
-          ignore_spells = ["Berserk", "Council Task", "Council Punishment", "Briar Betrayer"]
-          Spell.active.each { |s| existing_spell_names << s.name }
-          inactive_spells = existing_spell_names - ignore_spells - update_spell_names
-          inactive_spells.reject! do |s|
-            s =~ /^Aspect of the \w+ Cooldown|^[\w\s]+ Recovery/
-          end
-          inactive_spells.each do |s|
-            badspell = Spell[s].num
-            Spell[badspell].putdown if Spell[s].active?
-          end
+      existing_spell_names = []
+      ignore_spells = ["Berserk", "Council Task", "Council Punishment", "Briar Betrayer"]
+      Spell.active.each { |s| existing_spell_names << s.name }
+      inactive_spells = existing_spell_names - ignore_spells - update_spell_names
+      inactive_spells.reject! do |s|
+        s =~ /^Aspect of the \w+ Cooldown|^[\w\s]+ Recovery/
+      end
+      inactive_spells.each do |s|
+        badspell = Spell[s].num
+        Spell[badspell].putdown if Spell[s].active?
+      end
 
-          update_spell_durations.uniq.each do |k, v|
-            if (spell = Spell.list.find { |s| (s.name.downcase == k.strip.downcase) || (s.num.to_s == k.strip) })
-              spell.active = true
-              spell.timeleft = if v - Time.now > 300 * 60
-                                 600.01
-                               else
-                                 ((v - Time.now) / 60)
-                               end
-            elsif $infomon_debug
-              respond "no spell matches #{k}"
-            end
-          end
-        rescue StandardError
-          respond 'Error in spell durations thread' if $infomon_debug
+      update_spell_durations.uniq.each do |k, v|
+        if (spell = Spell.list.find { |s| (s.name.downcase == k.strip.downcase) || (s.num.to_s == k.strip) })
+          spell.active = true
+          spell.timeleft = if v - Time.now > 300 * 60
+                             600.01
+                           else
+                             ((v - Time.now) / 60)
+                           end
+        elsif $infomon_debug
+          respond "no spell matches #{k}"
         end
-        XMLData.process_spell_durations = false
+      end
+    rescue StandardError => e
+      if $infomon_debug
+        respond 'Error in spell durations thread'
+        respond e.inspect
+      end
+    end
+  end
+
+  def self.request_update
+    queue << Time.now
+  end
+
+  def self.queue
+    @queue ||= Queue.new
+  end
+
+  def self.block_until_update_requested
+    event = queue.pop
+    queue.clear
+    event
+  end
+
+  def self.watch!
+    @thread ||= Thread.new do
+      loop do
+        block_until_update_requested
+        update_spell_durations
+      rescue StandardError => e
+        respond 'Error in spell durations thread'
+        respond e.inspect
       end
     end
   end
