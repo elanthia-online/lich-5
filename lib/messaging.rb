@@ -138,10 +138,10 @@ module Lich
 
     def self.mono(msg)
       return raise StandardError.new 'Lich::Messaging.mono only works with String paremeters!' unless msg.is_a?(String)
-      if $frontend =~ /^(?:wizard|avalon)$/i
-        _respond msg
-      else
+      if $frontend =~ /^(?:stormfront|wrayth)$/i
         _respond "<output class=\"mono\"/>\n" + msg + "\n<output class=\"\"/>"
+      else
+        _respond msg
       end
     end
   end
