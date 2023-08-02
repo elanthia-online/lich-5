@@ -169,15 +169,17 @@ module Lich
         filename = "https://api.github.com/repos/elanthia-online/lich-5/releases/latest"
         update_info = URI.parse(filename).open.read
 
-        JSON::parse(update_info).each { |entry|
+        JSON::parse(update_info).each { |entry, value|
           if entry.include? 'tag_name'
-            @update_to = entry[1].sub('v', '')
-          elsif entry.include? 'tarball_url'
-            @zipfile = entry[1]
+            @update_to = value.sub('v', '')
+          elsif entry.include? 'assets'
+            @holder = value
           elsif entry.include? 'body'
-            @new_features = entry[1].gsub(/\#\# What's Changed.+$/m, '')
+            @new_features = value.gsub(/\#\# What's Changed.+$/m, '')
           end
         }
+        release_asset = @holder.find { |x| x['name'] =~ /lich-5.tar.gz/ }
+        @zipfile = release_asset.fetch('browser_download_url')
       end
 
       def self.download_update
