@@ -137,7 +137,7 @@ module Lich
     end
 
     def self.mono(msg)
-      return raise StandardError.new 'Lich::Messaging.mono only works with String paremeters!' if msg.is_a?(String)
+      return raise StandardError.new 'Lich::Messaging.mono only works with String paremeters!' unless msg.is_a?(String)
       if $frontend =~ /^(?:wizard|avalon)$/i
         _respond msg
       else
