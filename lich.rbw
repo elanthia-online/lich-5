@@ -1677,7 +1677,7 @@ module Games
           end
           effect_out.add_separator unless title == 'Debuffs'
         }
-        _respond "<output class=\"mono\"/>\n" + effect_out.to_s + "\n<output class=\"\"/>"
+        Lich::Messaging.mono(effect_out.to_s)
       end
     end
 
