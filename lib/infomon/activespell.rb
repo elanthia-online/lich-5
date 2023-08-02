@@ -109,29 +109,12 @@ module ActiveSpell
     end
   end
 
-  def self.update_in_background=(val)
-    @update_in_background = val
-  end
-  self.update_in_background = true
-
-  def self.update_in_background?
-    @update_in_background
-  end
-
   def self.request_update
-    if update_in_background?
-      enqueue_update
-    else
-      update_spell_durations
-    end
+    queue << Time.now
   end
 
   def self.queue
     @queue ||= Queue.new
-  end
-
-  def self.enqueue_update
-    queue << Time.now
   end
 
   def self.block_until_update_requested
