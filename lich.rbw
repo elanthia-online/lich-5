@@ -2527,6 +2527,8 @@ if (arg = ARGV.find { |a| (a == '-g') or (a == '--game') })
     $frontend = 'avalon'
   elsif ARGV.any? { |arg| arg == '--frostbite' }
     $frontend = 'frostbite'
+  elsif ARGV.any? { |arg| arg == '--genie' }
+    $frontend = 'genie'
   else
     $frontend = 'unknown'
   end
