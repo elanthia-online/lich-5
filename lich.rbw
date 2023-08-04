@@ -2738,7 +2738,7 @@ module Games
       def Spellsong.holdingtargets
         1 + ((Spells.bard - 1) / 7).truncate
       end
-      
+
       def Spellsong.cost
         Spellsong.renew_cost
       end
@@ -4300,100 +4300,69 @@ if argv_options[:sal]
   end
 end
 
+# Select your Front-End client here
+if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+  $frontend = 'stormfront'
+elsif ARGV.any? { |arg| (arg == '-w') or (arg == '--wizard') }
+  $frontend = 'wizard'
+elsif ARGV.any? { |arg| arg == '--avalon' }
+  $frontend = 'avalon'
+elsif ARGV.any? { |arg| arg == '--frostbite' }
+  $frontend = 'frostbite'
+elsif ARGV.any? { |arg| arg == '--genie' }
+  $frontend = 'genie'
+else
+  Lich.log("No front end selected. Setting $frontend to 'unknown'")
+  $frontend = 'unknown'
+end
+
+if ARGV.include?('--platinum')
+  Lich.log("Platinum flag detected. Togglinging $platinum true.")
+  $platinum = true
+else
+  $platinum = false
+end
+
 if arg = ARGV.find { |a| (a == '-g') or (a == '--game') }
   game_host, game_port = ARGV[ARGV.index(arg) + 1].split(':')
   game_port = game_port.to_i
-  if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-    $frontend = 'stormfront'
-  elsif ARGV.any? { |arg| (arg == '-w') or (arg == '--wizard') }
-    $frontend = 'wizard'
-  elsif ARGV.any? { |arg| arg == '--avalon' }
-    $frontend = 'avalon'
-  elsif ARGV.any? { |arg| arg == '--frostbite' }
-    $frontend = 'frostbite'
-  else
-    $frontend = 'unknown'
-  end
 elsif ARGV.include?('--gemstone')
-  if ARGV.include?('--platinum')
-    $platinum = true
-    if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+  if $platinum
+    if $frontend == 'stormfront'
       game_host = 'storm.gs4.game.play.net'
       game_port = 10124
-      $frontend = 'stormfront'
     else
       game_host = 'gs-plat.simutronics.net'
       game_port = 10121
-      if ARGV.any? { |arg| arg == '--avalon' }
-        $frontend = 'avalon'
-      else
-        $frontend = 'wizard'
-      end
     end
   else
-    $platinum = false
-    if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+    if $frontend == 'stormfront'
       game_host = 'storm.gs4.game.play.net'
       game_port = 10024
-      $frontend = 'stormfront'
     else
       game_host = 'gs3.simutronics.net'
       game_port = 4900
-      if ARGV.any? { |arg| arg == '--avalon' }
-        $frontend = 'avalon'
-      else
-        $frontend = 'wizard'
-      end
     end
   end
 elsif ARGV.include?('--shattered')
-  $platinum = false
-  if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+  if $frontend == 'stormfront'
     game_host = 'storm.gs4.game.play.net'
     game_port = 10324
-    $frontend = 'stormfront'
   else
     game_host = 'gs4.simutronics.net'
     game_port = 10321
-    if ARGV.any? { |arg| arg == '--avalon' }
-      $frontend = 'avalon'
-    else
-      $frontend = 'wizard'
-    end
   end
 elsif ARGV.include?('--fallen')
-  $platinum = false
   game_host = 'dr.simutronics.net'
   game_port = 11324
-  if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-    $frontend = 'stormfront'
-  elsif ARGV.grep(/--genie/).any?
-    $frontend = 'genie'
-  elsif ARGV.grep(/--frostbite/).any?
-    $frontend = 'frostbite'
-  else
-    $frontend = 'unknown'
-  end
 elsif ARGV.include?('--dragonrealms')
   game_host = 'dr.simutronics.net'
-  if ARGV.include?('--platinum')
-    $platinum = true
+  if $platinum
     game_port = 11124
   elsif ARGV.include?('--test')
-    $platinum = false
     game_port = 11624
   else    # DR PRime
-    $platinum = false
     $game_port = 11024
-  end
-  if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-    $frontend = 'stormfront'
-  elsif ARGV.grep(/--genie/).any?
-    $frontend = 'genie'
-  elsif ARGV.grep(/--frostbite/).any?
-    $frontend = 'frostbite'
-  else
-    $frontend = 'wizard'
   end
 else
   game_host, game_port = nil, nil
