@@ -5,14 +5,14 @@ shared_examples "task predicate examples" do
 
   it "truthy types" do
     truthy_types.each do |type|
-      t = described_class.new(type: type)
+      t = described_class.new(type: type, requirements: requirements)
       expect(t.send(predicate)).to be_truthy, "expected #{predicate} for :#{type} to be true"
     end
   end
 
   it "falsey types" do
     falsey_types.each do |type|
-      t = described_class.new(type: type)
+      t = described_class.new(type: type, requirements: requirements)
       expect(t.send(predicate)).to be_falsey, "expected #{predicate} for :#{type} to be false"
     end
   end
@@ -20,6 +20,8 @@ end
 
 class Bounty
   describe Task do
+    let(:requirements) { {} }
+
     describe "#bandit?" do
       let(:predicate) { :bandit? }
       let(:truthy_types) { [:bandit, :bandit_assignment] }
@@ -69,6 +71,29 @@ class Bounty
       include_examples "task predicate examples"
     end
 
+    describe "#heirloom_found?" do
+      let(:predicate) { :heirloom_found? }
+      let(:truthy_types) { [:heirloom_found] }
+
+      include_examples "task predicate examples"
+    end
+
+    describe "#search_heirloom?" do
+      let(:predicate) { :search_heirloom? }
+      let(:truthy_types) { [:heirloom] }
+      let(:requirements) { { action: "search" } }
+
+      include_examples "task predicate examples"
+    end
+
+    describe "#loot_heirloom?" do
+      let(:predicate) { :loot_heirloom? }
+      let(:truthy_types) { [:heirloom] }
+      let(:requirements) { { action: "loot" } }
+
+      include_examples "task predicate examples"
+    end
+
     describe "#herb?" do
       let(:predicate) { :herb? }
       let(:truthy_types) { [:herb, :herb_assignment] }
@@ -92,7 +117,7 @@ class Bounty
 
     describe "#done?" do
       let(:predicate) { :done? }
-      let(:truthy_types) { [:taskmaster, :guard, :failed] }
+      let(:truthy_types) { [:taskmaster, :guard, :failed, :heirloom_found] }
 
       include_examples "task predicate examples"
     end
@@ -113,24 +138,26 @@ class Bounty
 
     describe "#any?" do
       let(:predicate) { :any? }
-      let(:truthy_types) { [
-        :bandit, :bandit_assignment,
-        :creature_assignment, :cull, :dangerous, :dangerous_spawned,
-        :escort,
-        :failed,
-        :gem, :gem_assignment,
-        :guard,
-        :heirloom, :heirloom_assignment, :heirloom_found,
-        :herb, :herb_assignment,
-        :rescue, :rescue_assignment, :rescue_spawned,
-        :skin, :skin_assignment,
-        :taskmaster
-      ] }
+      let(:truthy_types) {
+        [
+          :bandit, :bandit_assignment,
+          :creature_assignment, :cull, :dangerous, :dangerous_spawned,
+          :escort,
+          :failed,
+          :gem, :gem_assignment,
+          :guard,
+          :heirloom, :heirloom_assignment, :heirloom_found,
+          :herb, :herb_assignment,
+          :rescue, :rescue_assignment, :rescue_spawned,
+          :skin, :skin_assignment,
+          :taskmaster
+        ]
+      }
     end
 
     describe "#guard?" do
       let(:predicate) { :guard? }
-      let(:truthy_types) { [:guard, :bandit_assignment, :creature_assignment, :heirloom_assignment, :rescue_assignment] }
+      let(:truthy_types) { [:guard, :bandit_assignment, :creature_assignment, :heirloom_assignment, :heirloom_found, :rescue_assignment] }
 
       include_examples "task predicate examples"
     end
@@ -144,7 +171,7 @@ class Bounty
 
     describe "#ready?" do
       let(:predicate) { :ready? }
-      let(:truthy_types) { [ :bandit_assignment, :escort_assignment, :cull, :dangerous, :gem, :herb, :skin, :heirloom ] }
+      let(:truthy_types) { [:bandit, :bandit_assignment, :escort, :escort_assignment, :cull, :dangerous, :gem, :herb, :skin, :heirloom, :rescue] }
 
       include_examples "task predicate examples"
     end

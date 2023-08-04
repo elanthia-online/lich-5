@@ -17,6 +17,8 @@ module Lich
         case type
         when /--announce|-a/
           self.announce
+        when /--(?:beta|test)(?: --(?:(script|library|data))=(.*))?/
+          self.prep_betatest($1.dup, $2.dup)
         when /--help|-h/
           self.help # Ok, that's just wrong.
         when /--update|-u/
@@ -83,88 +85,124 @@ module Lich
       end
 
       def self.snapshot
-        _respond; _respond 'Creating a snapshot of current Lich core files ONLY.'
-        _respond; _respond 'You may also wish to copy your entire Lich5 folder to'
+        _respond
+        _respond 'Creating a snapshot of current Lich core files ONLY.'
+        _respond
+        _respond 'You may also wish to copy your entire Lich5 folder to'
         _respond 'another location for additional safety, after any'
         _respond 'additional requested updates are completed.'
+
+        ## Let's make the snapshot folder
+
         snapshot_subdir = File.join(BACKUP_DIR, "L5-snapshot-#{Time.now.strftime("%Y-%m-%d-%H-%M-%S")}")
-        unless File.exist?(snapshot_subdir)
-          Dir.mkdir(snapshot_subdir)
-        end
-        filename = File.join(LICH_DIR, File.basename($PROGRAM_NAME))
-        copyfilename = File.join(snapshot_subdir, File.basename($PROGRAM_NAME))
-        File.open(filename, 'rb') { |r| File.open(copyfilename, 'wb') { |w| w.write(r.read) } }
+        FileUtils.mkdir_p(snapshot_subdir)
 
-        snapshot_lib_subdir = File.join(snapshot_subdir, "lib")
-        unless File.exist?(snapshot_lib_subdir)
-          Dir.mkdir(snapshot_lib_subdir)
-        end
-        ## let's just get the directory contents and back it up
+        ## lich.rbw main file backup
 
-        snapshot_lib_files = Dir.children(LIB_DIR)
-        snapshot_lib_files.each { |file|
-          File.open(File.join(LICH_DIR, "lib", file), 'rb') { |r|
-            File.open(File.join(snapshot_lib_subdir, file), 'wb') { |w| w.write(r.read) }
-          }
-        }
+        FileUtils.cp(File.join(LICH_DIR, File.basename($PROGRAM_NAME)), File.join(snapshot_subdir, File.basename($PROGRAM_NAME)))
 
-        snapshot_script_subdir = File.join(snapshot_subdir, "scripts")
-        unless File.exist?(snapshot_script_subdir)
-          Dir.mkdir(snapshot_script_subdir)
-        end
+        ## LIB folder backup and it's subfolders
+
+        FileUtils.mkdir_p(File.join(snapshot_subdir, "lib"))
+        FileUtils.cp_r(LIB_DIR, snapshot_subdir)
+
         ## here we should maintain a discrete array of script files (450K versus 10M plus)
         ## we need to find a better way without hving to maintain this list
 
+        FileUtils.mkdir_p(File.join(snapshot_subdir, "scripts"))
         @snapshot_core_script.each { |file|
-          if File.exist?(File.join(LICH_DIR, "scripts", file))
-            File.open(File.join(LICH_DIR, "scripts", file), 'rb') { |r|
-              File.open(File.join(snapshot_script_subdir, file), 'wb') { |w| w.write(r.read) }
-            }
-          else
-            next
-          end
+          FileUtils.cp(File.join(SCRIPT_DIR, file), File.join(snapshot_subdir, "scripts", file)) if File.exist?(File.join(SCRIPT_DIR, file))
         }
 
-        _respond; _respond 'Current Lich ecosystem files (only) backed up to:'
+        _respond
+        _respond 'Current Lich ecosystem files (only) backed up to:'
         _respond "    #{snapshot_subdir}"
       end
 
-      def self.prep_update
-        installed = Gem::Version.new(@current)
-        filename = "https://api.github.com/repos/elanthia-online/lich-5/releases/latest"
-        update_info = URI.open(filename).read
+      def self.prep_betatest(type = nil, requested_file = nil)
+        if type.nil?
+          respond 'You are electing to participate in the beta testing of the next Lich release.'
+          respond 'This beta test will include only Lich code, and does not include Ruby upates.'
+          respond 'While we will do everything we can to ensure you have a smooth experience, '
+          respond 'it is a test, and untoward things can result.  Please confirm your choice:'
+          respond 'Please confirm your participation:  ;send Y or ;send N'
+          # we are only going to get the next client-input line, and if it does not confirm, we bail
+          # we are doing this to prevent hanging the client with various other inputs by the user
+          sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_
+          line = sync_thread.gets until line.strip =~ /^(?:<c>)?(?:;send|;s) /i
+          if line =~ /send Y|s Y/i
+            @beta_response = 'accepted'
+            respond 'Beta test installation accepted.  Thank you for considering!'
+          else
+            @beta_response = 'rejected'
+            respond 'Aborting beta test installation request.  Thank you for considering!'
+            respond
+          end
+          if @beta_response =~ /accepted/
+            filename = "https://api.github.com/repos/elanthia-online/lich-5/releases"
+            update_info = URI.parse(filename).open.read
+            record = JSON::parse(update_info).first # assumption: Latest beta release always first record in API
+            record.each { |entry, value|
+              if entry.include? 'tag_name'
+                @update_to = value.sub('v', '')
+              elsif entry.include? 'assets'
+                @holder = value
+              elsif entry.include? 'body'
+                @new_features = value.gsub(/\#\# What's Changed.+$/m, '')
+              end
+            }
+            beta_asset = @holder.find { |x| x['name'] =~ /lich-5.tar.gz/ }
+            @zipfile = beta_asset.fetch('browser_download_url')
+            Lich::Util::Update.download_update
+          elsif @beta_response =~ /rejected/
+            nil
+          else
+            respond 'This is not where I want to be on a beta test request.'
+            respond
+          end
+        else
+          self.update_file(type, requested_file, 'beta')
+        end
+      end
 
-        JSON::parse(update_info).each { |entry|
+      def self.prep_update
+        filename = "https://api.github.com/repos/elanthia-online/lich-5/releases/latest"
+        update_info = URI.parse(filename).open.read
+
+        JSON::parse(update_info).each { |entry, value|
           if entry.include? 'tag_name'
-            @update_to = entry[1].sub('v', '')
-          elsif entry.include? 'tarball_url'
-            @zipfile = entry[1]
+            @update_to = value.sub('v', '')
+          elsif entry.include? 'assets'
+            @holder = value
           elsif entry.include? 'body'
-            @new_features = entry[1].gsub(/\#\# What's Changed.+$/m, '')
+            @new_features = value.gsub(/\#\# What's Changed.+$/m, '')
           end
         }
+        release_asset = @holder.find { |x| x['name'] =~ /lich-5.tar.gz/ }
+        @zipfile = release_asset.fetch('browser_download_url')
       end
 
       def self.download_update
         ## This is the workhorse routine that does the file moves from an update
-
-        _respond; _respond 'Getting reaady to update.  First we will create a'
-        _respond 'snapshot in case there are problems with the update.'
-
-        self.snapshot
-
         self.prep_update if @update_to.nil? or @update_to.empty?
         if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}")
           _respond ''; _respond "Lich version #{LICH_VERSION} is good.  Enjoy!"; _respond ''
         else
+          _respond; _respond 'Getting reaady to update.  First we will create a'
+          _respond 'snapshot in case there are problems with the update.'
+
+          self.snapshot
+
+          # download the requested update (can be prod release, or beta)
           _respond; _respond "Downloading Lich5 version #{@update_to}"; _respond
           filename = "lich5-#{@update_to}"
           File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
-            file.write open("#{@zipfile}").read
+            file.write URI.parse(@zipfile).open.read
           end
 
-          Dir.mkdir(File.join(TEMP_DIR, filename))
-          Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"), "#{TEMP_DIR}/#{filename}")
+          # unpack and prepare to use the requested update
+          FileUtils.mkdir_p(File.join(TEMP_DIR, filename))
+          Gem::Package.new("").extract_tar_gz(File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "rb"), File.join(TEMP_DIR, filename))
           new_target = Dir.children(File.join(TEMP_DIR, filename))
           FileUtils.cp_r(File.join(TEMP_DIR, filename, new_target[0]), TEMP_DIR)
           FileUtils.remove_dir(File.join(TEMP_DIR, filename))
@@ -173,19 +211,11 @@ module Lich
           _respond; _respond 'Copying updated lich files to their locations.'
 
           ## We do not care about local edits from players in the Lich5 / lib location
-
-          lib_update = Dir.children(File.join(TEMP_DIR, filename, "lib"))
-          lib_update.each { |file|
-            File.delete(File.join(LIB_DIR, file)) if File.exist?(File.join(LIB_DIR, file))
-            File.open(File.join(TEMP_DIR, filename, "lib", file), 'rb') { |r|
-              File.open(File.join(LIB_DIR, file), 'wb') { |w| w.write(r.read) }
-            }
-            _respond "lib #{file} has been updated."
-          }
+          FileUtils.copy_entry(File.join(TEMP_DIR, filename, "lib"), File.join(LIB_DIR))
+          _respond; _respond "All Lich lib files have been updated."; _respond
 
           ## We do not care about local edits from players to the Lich5 / script location
           ## for CORE scripts (those required to run Lich5 properly)
-
           core_update = Dir.children(File.join(TEMP_DIR, filename, "scripts"))
           core_update.each { |file|
             File.delete(File.join(SCRIPT_DIR, file)) if File.exist?(File.join(SCRIPT_DIR, file))
@@ -198,13 +228,15 @@ module Lich
           ## We DO care about local edits from players to the Lich5 / data files
           ## specifically gameobj-data.xml and spell-list.xml.
           ## Let's be a little more purposeful and gentle with these two files.
-
           data_update = Dir.children(File.join(TEMP_DIR, filename, "data"))
+          _respond # intentional spacer to separate categories of files
           data_update.each { |file|
             transition_filename = "#{file}".sub(".xml", '')
             newfilename = File.join(DATA_DIR, "#{transition_filename}-#{Time.now.to_i}.xml")
-            File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
-            File.delete(File.join(DATA_DIR, file)) if File.exist?(File.join(DATA_DIR, file))
+            if File.exist?(File.join(DATA_DIR, file))
+              File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
+              File.delete(File.join(DATA_DIR, file))
+            end
             File.open(File.join(TEMP_DIR, filename, "data", file), 'rb') { |r|
               File.open(File.join(DATA_DIR, file), 'wb') { |w| w.write(r.read) }
             }
@@ -214,15 +246,13 @@ module Lich
           ## Finally we move the lich.rbw file into place to complete the update.  We do
           ## not need to save a copy of this in the TEMP_DIR as previously done, since we
           ## took the snapshot at the beginning.
-
           lich_to_update = File.join(LICH_DIR, File.basename($PROGRAM_NAME))
           update_to_lich = File.join(TEMP_DIR, filename, "lich.rbw")
           File.open(update_to_lich, 'rb') { |r| File.open(lich_to_update, 'wb') { |w| w.write(r.read) } }
 
           ## And we clen up after ourselves
-
-          FileUtils.remove_dir(File.join(TEMP_DIR, filename))   # we know these exist because
-          FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz"))       # we just processed them
+          FileUtils.remove_dir(File.join(TEMP_DIR, filename)) # we know these exist because
+          FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) # we just processed them
 
           _respond; _respond "Lich5 has been updated to Lich5 version #{@update_to}"
           _respond "You should exit the game, then log back in.  This will start the game"
@@ -275,9 +305,8 @@ module Lich
         end
       end
 
-      def self.update_file(type, rf)
+      def self.update_file(type, rf, version = 'production')
         requested_file = rf
-        requested_file_name = requested_file.sub(/\.(?:lic|rb|xml|ui)$/, '')
         case type
         when "script"
           location = SCRIPT_DIR
@@ -285,18 +314,23 @@ module Lich
           requested_file =~ /\.lic$/ ? requested_file_ext = ".lic" : requested_file_ext = "bad extension"
         when "library"
           location = LIB_DIR
-          remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/master/lib"
+          case version
+          when "production"
+            remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/master/lib"
+          when "beta"
+            remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/staging/lib"
+          end
           requested_file =~ /\.rb$/ ? requested_file_ext = ".rb" : requested_file_ext = "bad extension"
         when "data"
           location = DATA_DIR
-          remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/master/data"
+          remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
           requested_file =~ /(\.(?:xml|ui))$/ ? requested_file_ext = $1.dup : requested_file_ext = "bad extension"
         end
         unless requested_file_ext == "bad extension"
           File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))
           begin
             File.open(File.join(location, requested_file), "wb") do |file|
-              file.write URI.open(File.join(remote_repo, requested_file)).read
+              file.write URI.parse(File.join(remote_repo, requested_file)).open.read
             end
             _respond
             _respond "#{requested_file} has been updated."

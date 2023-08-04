@@ -1,6 +1,6 @@
 class Bounty
   class Task
-    def initialize(options={})
+    def initialize(options = {})
       @description    = options[:description]
       @type           = options[:type]
       @requirements   = options[:requirements] || {}
@@ -71,18 +71,24 @@ class Bounty
     end
 
     def search_heirloom?
-      heirloom &&
+      [:heirloom].include?(type) &&
         requirements[:action] == "search"
     end
 
     def loot_heirloom?
-      heirloom &&
+      [:heirloom].include?(type) &&
         requirements[:action] == "loot"
+    end
+
+    def heirloom_found?
+      [
+        :heirloom_found
+      ].include?(type)
     end
 
     def done?
       [
-        :failed, :guard, :taskmaster
+        :failed, :guard, :taskmaster, :heirloom_found
       ].include?(type)
     end
 
@@ -105,7 +111,7 @@ class Bounty
     def guard?
       [
         :guard,
-        :bandit_assignment, :creature_assignment, :heirloom_assignment, :rescue_assignment
+        :bandit_assignment, :creature_assignment, :heirloom_assignment, :heirloom_found, :rescue_assignment
       ].include?(type)
     end
 
@@ -116,26 +122,32 @@ class Bounty
     def ready?
       [
         :bandit_assignment, :escort_assignment,
-        :cull, :dangerous, :gem, :herb, :skin, :heirloom
+        :bandit, :cull, :dangerous, :escort, :gem, :heirloom, :herb, :rescue, :skin
       ].include?(type)
     end
 
     def help?
       description.start_with?("You have been tasked to help")
     end
-    def assist?; help?; end
-    def group?; help? ;end
+
+    def assist?
+      help?
+    end
+
+    def group?
+      help?
+    end
 
     def method_missing(symbol, *args, &blk)
-      if requirements&.keys.include?(symbol)
+      if requirements&.keys&.include?(symbol)
         requirements[symbol]
       else
         super
       end
     end
 
-    def respond_to_missing?(symbol, include_private=false)
-      requirements&.keys.include?(symbol) || super
+    def respond_to_missing?(symbol, include_private = false)
+      requirements&.keys&.include?(symbol) || super
     end
   end
 end

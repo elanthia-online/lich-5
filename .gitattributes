@@ -2,11 +2,15 @@
 # let's gussy this up a bit for a working zip / tarball release
 # first, let's ignore files we don't want in the zip
 .git*           export-ignore
+*.yml           export-ignore
 .ruby-version   export-ignore
 README.adoc     export-ignore
 netlify.toml    export-ignore
+Gemfile*        export-ignore
+*.ico           export-ignore
+*.iss           export-ignore
 # second, let's take a running stab at ignoring a directory
-/lich           export-ignore
+/spec           export-ignore
 # third, let's ignore a file in a directory
-/data/update-lich5.json   export-ignore
+
 # next up, consider normalized line endings

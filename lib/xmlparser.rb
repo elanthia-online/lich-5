@@ -27,7 +27,7 @@ class XMLParser
               :prepared_spell, :encumbrance_text, :encumbrance_full_text, :encumbrance_value,
               :indicator, :injuries, :injury_mode, :room_count, :room_title, :room_description,
               :room_exits, :room_exits_string, :familiar_room_title, :familiar_room_description,
-              :familiar_room_exits, :bounty_task, :injury_mode, :server_time, :server_time_offset,
+              :familiar_room_exits, :bounty_task, :server_time, :server_time_offset,
               :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
               :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
               :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
@@ -137,10 +137,15 @@ class XMLParser
           if k.to_s =~ /Recovery/
             z.merge!(k => v) if k.instance_of?(String)
           else
-          z.merge!("#{k} Cooldown" => v) if k.instance_of?(String)
+            z.merge!("#{k} Cooldown" => v) if k.instance_of?(String)
           end
         when /Debuffs/
-          z.merge!("#{k} Debuff" => v) if k.instance_of?(String)
+
+          # need to deal with that pesky 'Silenced' versus 'Silence' from XML
+          if k == "Silenced"
+            k = 'Silence'
+          end
+          z.merge!(k => v) if k.instance_of?(String)
         end
       end
     end
@@ -173,12 +178,12 @@ class XMLParser
   def parse(line)
     @buffer.concat(line)
     loop {
-      if str = @buffer.slice!(/^[^<]+/)
+      if (str = @buffer.slice!(/^[^<]+/))
         text(str.gsub(/&(lt|gt|quot|apos|amp)/) { @unescape[$1] })
-      elsif str = @buffer.slice!(/^<\/[^<]+>/)
+      elsif (str = @buffer.slice!(/^<\/[^<]+>/))
         element = /^<\/([^\s>\/]+)/.match(str).captures.first
         tag_end(element)
-      elsif str = @buffer.slice!(/^<[^<]+>/)
+      elsif (str = @buffer.slice!(/^<[^<]+>/))
         element = /^<([^\s>\/]+)/.match(str).captures.first
         attributes = Hash.new
         str.scan(/([A-z][A-z0-9_\-]*)=(["'])(.*?)\2/).each { |attr| attributes[attr[0]] = attr[2] }
@@ -212,6 +217,22 @@ class XMLParser
     begin
       @active_tags.push(name)
       @active_ids.push(attributes['id'].to_s)
+
+      if name == 'nav'
+        @previous_nav_rm = @room_id
+        @room_id = attributes['rm'].to_i
+        $nav_seen = true
+        Map.last_seen_objects = nil if Map.method_defined?(:last_seen_objects); # DR Only
+      end
+
+      if name == 'compass'
+        if @current_stream == 'familiar'
+          @fam_mode = String.new
+        elsif @room_window_disabled
+          @room_exits = Array.new
+        end
+      end
+
       if name =~ /^(?:a|right|left)$/
         @obj_exist = attributes['exist']
         @obj_noun = attributes['noun']
@@ -229,13 +250,10 @@ class XMLParser
       elsif name == 'dialogData' and attributes['clear'] == 't' and PSM_3_DIALOG_IDS.include?(attributes["id"])
         @dialogs[attributes["id"]] ||= {}
         @dialogs[attributes["id"]].clear
+        # detect a clear board request for effects, and send to activespell
+        ActiveSpell.request_update
       elsif name == 'resource'
         nil
-      elsif name == 'nav'
-        @previous_nav_rm = @room_id
-        @room_id = attributes['rm'].to_i
-        $nav_seen = true
-        Map.last_seen_objects = nil if Map.method_defined?(:last_seen_objects); # DR Only
       elsif name == 'pushStream'
         @in_stream = true
         @current_stream = attributes['id'].to_s
@@ -278,10 +296,6 @@ class XMLParser
         elsif attributes['id'] == 'room desc'
           @room_description = String.new
           GameObj.clear_room_desc
-        elsif attributes['id'] == 'room extra' # DragonRealms
-          #@room_count += 1
-          #$room_count += 1
-          # elsif attributes['id'] == 'sprite'
         end
       elsif name == 'clearContainer'
         if attributes['id'] == 'stow'
@@ -301,11 +315,13 @@ class XMLParser
           @mana, @max_mana = attributes['text'].scan(/-?\d+/).collect { |num| num.to_i }
           difference = @mana - last_mana
           # fixme: enhancives screw this up
-          if (difference == noded_pulse) or (difference == unnoded_pulse) or ((@mana == @max_mana) and (last_mana + noded_pulse > @max_mana))
-            @last_pulse = Time.now.to_i
-            if @send_fake_tags
-              $_CLIENT_.puts "\034GSZ#{sprintf('%010d', (@mana + 1))}\n"
-              $_CLIENT_.puts "\034GSZ#{sprintf('%010d', @mana)}\n"
+          unless XMLData.name.empty?
+            if (difference == noded_pulse) or (difference == unnoded_pulse) or ((@mana == @max_mana) and (last_mana + noded_pulse > @max_mana))
+              @last_pulse = Time.now.to_i
+              if @send_fake_tags
+                $_CLIENT_.puts "\034GSZ#{sprintf('%010d', (@mana + 1))}\n"
+                $_CLIENT_.puts "\034GSZ#{sprintf('%010d', @mana)}\n"
+              end
             end
           end
           if @send_fake_tags
@@ -338,7 +354,7 @@ class XMLParser
           # puts "kind=(%s) name=%s attributes=%s" % [@active_ids[-2], name, attributes]
           self.parse_psm3_progressbar(@active_ids[-2], attributes)
           # since we received an updated spell duration, let's signal infomon to update
-          $process_legacy_spell_durations = true
+          ActiveSpell.request_update
         end
       elsif name == 'roundTime'
         @roundtime_end = attributes['value'].to_i
@@ -450,12 +466,6 @@ class XMLParser
           end
         end
         $_CLIENT_.puts "\034GSV#{sprintf('%010d%010d%010d%010d%010d%010d%010d%010d', @max_health.to_i, @health.to_i, @max_spirit.to_i, @spirit.to_i, @max_mana.to_i, @mana.to_i, make_wound_gsl, make_scar_gsl)}\r\n" if @send_fake_tags
-      elsif name == 'compass'
-        if @current_stream == 'familiar'
-          @fam_mode = String.new
-        elsif @room_window_disabled
-          @room_exits = Array.new
-        end
       elsif @room_window_disabled and (name == 'dir') and @active_tags.include?('compass')
         @room_exits.push(LONGDIR[attributes['value']])
       elsif name == 'radio'
@@ -468,12 +478,9 @@ class XMLParser
         end
       elsif name == 'label'
         if attributes['id'] == 'yourLvl'
-          @level = Stats.level = attributes['value'].slice(/\d+/).to_i
+          @level = attributes['value'].slice(/\d+/).to_i
         elsif attributes['id'] == 'encumblurb'
           @encumbrance_full_text = attributes['value']
-        elsif @active_tags[-2] == 'dialogData' and PSM_3_DIALOG_IDS.include?(@active_ids[-2])
-          # deprecated: labels do not have the required data in psm 3.0 dialogdata
-          #             instead we must parse the <progressBar/> element
         end
       elsif (name == 'container') and (attributes['id'] == 'stow')
         @stow_container_id = attributes['target'].sub('#', '')
@@ -489,7 +496,7 @@ class XMLParser
           end
         end
       elsif name == 'settingsInfo'
-        if game = attributes['instance']
+        if (game = attributes['instance'])
           if game == 'GS4'
             @game = 'GSIV'
           elsif (game == 'GSX') or (game == 'GS4X')
@@ -515,7 +522,7 @@ class XMLParser
           Game._puts "#{$cmd_prefix}_injury 2"
           sleep 0.05
           # fixme: game name hardcoded as Gemstone IV; maybe doesn't make any difference to the client
-          $_CLIENT_.puts "\034GSB0000000000#{attributes['char']}\r\n\034GSA#{Time.now.to_i.to_s}GemStone IV\034GSD\r\n"
+          $_CLIENT_.puts "\034GSB0000000000#{attributes['char']}\r\n\034GSA#{Time.now.to_i}GemStone IV\034GSD\r\n"
           # Sending fake GSL tags to the Wizard FE is disabled until now, because it doesn't accept the tags and just gives errors until initialized with the above line
           @send_fake_tags = true
           # Send all the tags we missed out on
@@ -708,6 +715,19 @@ class XMLParser
 
   def tag_end(name)
     begin
+
+      if @game =~ /^DR/
+        if name == 'compass' and $nav_seen
+          $nav_seen = false
+          @second_compass = true
+        end
+        if name == 'compass' and @second_compass
+          @second_compass = false
+          @room_count += 1
+          $room_count += 1
+        end
+      end
+
       if name == 'inv'
         if @obj_exist == @obj_location
           if @obj_after_name == 'is closed.'
@@ -722,20 +742,12 @@ class XMLParser
         $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
         gsl_exits = nil
       elsif @room_window_disabled and (name == 'compass')
-        #            @room_window_disabled = false
         @room_description = @room_description.strip
         @room_exits_string.concat " #{@room_exits.join(', ')}" unless @room_exits.empty?
         gsl_exits = String.new
         @room_exits.each { |exit| gsl_exits.concat(DIRMAP[SHORTDIR[exit]].to_s) }
         $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
         gsl_exits = nil
-        @room_count += 1
-        $room_count += 1
-      elsif name == 'compass' and $nav_seen
-        $nav_seen = false
-        @second_compass = true
-      elsif name == 'compass' and @second_compass
-        @second_compass = false
         @room_count += 1
         $room_count += 1
       end
@@ -753,7 +765,7 @@ class XMLParser
   def spellfront
     if (Time.now.to_i - @@warned_deprecated_spellfront) > 300
       @@warned_deprecated_spellfront = Time.now.to_i
-      unless script_name = Script.current.name
+      unless (script_name = Script.current.name)
         script_name = 'unknown script'
       end
       respond "--- warning: #{script_name} is using deprecated method XMLData.spellfront; this method will be removed in a future version of Lich"
