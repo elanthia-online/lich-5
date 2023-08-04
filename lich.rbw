@@ -3319,9 +3319,9 @@ main_thread = Thread.new {
         end
         if $_DETACHABLE_CLIENT_
           begin
-            unless ARGV.include?('--genie')
-              $frontend = 'profanity'
-              Thread.new {
+            $frontend = 'profanity' unless $frontend
+            Thread.new {
+              if $frontend == 'profanity'
                 100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
                 init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
                 init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
@@ -3343,18 +3343,18 @@ main_thread = Thread.new {
                     init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
                   end
                 end
-                init_str.concat '<compass>'
-                shorten_dir = { 'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se', 'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw', 'up' => 'up', 'down' => 'down', 'out' => 'out' }
-                for dir in XMLData.room_exits
-                  if (short_dir = shorten_dir[dir])
-                    init_str.concat "<dir value='#{short_dir}'/>"
-                  end
+              end
+              init_str.concat '<compass>'
+              shorten_dir = { 'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se', 'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw', 'up' => 'up', 'down' => 'down', 'out' => 'out' }
+              for dir in XMLData.room_exits
+                if (short_dir = shorten_dir[dir])
+                  init_str.concat "<dir value='#{short_dir}'/>"
                 end
-                init_str.concat '</compass>'
-                $_DETACHABLE_CLIENT_.puts init_str
-                init_str = nil
-              }
-            end
+              end
+              init_str.concat '</compass>'
+              $_DETACHABLE_CLIENT_.puts init_str
+              init_str = nil
+            }
             while (client_string = $_DETACHABLE_CLIENT_.gets)
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
               begin
