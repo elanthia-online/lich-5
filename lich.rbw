@@ -3319,9 +3319,7 @@ main_thread = Thread.new {
         end
         if $_DETACHABLE_CLIENT_
           begin
-            Lich.log("01 Front end is #{$frontend}")
             $frontend = 'profanity' unless $frontend
-            Lich.log("02 Front end is #{$frontend}")
             Thread.new {
               if $frontend == 'profanity'
                 100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
