@@ -3319,7 +3319,9 @@ main_thread = Thread.new {
         end
         if $_DETACHABLE_CLIENT_
           begin
+            Lich.log("01 Front end is #{$frontend}")
             $frontend = 'profanity' unless $frontend
+            Lich.log("02 Front end is #{$frontend}")
             Thread.new {
               if $frontend == 'profanity'
                 100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
@@ -3343,8 +3345,10 @@ main_thread = Thread.new {
                     init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
                   end
                 end
+                init_str.concat '<compass>'
               end
-              init_str.concat '<compass>'
+
+              init_str = '<compass>' unless $frontend == 'profanity'
               shorten_dir = { 'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se', 'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw', 'up' => 'up', 'down' => 'down', 'out' => 'out' }
               for dir in XMLData.room_exits
                 if (short_dir = shorten_dir[dir])
