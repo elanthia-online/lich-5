@@ -315,6 +315,10 @@ module Games
         a
       end
 
+      def GameObj.target
+        return (@@npcs + @@pcs).find { |n| n.id == XMLData.current_target_id }
+      end
+
       def GameObj.dead
         dead_list = Array.new
         for obj in @@npcs
