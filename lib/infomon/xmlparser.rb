@@ -4,7 +4,7 @@ module Infomon
   # this module handles all of the logic for parsing game lines that infomon depends on
   module XMLParser
     module Pattern
-      NpcDeathMessage = /^(?:The) (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? (?:falls to the ground motionless)[\.!]\r?\n?$/
+      NpcDeathMessage = /^(?:The) (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? (?:falls to the ground (?:motionless|and dies))[\.!]\r?\n?$/
 
       All = Regexp.union(NpcDeathMessage)
     end
