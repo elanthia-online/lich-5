@@ -707,8 +707,12 @@ class XMLParser
         elsif text_string =~ /^Obvious (?:paths|exits): (?:none)?$/
           @room_exits_string = text_string.strip
         end
+      # this detects for death messages in XML that are not matched with appropriate combat attributes above
       elsif text_string =~ /^(?:The) (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? (?:falls to the ground motionless)[\.!]\r?\n?$/
-        GameObj.npcs[npc_id] = 'dead'
+        match = Regexp.last_match
+        if npc = GameObj.npcs.find { |obj| obj.id == match[:npc_id].to_i}
+          npc.status = 'dead'
+        end
       end
     rescue
       $stdout.puts "--- error: XMLParser.text: #{$!}"
