@@ -18,7 +18,7 @@ module Infomon
         # this detects for death messages in XML that are not matched with appropriate combat attributes above
         when Pattern::NpcDeathMessage
           match = Regexp.last_match
-          if (npc = GameObj.npcs.find { |obj| obj.id == match[:npc_id] })
+          if (npc = GameObj.npcs.find { |obj| obj.id == match[:npc_id] && obj.status !~ /\b(?:dead|gone)\b/ })
             npc.status = 'dead'
           end
           :ok
