@@ -707,6 +707,8 @@ class XMLParser
         elsif text_string =~ /^Obvious (?:paths|exits): (?:none)?$/
           @room_exits_string = text_string.strip
         end
+      elsif text_string =~ /^(?:The) (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? (?:falls to the ground motionless)[\.!]\r?\n?$/
+        GameObj.npcs[npc_id] = 'dead'
       end
     rescue
       $stdout.puts "--- error: XMLParser.text: #{$!}"
