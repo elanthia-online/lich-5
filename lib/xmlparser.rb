@@ -710,7 +710,7 @@ class XMLParser
       # this detects for death messages in XML that are not matched with appropriate combat attributes above
       elsif text_string =~ /^(?:The) (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? (?:falls to the ground motionless)[\.!]\r?\n?$/
         match = Regexp.last_match
-        if npc = GameObj.npcs.find { |obj| obj.id == match[:npc_id].to_i}
+        if (npc = GameObj.npcs.find { |obj| obj.id == match[:npc_id].to_i })
           npc.status = 'dead'
         end
       end
@@ -724,7 +724,6 @@ class XMLParser
 
   def tag_end(name)
     begin
-
       if @game =~ /^DR/
         if name == 'compass' and $nav_seen
           $nav_seen = false
