@@ -1284,7 +1284,7 @@ module Games
                     XMLData.reset
                   end
                   Script.new_downstream_xml($_SERVERSTRING_)
-                  Infomon::XMLParser.parse($_SERVERSTRING_)
+                  Infomon::XMLParser.parse($_SERVERSTRING_) if XMLData.game =~ /^GS/
                   stripped_server = strip_xml($_SERVERSTRING_)
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
