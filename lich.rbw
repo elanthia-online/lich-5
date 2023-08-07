@@ -1188,9 +1188,11 @@ module Games
               begin
                 $cmd_prefix = String.new if $_SERVERSTRING_ =~ /^\034GSw/
 
-                unless XMLData.game.nil? or XMLData.game.empty?
-                  require 'lib/game-loader'
-                  GameLoader.load!
+                unless (XMLData.game.nil? or XMLData.game.empty?) 
+                  unless Module.const_defined?(:GameLoader)
+                    require 'lib/game-loader'
+                    GameLoader.load!
+                  end
                 end
 
                 if XMLData.game =~ /^GS/
@@ -1284,6 +1286,9 @@ module Games
                     XMLData.reset
                   end
                   Script.new_downstream_xml($_SERVERSTRING_)
+                  if Module.const_defined?(:GameLoader) && XMLData.game =~ /^GS/
+                    Infomon::XMLParser.parse($_SERVERSTRING_)
+                  end
                   stripped_server = strip_xml($_SERVERSTRING_)
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING

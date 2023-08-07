@@ -217,5 +217,6 @@ module Infomon
   end
 
   require_relative "parser"
+  require_relative "xmlparser"
   require_relative "cli"
 end

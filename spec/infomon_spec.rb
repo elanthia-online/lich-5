@@ -791,3 +791,11 @@ describe Infomon::Parser, ".parse" do
     end
   end
 end
+
+describe Infomon::XMLParser, ".parse" do
+  context "NPC Death" do
+    it "handles NPC death message not handled by normal xmlparser" do
+      Infomon::XMLParser.parse(%[The <pushBold/><a exist="1283966" noun="wraith">wraith</a><popBold/> falls to the ground motionless.]).eql?(:ok)
+    end
+  end
+end
