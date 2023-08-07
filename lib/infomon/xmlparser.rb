@@ -4,7 +4,7 @@ module Infomon
   # this module handles all of the logic for parsing game lines that infomon depends on
   module XMLParser
     module Pattern
-      NpcDeathMessage = /^(?:The) (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? (?:falls to the ground (?:motionless|and dies))[\.!]\r?\n?$/
+      NpcDeathMessage = /^The (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)? falls to the ground (?:motionless|and dies)[\.!]\r?\n?$/
 
       All = Regexp.union(NpcDeathMessage)
     end
@@ -18,7 +18,7 @@ module Infomon
         # this detects for death messages in XML that are not matched with appropriate combat attributes above
         when Pattern::NpcDeathMessage
           match = Regexp.last_match
-          if npc = GameObj.npcs.find { |obj| obj.id == match[:npc_id]}
+          if (npc = GameObj.npcs.find { |obj| obj.id == match[:npc_id] })
             npc.status = 'dead'
           end
           :ok
