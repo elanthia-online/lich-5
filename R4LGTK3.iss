@@ -3,7 +3,7 @@
 ; to support the Lich scripting environment for Simutronics games
 
 #define MyAppName "Ruby4Lich5"
-#define MyAppVersion "5.7.0-rc.8"
+#define MyAppVersion "5.7.0-rc.9"
 #define RubyVersion "3.2.2"
 #define MyAppPublisher "Elanthia-Online"
 #define MyAppURL "https://github.com/elanthia-online/lich-5/"
@@ -12,7 +12,7 @@
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
-AppId= {{edd9ccd7-33cb-4577-a470-fe8fd087ead6}
+AppId= {{edd9ccd7-33cb-4577-a470-fe8fd087ead7}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} Ruby {#RubyVersion} & Lich {#MyAppVersion}
