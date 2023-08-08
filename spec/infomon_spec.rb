@@ -322,7 +322,7 @@ describe Infomon::Parser, ".parse" do
 
     it "handles beast status info" do
       output = <<~Beast
-        Spirit Beast Information:                          
+        Spirit Beast Information:
 
             Redsteel Marks:            3441
             Beasts in Collection:      10
