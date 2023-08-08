@@ -284,16 +284,12 @@ describe Infomon::Parser, ".parse" do
         You are carrying 6,112 coins stored within your coin pouch.
 
         You are carrying 16 gigas artifact fragments.
-
-        You have 211 redsteel marks.
       Wealth
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
-      expect(Infomon.get("currency.redsteel_marks")).to eq(211)
       expect(Infomon.get("currency.silver")).to eq(5585)
       expect(Infomon.get("currency.silver_container")).to eq(6112)
       expect(Infomon.get("currency.gigas_artifact_fragments")).to eq(16)
-      expect(Lich::Currency.redsteel_marks).to eq(211)
       expect(Lich::Currency.silver).to eq(5585)
       expect(Lich::Currency.silver_container).to eq(6112)
       expect(Lich::Currency.gigas_artifact_fragments).to eq(16)
@@ -322,6 +318,25 @@ describe Infomon::Parser, ".parse" do
       expect(Lich::Currency.ethereal_scrip).to eq(295702)
       expect(Lich::Currency.soul_shards).to eq(53058)
       expect(Lich::Currency.raikhen).to eq(38847)
+    end
+
+    it "handles beast status info" do
+      output = <<~Beast
+        Spirit Beast Information:                          
+
+            Redsteel Marks:            3441
+            Beasts in Collection:      10
+            Beasts Captured:           5
+
+            Talondown Arena Level:     0 (9 wins 'til next)
+
+            Total Matches Won:         0
+            Total Matches:             0
+      Beast
+      output.split("\n").map { |line| Infomon::Parser.parse(line) }
+
+      expect(Infomon.get("currency.redsteel_marks")).to eq(3441)
+      expect(Lich::Currency.redsteel_marks).to eq(3441)
     end
   end
 
