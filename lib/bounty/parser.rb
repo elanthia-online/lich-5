@@ -13,6 +13,7 @@ class Bounty
       /the sentry just outside town/,
       /the sentry just outside (?<town>Kraken's Fall)/,
       /the purser of (?<town>River's Rest)/,
+      /the tavernkeeper at Rawknuckle's Common House/,
     )
 
     TASK_MATCHERS         = {
