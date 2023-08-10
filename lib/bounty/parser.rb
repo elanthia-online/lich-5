@@ -16,7 +16,7 @@ class Bounty
       /the tavernkeeper at Rawknuckle's Common House/,
     )
 
-    TASK_MATCHERS         = {
+    TASK_MATCHERS = {
       :none                => /^You are not currently assigned a task/,
       :bandit_assignment   => /#{HMM_REGEX}It appears they have a bandit problem they'd like you to solve/,
       :creature_assignment => /#{HMM_REGEX}It appears they have a creature problem they'd like you to solve/,
