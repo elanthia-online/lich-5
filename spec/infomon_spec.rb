@@ -206,6 +206,7 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get("experience.total_experience")).to eq(41_307_131)
       expect(Infomon.get("experience.long_term_experience")).to eq(26_266)
       expect(Infomon.get("experience.deeds")).to eq(20)
+      expect(Infomon.get("experience.deaths_sting")).to eq("None")
 
       expect(Experience.fame).to eq(4_804_958)
       expect(Experience.fxp_current).to eq(1_350)
@@ -214,6 +215,7 @@ describe Infomon::Parser, ".parse" do
       expect(Experience.txp).to eq(41_307_131)
       expect(Experience.lte).to eq(26_266)
       expect(Experience.deeds).to eq(20)
+      expect(Experience.deaths_sting).to eq("None")
     end
   end
 
