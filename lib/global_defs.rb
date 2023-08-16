@@ -2239,8 +2239,7 @@ def do_client(client_string)
       respond "                                                see #{$clean_lich_char}lich5-update --help"
       respond
       respond 'If you liked this help message, you might also enjoy:'
-      respond "   #{$clean_lich_char}lnet help"
-      respond "   #{$clean_lich_char}magic help     (infomon must be running)"
+      respond "   #{$clean_lich_char}lnet help" if defined?(LNet)
       respond "   #{$clean_lich_char}go2 help"
       respond "   #{$clean_lich_char}repository help"
       respond "   #{$clean_lich_char}alias help"
