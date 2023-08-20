@@ -15,7 +15,7 @@ module Infomon
       TotalExp = /^\s+Total Exp: (?<total_experience>[\d,]+)\s+Death's Sting: \w+$/.freeze
       LTE = /^\s+Long-Term Exp: (?<long_term_experience>[\d,]+)\s+Deeds: (?<deeds>\d+)$/.freeze
       ExprEnd = /^\s+Exp (?:until lvl|to next TP): [\d,]+/.freeze
-      SkillStart = /^\s\w+\s\(at level \d+\), your (?:current|base) skill bonuses(?: and ranks|, ranks and goals)/.freeze
+      SkillStart = /^\s\w+\s\(at level \d+\), your current skill bonuses(?: and ranks|, ranks and goals)/.freeze
       Skill = /^\s+(?<name>[[a-zA-Z]\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)/.freeze
       SpellRanks = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
       SkillEnd = /^Training Points: \d+ Phy \d+ Mnt/.freeze
@@ -149,14 +149,22 @@ module Infomon
           Infomon.mutex_lock
           :ok
         when Pattern::Skill
-          match = Regexp.last_match
-          @skills_hold.push(['skill.%s' % match[:name].downcase, match[:ranks].to_i],
-                            ['skill.%s_bonus' % match[:name], match[:bonus].to_i])
-          :ok
+          if Infomon.mutex.owned?
+            match = Regexp.last_match
+            @skills_hold.push(['skill.%s' % match[:name].downcase, match[:ranks].to_i],
+                              ['skill.%s_bonus' % match[:name], match[:bonus].to_i])
+            :ok
+          else
+            :noop
+          end
         when Pattern::SpellRanks
-          match = Regexp.last_match
-          @skills_hold.push(['spell.%s' % match[:name].downcase, match[:rank].to_i])
-          :ok
+          if Infomon.mutex.owned?
+            match = Regexp.last_match
+            @skills_hold.push(['spell.%s' % match[:name].downcase, match[:rank].to_i])
+            :ok
+          else
+            :noop
+          end
         when Pattern::SkillEnd
           if Infomon.mutex.owned?
             Infomon.upsert_batch(@skills_hold)
