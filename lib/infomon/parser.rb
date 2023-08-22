@@ -94,14 +94,14 @@ module Infomon
           Infomon.mutex_lock
           match = Regexp.last_match
           @stat_hold.push(['stat.race', match[:race].to_s],
-                          ['stat.profession', match[:profession].to_s])
+                          ['stat.profession', match[:profession].to_s]) unless Effects::Spells.active?(1212)
           :ok
         when Pattern::CharGenderAgeExpLevel
           # level captured here, but do not rely on it - use XML instead
           match = Regexp.last_match
           @stat_hold.push(['stat.gender', match[:gender].to_s],
-                          ['stat.age', match[:age].delete(',').to_i],
-                          ['stat.experience', match[:experience].delete(',').to_i])
+                          ['stat.age', match[:age].delete(',').to_i]) unless Effects::Spells.active?(1212)
+          @stat_hold.push(['stat.experience', match[:experience].delete(',').to_i])
           :ok
         when Pattern::Stat
           match = Regexp.last_match
