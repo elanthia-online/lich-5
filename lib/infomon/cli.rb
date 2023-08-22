@@ -9,7 +9,7 @@ module Infomon
     if Effects::Spells.active?(1212)
       respond 'ATTENTION:  SHROUD DETECTED - disabling Shroud of Deception to sync character\'s infomon setting'
       fput "STOP 1212"
-      sleep(0.5) until Effects::Spells.active?(1212)
+      sleep(0.5) until !Effects::Spells.active?(1212)
       shroud_detected = true
     end
     request = { 'info'               => /<a exist=.+#{XMLData.name}/,
