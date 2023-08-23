@@ -4,14 +4,7 @@ module Infomon
   # CLI commands for Infomon
   def self.sync
     # since none of this information is 3rd party displayed, silence is golden.
-    shroud_detected = false
     respond 'Infomon sync requested.'
-    if Effects::Spells.active?(1212)
-      respond 'ATTENTION:  SHROUD DETECTED - disabling Shroud of Deception to sync character\'s infomon setting'
-      put "STOP 1212"
-      sleep(0.5) until !Effects::Spells.active?(1212)
-      shroud_detected = true
-    end
     request = { 'info'               => /<a exist=.+#{XMLData.name}/,
                 'skill'              => /<a exist=.+#{XMLData.name}/,
                 'spell'              => %r{<output class="mono"/>},
@@ -33,7 +26,6 @@ module Infomon
       respond "Did #{command}." if $infomon_debug
     end
     respond 'Requested Infomon sync complete.'
-    respond 'ATTENTION:  TEND TO YOUR SHROUD!' if shroud_detected
     Infomon.set('infomon.last_sync', Time.now.to_i)
   end
 
