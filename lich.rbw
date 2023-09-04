@@ -3316,20 +3316,23 @@ main_thread = Thread.new {
                 init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
                 init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
                 init_str.concat "<progressBar id='stamina' value='0' text='stamina #{XMLData.stamina}/#{XMLData.max_stamina}'/>"
-                init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{XMLData.encumbrance_text}'/>"
-                init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
-                init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{XMLData.mind_text}'/>"
                 init_str.concat "<spell>#{XMLData.prepared_spell}</spell>"
-                init_str.concat "<right>#{GameObj.right_hand.name}</right>" if XMLData.game =~ /GS/
-                init_str.concat "<left>#{GameObj.left_hand.name}</left>" if XMLData.game =~ /GS/
                 for indicator in ['IconBLEEDING', 'IconPOISONED', 'IconDISEASED', 'IconSTANDING', 'IconKNEELING', 'IconSITTING', 'IconPRONE']
                   init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
                 end
-                for area in ['back', 'leftHand', 'rightHand', 'head', 'rightArm', 'abdomen', 'leftEye', 'leftArm', 'chest', 'rightLeg', 'neck', 'leftLeg', 'nsys', 'rightEye']
-                  if Wounds.send(area) > 0
-                    init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
-                  elsif Scars.send(area) > 0
-                    init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
+                # These don't exist in DR.
+                if XMLData.game =~ /GS/
+                  init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
+                  init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{XMLData.mind_text}'/>"
+                  init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{XMLData.encumbrance_text}'/>"
+                  init_str.concat "<right>#{GameObj.right_hand.name}</right>"
+                  init_str.concat "<left>#{GameObj.left_hand.name}</left>"
+                  for area in ['back', 'leftHand', 'rightHand', 'head', 'rightArm', 'abdomen', 'leftEye', 'leftArm', 'chest', 'rightLeg', 'neck', 'leftLeg', 'nsys', 'rightEye']
+                    if Wounds.send(area) > 0
+                      init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
+                    elsif Scars.send(area) > 0
+                      init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
+                    end
                   end
                 end
                 init_str.concat '<compass>'
