@@ -32,4 +32,8 @@ module Experience
   def self.deeds
     Infomon.get("experience.deeds")
   end
+
+  def self.deaths_sting
+    Infomon.get("experience.deaths_sting")
+  end
 end
