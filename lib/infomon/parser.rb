@@ -181,9 +181,9 @@ module Infomon
         when Pattern::GoalsEnded
           if @goals_detected
             @goals_detected = false
-            respond; respond monsterbold_start
-            respond "You just trained your character.  Lich will gather your updated skills."
-            respond monsterbold_end; respond
+            respond
+            respond Lich::Messaging.monsterbold('You just trained your character.  Lich will gather your updated skills.')
+            respond
             # temporary inform for users about command
             # fixme: update ExecCommand to consistently perform local API actions from lib files
             respond "[infomon_sync]#{$SEND_CHARACTER}skills"
