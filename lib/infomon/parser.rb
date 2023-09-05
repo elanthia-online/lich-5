@@ -188,8 +188,10 @@ module Infomon
             # fixme: update ExecCommand to consistently perform local API actions from lib files
             respond "[infomon_sync]#{$SEND_CHARACTER}skills"
             Game._puts("#{$cmd_prefix}skills")
+            :ok
+          else
+            :noop
           end
-          :ok
         when Pattern::PSMStart
           match = Regexp.last_match
           @psm_hold = []
