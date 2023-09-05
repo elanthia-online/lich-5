@@ -12,6 +12,8 @@ module Infomon
         dothistimeout('STOP 1212', 3, /With a moment's concentration, you terminate the Shroud of Deception spell./)
         sleep(0.5)
       end
+      shroud_detected = true
+    end
     request = { 'info'               => /<a exist=.+#{XMLData.name}/,
                 'skill'              => /<a exist=.+#{XMLData.name}/,
                 'spell'              => %r{<output class="mono"/>},
