@@ -15,10 +15,12 @@ module Infomon
       TotalExp = /^\s+Total Exp: (?<total_experience>[\d,]+)\s+Death's Sting: \w+$/.freeze
       LTE = /^\s+Long-Term Exp: (?<long_term_experience>[\d,]+)\s+Deeds: (?<deeds>\d+)$/.freeze
       ExprEnd = /^\s+Exp (?:until lvl|to next TP): [\d,]+/.freeze
-      SkillStart = /^\s\w+\s\(at level \d+\), your (?:current|base) skill bonuses(?: and ranks|, ranks and goals)/.freeze
+      SkillStart = /^\s\w+\s\(at level \d+\), your current skill bonuses and ranks/.freeze
       Skill = /^\s+(?<name>[[a-zA-Z]\s\-']+)\.+\|\s+(?<bonus>\d+)\s+(?<ranks>\d+)/.freeze
       SpellRanks = /^\s+(?<name>[\w\s\-']+)\.+\|\s+(?<rank>\d+).*$/.freeze
       SkillEnd = /^Training Points: \d+ Phy \d+ Mnt/.freeze
+      GoalsDetected = /^Skill goals updated!$/.freeze
+      GoalsEnded = /^Further information can be found in the FAQs\.$/.freeze
       PSMStart = /^\w+, the following (?<cat>Ascension Abilities|Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
       PSM = /^\s+(?<name>[A-z\s\-']+)\s+(?<command>[a-z]+)\s+(?<ranks>\d+)\/(?<max>\d+).*$/.freeze
       PSMEnd = /^   Subcategory: all$/.freeze
@@ -78,7 +80,7 @@ module Infomon
                          SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
                          Resource, Suffused, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketBlackscrip,
                          TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
-                         WealthSilver, WealthSilverContainer)
+                         WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded)
     end
 
     def self.parse(line)
@@ -173,6 +175,21 @@ module Infomon
           else
             :noop
           end
+        when Pattern::GoalsDetected
+          @goals_detected = true
+          :ok
+        when Pattern::GoalsEnded
+          if @goals_detected
+            @goals_detected = false
+            respond; respond monsterbold_start
+            respond "You just trained your character.  Lich will gather your updated skills."
+            respond monsterbold_end; respond
+            # temporary inform for users about command
+            # fixme: update ExecCommand to consistently perform local API actions from lib files
+            respond "[infomon_sync]#{$SEND_CHARACTER}skills"
+            Game._puts("#{$cmd_prefix}skills")
+          end
+          :ok
         when Pattern::PSMStart
           match = Regexp.last_match
           @psm_hold = []
