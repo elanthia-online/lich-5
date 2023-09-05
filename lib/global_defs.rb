@@ -735,6 +735,7 @@ def walk(*boundaries, &block)
     return checknpcs
   end
   dirs = checkpaths
+  return checknpcs if dirs.is_a?(FalseClass)
   dirs.delete($last_dir) unless dirs.length < 2
   this_time = rand(dirs.length)
   $last_dir = reverse_direction(dirs[this_time])
