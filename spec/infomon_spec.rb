@@ -228,7 +228,6 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get_bool("experience.lumnis")).to eq(false)
       expect(Experience.rpa?).to eq(true)
       expect(Experience.lumnis?).to eq(true)
-
     end
   end
 
