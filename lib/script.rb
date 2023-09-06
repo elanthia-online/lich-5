@@ -532,6 +532,7 @@ class Script
     end
   end
   def initialize(args)
+    prohibit_quiet = [ "alias", "autostart", "jinx", "lnet", "log", "map", "repository", "vars" ]
     @file_name = args[:file]
     @name = /.*[\/\\]+([^\.]+)\./.match(@file_name).captures.first
     if args[:args].class == String
@@ -551,7 +552,14 @@ class Script
     else
       @vars = Array.new
     end
-    @quiet = (args[:quiet] ? true : false)
+    if prohibit_quiet.include?(@name) && args[:quiet]
+      respond
+      respond Lich::Messaging.monsterbold("The #{@name} script cannot be run in quiet mode.  Running script normally.")
+      respond; respond
+      @quiet = false
+    else
+      @quiet = (args[:quiet] ? true : false)
+    end
     @downstream_buffer = LimitedArray.new
     @want_downstream = true
     @want_downstream_xml = false
@@ -591,7 +599,16 @@ class Script
         return nil
       end
     end
-    @quiet = true if data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i
+
+#    @quiet = true 
+    if data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i && prohibit_quiet.include?(@name)
+      respond
+      respond Lich::Messaging.monsterbold("The #{@name} script cannot be run in quiet mode.  Running script normally.")
+      respond; respond
+      @quiet = false
+    elsif data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i
+      @quiet = true
+    end
     @current_label = '~start'
     @labels[@current_label] = String.new
     @label_order.push(@current_label)
