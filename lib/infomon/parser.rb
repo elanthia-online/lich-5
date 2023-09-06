@@ -125,9 +125,7 @@ module Infomon
           @expr_hold = []
           Infomon.mutex_lock
           match = Regexp.last_match
-          @expr_hold.push(['experience.fame', match[:fame].delete(',').to_i],
-                          ['experience.rpa', false],
-                          ['experience.lumnis', false])
+          @expr_hold.push(['experience.fame', match[:fame].delete(',').to_i])
           :ok
         when Pattern::RealExp
           match = Regexp.last_match
@@ -151,6 +149,8 @@ module Infomon
         when Pattern::ExprEnd
           Infomon.upsert_batch(@expr_hold)
           Infomon.mutex_unlock
+          Infomon.set('experience.rpa', false)
+          Infomon.set('experience.lumnis', false)
           :ok
         when Pattern::SkillStart
           @skills_hold = []
