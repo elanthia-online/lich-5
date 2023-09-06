@@ -130,7 +130,7 @@ class Script
           rescue SystemStackError
             respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
             Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          rescue Exception
+          rescue StandardError
             if $! == JUMP
               retry if Script.current.get_next_label != JUMP_ERROR
               respond "--- label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!"
@@ -179,7 +179,7 @@ class Script
           rescue SystemStackError
             respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
             Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          rescue Exception
+          rescue StandardError
             if $! == JUMP
               retry if Script.current.get_next_label != JUMP_ERROR
               respond "--- label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!"
@@ -588,14 +588,14 @@ class Script
         Zlib::GzipReader.open(@file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
       rescue
         respond "--- Lich: error reading script file (#{@file_name}): #{$!}"
-        return nil
+        #        return nil
       end
     else
       begin
         File.open(@file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
       rescue
         respond "--- Lich: error reading script file (#{@file_name}): #{$!}"
-        return nil
+        #        return nil
       end
     end
 
@@ -624,7 +624,7 @@ class Script
     @current_label = @label_order[0]
     @thread_group = ThreadGroup.new
     @@running.push(self)
-    return self
+    #    return self
   end
 
   def kill
@@ -868,7 +868,7 @@ class ExecScript < Script
           respond $!.backtrace.first
           Lich.log "SystemStackError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
           Script.current.kill
-        rescue Exception
+        rescue StandardError
           respond "--- Exception: #{$!}"
           respond $!.backtrace.first
           Lich.log "Exception: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
@@ -974,7 +974,7 @@ class WizardScript < Script
         File.open(file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
       rescue
         respond "--- Lich: error reading script file (#{file_name}): #{$!}"
-        return nil
+        # return nil
       end
     end
     @quiet = true if data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i
@@ -1130,6 +1130,6 @@ class WizardScript < Script
     @current_label = @label_order[0]
     @thread_group = ThreadGroup.new
     @@running.push(self)
-    return self
+    # return self
   end
 end
