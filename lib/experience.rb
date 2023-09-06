@@ -50,10 +50,10 @@ module Experience
   end
 
   def self.rpa?
-    Infomon.get("experience.rpa")
+    Infomon.get_bool("experience.rpa")
   end
 
   def self.lumnis?
-    Infomon.get("experience.lumnis")
+    Infomon.get_bool("experience.lumnis")
   end
 end
