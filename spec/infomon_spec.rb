@@ -221,11 +221,11 @@ describe Infomon::Parser, ".parse" do
       expect(Experience.rpa?).to be(false)
       expect(Experience.lumnis?).to be(false)
 
-      Infomon::Parser.parse %[^Your recent adventures echo powerfully in your mind\.$]
+      Infomon::Parser.parse %[Your recent adventures echo powerfully in your mind.]
       expect(Infomon.get_bool("experience.rpa")).to be(true)
       expect(Experience.rpa?).to be(true)
 
-      Infomon::Parser.parse %[^You feel a strange sense of serenity and find that you are able to reflect on recent events with uncommon clarity and understanding\.$]
+      Infomon::Parser.parse %[You feel a strange sense of serenity and find that you are able to reflect on recent events with uncommon clarity and understanding.]
       expect(Infomon.get_bool("experience.lumnis")).to be(true)
       expect(Experience.lumnis?).to be(true)
     end
