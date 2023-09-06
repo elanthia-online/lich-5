@@ -55,6 +55,9 @@ module Infomon
       TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
       WealthSilver = /^You have (?<silver>no silver|but one|[\d,]+) coins? with you\.$/.freeze
       WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) coins? stored within your /.freeze
+      RPAActive = /^Your recent adventures echo powerfully in your mind\.$|^You take a deep breath, and look around with renewed vigor\.  It is good to be alive, and an adventurer in this land\.$|^With a sudden flash of insight, you realize you now understand more of what you have experienced\.\.\.\.\.$|^An old memory bubbles up from your past, and causes you to reflect a moment\.  With a flash of insight, you realize you understand yourself a bit better than you did a moment ago\.  The sudden feeling of self-knowledge is a pleasant one\.$/.freeze
+      LumnisActive = /^A soft feeling of serenity touches your mind, providing you with a clearer understanding of recent events\.$|^You feel a strange sense of serenity, and find you are able to reflect on recent events with uncommon clarity and understanding\.$/.freeze
+      LumnisDeactive = /^The soft feeling of serenity slowly dissipates from your mind\.$/.freeze
 
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
@@ -80,7 +83,7 @@ module Infomon
                          SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
                          Resource, Suffused, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketBlackscrip,
                          TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
-                         WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded)
+                         WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, RPAActive, LumnisActive, LumnisDeactive)
     end
 
     def self.parse(line)
@@ -122,7 +125,9 @@ module Infomon
           @expr_hold = []
           Infomon.mutex_lock
           match = Regexp.last_match
-          @expr_hold.push(['experience.fame', match[:fame].delete(',').to_i])
+          @expr_hold.push(['experience.fame', match[:fame].delete(',').to_i],
+                          ['experience.rpa', false],
+                          ['experience.lumnis', false])
           :ok
         when Pattern::RealExp
           match = Regexp.last_match
@@ -220,6 +225,15 @@ module Infomon
                                 ['psm.horlands_holler', 0]])
           :ok
         # end of blob saves
+        when Pattern::RPAActive
+          Infomon.set('experience.rpa', true)
+          :ok
+        when Pattern::LumnisActive
+          Infomon.set('experience.lumnis', true)
+          :ok
+        when Pattern::LumnisDeactive
+          Infomon.set('experience.lumnis', false)
+          :ok
         when Pattern::Warcries
           match = Regexp.last_match
           Infomon.set('psm.%s' % match[:name].split(' ')[1], 1)
