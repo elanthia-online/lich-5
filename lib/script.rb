@@ -553,7 +553,7 @@ class Script
     end
     if prohibit_quiet.include?(@name) && args[:quiet]
       respond
-      respond Lich::Messaging.monsterbold("The #{@name} script cannot be run in quiet mode.  Running script normally.")
+      _respond Lich::Messaging.monsterbold("The #{@name} script cannot be run in quiet mode.  Running script normally.")
       respond; respond
       @quiet = false
     else
@@ -602,7 +602,7 @@ class Script
     #    @quiet = true
     if data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i && prohibit_quiet.include?(@name)
       respond
-      respond Lich::Messaging.monsterbold("The #{@name} script cannot be run in quiet mode.  Running script normally.")
+      _respond Lich::Messaging.monsterbold("The #{@name} script cannot be run in quiet mode.  Running script normally.")
       respond; respond
       @quiet = false
     elsif data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i
