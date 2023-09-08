@@ -297,7 +297,7 @@ class Script
     end
 
     script_version = '0.0.0'
-    script_data = open("#{SCRIPT_DIR}/#{file_name}", 'r').read
+    script_data = File.open("#{SCRIPT_DIR}/#{file_name}", 'r').read
     if script_data =~ /^=begin\r?\n?(.+?)^=end/m
       comments = $1.split("\n")
     else
@@ -887,6 +887,7 @@ class ExecScript < Script
     new_script
   end
 
+  # rubocop:disable Lint/MissingSuper
   def initialize(cmd_data, flags = Hash.new)
     @cmd_data = cmd_data
     @vars = Array.new
@@ -919,6 +920,7 @@ class ExecScript < Script
     @name = "exec#{num}"
     @@running.push(self)
   end
+  # rubocop:enable Lint/MissingSuper
 
   def get_next_label
     echo 'goto labels are not available in exec scripts.'
@@ -927,6 +929,7 @@ class ExecScript < Script
 end
 
 class WizardScript < Script
+  # rubocop:disable Lint/MissingSuper
   def initialize(file_name, cli_vars = [])
     @name = /.*[\/\\]+([^\.]+)\./.match(file_name).captures.first
     @file_name = file_name
@@ -967,6 +970,7 @@ class WizardScript < Script
     @label_order = Array.new
     @labels = Hash.new
     data = nil
+    # rubocop:enable Lint/MissingSuper
     begin
       Zlib::GzipReader.open(file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
     rescue
