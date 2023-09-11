@@ -79,11 +79,11 @@ module ActiveSpell
       active_durations += effect_type.to_h.keys
       effect_type.to_h.each do |effect, end_time|
         next unless effect.is_a?(String)
-        effect, end_time = ActiveSpell.get_spell_info({effect=>end_time})
+        effect, end_time = ActiveSpell.get_spell_info({ effect=>end_time })
         effect = effect.join
         end_time = end_time[effect]
-        next unless spell = Spell.list.find { |s| s.num == effect.to_i || s.name =~ /#{effect}/ }
-        if effect_type.to_h.find { |k, v| k == spell.num }
+        next unless (spell = Spell.list.find { |s| s.num == effect.to_i || s.name =~ /#{effect}/ })
+        if effect_type.to_h.find { |k, _v| k == spell.num }
           effect_key = spell.num
         else
           effect_key = spell.name
