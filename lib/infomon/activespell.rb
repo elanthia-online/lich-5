@@ -42,7 +42,7 @@ module ActiveSpell
         makeychange << k
         update_spell_names.push('Next Bounty')
         next
-      when /(?:Resist Nature|620) \(\d{1,2}%\)/
+      when /(?:Resist Nature|620) (?:- (?:Heat|Cold) \(\d\d%|- Steam \(\d\d|- Lightning|\(\d\d%\))/
         makeychange << k
         update_spell_names.push('Resist Nature')
         next
@@ -69,7 +69,7 @@ module ActiveSpell
         update_spell_durations['Next Bounty'] = update_spell_durations.delete changekey
       when /Next Group Bounty Cooldown/
         update_spell_durations['Next Group Bounty'] = update_spell_durations.delete changekey
-      when /(?:Resist Nature|620) \(\d{1,2}%\)/
+      when /(?:Resist Nature|620) (?:- (?:Heat|Cold) \(\d\d%|- Steam \(\d\d|- Lightning|\(\d\d%\))/
         update_spell_durations['Resist Nature'] = update_spell_durations.delete changekey
       end
     end
