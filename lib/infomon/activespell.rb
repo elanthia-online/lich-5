@@ -75,6 +75,7 @@ module ActiveSpell
 
   def self.show_duration_change
     active_durations = Array.new
+    group_effects = [307, 310, 1605, 1609, 1618, 1608]
     [Effects::Spells, Effects::Cooldowns, Effects::Buffs, Effects::Debuffs].each do |effect_type|
       active_durations += effect_type.to_h.keys
       effect_type.to_h.each do |effect, end_time|
@@ -90,7 +91,7 @@ module ActiveSpell
         end
         time_left = ((end_time - Time.now) / 60).to_f
         duration = ((end_time - (@current_durations[effect_key].nil? ? Time.now : @current_durations[effect_key])) / 60).to_f
-        if @show_durations_first_pass && (@current_durations[effect_key].nil? || end_time > @current_durations[effect_key]) && duration > (0.1).to_f && (!(duration < (0.9).to_f) || time_left > (0.9).to_f)
+        if @show_durations_first_pass && (@current_durations[effect_key].nil? || end_time > @current_durations[effect_key]) && duration > (0.1).to_f && !(group_effects.include?(spell.num) && !spell.known?)
           respond "[ #{spell.num} #{spell.name}: +#{duration.as_time}, #{time_left.as_time} ]"
         end
         @current_durations[effect_key] = end_time
