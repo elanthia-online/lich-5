@@ -2228,6 +2228,7 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}e <code>                  ''"
       respond "   #{$clean_lich_char}execq <code>              same as #{$clean_lich_char}exec but without the script active and exited messages"
       respond "   #{$clean_lich_char}eq <code>                 ''"
+      respond "   #{$clean_lich_char}execname <name> <code>    creates named exec (name#) and then executes the code as if it was in a script"
       respond
       if (RUBY_VERSION =~ /^2\.[012]\./)
         respond "   #{$clean_lich_char}trust <script name>       let the script do whatever it wants"
