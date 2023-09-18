@@ -9,7 +9,7 @@ module Infomon
     if Effects::Spells.active?(1212)
       respond 'ATTENTION:  SHROUD DETECTED - disabling Shroud of Deception to sync character\'s infomon setting'
       while Effects::Spells.active?(1212)
-        dothistimeout('STOP 1212', 3, /With a moment's concentration, you terminate the Shroud of Deception spell./)
+        dothistimeout('STOP 1212', 3, /^With a moment's concentration, you terminate the Shroud of Deception spell\.$|^Stop what\?$/)
         sleep(0.5)
       end
       shroud_detected = true
