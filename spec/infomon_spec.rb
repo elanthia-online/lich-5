@@ -283,7 +283,7 @@ describe Infomon::Parser, ".parse" do
     it "handles wealth info" do
       output = <<~Wealth
         You have 5,585 silver with you.
-        You are carrying 6,112 coins stored within your coin pouch.
+        You are carrying 6,112 silver stored within your coin pouch.
 
         You are carrying 16 gigas artifact fragments.
       Wealth
