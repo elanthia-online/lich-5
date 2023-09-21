@@ -53,8 +53,8 @@ module Infomon
       TicketEtherealScrip = /^\s*Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
       TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards\.$/.freeze
       TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
-      WealthSilver = /^You have (?<silver>no silver|but one|[\d,]+) coins? with you\.$/.freeze
-      WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) coins? stored within your /.freeze
+      WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
+      WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
 
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
@@ -362,7 +362,7 @@ module Infomon
         when Pattern::WealthSilver
           match = Regexp.last_match
           case match[:silver]
-          when 'no silver'
+          when 'no'
             Infomon.set('currency.silver', 0)
           when 'but one'
             Infomon.set('currency.silver', 1)
