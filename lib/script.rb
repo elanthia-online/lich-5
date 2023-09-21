@@ -899,8 +899,13 @@ class ExecScript < Script
     @no_kill_all = false
     @match_stack_labels = Array.new
     @match_stack_strings = Array.new
-    num = '1'; num.succ! while @@running.any? { |s| s.name == "exec#{num}" }
-    @name = "exec#{num}"
+    if flags[:name].nil?
+      num = '1'; num.succ! while @@running.any? { |s| s.name == "exec#{num}" }
+      @name = "exec#{num}"
+    else
+      num = '1'; num.succ! while @@running.any? { |s| s.name == "#{flags[:name]}#{num}" }
+      @name = "#{flags[:name]}#{num}"
+    end
     @@running.push(self)
     self
   end
