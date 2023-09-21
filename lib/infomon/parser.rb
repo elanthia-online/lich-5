@@ -54,7 +54,7 @@ module Infomon
       TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards\.$/.freeze
       TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
       WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
-      WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) coins? stored within your /.freeze
+      WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
 
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
