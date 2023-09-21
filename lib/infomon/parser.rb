@@ -53,8 +53,8 @@ module Infomon
       TicketEtherealScrip = /^\s*Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
       TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards\.$/.freeze
       TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
-      WealthSilver = /^You have (?<silver>no silver|but one|[\d,]+) coins? with you\.$/.freeze
-      WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) coins? stored within your /.freeze
+      WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
+      WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
       RPAActive = /^Your recent adventures echo powerfully in your mind\.$|^You take a deep breath, and look around with renewed vigor\.  It is good to be alive, and an adventurer in this land\.$|^With a sudden flash of insight, you realize you now understand more of what you have experienced\.\.\.\.\.$|^An old memory bubbles up from your past, and causes you to reflect a moment\.  With a flash of insight, you realize you understand yourself a bit better than you did a moment ago\.  The sudden feeling of self-knowledge is a pleasant one\.$|^\[You currently have a role playing award active, and cannot activate another until your current one has expired\.\]$/.freeze
       LumnisActive = /^A soft feeling of serenity touches your mind, providing you with a clearer understanding of recent events\.$|^You feel a strange sense of serenity and find that you are able to reflect on recent events with uncommon clarity and understanding\.$/.freeze
       LumnisDeactive = /^The soft feeling of serenity slowly dissipates from your mind\.$/.freeze
@@ -376,7 +376,7 @@ module Infomon
         when Pattern::WealthSilver
           match = Regexp.last_match
           case match[:silver]
-          when 'no silver'
+          when 'no'
             Infomon.set('currency.silver', 0)
           when 'but one'
             Infomon.set('currency.silver', 1)
