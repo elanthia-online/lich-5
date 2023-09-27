@@ -2862,7 +2862,7 @@ main_thread = Thread.new {
       end
     elsif game =~ /AVALON/i
       # Simu strikes again
-      launcher_cmd = "open -n -b SimutronicsAvalon \"%1\""
+      launcher_cmd = "open -n -b Avalon \"%1\""
     elsif custom_launch
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
