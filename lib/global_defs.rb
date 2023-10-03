@@ -2185,7 +2185,7 @@ def do_client(client_string)
       require "lib/hmr"
       HMR.reload %r{#{Regexp.last_match[:pattern]}}
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
-      Infomon.sync
+      ExecScript.start("Infomon.sync", { :quiet => true })
     elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid/i
       respond "Changing Lich's Room title display for Lich ID#s from #{Lich.display_lichid} to #{!(Lich.display_lichid)}"
       Lich.display_lichid = !(Lich.display_lichid)
