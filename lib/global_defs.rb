@@ -2186,6 +2186,12 @@ def do_client(client_string)
       HMR.reload %r{#{Regexp.last_match[:pattern]}}
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync)/i
       Infomon.sync
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid)/i
+      respond "Changing Lich's Room title display for Lich ID#s from #{Lich.display_lichid} to #{!(Lich.display_lichid)}"
+      Lich.display_lichid = !(Lich.display_lichid)
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^display uid)/i
+      respond "Changing Lich's Room title display for RealID#s from #{Lich.display_uid} to #{!(Lich.display_uid)}"
+      Lich.display_uid = !(Lich.display_uid)
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
       Lich::Util::Update.request("#{update_parameter}")
@@ -2245,7 +2251,12 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
       respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
       respond "                                                see #{$clean_lich_char}lich5-update --help"
-      respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon" if XMLData.game =~ /^GS/
+      if XMLData.game =~ /^GS/
+        respond
+        respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon"
+        respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# in Room Title"
+        respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# in Room Title"
+      end
       respond
       respond 'If you liked this help message, you might also enjoy:'
       respond "   #{$clean_lich_char}lnet help" if defined?(LNet)
