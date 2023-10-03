@@ -2194,7 +2194,7 @@ def do_client(client_string)
       when 'false'
         new_value = false
       end        
-      respond "Changing Lich's Room title display for Lich ID#s from #{Lich.display_lichid} to #{new_value}"
+      respond "Changing Lich's Room title display for Lich ID#s to #{new_value}"
       Lich.display_lichid = new_value
     elsif XMLData.game =~ /^GS/ && cmd =~ /^display uid/i
       new_value = !(Lich.display_uid)
@@ -2204,7 +2204,7 @@ def do_client(client_string)
       when 'false'
         new_value = false
       end 
-      respond "Changing Lich's Room title display for RealID#s from #{Lich.display_uid} to #{new_value}"
+      respond "Changing Lich's Room title display for RealID#s to #{new_value}"
       Lich.display_uid = new_value
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
