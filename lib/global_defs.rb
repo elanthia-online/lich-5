@@ -2186,12 +2186,26 @@ def do_client(client_string)
       HMR.reload %r{#{Regexp.last_match[:pattern]}}
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
       ExecScript.start("Infomon.sync", { :quiet => true })
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid/i
-      respond "Changing Lich's Room title display for Lich ID#s from #{Lich.display_lichid} to #{!(Lich.display_lichid)}"
-      Lich.display_lichid = !(Lich.display_lichid)
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid\s?(true|false)?/i
+      new_value = !(Lich.display_lichid)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end        
+      respond "Changing Lich's Room title display for Lich ID#s from #{Lich.display_lichid} to #{new_value}"
+      Lich.display_lichid = new_value
     elsif XMLData.game =~ /^GS/ && cmd =~ /^display uid/i
-      respond "Changing Lich's Room title display for RealID#s from #{Lich.display_uid} to #{!(Lich.display_uid)}"
-      Lich.display_uid = !(Lich.display_uid)
+      new_value = !(Lich.display_uid)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end 
+      respond "Changing Lich's Room title display for RealID#s from #{Lich.display_uid} to #{new_value}"
+      Lich.display_uid = new_value
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
       Lich::Util::Update.request("#{update_parameter}")
@@ -2250,7 +2264,7 @@ def do_client(client_string)
       respond
       respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
       respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
-      respond "                                                see #{$clean_lich_char}lich5-update --help"
+      respond "                              see #{$clean_lich_char}lich5-update --help"
       if XMLData.game =~ /^GS/
         respond
         respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon"
