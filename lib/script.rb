@@ -680,13 +680,21 @@ class Script
   end
 
   def pause
-    respond "--- Lich: #{@name} paused."
-    @paused = true
+    if @paused == true
+      respond "--- Lich: #{@name} is already paused."
+    else
+      respond "--- Lich: #{@name} paused."
+      @paused = true
+    end
   end
 
   def unpause
-    respond "--- Lich: #{@name} unpaused."
-    @paused = false
+    if @paused == true
+      respond "--- Lich: #{@name} unpaused."
+      @paused = false
+    else
+      respond "--- Lich: #{@name} is not paused."
+    end
   end
 
   def paused?
