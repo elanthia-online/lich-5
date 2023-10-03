@@ -2184,12 +2184,12 @@ def do_client(client_string)
     elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
       require "lib/hmr"
       HMR.reload %r{#{Regexp.last_match[:pattern]}}
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync)/i
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
       Infomon.sync
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid)/i
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid/i
       respond "Changing Lich's Room title display for Lich ID#s from #{Lich.display_lichid} to #{!(Lich.display_lichid)}"
       Lich.display_lichid = !(Lich.display_lichid)
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^display uid)/i
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^display uid/i
       respond "Changing Lich's Room title display for RealID#s from #{Lich.display_uid} to #{!(Lich.display_uid)}"
       Lich.display_uid = !(Lich.display_uid)
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
