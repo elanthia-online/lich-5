@@ -2186,6 +2186,9 @@ def do_client(client_string)
       HMR.reload %r{#{Regexp.last_match[:pattern]}}
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
       ExecScript.start("Infomon.sync", { :quiet => true })
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon reset/i
+      Infomon.reset!
+      ExecScript.start("Infomon.sync", { :quiet => true })
     elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
       case Regexp.last_match(1)
@@ -2267,7 +2270,8 @@ def do_client(client_string)
       respond "                              see #{$clean_lich_char}lich5-update --help"
       if XMLData.game =~ /^GS/
         respond
-        respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon"
+        respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon (fixskill)"
+        respond "   #{$clean_lich_char}infomon reset             resets entire character infomon db table and then syncs data (fixprof)"
         respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# in Room Title"
         respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# in Room Title"
       end
