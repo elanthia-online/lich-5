@@ -2186,9 +2186,8 @@ def do_client(client_string)
       HMR.reload %r{#{Regexp.last_match[:pattern]}}
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
       ExecScript.start("Infomon.sync", { :quiet => true })
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon reset/i
-      Infomon.reset!
-      ExecScript.start("Infomon.sync", { :quiet => true })
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon (?:reset|redo)!?/i
+      ExecScript.start("Infomon.redo!", { :quiet => true })
     elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
       case Regexp.last_match(1)
