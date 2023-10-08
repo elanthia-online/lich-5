@@ -124,7 +124,7 @@ module Games
       end
 
       def Spellsong.timeleft
-        (@@renewed) / 60.to_f
+        ((@@renewed) / 60.to_f)
       end
     end
   end
