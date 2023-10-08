@@ -423,6 +423,7 @@ module Infomon
           :ok
         when Pattern::SpellsongRenewed
           Spellsong.renewed
+          :ok
         else
           :noop
         end
