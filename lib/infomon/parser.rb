@@ -71,6 +71,7 @@ module Infomon
       # Adding spell regexes.  Does not save to infomon.db.  Used by Spell and by ActiveSpells
       SpellUpMsgs = /^#{Games::Gemstone::Spell.upmsgs.join('$|^')}$/o.freeze
       SpellDnMsgs = /^#{Games::Gemstone::Spell.dnmsgs.join('$|^')}$/o.freeze
+      SpellsongRenewed = /^Your songs? renews?/.freeze
 
       All = Regexp.union(CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
                          ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
@@ -80,7 +81,7 @@ module Infomon
                          SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
                          Resource, Suffused, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketBlackscrip,
                          TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
-                         WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded)
+                         WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed)
     end
 
     def self.parse(line)
@@ -420,6 +421,8 @@ module Infomon
           end
           spell.putdown if spell.active?
           :ok
+        when Pattern::SpellsongRenewed
+          Spellsong.renewed
         else
           :noop
         end
