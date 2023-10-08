@@ -117,7 +117,7 @@ end
 
 module Games
   module Gemstone
-    module Spellsong
+    class Spellsong
       @@renewed ||= Time.at(Time.now.to_i - 1200)
       def Spellsong.renewed
         @@renewed = Time.now
