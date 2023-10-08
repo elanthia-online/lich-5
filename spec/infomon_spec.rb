@@ -93,6 +93,20 @@ module Effects
     def each()
       to_h.each { |k, v| yield(k, v) }
     end
+
+    def active?(effect)
+      expiry = to_h.fetch(effect, 0)
+      expiry.to_f > Time.now.to_f
+    end
+
+    def time_left(effect)
+      expiry = to_h.fetch(effect, 0)
+      if to_h.fetch(effect, 0) != 0
+        ((expiry - Time.now) / 60.to_f)
+      else
+        expiry
+      end
+    end
   end
 
   Spells    = Registry.new("Active Spells")
