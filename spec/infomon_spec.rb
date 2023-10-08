@@ -132,18 +132,14 @@ module Games
 end
 
 # fake GameObj to allow for passing.
-module Games
-  module Gemstone
-    class GameObj
-      @@npcs          = Array.new
-      def initialize(id, noun, name, before = nil, after = nil)
-        @id = id
-        @noun = noun
-        @name = name
-        @before_name = before
-        @after_name = after
-      end
-    end
+class GameObj
+  @@npcs = Array.new
+  def initialize(id, noun, name, before = nil, after = nil)
+    @id = id
+    @noun = noun
+    @name = name
+    @before_name = before
+    @after_name = after
   end
 end
 
