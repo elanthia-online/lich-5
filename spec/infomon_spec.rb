@@ -95,7 +95,10 @@ module Effects
     end
   end
 
-  Debuffs = Registry.new("Debuffs")
+  Spells    = Registry.new("Active Spells")
+  Buffs     = Registry.new("Buffs")
+  Debuffs   = Registry.new("Debuffs")
+  Cooldowns = Registry.new("Cooldowns")
 end
 
 describe Infomon, ".setup!" do
