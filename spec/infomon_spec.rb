@@ -35,12 +35,12 @@ Dir.mktmpdir do |dir|
   puts " Done!"
 end
 
+require "gameobj"
 require "infomon/infomon"
 require "attributes/stats"
 require "attributes/resources"
 require "infomon/currency"
 require "infomon/status"
-require "gameobj"
 require "experience"
 require "psms"
 module Infomon
