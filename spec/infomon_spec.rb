@@ -122,6 +122,10 @@ module Games
       def Spellsong.renewed
         @@renewed = Time.now
       end
+
+      def Spellsong.timeleft
+        (@@renewed) / 60.to_f
+      end
     end
   end
 end
