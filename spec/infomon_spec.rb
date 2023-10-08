@@ -40,6 +40,7 @@ require "attributes/stats"
 require "attributes/resources"
 require "infomon/currency"
 require "infomon/status"
+require "gameobj"
 require "experience"
 require "psms"
 module Infomon
