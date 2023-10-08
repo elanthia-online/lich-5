@@ -35,7 +35,6 @@ Dir.mktmpdir do |dir|
   puts " Done!"
 end
 
-require "gameobj"
 require "infomon/infomon"
 require "attributes/stats"
 require "attributes/resources"
@@ -43,6 +42,7 @@ require "infomon/currency"
 require "infomon/status"
 require "experience"
 require "psms"
+
 module Infomon
   # cheat definition of `respond` to prevent having to load global_defs with dependenciesw
   def self.respond(msg)
@@ -129,6 +129,20 @@ module Games
       end
     end
   end
+end
+
+# fake GameObj to allow for passing.
+module Games
+  module Gemstone
+    class GameObj
+      @@npcs          = Array.new
+      def initialize(id, noun, name, before = nil, after = nil)
+        @id = id
+        @noun = noun
+        @name = name
+        @before_name = before
+        @after_name = after
+      end
 end
 
 describe Infomon, ".setup!" do
