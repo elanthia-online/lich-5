@@ -141,6 +141,14 @@ class GameObj
     @before_name = before
     @after_name = after
   end
+
+  def GameObj.npcs
+    if @@npcs.empty?
+      nil
+    else
+      @@npcs.dup
+    end
+  end
 end
 
 describe Infomon, ".setup!" do
