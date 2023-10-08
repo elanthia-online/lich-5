@@ -143,6 +143,8 @@ module Games
         @before_name = before
         @after_name = after
       end
+    end
+  end
 end
 
 describe Infomon, ".setup!" do
