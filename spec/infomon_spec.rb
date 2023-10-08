@@ -115,6 +115,17 @@ module Effects
   Cooldowns = Registry.new("Cooldowns")
 end
 
+module Games
+  module Gemstone
+    module Spellsong
+      @@renewed ||= Time.at(Time.now.to_i - 1200)
+      def Spellsong.renewed
+        @@renewed = Time.now
+      end
+    end
+  end
+end
+
 describe Infomon, ".setup!" do
   context "can set itself up" do
     it "creates a db" do
