@@ -44,6 +44,7 @@ require 'open-uri'
 module Games
   module Gemstone
     class Spell
+      @@overrides ||= {}
       @@list ||= Array.new
       @@loaded ||= false
       @@cast_lock ||= Array.new
@@ -167,6 +168,33 @@ module Games
         @circle = (num.to_s.length == 3 ? num.to_s[0..0] : num.to_s[0..1])
         @@list.push(self) unless @@list.find { |spell| spell.num == @num }
         # self # rubocop Lint/Void: self used in void context
+      end
+
+      def Spell.add_override(number, callbacks)
+        for method in %i(time_per known?)
+          return "Callback object for #{number} does not implement #{method}" unless callbacks.respond_to?(method)
+        end
+
+        @@overrides[number] ||= []
+        @@overrides[number] << callbacks
+        return self
+      end
+
+      def Spell.overrides
+        @@overrides
+      end
+
+      def Spell.known_via_callback?(number)
+        overrides = @@overrides[number.to_s]
+        return nil if overrides.nil?
+        return overrides.any? { |callbacks| callbacks.known? }
+      end
+
+      def Spell.time_per_callback(number)
+        overrides = @@overrides[number.to_s]
+        return nil if overrides.nil?
+        first_known = overrides.find { |callbacks| callbacks.known? }
+        return first_known.time_per
       end
 
       def Spell.after_stance=(val)
@@ -318,6 +346,8 @@ module Games
       end
 
       def time_per(options = {})
+        time_per = Spell.time_per_callback(@num)
+        return time_per unless time_per.nil?
         formula = self.time_per_formula(options)
         if options[:line]
           # line = options[:line] rubocop useless assignment to line
@@ -434,6 +464,8 @@ module Games
       end
 
       def known?
+        override = Spell.known_via_callback?(@num)
+        return override unless override.nil?
         if @num.to_s.length == 3
           circle_num = @num.to_s[0..0].to_i
         elsif @num.to_s.length == 4
