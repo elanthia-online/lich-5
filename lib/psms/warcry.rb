@@ -88,4 +88,14 @@ class Warcry
     end
     usage_result
   end
+
+  Warcry.warcry_lookups.each { |warcry|
+    self.define_singleton_method(warcry[:short_name]) do
+      Warcry[warcry[:short_name]]
+    end
+
+    self.define_singleton_method(warcry[:long_name]) do
+      Warcry[warcry[:short_name]]
+    end
+  }
 end
