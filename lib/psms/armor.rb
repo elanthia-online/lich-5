@@ -118,7 +118,6 @@ module Armor
     usage_result
   end
 
-
   Armor.armor_lookups.each { |armor|
     self.define_singleton_method(armor[:short_name]) do
       Armor[armor[:short_name]]
