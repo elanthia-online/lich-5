@@ -100,4 +100,14 @@ module CMan
   def CMan.available?(name)
     CMan.known?(name) and CMan.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
   end
+
+  CMan.cman_lookups.each { |cman|
+    self.define_singleton_method(cman[:short_name]) do
+      CMan[cman[:short_name]]
+    end
+
+    self.define_singleton_method(cman[:long_name]) do
+      CMan[cman[:short_name]]
+    end
+  }
 end
