@@ -94,4 +94,14 @@ module Ascension
   def Ascension.available?(name)
     Ascension.known?(name) and Ascension.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
   end
+  
+  Ascension.ascension_lookups.each { |ascension|
+    self.define_singleton_method(ascension[:short_name]) do
+      Ascension[ascension[:short_name]]
+    end
+
+    self.define_singleton_method(ascension[:long_name]) do
+      Ascension[ascension[:short_name]]
+    end
+  }
 end

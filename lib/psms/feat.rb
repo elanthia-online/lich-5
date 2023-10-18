@@ -44,4 +44,14 @@ module Feat
   def Feat.available?(name)
     Feat.known?(name) and Feat.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
   end
+
+  Feat.feat_lookups.each { |feat|
+    self.define_singleton_method(feat[:short_name]) do
+      Feat[feat[:short_name]]
+    end
+
+    self.define_singleton_method(feat[:long_name]) do
+      Feat[feat[:short_name]]
+    end
+  }
 end
