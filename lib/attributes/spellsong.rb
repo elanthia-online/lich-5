@@ -1,8 +1,7 @@
 module Games
   module Gemstone
     class Spellsong
-      prepend Effects
-      @@renewed ||= Time.at(Time.now.to_i - 1200)
+      @@renewed ||= 0.to_f
 
       def self.sync
         timed_spell = Effects::Spells.to_h.keys.find { |k| k.to_s.match(/10[0-9][0-9]/) }
@@ -23,6 +22,7 @@ module Games
       end
 
       def self.timeleft
+        return 0.0 if Char.prof != 'Bard'
         (self.duration - ((Time.now.to_f - @@renewed.to_f) % self.duration)) / 60.to_f
       end
 
