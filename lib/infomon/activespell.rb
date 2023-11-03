@@ -97,6 +97,9 @@ module ActiveSpell
 
       update_spell_durations.uniq.each do |k, v|
         if (spell = Spell.list.find { |s| (s.name.downcase == k.strip.downcase) || (s.num.to_s == k.strip) })
+          if (spell.circle.to_i == 10) and not Spell.active.any? { |s| s.circle.to_i == 10 }
+            Spellsong.renewed
+          end
           spell.active = true
           spell.timeleft = if v - Time.now > 300 * 60
                              600.01

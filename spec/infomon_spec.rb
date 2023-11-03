@@ -42,6 +42,7 @@ require "infomon/currency"
 require "infomon/status"
 require "experience"
 require "psms"
+
 module Infomon
   # cheat definition of `respond` to prevent having to load global_defs with dependenciesw
   def self.respond(msg)
@@ -93,9 +94,61 @@ module Effects
     def each()
       to_h.each { |k, v| yield(k, v) }
     end
+
+    def active?(effect)
+      expiry = to_h.fetch(effect, 0)
+      expiry.to_f > Time.now.to_f
+    end
+
+    def time_left(effect)
+      expiry = to_h.fetch(effect, 0)
+      if to_h.fetch(effect, 0) != 0
+        ((expiry - Time.now) / 60.to_f)
+      else
+        expiry
+      end
+    end
   end
 
-  Debuffs = Registry.new("Debuffs")
+  Spells    = Registry.new("Active Spells")
+  Buffs     = Registry.new("Buffs")
+  Debuffs   = Registry.new("Debuffs")
+  Cooldowns = Registry.new("Cooldowns")
+end
+
+module Games
+  module Gemstone
+    class Spellsong
+      @@renewed ||= Time.at(Time.now.to_i - 1200)
+      def Spellsong.renewed
+        @@renewed = Time.now
+      end
+
+      def Spellsong.timeleft
+        8
+      end
+    end
+  end
+end
+
+# fake GameObj to allow for passing.
+class GameObj
+  @@npcs = Array.new
+  def initialize(id, noun, name, before = nil, after = nil)
+    @id = id
+    @noun = noun
+    @name = name
+    @before_name = before
+    @after_name = after
+  end
+
+  def GameObj.npcs
+    if @@npcs.empty?
+      nil
+    else
+      @@npcs.dup
+    end
+  end
 end
 
 describe Infomon, ".setup!" do
