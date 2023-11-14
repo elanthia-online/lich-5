@@ -7,9 +7,14 @@ Entries added here should always be accessible from Lich::Util.feature namespace
     game: Gemstone
     tags: CORE, util, utilities
     required: Lich > 5.0.19
-    version: 1.1.0
+    version: 1.3.1
 
   changelog:
+    v1.3.1 (2022-06-26)
+     * Fix to not squelch the end_pattern for issue_command if not a quiet command
+    v1.3.0 (2022-03-16)
+     * Add Lich::Util.issue_command that allows more fine-tooled control return
+     * Bugfix for Lich::Util.silver_count not using end_pattern properly
     v1.2.0 (2022-03-16)
      * Add Lich::Util.quiet_command to mimic XML version
     v1.1.0 (2022-03-09)
@@ -18,8 +23,6 @@ Entries added here should always be accessible from Lich::Util.feature namespace
      * Initial release
 
 =end
-
-
 
 module Lich
   module Util
@@ -47,70 +50,18 @@ module Lich
       "Util::#{prefix}-#{now}-#{Random.rand(10000)}"
     end
 
-    def self.quiet_command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true)
+    def self.issue_command(command, start_pattern, end_pattern = /<prompt/, include_end: true, timeout: 5, silent: nil, usexml: true, quiet: false)
       result = []
       name = self.anon_hook
       filter = false
-      if silent
-        save_script_silent = Script.current.silent
-        Script.current.silent = true
-      end
+
+      save_script_silent = Script.current.silent
       save_want_downstream = Script.current.want_downstream
       save_want_downstream_xml = Script.current.want_downstream_xml
-      Script.current.want_downstream = false
-      Script.current.want_downstream_xml = true
 
-      begin
-        Timeout::timeout(timeout, Interrupt) {
-          DownstreamHook.add(name, proc { |xml|
-            if filter
-              if xml =~ end_pattern
-                DownstreamHook.remove(name)
-                filter = false
-              else
-                next(nil)
-              end
-            elsif xml =~ start_pattern
-              filter = true
-              next(nil)
-            else
-              xml
-            end
-          })
-          fput command
-
-          until (xml = get) =~ start_pattern; end
-          result << xml.rstrip
-          until (xml = get) =~ end_pattern
-            result << xml.rstrip
-          end
-          if include_end
-            result << xml.rstrip
-          end
-        }
-      rescue Interrupt
-        nil
-      ensure
-        DownstreamHook.remove(name)
-        Script.current.want_downstream_xml = save_want_downstream_xml
-        Script.current.want_downstream = save_want_downstream
-        Script.current.silent = save_script_silent if silent
-      end
-      return result
-    end
-    
-    def self.quiet_command(command, start_pattern, end_pattern, include_end = true, timeout = 5, silent = true)
-      result = []
-      name = self.anon_hook
-      filter = false
-      if silent
-        save_script_silent = Script.current.silent
-        Script.current.silent = true
-      end
-      save_want_downstream = Script.current.want_downstream
-      save_want_downstream_xml = Script.current.want_downstream_xml
-      Script.current.want_downstream = true
-      Script.current.want_downstream_xml = false
+      Script.current.silent = silent if !silent.nil?
+      Script.current.want_downstream = !usexml
+      Script.current.want_downstream_xml = usexml
 
       begin
         Timeout::timeout(timeout, Interrupt) {
@@ -119,12 +70,25 @@ module Lich
               if line =~ end_pattern
                 DownstreamHook.remove(name)
                 filter = false
+                if quiet
+                  next(nil)
+                else
+                  line
+                end
               else
-                next(nil)
+                if quiet
+                  next(nil)
+                else
+                  line
+                end
               end
             elsif line =~ start_pattern
               filter = true
-              next(nil)
+              if quiet
+                next(nil)
+              else
+                line
+              end
             else
               line
             end
@@ -144,15 +108,23 @@ module Lich
         nil
       ensure
         DownstreamHook.remove(name)
-        Script.current.want_downstream_xml = save_want_downstream_xml
+        Script.current.silent = save_script_silent if !silent.nil?
         Script.current.want_downstream = save_want_downstream
-        Script.current.silent = save_script_silent if silent
+        Script.current.want_downstream_xml = save_want_downstream_xml
       end
       return result
     end
 
+    def self.quiet_command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true)
+      return issue_command(command, start_pattern, end_pattern, include_end: include_end, timeout: timeout, silent: silent, usexml: true, quiet: true)
+    end
+
+    def self.quiet_command(command, start_pattern, end_pattern, include_end = true, timeout = 5, silent = true)
+      return issue_command(command, start_pattern, end_pattern, include_end: include_end, timeout: timeout, silent: silent, usexml: false, quiet: true)
+    end
+
     def self.silver_count(timeout = 3)
-      silence_me unless undo_silence = silence_me
+      silence_me unless (undo_silence = silence_me)
       result = ''
       name = self.anon_hook
       filter = false
@@ -184,17 +156,15 @@ module Lich
           # non-blocking check, this allows us to
           # check the time even when the buffer is empty
           line = get?
-          break if line && line =~ start_pattern
+          break if line && line =~ end_pattern
           break if Time.now > ttl
-          sleep 0.1 # prevent a tight-loop
+          sleep(0.01) # prevent a tight-loop
         }
-
       ensure
         DownstreamHook.remove(name)
         silence_me if undo_silence
       end
       return result.gsub(',', '').to_i
     end
-
   end
 end

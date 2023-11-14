@@ -11,7 +11,7 @@ module Lich
       @current = LICH_VERSION
       @snapshot_core_script = ["alias.lic", "autostart.lic", "go2.lic", "infomon.lic",
                                "jinx.lic", "lnet.lic", "log.lic", "repository.lic",
-                               "vars.lic", "version.lic", "xnarost.lic"]
+                               "vars.lic", "version.lic", "map.lic"]
 
       def self.request(type = '--announce')
         case type

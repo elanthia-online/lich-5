@@ -1,10 +1,9 @@
 # Lich5 carveout for init_db
 
-
 #
 # Report an error if Lich 4.4 data is found
 #
-if File.exists?("#{DATA_DIR}/lich.sav")
+if File.exist?("#{DATA_DIR}/lich.sav")
   Lich.log "error: Archaic Lich 4.4 configuration found: Please remove #{DATA_DIR}/lich.sav"
   Lich.msgbox "error: Archaic Lich 4.4 configuration found: Please remove #{DATA_DIR}/lich.sav"
   exit
@@ -20,6 +19,8 @@ if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
   exit
 end
 
+require 'lib/wine'
+
 begin
   # stupid workaround for Windows
   # seems to avoid a 10 second lag when starting lnet, without adding a 10 second lag at startup
@@ -30,90 +31,6 @@ rescue LoadError
 rescue
   nil
 end
-
-# check for Linux | WINE (and maybe in future MacOS | WINE) first due to low population
-# segment of code unmodified from Lich4 (Tillmen)
-if arg = ARGV.find { |a| a =~ /^--wine=.+$/i }
-  $wine_bin = arg.sub(/^--wine=/, '')
-else
-  begin
-    $wine_bin = `which wine`.strip
-  rescue
-    $wine_bin = nil
-  end
-end
-if arg = ARGV.find { |a| a =~ /^--wine-prefix=.+$/i }
-  $wine_prefix = arg.sub(/^--wine-prefix=/, '')
-elsif ENV['WINEPREFIX']
-  $wine_prefix = ENV['WINEPREFIX']
-elsif ENV['HOME']
-  $wine_prefix = ENV['HOME'] + '/.wine'
-else
-  $wine_prefix = nil
-end
-if $wine_bin and File.exists?($wine_bin) and File.file?($wine_bin) and $wine_prefix and File.exists?($wine_prefix) and File.directory?($wine_prefix)
-  module Wine
-    BIN = $wine_bin
-    PREFIX = $wine_prefix
-    def Wine.registry_gets(key)
-      hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme: stupid highlights ]/
-      if File.exist?(PREFIX + '/system.reg')
-        if hkey == 'HKEY_LOCAL_MACHINE'
-          subkey = "[#{subkey.gsub('\\', '\\\\\\')}]"
-          if thingie.nil? or thingie.empty?
-            thingie = '@'
-          else
-            thingie = "\"#{thingie}\""
-          end
-          lookin = result = false
-          File.open(PREFIX + '/system.reg') { |f| f.readlines }.each { |line|
-            if line[0...subkey.length] == subkey
-              lookin = true
-            elsif line =~ /^\[/
-              lookin = false
-            elsif lookin and line =~ /^#{thingie}="(.*)"$/i
-              result = $1.split('\\"').join('"').split('\\\\').join('\\').sub(/\\0$/, '')
-              break
-            end
-          }
-          return result
-        else
-          return false
-        end
-      else
-        return false
-      end
-    end
-
-    def Wine.registry_puts(key, value)
-      hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme ]/
-      if File.exists?(PREFIX)
-        if thingie.nil? or thingie.empty?
-          thingie = '@'
-        else
-          thingie = "\"#{thingie}\""
-        end
-        # gsub sucks for this..
-        value = value.split('\\').join('\\\\')
-        value = value.split('"').join('\"')
-        begin
-          regedit_data = "REGEDIT4\n\n[#{hkey}\\#{subkey}]\n#{thingie}=\"#{value}\"\n\n"
-          filename = "#{TEMP_DIR}/wine-#{Time.now.to_i}.reg"
-          File.open(filename, 'w') { |f| f.write(regedit_data) }
-          system("#{BIN} regedit #{filename}")
-          sleep 0.2
-          File.delete(filename)
-        rescue
-          return false
-        end
-        return true
-      end
-    end
-  end
-end
-#$wine_bin = nil
-#$wine_prefix = nil
-#end
 
 # find the FE locations for Win and for Linux | WINE
 
@@ -146,9 +63,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
     end
   end
 elsif defined?(Wine)
-  paths = ['HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\STORM32\\Directory',
-           'HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\WIZ32\\Directory']
-## Needs improvement - iteration and such.  Quick slam test.
+  ## Needs improvement - iteration and such.  Quick slam test.
   $sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\STORM32\\Directory') || ''
   $wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
   $sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory')
@@ -232,6 +147,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       extern 'int GetLastError()'
       extern 'int CreateProcess(void*, void*, void*, void*, int, int, void*, void*, void*, void*)'
     end
+
     def Win32.GetLastError
       return Kernel32.GetLastError()
     end
@@ -305,6 +221,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       dlload 'user32'
       extern 'int MessageBox(int, char*, char*, int)'
     end
+
     def Win32.MessageBox(args)
       args[:lpCaption] ||= "Lich v#{LICH_VERSION}"
       return User32.MessageBox(args[:hWnd].to_i, args[:lpText], args[:lpCaption], args[:uType].to_i)
@@ -321,6 +238,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       extern 'int RegDeleteValue(int, char*)'
       extern 'int RegCloseKey(int)'
     end
+
     def Win32.GetTokenInformation(args)
       if args[:TokenInformationClass] == TokenElevation
         token_information_length = SIZEOF_LONG
@@ -388,10 +306,10 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       elsif (args[:dwType] == REG_MULTI_SZ) and (args[:lpData].class == Array)
         lpData = args[:lpData].join("\x00").concat("\x00\x00")
         cbData = lpData.length
-      elsif (args[:dwType] == REG_DWORD) and (args[:lpData].class == Fixnum)
+      elsif (args[:dwType] == REG_DWORD) and (args[:lpData].class == Integer)
         lpData = [args[:lpData]].pack('L')
         cbData = 4
-      elsif (args[:dwType] == REG_QWORD) and (args[:lpData].class == Fixnum or args[:lpData].class == Bignum)
+      elsif (args[:dwType] == REG_QWORD) and (args[:lpData].class == Integer)
         lpData = [args[:lpData]].pack('Q')
         cbData = 8
       elsif args[:dwType] == REG_BINARY
@@ -423,6 +341,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       extern 'int ShellExecuteEx(void*)'
       extern 'int ShellExecute(int, char*, char*, char*, char*, int)'
     end
+
     def Win32.ShellExecuteEx(args)
       #         struct = [ (SIZEOF_LONG * 15), 0, 0, 0, 0, 0, 0, SW_SHOWNORMAL, 0, 0, 0, 0, 0, 0, 0 ]
       struct = [(SIZEOF_LONG * 15), 0, 0, 0, 0, 0, 0, SW_SHOW, 0, 0, 0, 0, 0, 0, 0]
@@ -456,6 +375,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       module Kernel32
         extern 'int EnumProcesses(void*, int, void*)'
       end
+
       def Win32.EnumProcesses(args = {})
         args[:cb] ||= 400
         pProcessIds = Array.new((args[:cb] / SIZEOF_LONG), 0).pack(''.rjust((args[:cb] / SIZEOF_LONG), 'L'))
@@ -470,6 +390,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
         dlload 'psapi'
         extern 'int EnumProcesses(void*, int, void*)'
       end
+
       def Win32.EnumProcesses(args = {})
         args[:cb] ||= 400
         pProcessIds = Array.new((args[:cb] / SIZEOF_LONG), 0).pack(''.rjust((args[:cb] / SIZEOF_LONG), 'L'))
@@ -504,98 +425,17 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       if not caller.any? { |c| c =~ /eval|run/ }
         r = Win32.GetModuleFileName
         if r[:return] > 0
-          if File.exists?(r[:lpFilename])
+          if File.exist?(r[:lpFilename])
             Win32.ShellExecuteEx(:lpVerb => 'runas', :lpFile => r[:lpFilename], :lpParameters => "#{File.expand_path($PROGRAM_NAME)} shellexecute #{[Marshal.dump(args)].pack('m').gsub("\n", '')}")
           end
         end
       end
     end
   end
-else
-  if arg = ARGV.find { |a| a =~ /^--wine=.+$/i }
-    $wine_bin = arg.sub(/^--wine=/, '')
-  else
-    begin
-      $wine_bin = `which wine`.strip
-    rescue
-      $wine_bin = nil
-    end
-  end
-  if arg = ARGV.find { |a| a =~ /^--wine-prefix=.+$/i }
-    $wine_prefix = arg.sub(/^--wine-prefix=/, '')
-  elsif ENV['WINEPREFIX']
-    $wine_prefix = ENV['WINEPREFIX']
-  elsif ENV['HOME']
-    $wine_prefix = ENV['HOME'] + '/.wine'
-  else
-    $wine_prefix = nil
-  end
-  if $wine_bin and File.exists?($wine_bin) and File.file?($wine_bin) and $wine_prefix and File.exists?($wine_prefix) and File.directory?($wine_prefix)
-    module Wine
-      BIN = $wine_bin
-      PREFIX = $wine_prefix
-      def Wine.registry_gets(key)
-        hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme: stupid highlights ]/
-        if File.exist?(PREFIX + '/system.reg')
-          if hkey == 'HKEY_LOCAL_MACHINE'
-            subkey = "[#{subkey.gsub('\\', '\\\\\\')}]"
-            if thingie.nil? or thingie.empty?
-              thingie = '@'
-            else
-              thingie = "\"#{thingie}\""
-            end
-            lookin = result = false
-            File.open(PREFIX + '/system.reg') { |f| f.readlines }.each { |line|
-              if line[0...subkey.length] == subkey
-                lookin = true
-              elsif line =~ /^\[/
-                lookin = false
-              elsif lookin and line =~ /^#{thingie}="(.*)"$/i
-                result = $1.split('\\"').join('"').split('\\\\').join('\\').sub(/\\0$/, '')
-                break
-              end
-            }
-            return result
-          else
-            return false
-          end
-        else
-          return false
-        end
-      end
-
-      def Wine.registry_puts(key, value)
-        hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme ]/
-        if File.exists?(PREFIX)
-          if thingie.nil? or thingie.empty?
-            thingie = '@'
-          else
-            thingie = "\"#{thingie}\""
-          end
-          # gsub sucks for this..
-          value = value.split('\\').join('\\\\')
-          value = value.split('"').join('\"')
-          begin
-            regedit_data = "REGEDIT4\n\n[#{hkey}\\#{subkey}]\n#{thingie}=\"#{value}\"\n\n"
-            filename = "#{TEMP_DIR}/wine-#{Time.now.to_i}.reg"
-            File.open(filename, 'w') { |f| f.write(regedit_data) }
-            system("#{BIN} regedit #{filename}")
-            sleep 0.2
-            File.delete(filename)
-          rescue
-            return false
-          end
-          return true
-        end
-      end
-    end
-  end
-  $wine_bin = nil
-  $wine_prefix = nil
 end
 
 if ARGV[0] == 'shellexecute'
-  args = Marshal.load(ARGV[1].unpack('m')[0])
+  args = Marshal.load(Marshal.dump(ARGV[1].unpack('m')[0]))
   Win32.ShellExecute(:lpOperation => args[:op], :lpFile => args[:file], :lpDirectory => args[:dir], :lpParameters => args[:params])
   exit
 end
@@ -611,25 +451,24 @@ rescue LoadError
       r = Win32.GetModuleFileName
       if r[:return] > 0
         ruby_bin_dir = File.dirname(r[:lpFilename])
-        if File.exists?("#{ruby_bin_dir}\\gem.bat")
+        if File.exist?("#{ruby_bin_dir}\\gem.bat")
           verb = (Win32.isXP? ? 'open' : 'runas')
-          # fixme: using --source http://rubygems.org to avoid https because it has been failing to validate the certificate on Windows
-          r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --source http://rubygems.org --no-ri --no-rdoc --version 1.3.13')
+          r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --no-ri --no-rdoc')
           if r[:return] > 0
             pid = r[:hProcess]
             sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
             r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
           else
             # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
-            r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --source http://rubygems.org --no-ri --no-rdoc --version 1.3.13')
+            r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --no-ri --no-rdoc')
             if r <= 32
-              Win32.MessageBox(:lpText => "error: failed to start the sqlite3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\#{gem_file}\", :lpParameters => \"install sqlite3 --source http://rubygems.org --no-ri --no-rdoc --version 1.3.13'\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
+              Win32.MessageBox(:lpText => "error: failed to start the sqlite3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\#{gem_file}\", :lpParameters => \"install sqlite3 --no-ri --no-rdoc'\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
               exit
             end
             r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
           end
           if r == Win32::IDIOK
-            if File.exists?("#{ruby_bin_dir}\\rubyw.exe")
+            if File.exist?("#{ruby_bin_dir}\\rubyw.exe")
               Win32.ShellExecute(:lpOperation => 'open', :lpFile => "#{ruby_bin_dir}\\rubyw.exe", :lpParameters => "\"#{File.expand_path($PROGRAM_NAME)}\"")
             else
               Win32.MessageBox(:lpText => "error: failed to find rubyw.exe; can't restart Lich for you", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
@@ -653,43 +492,44 @@ rescue LoadError
   exit
 end
 
-if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)) or ENV['DISPLAY']
+if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i) or ENV['DISPLAY']) and !ARGV.include?('--no-gui')
+
   begin
     require 'gtk3'
     HAVE_GTK = true
   rescue LoadError
-    if (ENV['RUN_BY_CRON'].nil? or ENV['RUN_BY_CRON'] == 'false') and ARGV.empty? or ARGV.any? { |arg| arg =~ /^--gui$/ } or not $stdout.isatty
+    if (ENV['RUN_BY_CRON'].nil? or ENV['RUN_BY_CRON'] == 'false') and ARGV.empty? or ARGV.any? { |any_arg| any_arg =~ /^--gui$/ } or not $stdout.isatty
       if defined?(Win32)
-        r = Win32.MessageBox(:lpText => "Lich uses gtk3 to create windows, but it is not installed.  You can use Lich from the command line (ruby lich.rbw --help) or you can install gtk2 for a point and click interface.\n\nWould you like to install gtk2 now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
+        r = Win32.MessageBox(:lpText => "Lich uses gtk3 to create windows, but it is not installed.  You can use Lich from the command line (ruby lich.rbw --help) or you can install gtk3 for a point and click interface.\n\nWould you like to install gtk3 now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
         if r == Win32::IDIYES
           r = Win32.GetModuleFileName
           if r[:return] > 0
             ruby_bin_dir = File.dirname(r[:lpFilename])
-            if File.exists?("#{ruby_bin_dir}\\gem.cmd")
+            if File.exist?("#{ruby_bin_dir}\\gem.cmd")
               gem_file = 'gem.cmd'
-            elsif File.exists?("#{ruby_bin_dir}\\gem.bat")
+            elsif File.exist?("#{ruby_bin_dir}\\gem.bat")
               gem_file = 'gem.bat'
             else
               gem_file = nil
             end
             if gem_file
               verb = (Win32.isXP? ? 'open' : 'runas')
-              r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install cairo:1.14.3 gtk2:2.2.5 --source http://rubygems.org --no-ri --no-rdoc')
+              r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install gtk3 --no-ri --no-rdoc')
               if r[:return] > 0
                 pid = r[:hProcess]
                 sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
                 r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
               else
                 # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
-                r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install cairo:1.14.3 gtk2:2.2.5 --source http://rubygems.org --no-ri --no-rdoc')
+                r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install gtk3 --no-ri --no-rdoc')
                 if r <= 32
-                  Win32.MessageBox(:lpText => "error: failed to start the gtk3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\gem.bat\", :lpParameters => \"install cairo:1.14.3 gtk2:2.2.5 --source http://rubygems.org --no-ri --no-rdoc\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
+                  Win32.MessageBox(:lpText => "error: failed to start the gtk3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\gem.bat\", :lpParameters => \"install gtk3 --no-ri --no-rdoc\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
                   exit
                 end
                 r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
               end
               if r == Win32::IDIOK
-                if File.exists?("#{ruby_bin_dir}\\rubyw.exe")
+                if File.exist?("#{ruby_bin_dir}\\rubyw.exe")
                   Win32.ShellExecute(:lpOperation => 'open', :lpFile => "#{ruby_bin_dir}\\rubyw.exe", :lpParameters => "\"#{File.expand_path($PROGRAM_NAME)}\"")
                 else
                   Win32.MessageBox(:lpText => "error: failed to find rubyw.exe; can't restart Lich for you", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
@@ -722,12 +562,12 @@ else
   @early_gtk_error = "info: DISPLAY environment variable is not set; not trying gtk"
 end
 
-unless File.exists?(LICH_DIR)
+unless File.exist?(LICH_DIR)
   begin
     Dir.mkdir(LICH_DIR)
   rescue
     message = "An error occured while attempting to create directory #{LICH_DIR}\n\n"
-    if not File.exists?(LICH_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
+    if not File.exist?(LICH_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
       message.concat "This was likely because the parent directory (#{LICH_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop}) doesn't exist."
     elsif defined?(Win32) and (Win32.GetVersionEx[:dwMajorVersion] >= 6) and (dir !~ /^[A-z]\:\\(Users|Documents and Settings)/)
       message.concat "This was likely because Lich doesn't have permission to create files and folders here.  It is recommended to put Lich in your Documents folder."
@@ -741,12 +581,12 @@ end
 
 Dir.chdir(LICH_DIR)
 
-unless File.exists?(TEMP_DIR)
+unless File.exist?(TEMP_DIR)
   begin
     Dir.mkdir(TEMP_DIR)
   rescue
     message = "An error occured while attempting to create directory #{TEMP_DIR}\n\n"
-    if not File.exists?(TEMP_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
+    if not File.exist?(TEMP_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
       message.concat "This was likely because the parent directory (#{TEMP_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop}) doesn't exist."
     elsif defined?(Win32) and (Win32.GetVersionEx[:dwMajorVersion] >= 6) and (dir !~ /^[A-z]\:\\(Users|Documents and Settings)/)
       message.concat "This was likely because Lich doesn't have permission to create files and folders here.  It is recommended to put Lich in your Documents folder."
@@ -779,7 +619,7 @@ Lich.log "info: #{RUBY_PLATFORM}"
 Lich.log @early_gtk_error if @early_gtk_error
 @early_gtk_error = nil
 
-unless File.exists?(DATA_DIR)
+unless File.exist?(DATA_DIR)
   begin
     Dir.mkdir(DATA_DIR)
   rescue
@@ -788,7 +628,7 @@ unless File.exists?(DATA_DIR)
     exit
   end
 end
-unless File.exists?(SCRIPT_DIR)
+unless File.exist?(SCRIPT_DIR)
   begin
     Dir.mkdir(SCRIPT_DIR)
   rescue
@@ -797,7 +637,7 @@ unless File.exists?(SCRIPT_DIR)
     exit
   end
 end
-unless File.exists?("#{SCRIPT_DIR}/custom")
+unless File.exist?("#{SCRIPT_DIR}/custom")
   begin
     Dir.mkdir("#{SCRIPT_DIR}/custom")
   rescue
@@ -806,7 +646,7 @@ unless File.exists?("#{SCRIPT_DIR}/custom")
     exit
   end
 end
-unless File.exists?(MAP_DIR)
+unless File.exist?(MAP_DIR)
   begin
     Dir.mkdir(MAP_DIR)
   rescue
@@ -815,7 +655,7 @@ unless File.exists?(MAP_DIR)
     exit
   end
 end
-unless File.exists?(LOG_DIR)
+unless File.exist?(LOG_DIR)
   begin
     Dir.mkdir(LOG_DIR)
   rescue
@@ -824,7 +664,7 @@ unless File.exists?(LOG_DIR)
     exit
   end
 end
-unless File.exists?(BACKUP_DIR)
+unless File.exist?(BACKUP_DIR)
   begin
     Dir.mkdir(BACKUP_DIR)
   rescue
@@ -839,16 +679,19 @@ Lich.init_db
 #
 # only keep the last 20 debug files
 #
-if Dir.entries(TEMP_DIR).length > 20 # avoid NIL response
-  Dir.entries(TEMP_DIR).find_all { |fn| fn =~ /^debug-\d+-\d+-\d+-\d+-\d+-\d+\.log$/ }.sort.reverse[20..-1].each { |oldfile|
+
+DELETE_CANDIDATES = %r[^debug-\d+-\d+-\d+-\d+-\d+-\d+\.log$]
+if Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.length > 20 # avoid NIL response
+  Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.sort.reverse[20..-1].each { |oldfile|
     begin
-      File.delete("#{TEMP_DIR}/#{oldfile}")
+      File.delete(File.join(TEMP_DIR, oldfile))
     rescue
       Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
     end
   }
 end
 
+# todo: deprecate / remove for Ruby 3.2.1?
 if (RUBY_VERSION =~ /^2\.[012]\./)
   begin
     did_trusted_defaults = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='did_trusted_defaults';")
