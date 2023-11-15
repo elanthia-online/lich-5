@@ -256,4 +256,14 @@ module Shield
     }
     usage_result
   end
+
+  Shield.shield_lookups.each { |shield|
+    self.define_singleton_method(shield[:short_name]) do
+      Shield[shield[:short_name]]
+    end
+
+    self.define_singleton_method(shield[:long_name]) do
+      Shield[shield[:short_name]]
+    end
+  }
 end

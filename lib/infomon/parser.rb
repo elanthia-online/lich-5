@@ -53,8 +53,8 @@ module Infomon
       TicketEtherealScrip = /^\s*Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
       TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards\.$/.freeze
       TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
-      WealthSilver = /^You have (?<silver>no silver|but one|[\d,]+) coins? with you\.$/.freeze
-      WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) coins? stored within your /.freeze
+      WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
+      WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
 
       # TODO: refactor / streamline?
       SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
@@ -71,6 +71,7 @@ module Infomon
       # Adding spell regexes.  Does not save to infomon.db.  Used by Spell and by ActiveSpells
       SpellUpMsgs = /^#{Games::Gemstone::Spell.upmsgs.join('$|^')}$/o.freeze
       SpellDnMsgs = /^#{Games::Gemstone::Spell.dnmsgs.join('$|^')}$/o.freeze
+      SpellsongRenewed = /^Your songs? renews?/.freeze
 
       All = Regexp.union(CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
                          ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
@@ -80,7 +81,7 @@ module Infomon
                          SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
                          Resource, Suffused, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketBlackscrip,
                          TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
-                         WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded)
+                         WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed)
     end
 
     def self.parse(line)
@@ -362,7 +363,7 @@ module Infomon
         when Pattern::WealthSilver
           match = Regexp.last_match
           case match[:silver]
-          when 'no silver'
+          when 'no'
             Infomon.set('currency.silver', 0)
           when 'but one'
             Infomon.set('currency.silver', 1)
@@ -419,6 +420,9 @@ module Infomon
             line =~ /^#{s.msgdn}$/
           end
           spell.putdown if spell.active?
+          :ok
+        when Pattern::SpellsongRenewed
+          Spellsong.renewed
           :ok
         else
           :noop

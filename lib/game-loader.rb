@@ -12,6 +12,7 @@ module GameLoader
     require 'lib/attributes/society'
     require 'lib/infomon/status'
     require 'lib/experience'
+    require 'lib/attributes/spellsong'
     require 'lib/infomon/activespell'
     ActiveSpell.watch!
     # PSMS (armor, cman, feat, shield, weapon) have moved

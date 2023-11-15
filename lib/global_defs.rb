@@ -2122,9 +2122,13 @@ def do_client(client_string)
           Script.new_downstream(msg)
         end
       end
-    elsif cmd =~ /^(?:exec|e)(q)?(n)? (.+)$/
-      cmd_data = $3
-      ExecScript.start(cmd_data, { :quiet => $1, :trusted => ($2.nil? and RUBY_VERSION =~ /^2\.[012]\./) })
+    elsif cmd =~ /^(?:exec|e)(q)? (.+)$/
+      cmd_data = $2
+      ExecScript.start(cmd_data, { :quiet => $1 })
+    elsif cmd =~ /^(?:execname|en) ([\w\d-]+) (.+)$/
+      execname = $1
+      cmd_data = $2
+      ExecScript.start(cmd_data, { :name => execname })
     elsif cmd =~ /^trust\s+(.*)/i
       script_name = $1
       if RUBY_VERSION =~ /^2\.[012]\./
@@ -2177,12 +2181,36 @@ def do_client(client_string)
       respond("--- Lich: toggle #{toggle_var} set #{set_state}") if did_something
       did_something = false
       nil
-    elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
-      update_parameter = $1.dup
-      Lich::Util::Update.request("#{update_parameter}")
     elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
       require "lib/hmr"
       HMR.reload %r{#{Regexp.last_match[:pattern]}}
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
+      ExecScript.start("Infomon.sync", { :quiet => true })
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon (?:reset|redo)!?/i
+      ExecScript.start("Infomon.redo!", { :quiet => true })
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid(?: (true|false))?/i
+      new_value = !(Lich.display_lichid)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich's Room title display for Lich ID#s to #{new_value}"
+      Lich.display_lichid = new_value
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^display uid(?: (true|false))?/i
+      new_value = !(Lich.display_uid)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich's Room title display for RealID#s to #{new_value}"
+      Lich.display_uid = new_value
+    elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
+      update_parameter = $1.dup
+      Lich::Util::Update.request("#{update_parameter}")
     elsif cmd =~ /^(?:lich5-update|l5u)/i
       Lich::Util::Update.request("--help")
     elsif cmd =~ /^banks$/ && XMLData.game =~ /^GS/
@@ -2224,6 +2252,7 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}e <code>                  ''"
       respond "   #{$clean_lich_char}execq <code>              same as #{$clean_lich_char}exec but without the script active and exited messages"
       respond "   #{$clean_lich_char}eq <code>                 ''"
+      respond "   #{$clean_lich_char}execname <name> <code>    creates named exec (name#) and then executes the code as if it was in a script"
       respond
       if (RUBY_VERSION =~ /^2\.[012]\./)
         respond "   #{$clean_lich_char}trust <script name>       let the script do whatever it wants"
@@ -2237,7 +2266,14 @@ def do_client(client_string)
       respond
       respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
       respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
-      respond "                                                see #{$clean_lich_char}lich5-update --help"
+      respond "                              see #{$clean_lich_char}lich5-update --help"
+      if XMLData.game =~ /^GS/
+        respond
+        respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon (fixskill)"
+        respond "   #{$clean_lich_char}infomon reset             resets entire character infomon db table and then syncs data (fixprof)"
+        respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# in Room Title"
+        respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# in Room Title"
+      end
       respond
       respond 'If you liked this help message, you might also enjoy:'
       respond "   #{$clean_lich_char}lnet help" if defined?(LNet)
