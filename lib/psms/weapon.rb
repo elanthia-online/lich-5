@@ -200,4 +200,14 @@ module Weapon
     end
     usage_result
   end
+
+  Weapon.weapon_lookups.each { |weapon|
+    self.define_singleton_method(weapon[:short_name]) do
+      Weapon[weapon[:short_name]]
+    end
+
+    self.define_singleton_method(weapon[:long_name]) do
+      Weapon[weapon[:short_name]]
+    end
+  }
 end

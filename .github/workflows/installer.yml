@@ -34,11 +34,12 @@ jobs:
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/ewaggle.lic > lich5/scripts/ewaggle.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/go2.lic > lich5/scripts/go2.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/jinx.lic > lich5/scripts/jinx.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/lich5-update.lic > lich5/scripts/lich5-update.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/log.lic > lich5/scripts/log.lic
+          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/map.lic > lich5/scripts/map.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/repository.lic > lich5/scripts/repository.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/vars.lic > lich5/scripts/vars.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/version.lic > lich5/scripts/version.lic
-          curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/map.lic > lich5/scripts/map.lic
           curl https://raw.githubusercontent.com/rpherbig/dr-scripts/master/dependency.lic > lich5/scripts/dependency.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml > lich5/data/effect-list.xml
           cp lich.rbw Lich5/
