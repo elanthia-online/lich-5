@@ -260,6 +260,8 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get("experience.long_term_experience")).to eq(26_266)
       expect(Infomon.get("experience.deeds")).to eq(20)
       expect(Infomon.get("experience.deaths_sting")).to eq("None")
+      expect(Infomon.get_bool("experience.rpa")).to be(false)
+      expect(Infomon.get_bool("experience.lumnis")).to be(false)
 
       expect(Experience.fame).to eq(4_804_958)
       expect(Experience.fxp_current).to eq(1_350)
@@ -269,6 +271,16 @@ describe Infomon::Parser, ".parse" do
       expect(Experience.lte).to eq(26_266)
       expect(Experience.deeds).to eq(20)
       expect(Experience.deaths_sting).to eq("None")
+      expect(Experience.rpa?).to be(false)
+      expect(Experience.lumnis?).to be(false)
+
+      Infomon::Parser.parse %[Your recent adventures echo powerfully in your mind.]
+      expect(Infomon.get_bool("experience.rpa")).to be(true)
+      expect(Experience.rpa?).to be(true)
+
+      Infomon::Parser.parse %[You feel a strange sense of serenity and find that you are able to reflect on recent events with uncommon clarity and understanding.]
+      expect(Infomon.get_bool("experience.lumnis")).to be(true)
+      expect(Experience.lumnis?).to be(true)
     end
   end
 
