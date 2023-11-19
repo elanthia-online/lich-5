@@ -2745,17 +2745,16 @@ main_thread = Thread.new {
         File.open(sal_filename, 'w') { |f| f.puts @launch_data }
         launcher_cmd = launcher_cmd.sub('%1', sal_filename)
         launcher_cmd = launcher_cmd.tr('/', "\\") if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+        if defined?(Wine) and (game != 'AVALON') # Wine on linux
+          launcher_cmd = "#{Wine::BIN} #{launcher_cmd}"
+        end
       end
       begin
         unless custom_launch_dir.nil? || custom_launch_dir.empty?
           Dir.chdir(custom_launch_dir)
         end
 
-        if defined?(Wine) and (game != 'AVALON') # Wine on linux
-          spawn "#{Wine::BIN} #{launcher_cmd}"
-        else # All other OS divert here for 3.2.1
-          spawn launcher_cmd
-        end
+        spawn launcher_cmd
       rescue
         Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         Lich.msgbox(:message => "error: #{$!}", :icon => :error)
