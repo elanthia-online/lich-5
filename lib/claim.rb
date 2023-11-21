@@ -84,7 +84,11 @@ module Claim
       @mine = true
       self.claim_room nav_rm unless nav_rm.nil?
     rescue StandardError => e
-      Log.out(e)
+      if defined?(Log)
+        Log.out(e)
+      else
+        respond("Claim Parser Error: #{e}")
+      end
     ensure
       Lock.unlock if Lock.owned?
     end
