@@ -5,10 +5,12 @@ xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
     Original Author: Tillmen, others
     game: Gemstone
     tags: CORE, spells
-    required: Lich > 5.0.19
-    version: 1.2.1
+    required: Lich > 5.7
+    version: 1.3.0
 
   changelog:
+    v1.3.0 (2023-11-19)
+      Add usage of new Claim module
     v1.2.1 (2022-05-29)
       Logic to avoid adding 'Cooldown' tag to any spell with text 'Recovery'
       (for 599, Rapid Fire Recovery) in XMLData.active_spells
@@ -123,6 +125,11 @@ class XMLParser
     # real id updates
     @room_id = nil
     @previous_nav_rm = nil
+
+    # claim update
+    @arrival_pcs = []
+    @check_obvious_hiding = false
+    @room_player_hidden = false
   end
 
   # for backwards compatibility
@@ -219,13 +226,25 @@ class XMLParser
       @active_ids.push(attributes['id'].to_s)
 
       if name == 'nav'
+        Claim.lock if defined?(Claim)
+        @check_obvious_hiding = true
         @previous_nav_rm = @room_id
         @room_id = attributes['rm'].to_i
+        @arrival_pcs = []
         $nav_seen = true
         Map.last_seen_objects = nil if Map.method_defined?(:last_seen_objects); # DR Only
       end
 
       if name == 'compass'
+        if defined?(Claim) && Claim::Lock.owned?
+          if @room_player_hidden
+            @arrival_pcs.push(:hidden)
+            @check_obvious_hiding = false
+            @room_player_hidden = false
+          end
+          Claim.parser_handle(@room_id, @arrival_pcs)
+          Claim.unlock
+        end
         if @current_stream == 'familiar'
           @fam_mode = String.new
         elsif @room_window_disabled
@@ -591,6 +610,7 @@ class XMLParser
           if @active_tags.include?('a')
             @pc = GameObj.new_pc(@obj_exist, @obj_noun, "#{@player_title}#{text_string}", @player_status)
             @player_status = nil
+            @arrival_pcs.push(@pc.noun) if (defined?(Claim) && Claim::Lock.owned?)
           else
             if @game =~ /^DR/
               GameObj.clear_pcs
@@ -658,6 +678,8 @@ class XMLParser
         @society_task = text_string
       elsif (@current_stream == 'inv') and @active_tags.include?('a')
         GameObj.new_inv(@obj_exist, @obj_noun, text_string, nil)
+      elsif @check_obvious_hiding && text_string =~ /obvious signs of someone hiding/
+        @room_player_hidden = true
       elsif @current_stream == 'familiar'
         # fixme: familiar room tracking does not (can not?) auto update, status of pcs and npcs isn't tracked at all, titles of pcs aren't tracked
         if @current_style == 'roomName'
@@ -742,6 +764,15 @@ class XMLParser
         $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
         gsl_exits = nil
       elsif @room_window_disabled and (name == 'compass')
+        if defined?(Claim) && Claim::Lock.owned?
+          if @room_player_hidden
+            @arrival_pcs.push(:hidden)
+            @check_obvious_hiding = false
+            @room_player_hidden = false
+          end
+          Claim.parser_handle(@room_id, @arrival_pcs)
+          Claim.unlock
+        end
         @room_description = @room_description.strip
         @room_exits_string.concat " #{@room_exits.join(', ')}" unless @room_exits.empty?
         gsl_exits = String.new

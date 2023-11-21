@@ -4,6 +4,7 @@ module GameLoader
     require 'lib/map/map_gs.rb'
     require 'lib/spell'
     require 'lib/bounty'
+    require 'lib/claim'
     require 'lib/infomon/infomon'
     require 'lib/attributes/resources'
     require 'lib/attributes/stats'
