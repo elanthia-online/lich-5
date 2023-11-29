@@ -11,7 +11,7 @@ module Claim
   def self.claim_room(id)
     @claimed_room = id.to_i
     @timestamp    = Time.now
-    Log.out("claimed #{@claimed_room}", label: %i(claim room)) if defined? Log
+    Log.out("claimed #{@claimed_room}", label: %i(claim room)) if defined?(Log)
     Lock.unlock
   end
 
@@ -40,13 +40,16 @@ module Claim
   end
 
   def self.info
-    info = {'Current Room' => XMLData.room_id,
-            'Mine' => Claim.mine?,
-            'Claimed Room' => Claim.claimed_room,
-            'Checked' => Claim.checked?,
-            'Last Room' => Claim.last_room,
-            'Others' => Claim.others}
-    respond JSON.pretty_generate(info)
+    rows = [['XMLData.room_id', XMLData.room_id, 'Current room according to the XMLData'],
+            ['Claim.mine?', Claim.mine?, 'Claim status on the current room'],
+            ['Claim.claimed_room', Claim.claimed_room, 'Room id of the last claimed room'],
+            ['Claim.checked?', Claim.checked?, "Has Claim finished parsing ROOMID\ndefault: the current room"],
+            ['Claim.last_room', Claim.last_room, 'The last room checked by Claim, regardless of status'],
+            ['Claim.others', Claim.others.join("\n"), "Other characters in the room\npotentially less grouped characters"]]
+    info_table = Terminal::Table.new :headings => ['Property', 'Value', 'Description'],
+                                     :rows => rows,
+                                     :style => {:all_separators => true}
+    _respond "<output class=\"mono\"/>\n" + info_table.to_s + "\n<output class=\"\"/>")
   end
 
   def self.mine?
@@ -60,16 +63,24 @@ module Claim
   def self.members
     return [] unless defined? Group
 
-    if Group.checked?
-      Group.members.map(&:noun)
-    else
-      []
+    begin
+      if Group.checked?
+        return Group.members.map(&:noun)
+      else
+        return []
+      end
+    rescue
+      return []
     end
   end
 
   def self.clustered
-    return [] unless defined? Cluster 
-    Cluster.connected
+    begin
+      return [] unless defined? Cluster 
+      Cluster.connected
+    rescue
+      return []
+    end
   end
 
   def self.parser_handle(nav_rm, pcs)
