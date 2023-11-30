@@ -49,7 +49,7 @@ module Claim
     info_table = Terminal::Table.new :headings => ['Property', 'Value', 'Description'],
                                      :rows => rows,
                                      :style => {:all_separators => true}
-    _respond "<output class=\"mono\"/>\n" + info_table.to_s + "\n<output class=\"\"/>")
+    Lich::Messaging.mono(info_table.to_s)
   end
 
   def self.mine?
