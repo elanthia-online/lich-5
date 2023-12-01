@@ -10,7 +10,7 @@ xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
 
   changelog:
     v1.3.0 (2023-11-19)
-      Add usage of new Claim module
+      Add usage of new Lich::Claim module
     v1.2.1 (2022-05-29)
       Logic to avoid adding 'Cooldown' tag to any spell with text 'Recovery'
       (for 599, Rapid Fire Recovery) in XMLData.active_spells
@@ -127,7 +127,7 @@ class XMLParser
     @room_id = nil
     @previous_nav_rm = nil
 
-    # claim update
+    # Lich::Claim update
     @arrival_pcs = []
     @check_obvious_hiding = false
     @room_player_hidden = false
@@ -227,7 +227,7 @@ class XMLParser
       @active_ids.push(attributes['id'].to_s)
 
       if name == 'nav'
-        Claim.lock if defined?(Claim)
+        Lich::Claim.lock if defined?(Lich::Claim)
         @check_obvious_hiding = true
         @previous_nav_rm = @room_id
         @room_id = attributes['rm'].to_i
@@ -237,14 +237,14 @@ class XMLParser
       end
 
       if name == 'compass'
-        if defined?(Claim) && Claim::Lock.owned?
+        if defined?(Lich::Claim) && Lich::Claim::Lock.owned?
           if @room_player_hidden
             @arrival_pcs.push(:hidden)
             @check_obvious_hiding = false
             @room_player_hidden = false
           end
-          Claim.parser_handle(@room_id, @arrival_pcs)
-          Claim.unlock
+          Lich::Claim.parser_handle(@room_id, @arrival_pcs)
+          Lich::Claim.unlock
         end
         if @current_stream == 'familiar'
           @fam_mode = String.new
@@ -611,7 +611,7 @@ class XMLParser
           if @active_tags.include?('a')
             @pc = GameObj.new_pc(@obj_exist, @obj_noun, "#{@player_title}#{text_string}", @player_status)
             @player_status = nil
-            @arrival_pcs.push(@pc.noun) if (defined?(Claim) && Claim::Lock.owned?)
+            @arrival_pcs.push(@pc.noun) if (defined?(Lich::Claim) && Lich::Claim::Lock.owned?)
           else
             if @game =~ /^DR/
               GameObj.clear_pcs
@@ -765,14 +765,14 @@ class XMLParser
         $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
         gsl_exits = nil
       elsif @room_window_disabled and (name == 'compass')
-        if defined?(Claim) && Claim::Lock.owned?
+        if defined?(Lich::Claim) && Lich::Claim::Lock.owned?
           if @room_player_hidden
             @arrival_pcs.push(:hidden)
             @check_obvious_hiding = false
             @room_player_hidden = false
           end
-          Claim.parser_handle(@room_id, @arrival_pcs)
-          Claim.unlock
+          Lich::Claim.parser_handle(@room_id, @arrival_pcs)
+          Lich::Claim.unlock
         end
         @room_description = @room_description.strip
         @room_exits_string.concat " #{@room_exits.join(', ')}" unless @room_exits.empty?
