@@ -25,18 +25,6 @@ module Experience
     Infomon.get("experience.total_experience")
   end
 
-  def self.percent_fxp
-    (fxp_current.to_f / fxp_max.to_f) * 100
-  end
-
-  def self.percent_axp
-    (axp.to_f / txp.to_f) * 100
-  end
-
-  def self.percent_exp
-    (exp.to_f / txp.to_f) * 100
-  end
-
   def self.lte
     Infomon.get("experience.long_term_experience")
   end
