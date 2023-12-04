@@ -225,11 +225,14 @@ require_relative("./lib/xmlparser.rb")
 
 class UpstreamHook
   @@upstream_hooks ||= Hash.new
+  @@upstream_hook_sources ||= Hash.new
+
   def UpstreamHook.add(name, action)
     unless action.class == Proc
       echo "UpstreamHook: not a Proc (#{action})"
       return false
     end
+    @@upstream_hook_sources[name] = (Script.current.name || "Unknown")
     @@upstream_hooks[name] = action
   end
 
@@ -248,21 +251,33 @@ class UpstreamHook
   end
 
   def UpstreamHook.remove(name)
+    @@upstream_hook_sources.delete(name)
     @@upstream_hooks.delete(name)
   end
 
   def UpstreamHook.list
     @@upstream_hooks.keys.dup
   end
+
+  def UpstreamHook.sources
+    info_table = Terminal::Table.new :headings => ['Hook', 'Source'],
+                                     :rows => @@upstream_hook_sources.to_a,
+                                     :style => {:all_separators => true}
+    Lich::Messaging.mono(info_table.to_s)
+  end
+
 end
 
 class DownstreamHook
   @@downstream_hooks ||= Hash.new
+  @@downstream_hook_sources ||= Hash.new
+
   def DownstreamHook.add(name, action)
     unless action.class == Proc
       echo "DownstreamHook: not a Proc (#{action})"
       return false
     end
+    @@downstream_hook_sources[name] = (Script.current.name || "Unknown")
     @@downstream_hooks[name] = action
   end
 
@@ -281,12 +296,21 @@ class DownstreamHook
   end
 
   def DownstreamHook.remove(name)
+    @@downstream_hook_sources.delete(name)
     @@downstream_hooks.delete(name)
   end
 
   def DownstreamHook.list
     @@downstream_hooks.keys.dup
   end
+
+  def DownstreamHook.sources
+    info_table = Terminal::Table.new :headings => ['Hook', 'Source'],
+                                     :rows => @@downstream_hook_sources.to_a,
+                                     :style => {:all_separators => true}
+    Lich::Messaging.mono(info_table.to_s)
+  end
+
 end
 
 module Setting
