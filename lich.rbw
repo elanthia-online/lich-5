@@ -266,6 +266,10 @@ class UpstreamHook
     Lich::Messaging.mono(info_table.to_s)
   end
 
+  def UpstreamHook.hook_sources
+    @@upstream_hook_sources
+  end
+
 end
 
 class DownstreamHook
@@ -309,6 +313,10 @@ class DownstreamHook
                                      :rows => @@downstream_hook_sources.to_a,
                                      :style => {:all_separators => true}
     Lich::Messaging.mono(info_table.to_s)
+  end
+
+  def DownstreamHook.hook_sources
+    @@downstream_hook_sources
   end
 
 end
