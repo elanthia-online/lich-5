@@ -2367,128 +2367,71 @@ if argv_options[:sal]
   end
 end
 
-if (arg = ARGV.find { |a| (a == '-g') or (a == '--game') })
+
+# Select your Front-End client here
+if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+  $frontend = 'stormfront'
+elsif ARGV.any? { |arg| (arg == '-w') or (arg == '--wizard') }
+  $frontend = 'wizard'
+elsif ARGV.any? { |arg| arg == '--avalon' }
+  $frontend = 'avalon'
+elsif ARGV.any? { |arg| arg == '--frostbite' }
+  $frontend = 'frostbite'
+elsif ARGV.any? { |arg| arg == '--genie' }
+  $frontend = 'genie'
+else
+  Lich.log("No front end selected. Setting $frontend to 'unknown'")
+  $frontend = 'unknown'
+end
+
+if ARGV.include?('--platinum')
+  Lich.log("Platinum flag detected. Togglinging $platinum true.")
+  $platinum = true
+else
+  $platinum = false
+end
+
+if arg = ARGV.find { |a| (a == '-g') or (a == '--game') }
   game_host, game_port = ARGV[ARGV.index(arg) + 1].split(':')
   game_port = game_port.to_i
-  if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-    $frontend = 'stormfront'
-  elsif ARGV.any? { |arg| (arg == '-w') or (arg == '--wizard') }
-    $frontend = 'wizard'
-  elsif ARGV.any? { |arg| arg == '--avalon' }
-    $frontend = 'avalon'
-  elsif ARGV.any? { |arg| arg == '--frostbite' }
-    $frontend = 'frostbite'
-  else
-    $frontend = 'unknown'
-  end
 elsif ARGV.include?('--gemstone')
-  if ARGV.include?('--platinum')
-    $platinum = true
-    if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+  if $platinum
+    if $frontend == 'stormfront'
       game_host = 'storm.gs4.game.play.net'
       game_port = 10124
-      $frontend = 'stormfront'
     else
       game_host = 'gs-plat.simutronics.net'
       game_port = 10121
-      if ARGV.any? { |arg| arg == '--avalon' }
-        $frontend = 'avalon'
-      else
-        $frontend = 'wizard'
-      end
     end
   else
-    $platinum = false
-    if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+    if $frontend == 'stormfront'
       game_host = 'storm.gs4.game.play.net'
       game_port = 10024
-      $frontend = 'stormfront'
     else
       game_host = 'gs3.simutronics.net'
       game_port = 4900
-      if ARGV.any? { |arg| arg == '--avalon' }
-        $frontend = 'avalon'
-      else
-        $frontend = 'wizard'
-      end
     end
   end
 elsif ARGV.include?('--shattered')
-  $platinum = false
-  if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
+  if $frontend == 'stormfront'
     game_host = 'storm.gs4.game.play.net'
     game_port = 10324
-    $frontend = 'stormfront'
   else
     game_host = 'gs4.simutronics.net'
     game_port = 10321
-    if ARGV.any? { |arg| arg == '--avalon' }
-      $frontend = 'avalon'
-    else
-      $frontend = 'wizard'
-    end
   end
 elsif ARGV.include?('--fallen')
-  $platinum = false
-  # Not sure what the port info is for anything else but Genie :(
-  if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-    $frontend = 'stormfront'
-    $stdout.puts "fixme"
-    Lich.log "fixme"
-    exit
-  elsif ARGV.grep(/--genie/).any?
-    game_host = 'dr.simutronics.net'
-    game_port = 11324
-    $frontend = 'genie'
-  else
-    $stdout.puts "fixme"
-    Lich.log "fixme"
-    exit
-  end
+  game_host = 'dr.simutronics.net'
+  game_port = 11324
 elsif ARGV.include?('--dragonrealms')
-  if ARGV.include?('--platinum')
-    $platinum = true
-    if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-      $frontend = 'stormfront'
-      $stdout.puts "fixme"
-      Lich.log "fixme"
-      exit
-    elsif ARGV.grep(/--genie/).any?
-      game_host = 'dr.simutronics.net'
-      game_port = 11124
-      $frontend = 'genie'
-    elsif ARGV.grep(/--frostbite/).any?
-      game_host = 'dr.simutronics.net'
-      game_port = 11124
-      $frontend = 'frostbite'
-    else
-      $frontend = 'wizard'
-      $stdout.puts "fixme"
-      Lich.log "fixme"
-      exit
-    end
-  else
-    $platinum = false
-    if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-      $frontend = 'stormfront'
-      $stdout.puts "fixme"
-      Lich.log "fixme"
-      exit
-    elsif ARGV.grep(/--genie/).any?
-      game_host = 'dr.simutronics.net'
-      game_port = ARGV.include?('--test') ? 11624 : 11024
-      $frontend = 'genie'
-    else
-      game_host = 'dr.simutronics.net'
-      game_port = ARGV.include?('--test') ? 11624 : 11024
-      if ARGV.any? { |arg| arg == '--avalon' }
-        $frontend = 'avalon'
-      elsif ARGV.any? { |arg| arg == '--frostbite' }
-        $frontend = 'frostbite'
-      else
-        $frontend = 'wizard'
-      end
-    end
+
+  game_host = 'dr.simutronics.net'
+  if $platinum
+    game_port = 11124
+  elsif ARGV.include?('--test')
+    game_port = 11624
+  else    # DR PRime
+    $game_port = 11024
   end
 else
   game_host, game_port = nil, nil
