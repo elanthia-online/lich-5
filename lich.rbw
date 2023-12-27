@@ -2664,10 +2664,10 @@ main_thread = Thread.new {
     elsif defined?(Wine)
       Lich.log("info: Working against a Linux | WINE Platform")
       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
-        custom_launch = "Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
+        custom_launch = "#{Wine::BIN} Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
-        custom_launch = "Wrayth.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /Wrayth/
-        custom_launch = "Stormfront.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
+        custom_launch = "#{Wine::BIN} Wrayth.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /Wrayth/
+        custom_launch = "#{Wine::BIN} Stormfront.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
       end
     end
     if (custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ })
@@ -2783,11 +2783,7 @@ main_thread = Thread.new {
           Dir.chdir(custom_launch_dir)
         end
 
-        if defined?(Wine) and (game != 'AVALON') # Wine on linux
-          spawn "#{Wine::BIN} #{launcher_cmd}"
-        else # All other OS divert here for 3.2.1
-          spawn launcher_cmd
-        end
+        spawn launcher_cmd
       rescue
         Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         Lich.msgbox(:message => "error: #{$!}", :icon => :error)
