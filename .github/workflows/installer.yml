@@ -13,13 +13,13 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        ruby: ['3.2.2']
+        ruby: ['3.3.0']
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - name: Install Ruby 3.2.2
+      - name: Install Ruby 3.3.0
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
@@ -44,7 +44,7 @@ jobs:
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml > lich5/data/effect-list.xml
           cp lich.rbw Lich5/
           cp -r lib Lich5/
-          gem install tomlib ascii_charts concurrent-ruby ftools gtk3 json jwt mechanize nokogiri redis sequel sqlite3 terminal-table tzinfo webrick xmpp4r --no-document
+          gem install tomlib ascii_charts concurrent-ruby curses ftools gtk3 json jwt mechanize nokogiri redis sequel sqlite3 terminal-table tzinfo webrick xmpp4r --no-document
           rm -r -fo C:\msys64\ucrt64\share\man\*
           rm -r -fo C:\msys64\usr\share\man\*
           rm -r -fo C:\msys64\var\cache\pacman\pkg\*
