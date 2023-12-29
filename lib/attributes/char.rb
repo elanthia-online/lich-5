@@ -9,6 +9,10 @@ class Char
     XMLData.name
   end
 
+  def Char.stance
+    XMLData.stance_text
+  end
+
   def Char.health(*args)
     checkhealth(*args)
   end
