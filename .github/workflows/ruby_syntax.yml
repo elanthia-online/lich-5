@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ruby: ['3.2']
+        ruby: ['3.3']
     name: Run tests on Ruby ${{ matrix.ruby }}
     steps:
       - uses: actions/checkout@v3
