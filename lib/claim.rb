@@ -1,10 +1,9 @@
-
 module Lich
   module Claim
     Lock            = Mutex.new
-    @claimed_room   ||= nil
-    @last_room      ||= nil
-    @mine           ||= false
+    @claimed_room ||= nil
+    @last_room    ||= nil
+    @mine         ||= false
     @buffer         = []
     @others         = []
     @timestamp      = Time.now
@@ -48,8 +47,8 @@ module Lich
               ['Claim.last_room', Claim.last_room, 'The last room checked by Claim, regardless of status'],
               ['Claim.others', Claim.others.join("\n"), "Other characters in the room\npotentially less grouped characters"]]
       info_table = Terminal::Table.new :headings => ['Property', 'Value', 'Description'],
-                                      :rows => rows,
-                                      :style => {:all_separators => true}
+                                       :rows     => rows,
+                                       :style    => { :all_separators => true }
       Lich::Messaging.mono(info_table.to_s)
     end
 
@@ -77,7 +76,7 @@ module Lich
 
     def self.clustered
       begin
-        return [] unless defined? Cluster 
+        return [] unless defined? Cluster
         Cluster.connected
       rescue
         return []
@@ -105,6 +104,5 @@ module Lich
         Lock.unlock if Lock.owned?
       end
     end
-
   end
 end
