@@ -894,35 +894,19 @@ def checkstance(*args)
   Char.stance(*args)
 end
 
-def percentstance(num = nil)
-  if num.nil?
-    XMLData.stance_value
-  else
-    XMLData.stance_value >= num.to_i
-  end
+def percentstance(*args)
+  Lich.depreciated('percentstance', 'Char.percentstance')
+  Char.percentstance(*args)
 end
 
-def checkencumbrance(string = nil)
-  if string.nil?
-    XMLData.encumbrance_text
-  elsif (string.class == Integer) or (string =~ /^[0-9]+$/ and (string = string.to_i))
-    string <= XMLData.encumbrance_value
-  else
-    # fixme
-    if string =~ /#{XMLData.encumbrance_text}/i
-      true
-    else
-      false
-    end
-  end
+def checkencumbrance(*args)
+  Lich.depreciated('checkencumbrance', 'Char.checkencumbrance')
+  Char.checkencumbrance(*args)
 end
 
-def percentencumbrance(num = nil)
-  if num.nil?
-    XMLData.encumbrance_value
-  else
-    num.to_i <= XMLData.encumbrance_value
-  end
+def percentencumbrance(*args)
+  Lich.depreciated('percentencumbrance', 'Char.percentencumbrance')
+  Char.percentencumbrance(*args)
 end
 
 def checkarea(*strings)
