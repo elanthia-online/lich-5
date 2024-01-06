@@ -920,6 +920,7 @@ def percentconcentration(num = nil)
 end
 
 def checkstance(*args)
+  Lich.log("Depreciated method used - checkstance - Script: #{Script.current.name} - Change to use Char.stance instead!")
   Char.stance(*args)
 end
 
