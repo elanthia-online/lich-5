@@ -58,6 +58,15 @@ module Lich
     $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"
   end
 
+  def Lich.depreciated(old_object = '', new_object = '')
+    msg = "Depreciated call to #{old_object} used"
+    unless Script.current.name == 'unknown script'
+      msg += " in #{Script.current.name}"
+    end
+    msg += ". Please change to #{new_object} instead!"
+    Lich.log(msg)
+  end
+
   def Lich.msgbox(args)
     if defined?(Win32)
       if args[:buttons] == :ok_cancel
