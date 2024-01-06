@@ -126,7 +126,7 @@ class Char
       percent >= num.to_i
     end
   end
-  
+
   def Char.dump_info
     echo "Char.dump_info is no longer used. Update or fix your script."
   end
