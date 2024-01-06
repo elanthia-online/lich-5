@@ -9,8 +9,32 @@ class Char
     XMLData.name
   end
 
-  def Char.stance(*args)
-    checkstance(*args)
+  def Char.stance(num = nil)
+    if num.nil?
+      XMLData.stance_text
+    elsif (num.class == String) and (num.to_i == 0)
+      if num =~ /off/i
+        XMLData.stance_value == 0
+      elsif num =~ /adv/i
+        XMLData.stance_value.between?(01, 20)
+      elsif num =~ /for/i
+        XMLData.stance_value.between?(21, 40)
+      elsif num =~ /neu/i
+        XMLData.stance_value.between?(41, 60)
+      elsif num =~ /gua/i
+        XMLData.stance_value.between?(61, 80)
+      elsif num =~ /def/i
+        XMLData.stance_value == 100
+      else
+        echo "Char.stance: invalid argument (#{num}).  Must be off/adv/for/neu/gua/def or 0-100"
+        nil
+      end
+    elsif (num.class == Integer) or (num =~ /^[0-9]+$/ and (num = num.to_i))
+      XMLData.stance_value == num.to_i
+    else
+      echo "Char.stance: invalid argument (#{num}).  Must be off/adv/for/neu/gua/def or 0-100"
+      nil
+    end
   end
 
   def Char.health(*args)
