@@ -37,6 +37,37 @@ class Char
     end
   end
 
+  def Char.percentstance(num = nil)
+    if num.nil?
+      XMLData.stance_value
+    else
+      XMLData.stance_value >= num.to_i
+    end
+  end
+
+  def Char.checkencumbrance(string = nil)
+    if string.nil?
+      XMLData.encumbrance_text
+    elsif (string.class == Integer) or (string =~ /^[0-9]+$/ and (string = string.to_i))
+      string <= XMLData.encumbrance_value
+    else
+      # fixme
+      if string =~ /#{XMLData.encumbrance_text}/i
+        true
+      else
+        false
+      end
+    end
+  end
+
+  def Char.percentencumbrance(num = nil)
+    if num.nil?
+      XMLData.encumbrance_value
+    else
+      num.to_i <= XMLData.encumbrance_value
+    end
+  end
+
   def Char.health(num = nil)
     if num.nil?
       XMLData.health
