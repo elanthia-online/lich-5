@@ -812,94 +812,64 @@ def checksaturated
   end
 end
 
-def checkmana(num = nil)
-  if num.nil?
-    XMLData.mana
-  else
-    XMLData.mana >= num.to_i
-  end
+def checkmana(*args)
+  Lich.depreciated('checkmana', 'Char.mana')
+  Char.mana(*args)
 end
 
 def maxmana
-  XMLData.max_mana
+  Lich.depreciated('maxmana', 'Char.maxmana')
+  Char.maxmana
 end
 
-def percentmana(num = nil)
-  if XMLData.max_mana == 0
-    percent = 100
-  else
-    percent = ((XMLData.mana.to_f / XMLData.max_mana.to_f) * 100).to_i
-  end
-  if num.nil?
-    percent
-  else
-    percent >= num.to_i
-  end
+def percentmana(*args)
+  Lich.depreciated('percentmana', 'Char.percentmana')
+  Char.percentmana(*args)
 end
 
-def checkhealth(num = nil)
-  if num.nil?
-    XMLData.health
-  else
-    XMLData.health >= num.to_i
-  end
+def checkhealth(*args)
+  Lich.depreciated('checkhealth', 'Char.health')
+  Char.health(*args)
 end
 
 def maxhealth
-  XMLData.max_health
+  Lich.depreciated('maxhealth', 'Char.maxhealth')
+  Char.maxhealth
 end
 
-def percenthealth(num = nil)
-  if num.nil?
-    ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i
-  else
-    ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i >= num.to_i
-  end
+def percenthealth(*args)
+  Lich.depreciated('percenthealth', 'Char.percenthealth')
+  Char.percenthealth(*args)
 end
 
-def checkspirit(num = nil)
-  if num.nil?
-    XMLData.spirit
-  else
-    XMLData.spirit >= num.to_i
-  end
+def checkspirit(*args)
+  Lich.depreciated('checkspirit', 'Char.spirit')
+  Lich.spirit(*args)
 end
 
 def maxspirit
-  XMLData.max_spirit
+  Lich.depreciated('maxspirit', 'Char.maxspirit')
+  Char.maxspirit
 end
 
-def percentspirit(num = nil)
-  if num.nil?
-    ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i
-  else
-    ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i >= num.to_i
-  end
+def percentspirit(*args)
+  Lich.depreciated('percentspirit', 'Char.percentspirit')
+  Char.percentspirit(*args)
 end
 
-def checkstamina(num = nil)
-  if num.nil?
-    XMLData.stamina
-  else
-    XMLData.stamina >= num.to_i
-  end
+def checkstamina(*args)
+  Lich.depreciated('checkstamina', 'Char.stamina')
+  Char.stamina(*args)
 end
 
 def maxstamina()
-  XMLData.max_stamina
+  Lich.depreciated('maxstamina', 'Char.maxstamina')
+  Char.maxstamina
 end
 
-def percentstamina(num = nil)
-  if XMLData.max_stamina == 0
-    percent = 100
-  else
-    percent = ((XMLData.stamina.to_f / XMLData.max_stamina.to_f) * 100).to_i
-  end
-  if num.nil?
-    percent
-  else
-    percent >= num.to_i
-  end
+def percentstamina(*args)
+  Lich.depreciated('percentstamina', 'Char.percentstamina')
+  Char.percentstamina(*args)
 end
 
 def maxconcentration()
@@ -1663,7 +1633,7 @@ def noded_pulse
     else
       stats = [0, 0]
     end
-    return (maxmana * 25 / 100) + (stats.max / 10) + (stats.min / 20)
+    return (Char.maxmana * 25 / 100) + (stats.max / 10) + (stats.min / 20)
   else
     return 0 # this method is not used by DR
   end
@@ -1682,7 +1652,7 @@ def unnoded_pulse
     else
       stats = [0, 0]
     end
-    return (maxmana * 15 / 100) + (stats.max / 10) + (stats.min / 20)
+    return (Char.maxmana * 15 / 100) + (stats.max / 10) + (stats.min / 20)
   else
     return 0 # this method is not used by DR
   end
