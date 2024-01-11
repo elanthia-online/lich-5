@@ -32,7 +32,7 @@ module Lich
       caller_type = "Effects::#{effect}"
       case val
       when String
-        (eval caller_type).to_h.transform_keys(&:to_s).transform_keys(&:downcase).include?(val.downcase)
+        (eval caller_type).to_h.transform_keys(&:to_s).transform_keys(&:downcase).include?(val.downcase.gsub('_', ' '))
       when Integer
         #      seek = mappings.fetch(val, nil)
         (eval caller_type).active?(val)

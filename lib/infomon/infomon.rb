@@ -145,8 +145,8 @@ module Infomon
           end
         end
       rescue StandardError
-        respond "--- Lich: error: self.get(key): #{$!}"
-        Lich.log "error: self.get(key): #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+        respond "--- Lich: error: self.get(#{key}): #{$!}"
+        Lich.log "error: self.get(#{key}): #{$!}\n\t#{$!.backtrace.join("\n\t")}"
       end
     }
     return self._value(val)
