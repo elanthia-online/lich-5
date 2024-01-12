@@ -224,7 +224,7 @@ module Games
             respond(exception)
             respond(exception.backtrace)
           ensure
-            line
+            return line
           end
         }
 
