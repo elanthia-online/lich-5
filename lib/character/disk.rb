@@ -24,7 +24,7 @@ module Games
       end
 
       attr_reader :id, :name
-  
+
       def initialize(obj)
         @id   = obj.id
         @name = obj.name.split(" ").find do |word|
