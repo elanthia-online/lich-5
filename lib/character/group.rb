@@ -211,23 +211,6 @@ module Games
           EXIST = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a>}
         end
 
-        CALLBACK = ->line {
-          begin
-            # fast first-pass
-            if line.include?("group") or line.include?("following you") or line.include?("IconJOINED")
-              # more detailed pass
-              if (match_data = Observer.wants?(line))
-                Observer.consume(line.strip, match_data)
-              end
-            end
-          rescue => exception
-            respond(exception)
-            respond(exception.backtrace)
-          ensure
-            return line
-          end
-        }
-
         def self.exist(xml)
           xml.scan(Group::Observer::Term::EXIST).map { |id, _noun, _name| GameObj[id] }
         end
@@ -285,18 +268,7 @@ module Games
             return Group.delete(*people)
           end
         end
-
-        def self.attach()
-          remove() if DownstreamHook.list.include?(self.name)
-          DownstreamHook.add(self.name, CALLBACK)
-        end
-
-        def self.remove()
-          DownstreamHook.remove(self.name)
-        end
       end
-
-      Observer.attach()
     end
   end
 end
