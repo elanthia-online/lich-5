@@ -738,7 +738,6 @@ class XMLParser
 
   def tag_end(name)
     begin
-
       if @game =~ /^DR/
         if name == 'compass' and $nav_seen
           $nav_seen = false
