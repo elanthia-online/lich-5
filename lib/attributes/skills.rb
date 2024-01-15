@@ -43,7 +43,7 @@ module Skills
   end
 
   # these are here for backwards compat, if method is extended, this should return only rank
-  %i(twoweaponcombat armoruse shielduse combatmaneuvers edgedweapons bluntweapons twohandedweapons rangedweapons thrownweapons polearmweapons multiopponentcombat combatleadership physicalfitness arcanesymbols magicitemuse spellaiming harnesspower disarmingtraps pickinglocks stalkingandhiding firstaid emc mmc smc elair elearth elfire elwater slblessings slreligion slsummoning sldemonology slnecromancy mldivination mlmanipulation mltelepathy mltransference mltransformation).each do |shorthand|
+  %i(twoweaponcombat armoruse shielduse combatmaneuvers edgedweapons bluntweapons twohandedweapons rangedweapons thrownweapons polearmweapons multiopponentcombat physicalfitness arcanesymbols magicitemuse spellaiming harnesspower disarmingtraps pickinglocks stalkingandhiding firstaid emc mmc smc elair elearth elfire elwater slblessings slreligion slsummoning sldemonology slnecromancy mldivination mlmanipulation mltelepathy mltransference mltransformation).each do |shorthand|
     long_hand = @@skills.find { |method|
       method.to_s.gsub(/_/, '')
             .gsub(/elementallore/, 'el')
