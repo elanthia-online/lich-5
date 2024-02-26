@@ -1247,6 +1247,7 @@ module Games
                     end
                   end
                   @@cli_scripts = true
+                  Lich.log("info: logged in as #{XMLData.game}:#{XMLData.name}")
                 end
 
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
