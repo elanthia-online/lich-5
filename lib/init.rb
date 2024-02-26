@@ -599,7 +599,7 @@ unless File.exist?(TEMP_DIR)
 end
 
 begin
-  debug_filename = "#{TEMP_DIR}/debug-#{Time.now.strftime("%Y-%m-%d-%H-%M-%S")}.log"
+  debug_filename = "#{TEMP_DIR}/debug-#{Time.now.strftime("%Y-%m-%d-%H-%M-%S-%L")}.log"
   $stderr = File.open(debug_filename, 'w')
 rescue
   message = "An error occured while attempting to create file #{debug_filename}\n\n"
@@ -680,7 +680,7 @@ Lich.init_db
 # only keep the last 20 debug files
 #
 
-DELETE_CANDIDATES = %r[^debug-\d+-\d+-\d+-\d+-\d+-\d+\.log$]
+DELETE_CANDIDATES = %r[^debug(?:-\d+)+\.log$]
 if Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.length > 20 # avoid NIL response
   Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.sort.reverse[20..-1].each { |oldfile|
     begin
