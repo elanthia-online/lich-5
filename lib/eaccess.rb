@@ -15,7 +15,11 @@ module EAccess
     # Create an OpenSSL context
     ctx = OpenSSL::SSL::SSLContext.new
     # Get remote TCP socket
-    sock = TCPSocket.new(hostname, port)
+    if Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.0.0')
+      sock = TCPSocket.new(hostname, port)
+    else
+      sock = TCPSocket.new(hostname, port, connect_timeout: 5)
+    end
     # pass that socket to OpenSSL
     ssl = OpenSSL::SSL::SSLSocket.new(sock, ctx)
     # establish connection, if possible
@@ -37,7 +41,11 @@ module EAccess
 
   def self.socket(hostname = "eaccess.play.net", port = 7910)
     download_pem unless pem_exist?
-    socket = TCPSocket.open(hostname, port)
+    if Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.0.0')
+      socket = TCPSocket.open(hostname, port)
+    else
+      socket = TCPSocket.open(hostname, port, connect_timeout: 5)
+    end
     cert_store              = OpenSSL::X509::Store.new
     ssl_context             = OpenSSL::SSL::SSLContext.new
     ssl_context.cert_store  = cert_store
