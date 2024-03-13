@@ -1190,7 +1190,11 @@ module Games
       end
 
       def Game.open(host, port)
-        @@socket = TCPSocket.open(host, port)
+        if Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.0.0')
+          @@socket = TCPSocket.open(host, port)
+        else
+          @@socket = TCPSocket.open(host, port, connect_timeout: 5)
+        end
         begin
           @@socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, true)
         rescue
