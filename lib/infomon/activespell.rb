@@ -82,7 +82,7 @@ module ActiveSpell
   def self.show_duration_change
     active_durations = Array.new
     group_effects = [307, 310, 1605, 1609, 1618, 1608]
-    [Effects::Spells, Effects::Cooldowns, Effects::Buffs, Effects::Debuffs].each do |effect_type|
+    [Effects::Spells.dup, Effects::Cooldowns.dup, Effects::Buffs.dup, Effects::Debuffs.dup].each do |effect_type|
       active_durations += effect_type.to_h.keys
       effect_type.to_h.each do |effect, end_time|
         next unless effect.is_a?(String)
