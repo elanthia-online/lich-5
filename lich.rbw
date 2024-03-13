@@ -1852,48 +1852,6 @@ def start_exec_script(cmd_data, options = Hash.new)
   ExecScript.start(cmd_data, options)
 end
 
-module Setting
-  def Setting.[](name)
-    Settings[name]
-  end
-
-  def Setting.[]=(name, value)
-    Settings[name] = value
-  end
-
-  def Setting.to_hash(_scope = ':')
-    Settings.to_hash
-  end
-end
-
-module GameSetting
-  def GameSetting.[](name)
-    GameSettings[name]
-  end
-
-  def GameSetting.[]=(name, value)
-    GameSettings[name] = value
-  end
-
-  def GameSetting.to_hash(_scope = ':')
-    GameSettings.to_hash
-  end
-end
-
-module CharSetting
-  def CharSetting.[](name)
-    CharSettings[name]
-  end
-
-  def CharSetting.[]=(name, value)
-    CharSettings[name] = value
-  end
-
-  def CharSetting.to_hash(_scope = ':')
-    CharSettings.to_hash
-  end
-end
-
 class StringProc
   def StringProc._load(string)
     StringProc.new(string)
