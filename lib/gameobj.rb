@@ -308,7 +308,10 @@ module Games
       def GameObj.targets
         a = Array.new
         XMLData.current_target_ids.each { |id|
-          if (npc = @@npcs.find { |n| n.id == id }) && (npc.status !~ /dead|gone/) && (npc.name !~ /^animated\b/ || npc.name =~ /^animated slush/)
+          if (npc = @@npcs.find { |n| n.id == id })
+            next if (npc.status =~ /dead|gone/i)
+            next if (npc.name =~ /^animated\b/i && npc.name !~ /^animated slush/i)
+            next if (npc.noun =~ /^(?:arm|appendage|claw|limb|pincer|tentacle)s?$|^(?:palpus|palpi)$/i)
             a.push(npc)
           end
         }
