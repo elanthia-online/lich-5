@@ -7,7 +7,7 @@ module ActiveSpell
   #
 
   @current_durations ||= Hash.new
-  @show_durations_first_pass ||= false
+  @durations_first_pass_complete ||= false
 
   def self.get_spell_info(spell_check = XMLData.active_spells)
     puts "spell update requested\r\n" if $infomon_debug
@@ -97,17 +97,17 @@ module ActiveSpell
         end
         time_left = ((end_time - Time.now) / 60).to_f
         duration = ((end_time - (@current_durations[effect_key].nil? ? Time.now : @current_durations[effect_key])) / 60).to_f
-        if @show_durations_first_pass && (@current_durations[effect_key].nil? || end_time > @current_durations[effect_key]) && duration > (0.1).to_f && !(group_effects.include?(spell.num) && !spell.known?)
+        if @durations_first_pass_complete && (@current_durations[effect_key].nil? || end_time > @current_durations[effect_key]) && duration > (0.1).to_f && !(group_effects.include?(spell.num) && !spell.known?)
           respond "[ #{spell.num} #{spell.name}: +#{duration.as_time}, #{time_left.as_time} ]"
         end
         @current_durations[effect_key] = end_time
       end
     end
     (@current_durations.keys - active_durations).each do |spell|
-      respond "[ #{Spell.list.find { |s| s.num == spell.to_i || s.name =~ /#{spell}/ }.num} #{Spell.list.find { |s| s.num == spell.to_i || s.name =~ /#{spell}/ }.name}: Ended ]" if @show_durations_first_pass
+      respond "[ #{Spell.list.find { |s| s.num == spell.to_i || s.name =~ /#{spell}/ }.num} #{Spell.list.find { |s| s.num == spell.to_i || s.name =~ /#{spell}/ }.name}: Ended ]" if @durations_first_pass_complete
       @current_durations.delete(spell)
     end
-    @show_durations_first_pass = true
+    @durations_first_pass_complete = true
   end
 
   def self.update_spell_durations
