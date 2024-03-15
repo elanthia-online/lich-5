@@ -5,7 +5,7 @@ require "ostruct"
 
 module Status
   def self.bound?
-    Infomon.get_bool("status.bound") && Effects::Debuffs.active?('Bind')
+    Infomon.get_bool("status.bound") && (Effects::Debuffs.active?('Bind') || Effects::Debuffs.active?(214))
   end
 
   def self.calmed?
