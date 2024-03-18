@@ -9,7 +9,7 @@ module Status
   end
 
   def self.calmed?
-    Infomon.get_bool("status.calmed") && Effects::Debuffs.active?('Calm')
+    Infomon.get_bool("status.calmed") && (Effects::Debuffs.active?('Calm') || Effects::Debuffs.active?(201))
   end
 
   def self.cutthroat?
@@ -21,7 +21,7 @@ module Status
   end
 
   def self.sleeping?
-    Infomon.get_bool("status.sleeping") && Effects::Debuffs.active?('Sleep')
+    Infomon.get_bool("status.sleeping") && (Effects::Debuffs.active?('Sleep') || Effects::Debuffs.active?(501))
   end
 
   # deprecate these in global_defs after warning, consider bringing other status maps over
