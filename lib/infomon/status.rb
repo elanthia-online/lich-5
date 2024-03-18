@@ -17,7 +17,7 @@ module Status
   end
 
   def self.silenced?
-    Infomon.get_bool("status.silenced") && Effects::Debuffs.acitve?('Silenced')
+    Infomon.get_bool("status.silenced") && Effects::Debuffs.active?('Silenced')
   end
 
   def self.sleeping?
