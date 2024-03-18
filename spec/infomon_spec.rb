@@ -707,7 +707,7 @@ describe Infomon::Parser, ".parse" do
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
-      XMLData.save_dialogs("Debuffs", { 'Sleep' => true }) # to test if Effects has this key
+      XMLData.save_dialogs("Debuffs", { 'Sleep' => (Time.now + 5) }) # to test if Effects has this key
       expect(Status.sleeping?).to be(true)
       expect(Status.muckled?).to be(true) # discount IconMAP presently - future update
     end
@@ -733,7 +733,7 @@ describe Infomon::Parser, ".parse" do
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
-      XMLData.save_dialogs("Debuffs", { 'Bind' => true }) # to test if Effects has this key
+      XMLData.save_dialogs("Debuffs", { 'Bind' => (Time.now + 5) }) # to test if Effects has this key
       expect(Status.bound?).to be(true)
       expect(Status.muckled?).to be(true)
     end
@@ -758,7 +758,7 @@ describe Infomon::Parser, ".parse" do
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
-      XMLData.save_dialogs("Debuffs", { 'Silenced' => true }) # to test if Effects has this key
+      XMLData.save_dialogs("Debuffs", { 'Silenced' => (Time.now + 5) }) # to test if Effects has this key
       expect(Status.silenced?).to be(true)
       expect(Status.muckled?).to be(false)
     end
@@ -781,7 +781,7 @@ describe Infomon::Parser, ".parse" do
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
-      XMLData.save_dialogs("Debuffs", { 'Calm' => true }) # to test if Effects has this key
+      XMLData.save_dialogs("Debuffs", { 'Calm' => (Time.now + 5) }) # to test if Effects has this key
       expect(Status.calmed?).to be(true)
       expect(Status.muckled?).to be(false)
     end
@@ -806,7 +806,7 @@ describe Infomon::Parser, ".parse" do
       output.split("\n").map { |line|
         Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
-      XMLData.save_dialogs("Debuffs", { 'Major Bleed' => true }) # to test if Effects has this key
+      XMLData.save_dialogs("Debuffs", { 'Major Bleed' => (Time.now + 5) }) # to test if Effects has this key
       expect(Status.cutthroat?).to be(true)
       expect(Status.muckled?).to be(false)
     end
