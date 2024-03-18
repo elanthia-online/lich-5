@@ -5,23 +5,23 @@ require "ostruct"
 
 module Status
   def self.bound?
-    Infomon.get_bool("status.bound") && Effects::Debuffs.to_h.has_key?('Bind')
+    Infomon.get_bool("status.bound") && (Effects::Debuffs.active?('Bind') || Effects::Debuffs.active?(214))
   end
 
   def self.calmed?
-    Infomon.get_bool("status.calmed") && Effects::Debuffs.to_h.has_key?('Calm')
+    Infomon.get_bool("status.calmed") && (Effects::Debuffs.active?('Calm') || Effects::Debuffs.active?(201))
   end
 
   def self.cutthroat?
-    Infomon.get_bool("status.cutthroat") && Effects::Debuffs.to_h.has_key?('Major Bleed')
+    Infomon.get_bool("status.cutthroat") && Effects::Debuffs.active?('Major Bleed')
   end
 
   def self.silenced?
-    Infomon.get_bool("status.silenced") && Effects::Debuffs.to_h.has_key?('Silenced')
+    Infomon.get_bool("status.silenced") && Effects::Debuffs.acitve?('Silenced')
   end
 
   def self.sleeping?
-    Infomon.get_bool("status.sleeping") && Effects::Debuffs.to_h.has_key?('Sleep')
+    Infomon.get_bool("status.sleeping") && (Effects::Debuffs.active?('Sleep') || Effects::Debuffs.active?(501))
   end
 
   # deprecate these in global_defs after warning, consider bringing other status maps over
