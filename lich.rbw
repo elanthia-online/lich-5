@@ -2791,8 +2791,8 @@ main_thread = Thread.new {
 
         spawn launcher_cmd
       rescue
-        Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-        Lich.msgbox(:message => "error: #{$!}", :icon => :error)
+        Lich.log "error: #{$!.sub(game_key.to_s, '[scrubbed key]')}\n\t#{$!.backtrace.join("\n\t")}"
+        Lich.msgbox(:message => "error: #{$!.sub(game_key.to_s, '[scrubbed key]')}", :icon => :error)
       end
       Lich.log 'info: waiting for client to connect...'
       300.times { sleep 0.1; break unless accept_thread.status }
