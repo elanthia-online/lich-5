@@ -8,6 +8,10 @@ module ActiveSpell
 
   @current_durations ||= Hash.new
   @durations_first_pass_complete ||= false
+  
+  def self.show_durations?
+    Infomon.get_bool("infomon.show_durations")
+  end
 
   def self.get_spell_info(spell_check = XMLData.active_spells)
     puts "spell update requested\r\n" if $infomon_debug
@@ -144,7 +148,7 @@ module ActiveSpell
           respond "no spell matches #{k}"
         end
       end
-      show_duration_change
+      show_duration_change if show_durations?
     rescue StandardError => e
       if $infomon_debug
         respond 'Error in spell durations thread'
