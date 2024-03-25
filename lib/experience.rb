@@ -48,4 +48,12 @@ module Experience
   def self.deaths_sting
     Infomon.get("experience.deaths_sting")
   end
+
+  def self.rpa?
+    Infomon.get_bool("experience.rpa")
+  end
+
+  def self.lumnis?
+    Infomon.get_bool("experience.lumnis")
+  end
 end
