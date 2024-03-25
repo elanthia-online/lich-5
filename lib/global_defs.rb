@@ -2196,7 +2196,7 @@ def do_client(client_string)
       when 'false'
         new_value = false
       end
-      respond "Changing Infomon's spell duration showing to #{new_value}"
+      respond "Changing Infomon's effect duration showing to #{new_value}"
       Infomon.set('infomon.show_durations', new_value)
     elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
