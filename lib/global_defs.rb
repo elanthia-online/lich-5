@@ -2188,6 +2188,16 @@ def do_client(client_string)
       ExecScript.start("Infomon.sync", { :quiet => true })
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon (?:reset|redo)!?/i
       ExecScript.start("Infomon.redo!", { :quiet => true })
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon show(?: (true|false))?/i
+      new_value = !(Infomon.get_bool("infomon.show_durations"))
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Infomon's spell duration showing to #{new_value}"
+      Infomon.set('infomon.show_durations', new_value)
     elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
       case Regexp.last_match(1)
