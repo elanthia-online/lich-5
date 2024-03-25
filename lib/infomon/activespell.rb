@@ -8,7 +8,7 @@ module ActiveSpell
 
   @current_durations ||= Hash.new
   @durations_first_pass_complete ||= false
-  
+
   def self.show_durations?
     Infomon.get_bool("infomon.show_durations")
   end
