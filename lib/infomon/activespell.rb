@@ -7,7 +7,7 @@ module ActiveSpell
   #
 
   def self.get_spell_info(spell_check = XMLData.active_spells)
-    puts "spell update requested\r\n" if $infomon_debug
+    respond "spell update requested\r\n" if $infomon_debug
     spell_update_durations = spell_check
     spell_update_names = []
     makeychange = []
@@ -80,8 +80,8 @@ module ActiveSpell
     begin
       respond "[infomon] updating spell durations..." if $infomon_debug
       spell_update_names, spell_update_durations = ActiveSpell.get_spell_info
-      puts "#{spell_update_names}\r\n" if $infomon_debug
-      puts "#{spell_update_durations}\r\n" if $infomon_debug
+      respond "#{spell_update_names}\r\n" if $infomon_debug
+      respond "#{spell_update_durations}\r\n" if $infomon_debug
 
       existing_spell_names = []
       active_spells = Spell.active
