@@ -84,8 +84,9 @@ module ActiveSpell
       puts "#{spell_update_durations}\r\n" if $infomon_debug
 
       existing_spell_names = []
+      active_spells = Spell.active
       ignore_spells = ["Berserk", "Council Task", "Council Punishment", "Briar Betrayer"]
-      Spell.active.each { |s| existing_spell_names << s.name }
+      active_spells.each { |s| existing_spell_names << s.name }
       inactive_spells = existing_spell_names - ignore_spells - spell_update_names
       inactive_spells.reject! do |s|
         s =~ /^Aspect of the \w+ Cooldown|^[\w\s]+ Recovery/
@@ -97,7 +98,7 @@ module ActiveSpell
 
       spell_update_durations.uniq.each do |k, v|
         if (spell = Spell.list.find { |s| (s.name.downcase == k.strip.downcase) || (s.num.to_s == k.strip) })
-          if (spell.circle.to_i == 10) and not Spell.active.any? { |s| s.circle.to_i == 10 }
+          if (spell.circle.to_i == 10) and not active_spells.any? { |s| s.circle.to_i == 10 }
             Spellsong.renewed
           end
           spell.active = true
