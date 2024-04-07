@@ -24,7 +24,7 @@ module Games
       end
 
       def self.timeleft
-        return 0.0 if Char.prof != 'Bard'
+        return 0.0 if Stats.prof != 'Bard'
         (self.duration - ((Time.now.to_f - @@renewed.to_f) % self.duration)) / 60.to_f
       end
 
