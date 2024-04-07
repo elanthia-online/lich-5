@@ -2,6 +2,8 @@ module Games
   module Gemstone
     class Spellsong
       @@renewed ||= 0.to_f
+      @@song_duration ||= 0.to_f
+      @@duration_calcs ||= []
 
       def self.sync
         timed_spell = Effects::Spells.to_h.keys.find { |k| k.to_s.match(/10[0-9][0-9]/) }
@@ -29,22 +31,25 @@ module Games
       def self.serialize
         self.timeleft
       end
-
       def self.duration
-        total = 135
-        1.upto(Stats.level.to_i) { |n|
-          if n < 26
-            total += 4
-          elsif n < 51
-            total += 3
-          elsif n < 76
-            total += 2
-          else
-            total += 1
-          end
-        }
-        # echo  total + Stats.log[1].to_i + (Stats.inf[1].to_i * 3) + (Skills.mltelepathy.to_i * 2)
-        total + Stats.log[1].to_i + (Stats.inf[1].to_i * 3) + (Skills.mltelepathy.to_i * 2)
+        if @@song_duration != 0.to_f || @@duration_calcs != [Stats.level.to_i, Stats.log[1].to_i, Stats.inf[1].to_i, Skills.mltelepathy.to_i]
+          @@duration_calcs = [Stats.level.to_i, Stats.log[1].to_i, Stats.inf[1].to_i, Skills.mltelepathy.to_i]
+          total = 120
+          1.upto(Stats.level.to_i) { |n|
+            if n < 26
+              total += 4
+            elsif n < 51
+              total += 3
+            elsif n < 76
+              total += 2
+            else
+              total += 1
+            end
+          }
+          return (@@song_duration = total + Stats.log[1].to_i + (Stats.inf[1].to_i * 3) + (Skills.mltelepathy.to_i * 2))
+        else
+          return @@song_duration
+        end
       end
 
       def self.renew_cost
