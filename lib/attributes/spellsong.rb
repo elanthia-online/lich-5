@@ -33,7 +33,7 @@ module Games
       end
 
       def self.duration
-        if @@song_duration != 0 || @@duration_calcs != [Stats.level.to_i, Stats.log[1].to_i, Stats.inf[1].to_i, Skills.mltelepathy.to_i]
+        if @@duration_calcs != [Stats.level.to_i, Stats.log[1].to_i, Stats.inf[1].to_i, Skills.mltelepathy.to_i]
           @@duration_calcs = [Stats.level.to_i, Stats.log[1].to_i, Stats.inf[1].to_i, Skills.mltelepathy.to_i]
           total = 120
           1.upto(Stats.level.to_i) { |n|
