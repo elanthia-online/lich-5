@@ -33,13 +33,13 @@ module Games
       end
 
       def self.duration
-        return @@song_duration if @@duration_calcs == [Stats.level.to_i, Stats.log[1].to_i, Stats.inf[1].to_i, Skills.mltelepathy.to_i]
-        @@duration_calcs = [Stats.level.to_i, Stats.log[1].to_i, Stats.inf[1].to_i, Skills.mltelepathy.to_i]
-        total = self.duration_base_level(Stats.level.to_i)
-        return (@@song_duration = total + Stats.log[1].to_i + (Stats.inf[1].to_i * 3) + (Skills.mltelepathy.to_i * 2))
+        return @@song_duration if @@duration_calcs == [Stats.level, Stats.log[1], Stats.inf[1], Skills.mltelepathy]
+        @@duration_calcs = [Stats.level, Stats.log[1], Stats.inf[1], Skills.mltelepathy]
+        total = self.duration_base_level(Stats.level)
+        return (@@song_duration = total + Stats.log[1] + (Stats.inf[1] * 3) + (Skills.mltelepathy * 2))
       end
 
-      def self.duration_base_level(level = Stats.level.to_i)
+      def self.duration_base_level(level = Stats.level)
         total = 120
         case level
         when (0..25)
