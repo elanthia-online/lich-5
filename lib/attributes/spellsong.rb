@@ -51,7 +51,6 @@ module Games
         when (76..100)
           total += 225 + (level - 75)
         else
-          fail("unhandled case in Spellsong.duration level=#{level}")
           Lich.log("unhandled case in Spellsong.duration level=#{level}")
         end
         return total
