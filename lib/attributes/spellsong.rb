@@ -33,24 +33,28 @@ module Games
       end
 
       def self.duration
-        if @@duration_calcs != [Stats.level.to_i, Stats.log[1].to_i, Stats.inf[1].to_i, Skills.mltelepathy.to_i]
-          @@duration_calcs = [Stats.level.to_i, Stats.log[1].to_i, Stats.inf[1].to_i, Skills.mltelepathy.to_i]
-          total = 120
-          1.upto(Stats.level.to_i) { |n|
-            if n < 26
-              total += 4
-            elsif n < 51
-              total += 3
-            elsif n < 76
-              total += 2
-            else
-              total += 1
-            end
-          }
-          return (@@song_duration = total + Stats.log[1].to_i + (Stats.inf[1].to_i * 3) + (Skills.mltelepathy.to_i * 2))
+        return @@song_duration if @@duration_calcs == [Stats.level.to_i, Stats.log[1].to_i, Stats.inf[1].to_i, Skills.mltelepathy.to_i]
+        @@duration_calcs = [Stats.level.to_i, Stats.log[1].to_i, Stats.inf[1].to_i, Skills.mltelepathy.to_i]
+        total = self.duration_base_level(Stats.level.to_i)
+        return (@@song_duration = total + Stats.log[1].to_i + (Stats.inf[1].to_i * 3) + (Skills.mltelepathy.to_i * 2))
+      end
+
+      def self.duration_base_level(level = Stats.level.to_i)
+        total = 120
+        case level
+        when (0..25)
+          total += level * 4
+        when (26..50)
+          total += 100 + (level - 25) * 3
+        when (51..75)
+          total += 175 + (level - 50) * 2
+        when (76..100)
+          total += 225 + (level - 75)
         else
-          return @@song_duration
+          fail("unhandled case in Spellsong.duration level=#{level}")
+          Lich.log("unhandled case in Spellsong.duration level=#{level}")
         end
+        return total
       end
 
       def self.renew_cost
