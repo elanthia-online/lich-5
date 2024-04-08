@@ -3,6 +3,7 @@ module GameLoader
   def self.gemstone
     require 'lib/map/map_gs.rb'
     require 'lib/spell'
+    require 'lib/effects'
     require 'lib/bounty'
     require 'lib/claim'
     require 'lib/infomon/infomon'
@@ -21,7 +22,6 @@ module GameLoader
     require 'lib/psms'
     require 'lib/attributes/char'
     require 'lib/infomon/currency'
-    require 'lib/effects'
   end
 
   def self.dragon_realms
