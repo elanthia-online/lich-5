@@ -2,7 +2,7 @@ module Games
   module Gemstone
     class Spellsong
       @@renewed ||= 0.to_f
-      @@song_duration ||= 0.to_f
+      @@song_duration ||= 120.to_f
       @@duration_calcs ||= []
 
       def self.sync
@@ -34,6 +34,7 @@ module Games
 
       def self.duration
         return @@song_duration if @@duration_calcs == [Stats.level, Stats.log[1], Stats.inf[1], Skills.mltelepathy]
+        return @@song_duration if [Stats.level, Stats.log[1], Stats.inf[1], Skills.mltelepathy].include?(nil)
         @@duration_calcs = [Stats.level, Stats.log[1], Stats.inf[1], Skills.mltelepathy]
         total = self.duration_base_level(Stats.level)
         return (@@song_duration = total + Stats.log[1] + (Stats.inf[1] * 3) + (Skills.mltelepathy * 2))
