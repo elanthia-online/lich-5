@@ -31,8 +31,7 @@ module DB_Store
     return 'Error: No data to store.' unless blob
 
     begin
-      Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);',
-                      script.encode('UTF-8'), scope.encode('UTF-8'), blob)
+      Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', [script.encode('UTF-8'), scope.encode('UTF-8'), blob])
     rescue SQLite3::BusyException
       sleep 0.05
       retry
