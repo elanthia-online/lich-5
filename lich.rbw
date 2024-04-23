@@ -346,7 +346,7 @@ module Setting
     values = Array.new
     for setting in args
       begin
-        v = Lich.db.get_first_value('SELECT value FROM script_setting WHERE script=? AND name=?;', script.name.encode('UTF-8'), setting.encode('UTF-8'))
+        v = Lich.db.get_first_value('SELECT value FROM script_setting WHERE script=? AND name=?;', [script.name.encode('UTF-8'), setting.encode('UTF-8')])
       rescue SQLite3::BusyException
         sleep 0.1
         retry
@@ -406,7 +406,7 @@ module Setting
       begin
         if value.nil?
           begin
-            Lich.db.execute('DELETE FROM script_setting WHERE script=? AND name=?;', script.name.encode('UTF-8'), setting.encode('UTF-8'))
+            Lich.db.execute('DELETE FROM script_setting WHERE script=? AND name=?;', [script.name.encode('UTF-8'), setting.encode('UTF-8')])
           rescue SQLite3::BusyException
             sleep 0.1
             retry
@@ -414,7 +414,7 @@ module Setting
         else
           v = SQLite3::Blob.new(Marshal.dump(value))
           begin
-            Lich.db.execute('INSERT OR REPLACE INTO script_setting(script,name,value) VALUES(?,?,?);', script.name.encode('UTF-8'), setting.encode('UTF-8'), v)
+            Lich.db.execute('INSERT OR REPLACE INTO script_setting(script,name,value) VALUES(?,?,?);', [script.name.encode('UTF-8'), setting.encode('UTF-8'), v])
           rescue SQLite3::BusyException
             sleep 0.1
             retry
@@ -446,7 +446,7 @@ module Setting
       exit
     end
     begin
-      rows = Lich.db.execute('SELECT name FROM script_setting WHERE script=?;', script.name.encode('UTF-8'))
+      rows = Lich.db.execute('SELECT name FROM script_setting WHERE script=?;', [script.name.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
@@ -511,7 +511,7 @@ module Settings
     mutex.synchronize {
       unless settings[script.name] and settings[script.name][scope]
         begin
-          marshal_hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', script.name.encode('UTF-8'), scope.encode('UTF-8'))
+          marshal_hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', [script.name.encode('UTF-8'), scope.encode('UTF-8')])
         rescue SQLite3::BusyException
           sleep 0.1
           retry
@@ -552,7 +552,7 @@ module Settings
             end
             blob = SQLite3::Blob.new(Marshal.dump(data))
             begin
-              Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', script_name.encode('UTF-8'), scope.encode('UTF-8'), blob)
+              Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', [script_name.encode('UTF-8'), scope.encode('UTF-8'), blob])
             rescue SQLite3::BusyException
               sleep 0.1
               retry
@@ -647,7 +647,7 @@ module Vars
     mutex.synchronize {
       unless @@loaded
         begin
-          h = Lich.db.get_first_value('SELECT hash FROM uservars WHERE scope=?;', "#{XMLData.game}:#{XMLData.name}".encode('UTF-8'))
+          h = Lich.db.get_first_value('SELECT hash FROM uservars WHERE scope=?;', ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8')])
         rescue SQLite3::BusyException
           sleep 0.1
           retry
@@ -674,7 +674,7 @@ module Vars
           md5 = Digest::MD5.hexdigest(@@vars.to_s)
           blob = SQLite3::Blob.new(Marshal.dump(@@vars))
           begin
-            Lich.db.execute('INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);', "#{XMLData.game}:#{XMLData.name}".encode('UTF-8'), blob)
+            Lich.db.execute('INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);', ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8'), blob])
           rescue SQLite3::BusyException
             sleep 0.1
             retry
