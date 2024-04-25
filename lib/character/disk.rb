@@ -1,10 +1,10 @@
 module Games
   module Gemstone
     class Disk
-      NOUNS = %w{disk coffin}
+      NOUNS = %w{cassone chest coffer coffin coffret disk hamper saucer sphere trunk tureen}
 
       def self.is_disk?(thing)
-        NOUNS.include?(thing.noun)
+        thing.name =~ /([A-Z][a-z]+) #{Regexp.union(NOUNS)}/
       end
 
       def self.find_by_name(name)
