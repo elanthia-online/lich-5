@@ -4,7 +4,7 @@ module Games
       NOUNS = %w{cassone chest coffer coffin coffret disk hamper saucer sphere trunk tureen}
 
       def self.is_disk?(thing)
-        thing.name =~ /([A-Z][a-z]+) #{Regexp.union(NOUNS)}/
+        thing.name =~ /\b([A-Z][a-z]+) #{Regexp.union(NOUNS)}\b/
       end
 
       def self.find_by_name(name)
