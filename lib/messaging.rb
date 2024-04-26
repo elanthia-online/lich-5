@@ -7,9 +7,11 @@ Entries added here should always be accessible from Lich::Messaging.feature name
     game: Gemstone
     tags: CORE, util, utilities
     required: Lich > 5.4.0
-    version: 1.2.0
+    version: 1.2.1
 
   changelog:
+    v1.2.1 (2024-04-26
+      Bugfix for Wizard closing tag
     v1.2.0 (2023-08-02)
       Add Lich::Messaging.mono(msg) to send msg as mono spaced text
       Robocop code cleanup
@@ -97,13 +99,13 @@ module Lich
           preset_color_after = (monsterbold_end + " ")
         when "warn", "orange", "gold", "thought"
           preset_color_before = wizard_color["gold"].chr.force_encoding(Encoding::ASCII_8BIT)
-          preset_color_after = "\217".force_encoding(Encoding::ASCII_8BIT)
+          preset_color_after = "\240".force_encoding(Encoding::ASCII_8BIT)
         when "info", "teal", "whisper"
           preset_color_before = wizard_color["teal"].chr.force_encoding(Encoding::ASCII_8BIT)
-          preset_color_after = "\217".force_encoding(Encoding::ASCII_8BIT)
+          preset_color_after = "\240".force_encoding(Encoding::ASCII_8BIT)
         when "green", "speech", "debug", "light green"
           preset_color_before = wizard_color["bright green"].chr.force_encoding(Encoding::ASCII_8BIT)
-          preset_color_after = "\217".force_encoding(Encoding::ASCII_8BIT)
+          preset_color_after = "\240".force_encoding(Encoding::ASCII_8BIT)
         when "link", "command", "selectedLink", "watching", "roomName"
           preset_color_before = ""
           preset_color_after = ""
