@@ -812,64 +812,106 @@ def checksaturated
   end
 end
 
-def checkmana(*args)
+def checkmana(num = nil)
   Lich.deprecated('checkmana', 'Char.mana')
-  Char.mana(*args)
+  if num.nil?
+    XMLData.mana
+  else
+    XMLData.mana >= num.to_i
+  end
 end
 
 def maxmana
   Lich.deprecated('maxmana', 'Char.maxmana')
-  Char.maxmana
+  XMLData.max_mana
 end
 
-def percentmana(*args)
-  Lich.deprecated('percentmana', 'Char.percentmana')
-  Char.percentmana(*args)
+def percentmana(num = nil)
+  Lich.deprecated('percentmana', 'Char.percent_mana')
+  if XMLData.max_mana == 0
+    percent = 100
+  else
+    percent = ((XMLData.mana.to_f / XMLData.max_mana.to_f) * 100).to_i
+  end
+  if num.nil?
+    percent
+  else
+    percent >= num.to_i
+  end
 end
 
-def checkhealth(*args)
+def checkhealth(num = nil)
   Lich.deprecated('checkhealth', 'Char.health')
-  Char.health(*args)
+  if num.nil?
+    XMLData.health
+  else
+    XMLData.health >= num.to_i
+  end
 end
 
 def maxhealth
-  Lich.deprecated('maxhealth', 'Char.maxhealth')
-  Char.maxhealth
+  Lich.deprecated('maxhealth', 'Char.max_health')
+  XMLData.max_health
 end
 
-def percenthealth(*args)
-  Lich.deprecated('percenthealth', 'Char.percenthealth')
-  Char.percenthealth(*args)
+def percenthealth(num = nil)
+  Lich.deprecated('percenthealth', 'Char.percent_health')
+  if num.nil?
+    ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i
+  else
+    ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i >= num.to_i
+  end
 end
 
-def checkspirit(*args)
+def checkspirit(num = nil)
   Lich.deprecated('checkspirit', 'Char.spirit')
-  Lich.spirit(*args)
+  if num.nil?
+    XMLData.spirit
+  else
+    XMLData.spirit >= num.to_i
+  end
 end
 
 def maxspirit
-  Lich.deprecated('maxspirit', 'Char.maxspirit')
-  Char.maxspirit
+  Lich.deprecated('maxspirit', 'Char.max_spirit')
+  XMLData.max_spirit
 end
 
-def percentspirit(*args)
-  Lich.deprecated('percentspirit', 'Char.percentspirit')
-  Char.percentspirit(*args)
+def percentspirit(num = nil)
+  Lich.deprecated('percentspirit', 'Char.percent_spirit')
+  if num.nil?
+    ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i
+  else
+    ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i >= num.to_i
+  end
 end
 
-def checkstamina(*args)
+def checkstamina(num = nil)
   Lich.deprecated('checkstamina', 'Char.stamina')
-  Char.stamina(*args)
+  if num.nil?
+    XMLData.stamina
+  else
+    XMLData.stamina >= num.to_i
+  end
 end
 
 def maxstamina()
-  Lich.deprecated('maxstamina', 'Char.maxstamina')
-  Char.maxstamina
+  Lich.deprecated('maxstamina', 'Char.max_stamina')
+  XMLData.max_stamina
 end
 
-def percentstamina(*args)
-  Lich.deprecated('percentstamina', 'Char.percentstamina')
-  Char.percentstamina(*args)
+def percentstamina(num = nil)
+  Lich.deprecated('percentstamina', 'Char.percent_stamina')
+  if XMLData.max_stamina == 0
+    percent = 100
+  else
+    percent = ((XMLData.stamina.to_f / XMLData.max_stamina.to_f) * 100).to_i
+  end
+  if num.nil?
+    percent
+  else
+    percent >= num.to_i
+  end
 end
 
 def maxconcentration()
@@ -889,24 +931,67 @@ def percentconcentration(num = nil)
   end
 end
 
-def checkstance(*args)
+def checkstance(num = nil)
   Lich.deprecated('checkstance', 'Char.stance')
-  Char.stance(*args)
+  if num.nil?
+    XMLData.stance_text
+  elsif (num.class == String) and (num.to_i == 0)
+    if num =~ /off/i
+      XMLData.stance_value == 0
+    elsif num =~ /adv/i
+      XMLData.stance_value.between?(01, 20)
+    elsif num =~ /for/i
+      XMLData.stance_value.between?(21, 40)
+    elsif num =~ /neu/i
+      XMLData.stance_value.between?(41, 60)
+    elsif num =~ /gua/i
+      XMLData.stance_value.between?(61, 80)
+    elsif num =~ /def/i
+      XMLData.stance_value == 100
+    else
+      echo "checkstance: invalid argument (#{num}).  Must be off/adv/for/neu/gua/def or 0-100"
+      nil
+    end
+  elsif (num.class == Integer) or (num =~ /^[0-9]+$/ and (num = num.to_i))
+    XMLData.stance_value == num.to_i
+  else
+    echo "checkstance: invalid argument (#{num}).  Must be off/adv/for/neu/gua/def or 0-100"
+    nil
+  end
 end
 
-def percentstance(*args)
-  Lich.deprecated('percentstance', 'Char.percentstance')
-  Char.percentstance(*args)
+def percentstance(num = nil)
+  Lich.deprecated('percentstance', 'Char.percent_stance')
+  if num.nil?
+    XMLData.stance_value
+  else
+    XMLData.stance_value >= num.to_i
+  end
 end
 
-def checkencumbrance(*args)
-  Lich.deprecated('checkencumbrance', 'Char.checkencumbrance')
-  Char.checkencumbrance(*args)
+def checkencumbrance(string = nil)
+  Lich.deprecated('checkencumbrance', 'Char.encumbrance')
+  if string.nil?
+    XMLData.encumbrance_text
+  elsif (string.class == Integer) or (string =~ /^[0-9]+$/ and (string = string.to_i))
+    string <= XMLData.encumbrance_value
+  else
+    # fixme
+    if string =~ /#{XMLData.encumbrance_text}/i
+      true
+    else
+      false
+    end
+  end
 end
 
-def percentencumbrance(*args)
-  Lich.deprecated('percentencumbrance', 'Char.percentencumbrance')
-  Char.percentencumbrance(*args)
+def percentencumbrance(num = nil)
+  Lich.deprecated('percentencumbrance', 'Char.percent_encumbrance')
+  if num.nil?
+    XMLData.encumbrance_value
+  else
+    num.to_i <= XMLData.encumbrance_value
+  end
 end
 
 def checkarea(*strings)
@@ -1617,7 +1702,7 @@ def noded_pulse
     else
       stats = [0, 0]
     end
-    return (Char.maxmana * 25 / 100) + (stats.max / 10) + (stats.min / 20)
+    return (XMLData.max_mana * 25 / 100) + (stats.max / 10) + (stats.min / 20)
   else
     return 0 # this method is not used by DR
   end
@@ -1636,7 +1721,7 @@ def unnoded_pulse
     else
       stats = [0, 0]
     end
-    return (Char.maxmana * 15 / 100) + (stats.max / 10) + (stats.min / 20)
+    return (XMLData.max_mana * 15 / 100) + (stats.max / 10) + (stats.min / 20)
   else
     return 0 # this method is not used by DR
   end
