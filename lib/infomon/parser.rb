@@ -57,10 +57,10 @@ module Infomon
       WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
 
       # TODO: refactor / streamline?
-      SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$/.freeze
+      SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$|^That is impossible to do while unconscious$/.freeze
       SleepNoActive = /^Your thoughts slowly come back to you as you find yourself lying on the ground\.  You must have been sleeping\.$|^You wake up from your slumber\.$|^You are awoken|^You awake|^You slowly come back to alertness and realize you must have been sleeping\.$/.freeze
-      BindActive = /^An unseen force envelops you, restricting all movement\./.freeze
-      BindNoActive = /^The restricting force that envelops you dissolves away\.|^You shake off the immobilization that was restricting your movements!/.freeze
+      BindActive = /^An unseen force (?:envelops|entangles) you, restricting (?:all|your) movement|^You are caught fast, the light of (?:Liabo|Lornon|Tilaok|Makiri|the moon) arresting your movements/.freeze
+      BindNoActive = /^The restricting force that envelops you dissolves away\.|^You shake off the immobilization that was restricting your movements!|^The restricting force enveloping you fades away\./.freeze
       SilenceActive = /^A pall of silence settles over you\.|^The pall of silence settles more heavily over you\./.freeze
       SilenceNoActive = /^The pall of silence leaves you\./.freeze
       CalmActive = /^A calm washes over you\./.freeze
@@ -184,7 +184,7 @@ module Infomon
           if @goals_detected
             @goals_detected = false
             respond
-            respond Lich::Messaging.monsterbold('You just trained your character.  Lich will gather your updated skills.')
+            _respond Lich::Messaging.monsterbold('You just trained your character.  Lich will gather your updated skills.')
             respond
             # temporary inform for users about command
             # fixme: update ExecCommand to consistently perform local API actions from lib files

@@ -337,7 +337,7 @@ module Settings
     mutex.synchronize {
       unless settings[script.name] and settings[script.name][scope]
         begin
-          marshal_hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', script.name.encode('UTF-8'), scope.encode('UTF-8'))
+          marshal_hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', [script.name.encode('UTF-8'), scope.encode('UTF-8')])
         rescue SQLite3::BusyException
           sleep 0.1
           retry
@@ -378,7 +378,7 @@ module Settings
             end
             blob = SQLite3::Blob.new(Marshal.dump(data))
             begin
-              Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', script_name.encode('UTF-8'), scope.encode('UTF-8'), blob)
+              Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', [script_name.encode('UTF-8'), scope.encode('UTF-8'), blob])
             rescue SQLite3::BusyException
               sleep 0.1
               retry
@@ -473,7 +473,7 @@ module Vars
     mutex.synchronize {
       unless @@loaded
         begin
-          h = Lich.db.get_first_value('SELECT hash FROM uservars WHERE scope=?;', "#{XMLData.game}:#{XMLData.name}".encode('UTF-8'))
+          h = Lich.db.get_first_value('SELECT hash FROM uservars WHERE scope=?;', ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8')])
         rescue SQLite3::BusyException
           sleep 0.1
           retry
@@ -500,7 +500,7 @@ module Vars
           md5 = Digest::MD5.hexdigest(@@vars.to_s)
           blob = SQLite3::Blob.new(Marshal.dump(@@vars))
           begin
-            Lich.db.execute('INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);', "#{XMLData.game}:#{XMLData.name}".encode('UTF-8'), blob)
+            Lich.db.execute('INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);', ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8'), blob])
           rescue SQLite3::BusyException
             sleep 0.1
             retry
@@ -1288,79 +1288,6 @@ module Games
 
       def Gift.stopwatch
         nil
-      end
-    end
-
-    module Effects
-      class Registry
-        include Enumerable
-
-        def initialize(dialog)
-          @dialog = dialog
-        end
-
-        def to_h
-          XMLData.dialogs.fetch(@dialog, {})
-        end
-
-        def each()
-          to_h.each { |k, v| yield(k, v) }
-        end
-
-        def active?(effect)
-          expiry = to_h.fetch(effect, 0)
-          expiry.to_f > Time.now.to_f
-        end
-
-        def time_left(effect)
-          expiry = to_h.fetch(effect, 0)
-          if to_h.fetch(effect, 0) != 0
-            ((expiry - Time.now) / 60.to_f)
-          else
-            expiry
-          end
-        end
-      end
-
-      Spells    = Registry.new("Active Spells")
-      Buffs     = Registry.new("Buffs")
-      Debuffs   = Registry.new("Debuffs")
-      Cooldowns = Registry.new("Cooldowns")
-
-      def self.display
-        effect_out = Terminal::Table.new :headings => ["ID", "Type", "Name", "Duration"]
-        titles = ["Spells", "Cooldowns", "Buffs", "Debuffs"]
-        circle = nil
-        [Effects::Spells, Effects::Cooldowns, Effects::Buffs, Effects::Debuffs].each { |effect|
-          title = titles.shift
-          id_effects = effect.to_h.select { |k, _v| k.is_a?(Integer) }
-          text_effects = effect.to_h.reject { |k, _v| k.is_a?(Integer) }
-          if id_effects.length != text_effects.length
-            # has spell names disabled
-            text_effects = id_effects
-          end
-          if id_effects.length == 0
-            effect_out.add_row ["", title, "No #{title.downcase} found!", ""]
-          else
-            id_effects.each { |sn, end_time|
-              stext = text_effects.shift[0]
-              duration = ((end_time - Time.now) / 60.to_f)
-              if duration < 0
-                next
-              elsif duration > 86400
-                duration = "Indefinite"
-              else
-                duration = duration.as_time
-              end
-              if Spell[sn].circlename && circle != Spell[sn].circlename && title == 'Spells'
-                circle = Spell[sn].circlename
-              end
-              effect_out.add_row [sn, title, stext, duration]
-            }
-          end
-          effect_out.add_separator unless title == 'Debuffs'
-        }
-        Lich::Messaging.mono(effect_out.to_s)
       end
     end
 
@@ -2575,8 +2502,8 @@ main_thread = Thread.new {
 
         spawn launcher_cmd
       rescue
-        Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-        Lich.msgbox(:message => "error: #{$!}", :icon => :error)
+        Lich.log "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}\n\t#{$!.backtrace.join("\n\t")}"
+        Lich.msgbox(:message => "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}", :icon => :error)
       end
       Lich.log 'info: waiting for client to connect...'
       300.times { sleep 0.1; break unless accept_thread.status }
