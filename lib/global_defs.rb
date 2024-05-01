@@ -2172,7 +2172,7 @@ def do_client(client_string)
       set_state = $2
       did_something = false
       begin
-        Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values(?,?);", toggle_var.to_s.encode('UTF-8'), set_state.to_s.encode('UTF-8'))
+        Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values(?,?);", [toggle_var.to_s.encode('UTF-8'), set_state.to_s.encode('UTF-8')])
         did_something = true
       rescue SQLite3::BusyException
         sleep 0.1

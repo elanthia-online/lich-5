@@ -476,7 +476,7 @@ class Script
       # fixme: case sensitive blah blah
       if not caller.any? { |c| c =~ /eval|run/ }
         begin
-          Lich.db.execute('INSERT OR REPLACE INTO trusted_scripts(name) values(?);', script_name.encode('UTF-8'))
+          Lich.db.execute('INSERT OR REPLACE INTO trusted_scripts(name) values(?);', [script_name.encode('UTF-8')])
         rescue SQLite3::BusyException
           sleep 0.1
           retry
@@ -490,14 +490,14 @@ class Script
 
     def Script.distrust(script_name)
       begin
-        there = Lich.db.get_first_value('SELECT name FROM trusted_scripts WHERE name=?;', script_name.encode('UTF-8'))
+        there = Lich.db.get_first_value('SELECT name FROM trusted_scripts WHERE name=?;', [script_name.encode('UTF-8')])
       rescue SQLite3::BusyException
         sleep 0.1
         retry
       end
       if there
         begin
-          Lich.db.execute('DELETE FROM trusted_scripts WHERE name=?;', script_name.encode('UTF-8'))
+          Lich.db.execute('DELETE FROM trusted_scripts WHERE name=?;', [script_name.encode('UTF-8')])
         rescue SQLite3::BusyException
           sleep 0.1
           retry

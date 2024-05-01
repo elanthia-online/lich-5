@@ -478,7 +478,7 @@ module Lich
 
   def Lich.inventory_boxes(player_id)
     begin
-      v = Lich.db.get_first_value('SELECT player_id FROM enable_inventory_boxes WHERE player_id=?;', player_id.to_i)
+      v = Lich.db.get_first_value('SELECT player_id FROM enable_inventory_boxes WHERE player_id=?;', [player_id.to_i])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
@@ -493,14 +493,14 @@ module Lich
   def Lich.set_inventory_boxes(player_id, enabled)
     if enabled
       begin
-        Lich.db.execute('INSERT OR REPLACE INTO enable_inventory_boxes values(?);', player_id.to_i)
+        Lich.db.execute('INSERT OR REPLACE INTO enable_inventory_boxes values(?);', [player_id.to_i])
       rescue SQLite3::BusyException
         sleep 0.1
         retry
       end
     else
       begin
-        Lich.db.execute('DELETE FROM enable_inventory_boxes where player_id=?;', player_id.to_i)
+        Lich.db.execute('DELETE FROM enable_inventory_boxes where player_id=?;', [player_id.to_i])
       rescue SQLite3::BusyException
         sleep 0.1
         retry
@@ -521,7 +521,7 @@ module Lich
 
   def Lich.win32_launch_method=(val)
     begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('win32_launch_method',?);", val.to_s.encode('UTF-8'))
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('win32_launch_method',?);", [val.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
@@ -585,7 +585,7 @@ module Lich
   def Lich.debug_messaging=(val)
     @@debug_messaging = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('debug_messaging',?);", @@debug_messaging.to_s.encode('UTF-8'))
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('debug_messaging',?);", [@@debug_messaging.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
@@ -610,7 +610,7 @@ module Lich
   def Lich.display_lichid=(val)
     @@display_lichid = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_lichid',?);", @@display_lichid.to_s.encode('UTF-8'))
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_lichid',?);", [@@display_lichid.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
@@ -635,7 +635,7 @@ module Lich
   def Lich.display_uid=(val)
     @@display_uid = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_uid',?);", @@display_uid.to_s.encode('UTF-8'))
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_uid',?);", [@@display_uid.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
@@ -659,7 +659,7 @@ end
   def Lich.track_autosort_state=(val)
     @@track_autosort_state = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_autosort_state',?);", @@track_autosort_state.to_s.encode('UTF-8'))
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_autosort_state',?);", [@@track_autosort_state.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
@@ -683,7 +683,7 @@ end
   def Lich.track_dark_mode=(val)
     @@track_dark_mode = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_dark_mode',?);", @@track_dark_mode.to_s.encode('UTF-8'))
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_dark_mode',?);", [@@track_dark_mode.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
@@ -707,7 +707,7 @@ end
   def Lich.track_layout_state=(val)
     @@track_layout_state = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
-      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_layout_state',?);", @@track_layout_state.to_s.encode('UTF-8'))
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_layout_state',?);", [@@track_layout_state.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
