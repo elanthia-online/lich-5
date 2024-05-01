@@ -61,7 +61,7 @@ require 'rexml/document'
 require 'rexml/streamlistener'
 require 'stringio'
 require 'zlib'
-require 'drb'
+require 'drb/drb'
 require 'resolv'
 require 'digest/md5'
 require 'json'
@@ -1247,6 +1247,7 @@ module Games
                     end
                   end
                   @@cli_scripts = true
+                  Lich.log("info: logged in as #{XMLData.game}:#{XMLData.name}")
                 end
 
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
@@ -1317,10 +1318,17 @@ module Games
                     end
                     XMLData.reset
                   end
-                  Script.new_downstream_xml($_SERVERSTRING_)
                   if Module.const_defined?(:GameLoader) && XMLData.game =~ /^GS/
-                    Infomon::XMLParser.parse($_SERVERSTRING_)
+                    infomon_serverstring = $_SERVERSTRING_.dup
+                    Infomon::XMLParser.parse(infomon_serverstring)
+                    stripped_infomon_serverstring = strip_xml(infomon_serverstring)
+                    stripped_infomon_serverstring.split("\r\n").each { |line|
+                      unless line.empty?
+                        Infomon::Parser.parse(line)
+                      end
+                    }
                   end
+                  Script.new_downstream_xml($_SERVERSTRING_)
                   stripped_server = strip_xml($_SERVERSTRING_)
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
@@ -1330,11 +1338,9 @@ module Games
 
                     if !line.empty?
                       if XMLData.game =~ /^GS/
-                        Infomon::Parser.parse(line.dup)
                         Script.new_downstream(line)
                       else
                         unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
-
                           Script.new_downstream(line)
                         end
                       end
@@ -2785,8 +2791,8 @@ main_thread = Thread.new {
 
         spawn launcher_cmd
       rescue
-        Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-        Lich.msgbox(:message => "error: #{$!}", :icon => :error)
+        Lich.log "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}\n\t#{$!.backtrace.join("\n\t")}"
+        Lich.msgbox(:message => "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}", :icon => :error)
       end
       Lich.log 'info: waiting for client to connect...'
       300.times { sleep 0.1; break unless accept_thread.status }
