@@ -60,9 +60,7 @@ module Lich
 
   def Lich.deprecated(old_object = '', new_object = '')
     msg = "deprecated call to #{old_object} used"
-    unless Script.current.name == 'unknown script'
-      msg += " in #{Script.current.name}"
-    end
+    msg += " in #{caller[0]}"
     msg += ". Please change to #{new_object} instead!"
     Lich.log(msg)
   end
