@@ -6,6 +6,13 @@ module ActiveSpell
   # Simu's time calculations
   #
 
+  @current_durations ||= Hash.new
+  @durations_first_pass_complete ||= false
+
+  def self.show_durations?
+    Infomon.get_bool("infomon.show_durations")
+  end
+
   def self.get_spell_info(spell_check = XMLData.active_spells)
     respond "spell update requested\r\n" if $infomon_debug
     spell_update_durations = spell_check
@@ -76,6 +83,37 @@ module ActiveSpell
     [spell_update_names, spell_update_durations]
   end
 
+  def self.show_duration_change
+    active_durations = Array.new
+    group_effects = [307, 310, 1605, 1609, 1618, 1608]
+    [Effects::Spells.dup, Effects::Cooldowns.dup, Effects::Buffs.dup, Effects::Debuffs.dup].each do |effect_type|
+      active_durations += effect_type.to_h.keys
+      effect_type.to_h.each do |effect, end_time|
+        next unless effect.is_a?(String)
+        effect, end_time = ActiveSpell.get_spell_info({ effect=>end_time })
+        effect = effect.join
+        end_time = end_time[effect]
+        next unless (spell = Spell.list.find { |s| s.num == effect.to_i || s.name =~ /^#{effect}$/ })
+        if effect_type.to_h.find { |k, _v| k == spell.num }
+          effect_key = spell.num
+        else
+          effect_key = spell.name
+        end
+        time_left = ((end_time - Time.now) / 60).to_f
+        duration = ((end_time - (@current_durations[effect_key].nil? ? Time.now : @current_durations[effect_key])) / 60).to_f
+        if @durations_first_pass_complete && (@current_durations[effect_key].nil? || end_time > @current_durations[effect_key]) && duration > (0.1).to_f && !(group_effects.include?(spell.num) && !spell.known?)
+          respond "[ #{spell.num} #{spell.name}: +#{duration.as_time}, #{time_left.as_time} ]"
+        end
+        @current_durations[effect_key] = end_time
+      end
+    end
+    (@current_durations.keys - active_durations).each do |spell|
+      respond "[ #{Spell.list.find { |s| s.num == spell.to_i || s.name =~ /#{spell}/ }.num} #{Spell.list.find { |s| s.num == spell.to_i || s.name =~ /#{spell}/ }.name}: Ended ]" if @durations_first_pass_complete
+      @current_durations.delete(spell)
+    end
+    @durations_first_pass_complete = true
+  end
+
   def self.update_spell_durations
     begin
       respond "[infomon] updating spell durations..." if $infomon_debug
@@ -111,6 +149,7 @@ module ActiveSpell
           respond "no spell matches #{k}"
         end
       end
+      show_duration_change if show_durations?
     rescue StandardError => e
       if $infomon_debug
         respond 'Error in spell durations thread'

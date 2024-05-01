@@ -2188,6 +2188,23 @@ def do_client(client_string)
       ExecScript.start("Infomon.sync", { :quiet => true })
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon (?:reset|redo)!?/i
       ExecScript.start("Infomon.redo!", { :quiet => true })
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon show( full)?/i
+      case Regexp.last_match(1)
+      when 'full'
+        Infomon.show(true)
+      else
+        Infomon.show(false)
+      end
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon effects?(?: (true|false))?/i
+      new_value = !(Infomon.get_bool("infomon.show_durations"))
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Infomon's effect duration showing to #{new_value}"
+      Infomon.set('infomon.show_durations', new_value)
     elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
       case Regexp.last_match(1)
@@ -2271,6 +2288,8 @@ def do_client(client_string)
         respond
         respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon (fixskill)"
         respond "   #{$clean_lich_char}infomon reset             resets entire character infomon db table and then syncs data (fixprof)"
+        respond "   #{$clean_lich_char}infomon effects           toggle display of effect durations"
+        respond "   #{$clean_lich_char}infomon show              shows all current Infomon values for character"
         respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# in Room Title"
         respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# in Room Title"
       end
