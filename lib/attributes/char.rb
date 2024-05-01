@@ -98,7 +98,7 @@ class Char
       klass.respond_to?(meth, *args)
     }
     if polyfill
-      Lich.log("Char.method_missing(#{meth}). Script(#{caller[0]}) needs to change Char.#{meth} to #{polyfill}.#{meth}")
+      Lich.deprecated("Char.#{meth}", "#{polyfill}.#{meth}")
       return polyfill.send(meth, *args)
     end
     super(meth, *args)
