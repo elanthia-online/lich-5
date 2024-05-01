@@ -2,6 +2,8 @@ module Games
   module Gemstone
     class Spellsong
       @@renewed ||= 0.to_f
+      @@song_duration ||= 120.to_f
+      @@duration_calcs ||= []
 
       def self.sync
         timed_spell = Effects::Spells.to_h.keys.find { |k| k.to_s.match(/10[0-9][0-9]/) }
@@ -22,7 +24,7 @@ module Games
       end
 
       def self.timeleft
-        return 0.0 if Char.prof != 'Bard'
+        return 0.0 if Stats.prof != 'Bard'
         (self.duration - ((Time.now.to_f - @@renewed.to_f) % self.duration)) / 60.to_f
       end
 
@@ -31,20 +33,28 @@ module Games
       end
 
       def self.duration
-        total = 135
-        1.upto(Stats.level.to_i) { |n|
-          if n < 26
-            total += 4
-          elsif n < 51
-            total += 3
-          elsif n < 76
-            total += 2
-          else
-            total += 1
-          end
-        }
-        # echo  total + Stats.log[1].to_i + (Stats.inf[1].to_i * 3) + (Skills.mltelepathy.to_i * 2)
-        total + Stats.log[1].to_i + (Stats.inf[1].to_i * 3) + (Skills.mltelepathy.to_i * 2)
+        return @@song_duration if @@duration_calcs == [Stats.level, Stats.log[1], Stats.inf[1], Skills.mltelepathy]
+        return @@song_duration if [Stats.level, Stats.log[1], Stats.inf[1], Skills.mltelepathy].include?(nil)
+        @@duration_calcs = [Stats.level, Stats.log[1], Stats.inf[1], Skills.mltelepathy]
+        total = self.duration_base_level(Stats.level)
+        return (@@song_duration = total + Stats.log[1] + (Stats.inf[1] * 3) + (Skills.mltelepathy * 2))
+      end
+
+      def self.duration_base_level(level = Stats.level)
+        total = 120
+        case level
+        when (0..25)
+          total += level * 4
+        when (26..50)
+          total += 100 + (level - 25) * 3
+        when (51..75)
+          total += 175 + (level - 50) * 2
+        when (76..100)
+          total += 225 + (level - 75)
+        else
+          Lich.log("unhandled case in Spellsong.duration level=#{level}")
+        end
+        return total
       end
 
       def self.renew_cost

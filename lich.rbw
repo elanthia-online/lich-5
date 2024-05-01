@@ -321,180 +321,6 @@ class DownstreamHook
 
 end
 
-module Setting
-  @@load = proc { |args|
-    unless (script = Script.current)
-      respond '--- error: Setting.load: calling script is unknown'
-      respond $!.backtrace[0..2]
-      next nil
-    end
-    if script.class == ExecScript
-      respond "--- Lich: error: Setting.load: exec scripts can't have settings"
-      respond $!.backtrace[0..2]
-      exit
-    end
-    if args.empty?
-      respond '--- error: Setting.load: no setting specified'
-      respond $!.backtrace[0..2]
-      exit
-    end
-    if args.any? { |a| a.class != String }
-      respond "--- Lich: error: Setting.load: non-string given as setting name"
-      respond $!.backtrace[0..2]
-      exit
-    end
-    values = Array.new
-    for setting in args
-      begin
-        v = Lich.db.get_first_value('SELECT value FROM script_setting WHERE script=? AND name=?;', script.name.encode('UTF-8'), setting.encode('UTF-8'))
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      if v.nil?
-        values.push(v)
-      else
-        begin
-          values.push(Marshal.load(v))
-        rescue
-          respond "--- Lich: error: Setting.load: #{$!}"
-          respond $!.backtrace[0..2]
-          exit
-        end
-      end
-    end
-    if args.length == 1
-      next values[0]
-    else
-      next values
-    end
-  }
-  @@save = proc { |hash|
-    unless (script = Script.current)
-      respond '--- error: Setting.save: calling script is unknown'
-      respond $!.backtrace[0..2]
-      next nil
-    end
-    if script.class == ExecScript
-      respond "--- Lich: error: Setting.load: exec scripts can't have settings"
-      respond $!.backtrace[0..2]
-      exit
-    end
-    if hash.class != Hash
-      respond "--- Lich: error: Setting.save: invalid arguments: use Setting.save('setting1' => 'value1', 'setting2' => 'value2')"
-      respond $!.backtrace[0..2]
-      exit
-    end
-    if hash.empty?
-      next nil
-    end
-
-    if hash.keys.any? { |k| k.class != String }
-      respond "--- Lich: error: Setting.save: non-string given as a setting name"
-      respond $!.backtrace[0..2]
-      exit
-    end
-    if hash.length > 1
-      begin
-        Lich.db.execute('BEGIN')
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-    end
-    hash.each { |setting, value|
-      begin
-        if value.nil?
-          begin
-            Lich.db.execute('DELETE FROM script_setting WHERE script=? AND name=?;', script.name.encode('UTF-8'), setting.encode('UTF-8'))
-          rescue SQLite3::BusyException
-            sleep 0.1
-            retry
-          end
-        else
-          v = SQLite3::Blob.new(Marshal.dump(value))
-          begin
-            Lich.db.execute('INSERT OR REPLACE INTO script_setting(script,name,value) VALUES(?,?,?);', script.name.encode('UTF-8'), setting.encode('UTF-8'), v)
-          rescue SQLite3::BusyException
-            sleep 0.1
-            retry
-          end
-        end
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-    }
-    if hash.length > 1
-      begin
-        Lich.db.execute('END')
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-    end
-    true
-  }
-  @@list = proc {
-    unless (script = Script.current)
-      respond '--- error: Setting: unknown calling script'
-      next nil
-    end
-    if script.class == ExecScript
-      respond "--- Lich: error: Setting.load: exec scripts can't have settings"
-      respond $!.backtrace[0..2]
-      exit
-    end
-    begin
-      rows = Lich.db.execute('SELECT name FROM script_setting WHERE script=?;', script.name.encode('UTF-8'))
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
-    if rows
-      # fixme
-      next rows.inspect
-    else
-      next nil
-    end
-  }
-  def Setting.load(*args)
-    @@load.call(args)
-  end
-
-  def Setting.save(hash)
-    @@save.call(hash)
-  end
-
-  def Setting.list
-    @@list.call
-  end
-end
-
-module GameSetting
-  def GameSetting.load(*args)
-    Setting.load(args.collect { |a| "#{XMLData.game}:#{a}" })
-  end
-
-  def GameSetting.save(hash)
-    game_hash = Hash.new
-    hash.each_pair { |k, v| game_hash["#{XMLData.game}:#{k}"] = v }
-    Setting.save(game_hash)
-  end
-end
-
-module CharSetting
-  def CharSetting.load(*args)
-    Setting.load(args.collect { |a| "#{XMLData.game}:#{XMLData.name}:#{a}" })
-  end
-
-  def CharSetting.save(hash)
-    game_hash = Hash.new
-    hash.each_pair { |k, v| game_hash["#{XMLData.game}:#{XMLData.name}:#{k}"] = v }
-    Setting.save(game_hash)
-  end
-end
-
 module Settings
   settings    = Hash.new
   md5_at_load = Hash.new
@@ -511,7 +337,7 @@ module Settings
     mutex.synchronize {
       unless settings[script.name] and settings[script.name][scope]
         begin
-          marshal_hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', script.name.encode('UTF-8'), scope.encode('UTF-8'))
+          marshal_hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', [script.name.encode('UTF-8'), scope.encode('UTF-8')])
         rescue SQLite3::BusyException
           sleep 0.1
           retry
@@ -552,7 +378,7 @@ module Settings
             end
             blob = SQLite3::Blob.new(Marshal.dump(data))
             begin
-              Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', script_name.encode('UTF-8'), scope.encode('UTF-8'), blob)
+              Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', [script_name.encode('UTF-8'), scope.encode('UTF-8'), blob])
             rescue SQLite3::BusyException
               sleep 0.1
               retry
@@ -647,7 +473,7 @@ module Vars
     mutex.synchronize {
       unless @@loaded
         begin
-          h = Lich.db.get_first_value('SELECT hash FROM uservars WHERE scope=?;', "#{XMLData.game}:#{XMLData.name}".encode('UTF-8'))
+          h = Lich.db.get_first_value('SELECT hash FROM uservars WHERE scope=?;', ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8')])
         rescue SQLite3::BusyException
           sleep 0.1
           retry
@@ -674,7 +500,7 @@ module Vars
           md5 = Digest::MD5.hexdigest(@@vars.to_s)
           blob = SQLite3::Blob.new(Marshal.dump(@@vars))
           begin
-            Lich.db.execute('INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);', "#{XMLData.game}:#{XMLData.name}".encode('UTF-8'), blob)
+            Lich.db.execute('INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);', ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8'), blob])
           rescue SQLite3::BusyException
             sleep 0.1
             retry
@@ -1465,79 +1291,6 @@ module Games
       end
     end
 
-    module Effects
-      class Registry
-        include Enumerable
-
-        def initialize(dialog)
-          @dialog = dialog
-        end
-
-        def to_h
-          XMLData.dialogs.fetch(@dialog, {})
-        end
-
-        def each()
-          to_h.each { |k, v| yield(k, v) }
-        end
-
-        def active?(effect)
-          expiry = to_h.fetch(effect, 0)
-          expiry.to_f > Time.now.to_f
-        end
-
-        def time_left(effect)
-          expiry = to_h.fetch(effect, 0)
-          if to_h.fetch(effect, 0) != 0
-            ((expiry - Time.now) / 60.to_f)
-          else
-            expiry
-          end
-        end
-      end
-
-      Spells    = Registry.new("Active Spells")
-      Buffs     = Registry.new("Buffs")
-      Debuffs   = Registry.new("Debuffs")
-      Cooldowns = Registry.new("Cooldowns")
-
-      def self.display
-        effect_out = Terminal::Table.new :headings => ["ID", "Type", "Name", "Duration"]
-        titles = ["Spells", "Cooldowns", "Buffs", "Debuffs"]
-        circle = nil
-        [Effects::Spells, Effects::Cooldowns, Effects::Buffs, Effects::Debuffs].each { |effect|
-          title = titles.shift
-          id_effects = effect.to_h.select { |k, _v| k.is_a?(Integer) }
-          text_effects = effect.to_h.reject { |k, _v| k.is_a?(Integer) }
-          if id_effects.length != text_effects.length
-            # has spell names disabled
-            text_effects = id_effects
-          end
-          if id_effects.length == 0
-            effect_out.add_row ["", title, "No #{title.downcase} found!", ""]
-          else
-            id_effects.each { |sn, end_time|
-              stext = text_effects.shift[0]
-              duration = ((end_time - Time.now) / 60.to_f)
-              if duration < 0
-                next
-              elsif duration > 86400
-                duration = "Indefinite"
-              else
-                duration = duration.as_time
-              end
-              if Spell[sn].circlename && circle != Spell[sn].circlename && title == 'Spells'
-                circle = Spell[sn].circlename
-              end
-              effect_out.add_row [sn, title, stext, duration]
-            }
-          end
-          effect_out.add_separator unless title == 'Debuffs'
-        }
-        Lich::Messaging.mono(effect_out.to_s)
-      end
-    end
-
     class Wounds
       def Wounds.leftEye;   fix_injury_mode; XMLData.injuries['leftEye']['wound'];   end
 
@@ -2024,48 +1777,6 @@ end
 
 def start_exec_script(cmd_data, options = Hash.new)
   ExecScript.start(cmd_data, options)
-end
-
-module Setting
-  def Setting.[](name)
-    Settings[name]
-  end
-
-  def Setting.[]=(name, value)
-    Settings[name] = value
-  end
-
-  def Setting.to_hash(_scope = ':')
-    Settings.to_hash
-  end
-end
-
-module GameSetting
-  def GameSetting.[](name)
-    GameSettings[name]
-  end
-
-  def GameSetting.[]=(name, value)
-    GameSettings[name] = value
-  end
-
-  def GameSetting.to_hash(_scope = ':')
-    GameSettings.to_hash
-  end
-end
-
-module CharSetting
-  def CharSetting.[](name)
-    CharSettings[name]
-  end
-
-  def CharSetting.[]=(name, value)
-    CharSettings[name] = value
-  end
-
-  def CharSetting.to_hash(_scope = ':')
-    CharSettings.to_hash
-  end
 end
 
 class StringProc
