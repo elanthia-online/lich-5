@@ -22,6 +22,8 @@ module GameLoader
     require 'lib/psms'
     require 'lib/attributes/char'
     require 'lib/infomon/currency'
+    require 'lib/character/disk'
+    require 'lib/character/group'
   end
 
   def self.dragon_realms
