@@ -813,62 +813,62 @@ def checksaturated
 end
 
 def checkmana(*args)
-  Lich.depreciated('checkmana', 'Char.mana')
+  Lich.deprecated('checkmana', 'Char.mana')
   Char.mana(*args)
 end
 
 def maxmana
-  Lich.depreciated('maxmana', 'Char.maxmana')
+  Lich.deprecated('maxmana', 'Char.maxmana')
   Char.maxmana
 end
 
 def percentmana(*args)
-  Lich.depreciated('percentmana', 'Char.percentmana')
+  Lich.deprecated('percentmana', 'Char.percentmana')
   Char.percentmana(*args)
 end
 
 def checkhealth(*args)
-  Lich.depreciated('checkhealth', 'Char.health')
+  Lich.deprecated('checkhealth', 'Char.health')
   Char.health(*args)
 end
 
 def maxhealth
-  Lich.depreciated('maxhealth', 'Char.maxhealth')
+  Lich.deprecated('maxhealth', 'Char.maxhealth')
   Char.maxhealth
 end
 
 def percenthealth(*args)
-  Lich.depreciated('percenthealth', 'Char.percenthealth')
+  Lich.deprecated('percenthealth', 'Char.percenthealth')
   Char.percenthealth(*args)
 end
 
 def checkspirit(*args)
-  Lich.depreciated('checkspirit', 'Char.spirit')
+  Lich.deprecated('checkspirit', 'Char.spirit')
   Lich.spirit(*args)
 end
 
 def maxspirit
-  Lich.depreciated('maxspirit', 'Char.maxspirit')
+  Lich.deprecated('maxspirit', 'Char.maxspirit')
   Char.maxspirit
 end
 
 def percentspirit(*args)
-  Lich.depreciated('percentspirit', 'Char.percentspirit')
+  Lich.deprecated('percentspirit', 'Char.percentspirit')
   Char.percentspirit(*args)
 end
 
 def checkstamina(*args)
-  Lich.depreciated('checkstamina', 'Char.stamina')
+  Lich.deprecated('checkstamina', 'Char.stamina')
   Char.stamina(*args)
 end
 
 def maxstamina()
-  Lich.depreciated('maxstamina', 'Char.maxstamina')
+  Lich.deprecated('maxstamina', 'Char.maxstamina')
   Char.maxstamina
 end
 
 def percentstamina(*args)
-  Lich.depreciated('percentstamina', 'Char.percentstamina')
+  Lich.deprecated('percentstamina', 'Char.percentstamina')
   Char.percentstamina(*args)
 end
 
@@ -890,22 +890,22 @@ def percentconcentration(num = nil)
 end
 
 def checkstance(*args)
-  Lich.depreciated('checkstance', 'Char.stance')
+  Lich.deprecated('checkstance', 'Char.stance')
   Char.stance(*args)
 end
 
 def percentstance(*args)
-  Lich.depreciated('percentstance', 'Char.percentstance')
+  Lich.deprecated('percentstance', 'Char.percentstance')
   Char.percentstance(*args)
 end
 
 def checkencumbrance(*args)
-  Lich.depreciated('checkencumbrance', 'Char.checkencumbrance')
+  Lich.deprecated('checkencumbrance', 'Char.checkencumbrance')
   Char.checkencumbrance(*args)
 end
 
 def percentencumbrance(*args)
-  Lich.depreciated('percentencumbrance', 'Char.percentencumbrance')
+  Lich.deprecated('percentencumbrance', 'Char.percentencumbrance')
   Char.percentencumbrance(*args)
 end
 
