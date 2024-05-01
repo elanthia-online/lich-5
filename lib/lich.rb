@@ -58,11 +58,12 @@ module Lich
     $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"
   end
 
-  def Lich.deprecated(old_object = '', new_object = '')
+  def Lich.deprecated(old_object = '', new_object = '', debug_log: true, fe_log: false)
     msg = "deprecated call to #{old_object} used"
     msg += " in #{caller[0]}"
     msg += ". Please change to #{new_object} instead!"
-    Lich.log(msg)
+    Lich.log(msg) if debug_log
+    _respond Lich::Messaging.monsterbold(msg) if fe_log
   end
 
   def Lich.msgbox(args)
