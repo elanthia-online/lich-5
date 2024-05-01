@@ -63,7 +63,7 @@ class Char
     }
     if polyfill
       Lich.log("Char.method_missing(#{meth}). Script(#{caller[0]}) needs to change Char.#{meth} to #{polyfill}.#{meth}")
-      return polyfill.send(meth, *args) 
+      return polyfill.send(meth, *args)
     end
     super(meth, *args)
   end
