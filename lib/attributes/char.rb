@@ -9,152 +9,75 @@ class Char
     XMLData.name
   end
 
-  def Char.stance(num = nil)
-    if num.nil?
-      XMLData.stance_text
-    elsif (num.class == String) and (num.to_i == 0)
-      if num =~ /off/i
-        XMLData.stance_value == 0
-      elsif num =~ /adv/i
-        XMLData.stance_value.between?(01, 20)
-      elsif num =~ /for/i
-        XMLData.stance_value.between?(21, 40)
-      elsif num =~ /neu/i
-        XMLData.stance_value.between?(41, 60)
-      elsif num =~ /gua/i
-        XMLData.stance_value.between?(61, 80)
-      elsif num =~ /def/i
-        XMLData.stance_value == 100
-      else
-        echo "Char.stance: invalid argument (#{num}).  Must be off/adv/for/neu/gua/def or 0-100"
-        nil
-      end
-    elsif (num.class == Integer) or (num =~ /^[0-9]+$/ and (num = num.to_i))
-      XMLData.stance_value == num.to_i
-    else
-      echo "Char.stance: invalid argument (#{num}).  Must be off/adv/for/neu/gua/def or 0-100"
-      nil
-    end
+  def Char.stance
+    XMLData.stance_text
   end
 
-  def Char.percentstance(num = nil)
-    if num.nil?
-      XMLData.stance_value
-    else
-      XMLData.stance_value >= num.to_i
-    end
+  def Char.percent_stance
+    XMLData.stance_value
   end
 
-  def Char.checkencumbrance(string = nil)
-    if string.nil?
-      XMLData.encumbrance_text
-    elsif (string.class == Integer) or (string =~ /^[0-9]+$/ and (string = string.to_i))
-      string <= XMLData.encumbrance_value
-    else
-      # fixme
-      if string =~ /#{XMLData.encumbrance_text}/i
-        true
-      else
-        false
-      end
-    end
+  def Char.encumbrance
+    XMLData.encumbrance_text
   end
 
-  def Char.percentencumbrance(num = nil)
-    if num.nil?
-      XMLData.encumbrance_value
-    else
-      num.to_i <= XMLData.encumbrance_value
-    end
+  def Char.percent_encumbrance
+    XMLData.encumbrance_value
   end
 
-  def Char.health(num = nil)
-    if num.nil?
-      XMLData.health
-    else
-      XMLData.health >= num.to_i
-    end
+  def Char.health
+    XMLData.health
   end
 
-  def Char.mana(num = nil)
-    if num.nil?
-      XMLData.mana
-    else
-      XMLData.mana >= num.to_i
-    end
+  def Char.mana
+    XMLData.mana
   end
 
-  def Char.spirit(num = nil)
-    if num.nil?
-      XMLData.spirit
-    else
-      XMLData.spirit >= num.to_i
-    end
+  def Char.spirit
+    XMLData.spirit
   end
 
-  def Char.stamina(num = nil)
-    if num.nil?
-      XMLData.stamina
-    else
-      XMLData.stamina >= num.to_i
-    end
+  def Char.stamina
+    XMLData.stamina
   end
 
-  def Char.maxhealth
+  def Char.max_health
     Object.module_eval { XMLData.max_health }
   end
 
-  def Char.maxmana
+  def Char.max_mana
     Object.module_eval { XMLData.max_mana }
   end
 
-  def Char.maxspirit
+  def Char.max_spirit
     Object.module_eval { XMLData.max_spirit }
   end
 
-  def Char.maxstamina
+  def Char.max_stamina
     Object.module_eval { XMLData.max_stamina }
   end
 
-  def Char.percenthealth(num = nil)
-    if num.nil?
-      ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i
-    else
-      ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i >= num.to_i
-    end
+  def Char.percent_health
+    ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i
   end
 
-  def Char.percentmana(num = nil)
+  def Char.percent_mana
     if XMLData.max_mana == 0
-      percent = 100
+      100
     else
-      percent = ((XMLData.mana.to_f / XMLData.max_mana.to_f) * 100).to_i
-    end
-    if num.nil?
-      percent
-    else
-      percent >= num.to_i
+      ((XMLData.mana.to_f / XMLData.max_mana.to_f) * 100).to_i
     end
   end
 
-  def Char.percentspirit(num = nil)
-    if num.nil?
-      ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i
-    else
-      ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i >= num.to_i
-    end
+  def Char.percent_spirit
+    ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i
   end
 
-  def Char.percentstamina(num = nil)
+  def Char.percent_stamina
     if XMLData.max_stamina == 0
-      percent = 100
+      100
     else
-      percent = ((XMLData.stamina.to_f / XMLData.max_stamina.to_f) * 100).to_i
-    end
-    if num.nil?
-      percent
-    else
-      percent >= num.to_i
+      ((XMLData.stamina.to_f / XMLData.max_stamina.to_f) * 100).to_i
     end
   end
 
