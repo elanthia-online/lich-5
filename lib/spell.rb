@@ -466,7 +466,7 @@ module Games
         elsif circle_num == 16
           ranks = [Spells.paladin, XMLData.level].min
         elsif circle_num == 17
-          if (@num == 1700) and (Char.prof =~ /^(?:Wizard|Cleric|Empath|Sorcerer|Savant)$/)
+          if (@num == 1700) and (Stats.prof =~ /^(?:Wizard|Cleric|Empath|Sorcerer|Savant)$/)
             return true
           else
             return false
