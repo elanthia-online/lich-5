@@ -58,9 +58,9 @@ module Lich
     $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"
   end
 
-  def Lich.deprecated(old_object = '', new_object = '', debug_log: true, fe_log: false)
+  def Lich.deprecated(old_object = '', new_object = '', script_location = "#{Script.current.name || 'unknown'}", debug_log: true, fe_log: false)
     msg = "deprecated call to #{old_object} used"
-    msg += " in #{caller[0]}"
+    msg += " in #{script_location}"
     msg += ". Please change to #{new_object} instead!"
     Lich.log(msg) if debug_log
     _respond Lich::Messaging.monsterbold(msg) if fe_log
