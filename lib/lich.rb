@@ -60,11 +60,11 @@ module Lich
   end
 
   def Lich.deprecated(old_object = '', new_object = '', script_location = "#{Script.current.name || 'unknown'}", debug_log: true, fe_log: false, limit_log: true)
-    return if limit_log && @@deprecated_log.include?("#{script_location}-#{old_object}-#{new_object}")
     msg = "Deprecated call to #{old_object} used in #{script_location}. Please change to #{new_object} instead!"
+    return if limit_log && @@deprecated_log.include?(msg)
     Lich.log(msg) if debug_log
     _respond Lich::Messaging.monsterbold(msg) if fe_log
-    @@deprecated_log.push("#{script_location}-#{old_object}-#{new_object}") unless @@deprecated_log.include?("#{script_location}-#{old_object}-#{new_object}")
+    @@deprecated_log.push(msg) unless @@deprecated_log.include?(msg)
     end
   end
 
