@@ -98,7 +98,7 @@ class Char
       klass.respond_to?(meth, *args)
     }
     if polyfill
-      Lich.deprecated("Char.#{meth}", "#{polyfill}.#{meth}")
+      Lich.deprecated("Char.#{meth}", "#{polyfill}.#{meth}", caller[0])
       return polyfill.send(meth, *args)
     end
     super(meth, *args)
