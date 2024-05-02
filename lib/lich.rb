@@ -65,7 +65,6 @@ module Lich
     Lich.log(msg) if debug_log
     _respond Lich::Messaging.monsterbold(msg) if fe_log
     @@deprecated_log.push(msg) unless @@deprecated_log.include?(msg)
-    end
   end
 
   def Lich.msgbox(args)
