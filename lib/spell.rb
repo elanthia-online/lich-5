@@ -563,15 +563,15 @@ module Games
         # fixme: deal with them dirty bards!
         release_options = options.dup
         release_options[:multicast] = nil
-        if (self.stamina_cost(options) > 0) and (Spell[9699].active? or not checkstamina(self.stamina_cost(options)) or Effects::Debuffs.active?("Overexerted"))
+        if (self.stamina_cost(options) > 0) and (Spell[9699].active? or not Char.stamina >= self.stamina_cost(options) or Effects::Debuffs.active?("Overexerted"))
           false
-        elsif (self.spirit_cost(options) > 0) and not checkspirit(self.spirit_cost(options) + 1 + [9912, 9913, 9914, 9916, 9916, 9916].delete_if { |num| !Spell[num].active? }.length)
+        elsif (self.spirit_cost(options) > 0) and not (Char.spirit >= (self.spirit_cost(options) + 1 + [9912, 9913, 9914, 9916, 9916, 9916].delete_if { |num| !Spell[num].active? }.length))
           false
         elsif (self.mana_cost(options) > 0)
           ## convert Spell[9699].active? to Effects::Debuffs test (if Debuffs is where it shows)
-          if (Feat.known?(:mental_acuity) and self.num.between?(1201, 1220)) and (Spell[9699].active? or not checkstamina(self.mana_cost(options) * 2) or Effects::Debuffs.active?("Overexerted"))
+          if (Feat.known?(:mental_acuity) and self.num.between?(1201, 1220)) and (Spell[9699].active? or not Char.stamina >= (self.mana_cost(options) * 2) or Effects::Debuffs.active?("Overexerted"))
             false
-          elsif (!(Feat.known?(:mental_acuity) and self.num.between?(1201, 1220))) and (!checkmana(self.mana_cost(options)) or (Spell[515].active? and !checkmana(self.mana_cost(options) + [self.mana_cost(release_options) / 4, 1].max)))
+          elsif (!(Feat.known?(:mental_acuity) and self.num.between?(1201, 1220))) and (!(Char.mana >= self.mana_cost(options)) or (Spell[515].active? and !(Char.mana >= self.mana_cost(options)) + [self.mana_cost(release_options) / 4, 1].max)))
             false
           else
             true
@@ -599,24 +599,24 @@ module Games
         # fixme: find multicast in target and check mana for it
         check_energy = proc {
           if Feat.known?(:mental_acuity)
-            unless (self.mana_cost <= 0) or checkstamina(self.mana_cost * 2)
+            unless (self.mana_cost <= 0) or Char.stamina >= (self.mana_cost * 2)
               echo 'cast: not enough stamina there, Monk!'
               sleep 0.1
               return false
             end
           else
-            unless (self.mana_cost <= 0) or checkmana(self.mana_cost)
+            unless (self.mana_cost <= 0) or Char.mana >= self.mana_cost
               echo 'cast: not enough mana'
               sleep 0.1
               return false
             end
           end
-          unless (self.spirit_cost <= 0) or checkspirit(self.spirit_cost + 1 + [9912, 9913, 9914, 9916, 9916, 9916].delete_if { |num| !Spell[num].active? }.length)
+          unless (self.spirit_cost <= 0) or Char.spirit >= (self.spirit_cost + 1 + [9912, 9913, 9914, 9916, 9916, 9916].delete_if { |num| !Spell[num].active? }.length)
             echo 'cast: not enough spirit'
             sleep 0.1
             return false
           end
-          unless (self.stamina_cost <= 0) or checkstamina(self.stamina_cost)
+          unless (self.stamina_cost <= 0) or Char.stamina >= self.stamina_cost
             echo 'cast: not enough stamina'
             sleep 0.1
             return false
@@ -693,17 +693,17 @@ module Games
                 unless checkprep == @name
                   unless checkprep == 'None'
                     dothistimeout 'release', 5, /^You feel the magic of your spell rush away from you\.$|^You don't have a prepared spell to release!$/
-                    unless (self.mana_cost <= 0) or checkmana(self.mana_cost)
+                    unless (self.mana_cost <= 0) or Char.mana >= self.mana_cost
                       echo 'cast: not enough mana'
                       sleep 0.1
                       return false
                     end
-                    unless (self.spirit_cost <= 0) or checkspirit(self.spirit_cost + 1 + (if checkspell(9912) then 1 else 0 end) + (if checkspell(9913) then 1 else 0 end) + (if checkspell(9914) then 1 else 0 end) + (if checkspell(9916) then 5 else 0 end))
+                    unless (self.spirit_cost <= 0) or Char.spirit >= (self.spirit_cost + 1 + (if checkspell(9912) then 1 else 0 end) + (if checkspell(9913) then 1 else 0 end) + (if checkspell(9914) then 1 else 0 end) + (if checkspell(9916) then 5 else 0 end))
                       echo 'cast: not enough spirit'
                       sleep 0.1
                       return false
                     end
-                    unless (self.stamina_cost <= 0) or checkstamina(self.stamina_cost)
+                    unless (self.stamina_cost <= 0) or Char.stamina >= self.stamina_cost
                       echo 'cast: not enough stamina'
                       sleep 0.1
                       return false
@@ -717,7 +717,7 @@ module Games
                       break
                     elsif prepare_result == 'You already have a spell readied!  You must RELEASE it if you wish to prepare another!'
                       dothistimeout 'release', 5, /^You feel the magic of your spell rush away from you\.$|^You don't have a prepared spell to release!$/
-                      unless (self.mana_cost <= 0) or checkmana(self.mana_cost)
+                      unless (self.mana_cost <= 0) or Char.mana >= self.mana_cost
                         echo 'cast: not enough mana'
                         sleep 0.1
                         return false
