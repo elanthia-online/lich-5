@@ -48,11 +48,11 @@ module Lich
     end
   end
 
-  def Lich.class_variable_get(*a); nil; end
+  def Lich.class_variable_get(*_a); nil; end
 
-  def Lich.class_eval(*a);         nil; end
+  def Lich.class_eval(*_a);         nil; end
 
-  def Lich.module_eval(*a);        nil; end
+  def Lich.module_eval(*_a);        nil; end
 
   def Lich.log(msg)
     $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"
@@ -118,8 +118,8 @@ module Lich
       args[:title] ||= "Lich v#{LICH_VERSION}"
       dialog.title = args[:title]
       response = nil
-      dialog.run { |r|
-        response = r
+      dialog.run { |d_r|
+        response = d_r
         dialog.destroy
       }
       if response == Gtk::Dialog::RESPONSE_OK
@@ -148,7 +148,6 @@ module Lich
           launcher_cmd = Win32.RegQueryValueEx(:hKey => launcher_key)[:lpData]
         end
         return launcher_cmd
-        Lich.log 'returned #{launcher_cmd}'
       ensure
         Win32.RegCloseKey(:hKey => launcher_key) rescue nil
       end
@@ -545,8 +544,8 @@ module Lich
       gamehost = 'storm.gs4.game.play.net'
       gameport = 10024
     elsif (gamehost == 'gs4.simutronics.net') and (gameport.to_i == 10321)
-      game_host = 'storm.gs4.game.play.net'
-      game_port = 10324
+      gamehost = 'storm.gs4.game.play.net'
+      gameport = 10324
     elsif (gamehost == 'prime.dr.game.play.net') and (gameport.to_i == 4901)
       gamehost = 'dr.simutronics.net'
       gameport = 11024
@@ -564,9 +563,6 @@ module Lich
     elsif (gamehost == 'storm.gs4.game.play.net') and (gameport.to_i == 10024)
       gamehost = 'gs3.simutronics.net'
       gameport = 4900
-    elsif (gamehost == 'storm.gs4.game.play.net') and (gameport.to_i == 10324)
-      game_host = 'gs4.simutronics.net'
-      game_port = 10321
     elsif (gamehost == 'dr.simutronics.net') and (gameport.to_i == 11024)
       gamehost = 'prime.dr.game.play.net'
       gameport = 4901
@@ -574,19 +570,19 @@ module Lich
     [gamehost, gameport]
   end
 
-# new feature GUI / internal settings states
+  # new feature GUI / internal settings states
 
   def Lich.debug_messaging
     if @@debug_messaging.nil?
-    begin
+      begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='debug_messaging';")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
       @@debug_messaging = (val.to_s =~ /on|true|yes/ ? true : false)
       Lich.debug_messaging = @@debug_messaging
-  end
+    end
     return @@debug_messaging
   end
 
@@ -603,15 +599,15 @@ module Lich
 
   def Lich.display_lichid
     if @@display_lichid.nil?
-    begin
+      begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_lichid';")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
       val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != ""; # default false if DR, otherwise default true
       @@display_lichid = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
-  end
+    end
     return @@display_lichid
   end
 
@@ -628,15 +624,15 @@ module Lich
 
   def Lich.display_uid
     if @@display_uid.nil?
-    begin
+      begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_uid';")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
       val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != ""; # default false if DR, otherwise default true
       @@display_uid = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
-  end
+    end
     return @@display_uid
   end
 
@@ -653,14 +649,14 @@ module Lich
 
   def Lich.track_autosort_state
     if @@track_autosort_state.nil?
-    begin
+      begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_autosort_state';")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-end
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
       @@track_autosort_state = (val.to_s =~ /on|true|yes/ ? true : false)
-  end
+    end
     return @@track_autosort_state
   end
 
@@ -677,14 +673,14 @@ end
 
   def Lich.track_dark_mode
     if @@track_dark_mode.nil?
-    begin
+      begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_dark_mode';")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
       @@track_dark_mode = (val.to_s =~ /on|true|yes/ ? true : false)
-  end
+    end
     return @@track_dark_mode
   end
 
@@ -701,14 +697,14 @@ end
 
   def Lich.track_layout_state
     if @@track_layout_state.nil?
-    begin
+      begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_layout_state';")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
       @@track_layout_state = (val.to_s =~ /on|true|yes/ ? true : false)
-  end
+    end
     return @@track_layout_state
   end
 
