@@ -730,7 +730,7 @@ module Games
                 end
               end
               waitcastrt?
-              if @stance and checkstance != 'offensive'
+              if @stance and Char.stance != 'offensive'
                 put 'stance offensive'
                 # dothistimeout 'stance offensive', 5, /^You (?:are now in|move into) an? offensive stance|^You are unable to change your stance\.$/
               end
@@ -756,11 +756,11 @@ module Games
               end
               if @stance
                 if @@after_stance
-                  if checkstance !~ /#{@@after_stance}/
+                  if Char.stance !~ /#{@@after_stance}/
                     waitrt?
                     dothistimeout "stance #{@@after_stance}", 3, /^You (?:are now in|move into) an? \w+ stance|^You are unable to change your stance\.$/
                   end
-                elsif checkstance !~ /^guarded$|^defensive$/
+                elsif Char.stance !~ /^guarded$|^defensive$/
                   waitrt?
                   if checkcastrt > 0
                     dothistimeout 'stance guarded', 3, /^You (?:are now in|move into) an? \w+ stance|^You are unable to change your stance\.$/
