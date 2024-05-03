@@ -55,8 +55,8 @@ Name: "lich"; 				        Description: "Lich Files"; 				              Types: fu
 Name: "rubygem"; 			        Description: "Ruby {#RubyVersion} (64-bit) with Gems"; 	Types: full rubyonly
 
 [Tasks] 
-Name: LichGS;  Description: "GS4 defaults to {userdesktop}\Lich5"; GroupDescription: "Lich5 Folder Location";  Components: lich; Flags: unchecked exclusive
-Name: LichDR;  Description: "DR defaults to {app}\Lich5";          GroupDescription: "Lich5 Folder Location";  Components: lich; Flags: unchecked exclusive
+Name: LichGS;  Description: "Place in Desktop ({userdesktop}\Lich5 - preferred for GS)"; GroupDescription: "Lich5 Folder Location";  Components: lich; Flags: unchecked exclusive
+Name: LichDR;  Description: "Place in Ruby4Lich5 ({app}\Lich5 - preferred for DR)";      GroupDescription: "Lich5 Folder Location";  Components: lich; Flags: unchecked exclusive
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -79,5 +79,5 @@ Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\shell\open\command"; ValueType: s
 Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\rubyw.exe"" ""%1"" %*"; Flags: uninsdeletekey; Components: rubygem
 
 [RUN]
-Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s ""{app}\R4LInstall\Lich{#MyAppVersion}"" ""{userdesktop}\Lich5"""""; Tasks: LichGS
-Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s ""{app}\R4LInstall\Lich{#MyAppVersion}"" ""{app}\Lich5"""""; Tasks: LichDR
+Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s /y ""{app}\R4LInstall\Lich{#MyAppVersion}"" ""{userdesktop}\Lich5"""""; Tasks: LichGS
+Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s /y ""{app}\R4LInstall\Lich{#MyAppVersion}"" ""{app}\Lich5""""";         Tasks: LichDR
