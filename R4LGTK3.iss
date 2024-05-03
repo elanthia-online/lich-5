@@ -55,8 +55,8 @@ Name: "lich"; 				        Description: "Lich Files"; 				              Types: fu
 Name: "rubygem"; 			        Description: "Ruby {#RubyVersion} (64-bit) with Gems"; 	Types: full rubyonly
 
 [Tasks] 
-Name: LichDR;  Description: "GS4 defaults to {userdesktop}\Lich5"; GroupDescription: "Lich5 Folder Location";  Components: lich; Flags: unchecked exclusive
-Name: LichGS;  Description: "DR defaults to {app}\Lich5";          GroupDescription: "Lich5 Folder Location";  Components: lich; Flags: unchecked exclusive
+Name: LichGS;  Description: "GS4 defaults to {userdesktop}\Lich5"; GroupDescription: "Lich5 Folder Location";  Components: lich; Flags: unchecked exclusive
+Name: LichDR;  Description: "DR defaults to {app}\Lich5";          GroupDescription: "Lich5 Folder Location";  Components: lich; Flags: unchecked exclusive
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
