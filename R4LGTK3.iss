@@ -46,12 +46,17 @@ SolidCompression=yes
 WizardStyle=modern
 
 [Types]
-Name: "full"; 		            Description: "Ruby and Lich Files"
-Name: "compact"; 	            Description: "Ruby Installation Only"
+Name: "full"; 		            Description: "Both Lich and Ruby"
+Name: "lichonly";             Description: "Lich Installation Only"
+Name: "rubyonly"; 	          Description: "Ruby Installation Only"
 
 [Components]
-Name: "lich"; 				        Description: "Lich Files"; 				              Types: full
-Name: "rubygem"; 			        Description: "Ruby {#RubyVersion} (64-bit) with Gems"; 	Types: full compact
+Name: "lich"; 				        Description: "Lich Files"; 				              Types: full lichonly
+Name: "rubygem"; 			        Description: "Ruby {#RubyVersion} (64-bit) with Gems"; 	Types: full rubyonly
+
+[Tasks] 
+Name: LichDR;  Description: "GS4 defaults to {userdesktop}\Lich5"; GroupDescription: "Lich5 Folder Location";  Components: lich; Flags: unchecked exclusive
+Name: LichGS;  Description: "DR defaults to {app}\Lich5";          GroupDescription: "Lich5 Folder Location";  Components: lich; Flags: unchecked exclusive
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -64,15 +69,15 @@ Source: ".\fly64.ico";            DestDir: "{app}\R4LInstall"; Components: lich;
 Source: ".\Lich5\*";              DestDir: "{app}\R4LInstall\Lich{#MyAppVersion}";      Components: lich;              Flags: ignoreversion createallsubdirs recursesubdirs   
 
 [Registry]
-Root: HKCU; Subkey: "SOFTWARE\Classes\.rb"; ValueType: string; ValueName: ""; ValueData: "RubyFile"; Flags: uninsdeletevalue uninsdeletekeyifempty
-Root: HKCU; Subkey: "SOFTWARE\Classes\.rbw"; ValueType: string; ValueName: ""; ValueData: "RubyWFile"; Flags: uninsdeletevalue uninsdeletekeyifempty
-Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile"; ValueType: string; ValueName: ""; ValueData: "RubyFile"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile"; ValueType: string; ValueName: ""; ValueData: "RubyWFile"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#RubyVersion}\bin\ruby.exe,0"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#RubyVersion}\bin\rubyw.exe,0"; Flags: uninsdeletekey 
-Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\ruby.exe"" ""%1"" %*"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\rubyw.exe"" ""%1"" %*"; Flags: uninsdeletekey
-;Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"; ValueType: string; ValueName: "{app}\{#RubyVersion}\bin\rubyw.exe"; ValueData: "~ WIN7RTM"; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "SOFTWARE\Classes\.rb"; ValueType: string; ValueName: ""; ValueData: "RubyFile"; Flags: uninsdeletevalue uninsdeletekeyifempty; Components: rubygem
+Root: HKCU; Subkey: "SOFTWARE\Classes\.rbw"; ValueType: string; ValueName: ""; ValueData: "RubyWFile"; Flags: uninsdeletevalue uninsdeletekeyifempty; Components: rubygem
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile"; ValueType: string; ValueName: ""; ValueData: "RubyFile"; Flags: uninsdeletekey; Components: rubygem
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile"; ValueType: string; ValueName: ""; ValueData: "RubyWFile"; Flags: uninsdeletekey; Components: rubygem
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#RubyVersion}\bin\ruby.exe,0"; Flags: uninsdeletekey; Components: rubygem
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#RubyVersion}\bin\rubyw.exe,0"; Flags: uninsdeletekey; Components: rubygem
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\ruby.exe"" ""%1"" %*"; Flags: uninsdeletekey; Components: rubygem
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\rubyw.exe"" ""%1"" %*"; Flags: uninsdeletekey; Components: rubygem
 
 [RUN]
-Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s ""{app}\R4LInstall\Lich{#MyAppVersion}"" ""{userdesktop}\Lich5"""""; Components: lich
+Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s ""{app}\R4LInstall\Lich{#MyAppVersion}"" ""{userdesktop}\Lich5"""""; Tasks: LichGS
+Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s ""{app}\R4LInstall\Lich{#MyAppVersion}"" ""{app}\Lich5"""""; Tasks: LichDR
