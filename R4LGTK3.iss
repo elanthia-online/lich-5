@@ -34,6 +34,7 @@ DisableStartupPrompt=Yes
 DisableProgramGroupPage=Yes
 DisableWelcomePage=Yes
 DisableReadyPage=Yes
+UsePreviousAppDir=No
 ;DisableFinishedPage=Yes
 
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
