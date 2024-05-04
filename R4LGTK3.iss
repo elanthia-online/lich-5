@@ -61,6 +61,9 @@ Name: LichDR;  Description: "Place in Ruby4Lich5 ({app}\Lich5 - preferred for Dr
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Dirs]
+Name: "{app}\R4LInstall"; Attribs: hidden
+
 [Files]
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 Source: "C:\hostedtoolcache\windows\Ruby\{#RubyVersion}\x64\*"; DestDir: "{app}\{#RubyVersion}";                 Components: rubygem; Flags: ignoreversion createallsubdirs recursesubdirs
