@@ -333,7 +333,7 @@ module Settings
       respond '--- error: Settings: invalid scope'
       next nil
     end
-    Lich.mutex.synchronize {
+    Lich.db_mutex.synchronize {
       unless settings[script.name] and settings[script.name][scope]
         begin
           marshal_hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', [script.name.encode('UTF-8'), scope.encode('UTF-8')])
@@ -361,7 +361,7 @@ module Settings
     settings[script.name][scope]
   }
   @@save = proc {
-    Lich.mutex.synchronize {
+    Lich.db_mutex.synchronize {
       sql_began = false
       settings.each_pair { |script_name, scopedata|
         scopedata.each_pair { |scope, data|
@@ -468,7 +468,7 @@ module Vars
   md5      = nil
   @@loaded = false
   @@load = proc {
-    Lich.mutex.synchronize {
+    Lich.db_mutex.synchronize {
       unless @@loaded
         begin
           h = Lich.db.get_first_value('SELECT hash FROM uservars WHERE scope=?;', ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8')])
@@ -492,7 +492,7 @@ module Vars
     nil
   }
   @@save = proc {
-    Lich.mutex.synchronize {
+    Lich.db_mutex.synchronize {
       if @@loaded
         if Digest::MD5.hexdigest(@@vars.to_s) != md5
           md5 = Digest::MD5.hexdigest(@@vars.to_s)
