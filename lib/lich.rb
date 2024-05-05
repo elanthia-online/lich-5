@@ -13,14 +13,13 @@ module Lich
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
 
-
-  def self.mutex
+  def self.db_mutex
     @@db_mutex
   end
 
   def self.mutex_lock
     begin
-      self.mutex.lock unless self.mutex.owned?
+      self.db_mutex.lock unless self.db_mutex.owned?
     rescue StandardError
       respond "--- Lich: error: Lich.mutex_lock: #{$!}"
       Lich.log "error: Lich.mutex_lock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
@@ -29,7 +28,7 @@ module Lich
 
   def self.mutex_unlock
     begin
-      self.mutex.unlock if self.mutex.owned?
+      self.db_mutex.unlock if self.db_mutex.owned?
     rescue StandardError
       respond "--- Lich: error: Lich.mutex_unlock: #{$!}"
       Lich.log "error: Lich.mutex_unlock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
