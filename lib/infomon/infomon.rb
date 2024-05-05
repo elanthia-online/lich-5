@@ -48,8 +48,8 @@ module Infomon
     begin
       self.mutex.lock unless self.mutex.owned?
     rescue StandardError
-      respond "--- Lich: error: mutex_lock: #{$!}"
-      Lich.log "error: mutex_lock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      respond "--- Lich: error: Infomon.mutex_lock: #{$!}"
+      Lich.log "error: Infomon.mutex_lock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
     end
   end
 
@@ -57,8 +57,8 @@ module Infomon
     begin
       self.mutex.unlock if self.mutex.owned?
     rescue StandardError
-      respond "--- Lich: error: mutex_ulock: #{$!}"
-      Lich.log "error: mutex_ulock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      respond "--- Lich: error: Infomon.mutex_unlock: #{$!}"
+      Lich.log "error: Infomon.mutex_unlock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
     end
   end
 
@@ -145,8 +145,8 @@ module Infomon
           end
         end
       rescue StandardError
-        respond "--- Lich: error: self.get(#{key}): #{$!}"
-        Lich.log "error: self.get(#{key}): #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+        respond "--- Lich: error: Infomon.get(#{key}): #{$!}"
+        Lich.log "error: Infomon.get(#{key}): #{$!}\n\t#{$!.backtrace.join("\n\t")}"
       end
     }
     return self._value(val)
@@ -210,8 +210,8 @@ module Infomon
           end
         end
       rescue StandardError
-        respond "--- Lich: error: ThreadQueue: #{$!}"
-        Lich.log "error: ThreadQueue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+        respond "--- Lich: error: Infomon ThreadQueue: #{$!}"
+        Lich.log "error: Infomon ThreadQueue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
       end
     end
   end
