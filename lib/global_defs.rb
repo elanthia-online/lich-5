@@ -813,6 +813,7 @@ def checksaturated
 end
 
 def checkmana(num = nil)
+  Lich.deprecated('checkmana', 'Char.mana')
   if num.nil?
     XMLData.mana
   else
@@ -821,10 +822,12 @@ def checkmana(num = nil)
 end
 
 def maxmana
+  Lich.deprecated('maxmana', 'Char.maxmana')
   XMLData.max_mana
 end
 
 def percentmana(num = nil)
+  Lich.deprecated('percentmana', 'Char.percent_mana')
   if XMLData.max_mana == 0
     percent = 100
   else
@@ -838,6 +841,7 @@ def percentmana(num = nil)
 end
 
 def checkhealth(num = nil)
+  Lich.deprecated('checkhealth', 'Char.health')
   if num.nil?
     XMLData.health
   else
@@ -846,10 +850,12 @@ def checkhealth(num = nil)
 end
 
 def maxhealth
+  Lich.deprecated('maxhealth', 'Char.max_health')
   XMLData.max_health
 end
 
 def percenthealth(num = nil)
+  Lich.deprecated('percenthealth', 'Char.percent_health')
   if num.nil?
     ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i
   else
@@ -858,6 +864,7 @@ def percenthealth(num = nil)
 end
 
 def checkspirit(num = nil)
+  Lich.deprecated('checkspirit', 'Char.spirit')
   if num.nil?
     XMLData.spirit
   else
@@ -866,10 +873,12 @@ def checkspirit(num = nil)
 end
 
 def maxspirit
+  Lich.deprecated('maxspirit', 'Char.max_spirit')
   XMLData.max_spirit
 end
 
 def percentspirit(num = nil)
+  Lich.deprecated('percentspirit', 'Char.percent_spirit')
   if num.nil?
     ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i
   else
@@ -878,6 +887,7 @@ def percentspirit(num = nil)
 end
 
 def checkstamina(num = nil)
+  Lich.deprecated('checkstamina', 'Char.stamina')
   if num.nil?
     XMLData.stamina
   else
@@ -886,10 +896,12 @@ def checkstamina(num = nil)
 end
 
 def maxstamina()
+  Lich.deprecated('maxstamina', 'Char.max_stamina')
   XMLData.max_stamina
 end
 
 def percentstamina(num = nil)
+  Lich.deprecated('percentstamina', 'Char.percent_stamina')
   if XMLData.max_stamina == 0
     percent = 100
   else
@@ -920,6 +932,7 @@ def percentconcentration(num = nil)
 end
 
 def checkstance(num = nil)
+  Lich.deprecated('checkstance', 'Char.stance')
   if num.nil?
     XMLData.stance_text
   elsif (num.class == String) and (num.to_i == 0)
@@ -948,6 +961,7 @@ def checkstance(num = nil)
 end
 
 def percentstance(num = nil)
+  Lich.deprecated('percentstance', 'Char.percent_stance')
   if num.nil?
     XMLData.stance_value
   else
@@ -956,6 +970,7 @@ def percentstance(num = nil)
 end
 
 def checkencumbrance(string = nil)
+  Lich.deprecated('checkencumbrance', 'Char.encumbrance')
   if string.nil?
     XMLData.encumbrance_text
   elsif (string.class == Integer) or (string =~ /^[0-9]+$/ and (string = string.to_i))
@@ -971,6 +986,7 @@ def checkencumbrance(string = nil)
 end
 
 def percentencumbrance(num = nil)
+  Lich.deprecated('percentencumbrance', 'Char.percent_encumbrance')
   if num.nil?
     XMLData.encumbrance_value
   else
@@ -1686,7 +1702,7 @@ def noded_pulse
     else
       stats = [0, 0]
     end
-    return (maxmana * 25 / 100) + (stats.max / 10) + (stats.min / 20)
+    return (XMLData.max_mana * 25 / 100) + (stats.max / 10) + (stats.min / 20)
   else
     return 0 # this method is not used by DR
   end
@@ -1705,7 +1721,7 @@ def unnoded_pulse
     else
       stats = [0, 0]
     end
-    return (maxmana * 15 / 100) + (stats.max / 10) + (stats.min / 20)
+    return (XMLData.max_mana * 15 / 100) + (stats.max / 10) + (stats.min / 20)
   else
     return 0 # this method is not used by DR
   end
@@ -2172,7 +2188,7 @@ def do_client(client_string)
       set_state = $2
       did_something = false
       begin
-        Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values(?,?);", toggle_var.to_s.encode('UTF-8'), set_state.to_s.encode('UTF-8'))
+        Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values(?,?);", [toggle_var.to_s.encode('UTF-8'), set_state.to_s.encode('UTF-8')])
         did_something = true
       rescue SQLite3::BusyException
         sleep 0.1
@@ -2188,6 +2204,23 @@ def do_client(client_string)
       ExecScript.start("Infomon.sync", { :quiet => true })
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon (?:reset|redo)!?/i
       ExecScript.start("Infomon.redo!", { :quiet => true })
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon show( full)?/i
+      case Regexp.last_match(1)
+      when 'full'
+        Infomon.show(true)
+      else
+        Infomon.show(false)
+      end
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon effects?(?: (true|false))?/i
+      new_value = !(Infomon.get_bool("infomon.show_durations"))
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Infomon's effect duration showing to #{new_value}"
+      Infomon.set('infomon.show_durations', new_value)
     elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
       case Regexp.last_match(1)
@@ -2271,6 +2304,8 @@ def do_client(client_string)
         respond
         respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon (fixskill)"
         respond "   #{$clean_lich_char}infomon reset             resets entire character infomon db table and then syncs data (fixprof)"
+        respond "   #{$clean_lich_char}infomon effects           toggle display of effect durations"
+        respond "   #{$clean_lich_char}infomon show              shows all current Infomon values for character"
         respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# in Room Title"
         respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# in Room Title"
       end

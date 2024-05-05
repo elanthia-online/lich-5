@@ -12,9 +12,9 @@ end
 if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
   if (RUBY_PLATFORM =~ /mingw|win/) and (RUBY_PLATFORM !~ /darwin/i)
     require 'fiddle'
-    Fiddle::Function.new(DL.dlopen('user32.dll')['MessageBox'], [Fiddle::TYPE_INT, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_INT], Fiddle::TYPE_INT).call(0, 'Upgrade Ruby to version 2.6', "Lich v#{LICH_VERSION}", 16)
+    Fiddle::Function.new(Fiddle.dlopen('user32.dll')['MessageBox'], [Fiddle::TYPE_INT, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_INT], Fiddle::TYPE_INT).call(0, "Upgrade Ruby to version #{REQUIRED_RUBY} or newer!", "Lich v#{LICH_VERSION}", 16)
   else
-    puts "Upgrade Ruby to version 2.6"
+    puts "Upgrade Ruby to version #{REQUIRED_RUBY} or newer!"
   end
   exit
 end

@@ -15,14 +15,8 @@ module DB_Store
   end
 
   def self.get_data(scope = "#{XMLData.game}:#{XMLData.name}", script)
-    hash = Lich.db.get_first_value(
-      'SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;',
-      script.encode('UTF-8'),
-      scope.encode('UTF-8')
-    )
-
+    hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', [script.encode('UTF-8'), scope.encode('UTF-8')])
     return {} unless hash
-
     Marshal.load(hash)
   end
 
@@ -31,8 +25,7 @@ module DB_Store
     return 'Error: No data to store.' unless blob
 
     begin
-      Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);',
-                      script.encode('UTF-8'), scope.encode('UTF-8'), blob)
+      Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', [script.encode('UTF-8'), scope.encode('UTF-8'), blob])
     rescue SQLite3::BusyException
       sleep 0.05
       retry

@@ -9,40 +9,76 @@ class Char
     XMLData.name
   end
 
-  def Char.stance(*args)
-    checkstance(*args)
+  def Char.stance
+    XMLData.stance_text
   end
 
-  def Char.health(*args)
-    checkhealth(*args)
+  def Char.percent_stance
+    XMLData.stance_value
   end
 
-  def Char.mana(*args)
-    checkmana(*args)
+  def Char.encumbrance
+    XMLData.encumbrance_text
   end
 
-  def Char.spirit(*args)
-    checkspirit(*args)
+  def Char.percent_encumbrance
+    XMLData.encumbrance_value
   end
 
-  def Char.maxhealth
-    Object.module_eval { maxhealth }
+  def Char.health
+    XMLData.health
   end
 
-  def Char.maxmana
-    Object.module_eval { maxmana }
+  def Char.mana
+    XMLData.mana
   end
 
-  def Char.maxspirit
-    Object.module_eval { maxspirit }
+  def Char.spirit
+    XMLData.spirit
   end
 
-  def Char.stamina(*args)
-    checkstamina(*args)
+  def Char.stamina
+    XMLData.stamina
   end
 
-  def Char.maxstamina
-    Object.module_eval { maxstamina }
+  def Char.max_health
+    Object.module_eval { XMLData.max_health }
+  end
+
+  def Char.max_mana
+    Object.module_eval { XMLData.max_mana }
+  end
+
+  def Char.max_spirit
+    Object.module_eval { XMLData.max_spirit }
+  end
+
+  def Char.max_stamina
+    Object.module_eval { XMLData.max_stamina }
+  end
+
+  def Char.percent_health
+    ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i
+  end
+
+  def Char.percent_mana
+    if XMLData.max_mana == 0
+      100
+    else
+      ((XMLData.mana.to_f / XMLData.max_mana.to_f) * 100).to_i
+    end
+  end
+
+  def Char.percent_spirit
+    ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i
+  end
+
+  def Char.percent_stamina
+    if XMLData.max_stamina == 0
+      100
+    else
+      ((XMLData.stamina.to_f / XMLData.max_stamina.to_f) * 100).to_i
+    end
   end
 
   def Char.dump_info
@@ -61,7 +97,10 @@ class Char
     polyfill = [Stats, Skills, Spellsong].find { |klass|
       klass.respond_to?(meth, *args)
     }
-    return polyfill.send(meth, *args) if polyfill
+    if polyfill
+      Lich.deprecated("Char.#{meth}", "#{polyfill}.#{meth}", caller[0])
+      return polyfill.send(meth, *args)
+    end
     super(meth, *args)
   end
 

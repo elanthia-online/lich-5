@@ -184,7 +184,7 @@ module Infomon
           if @goals_detected
             @goals_detected = false
             respond
-            respond Lich::Messaging.monsterbold('You just trained your character.  Lich will gather your updated skills.')
+            _respond Lich::Messaging.monsterbold('You just trained your character.  Lich will gather your updated skills.')
             respond
             # temporary inform for users about command
             # fixme: update ExecCommand to consistently perform local API actions from lib files
