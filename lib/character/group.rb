@@ -182,7 +182,9 @@ module Games
           ## active messages
           ##
           NO_GROUP = /You are not currently in a group/
-          MEMBER   = /<a exist="(?<id>.*?)" noun="(?<name>.*?)">(?:.*?)<\/a> is (?<type>(?:the leader|also a member) of your group|following you)\./
+          # Previous GROUP output below, left in-case something missing/needed to resolve after change
+          # MEMBER   = /<a exist="(?<id>.*?)" noun="(?<name>.*?)">(?:.*?)<\/a> is (?<type>(?:the leader|also a member) of your group|following you)\./
+          MEMBER   = /You are (?:leading|grouped with) (.*)/
           STATUS   = /^Your group status is currently (?<status>open|closed)\./
 
           GROUP_EMPTIED    = %[<indicator id='IconJOINED' visible='n'/>]
