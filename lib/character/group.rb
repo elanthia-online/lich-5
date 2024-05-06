@@ -241,7 +241,7 @@ module Games
 
           if line.include?("You are leading")
             Group.leader = :self
-          elsif line.include?("who is leading")
+          elsif line.include?("You are grouped with")
             Group.leader = people.first
           end
 
