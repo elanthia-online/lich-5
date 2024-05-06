@@ -130,6 +130,10 @@ module Games
         @@members.map(&:id)
       end
 
+      def self.nouns
+        @@members.map(&:noun)
+      end
+
       def self.include?(*members)
         members.all? { |m| ids.include?(m.id) }
       end
