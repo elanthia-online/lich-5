@@ -1,42 +1,5 @@
 =begin
 spell.rb: Core lich file for spell management and for spell related scripts.
-Further modifications are to support the retirement of spell-list.xml.
-
-    Maintainer: Elanthia-Online
-    Original Author: Tillmen, others
-    game: Gemstone
-    tags: CORE, spells
-    required: Lich > 5.0.19
-    version: 1.2.6
-
-  changelog:
-    v1.2.6 (2023-06-26)
-      download missing effect-list.xml if not found
-    v1.2.5 (2023-06-05)
-      bugfix for known? if ranks nil
-    v1.2.4 (2023-03-22)
-      Rubocop code cleanup
-      Add spell preparation time detection from debuffs to recast after prep time.
-      Fix for affordable? to check Overexerted on stamina checks
-    v1.2.3 (2023-02-19)
-      Remove .untaint calls for Ruby 3.2 compatibility
-    v1.2.2 (2022-11-24)
-      Removed references to $SAFE
-      Removed deprecated reference to "#{SCRIPT_DIR}/spell-list.xml"
-      fix for Mental Acuity to only work on MnM spells 1201-1220
-      fix for Armored Casting and Spell Hinderance
-    v1.2.1 (2022-05-10)
-      add unknown spell result to regex results
-    v1.2.0 (2022-03-14)
-      add Spell.force_cast(target, args, results_of_interest)
-      add Spell.force_channel(target, args, results_of_interest)
-      add Spell.force_evoke(target, args, results_of_interest)
-      add Spell.force_incant(args, results_of_interest)
-    v1.1.0 (2021-09-27
-      rebaselined as spell.rb to support spell-list.xml retirement
-    v1.0.0 (2021-09-22)
-      initial release and subsequent modifications as SIMU changes warranted
-
 =end
 
 require 'open-uri'
@@ -571,7 +534,7 @@ module Games
           ## convert Spell[9699].active? to Effects::Debuffs test (if Debuffs is where it shows)
           if (Feat.known?(:mental_acuity) and self.num.between?(1201, 1220)) and (Spell[9699].active? or not Char.stamina >= (self.mana_cost(options) * 2) or Effects::Debuffs.active?("Overexerted"))
             false
-          elsif (!(Feat.known?(:mental_acuity) and self.num.between?(1201, 1220))) and (!(Char.mana >= self.mana_cost(options)) or (Spell[515].active? and !(Char.mana >= self.mana_cost(options)) + [self.mana_cost(release_options) / 4, 1].max))
+          elsif (!(Feat.known?(:mental_acuity) and self.num.between?(1201, 1220))) and (!(Char.mana >= self.mana_cost(options)) or (Spell[515].active? and !(Char.mana >= (self.mana_cost(options) + [self.mana_cost(release_options) / 4, 1].max))))
             false
           else
             true
