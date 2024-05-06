@@ -61,7 +61,7 @@ require 'rexml/document'
 require 'rexml/streamlistener'
 require 'stringio'
 require 'zlib'
-require 'drb'
+require 'drb/drb'
 require 'resolv'
 require 'digest/md5'
 require 'json'
@@ -225,11 +225,14 @@ require_relative("./lib/xmlparser.rb")
 
 class UpstreamHook
   @@upstream_hooks ||= Hash.new
+  @@upstream_hook_sources ||= Hash.new
+
   def UpstreamHook.add(name, action)
     unless action.class == Proc
       echo "UpstreamHook: not a Proc (#{action})"
       return false
     end
+    @@upstream_hook_sources[name] = (Script.current.name || "Unknown")
     @@upstream_hooks[name] = action
   end
 
@@ -248,21 +251,37 @@ class UpstreamHook
   end
 
   def UpstreamHook.remove(name)
+    @@upstream_hook_sources.delete(name)
     @@upstream_hooks.delete(name)
   end
 
   def UpstreamHook.list
     @@upstream_hooks.keys.dup
   end
+
+  def UpstreamHook.sources
+    info_table = Terminal::Table.new :headings => ['Hook', 'Source'],
+                                     :rows => @@upstream_hook_sources.to_a,
+                                     :style => {:all_separators => true}
+    Lich::Messaging.mono(info_table.to_s)
+  end
+
+  def UpstreamHook.hook_sources
+    @@upstream_hook_sources
+  end
+
 end
 
 class DownstreamHook
   @@downstream_hooks ||= Hash.new
+  @@downstream_hook_sources ||= Hash.new
+
   def DownstreamHook.add(name, action)
     unless action.class == Proc
       echo "DownstreamHook: not a Proc (#{action})"
       return false
     end
+    @@downstream_hook_sources[name] = (Script.current.name || "Unknown")
     @@downstream_hooks[name] = action
   end
 
@@ -281,186 +300,25 @@ class DownstreamHook
   end
 
   def DownstreamHook.remove(name)
+    @@downstream_hook_sources.delete(name)
     @@downstream_hooks.delete(name)
   end
 
   def DownstreamHook.list
     @@downstream_hooks.keys.dup
   end
-end
 
-module Setting
-  @@load = proc { |args|
-    unless (script = Script.current)
-      respond '--- error: Setting.load: calling script is unknown'
-      respond $!.backtrace[0..2]
-      next nil
-    end
-    if script.class == ExecScript
-      respond "--- Lich: error: Setting.load: exec scripts can't have settings"
-      respond $!.backtrace[0..2]
-      exit
-    end
-    if args.empty?
-      respond '--- error: Setting.load: no setting specified'
-      respond $!.backtrace[0..2]
-      exit
-    end
-    if args.any? { |a| a.class != String }
-      respond "--- Lich: error: Setting.load: non-string given as setting name"
-      respond $!.backtrace[0..2]
-      exit
-    end
-    values = Array.new
-    for setting in args
-      begin
-        v = Lich.db.get_first_value('SELECT value FROM script_setting WHERE script=? AND name=?;', script.name.encode('UTF-8'), setting.encode('UTF-8'))
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      if v.nil?
-        values.push(v)
-      else
-        begin
-          values.push(Marshal.load(v))
-        rescue
-          respond "--- Lich: error: Setting.load: #{$!}"
-          respond $!.backtrace[0..2]
-          exit
-        end
-      end
-    end
-    if args.length == 1
-      next values[0]
-    else
-      next values
-    end
-  }
-  @@save = proc { |hash|
-    unless (script = Script.current)
-      respond '--- error: Setting.save: calling script is unknown'
-      respond $!.backtrace[0..2]
-      next nil
-    end
-    if script.class == ExecScript
-      respond "--- Lich: error: Setting.load: exec scripts can't have settings"
-      respond $!.backtrace[0..2]
-      exit
-    end
-    if hash.class != Hash
-      respond "--- Lich: error: Setting.save: invalid arguments: use Setting.save('setting1' => 'value1', 'setting2' => 'value2')"
-      respond $!.backtrace[0..2]
-      exit
-    end
-    if hash.empty?
-      next nil
-    end
-
-    if hash.keys.any? { |k| k.class != String }
-      respond "--- Lich: error: Setting.save: non-string given as a setting name"
-      respond $!.backtrace[0..2]
-      exit
-    end
-    if hash.length > 1
-      begin
-        Lich.db.execute('BEGIN')
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-    end
-    hash.each { |setting, value|
-      begin
-        if value.nil?
-          begin
-            Lich.db.execute('DELETE FROM script_setting WHERE script=? AND name=?;', script.name.encode('UTF-8'), setting.encode('UTF-8'))
-          rescue SQLite3::BusyException
-            sleep 0.1
-            retry
-          end
-        else
-          v = SQLite3::Blob.new(Marshal.dump(value))
-          begin
-            Lich.db.execute('INSERT OR REPLACE INTO script_setting(script,name,value) VALUES(?,?,?);', script.name.encode('UTF-8'), setting.encode('UTF-8'), v)
-          rescue SQLite3::BusyException
-            sleep 0.1
-            retry
-          end
-        end
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-    }
-    if hash.length > 1
-      begin
-        Lich.db.execute('END')
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-    end
-    true
-  }
-  @@list = proc {
-    unless (script = Script.current)
-      respond '--- error: Setting: unknown calling script'
-      next nil
-    end
-    if script.class == ExecScript
-      respond "--- Lich: error: Setting.load: exec scripts can't have settings"
-      respond $!.backtrace[0..2]
-      exit
-    end
-    begin
-      rows = Lich.db.execute('SELECT name FROM script_setting WHERE script=?;', script.name.encode('UTF-8'))
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
-    if rows
-      # fixme
-      next rows.inspect
-    else
-      next nil
-    end
-  }
-  def Setting.load(*args)
-    @@load.call(args)
+  def DownstreamHook.sources
+    info_table = Terminal::Table.new :headings => ['Hook', 'Source'],
+                                     :rows => @@downstream_hook_sources.to_a,
+                                     :style => {:all_separators => true}
+    Lich::Messaging.mono(info_table.to_s)
   end
 
-  def Setting.save(hash)
-    @@save.call(hash)
+  def DownstreamHook.hook_sources
+    @@downstream_hook_sources
   end
 
-  def Setting.list
-    @@list.call
-  end
-end
-
-module GameSetting
-  def GameSetting.load(*args)
-    Setting.load(args.collect { |a| "#{XMLData.game}:#{a}" })
-  end
-
-  def GameSetting.save(hash)
-    game_hash = Hash.new
-    hash.each_pair { |k, v| game_hash["#{XMLData.game}:#{k}"] = v }
-    Setting.save(game_hash)
-  end
-end
-
-module CharSetting
-  def CharSetting.load(*args)
-    Setting.load(args.collect { |a| "#{XMLData.game}:#{XMLData.name}:#{a}" })
-  end
-
-  def CharSetting.save(hash)
-    game_hash = Hash.new
-    hash.each_pair { |k, v| game_hash["#{XMLData.game}:#{XMLData.name}:#{k}"] = v }
-    Setting.save(game_hash)
-  end
 end
 
 module Settings
@@ -479,7 +337,7 @@ module Settings
     mutex.synchronize {
       unless settings[script.name] and settings[script.name][scope]
         begin
-          marshal_hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', script.name.encode('UTF-8'), scope.encode('UTF-8'))
+          marshal_hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', [script.name.encode('UTF-8'), scope.encode('UTF-8')])
         rescue SQLite3::BusyException
           sleep 0.1
           retry
@@ -520,7 +378,7 @@ module Settings
             end
             blob = SQLite3::Blob.new(Marshal.dump(data))
             begin
-              Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', script_name.encode('UTF-8'), scope.encode('UTF-8'), blob)
+              Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', [script_name.encode('UTF-8'), scope.encode('UTF-8'), blob])
             rescue SQLite3::BusyException
               sleep 0.1
               retry
@@ -615,7 +473,7 @@ module Vars
     mutex.synchronize {
       unless @@loaded
         begin
-          h = Lich.db.get_first_value('SELECT hash FROM uservars WHERE scope=?;', "#{XMLData.game}:#{XMLData.name}".encode('UTF-8'))
+          h = Lich.db.get_first_value('SELECT hash FROM uservars WHERE scope=?;', ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8')])
         rescue SQLite3::BusyException
           sleep 0.1
           retry
@@ -642,7 +500,7 @@ module Vars
           md5 = Digest::MD5.hexdigest(@@vars.to_s)
           blob = SQLite3::Blob.new(Marshal.dump(@@vars))
           begin
-            Lich.db.execute('INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);', "#{XMLData.game}:#{XMLData.name}".encode('UTF-8'), blob)
+            Lich.db.execute('INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);', ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8'), blob])
           rescue SQLite3::BusyException
             sleep 0.1
             retry
@@ -1215,6 +1073,7 @@ module Games
                     end
                   end
                   @@cli_scripts = true
+                  Lich.log("info: logged in as #{XMLData.game}:#{XMLData.name}")
                 end
 
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
@@ -1285,10 +1144,17 @@ module Games
                     end
                     XMLData.reset
                   end
-                  Script.new_downstream_xml($_SERVERSTRING_)
                   if Module.const_defined?(:GameLoader) && XMLData.game =~ /^GS/
-                    Infomon::XMLParser.parse($_SERVERSTRING_)
+                    infomon_serverstring = $_SERVERSTRING_.dup
+                    Infomon::XMLParser.parse(infomon_serverstring)
+                    stripped_infomon_serverstring = strip_xml(infomon_serverstring)
+                    stripped_infomon_serverstring.split("\r\n").each { |line|
+                      unless line.empty?
+                        Infomon::Parser.parse(line)
+                      end
+                    }
                   end
+                  Script.new_downstream_xml($_SERVERSTRING_)
                   stripped_server = strip_xml($_SERVERSTRING_)
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
@@ -1298,11 +1164,9 @@ module Games
 
                     if !line.empty?
                       if XMLData.game =~ /^GS/
-                        Infomon::Parser.parse(line.dup)
                         Script.new_downstream(line)
                       else
                         unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
-
                           Script.new_downstream(line)
                         end
                       end
@@ -1424,79 +1288,6 @@ module Games
 
       def Gift.stopwatch
         nil
-      end
-    end
-
-    module Effects
-      class Registry
-        include Enumerable
-
-        def initialize(dialog)
-          @dialog = dialog
-        end
-
-        def to_h
-          XMLData.dialogs.fetch(@dialog, {})
-        end
-
-        def each()
-          to_h.each { |k, v| yield(k, v) }
-        end
-
-        def active?(effect)
-          expiry = to_h.fetch(effect, 0)
-          expiry.to_f > Time.now.to_f
-        end
-
-        def time_left(effect)
-          expiry = to_h.fetch(effect, 0)
-          if to_h.fetch(effect, 0) != 0
-            ((expiry - Time.now) / 60.to_f)
-          else
-            expiry
-          end
-        end
-      end
-
-      Spells    = Registry.new("Active Spells")
-      Buffs     = Registry.new("Buffs")
-      Debuffs   = Registry.new("Debuffs")
-      Cooldowns = Registry.new("Cooldowns")
-
-      def self.display
-        effect_out = Terminal::Table.new :headings => ["ID", "Type", "Name", "Duration"]
-        titles = ["Spells", "Cooldowns", "Buffs", "Debuffs"]
-        circle = nil
-        [Effects::Spells, Effects::Cooldowns, Effects::Buffs, Effects::Debuffs].each { |effect|
-          title = titles.shift
-          id_effects = effect.to_h.select { |k, _v| k.is_a?(Integer) }
-          text_effects = effect.to_h.reject { |k, _v| k.is_a?(Integer) }
-          if id_effects.length != text_effects.length
-            # has spell names disabled
-            text_effects = id_effects
-          end
-          if id_effects.length == 0
-            effect_out.add_row ["", title, "No #{title.downcase} found!", ""]
-          else
-            id_effects.each { |sn, end_time|
-              stext = text_effects.shift[0]
-              duration = ((end_time - Time.now) / 60.to_f)
-              if duration < 0
-                next
-              elsif duration > 86400
-                duration = "Indefinite"
-              else
-                duration = duration.as_time
-              end
-              if Spell[sn].circlename && circle != Spell[sn].circlename && title == 'Spells'
-                circle = Spell[sn].circlename
-              end
-              effect_out.add_row [sn, title, stext, duration]
-            }
-          end
-          effect_out.add_separator unless title == 'Debuffs'
-        }
-        Lich::Messaging.mono(effect_out.to_s)
       end
     end
 
@@ -1986,48 +1777,6 @@ end
 
 def start_exec_script(cmd_data, options = Hash.new)
   ExecScript.start(cmd_data, options)
-end
-
-module Setting
-  def Setting.[](name)
-    Settings[name]
-  end
-
-  def Setting.[]=(name, value)
-    Settings[name] = value
-  end
-
-  def Setting.to_hash(_scope = ':')
-    Settings.to_hash
-  end
-end
-
-module GameSetting
-  def GameSetting.[](name)
-    GameSettings[name]
-  end
-
-  def GameSetting.[]=(name, value)
-    GameSettings[name] = value
-  end
-
-  def GameSetting.to_hash(_scope = ':')
-    GameSettings.to_hash
-  end
-end
-
-module CharSetting
-  def CharSetting.[](name)
-    CharSettings[name]
-  end
-
-  def CharSetting.[]=(name, value)
-    CharSettings[name] = value
-  end
-
-  def CharSetting.to_hash(_scope = ':')
-    CharSettings.to_hash
-  end
 end
 
 class StringProc
@@ -2632,10 +2381,10 @@ main_thread = Thread.new {
     elsif defined?(Wine)
       Lich.log("info: Working against a Linux | WINE Platform")
       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
-        custom_launch = "Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
+        custom_launch = "#{Wine::BIN} Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
-        custom_launch = "Wrayth.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /Wrayth/
-        custom_launch = "Stormfront.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
+        custom_launch = "#{Wine::BIN} Wrayth.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /Wrayth/
+        custom_launch = "#{Wine::BIN} Stormfront.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
       end
     end
     if (custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ })
@@ -2751,14 +2500,10 @@ main_thread = Thread.new {
           Dir.chdir(custom_launch_dir)
         end
 
-        if defined?(Wine) and (game != 'AVALON') # Wine on linux
-          spawn "#{Wine::BIN} #{launcher_cmd}"
-        else # All other OS divert here for 3.2.1
-          spawn launcher_cmd
-        end
+        spawn launcher_cmd
       rescue
-        Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-        Lich.msgbox(:message => "error: #{$!}", :icon => :error)
+        Lich.log "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}\n\t#{$!.backtrace.join("\n\t")}"
+        Lich.msgbox(:message => "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}", :icon => :error)
       end
       Lich.log 'info: waiting for client to connect...'
       300.times { sleep 0.1; break unless accept_thread.status }
