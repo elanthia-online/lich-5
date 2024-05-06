@@ -5,7 +5,7 @@ module Infomon
   module XMLParser
     module Pattern
       NpcDeathMessage = /^The (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)? (?:falls to the ground|howls in agony one last time) (?:motionless|and dies)[\.!]\r?\n?$/
-      Group_Short = /(?:group|following you|IconJOINED)/
+      Group_Short = /(?:group|following you|IconJOINED)|^You are leading/
 
       All = Regexp.union(NpcDeathMessage, Group_Short)
     end
