@@ -239,9 +239,9 @@ module Games
 
           people = exist(line)
 
-          if line.include?("is following you")
+          if line.include?("You are leading")
             Group.leader = :self
-          elsif line.include?("is the leader of your group")
+          elsif line.include?("who is leading")
             Group.leader = people.first
           end
 
