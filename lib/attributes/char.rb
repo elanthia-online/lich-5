@@ -45,16 +45,36 @@ class Char
     Object.module_eval { XMLData.max_health }
   end
 
+  def Char.maxhealth
+    Lich.deprecated("Char.maxhealth", "Char.max_health", caller[0], fe_log: true)
+    Char.max_health
+  end
+
   def Char.max_mana
     Object.module_eval { XMLData.max_mana }
+  end
+
+  def Char.maxmana
+    Lich.deprecated("Char.maxmana", "Char.max_mana", caller[0], fe_log: true)
+    Char.max_mana
   end
 
   def Char.max_spirit
     Object.module_eval { XMLData.max_spirit }
   end
 
+  def Char.maxspirit
+    Lich.deprecated("Char.maxspirit", "Char.max_spirit", caller[0], fe_log: true)
+    Char.max_spirit
+  end
+
   def Char.max_stamina
     Object.module_eval { XMLData.max_stamina }
+  end
+
+  def Char.maxstamina
+    Lich.deprecated("Char.maxstamina", "Char.max_stamina", caller[0], fe_log: true)
+    Char.max_stamina
   end
 
   def Char.percent_health
