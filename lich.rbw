@@ -1061,29 +1061,28 @@ module Games
 
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
 
-                if !@@autostarted && Gem::Version.new(RUBY_VERSION) < Gem::Version.new(RECOMMENDED_RUBY)
-                  ruby_warning = Terminal::Table.new
-                  ruby_warning.title = "Ruby Recommended Version Warning"
-                  ruby_warning.add_row(["Please update your Ruby installation."])
-                  ruby_warning.add_row(["You're currently running Ruby v#{Gem::Version.new(RUBY_VERSION)}!"])
-                  ruby_warning.add_row(["It's recommended to run Ruby v#{Gem::Version.new(RECOMMENDED_RUBY)} or higher!"])
-                  ruby_warning.add_row(["Future Lich5 releases will soon require this newer version."])
-                  ruby_warning.add_row([" "])
-                  ruby_warning.add_row(["Visit the following link for info on updating:"])
-                  if XMLData.game =~ /^GS/
-                    ruby_warning.add_row(["https://gswiki.play.net/Lich:Software/Installation"])
-                  elsif XMLData.game =~ /^DR/
-                    ruby_warning.add_row(["https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich"])
-                  else
-                    ruby_warning.add_row(["Unknown game type #{XMLData.game} detected."])
-                    ruby_warning.add_row(["Unsure of proper documentation, please seek assistance via discord!"])
-                  end
-                  Lich::Messaging.mono(ruby_warning.to_s)
-                end
-
                 if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
                   Script.start('autostart') if Script.exists?('autostart')
                   @@autostarted = true
+                  if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(RECOMMENDED_RUBY)
+                    ruby_warning = Terminal::Table.new
+                    ruby_warning.title = "Ruby Recommended Version Warning"
+                    ruby_warning.add_row(["Please update your Ruby installation."])
+                    ruby_warning.add_row(["You're currently running Ruby v#{Gem::Version.new(RUBY_VERSION)}!"])
+                    ruby_warning.add_row(["It's recommended to run Ruby v#{Gem::Version.new(RECOMMENDED_RUBY)} or higher!"])
+                    ruby_warning.add_row(["Future Lich5 releases will soon require this newer version."])
+                    ruby_warning.add_row([" "])
+                    ruby_warning.add_row(["Visit the following link for info on updating:"])
+                    if XMLData.game =~ /^GS/
+                      ruby_warning.add_row(["https://gswiki.play.net/Lich:Software/Installation"])
+                    elsif XMLData.game =~ /^DR/
+                      ruby_warning.add_row(["https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich"])
+                    else
+                      ruby_warning.add_row(["Unknown game type #{XMLData.game} detected."])
+                      ruby_warning.add_row(["Unsure of proper documentation, please seek assistance via discord!"])
+                    end
+                    Lich::Messaging.mono(ruby_warning.to_s)
+                  end
                 end
 
                 if @@autostarted and !@@cli_scripts and $_SERVERSTRING_ =~ /roomDesc/
