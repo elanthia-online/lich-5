@@ -221,7 +221,7 @@ class LimitedArray < Array
   end
 end
 
-require_relative("./lib/xmlparser.rb")
+require File.join(LIB_DIR, 'xmlparser.rb')
 
 class UpstreamHook
   @@upstream_hooks ||= Hash.new
@@ -559,7 +559,7 @@ module Vars
 end
 
 # Script classes move to lib 230305
-require_relative('./lib/script.rb')
+require File.join(LIB_DIR, 'script.rb')
 
 class Watchfor
   def initialize(line, theproc = nil, &block)
@@ -1251,7 +1251,7 @@ module Games
       end
     end
 
-    require_relative("./lib/gameobj.rb")
+    require File.join(LIB_DIR, 'gameobj.rb')
 
     class Gift
       @@gift_start ||= Time.now
@@ -2221,7 +2221,7 @@ main_thread = Thread.new {
   $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
-  require_relative("./lib/eaccess.rb")
+  require File.join(LIB_DIR, 'eaccess.rb')
 
   if ARGV.include?('--login')
     if File.exist?("#{DATA_DIR}/entry.dat")
