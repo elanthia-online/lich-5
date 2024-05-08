@@ -68,7 +68,7 @@ require 'json'
 require 'terminal-table'
 
 # TODO: Move all local requires to top of file
-require_relative('./lib/constants')
+require File.join(LIB_DIR, 'constants.rb')
 require File.join(LIB_DIR, 'version.rb')
 
 require File.join(LIB_DIR, 'lich.rb')
@@ -1048,7 +1048,7 @@ module Games
 
                 unless (XMLData.game.nil? or XMLData.game.empty?) 
                   unless Module.const_defined?(:GameLoader)
-                    require File.join(LIB_DIR, 'game-loader.rb'
+                    require File.join(LIB_DIR, 'game-loader.rb')
                     GameLoader.load!
                   end
                 end
