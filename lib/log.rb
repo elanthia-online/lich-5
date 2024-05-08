@@ -8,7 +8,7 @@ module Log
       _write _view(msg.message, label)
       msg.backtrace.to_a.slice(0..5).each do |frame| _write _view(frame, label) end
     else
-      self._write _view(msg, label) #if Script.current.vars.include?("--debug")
+      self._write _view(msg, label) # if Script.current.vars.include?("--debug")
     end
   end
 
@@ -25,7 +25,7 @@ module Log
   def self._view(msg, label)
     label = [Script.current.name, label].flatten.compact.join(".")
     safe = msg.inspect
-    #safe = safe.gsub("<", "&lt;").gsub(">", "&gt;") if safe.include?("<") and safe.include?(">")
+    # safe = safe.gsub("<", "&lt;").gsub(">", "&gt;") if safe.include?("<") and safe.include?(">")
     "[#{label}] #{safe}"
   end
 
