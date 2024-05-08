@@ -830,9 +830,9 @@ class SpellRanks
   attr_accessor :minorspiritual, :majorspiritual, :cleric, :minorelemental, :majorelemental, :minormental, :ranger, :sorcerer, :wizard, :bard, :empath, :paladin, :arcanesymbols, :magicitemuse, :monk
 
   def SpellRanks.load
-    if File.exist?("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat")
+    if File.exist?(File.join(DATA_DIR, "#{XMLData.game}", "spell-ranks.dat"))
       begin
-        File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'rb') { |f|
+        File.open(File.join(DATA_DIR, "#{XMLData.game}", "spell-ranks.dat"), 'rb') { |f|
           @@timestamp, @@list = Marshal.load(f.read)
         }
         # minor mental circle added 2012-07-18; old data files will have @minormental as nil
@@ -854,7 +854,7 @@ class SpellRanks
 
   def SpellRanks.save
     begin
-      File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'wb') { |f|
+      File.open(File.join(DATA_DIR, "#{XMLData.game}", "spell-ranks.dat"), 'wb') { |f|
         f.write(Marshal.dump([@@timestamp, @@list]))
       }
     rescue
@@ -2224,8 +2224,8 @@ main_thread = Thread.new {
   require File.join(LIB_DIR, 'eaccess.rb')
 
   if ARGV.include?('--login')
-    if File.exist?("#{DATA_DIR}/entry.dat")
-      entry_data = File.open("#{DATA_DIR}/entry.dat", 'r') { |blob|
+    if File.exist?(File.join(DATA_DIR, "entry.dat"))
+      entry_data = File.open(File.join(DATA_DIR, "entry.dat"), 'r') { |blob|
         begin
           Marshal.load(blob.read.unpack('m').first)
         rescue
@@ -2487,9 +2487,9 @@ main_thread = Thread.new {
           localhost = "localhost"
         end
         @launch_data.collect! { |line| line.sub(/GAMEPORT=.+/, "GAMEPORT=#{localport}").sub(/GAMEHOST=.+/, "GAMEHOST=#{localhost}") }
-        sal_filename = "#{TEMP_DIR}/lich#{rand(10000)}.sal"
+        sal_filename = File.join(TEMP_DIR, "lich#{rand(10000)}.sal")
         while File.exist?(sal_filename)
-          sal_filename = "#{TEMP_DIR}/lich#{rand(10000)}.sal"
+          sal_filename = File.join(TEMP_DIR, "lich#{rand(10000)}.sal")
         end
         File.open(sal_filename, 'w') { |f| f.puts @launch_data }
         launcher_cmd = launcher_cmd.sub('%1', sal_filename)
