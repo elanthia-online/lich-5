@@ -69,17 +69,17 @@ require 'terminal-table'
 
 # TODO: Move all local requires to top of file
 require_relative('./lib/constants')
-require 'lib/version'
+require File.join(LIB_DIR, 'version.rb')
 
-require 'lib/lich'
-require 'lib/init'
-require 'lib/front-end'
-require 'lib/update'
+require File.join(LIB_DIR, 'lich.rb')
+require File.join(LIB_DIR, 'init.rb')
+require File.join(LIB_DIR, 'front-end.rb')
+require File.join(LIB_DIR, 'update.rb')
 
 # TODO: Need to split out initiatilzation functions to move require to top of file
-require 'lib/gtk'
-require 'lib/gui-login'
-require 'lib/db_store'
+require File.join(LIB_DIR, 'gtk.rb')
+require File.join(LIB_DIR, 'gui-login.rb')
+require File.join(LIB_DIR, 'db_store.rb')
 class NilClass
   def dup
     nil
@@ -589,9 +589,9 @@ end
 
 ## adding util to the list of defs
 
-require 'lib/util.rb'
-require 'lib/messaging.rb'
-require 'lib/global_defs.rb'
+require File.join(LIB_DIR, 'util.rb')
+require File.join(LIB_DIR, 'messaging.rb')
+require File.join(LIB_DIR, 'global_defs.rb')
 
 module Buffer
   DOWNSTREAM_STRIPPED = 1
@@ -1048,7 +1048,7 @@ module Games
 
                 unless (XMLData.game.nil? or XMLData.game.empty?) 
                   unless Module.const_defined?(:GameLoader)
-                    require 'lib/game-loader'
+                    require File.join(LIB_DIR, 'game-loader.rb'
                     GameLoader.load!
                   end
                 end
