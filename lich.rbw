@@ -1081,7 +1081,9 @@ module Games
                       ruby_warning.add_row(["Unknown game type #{XMLData.game} detected."])
                       ruby_warning.add_row(["Unsure of proper documentation, please seek assistance via discord!"])
                     end
-                    Lich::Messaging.mono(ruby_warning.to_s)
+                    ruby_warning.to_s.split("\n").each { |row|
+                      Lich::Messaging.mono(Lich::Messaging.monsterbold(row))
+                    }
                   end
                 end
 
