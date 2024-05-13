@@ -9,9 +9,8 @@ module Lich
       require 'zlib'
 
       @current = LICH_VERSION
-      @snapshot_core_script = ["alias.lic", "autostart.lic", "go2.lic", "infomon.lic",
-                               "jinx.lic", "lnet.lic", "log.lic", "repository.lic",
-                               "vars.lic", "version.lic", "map.lic"]
+      @snapshot_core_script = ["alias.lic", "autostart.lic", "dependency.lic", "ewaggle.lic", "go2.lic", "infomon.lic",
+                               "jinx.lic", "lnet.lic", "log.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"]
 
       def self.request(type = '--announce')
         case type
@@ -352,6 +351,10 @@ module Lich
           _respond "Valid extensions are '.lic' for scripts, '.rb' for library files,"
           _respond "and '.xml' or '.ui' for data files. Please correct and try again."
         end
+      end
+
+      def self.update_core_scripts
+
       end
       # End module definitions
     end
