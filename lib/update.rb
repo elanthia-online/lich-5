@@ -11,6 +11,11 @@ module Lich
       @current = LICH_VERSION
       @snapshot_core_script = ["alias.lic", "autostart.lic", "dependency.lic", "ewaggle.lic", "go2.lic", "infomon.lic",
                                "jinx.lic", "lnet.lic", "log.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"]
+      @updatable_core_scripts = {
+        "all" => ["alias.lic", "autostart.lic", "jinx.lic", "log.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"],
+        "gs" => ["ewaggle.lic", "go2.lic"],
+        "dr" => ["dependency.lic"]
+      }
 
       def self.request(type = '--announce')
         case type
@@ -215,14 +220,15 @@ module Lich
 
           ## We do not care about local edits from players to the Lich5 / script location
           ## for CORE scripts (those required to run Lich5 properly)
-          core_update = Dir.children(File.join(TEMP_DIR, filename, "scripts"))
-          core_update.each { |file|
-            File.delete(File.join(SCRIPT_DIR, file)) if File.exist?(File.join(SCRIPT_DIR, file))
-            File.open(File.join(TEMP_DIR, filename, "scripts", file), 'rb') { |r|
-              File.open(File.join(SCRIPT_DIR, file), 'wb') { |w| w.write(r.read) }
-            }
-            _respond "script #{file} has been updated."
-          }
+          #core_update = Dir.children(File.join(TEMP_DIR, filename, "scripts"))
+          #core_update.each { |file|
+          #  File.delete(File.join(SCRIPT_DIR, file)) if File.exist?(File.join(SCRIPT_DIR, file))
+          #  File.open(File.join(TEMP_DIR, filename, "scripts", file), 'rb') { |r|
+          #    File.open(File.join(SCRIPT_DIR, file), 'wb') { |w| w.write(r.read) }
+          #  }
+          #  _respond "script #{file} has been updated."
+          #}
+          self.update_core_scripts
 
           ## We DO care about local edits from players to the Lich5 / data files
           ## specifically gameobj-data.xml and spell-list.xml.
@@ -354,7 +360,13 @@ module Lich
       end
 
       def self.update_core_scripts
-
+        if XMLData.game !~ /^GS|^DR/
+          _respond "invalid game type, unsure what scripts to update via Update.update_core_scripts"
+          return
+        end
+        @updatable_core_scripts["all"].each { |script| self.update_file('script', script) }
+        @updatable_core_scripts["gs"].each { |script| self.update_file('script', script) } if XMLData.game =~ /^GS/
+        @updatable_core_scripts["dr"].each { |script| self.update_file('script', script) } if XMLData.game =~ /^DR/
       end
       # End module definitions
     end
