@@ -335,8 +335,8 @@ module Lich
 
         updatable_scripts = {
           "all" => ["alias.lic", "autostart.lic", "jinx.lic", "log.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"],
-          "gs" => ["ewaggle.lic", "go2.lic"],
-          "dr" => ["dependency.lic"]
+          "gs"  => ["ewaggle.lic", "go2.lic"],
+          "dr"  => ["dependency.lic"]
         }
 
         ## We DO care about local edits from players to the Lich5 / data files
