@@ -26,7 +26,7 @@ module Lich
   module Stash
     def self.find_container(param)
       GameObj.inv.find do |container|
-        container.name =~ %r[#{param}]
+        container.name =~ %r[#{param.strip}] || container.name =~ %r[#{param.sub(' ', ' .*')}]
       end or fail "could not find Container[name: #{param}]"
     end
 
@@ -103,13 +103,13 @@ module Lich
       end
       # weaponsack for both hands
       if UserVars.weapon and UserVars.weaponsack and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
-        weaponsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack).sub(' ', ' .*')}/i }
+        weaponsack = container(UserVars.weaponsack)
       end
       # lootsack for both hands
       if UserVars.lootsack.nil? or UserVars.lootsack.empty?
         lootsack = nil
       else
-        lootsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack).sub(' ', ' .*')}/i }
+        lootsack = container(UserVars.lootsack)
       end
       # finding another container if needed
       other_containers_var = nil
