@@ -310,7 +310,11 @@ module Lich
         case type
         when "script"
           location = SCRIPT_DIR
-          remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
+          if requested_file.downcase == 'dependency.lic'
+            remote_repo = "https://raw.githubusercontent.com/rpherbig/dr-scripts/master/"
+          else
+            remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
+          end
           requested_file =~ /\.lic$/ ? requested_file_ext = ".lic" : requested_file_ext = "bad extension"
         when "library"
           location = LIB_DIR
