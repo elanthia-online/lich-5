@@ -27,7 +27,7 @@ module Lich
     def self.find_container(param, loud_fail: true)
       found_container = GameObj.inv.find do |container|
         container.name =~ %r[#{param.strip}] || container.name =~ %r[#{param.sub(' ', ' .*')}]
-      end 
+      end
       if found_container.nil? && loud_fail
         fail "could not find Container[name: #{param}]"
       else
