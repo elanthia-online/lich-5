@@ -37,13 +37,13 @@ module Lich
 
     def self.container(param)
       @weapon_displayer ||= []
-      container = find_container(param)
-      unless @weapon_displayer.include?(container.id)
-        result = Lich::Util.issue_command("look in ##{container.id}", /In the .*$|That is closed\.|^You glance at/, silent: true, quiet: true) if container.contents.nil?
-        fput "open ##{container.id}" if result.include?('That is closed.')
-        @weapon_displayer.push(container.id) if GameObj.containers.find { |item| item[0] == container.id }.nil?
+      container_to_check = find_container(param)
+      unless @weapon_displayer.include?(container_to_check.id)
+        result = Lich::Util.issue_command("look in ##{container_to_check.id}", /In the .*$|That is closed\.|^You glance at/, silent: true, quiet: true) if container_to_check.contents.nil?
+        fput "open ##{container_to_check.id}" if result.include?('That is closed.')
+        @weapon_displayer.push(container_to_check.id) if GameObj.containers.find { |item| item[0] == container_to_check.id }.nil?
       end
-      return container
+      return container_to_check
     end
 
     def self.try_or_fail(seconds: 2, command: nil)
