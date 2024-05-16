@@ -213,24 +213,6 @@ module Lich
           FileUtils.copy_entry(File.join(TEMP_DIR, filename, "lib"), File.join(LIB_DIR))
           _respond; _respond "All Lich lib files have been updated."; _respond
 
-          ## We DO care about local edits from players to the Lich5 / data files
-          ## specifically gameobj-data.xml and spell-list.xml.
-          ## Let's be a little more purposeful and gentle with these two files.
-          data_update = Dir.children(File.join(TEMP_DIR, filename, "data"))
-          data_update.each { |file|
-            next unless file == 'gameobj-data.xml'
-            transition_filename = "#{file}".sub(".xml", '')
-            newfilename = File.join(DATA_DIR, "#{transition_filename}-#{Time.now.to_i}.xml")
-            if File.exist?(File.join(DATA_DIR, file))
-              File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
-              File.delete(File.join(DATA_DIR, file))
-            end
-            File.open(File.join(TEMP_DIR, filename, "data", file), 'rb') { |r|
-              File.open(File.join(DATA_DIR, file), 'wb') { |w| w.write(r.read) }
-            }
-            _respond "data #{file} has been updated. The prior version was renamed to #{newfilename}."
-          }
-
           ## Use new method so can be reused to do a blanket update of core data & scripts
           self.update_core_data_and_scripts
 
