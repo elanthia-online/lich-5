@@ -1874,27 +1874,29 @@ for arg in ARGV
     puts 'Usage:  lich [OPTION]'
     puts ''
     puts 'Options are:'
-    puts '  -h, --help          Display this list.'
-    puts '  -V, --version       Display the program version number and credits.'
+    puts '  -h, --help            Display this list.'
+    puts '  -V, --version         Display the program version number and credits.'
     puts ''
-    puts '  -d, --directory     Set the main Lich program directory.'
-    puts '      --script-dir    Set the directoy where Lich looks for scripts.'
-    puts '      --data-dir      Set the directory where Lich will store script data.'
-    puts '      --temp-dir      Set the directory where Lich will store temporary files.'
+    puts '  -d, --directory       Set the main Lich program directory.'
+    puts '      --script-dir      Set the directoy where Lich looks for scripts.'
+    puts '      --data-dir        Set the directory where Lich will store script data.'
+    puts '      --temp-dir        Set the directory where Lich will store temporary files.'
     puts ''
-    puts '  -w, --wizard        Run in Wizard mode (default)'
-    puts '  -s, --stormfront    Run in StormFront mode.'
-    puts '      --avalon        Run in Avalon mode.'
-    puts '      --frostbite     Run in Frosbite mode.'
+    puts '  -w, --wizard          Run in Wizard mode (default)'
+    puts '  -s, --stormfront      Run in StormFront mode.'
+    puts '      --avalon          Run in Avalon mode.'
+    puts '      --frostbite       Run in Frosbite mode.'
     puts ''
-    puts '      --gemstone      Connect to the Gemstone IV Prime server (default).'
-    puts '      --dragonrealms  Connect to the DragonRealms server.'
-    puts '      --platinum      Connect to the Gemstone IV/DragonRealms Platinum server.'
-    puts '      --test          Connect to the test instance of the selected game server.'
-    puts '  -g, --game          Set the IP address and port of the game.  See example below.'
+    puts '      --dark-mode       Enable/disable darkmode without GUI. See example below.'
     puts ''
-    puts '      --install       Edits the Windows/WINE registry so that Lich is started when logging in using the website or SGE.'
-    puts '      --uninstall     Removes Lich from the registry.'
+    puts '      --gemstone        Connect to the Gemstone IV Prime server (default).'
+    puts '      --dragonrealms    Connect to the DragonRealms server.'
+    puts '      --platinum        Connect to the Gemstone IV/DragonRealms Platinum server.'
+    puts '      --test            Connect to the test instance of the selected game server.'
+    puts '  -g, --game            Set the IP address and port of the game.  See example below.'
+    puts ''
+    puts '      --install         Edits the Windows/WINE registry so that Lich is started when logging in using the website or SGE.'
+    puts '      --uninstall       Removes Lich from the registry.'
     puts ''
     puts 'The majority of Lich\'s built-in functionality was designed and implemented with Simutronics MUDs in mind (primarily Gemstone IV): as such, many options/features provided by Lich may not be applicable when it is used with a non-Simutronics MUD.  In nearly every aspect of the program, users who are not playing a Simutronics game should be aware that if the description of a feature/option does not sound applicable and/or compatible with the current game, it should be assumed that the feature/option is not.  This particularly applies to in-script methods (commands) that depend heavily on the data received from the game conforming to specific patterns (for instance, it\'s extremely unlikely Lich will know how much "health" your character has left in a non-Simutronics game, and so the "health" script command will most likely return a value of 0).'
     puts ''
@@ -1907,6 +1909,8 @@ for arg in ARGV
     puts '  lich --dragonrealms --test --genie (run Lich connected to DragonRealms Test server for the Genie frontend)'
     puts '  lich --script-dir /mydir/scripts   (run Lich with its script directory set to \'/mydir/scripts\')'
     puts '  lich --bare -g skotos.net:5555     (run in bare-bones mode with the IP address and port of the game set to \'skotos.net:5555\')'
+    puts '  lich --login YourCharName --detachable-client=8000 --without-frontend --dark-mode=true'
+    puts '       ... (run Lich and login without the GUI in a headless state while enabling dark mode for Lich spawned windows)'
     puts ''
     exit
   elsif (arg == '-v') or (arg == '--version')
@@ -2021,6 +2025,16 @@ for arg in ARGV
       end
     end
     bad_args.clear
+  elsif arg =~ /^--dark-mode=(true|false|on|off)$/i
+    value = $1
+    if value =~ /^(true|on)$/i 
+      argv_options[:dark_mode] = true
+    elsif value =~ /^(false|off)$/i 
+      argv_options[:dark_mode] = false
+    end
+    if defined?(Gtk)
+      @theme_state = Lich.track_dark_mode = argv_options[:dark_mode]
+    end
   else
     bad_args.push(arg)
   end
