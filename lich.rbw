@@ -1147,7 +1147,7 @@ module Games
                   if Module.const_defined?(:GameLoader) && XMLData.game =~ /^GS/
                     infomon_serverstring = $_SERVERSTRING_.dup
                     Infomon::XMLParser.parse(infomon_serverstring)
-                    stripped_infomon_serverstring = strip_xml(infomon_serverstring)
+                    stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
                     stripped_infomon_serverstring.split("\r\n").each { |line|
                       unless line.empty?
                         Infomon::Parser.parse(line)
@@ -1155,7 +1155,7 @@ module Games
                     }
                   end
                   Script.new_downstream_xml($_SERVERSTRING_)
-                  stripped_server = strip_xml($_SERVERSTRING_)
+                  stripped_server = strip_xml($_SERVERSTRING_, type: 'main')
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
                     if defined?(Map) and Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
