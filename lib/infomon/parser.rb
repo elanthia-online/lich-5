@@ -303,7 +303,7 @@ module Infomon
           seek_name = PSMS.name_normal(match[:psm])
           no_decrement = (match.string =~ /have decreased to/)
           db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("#{@psm_cat}.#{db_name[:long_name}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
+          Infomon.set("#{@psm_cat}.#{db_name[:long_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
           :ok
         when Pattern::LostTechnique
           match = Regexp.last_match
