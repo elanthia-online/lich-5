@@ -206,7 +206,7 @@ module Infomon
           :ok
         when Pattern::PSM
           match = Regexp.last_match
-          @psm_hold.push(["#{@psm_cat}.%s" % match[:command], match[:ranks].to_i])
+          @psm_hold.push(["#{@psm_cat}.%s" % PSMS.name_normal(match[:name]), match[:ranks].to_i])
           :ok
         when Pattern::PSMEnd
           Infomon.upsert_batch(@psm_hold)
