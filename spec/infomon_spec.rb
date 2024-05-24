@@ -685,7 +685,7 @@ describe Infomon::Parser, ".parse" do
       expect(Infomon.get('skill.edged_weapon')).to eq(1)
       expect(Infomon.get('weapon.pummel')).to eq(5)
       expect(Infomon.get('stat.aura_bonus')).to eq(18)
-      Infomon.delete!('psm.pummel')
+      Infomon.delete!('weapon.pummel')
       expect(Infomon.get('skill.edged_weapon')).to eq(1)
       expect(Infomon.get('weapon.pummel')).to be(nil)
       expect(Infomon.get('stat.aura_bonus')).to eq(18)
