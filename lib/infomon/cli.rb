@@ -65,6 +65,6 @@ module Infomon
   end
 
   def self.db_refresh_needed?
-    Infomon.get("infomon.last_sync") < Time.new(2024, 05, 24, 19, 45, 00).to_i
+    Infomon.get("infomon.last_sync").nil? || Infomon.get("infomon.last_sync") < Time.new(2024, 05, 24, 19, 45, 00).to_i
   end
 end
