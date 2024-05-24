@@ -1062,6 +1062,7 @@ module Games
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
 
                 if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
+                  ExecScript.start("Infomon.redo!") if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
                   Script.start('autostart') if Script.exists?('autostart')
                   @@autostarted = true
                 end
