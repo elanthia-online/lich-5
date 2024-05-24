@@ -67,6 +67,12 @@ module Lich
     @@deprecated_log.push(msg) unless @@deprecated_log.include?(msg)
   end
 
+  def Lich.show_deprecated_log
+    @@deprecated_log.each do |msg|
+      respond(msg)
+    end
+  end
+
   def Lich.msgbox(args)
     if defined?(Win32)
       if args[:buttons] == :ok_cancel
