@@ -1068,7 +1068,7 @@ module Games
                 end
 
                 if !@@infomon_loaded && defined?(Infomon) && !XMLData.name.empty?
-                  ExecScript.start("Infomon.redo!", { :quiet => true, :name => "infomon_reset" }) if XMLData.game !~ /^DR/# && Infomon.db_refresh_needed?
+                  ExecScript.start("Infomon.redo!", { :quiet => true, :name => "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
                   @@infomon_loaded = true
                 end
 
