@@ -913,6 +913,7 @@ module Games
       @@_buffer.max_size = 1000
       @@autostarted = false
       @@cli_scripts = false
+      @@infomon_loaded = false
 
       def self.clean_gs_serverstring(server_string)
         # The Rift, Scatter is broken...
@@ -1062,9 +1063,14 @@ module Games
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
 
                 if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
-                  ExecScript.start("Infomon.redo!") if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
+                  ExecScript.start("Infomon.redo!", { :quiet => true }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
                   Script.start('autostart') if Script.exists?('autostart')
                   @@autostarted = true
+                end
+
+                if !@@infomon_loaded && defined?(Infomon) && !XMLData.name.empty?
+                  ExecScript.start("Infomon.redo!", { :quiet => true, :name => "infomon_reset" }) if XMLData.game !~ /^DR/# && Infomon.db_refresh_needed?
+                  @@infomon_loaded = true
                 end
 
                 if @@autostarted and !@@cli_scripts and $_SERVERSTRING_ =~ /roomDesc/
