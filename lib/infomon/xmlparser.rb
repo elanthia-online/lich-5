@@ -74,7 +74,7 @@ module Infomon
         /rumbles in agony as .*? teeters for a moment, then tumbles to the ground with a thundering crash/,
         /sinks to the ground, the fell light in (?:his|her) eyes guttering before going out entirely/,
       )
-      NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?<a.*?exist=["'](\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? #{NpcDeathPostfix}[\.!]\r?\n?$/
+      NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? #{NpcDeathPostfix}[\.!]\r?\n?$/
 
       All = Regexp.union(NpcDeathMessage, Group_Short)
     end
