@@ -18,7 +18,7 @@ module Games
 
         def expiration(effect)
           if effect.is_a?(Regexp)
-            to_h.find { |k, v| k.to_s =~ effect }[1]
+            to_h.find { |k, v| k.to_s =~ effect }[1] || 0
           else
             to_h.fetch(effect, 0)
           end
