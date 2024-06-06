@@ -1163,7 +1163,6 @@ module Games
                     end
 
                     Script.new_downstream(line) if !line.empty?
-                    end
                   }
                 end
               rescue
