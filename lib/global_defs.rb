@@ -2447,60 +2447,60 @@ def alias_deprecated
   echo "The alias command you're attempting to use is deprecated.  Fix your script."
 end
 
-  ## Alias block from Lich (needs further cleanup)
+## Alias block from Lich (needs further cleanup)
 
-  undef :abort
-  alias :mana :checkmana
-  alias :mana? :checkmana
-  alias :max_mana :maxmana
-  alias :health :checkhealth
-  alias :health? :checkhealth
-  alias :spirit :checkspirit
-  alias :spirit? :checkspirit
-  alias :stamina :checkstamina
-  alias :stamina? :checkstamina
-  alias :stunned? :checkstunned
-  alias :bleeding? :checkbleeding
-  alias :reallybleeding? :alias_deprecated
-  alias :poisoned? :checkpoison
-  alias :diseased? :checkdisease
-  alias :dead? :checkdead
-  alias :hiding? :checkhidden
-  alias :hidden? :checkhidden
-  alias :hidden :checkhidden
-  alias :checkhiding :checkhidden
-  alias :invisible? :checkinvisible
-  alias :standing? :checkstanding
-  alias :kneeling? :checkkneeling
-  alias :sitting? :checksitting
-  alias :stance? :checkstance
-  alias :stance :checkstance
-  alias :joined? :checkgrouped
-  alias :checkjoined :checkgrouped
-  alias :group? :checkgrouped
-  alias :myname? :checkname
-  alias :active? :checkspell
-  alias :righthand? :checkright
-  alias :lefthand? :checkleft
-  alias :righthand :checkright
-  alias :lefthand :checkleft
-  alias :mind? :checkmind
-  alias :checkactive :checkspell
-  alias :forceput :fput
-  alias :send_script :send_scripts
-  alias :stop_scripts :stop_script
-  alias :kill_scripts :stop_script
-  alias :kill_script :stop_script
-  alias :fried? :checkfried
-  alias :saturated? :checksaturated
-  alias :webbed? :checkwebbed
-  alias :pause_scripts :pause_script
-  alias :roomdescription? :checkroomdescrip
-  alias :prepped? :checkprep
-  alias :checkprepared :checkprep
-  alias :unpause_scripts :unpause_script
-  alias :priority? :setpriority
-  alias :checkoutside :outside?
-  alias :toggle_status :status_tags
-  alias :encumbrance? :checkencumbrance
-  alias :bounty? :checkbounty
+undef :abort
+alias :mana :checkmana
+alias :mana? :checkmana
+alias :max_mana :maxmana
+alias :health :checkhealth
+alias :health? :checkhealth
+alias :spirit :checkspirit
+alias :spirit? :checkspirit
+alias :stamina :checkstamina
+alias :stamina? :checkstamina
+alias :stunned? :checkstunned
+alias :bleeding? :checkbleeding
+alias :reallybleeding? :alias_deprecated
+alias :poisoned? :checkpoison
+alias :diseased? :checkdisease
+alias :dead? :checkdead
+alias :hiding? :checkhidden
+alias :hidden? :checkhidden
+alias :hidden :checkhidden
+alias :checkhiding :checkhidden
+alias :invisible? :checkinvisible
+alias :standing? :checkstanding
+alias :kneeling? :checkkneeling
+alias :sitting? :checksitting
+alias :stance? :checkstance
+alias :stance :checkstance
+alias :joined? :checkgrouped
+alias :checkjoined :checkgrouped
+alias :group? :checkgrouped
+alias :myname? :checkname
+alias :active? :checkspell
+alias :righthand? :checkright
+alias :lefthand? :checkleft
+alias :righthand :checkright
+alias :lefthand :checkleft
+alias :mind? :checkmind
+alias :checkactive :checkspell
+alias :forceput :fput
+alias :send_script :send_scripts
+alias :stop_scripts :stop_script
+alias :kill_scripts :stop_script
+alias :kill_script :stop_script
+alias :fried? :checkfried
+alias :saturated? :checksaturated
+alias :webbed? :checkwebbed
+alias :pause_scripts :pause_script
+alias :roomdescription? :checkroomdescrip
+alias :prepped? :checkprep
+alias :checkprepared :checkprep
+alias :unpause_scripts :unpause_script
+alias :priority? :setpriority
+alias :checkoutside :outside?
+alias :toggle_status :status_tags
+alias :encumbrance? :checkencumbrance
+alias :bounty? :checkbounty
