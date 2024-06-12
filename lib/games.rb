@@ -126,7 +126,8 @@ module Games
           @@socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, true)
         rescue
           Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-        rescue Exception
+        # rescue Exception
+        rescue StandardError
           Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         end
         @@socket.sync = true
@@ -151,7 +152,7 @@ module Games
               begin
                 $cmd_prefix = String.new if $_SERVERSTRING_ =~ /^\034GSw/
 
-                unless (XMLData.game.nil? or XMLData.game.empty?) 
+                unless (XMLData.game.nil? or XMLData.game.empty?)
                   unless Module.const_defined?(:GameLoader)
                     require 'lib/game-loader'
                     GameLoader.load!
@@ -283,7 +284,7 @@ module Games
                 Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
               end
             end
-          rescue Exception
+          rescue StandardError
             Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
             $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.slice(0..10).join("\n\t")}"
             sleep 0.2
@@ -355,7 +356,6 @@ module Games
         @@_buffer
       end
     end
-
 
     class Gift
       @@gift_start ||= Time.now
