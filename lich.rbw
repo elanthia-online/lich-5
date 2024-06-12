@@ -896,7 +896,8 @@ class SpellRanks
   end
 end
 
-require_relative(./lib/games.rb)
+require_relative('./lib/games.rb')
+require_relative('./lib/gameobj.rb')
 
 include Games::Gemstone
 

@@ -1,5 +1,5 @@
-#Carve-out for Games module from lich.rbw
-#2024-06-12
+# Carve-out for Games module from lich.rbw
+# 2024-06-12
 
 module Games
   module Unknown
@@ -40,7 +40,7 @@ module Games
         # One example of this is in the discern text for the spell Membrach's Greed
         # which gets sent as Membrach\x92s Greed. This fixes the bad encoding until
         # Simu fixes it.
-        if server_string =~ /\x92/
+        if server_string =~ /\\x92/
           Lich.log "Detected poorly encoded apostrophe: #{server_string.inspect}"
           server_string.gsub!("\x92", "'")
           Lich.log "Changed poorly encoded apostrophe to: #{server_string.inspect}"
@@ -356,7 +356,6 @@ module Games
       end
     end
 
-    require_relative("./lib/gameobj.rb")
 
     class Gift
       @@gift_start ||= Time.now
