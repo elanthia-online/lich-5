@@ -70,7 +70,7 @@ require 'json'
 require 'terminal-table'
 
 # TODO: Move all local requires to top of file
-if LIB_DIR
+if defined? LIB_DIR
   require File.join(LIB_DIR, 'constants.rb')
 else
   require_relative('./lib/constants.rb')
