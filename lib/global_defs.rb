@@ -2020,7 +2020,7 @@ end
 def monsterbold_start
   if $frontend =~ /^(?:wizard|avalon)$/
     "\034GSL\r\n"
-  elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity)$/
+  elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/
     '<pushBold/>'
   else
     ''
@@ -2030,7 +2030,7 @@ end
 def monsterbold_end
   if $frontend =~ /^(?:wizard|avalon)$/
     "\034GSM\r\n"
-  elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity)$/
+  elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/
     '<popBold/>'
   else
     ''
