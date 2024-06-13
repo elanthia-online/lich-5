@@ -24,21 +24,26 @@ stash.rb: Core lich file for extending free_hands, empty_hands functions in
 
 module Lich
   module Stash
-    def self.find_container(param)
-      GameObj.inv.find do |container|
-        container.name =~ %r[#{param}]
-      end or fail "could not find Container[name: #{param}]"
+    def self.find_container(param, loud_fail: true)
+      found_container = GameObj.inv.find do |container|
+        container.name =~ %r[#{param.strip}] || container.name =~ %r[#{param.sub(' ', ' .*')}]
+      end
+      if found_container.nil? && loud_fail
+        fail "could not find Container[name: #{param}]"
+      else
+        return found_container
+      end
     end
 
     def self.container(param)
       @weapon_displayer ||= []
-      container = find_container(param)
-      unless @weapon_displayer.include?(container.id)
-        result = Lich::Util.issue_command("look in ##{container.id}", /In the .*$|That is closed\.|^You glance at/, silent: true, quiet: true) if container.contents.nil?
-        fput "open ##{container.id}" if result.include?('That is closed.')
-        @weapon_displayer.push(container.id) if GameObj.containers.find { |item| item[0] == container.id }.nil?
+      container_to_check = find_container(param)
+      unless @weapon_displayer.include?(container_to_check.id)
+        result = Lich::Util.issue_command("look in ##{container_to_check.id}", /In the .*$|That is closed\.|^You glance at/, silent: true, quiet: true) if container_to_check.contents.nil?
+        fput "open ##{container_to_check.id}" if result.include?('That is closed.')
+        @weapon_displayer.push(container_to_check.id) if GameObj.containers.find { |item| item[0] == container_to_check.id }.nil?
       end
-      return container
+      return container_to_check
     end
 
     def self.try_or_fail(seconds: 2, command: nil)
@@ -103,13 +108,13 @@ module Lich
       end
       # weaponsack for both hands
       if UserVars.weapon and UserVars.weaponsack and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
-        weaponsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack).sub(' ', ' .*')}/i }
+        weaponsack = nil unless (weaponsack = container(UserVars.weaponsack, loud_fail: false)).is_a?(Games::Gemstone::GameObj)
       end
       # lootsack for both hands
       if UserVars.lootsack.nil? or UserVars.lootsack.empty?
         lootsack = nil
       else
-        lootsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack).sub(' ', ' .*')}/i }
+        lootsack = nil unless (lootsack = container(UserVars.lootsack, loud_fail: false)).is_a?(Games::Gemstone::GameObj)
       end
       # finding another container if needed
       other_containers_var = nil
