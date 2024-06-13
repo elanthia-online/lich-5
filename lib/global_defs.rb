@@ -1992,18 +1992,19 @@ def sf_to_wiz(line)
   end
 end
 
-def strip_xml(line)
+def strip_xml(line, type: 'main')
   return line if line == "\r\n"
 
-  if $strip_xml_multiline
-    $strip_xml_multiline = $strip_xml_multiline + line
-    line = $strip_xml_multiline
+  if $strip_xml_multiline[type]
+    $strip_xml_multiline[type] = $strip_xml_multiline[type] + line
+    line = $strip_xml_multiline[type]
   end
   if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
-    $strip_xml_multiline = line
+    $strip_xml_multiline ||= {}
+    $strip_xml_multiline[type] = line
     return nil
   end
-  $strip_xml_multiline = nil
+  $strip_xml_multiline[type] = nil
 
   line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
   line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
