@@ -17,7 +17,7 @@ module GameLoader
     require File.join(LIB_DIR, 'attributes', 'spells.rb')
     require File.join(LIB_DIR, 'attributes', 'skills.rb')
     require File.join(LIB_DIR, 'attributes', 'society.rb')
-    require File.join(LIB_DIR, 'attributes', 'status.rb')
+    require File.join(LIB_DIR, 'infomon', 'status.rb')
     require File.join(LIB_DIR, 'experience.rb')
     require File.join(LIB_DIR, 'attributes', 'spellsong.rb')
     require File.join(LIB_DIR, 'infomon', 'activespell.rb')
