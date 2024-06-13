@@ -52,6 +52,8 @@ for arg in ARGV
     BACKUP_DIR = $1
   elsif arg =~ /^--data=(.+)[\\\/]?$/i
     DATA_DIR = $1
+  elsif arg =~ /^--lib=(.+)[\\\/]?$/i
+    LIB_DIR = $1
   end
 end
 
@@ -68,18 +70,22 @@ require 'json'
 require 'terminal-table'
 
 # TODO: Move all local requires to top of file
-require_relative('./lib/constants')
-require 'lib/version'
+if LIB_DIR
+  require File.join(LIB_DIR, 'constants.rb')
+else
+  require_relative('./lib/constants.rb')
+end
+require File.join(LIB_DIR, 'version.rb')
 
-require 'lib/lich'
-require 'lib/init'
-require 'lib/front-end'
-require 'lib/update'
+require File.join(LIB_DIR, 'lich.rb')
+require File.join(LIB_DIR, 'init.rb')
+require File.join(LIB_DIR, 'front-end.rb')
+require File.join(LIB_DIR, 'update.rb')
 
 # TODO: Need to split out initiatilzation functions to move require to top of file
-require 'lib/gtk'
-require 'lib/gui-login'
-require 'lib/db_store'
+require File.join(LIB_DIR, 'gtk.rb')
+require File.join(LIB_DIR, 'gui-login.rb')
+require File.join(LIB_DIR, 'db_store.rb')
 class NilClass
   def dup
     nil
@@ -221,7 +227,7 @@ class LimitedArray < Array
   end
 end
 
-require_relative("./lib/xmlparser.rb")
+require File.join(LIB_DIR, 'xmlparser.rb')
 
 class UpstreamHook
   @@upstream_hooks ||= Hash.new
@@ -557,7 +563,7 @@ module Vars
 end
 
 # Script classes move to lib 230305
-require_relative('./lib/script.rb')
+require File.join(LIB_DIR, 'script.rb')
 
 class Watchfor
   def initialize(line, theproc = nil, &block)
@@ -587,9 +593,9 @@ end
 
 ## adding util to the list of defs
 
-require 'lib/util.rb'
-require 'lib/messaging.rb'
-require 'lib/global_defs.rb'
+require File.join(LIB_DIR, 'util.rb')
+require File.join(LIB_DIR, 'messaging.rb')
+require File.join(LIB_DIR, 'global_defs.rb')
 
 module Buffer
   DOWNSTREAM_STRIPPED = 1
@@ -828,9 +834,9 @@ class SpellRanks
   attr_accessor :minorspiritual, :majorspiritual, :cleric, :minorelemental, :majorelemental, :minormental, :ranger, :sorcerer, :wizard, :bard, :empath, :paladin, :arcanesymbols, :magicitemuse, :monk
 
   def SpellRanks.load
-    if File.exist?("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat")
+    if File.exist?(File.join(DATA_DIR, "#{XMLData.game}", "spell-ranks.dat"))
       begin
-        File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'rb') { |f|
+        File.open(File.join(DATA_DIR, "#{XMLData.game}", "spell-ranks.dat"), 'rb') { |f|
           @@timestamp, @@list = Marshal.load(f.read)
         }
         # minor mental circle added 2012-07-18; old data files will have @minormental as nil
@@ -852,7 +858,7 @@ class SpellRanks
 
   def SpellRanks.save
     begin
-      File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'wb') { |f|
+      File.open(File.join(DATA_DIR, "#{XMLData.game}", "spell-ranks.dat"), 'wb') { |f|
         f.write(Marshal.dump([@@timestamp, @@list]))
       }
     rescue
@@ -1046,7 +1052,7 @@ module Games
 
                 unless (XMLData.game.nil? or XMLData.game.empty?) 
                   unless Module.const_defined?(:GameLoader)
-                    require 'lib/game-loader'
+                    require File.join(LIB_DIR, 'game-loader.rb')
                     GameLoader.load!
                   end
                 end
@@ -1270,7 +1276,7 @@ module Games
       end
     end
 
-    require_relative("./lib/gameobj.rb")
+    require File.join(LIB_DIR, 'gameobj.rb')
 
     class Gift
       @@gift_start ||= Time.now
@@ -2240,11 +2246,11 @@ main_thread = Thread.new {
   $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
-  require_relative("./lib/eaccess.rb")
+  require File.join(LIB_DIR, 'eaccess.rb')
 
   if ARGV.include?('--login')
-    if File.exist?("#{DATA_DIR}/entry.dat")
-      entry_data = File.open("#{DATA_DIR}/entry.dat", 'r') { |blob|
+    if File.exist?(File.join(DATA_DIR, "entry.dat"))
+      entry_data = File.open(File.join(DATA_DIR, "entry.dat"), 'r') { |blob|
         begin
           Marshal.load(blob.read.unpack('m').first)
         rescue
@@ -2506,9 +2512,9 @@ main_thread = Thread.new {
           localhost = "localhost"
         end
         @launch_data.collect! { |line| line.sub(/GAMEPORT=.+/, "GAMEPORT=#{localport}").sub(/GAMEHOST=.+/, "GAMEHOST=#{localhost}") }
-        sal_filename = "#{TEMP_DIR}/lich#{rand(10000)}.sal"
+        sal_filename = File.join(TEMP_DIR, "lich#{rand(10000)}.sal")
         while File.exist?(sal_filename)
-          sal_filename = "#{TEMP_DIR}/lich#{rand(10000)}.sal"
+          sal_filename = File.join(TEMP_DIR, "lich#{rand(10000)}.sal")
         end
         File.open(sal_filename, 'w') { |f| f.puts @launch_data }
         launcher_cmd = launcher_cmd.sub('%1', sal_filename)

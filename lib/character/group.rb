@@ -1,6 +1,6 @@
 require "ostruct"
 require "benchmark"
-require "lib/character/disk"
+require File.join(LIB_DIR, 'character', 'disk.rb')
 
 module Games
   module Gemstone
