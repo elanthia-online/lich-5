@@ -52,6 +52,8 @@ for arg in ARGV
     BACKUP_DIR = $1
   elsif arg =~ /^--data=(.+)[\\\/]?$/i
     DATA_DIR = $1
+  elsif arg =~ /^--lib=(.+)[\\\/]?$/i
+    LIB_DIR = $1
   end
 end
 
