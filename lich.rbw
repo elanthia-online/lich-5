@@ -1193,7 +1193,7 @@ module Games
         if Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.0.0')
           @@socket = TCPSocket.open(host, port)
         else
-          @@socket = TCPSocket.open(host, port, connect_timeout: 5)
+          @@socket = TCPSocket.open(host, port, connect_timeout: 60)
         end
         begin
           @@socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, true)
