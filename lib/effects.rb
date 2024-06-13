@@ -16,17 +16,23 @@ module Games
           to_h.each { |k, v| yield(k, v) }
         end
 
+        def expiration(effect)
+          if effect.is_a?(Regexp)
+            to_h.find { |k, _v| k.to_s =~ effect }[1] || 0
+          else
+            to_h.fetch(effect, 0)
+          end
+        end
+
         def active?(effect)
-          expiry = to_h.fetch(effect, 0)
-          expiry.to_f > Time.now.to_f
+          expiration(effect).to_f > Time.now.to_f
         end
 
         def time_left(effect)
-          expiry = to_h.fetch(effect, 0)
-          if to_h.fetch(effect, 0) != 0
-            ((expiry - Time.now) / 60.to_f)
+          if expiration(effect) != 0
+            ((expiration(effect) - Time.now) / 60.to_f)
           else
-            expiry
+            expiration(effect)
           end
         end
       end
