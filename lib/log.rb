@@ -4,7 +4,7 @@
 module Log
   @@log_enabled = nil
   @@log_filter  = nil
-  
+
   def self.on(filter = //)
     @@log_enabled = true
     @@log_filter = filter
