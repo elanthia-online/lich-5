@@ -1725,49 +1725,49 @@ def running?(*snames)
 end
 
 module Settings
-  def Settings.load; end
+  def Settings.load; Lich.deprecated('Settings.load', 'not using, not applicable,', caller[0]); end
 
-  def Settings.save_all; end
+  def Settings.save_all; Lich.deprecated('Settings.save_all', 'not using, not applicable,', caller[0]); end
 
-  def Settings.clear; end
+  def Settings.clear; Lich.deprecated('Settings.clear', 'not using, not applicable,', caller[0]); end
 
-  def Settings.auto=(val); end
+  def Settings.auto=(val); Lich.deprecated('Settings.auto=(val)', 'not using, not applicable,', caller[0]); end
 
-  def Settings.auto; end
+  def Settings.auto; Lich.deprecated('Settings.auto', 'not using, not applicable,', caller[0]); end
 
-  def Settings.autoload; end
+  def Settings.autoload; Lich.deprecated('Settings.autoload', 'not using, not applicable,', caller[0]); end
 end
 
 module GameSettings
-  def GameSettings.load; end
+  def GameSettings.load; Lich.deprecated('GameSettings.load', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.save; end
+  def GameSettings.save; Lich.deprecated('GameSettings.save', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.save_all; end
+  def GameSettings.save_all; Lich.deprecated('GameSettings.save_all', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.clear; end
+  def GameSettings.clear; Lich.deprecated('GameSettings.clear', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.auto=(val); end
+  def GameSettings.auto=(val); Lich.deprecated('GameSettings.auto=(val)', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.auto; end
+  def GameSettings.auto; Lich.deprecated('GameSettings.auto', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.autoload; end
+  def GameSettings.autoload; Lich.deprecated('GameSettings.autoload', 'not using, not applicable,', caller[0]); end
 end
 
 module CharSettings
-  def CharSettings.load; end
+  def CharSettings.load; Lich.deprecated('CharSettings.load', 'not using, not applicable,', caller[0]); end
 
-  def CharSettings.save; end
+  def CharSettings.save; Lich.deprecated('CharSettings.save', 'not using, not applicable,', caller[0]); end
 
-  def CharSettings.save_all; end
+  def CharSettings.save_all; Lich.deprecated('CharSettings.save_all', 'not using, not applicable,', caller[0]); end
 
-  def CharSettings.clear; end
+  def CharSettings.clear; Lich.deprecated('CharSettings.clear', 'not using, not applicable,', caller[0]); end
 
-  def CharSettings.auto=(val); end
+  def CharSettings.auto=(val); Lich.deprecated('CharSettings.auto=(val)', 'not using, not applicable,', caller[0]); end
 
-  def CharSettings.auto; end
+  def CharSettings.auto; Lich.deprecated('CharSettings.auto', 'not using, not applicable,', caller[0]); end
 
-  def CharSettings.autoload; end
+  def CharSettings.autoload; Lich.deprecated('CharSettings.autoload', 'not using, not applicable,', caller[0]); end
 end
 
 module UserVars
