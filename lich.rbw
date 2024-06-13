@@ -324,7 +324,6 @@ end
 module Settings
   settings    = Hash.new
   md5_at_load = Hash.new
-  mutex       = Mutex.new
   @@settings = proc { |scope|
     unless (script = Script.current)
       respond '--- error: Settings: unknown calling script'
@@ -334,7 +333,7 @@ module Settings
       respond '--- error: Settings: invalid scope'
       next nil
     end
-    mutex.synchronize {
+    Lich.db_mutex.synchronize {
       unless settings[script.name] and settings[script.name][scope]
         begin
           marshal_hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', [script.name.encode('UTF-8'), scope.encode('UTF-8')])
@@ -362,7 +361,7 @@ module Settings
     settings[script.name][scope]
   }
   @@save = proc {
-    mutex.synchronize {
+    Lich.db_mutex.synchronize {
       sql_began = false
       settings.each_pair { |script_name, scopedata|
         scopedata.each_pair { |scope, data|
@@ -467,10 +466,9 @@ end
 module Vars
   @@vars   = Hash.new
   md5      = nil
-  mutex    = Mutex.new
   @@loaded = false
   @@load = proc {
-    mutex.synchronize {
+    Lich.db_mutex.synchronize {
       unless @@loaded
         begin
           h = Lich.db.get_first_value('SELECT hash FROM uservars WHERE scope=?;', ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8')])
@@ -494,7 +492,7 @@ module Vars
     nil
   }
   @@save = proc {
-    mutex.synchronize {
+    Lich.db_mutex.synchronize {
       if @@loaded
         if Digest::MD5.hexdigest(@@vars.to_s) != md5
           md5 = Digest::MD5.hexdigest(@@vars.to_s)
