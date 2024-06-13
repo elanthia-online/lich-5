@@ -917,6 +917,7 @@ module Games
       @@_buffer.max_size = 1000
       @@autostarted = false
       @@cli_scripts = false
+      @@infomon_loaded = false
 
       def self.clean_gs_serverstring(server_string)
         # The Rift, Scatter is broken...
@@ -1089,6 +1090,11 @@ module Games
                       Lich::Messaging.mono(Lich::Messaging.monsterbold(row))
                     }
                   end
+                end
+
+                if !@@infomon_loaded && defined?(Infomon) && !XMLData.name.empty?
+                  ExecScript.start("Infomon.redo!", { :quiet => true, :name => "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
+                  @@infomon_loaded = true
                 end
 
                 if @@autostarted and !@@cli_scripts and $_SERVERSTRING_ =~ /roomDesc/

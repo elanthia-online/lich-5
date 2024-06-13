@@ -84,6 +84,23 @@ module Infomon
                          WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed)
     end
 
+    def self.find_cat(category)
+      case category
+      when /Armor/
+        'Armor'
+      when /Ascension/
+        'Ascension'
+      when /Combat/
+        'CMan'
+      when /Feat/
+        'Feat'
+      when /Shield/
+        'Shield'
+      when /Weapon/
+        'Weapon'
+      end
+    end
+
     def self.parse(line)
       # O(1) vs O(N)
       return :noop unless line =~ Pattern::All
@@ -197,16 +214,12 @@ module Infomon
         when Pattern::PSMStart
           match = Regexp.last_match
           @psm_hold = []
-          if match[:cat] =~ /Ascension/
-            @psm_cat = 'ascension'
-          else
-            @psm_cat = 'psm'
-          end
+          @psm_cat = find_cat(match[:cat])
           Infomon.mutex_lock
           :ok
         when Pattern::PSM
           match = Regexp.last_match
-          @psm_hold.push(["#{@psm_cat}.%s" % match[:command], match[:ranks].to_i])
+          @psm_hold.push(["#{@psm_cat.downcase}.%s" % match[:command], match[:ranks].to_i])
           :ok
         when Pattern::PSMEnd
           Infomon.upsert_batch(@psm_hold)
@@ -280,43 +293,25 @@ module Infomon
           :ok
         when Pattern::LearnPSM, Pattern::LearnTechnique
           match = Regexp.last_match
-          category = match[:cat]
-          category = "CMan" if category =~ /Combat/
-          if category =~ /Ascension/
-            @psm_cat = 'ascension'
-          else
-            @psm_cat = 'psm'
-          end
+          @psm_cat = find_cat(match[:cat])
           seek_name = PSMS.name_normal(match[:psm])
-          db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", match[:rank].to_i)
+          db_name = PSMS.find_name(seek_name, @psm_cat)
+          Infomon.set("#{@psm_cat.downcase}.#{db_name[:short_name]}", match[:rank].to_i)
           :ok
         when Pattern::UnlearnPSM, Pattern::UnlearnTechnique
           match = Regexp.last_match
-          category = match[:cat]
-          category = "CMan" if category =~ /Combat/
-          if category =~ /Ascension/
-            @psm_cat = 'ascension'
-          else
-            @psm_cat = 'psm'
-          end
+          @psm_cat = find_cat(match[:cat])
           seek_name = PSMS.name_normal(match[:psm])
           no_decrement = (match.string =~ /have decreased to/)
-          db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
+          db_name = PSMS.find_name(seek_name, @psm_cat)
+          Infomon.set("#{@psm_cat.downcase}.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
           :ok
         when Pattern::LostTechnique
           match = Regexp.last_match
-          category = match[:cat]
-          category = "CMan" if category =~ /Combat/
-          if category =~ /Ascension/
-            @psm_cat = 'ascension'
-          else
-            @psm_cat = 'psm'
-          end
+          @psm_cat = find_cat(match[:cat])
           seek_name = PSMS.name_normal(match[:psm])
-          db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", 0)
+          db_name = PSMS.find_name(seek_name, @psm_cat)
+          Infomon.set("#{@psm_cat.downcase}.#{db_name[:short_name]}", 0)
           :ok
         when Pattern::Resource
           match = Regexp.last_match
