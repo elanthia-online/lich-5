@@ -1,11 +1,11 @@
 LICH_DIR    ||= File.dirname(File.expand_path($PROGRAM_NAME))
-TEMP_DIR    ||= "#{LICH_DIR}/temp".freeze
-DATA_DIR    ||= "#{LICH_DIR}/data".freeze
-SCRIPT_DIR  ||= "#{LICH_DIR}/scripts".freeze
-LIB_DIR     ||= "#{LICH_DIR}/lib".freeze
-MAP_DIR     ||= "#{LICH_DIR}/maps".freeze
-LOG_DIR     ||= "#{LICH_DIR}/logs".freeze
-BACKUP_DIR  ||= "#{LICH_DIR}/backup".freeze
+TEMP_DIR    ||= File.join(LICH_DIR, "temp").freeze
+DATA_DIR    ||= File.join(LICH_DIR, "data").freeze
+SCRIPT_DIR  ||= File.join(LICH_DIR, "scripts").freeze
+LIB_DIR     ||= File.join(LICH_DIR, "lib").freeze
+MAP_DIR     ||= File.join(LICH_DIR, "maps").freeze
+LOG_DIR     ||= File.join(LICH_DIR, "logs").freeze
+BACKUP_DIR  ||= File.join(LICH_DIR, "backup").freeze
 
 TESTING = false
 

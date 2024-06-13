@@ -52,6 +52,8 @@ for arg in ARGV
     BACKUP_DIR = $1
   elsif arg =~ /^--data=(.+)[\\\/]?$/i
     DATA_DIR = $1
+  elsif arg =~ /^--lib=(.+)[\\\/]?$/i
+    LIB_DIR = $1
   end
 end
 
@@ -68,18 +70,22 @@ require 'json'
 require 'terminal-table'
 
 # TODO: Move all local requires to top of file
-require_relative('./lib/constants')
-require 'lib/version'
+if defined? LIB_DIR
+  require File.join(LIB_DIR, 'constants.rb')
+else
+  require_relative('./lib/constants.rb')
+end
+require File.join(LIB_DIR, 'version.rb')
 
-require 'lib/lich'
-require 'lib/init'
-require 'lib/front-end'
-require 'lib/update'
+require File.join(LIB_DIR, 'lich.rb')
+require File.join(LIB_DIR, 'init.rb')
+require File.join(LIB_DIR, 'front-end.rb')
+require File.join(LIB_DIR, 'update.rb')
 
 # TODO: Need to split out initiatilzation functions to move require to top of file
-require 'lib/gtk'
-require 'lib/gui-login'
-require 'lib/db_store'
+require File.join(LIB_DIR, 'gtk.rb')
+require File.join(LIB_DIR, 'gui-login.rb')
+require File.join(LIB_DIR, 'db_store.rb')
 class NilClass
   def dup
     nil
@@ -221,7 +227,7 @@ class LimitedArray < Array
   end
 end
 
-require_relative("./lib/xmlparser.rb")
+require File.join(LIB_DIR, 'xmlparser.rb')
 
 class UpstreamHook
   @@upstream_hooks ||= Hash.new
@@ -324,7 +330,6 @@ end
 module Settings
   settings    = Hash.new
   md5_at_load = Hash.new
-  mutex       = Mutex.new
   @@settings = proc { |scope|
     unless (script = Script.current)
       respond '--- error: Settings: unknown calling script'
@@ -334,7 +339,7 @@ module Settings
       respond '--- error: Settings: invalid scope'
       next nil
     end
-    mutex.synchronize {
+    Lich.db_mutex.synchronize {
       unless settings[script.name] and settings[script.name][scope]
         begin
           marshal_hash = Lich.db.get_first_value('SELECT hash FROM script_auto_settings WHERE script=? AND scope=?;', [script.name.encode('UTF-8'), scope.encode('UTF-8')])
@@ -362,7 +367,7 @@ module Settings
     settings[script.name][scope]
   }
   @@save = proc {
-    mutex.synchronize {
+    Lich.db_mutex.synchronize {
       sql_began = false
       settings.each_pair { |script_name, scopedata|
         scopedata.each_pair { |scope, data|
@@ -467,10 +472,9 @@ end
 module Vars
   @@vars   = Hash.new
   md5      = nil
-  mutex    = Mutex.new
   @@loaded = false
   @@load = proc {
-    mutex.synchronize {
+    Lich.db_mutex.synchronize {
       unless @@loaded
         begin
           h = Lich.db.get_first_value('SELECT hash FROM uservars WHERE scope=?;', ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8')])
@@ -494,7 +498,7 @@ module Vars
     nil
   }
   @@save = proc {
-    mutex.synchronize {
+    Lich.db_mutex.synchronize {
       if @@loaded
         if Digest::MD5.hexdigest(@@vars.to_s) != md5
           md5 = Digest::MD5.hexdigest(@@vars.to_s)
@@ -559,7 +563,7 @@ module Vars
 end
 
 # Script classes move to lib 230305
-require_relative('./lib/script.rb')
+require File.join(LIB_DIR, 'script.rb')
 
 class Watchfor
   def initialize(line, theproc = nil, &block)
@@ -589,9 +593,9 @@ end
 
 ## adding util to the list of defs
 
-require 'lib/util.rb'
-require 'lib/messaging.rb'
-require 'lib/global_defs.rb'
+require File.join(LIB_DIR, 'util.rb')
+require File.join(LIB_DIR, 'messaging.rb')
+require File.join(LIB_DIR, 'global_defs.rb')
 
 module Buffer
   DOWNSTREAM_STRIPPED = 1
@@ -830,9 +834,9 @@ class SpellRanks
   attr_accessor :minorspiritual, :majorspiritual, :cleric, :minorelemental, :majorelemental, :minormental, :ranger, :sorcerer, :wizard, :bard, :empath, :paladin, :arcanesymbols, :magicitemuse, :monk
 
   def SpellRanks.load
-    if File.exist?("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat")
+    if File.exist?(File.join(DATA_DIR, "#{XMLData.game}", "spell-ranks.dat"))
       begin
-        File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'rb') { |f|
+        File.open(File.join(DATA_DIR, "#{XMLData.game}", "spell-ranks.dat"), 'rb') { |f|
           @@timestamp, @@list = Marshal.load(f.read)
         }
         # minor mental circle added 2012-07-18; old data files will have @minormental as nil
@@ -854,7 +858,7 @@ class SpellRanks
 
   def SpellRanks.save
     begin
-      File.open("#{DATA_DIR}/#{XMLData.game}/spell-ranks.dat", 'wb') { |f|
+      File.open(File.join(DATA_DIR, "#{XMLData.game}", "spell-ranks.dat"), 'wb') { |f|
         f.write(Marshal.dump([@@timestamp, @@list]))
       }
     rescue
@@ -913,6 +917,7 @@ module Games
       @@_buffer.max_size = 1000
       @@autostarted = false
       @@cli_scripts = false
+      @@infomon_loaded = false
 
       def self.clean_gs_serverstring(server_string)
         # The Rift, Scatter is broken...
@@ -1048,7 +1053,7 @@ module Games
 
                 unless (XMLData.game.nil? or XMLData.game.empty?) 
                   unless Module.const_defined?(:GameLoader)
-                    require 'lib/game-loader'
+                    require File.join(LIB_DIR, 'game-loader.rb')
                     GameLoader.load!
                   end
                 end
@@ -1071,6 +1076,32 @@ module Games
                   end
                   Script.start('autostart') if Script.exists?('autostart')
                   @@autostarted = true
+                  if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(RECOMMENDED_RUBY)
+                    ruby_warning = Terminal::Table.new
+                    ruby_warning.title = "Ruby Recommended Version Warning"
+                    ruby_warning.add_row(["Please update your Ruby installation."])
+                    ruby_warning.add_row(["You're currently running Ruby v#{Gem::Version.new(RUBY_VERSION)}!"])
+                    ruby_warning.add_row(["It's recommended to run Ruby v#{Gem::Version.new(RECOMMENDED_RUBY)} or higher!"])
+                    ruby_warning.add_row(["Future Lich5 releases will soon require this newer version."])
+                    ruby_warning.add_row([" "])
+                    ruby_warning.add_row(["Visit the following link for info on updating:"])
+                    if XMLData.game =~ /^GS/
+                      ruby_warning.add_row(["https://gswiki.play.net/Lich:Software/Installation"])
+                    elsif XMLData.game =~ /^DR/
+                      ruby_warning.add_row(["https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich"])
+                    else
+                      ruby_warning.add_row(["Unknown game type #{XMLData.game} detected."])
+                      ruby_warning.add_row(["Unsure of proper documentation, please seek assistance via discord!"])
+                    end
+                    ruby_warning.to_s.split("\n").each { |row|
+                      Lich::Messaging.mono(Lich::Messaging.monsterbold(row))
+                    }
+                  end
+                end
+
+                if !@@infomon_loaded && defined?(Infomon) && !XMLData.name.empty?
+                  ExecScript.start("Infomon.redo!", { :quiet => true, :name => "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
+                  @@infomon_loaded = true
                 end
 
                 if @@autostarted and !@@cli_scripts and $_SERVERSTRING_ =~ /roomDesc/
@@ -1154,7 +1185,7 @@ module Games
                   if Module.const_defined?(:GameLoader) && XMLData.game =~ /^GS/
                     infomon_serverstring = $_SERVERSTRING_.dup
                     Infomon::XMLParser.parse(infomon_serverstring)
-                    stripped_infomon_serverstring = strip_xml(infomon_serverstring)
+                    stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
                     stripped_infomon_serverstring.split("\r\n").each { |line|
                       unless line.empty?
                         Infomon::Parser.parse(line)
@@ -1162,22 +1193,14 @@ module Games
                     }
                   end
                   Script.new_downstream_xml($_SERVERSTRING_)
-                  stripped_server = strip_xml($_SERVERSTRING_)
+                  stripped_server = strip_xml($_SERVERSTRING_, type: 'main')
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
                     if defined?(Map) and Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
                       Map.last_seen_objects = $1 # DR only: copy loot line to Map.last_seen_objects
                     end
 
-                    if !line.empty?
-                      if XMLData.game =~ /^GS/
-                        Script.new_downstream(line)
-                      else
-                        unless line =~ /^\s\*\s[A-Z][a-z]+ (?:returns home from a hard day of adventuring\.|joins the adventure\.|(?:is off to a rough start!  (?:H|She) )?just bit the dust!|was just incinerated!|was just vaporized!|has been vaporized!|has disconnected\.)$|^ \* The death cry of [A-Z][a-z]+ echoes in your mind!$|^\r*\n*$/
-                          Script.new_downstream(line)
-                        end
-                      end
-                    end
+                    Script.new_downstream(line) if !line.empty?
                   }
                 end
               rescue
@@ -1258,7 +1281,7 @@ module Games
       end
     end
 
-    require_relative("./lib/gameobj.rb")
+    require File.join(LIB_DIR, 'gameobj.rb')
 
     class Gift
       @@gift_start ||= Time.now
@@ -1564,56 +1587,6 @@ $room_count = 0
 $psinet = false
 $stormfront = true
 
-class Script
-  def Script.self
-    Script.current
-  end
-
-  def Script.running
-    list = Array.new
-    for script in @@running
-      list.push(script) unless script.hidden
-    end
-    return list
-  end
-
-  def Script.index
-    Script.running
-  end
-
-  def Script.hidden
-    list = Array.new
-    for script in @@running
-      list.push(script) if script.hidden
-    end
-    return list
-  end
-
-  def Script.namescript_incoming(line)
-    Script.new_downstream(line)
-  end
-end
-
-def start_script(script_name, cli_vars = [], flags = Hash.new)
-  if flags == true
-    flags = { :quiet => true }
-  end
-  Script.start(script_name, cli_vars.join(' '), flags)
-end
-
-def start_scripts(*script_names)
-  script_names.flatten.each { |script_name|
-    start_script(script_name)
-    sleep 0.02
-  }
-end
-
-def force_start_script(script_name, cli_vars = [], flags = {})
-  flags = Hash.new unless flags.class == Hash
-  flags[:force] = true
-  start_script(script_name, cli_vars, flags)
-end
-
 def survivepoison?
   echo 'survivepoison? called, but there is no XML for poison rate'
   return true
@@ -1622,18 +1595,6 @@ end
 def survivedisease?
   echo 'survivepoison? called, but there is no XML for disease rate'
   return true
-end
-
-def before_dying(&code)
-  Script.at_exit(&code)
-end
-
-def undo_before_dying
-  Script.clear_exit_procs
-end
-
-def abort!
-  Script.exit!
 end
 
 def fetchloot(userbagchoice = UserVars.lootsack)
@@ -1679,77 +1640,50 @@ def take(*items)
   if unsh then fput("take my #{weap} from my #{UserVars.lootsack}") end
 end
 
-def stop_script(*target_names)
-  numkilled = 0
-  target_names.each { |target_name|
-    condemned = Script.list.find { |s_sock| s_sock.name =~ /^#{target_name}/i }
-    if condemned.nil?
-      respond("--- Lich: '#{Script.current}' tried to stop '#{target_name}', but it isn't running!")
-    else
-      if condemned.name =~ /^#{Script.current.name}$/i
-        exit
-      end
-      condemned.kill
-      respond("--- Lich: '#{condemned}' has been stopped by #{Script.current}.")
-      numkilled += 1
-    end
-  }
-  if numkilled == 0
-    return false
-  else
-    return numkilled
-  end
-end
-
-def running?(*snames)
-  snames.each { |checking| (return false) unless (Script.running.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.running.find { |lscr| lscr.name =~ /^#{checking}/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}/i }) }
-  true
-end
-
 module Settings
-  def Settings.load; end
+  def Settings.load; Lich.deprecated('Settings.load', 'not using, not applicable,', caller[0]); end
 
-  def Settings.save_all; end
+  def Settings.save_all; Lich.deprecated('Settings.save_all', 'not using, not applicable,', caller[0]); end
 
-  def Settings.clear; end
+  def Settings.clear; Lich.deprecated('Settings.clear', 'not using, not applicable,', caller[0]); end
 
-  def Settings.auto=(val); end
+  def Settings.auto=(val); Lich.deprecated('Settings.auto=(val)', 'not using, not applicable,', caller[0]); end
 
-  def Settings.auto; end
+  def Settings.auto; Lich.deprecated('Settings.auto', 'not using, not applicable,', caller[0]); end
 
-  def Settings.autoload; end
+  def Settings.autoload; Lich.deprecated('Settings.autoload', 'not using, not applicable,', caller[0]); end
 end
 
 module GameSettings
-  def GameSettings.load; end
+  def GameSettings.load; Lich.deprecated('GameSettings.load', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.save; end
+  def GameSettings.save; Lich.deprecated('GameSettings.save', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.save_all; end
+  def GameSettings.save_all; Lich.deprecated('GameSettings.save_all', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.clear; end
+  def GameSettings.clear; Lich.deprecated('GameSettings.clear', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.auto=(val); end
+  def GameSettings.auto=(val); Lich.deprecated('GameSettings.auto=(val)', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.auto; end
+  def GameSettings.auto; Lich.deprecated('GameSettings.auto', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.autoload; end
+  def GameSettings.autoload; Lich.deprecated('GameSettings.autoload', 'not using, not applicable,', caller[0]); end
 end
 
 module CharSettings
-  def CharSettings.load; end
+  def CharSettings.load; Lich.deprecated('CharSettings.load', 'not using, not applicable,', caller[0]); end
 
-  def CharSettings.save; end
+  def CharSettings.save; Lich.deprecated('CharSettings.save', 'not using, not applicable,', caller[0]); end
 
-  def CharSettings.save_all; end
+  def CharSettings.save_all; Lich.deprecated('CharSettings.save_all', 'not using, not applicable,', caller[0]); end
 
-  def CharSettings.clear; end
+  def CharSettings.clear; Lich.deprecated('CharSettings.clear', 'not using, not applicable,', caller[0]); end
 
-  def CharSettings.auto=(val); end
+  def CharSettings.auto=(val); Lich.deprecated('CharSettings.auto=(val)', 'not using, not applicable,', caller[0]); end
 
-  def CharSettings.auto; end
+  def CharSettings.auto; Lich.deprecated('CharSettings.auto', 'not using, not applicable,', caller[0]); end
 
-  def CharSettings.autoload; end
+  def CharSettings.autoload; Lich.deprecated('CharSettings.autoload', 'not using, not applicable,', caller[0]); end
 end
 
 module UserVars
@@ -1782,10 +1716,6 @@ module UserVars
   end
 end
 
-def start_exec_script(cmd_data, options = Hash.new)
-  ExecScript.start(cmd_data, options)
-end
-
 class StringProc
   def StringProc._load(string)
     StringProc.new(string)
@@ -1811,62 +1741,6 @@ end
 # End deprecated stuff
 #
 
-undef :abort
-alias :mana :checkmana
-alias :mana? :checkmana
-alias :max_mana :maxmana
-alias :health :checkhealth
-alias :health? :checkhealth
-alias :spirit :checkspirit
-alias :spirit? :checkspirit
-alias :stamina :checkstamina
-alias :stamina? :checkstamina
-alias :stunned? :checkstunned
-alias :bleeding? :checkbleeding
-alias :reallybleeding? :checkreallybleeding
-alias :poisoned? :checkpoison
-alias :diseased? :checkdisease
-alias :dead? :checkdead
-alias :hiding? :checkhidden
-alias :hidden? :checkhidden
-alias :hidden :checkhidden
-alias :checkhiding :checkhidden
-alias :invisible? :checkinvisible
-alias :standing? :checkstanding
-alias :kneeling? :checkkneeling
-alias :sitting? :checksitting
-alias :stance? :checkstance
-alias :stance :checkstance
-alias :joined? :checkgrouped
-alias :checkjoined :checkgrouped
-alias :group? :checkgrouped
-alias :myname? :checkname
-alias :active? :checkspell
-alias :righthand? :checkright
-alias :lefthand? :checkleft
-alias :righthand :checkright
-alias :lefthand :checkleft
-alias :mind? :checkmind
-alias :checkactive :checkspell
-alias :forceput :fput
-alias :send_script :send_scripts
-alias :stop_scripts :stop_script
-alias :kill_scripts :stop_script
-alias :kill_script :stop_script
-alias :fried? :checkfried
-alias :saturated? :checksaturated
-alias :webbed? :checkwebbed
-alias :pause_scripts :pause_script
-alias :roomdescription? :checkroomdescrip
-alias :prepped? :checkprep
-alias :checkprepared :checkprep
-alias :unpause_scripts :unpause_script
-alias :priority? :setpriority
-alias :checkoutside :outside?
-alias :toggle_status :status_tags
-alias :encumbrance? :checkencumbrance
-alias :bounty? :checkbounty
-
 #
 # Program start
 #
@@ -1881,27 +1755,29 @@ for arg in ARGV
     puts 'Usage:  lich [OPTION]'
     puts ''
     puts 'Options are:'
-    puts '  -h, --help          Display this list.'
-    puts '  -V, --version       Display the program version number and credits.'
+    puts '  -h, --help            Display this list.'
+    puts '  -V, --version         Display the program version number and credits.'
     puts ''
-    puts '  -d, --directory     Set the main Lich program directory.'
-    puts '      --script-dir    Set the directoy where Lich looks for scripts.'
-    puts '      --data-dir      Set the directory where Lich will store script data.'
-    puts '      --temp-dir      Set the directory where Lich will store temporary files.'
+    puts '  -d, --directory       Set the main Lich program directory.'
+    puts '      --script-dir      Set the directoy where Lich looks for scripts.'
+    puts '      --data-dir        Set the directory where Lich will store script data.'
+    puts '      --temp-dir        Set the directory where Lich will store temporary files.'
     puts ''
-    puts '  -w, --wizard        Run in Wizard mode (default)'
-    puts '  -s, --stormfront    Run in StormFront mode.'
-    puts '      --avalon        Run in Avalon mode.'
-    puts '      --frostbite     Run in Frosbite mode.'
+    puts '  -w, --wizard          Run in Wizard mode (default)'
+    puts '  -s, --stormfront      Run in StormFront mode.'
+    puts '      --avalon          Run in Avalon mode.'
+    puts '      --frostbite       Run in Frosbite mode.'
     puts ''
-    puts '      --gemstone      Connect to the Gemstone IV Prime server (default).'
-    puts '      --dragonrealms  Connect to the DragonRealms server.'
-    puts '      --platinum      Connect to the Gemstone IV/DragonRealms Platinum server.'
-    puts '      --test          Connect to the test instance of the selected game server.'
-    puts '  -g, --game          Set the IP address and port of the game.  See example below.'
+    puts '      --dark-mode       Enable/disable darkmode without GUI. See example below.'
     puts ''
-    puts '      --install       Edits the Windows/WINE registry so that Lich is started when logging in using the website or SGE.'
-    puts '      --uninstall     Removes Lich from the registry.'
+    puts '      --gemstone        Connect to the Gemstone IV Prime server (default).'
+    puts '      --dragonrealms    Connect to the DragonRealms server.'
+    puts '      --platinum        Connect to the Gemstone IV/DragonRealms Platinum server.'
+    puts '      --test            Connect to the test instance of the selected game server.'
+    puts '  -g, --game            Set the IP address and port of the game.  See example below.'
+    puts ''
+    puts '      --install         Edits the Windows/WINE registry so that Lich is started when logging in using the website or SGE.'
+    puts '      --uninstall       Removes Lich from the registry.'
     puts ''
     puts 'The majority of Lich\'s built-in functionality was designed and implemented with Simutronics MUDs in mind (primarily Gemstone IV): as such, many options/features provided by Lich may not be applicable when it is used with a non-Simutronics MUD.  In nearly every aspect of the program, users who are not playing a Simutronics game should be aware that if the description of a feature/option does not sound applicable and/or compatible with the current game, it should be assumed that the feature/option is not.  This particularly applies to in-script methods (commands) that depend heavily on the data received from the game conforming to specific patterns (for instance, it\'s extremely unlikely Lich will know how much "health" your character has left in a non-Simutronics game, and so the "health" script command will most likely return a value of 0).'
     puts ''
@@ -1914,6 +1790,8 @@ for arg in ARGV
     puts '  lich --dragonrealms --test --genie (run Lich connected to DragonRealms Test server for the Genie frontend)'
     puts '  lich --script-dir /mydir/scripts   (run Lich with its script directory set to \'/mydir/scripts\')'
     puts '  lich --bare -g skotos.net:5555     (run in bare-bones mode with the IP address and port of the game set to \'skotos.net:5555\')'
+    puts '  lich --login YourCharName --detachable-client=8000 --without-frontend --dark-mode=true'
+    puts '       ... (run Lich and login without the GUI in a headless state while enabling dark mode for Lich spawned windows)'
     puts ''
     exit
   elsif (arg == '-v') or (arg == '--version')
@@ -2028,6 +1906,16 @@ for arg in ARGV
       end
     end
     bad_args.clear
+  elsif arg =~ /^--dark-mode=(true|false|on|off)$/i
+    value = $1
+    if value =~ /^(true|on)$/i 
+      argv_options[:dark_mode] = true
+    elsif value =~ /^(false|off)$/i 
+      argv_options[:dark_mode] = false
+    end
+    if defined?(Gtk)
+      @theme_state = Lich.track_dark_mode = argv_options[:dark_mode]
+    end
   else
     bad_args.push(arg)
   end
@@ -2228,11 +2116,11 @@ main_thread = Thread.new {
   $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
-  require_relative("./lib/eaccess.rb")
+  require File.join(LIB_DIR, 'eaccess.rb')
 
   if ARGV.include?('--login')
-    if File.exist?("#{DATA_DIR}/entry.dat")
-      entry_data = File.open("#{DATA_DIR}/entry.dat", 'r') { |blob|
+    if File.exist?(File.join(DATA_DIR, "entry.dat"))
+      entry_data = File.open(File.join(DATA_DIR, "entry.dat"), 'r') { |blob|
         begin
           Marshal.load(blob.read.unpack('m').first)
         rescue
@@ -2494,9 +2382,9 @@ main_thread = Thread.new {
           localhost = "localhost"
         end
         @launch_data.collect! { |line| line.sub(/GAMEPORT=.+/, "GAMEPORT=#{localport}").sub(/GAMEHOST=.+/, "GAMEHOST=#{localhost}") }
-        sal_filename = "#{TEMP_DIR}/lich#{rand(10000)}.sal"
+        sal_filename = File.join(TEMP_DIR, "lich#{rand(10000)}.sal")
         while File.exist?(sal_filename)
-          sal_filename = "#{TEMP_DIR}/lich#{rand(10000)}.sal"
+          sal_filename = File.join(TEMP_DIR, "lich#{rand(10000)}.sal")
         end
         File.open(sal_filename, 'w') { |f| f.puts @launch_data }
         launcher_cmd = launcher_cmd.sub('%1', sal_filename)

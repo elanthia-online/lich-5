@@ -471,6 +471,36 @@ class Script
       return false
     end
   end
+
+  # moved from lich.rbw 2024
+  def Script.self
+    Script.current
+  end
+  
+  def Script.running
+    list = Array.new
+    for script in @@running
+      list.push(script) unless script.hidden
+    end
+    return list
+  end
+  
+  def Script.index
+    Script.running
+  end
+  
+  def Script.hidden
+    list = Array.new
+    for script in @@running
+      list.push(script) if script.hidden
+    end
+    return list
+  end
+  
+  def Script.namescript_incoming(line)
+    Script.new_downstream(line)
+  end
+
   if (RUBY_VERSION =~ /^2\.[012]\./)
     def Script.trust(script_name)
       # fixme: case sensitive blah blah
@@ -531,6 +561,7 @@ class Script
       []
     end
   end
+
   def initialize(args)
     @file_name = args[:file]
     @name = /.*[\/\\]+([^\.]+)\./.match(@file_name).captures.first

@@ -1,34 +1,46 @@
 # handles instances of modules that are game dependent
 module GameLoader
+  def self.common_before
+    require File.join(LIB_DIR, 'log.rb')
+  end
+
   def self.gemstone
-    require 'lib/map/map_gs.rb'
-    require 'lib/spell'
-    require 'lib/effects'
-    require 'lib/bounty'
-    require 'lib/claim'
-    require 'lib/infomon/infomon'
-    require 'lib/attributes/resources'
-    require 'lib/attributes/stats'
-    require 'lib/attributes/spells'
-    require 'lib/attributes/skills'
-    require 'lib/attributes/society'
-    require 'lib/infomon/status'
-    require 'lib/experience'
-    require 'lib/attributes/spellsong'
-    require 'lib/infomon/activespell'
+    self.common_before
+    require File.join(LIB_DIR, 'map', 'map_gs.rb')
+    require File.join(LIB_DIR, 'spell.rb')
+    require File.join(LIB_DIR, 'effects.rb')
+    require File.join(LIB_DIR, 'bounty.rb')
+    require File.join(LIB_DIR, 'claim.rb')
+    require File.join(LIB_DIR, 'infomon', 'infomon.rb')
+    require File.join(LIB_DIR, 'attributes', 'resources.rb')
+    require File.join(LIB_DIR, 'attributes', 'stats.rb')
+    require File.join(LIB_DIR, 'attributes', 'spells.rb')
+    require File.join(LIB_DIR, 'attributes', 'skills.rb')
+    require File.join(LIB_DIR, 'attributes', 'society.rb')
+    require File.join(LIB_DIR, 'infomon', 'status.rb')
+    require File.join(LIB_DIR, 'experience.rb')
+    require File.join(LIB_DIR, 'attributes', 'spellsong.rb')
+    require File.join(LIB_DIR, 'infomon', 'activespell.rb')
     ActiveSpell.watch!
     # PSMS (armor, cman, feat, shield, weapon) have moved
     # to ./lib/psms and are now called by psms.rb
-    require 'lib/psms'
-    require 'lib/attributes/char'
-    require 'lib/infomon/currency'
-    require 'lib/character/disk'
-    require 'lib/character/group'
+    require File.join(LIB_DIR, 'psms.rb')
+    require File.join(LIB_DIR, 'attributes', 'char.rb')
+    require File.join(LIB_DIR, 'infomon', 'currency.rb')
+    require File.join(LIB_DIR, 'character', 'disk.rb')
+    require File.join(LIB_DIR, 'character', 'group.rb')
+    # self.common_after
   end
 
   def self.dragon_realms
-    require 'lib/map/map_dr.rb'
-    require 'lib/attributes/char'
+    self.common_before
+    require File.join(LIB_DIR, 'map', 'map_dr.rb')
+    require File.join(LIB_DIR, 'attributes', 'char.rb')
+    # self.common_after
+  end
+
+  def self.common_after
+    nil
   end
 
   def self.load!

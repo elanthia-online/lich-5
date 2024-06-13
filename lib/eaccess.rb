@@ -1,9 +1,9 @@
 require "openssl"
 require "socket"
-require 'lib/account.rb'
+require File.join(LIB_DIR, 'account.rb')
 
 module EAccess
-  PEM = File.join("#{DATA_DIR}/", "simu.pem")
+  PEM = File.join(DATA_DIR, "simu.pem")
   # pp PEM
   PACKET_SIZE = 8192
 
