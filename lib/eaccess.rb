@@ -18,7 +18,7 @@ module EAccess
     if Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.0.0')
       sock = TCPSocket.new(hostname, port)
     else
-      sock = TCPSocket.new(hostname, port, connect_timeout: 5)
+      sock = TCPSocket.new(hostname, port, connect_timeout: 60)
     end
     # pass that socket to OpenSSL
     ssl = OpenSSL::SSL::SSLSocket.new(sock, ctx)
@@ -44,7 +44,7 @@ module EAccess
     if Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.0.0')
       socket = TCPSocket.open(hostname, port)
     else
-      socket = TCPSocket.open(hostname, port, connect_timeout: 5)
+      socket = TCPSocket.open(hostname, port, connect_timeout: 60)
     end
     cert_store              = OpenSSL::X509::Store.new
     ssl_context             = OpenSSL::SSL::SSLContext.new
