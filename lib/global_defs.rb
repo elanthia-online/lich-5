@@ -1,7 +1,74 @@
 # global_defs carveout for lich5
 # this needs to be broken up even more - OSXLich-Doug (2022-04-13)
 # rubocop changes and DR toplevel command handling (2023-06-28)
+# sadly adding global level script methods (2024-06-12)
 
+# added 2024
+
+def start_script(script_name, cli_vars = [], flags = Hash.new)
+  if flags == true
+    flags = { :quiet => true }
+  end
+  Script.start(script_name, cli_vars.join(' '), flags)
+end
+
+def start_scripts(*script_names)
+  script_names.flatten.each { |script_name|
+    start_script(script_name)
+    sleep 0.02
+  }
+end
+
+def force_start_script(script_name, cli_vars = [], flags = {})
+  flags = Hash.new unless flags.class == Hash
+  flags[:force] = true
+  start_script(script_name, cli_vars, flags)
+end
+
+def before_dying(&code)
+  Script.at_exit(&code)
+end
+
+def undo_before_dying
+  Script.clear_exit_procs
+end
+
+def abort!
+  Script.exit!
+end
+
+def stop_script(*target_names)
+  numkilled = 0
+  target_names.each { |target_name|
+    condemned = Script.list.find { |s_sock| s_sock.name =~ /^#{target_name}/i }
+    if condemned.nil?
+      respond("--- Lich: '#{Script.current}' tried to stop '#{target_name}', but it isn't running!")
+    else
+      if condemned.name =~ /^#{Script.current.name}$/i
+        exit
+      end
+      condemned.kill
+      respond("--- Lich: '#{condemned}' has been stopped by #{Script.current}.")
+      numkilled += 1
+    end
+  }
+  if numkilled == 0
+    return false
+  else
+    return numkilled
+  end
+end
+
+def running?(*snames)
+  snames.each { |checking| (return false) unless (Script.running.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.running.find { |lscr| lscr.name =~ /^#{checking}/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}/i }) }
+  true
+end
+
+def start_exec_script(cmd_data, options = Hash.new)
+  ExecScript.start(cmd_data, options)
+end
+
+# prior to 2024
 def hide_me
   Script.current.hidden = !Script.current.hidden
 end
@@ -2371,3 +2438,66 @@ def report_errors(&block)
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
   end
 end
+
+def alias_deprecated
+  # todo: add command reference, possibly add calling script
+  echo "The alias command you're attempting to use is deprecated.  Fix your script."
+end
+
+## Alias block from Lich (needs further cleanup)
+
+undef :abort
+alias :mana :checkmana
+alias :mana? :checkmana
+alias :max_mana :maxmana
+alias :health :checkhealth
+alias :health? :checkhealth
+alias :spirit :checkspirit
+alias :spirit? :checkspirit
+alias :stamina :checkstamina
+alias :stamina? :checkstamina
+alias :stunned? :checkstunned
+alias :bleeding? :checkbleeding
+alias :reallybleeding? :alias_deprecated
+alias :poisoned? :checkpoison
+alias :diseased? :checkdisease
+alias :dead? :checkdead
+alias :hiding? :checkhidden
+alias :hidden? :checkhidden
+alias :hidden :checkhidden
+alias :checkhiding :checkhidden
+alias :invisible? :checkinvisible
+alias :standing? :checkstanding
+alias :kneeling? :checkkneeling
+alias :sitting? :checksitting
+alias :stance? :checkstance
+alias :stance :checkstance
+alias :joined? :checkgrouped
+alias :checkjoined :checkgrouped
+alias :group? :checkgrouped
+alias :myname? :checkname
+alias :active? :checkspell
+alias :righthand? :checkright
+alias :lefthand? :checkleft
+alias :righthand :checkright
+alias :lefthand :checkleft
+alias :mind? :checkmind
+alias :checkactive :checkspell
+alias :forceput :fput
+alias :send_script :send_scripts
+alias :stop_scripts :stop_script
+alias :kill_scripts :stop_script
+alias :kill_script :stop_script
+alias :fried? :checkfried
+alias :saturated? :checksaturated
+alias :webbed? :checkwebbed
+alias :pause_scripts :pause_script
+alias :roomdescription? :checkroomdescrip
+alias :prepped? :checkprep
+alias :checkprepared :checkprep
+alias :unpause_scripts :unpause_script
+alias :priority? :setpriority
+alias :checkoutside :outside?
+alias :toggle_status :status_tags
+alias :encumbrance? :checkencumbrance
+alias :bounty? :checkbounty
