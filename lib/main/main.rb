@@ -666,11 +666,11 @@ reconnect_if_wanted = proc {
     }
   end
 
-  if defined? detachable_client_port
+  if defined? @detachable_client_port
     detachable_client_thread = Thread.new {
       loop {
         begin
-          server = TCPServer.new(detachable_client_host, detachable_client_port)
+          server = TCPServer.new(@detachable_client_host, @detachable_client_port)
           char_name = ARGV[ARGV.index('--login') + 1].capitalize
           Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
 
