@@ -357,6 +357,9 @@ module Lich
         updatable_scripts["all"].each { |script| self.update_file('script', script) }
         updatable_scripts["gs"].each { |script| self.update_file('script', script) } if XMLData.game =~ /^GS/
         updatable_scripts["dr"].each { |script| self.update_file('script', script) } if XMLData.game =~ /^DR/
+
+        ## Update Lich.db value with last updated version
+        Lich.core_updated_with_lich_version = LICH_VERSION
       end
       # End module definitions
     end
