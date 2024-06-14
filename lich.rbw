@@ -96,21 +96,8 @@ require File.join(LIB_DIR, 'limitedarray.rb')
 require File.join(LIB_DIR, 'xmlparser.rb')
 require File.join(LIB_DIR, 'upstreamhook.rb')
 require File.join(LIB_DIR, 'downstreamhook.rb')
-require File.join(LIB_DIR, 'settings', 'settings.rb'
-
-module GameSettings
-  def GameSettings.[](name)
-    Settings.to_hash(XMLData.game)[name]
-  end
-
-  def GameSettings.[]=(name, value)
-    Settings.to_hash(XMLData.game)[name] = value
-  end
-
-  def GameSettings.to_hash
-    Settings.to_hash(XMLData.game)
-  end
-end
+require File.join(LIB_DIR, 'settings', 'settings.rb')
+require File.join(LIB_DIR, 'settings', 'gamesettings.rb')
 
 module CharSettings
   def CharSettings.[](name)
@@ -214,21 +201,7 @@ def take(*items)
   if unsh then fput("take my #{weap} from my #{UserVars.lootsack}") end
 end
 
-module GameSettings
-  def GameSettings.load; Lich.deprecated('GameSettings.load', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.save; Lich.deprecated('GameSettings.save', 'not using, not applicable,', caller[0]); end
-
-  def GameSettings.save_all; Lich.deprecated('GameSettings.save_all', 'not using, not applicable,', caller[0]); end
-
-  def GameSettings.clear; Lich.deprecated('GameSettings.clear', 'not using, not applicable,', caller[0]); end
-
-  def GameSettings.auto=(val); Lich.deprecated('GameSettings.auto=(val)', 'not using, not applicable,', caller[0]); end
-
-  def GameSettings.auto; Lich.deprecated('GameSettings.auto', 'not using, not applicable,', caller[0]); end
-
-  def GameSettings.autoload; Lich.deprecated('GameSettings.autoload', 'not using, not applicable,', caller[0]); end
-end
 
 module CharSettings
   def CharSettings.load; Lich.deprecated('CharSettings.load', 'not using, not applicable,', caller[0]); end
