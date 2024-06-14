@@ -25,7 +25,7 @@ stash.rb: Core lich file for extending free_hands, empty_hands functions in
 module Lich
   module Stash
     def self.find_container(param, loud_fail: true)
-      param = param.name if param.is_a?(GameObj)
+      param = param.name if param.is_a?(Games::Gemstone::GameObj)
       found_container = GameObj.inv.find do |container|
         container.name =~ %r[#{param.strip}] || container.name =~ %r[#{param.sub(' ', ' .*')}]
       end
