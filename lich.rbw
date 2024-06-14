@@ -98,20 +98,7 @@ require File.join(LIB_DIR, 'upstreamhook.rb')
 require File.join(LIB_DIR, 'downstreamhook.rb')
 require File.join(LIB_DIR, 'settings', 'settings.rb')
 require File.join(LIB_DIR, 'settings', 'gamesettings.rb')
-
-module CharSettings
-  def CharSettings.[](name)
-    Settings.to_hash("#{XMLData.game}:#{XMLData.name}")[name]
-  end
-
-  def CharSettings.[]=(name, value)
-    Settings.to_hash("#{XMLData.game}:#{XMLData.name}")[name] = value
-  end
-
-  def CharSettings.to_hash
-    Settings.to_hash("#{XMLData.game}:#{XMLData.name}")
-  end
-end
+require File.join(LIB_DIR, 'settings', 'charsettings.rb')
 require File.join(LIB_DIR, 'vars.rb')
 
 # Script classes move to lib 230305
@@ -199,24 +186,6 @@ def take(*items)
     fput("put my #{trinket} in my #{UserVars.lootsack}") if (righthand? || lefthand?)
   }
   if unsh then fput("take my #{weap} from my #{UserVars.lootsack}") end
-end
-
-
-
-module CharSettings
-  def CharSettings.load; Lich.deprecated('CharSettings.load', 'not using, not applicable,', caller[0]); end
-
-  def CharSettings.save; Lich.deprecated('CharSettings.save', 'not using, not applicable,', caller[0]); end
-
-  def CharSettings.save_all; Lich.deprecated('CharSettings.save_all', 'not using, not applicable,', caller[0]); end
-
-  def CharSettings.clear; Lich.deprecated('CharSettings.clear', 'not using, not applicable,', caller[0]); end
-
-  def CharSettings.auto=(val); Lich.deprecated('CharSettings.auto=(val)', 'not using, not applicable,', caller[0]); end
-
-  def CharSettings.auto; Lich.deprecated('CharSettings.auto', 'not using, not applicable,', caller[0]); end
-
-  def CharSettings.autoload; Lich.deprecated('CharSettings.autoload', 'not using, not applicable,', caller[0]); end
 end
 
 class StringProc
