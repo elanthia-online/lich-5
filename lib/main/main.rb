@@ -34,7 +34,7 @@ reconnect_if_wanted = proc {
   end
 }
 
-main_thread = Thread.new {
+@main_thread = Thread.new {
   test_mode = false
   $SEND_CHARACTER = '>'
   $cmd_prefix = '<c>'
@@ -602,8 +602,8 @@ main_thread = Thread.new {
           end
         }
         DownstreamHook.add('inventory_boxes_off', inv_off_proc)
-        inv_toggle_proc = proc { |client_string|
-          if client_string =~ /^(?:<c>)?_flag Display Inventory Boxes ([01])/
+        inv_toggle_proc = proc { |client_string_inv_toggle|
+          if client_string_inv_toggle =~ /^(?:<c>)?_flag Display Inventory Boxes ([01])/
             if $1 == '1'
               DownstreamHook.remove('inventory_boxes_off')
               Lich.set_inventory_boxes(XMLData.player_id, true)
@@ -612,7 +612,7 @@ main_thread = Thread.new {
               Lich.set_inventory_boxes(XMLData.player_id, false)
             end
             nil
-          elsif client_string =~ /^(?:<c>)?\s*(?:set|flag)\s+inv(?:e|en|ent|ento|entor|entory)?\s+(on|off)/i
+          elsif client_string_inv_toggle =~ /^(?:<c>)?\s*(?:set|flag)\s+inv(?:e|en|ent|ento|entor|entory)?\s+(on|off)/i
             if $1.downcase == 'on'
               DownstreamHook.remove('inventory_boxes_off')
               respond 'You have enabled viewing of inventory and container windows.'
@@ -624,7 +624,7 @@ main_thread = Thread.new {
             end
             nil
           else
-            client_string
+            client_string_inv_toggle
           end
         }
         UpstreamHook.add('inventory_boxes_toggle', inv_toggle_proc)

@@ -2073,6 +2073,6 @@ if defined?(Gtk)
   Thread.current.priority = -10
   Gtk.main
 else
-  main_thread.join
+  @main_thread.join
 end
 exit
