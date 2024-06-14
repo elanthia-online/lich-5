@@ -1072,7 +1072,6 @@ module Games
                     Lich::Messaging.mono(Lich::Messaging.monsterbold("Installing newest core scripts available to ensure you're up-to-date!"))
                     Lich::Messaging.mono("")
                     Lich::Util::Update.update_core_data_and_scripts
-                    Lich.core_updated_with_lich_version = LICH_VERSION
                   end
                   Script.start('autostart') if Script.exists?('autostart')
                   @@autostarted = true
