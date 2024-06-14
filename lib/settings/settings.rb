@@ -113,7 +113,7 @@ module Settings
   def Settings.save
     @@save.call
   end
-  
+
   ## deprecating these methods - temporary
   def Settings.load; Lich.deprecated('Settings.load', 'not using, not applicable,', caller[0]); end
 
@@ -121,7 +121,7 @@ module Settings
 
   def Settings.clear; Lich.deprecated('Settings.clear', 'not using, not applicable,', caller[0]); end
 
-  def Settings.auto=(val); Lich.deprecated('Settings.auto=(val)', 'not using, not applicable,', caller[0]); end
+  def Settings.auto=(_val); Lich.deprecated('Settings.auto=(val)', 'not using, not applicable,', caller[0]); end
 
   def Settings.auto; Lich.deprecated('Settings.auto', 'not using, not applicable,', caller[0]); end
 

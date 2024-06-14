@@ -16,15 +16,15 @@ module CharSettings
 
   ## deprecating these methods - temporary
   def CharSettings.load; Lich.deprecated('CharSettings.load', 'not using, not applicable,', caller[0]); end
-  
+
   def CharSettings.save; Lich.deprecated('CharSettings.save', 'not using, not applicable,', caller[0]); end
-  
+
   def CharSettings.save_all; Lich.deprecated('CharSettings.save_all', 'not using, not applicable,', caller[0]); end
-  
+
   def CharSettings.clear; Lich.deprecated('CharSettings.clear', 'not using, not applicable,', caller[0]); end
-  
-  def CharSettings.auto=(val); Lich.deprecated('CharSettings.auto=(val)', 'not using, not applicable,', caller[0]); end
-  
+
+  def CharSettings.auto=(_val); Lich.deprecated('CharSettings.auto=(val)', 'not using, not applicable,', caller[0]); end
+
   def CharSettings.auto; Lich.deprecated('CharSettings.auto', 'not using, not applicable,', caller[0]); end
 
   def CharSettings.autoload; Lich.deprecated('CharSettings.autoload', 'not using, not applicable,', caller[0]); end

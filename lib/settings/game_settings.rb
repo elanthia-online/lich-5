@@ -23,7 +23,7 @@ module GameSettings
 
   def GameSettings.clear; Lich.deprecated('GameSettings.clear', 'not using, not applicable,', caller[0]); end
 
-  def GameSettings.auto=(val); Lich.deprecated('GameSettings.auto=(val)', 'not using, not applicable,', caller[0]); end
+  def GameSettings.auto=(_val); Lich.deprecated('GameSettings.auto=(val)', 'not using, not applicable,', caller[0]); end
 
   def GameSettings.auto; Lich.deprecated('GameSettings.auto', 'not using, not applicable,', caller[0]); end
 
