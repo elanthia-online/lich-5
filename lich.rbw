@@ -328,7 +328,7 @@ class DownstreamHook
 end
 
 require File.join(LIB_DIR, 'settings', 'settings.rb')
-require File.join(LIB_DIR, 'settings' 'game_settings.rb')
+require File.join(LIB_DIR, 'settings', 'game_settings.rb')
 require File.join(LIB_DIR, 'settings', 'char_settings.rb')
 
 
