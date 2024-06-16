@@ -2,7 +2,66 @@
 ## contextual logging
 ##
 module Log
+  @@log_enabled = nil
+  @@log_filter  = nil
+
+  def self.on(filter = //)
+    @@log_enabled = true
+    @@log_filter = filter
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('log_enabled',?);", [@@log_enabled.to_s.encode('UTF-8')])
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('log_filter',?);", [@@log_filter.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    return nil
+  end
+
+  def self.off
+    @@log_enabled = false
+    @@log_filter = //
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('log_enabled',?);", [@@log_enabled.to_s.encode('UTF-8')])
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('log_filter',?);", [@@log_filter.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    return nil
+  end
+
+  def self.on?
+    if @@log_enabled.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='log_enabled';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      val = false if val.nil?
+      @@log_enabled = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?
+    end
+    return @@log_enabled
+  end
+
+  def self.filter
+    if @@log_filter.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='log_filter';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      val = // if val.nil?
+      @@log_filter = val
+    end
+    return @@log_filter
+  end
+
   def self.out(msg, label: :debug)
+    return unless Script.current.vars.include?("--debug") || Log.on?
+    return if msg !~ Log.filter
     if msg.is_a?(Exception)
       ## pretty-print exception
       _write _view(msg.message, label)
