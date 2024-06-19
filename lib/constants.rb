@@ -18,3 +18,67 @@ $lich_dir = "#{LICH_DIR}/"
 $temp_dir = "#{TEMP_DIR}/"
 $script_dir = "#{SCRIPT_DIR}/"
 $data_dir = "#{DATA_DIR}/"
+
+# transcoding migrated 2024-06-13
+DIRMAP = {
+  'out'  => 'K',
+  'ne'   => 'B',
+  'se'   => 'D',
+  'sw'   => 'F',
+  'nw'   => 'H',
+  'up'   => 'I',
+  'down' => 'J',
+  'n'    => 'A',
+  'e'    => 'C',
+  's'    => 'E',
+  'w'    => 'G',
+}
+SHORTDIR = {
+  'out'       => 'out',
+  'northeast' => 'ne',
+  'southeast' => 'se',
+  'southwest' => 'sw',
+  'northwest' => 'nw',
+  'up'        => 'up',
+  'down'      => 'down',
+  'north'     => 'n',
+  'east'      => 'e',
+  'south'     => 's',
+  'west'      => 'w',
+}
+LONGDIR = {
+  'out'  => 'out',
+  'ne'   => 'northeast',
+  'se'   => 'southeast',
+  'sw'   => 'southwest',
+  'nw'   => 'northwest',
+  'up'   => 'up',
+  'down' => 'down',
+  'n'    => 'north',
+  'e'    => 'east',
+  's'    => 'south',
+  'w'    => 'west',
+}
+MINDMAP = {
+  'clear as a bell' => 'A',
+  'fresh and clear' => 'B',
+  'clear'           => 'C',
+  'muddled'         => 'D',
+  'becoming numbed' => 'E',
+  'numbed'          => 'F',
+  'must rest'       => 'G',
+  'saturated'       => 'H',
+}
+ICONMAP = {
+  'IconKNEELING'  => 'GH',
+  'IconPRONE'     => 'G',
+  'IconSITTING'   => 'H',
+  'IconSTANDING'  => 'T',
+  'IconSTUNNED'   => 'I',
+  'IconHIDDEN'    => 'N',
+  'IconINVISIBLE' => 'D',
+  'IconDEAD'      => 'B',
+  'IconWEBBED'    => 'C',
+  'IconJOINED'    => 'P',
+  'IconBLEEDING'  => 'O',
+}
