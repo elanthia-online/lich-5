@@ -342,7 +342,7 @@ reconnect_if_wanted = proc {
         File.delete(sal_filename) rescue nil
       end
     end
-    gamehost, gameport = Lich.fix_game_host_port(gamehost, gameport)
+    gamehost, gameport = Lich.fix_@game_host_port(gamehost, gameport)
     Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
     begin
       connect_thread = Thread.new {
@@ -358,7 +358,7 @@ reconnect_if_wanted = proc {
       end
     rescue
       Lich.log "error: #{$!}"
-      gamehost, gameport = Lich.break_game_host_port(gamehost, gameport)
+      gamehost, gameport = Lich.break_@game_host_port(gamehost, gameport)
       Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
       begin
         connect_thread = Thread.new {
@@ -382,16 +382,16 @@ reconnect_if_wanted = proc {
       end
     end
     Lich.log 'info: connected'
-  elsif game_host and game_port
+  elsif @game_host and @game_port
     unless Lich.hosts_file
       Lich.log "error: cannot find hosts file"
       $stdout.puts "error: cannot find hosts file"
       exit
     end
-    IPSocket.getaddress(game_host)
+    IPSocket.getaddress(@game_host)
     error_count = 0
     begin
-      listener = TCPServer.new('127.0.0.1', game_port)
+      listener = TCPServer.new('127.0.0.1', @game_port)
       begin
         listener.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, 1)
       rescue
@@ -407,13 +407,13 @@ reconnect_if_wanted = proc {
         retry
       end
     end
-    Lich.modify_hosts(game_host)
+    Lich.modify_hosts(@game_host)
 
-    $stdout.puts "Pretending to be #{game_host}"
-    $stdout.puts "Listening on port #{game_port}"
+    $stdout.puts "Pretending to be #{@game_host}"
+    $stdout.puts "Listening on port #{@game_port}"
     $stdout.puts "Waiting for the client to connect..."
-    Lich.log "info: pretending to be #{game_host}"
-    Lich.log "info: listening on port #{game_port}"
+    Lich.log "info: pretending to be #{@game_host}"
+    Lich.log "info: listening on port #{@game_port}"
     Lich.log "info: waiting for the client to connect..."
 
     timeout_thread = Thread.new {
@@ -436,16 +436,16 @@ reconnect_if_wanted = proc {
       $_CLIENT_.puts "Running in test mode: host socket set to stdin."
     else
       Lich.log 'info: connecting to the real game host...'
-      game_host, game_port = Lich.fix_game_host_port(game_host, game_port)
+      @game_host, @game_port = Lich.fix_@game_host_port(@game_host, @game_port)
       begin
         timeout_thread = Thread.new {
           sleep 30
-          Lich.log "error: timed out connecting to #{game_host}:#{game_port}"
-          $stdout.puts "error: timed out connecting to #{game_host}:#{game_port}"
+          Lich.log "error: timed out connecting to #{@game_host}:#{@game_port}"
+          $stdout.puts "error: timed out connecting to #{@game_host}:#{@game_port}"
           exit
         }
         begin
-          Game.open(game_host, game_port)
+          Game.open(@game_host, @game_port)
         rescue
           Lich.log "error: #{$!}"
           $stdout.puts "error: #{$!}"

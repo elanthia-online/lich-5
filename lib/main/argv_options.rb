@@ -237,8 +237,8 @@ if @argv_options[:sal]
 end
 
 if (arg = ARGV.find { |a| (a == '-g') or (a == '--game') })
-  game_host, game_port = ARGV[ARGV.index(arg) + 1].split(':')
-  game_port = game_port.to_i
+  @game_host, @game_port = ARGV[ARGV.index(arg) + 1].split(':')
+  @game_port = @game_port.to_i
   if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
     $frontend = 'stormfront'
   elsif ARGV.any? { |arg| (arg == '-w') or (arg == '--wizard') }
@@ -254,12 +254,12 @@ elsif ARGV.include?('--gemstone')
   if ARGV.include?('--platinum')
     $platinum = true
     if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-      game_host = 'storm.gs4.game.play.net'
-      game_port = 10124
+      @game_host = 'storm.gs4.game.play.net'
+      @game_port = 10124
       $frontend = 'stormfront'
     else
-      game_host = 'gs-plat.simutronics.net'
-      game_port = 10121
+      @game_host = 'gs-plat.simutronics.net'
+      @game_port = 10121
       if ARGV.any? { |arg| arg == '--avalon' }
         $frontend = 'avalon'
       else
@@ -269,12 +269,12 @@ elsif ARGV.include?('--gemstone')
   else
     $platinum = false
     if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-      game_host = 'storm.gs4.game.play.net'
-      game_port = 10024
+      @game_host = 'storm.gs4.game.play.net'
+      @game_port = 10024
       $frontend = 'stormfront'
     else
-      game_host = 'gs3.simutronics.net'
-      game_port = 4900
+      @game_host = 'gs3.simutronics.net'
+      @game_port = 4900
       if ARGV.any? { |arg| arg == '--avalon' }
         $frontend = 'avalon'
       else
@@ -285,12 +285,12 @@ elsif ARGV.include?('--gemstone')
 elsif ARGV.include?('--shattered')
   $platinum = false
   if ARGV.any? { |arg| (arg == '-s') or (arg == '--stormfront') }
-    game_host = 'storm.gs4.game.play.net'
-    game_port = 10324
+    @game_host = 'storm.gs4.game.play.net'
+    @game_port = 10324
     $frontend = 'stormfront'
   else
-    game_host = 'gs4.simutronics.net'
-    game_port = 10321
+    @game_host = 'gs4.simutronics.net'
+    @game_port = 10321
     if ARGV.any? { |arg| arg == '--avalon' }
       $frontend = 'avalon'
     else
@@ -306,8 +306,8 @@ elsif ARGV.include?('--fallen')
     Lich.log "fixme"
     exit
   elsif ARGV.grep(/--genie/).any?
-    game_host = 'dr.simutronics.net'
-    game_port = 11324
+    @game_host = 'dr.simutronics.net'
+    @game_port = 11324
     $frontend = 'genie'
   else
     $stdout.puts "fixme"
@@ -323,12 +323,12 @@ elsif ARGV.include?('--dragonrealms')
       Lich.log "fixme"
       exit
     elsif ARGV.grep(/--genie/).any?
-      game_host = 'dr.simutronics.net'
-      game_port = 11124
+      @game_host = 'dr.simutronics.net'
+      @game_port = 11124
       $frontend = 'genie'
     elsif ARGV.grep(/--frostbite/).any?
-      game_host = 'dr.simutronics.net'
-      game_port = 11124
+      @game_host = 'dr.simutronics.net'
+      @game_port = 11124
       $frontend = 'frostbite'
     else
       $frontend = 'wizard'
@@ -344,12 +344,12 @@ elsif ARGV.include?('--dragonrealms')
       Lich.log "fixme"
       exit
     elsif ARGV.grep(/--genie/).any?
-      game_host = 'dr.simutronics.net'
-      game_port = ARGV.include?('--test') ? 11624 : 11024
+      @game_host = 'dr.simutronics.net'
+      @game_port = ARGV.include?('--test') ? 11624 : 11024
       $frontend = 'genie'
     else
-      game_host = 'dr.simutronics.net'
-      game_port = ARGV.include?('--test') ? 11624 : 11024
+      @game_host = 'dr.simutronics.net'
+      @game_port = ARGV.include?('--test') ? 11624 : 11024
       if ARGV.any? { |arg| arg == '--avalon' }
         $frontend = 'avalon'
       elsif ARGV.any? { |arg| arg == '--frostbite' }
@@ -360,7 +360,7 @@ elsif ARGV.include?('--dragonrealms')
     end
   end
 else
-  game_host, game_port = nil, nil
+  @game_host, @game_port = nil, nil
   Lich.log "info: no force-mode info given"
 end
 # rubocop:enable Lint/UselessAssignment
