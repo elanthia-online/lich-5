@@ -334,8 +334,8 @@ module Lich
         end
 
         updatable_scripts = {
-          "all" => ["alias.lic", "autostart.lic", "jinx.lic", "log.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"],
-          "gs"  => ["ewaggle.lic", "go2.lic"],
+          "all" => ["alias.lic", "autostart.lic", "jinx.lic", "log.lic", "map.lic", "repository.lic", "vars.lic", "version.lic", "go2.lic"],
+          "gs"  => ["ewaggle.lic"],
           "dr"  => ["dependency.lic"]
         }
 
