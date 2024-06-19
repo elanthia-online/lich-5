@@ -9,8 +9,8 @@ module Lich
       require 'zlib'
 
       @current = LICH_VERSION
-      @snapshot_core_script = ["alias.lic", "autostart.lic", "dependency.lic", "ewaggle.lic", "go2.lic", "infomon.lic",
-                               "jinx.lic", "lnet.lic", "log.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"]
+      @snapshot_core_script = ["alias.lic", "autostart.lic", "dependency.lic", "ewaggle.lic", "foreach.lic", "go2.lic", "infomon.lic",
+                               "jinx.lic", "lnet.lic", "log.lic", "logxml.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"]
 
       def self.request(type = '--announce')
         case type
