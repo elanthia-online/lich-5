@@ -358,7 +358,7 @@ reconnect_if_wanted = proc {
       end
     rescue
       Lich.log "error: #{$!}"
-      gamehost, gameport = Lich.break_@game_host_port(gamehost, gameport)
+      gamehost, gameport = Lich.break_game_host_port(gamehost, gameport)
       Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
       begin
         connect_thread = Thread.new {
