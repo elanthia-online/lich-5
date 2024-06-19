@@ -214,7 +214,7 @@ module Lich
           _respond; _respond "All Lich lib files have been updated."; _respond
 
           ## Use new method so can be reused to do a blanket update of core data & scripts
-          self.update_core_data_and_scripts
+          self.update_core_data_and_scripts(@update_to)
 
           ## Finally we move the lich.rbw file into place to complete the update.  We do
           ## not need to save a copy of this in the TEMP_DIR as previously done, since we
@@ -327,14 +327,14 @@ module Lich
         end
       end
 
-      def self.update_core_data_and_scripts
+      def self.update_core_data_and_scripts(version = LICH_VERSION)
         if XMLData.game !~ /^GS|^DR/
           _respond "invalid game type, unsure what scripts to update via Update.update_core_scripts"
           return
         end
 
         updatable_scripts = {
-          "all" => ["alias.lic", "autostart.lic", "jinx.lic", "log.lic", "logxml.lic", "map.lic", "repository.lic", "vars.lic", "version.lic", "go2.lic"],
+          "all" => ["alias.lic", "autostart.lic", "go2.lic", "jinx.lic", "log.lic", "logxml.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"],
           "gs"  => ["ewaggle.lic", "foreach.lic"],
           "dr"  => ["dependency.lic"]
         }
@@ -359,7 +359,7 @@ module Lich
         updatable_scripts["dr"].each { |script| self.update_file('script', script) } if XMLData.game =~ /^DR/
 
         ## Update Lich.db value with last updated version
-        Lich.core_updated_with_lich_version = LICH_VERSION
+        Lich.core_updated_with_lich_version = version
       end
       # End module definitions
     end
