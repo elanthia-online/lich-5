@@ -9,9 +9,8 @@ module Lich
       require 'zlib'
 
       @current = LICH_VERSION
-      @snapshot_core_script = ["alias.lic", "autostart.lic", "go2.lic", "infomon.lic",
-                               "jinx.lic", "lnet.lic", "log.lic", "repository.lic",
-                               "vars.lic", "version.lic", "map.lic"]
+      @snapshot_core_script = ["alias.lic", "autostart.lic", "dependency.lic", "ewaggle.lic", "foreach.lic", "go2.lic", "infomon.lic",
+                               "jinx.lic", "lnet.lic", "log.lic", "logxml.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"]
 
       def self.request(type = '--announce')
         case type
@@ -214,34 +213,8 @@ module Lich
           FileUtils.copy_entry(File.join(TEMP_DIR, filename, "lib"), File.join(LIB_DIR))
           _respond; _respond "All Lich lib files have been updated."; _respond
 
-          ## We do not care about local edits from players to the Lich5 / script location
-          ## for CORE scripts (those required to run Lich5 properly)
-          core_update = Dir.children(File.join(TEMP_DIR, filename, "scripts"))
-          core_update.each { |file|
-            File.delete(File.join(SCRIPT_DIR, file)) if File.exist?(File.join(SCRIPT_DIR, file))
-            File.open(File.join(TEMP_DIR, filename, "scripts", file), 'rb') { |r|
-              File.open(File.join(SCRIPT_DIR, file), 'wb') { |w| w.write(r.read) }
-            }
-            _respond "script #{file} has been updated."
-          }
-
-          ## We DO care about local edits from players to the Lich5 / data files
-          ## specifically gameobj-data.xml and spell-list.xml.
-          ## Let's be a little more purposeful and gentle with these two files.
-          data_update = Dir.children(File.join(TEMP_DIR, filename, "data"))
-          _respond # intentional spacer to separate categories of files
-          data_update.each { |file|
-            transition_filename = "#{file}".sub(".xml", '')
-            newfilename = File.join(DATA_DIR, "#{transition_filename}-#{Time.now.to_i}.xml")
-            if File.exist?(File.join(DATA_DIR, file))
-              File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
-              File.delete(File.join(DATA_DIR, file))
-            end
-            File.open(File.join(TEMP_DIR, filename, "data", file), 'rb') { |r|
-              File.open(File.join(DATA_DIR, file), 'wb') { |w| w.write(r.read) }
-            }
-            _respond "data #{file} has been updated. The prior version was renamed to #{newfilename}."
-          }
+          ## Use new method so can be reused to do a blanket update of core data & scripts
+          self.update_core_data_and_scripts
 
           ## Finally we move the lich.rbw file into place to complete the update.  We do
           ## not need to save a copy of this in the TEMP_DIR as previously done, since we
@@ -310,7 +283,11 @@ module Lich
         case type
         when "script"
           location = SCRIPT_DIR
-          remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
+          if requested_file.downcase == 'dependency.lic'
+            remote_repo = "https://raw.githubusercontent.com/rpherbig/dr-scripts/master/"
+          else
+            remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
+          end
           requested_file =~ /\.lic$/ ? requested_file_ext = ".lic" : requested_file_ext = "bad extension"
         when "library"
           location = LIB_DIR
@@ -348,6 +325,41 @@ module Lich
           _respond "Valid extensions are '.lic' for scripts, '.rb' for library files,"
           _respond "and '.xml' or '.ui' for data files. Please correct and try again."
         end
+      end
+
+      def self.update_core_data_and_scripts
+        if XMLData.game !~ /^GS|^DR/
+          _respond "invalid game type, unsure what scripts to update via Update.update_core_scripts"
+          return
+        end
+
+        updatable_scripts = {
+          "all" => ["alias.lic", "autostart.lic", "jinx.lic", "log.lic", "logxml.lic", "map.lic", "repository.lic", "vars.lic", "version.lic", "go2.lic"],
+          "gs"  => ["ewaggle.lic", "foreach.lic"],
+          "dr"  => ["dependency.lic"]
+        }
+
+        ## We DO care about local edits from players to the Lich5 / data files
+        ## specifically gameobj-data.xml and spell-list.xml.
+        ## Let's be a little more purposeful and gentle with these two files.
+        ["effect-list.xml"].each { |file|
+          transition_filename = "#{file}".sub(".xml", '')
+          newfilename = File.join(DATA_DIR, "#{transition_filename}-#{Time.now.to_i}.xml")
+          if File.exist?(File.join(DATA_DIR, file))
+            File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
+            _respond "The prior version of #{file} was renamed to #{newfilename}."
+          end
+          self.update_file('data', file)
+        }
+
+        ## We do not care about local edits from players to the Lich5 / script location
+        ## for CORE scripts (those required to run Lich5 properly)
+        updatable_scripts["all"].each { |script| self.update_file('script', script) }
+        updatable_scripts["gs"].each { |script| self.update_file('script', script) } if XMLData.game =~ /^GS/
+        updatable_scripts["dr"].each { |script| self.update_file('script', script) } if XMLData.game =~ /^DR/
+
+        ## Update Lich.db value with last updated version
+        Lich.core_updated_with_lich_version = LICH_VERSION
       end
       # End module definitions
     end
