@@ -342,7 +342,7 @@ reconnect_if_wanted = proc {
         File.delete(sal_filename) rescue nil
       end
     end
-    gamehost, gameport = Lich.fix_@game_host_port(gamehost, gameport)
+    gamehost, gameport = Lich.fix_game_host_port(gamehost, gameport)
     Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
     begin
       connect_thread = Thread.new {
@@ -436,7 +436,7 @@ reconnect_if_wanted = proc {
       $_CLIENT_.puts "Running in test mode: host socket set to stdin."
     else
       Lich.log 'info: connecting to the real game host...'
-      @game_host, @game_port = Lich.fix_@game_host_port(@game_host, @game_port)
+      @game_host, @game_port = Lich.fix_game_host_port(@game_host, @game_port)
       begin
         timeout_thread = Thread.new {
           sleep 30
