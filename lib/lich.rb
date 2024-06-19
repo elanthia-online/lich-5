@@ -653,6 +653,26 @@ module Lich
     return nil
   end
 
+  def Lich.core_updated_with_lich_version
+    begin
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='core_updated_with_lich_version';")
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    return val.to_s
+  end
+
+  def Lich.core_updated_with_lich_version=(val)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('core_updated_with_lich_version',?);", [val.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    return nil
+  end
+
   def Lich.display_uid
     if @@display_uid.nil?
       begin
