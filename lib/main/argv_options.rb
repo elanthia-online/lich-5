@@ -3,7 +3,7 @@
 
 ARGV.delete_if { |arg| arg =~ /launcher\.exe/i } # added by Simutronics Game Entry
 
-argv_options = Hash.new
+@argv_options = Hash.new
 bad_args = Array.new
 
 for arg in ARGV
@@ -120,57 +120,57 @@ for arg in ARGV
     end
     exit
   elsif arg =~ /^--start-scripts=(.+)$/i
-    argv_options[:start_scripts] = $1
+    @argv_options[:start_scripts] = $1
   elsif arg =~ /^--reconnect$/i
-    argv_options[:reconnect] = true
+    @argv_options[:reconnect] = true
   elsif arg =~ /^--reconnect-delay=(.+)$/i
-    argv_options[:reconnect_delay] = $1
+    @argv_options[:reconnect_delay] = $1
   elsif arg =~ /^--host=(.+):(.+)$/
-    argv_options[:host] = { :domain => $1, :port => $2.to_i }
+    @argv_options[:host] = { :domain => $1, :port => $2.to_i }
   elsif arg =~ /^--hosts-file=(.+)$/i
-    argv_options[:hosts_file] = $1
+    @argv_options[:hosts_file] = $1
   elsif arg =~ /^--no-gui$/i
-    argv_options[:gui] = false
+    @argv_options[:gui] = false
   elsif arg =~ /^--gui$/i
-    argv_options[:gui] = true
+    @argv_options[:gui] = true
   elsif arg =~ /^--game=(.+)$/i
-    argv_options[:game] = $1
+    @argv_options[:game] = $1
   elsif arg =~ /^--account=(.+)$/i
-    argv_options[:account] = $1
+    @argv_options[:account] = $1
   elsif arg =~ /^--password=(.+)$/i
-    argv_options[:password] = $1
+    @argv_options[:password] = $1
   elsif arg =~ /^--character=(.+)$/i
-    argv_options[:character] = $1
+    @argv_options[:character] = $1
   elsif arg =~ /^--frontend=(.+)$/i
-    argv_options[:frontend] = $1
+    @argv_options[:frontend] = $1
   elsif arg =~ /^--frontend-command=(.+)$/i
-    argv_options[:frontend_command] = $1
+    @argv_options[:frontend_command] = $1
   elsif arg =~ /^--save$/i
-    argv_options[:save] = true
+    @argv_options[:save] = true
   elsif arg =~ /^--wine(?:\-prefix)?=.+$/i
     nil # already used when defining the Wine module
   elsif arg =~ /\.sal$|Gse\.~xt$/i
-    argv_options[:sal] = arg
-    unless File.exist?(argv_options[:sal])
+    @argv_options[:sal] = arg
+    unless File.exist?(@argv_options[:sal])
       if ARGV.join(' ') =~ /([A-Z]:\\.+?\.(?:sal|~xt))/i
-        argv_options[:sal] = $1
+        @argv_options[:sal] = $1
       end
     end
-    unless File.exist?(argv_options[:sal])
+    unless File.exist?(@argv_options[:sal])
       if defined?(Wine)
-        argv_options[:sal] = "#{Wine::PREFIX}/drive_c/#{argv_options[:sal][3..-1].split('\\').join('/')}"
+        @argv_options[:sal] = "#{Wine::PREFIX}/drive_c/#{@argv_options[:sal][3..-1].split('\\').join('/')}"
       end
     end
     bad_args.clear
   elsif arg =~ /^--dark-mode=(true|false|on|off)$/i
     value = $1
     if value =~ /^(true|on)$/i
-      argv_options[:dark_mode] = true
+      @argv_options[:dark_mode] = true
     elsif value =~ /^(false|off)$/i
-      argv_options[:dark_mode] = false
+      @argv_options[:dark_mode] = false
     end
     if defined?(Gtk)
-      @theme_state = Lich.track_dark_mode = argv_options[:dark_mode]
+      @theme_state = Lich.track_dark_mode = @argv_options[:dark_mode]
     end
   else
     bad_args.push(arg)
@@ -202,20 +202,20 @@ elsif (arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1
   @detachable_client_host, @detachable_client_port = /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/.match(arg).captures
 end
 
-if argv_options[:sal]
-  unless File.exist?(argv_options[:sal])
-    Lich.log "error: launch file does not exist: #{argv_options[:sal]}"
-    Lich.msgbox "error: launch file does not exist: #{argv_options[:sal]}"
+if @argv_options[:sal]
+  unless File.exist?(@argv_options[:sal])
+    Lich.log "error: launch file does not exist: #{@argv_options[:sal]}"
+    Lich.msgbox "error: launch file does not exist: #{@argv_options[:sal]}"
     exit
   end
-  Lich.log "info: launch file: #{argv_options[:sal]}"
-  if argv_options[:sal] =~ /SGE\.sal/i
+  Lich.log "info: launch file: #{@argv_options[:sal]}"
+  if @argv_options[:sal] =~ /SGE\.sal/i
     unless (launcher_cmd = Lich.get_simu_launcher)
       $stdout.puts 'error: failed to find the Simutronics launcher'
       Lich.log 'error: failed to find the Simutronics launcher'
       exit
     end
-    launcher_cmd.sub!('%1', argv_options[:sal])
+    launcher_cmd.sub!('%1', @argv_options[:sal])
     Lich.log "info: launcher_cmd: #{launcher_cmd}"
     if defined?(Win32) and launcher_cmd =~ /^"(.*?)"\s*(.*)$/
       dir_file = $1

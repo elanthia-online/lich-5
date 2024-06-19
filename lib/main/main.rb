@@ -122,7 +122,7 @@ reconnect_if_wanted = proc {
 
   ## GUI starts here
 
-  elsif defined?(Gtk) and (ARGV.empty? or argv_options[:gui])
+  elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
     gui_login
   end
 
@@ -137,12 +137,12 @@ reconnect_if_wanted = proc {
 
   Socket.do_not_reverse_lookup = true
 
-  if defined? argv_options[:sal]
+  if @argv_options[:sal]
     begin
-      @launch_data = File.open(argv_options[:sal]) { |sal_file| sal_file.readlines }.collect { |line| line.chomp }
+      @launch_data = File.open(@argv_options[:sal]) { |sal_file| sal_file.readlines }.collect { |line| line.chomp }
     rescue
       $stdout.puts "error: failed to read launch_file: #{$!}"
-      Lich.log "info: launch_file: #{argv_options[:sal]}"
+      Lich.log "info: launch_file: #{@argv_options[:sal]}"
       Lich.log "error: failed to read launch_file: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
       exit
     end
