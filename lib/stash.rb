@@ -27,7 +27,7 @@ module Lich
     def self.find_container(param, loud_fail: true)
       param = param.name if param.is_a?(Games::Gemstone::GameObj)
       found_container = GameObj.inv.find do |container|
-        container.name =~ %r[#{param.strip}] || container.name =~ %r[#{param.sub(' ', ' .*')}]
+        container.name =~ %r[#{param.strip}]i || container.name =~ %r[#{param.sub(' ', ' .*')}]i
       end
       if found_container.nil? && loud_fail
         fail "could not find Container[name: #{param}]"
