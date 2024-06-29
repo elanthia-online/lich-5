@@ -15,14 +15,14 @@ class Numeric
   end
   
   def minutes
-      return self * 60
+    return self * 60
   end
   
   def hours
-      return self * 3600
+    return self * 3600
   end
 
   def days
-      return self * 86400
+    return self * 86400
   end
 end
