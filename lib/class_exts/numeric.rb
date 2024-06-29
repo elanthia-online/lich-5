@@ -18,7 +18,7 @@ class Numeric
   def minutes
     return self * 60
   end
-  :alias :minute :minutes
+  alias :minute :minutes
 
   def hours
     return self * 3600
