@@ -9,4 +9,24 @@ class Numeric
   def with_commas
     self.to_s.reverse.scan(/(?:\d*\.)?\d{1,3}-?/).join(',').reverse
   end
+
+  def seconds
+    return self
+  end
+  alias :second :seconds
+
+  def minutes
+    return self * 60
+  end
+  alias :minute :minutes
+
+  def hours
+    return self * 3600
+  end
+  alias :hour :hours
+
+  def days
+    return self * 86400
+  end
+  alias :day :days
 end
