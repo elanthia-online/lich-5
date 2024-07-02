@@ -85,7 +85,7 @@ module CritRanks
                                :slowed          => false,
                                :wound_rank      => 2,
                                :secondary_wound => nil,
-                               :regex           => /Blow to head./ },
+                               :regex           => /(?!.*removes skull.)Blow to head\./ },
                         4 =>
                              { :type            => "SLASH",
                                :location        => "HEAD",
