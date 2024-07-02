@@ -26,21 +26,25 @@
 #      :secondary_wound:                                <<-- second wound caused at different LOCATIONI
 #      :regex: !ruby/regexp /The .*? is stunned!/       <<-- the regex that denotes the crit text for capture
 
-module CritRanks
-  CritRanks.table[:GENERIC] =
-    { "UNSPECIFIED" =>
-                       { 0 =>
-                              { :type            => "GENERIC",
-                                :location        => "UNSPECIFIED",
-                                :rank            => 0,
-                                :damage          => 0,
-                                :position        => nil,
-                                :fatal           => false,
-                                :stunned         => 999,
-                                :amputated       => false,
-                                :crippled        => false,
-                                :sleeping        => false,
-                                :wound_rank      => 0,
-                                :secondary_wound => nil,
-                                :regex           => /The .*? is stunned./ } } }
+module Games
+  module Gemstone
+    module CritRanks
+      CritRanks.table[:GENERIC] =
+        { "UNSPECIFIED" =>
+                           { 0 =>
+                                  { :type            => "GENERIC",
+                                    :location        => "UNSPECIFIED",
+                                    :rank            => 0,
+                                    :damage          => 0,
+                                    :position        => nil,
+                                    :fatal           => false,
+                                    :stunned         => 999,
+                                    :amputated       => false,
+                                    :crippled        => false,
+                                    :sleeping        => false,
+                                    :wound_rank      => 0,
+                                    :secondary_wound => nil,
+                                    :regex           => /The .*? is stunned./ } } }
+    end
+  end
 end
