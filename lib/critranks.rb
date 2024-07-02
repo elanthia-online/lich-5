@@ -88,10 +88,6 @@ module Games
         end
       end
 
-#      def parse(line)
-#        public :parse
-#      end
-
       def self.fetch(type, location, rank)
         table.dig(
           validate(type, types),
