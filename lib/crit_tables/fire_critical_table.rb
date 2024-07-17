@@ -394,7 +394,7 @@ module Games
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Neck completely incinerated; head drops to the ground and rolls to your feet./ } },
+                                                      /Neck completely incinerated; .*?'s head drops to the ground and rolls to your feet./ } },
           :right_eye  =>
                          { 0 =>
                                 { :type            => "Fire",
