@@ -1344,7 +1344,7 @@ module Games
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "Nerves", :wound_rank => 3 },
                                   :regex           =>
                                                       /Terrifying electrical arc destroys spinal column one vertebra at a time./ },
                            9 =>
@@ -1364,7 +1364,7 @@ module Games
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "Nerves", :wound_rank => 3 },
                                   :regex           =>
                                                       /Massive electrical bolt burns a hole through the back and kidneys./ } },
           :right_arm  =>
@@ -2524,7 +2524,7 @@ module Games
           :nerves     =>
                          { 1 =>
                                 { :type            => "Lightning",
-                                  :location        => "NERVES",
+                                  :location        => "Nerves",
                                   :rank            => 1,
                                   :damage          => 5,
                                   :position        => nil,
@@ -2543,7 +2543,7 @@ module Games
                                   :regex           => /Mild electrical jolt sends .*? into spasms./ },
                            2 =>
                                 { :type            => "Lightning",
-                                  :location        => "NERVES",
+                                  :location        => "Nerves",
                                   :rank            => 2,
                                   :damage          => 10,
                                   :position        => nil,
@@ -2562,7 +2562,7 @@ module Games
                                   :regex           => /Electric shot gives .*? a really bad cramp./ },
                            3 =>
                                 { :type            => "Lightning",
-                                  :location        => "NERVES",
+                                  :location        => "Nerves",
                                   :rank            => 3,
                                   :damage          => 15,
                                   :position        => nil,
@@ -2581,7 +2581,7 @@ module Games
                                   :regex           => /Hard jolt knocks .*? back on (?:its|her|his) heels./ },
                            4 =>
                                 { :type            => "Lightning",
-                                  :location        => "NERVES",
+                                  :location        => "Nerves",
                                   :rank            => 4,
                                   :damage          => 20,
                                   :position        => "PRONE",
@@ -2600,7 +2600,7 @@ module Games
                                   :regex           => /Heavy shock gives .*? fits./ },
                            5 =>
                                 { :type            => "Lightning",
-                                  :location        => "NERVES",
+                                  :location        => "Nerves",
                                   :rank            => 5,
                                   :damage          => 30,
                                   :position        => nil,
@@ -2619,7 +2619,7 @@ module Games
                                   :regex           => /Electrical blast goes right to the heart./ },
                            6 =>
                                 { :type            => "Lightning",
-                                  :location        => "NERVES",
+                                  :location        => "Nerves",
                                   :rank            => 6,
                                   :damage          => 50,
                                   :position        => nil,
@@ -2638,7 +2638,7 @@ module Games
                                   :regex           => /Electrical charge toasts foe./ },
                            7 =>
                                 { :type            => "Lightning",
-                                  :location        => "NERVES",
+                                  :location        => "Nerves",
                                   :rank            => 7,
                                   :damage          => 50,
                                   :position        => nil,
@@ -2657,7 +2657,7 @@ module Games
                                   :regex           => /Powerful blast reduces .*? to a smoldering pile of ash./ },
                            8 =>
                                 { :type            => "Lightning",
-                                  :location        => "NERVES",
+                                  :location        => "Nerves",
                                   :rank            => 8,
                                   :damage          => 60,
                                   :position        => nil,
@@ -2677,7 +2677,7 @@ module Games
                                                       /Electric shock causes a strong enough convulsion to snap .*?'s neck./ },
                            9 =>
                                 { :type            => "Lightning",
-                                  :location        => "NERVES",
+                                  :location        => "Nerves",
                                   :rank            => 9,
                                   :damage          => 70,
                                   :position        => nil,
