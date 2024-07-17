@@ -1045,7 +1045,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Slash (?:to the|along) .*?'s lower back./ },
+                                  :regex           => /Slash (?:to|along) .*?'s lower back./ },
                            4 =>
                                 { :type            => "Slash",
                                   :location        => "Back",
