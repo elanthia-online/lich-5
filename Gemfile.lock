@@ -37,7 +37,7 @@ GEM
       parser (>= 3.2.2.4)
       rainbow (>= 2.2.2, < 4.0)
       regexp_parser (>= 1.8, < 3.0)
-      rexml (>= 3.2.5, < 4.0)
+      rexml (>= 3.2.5, < 3.3.2)
       rubocop-ast (>= 1.30.0, < 2.0)
       ruby-progressbar (~> 1.7)
       unicode-display_width (>= 2.4.0, < 3.0)
