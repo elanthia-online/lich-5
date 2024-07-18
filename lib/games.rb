@@ -253,7 +253,7 @@ module Games
                   end
                   begin
                     pp $_SERVERSTRING_ if $deep_debug
-                    REXML::Document.parse_stream($_SERVERSTRING_, XMLData)
+                    REXML::Document.parse_stream("<root>#{$_SERVERSTRING_}</root>", XMLData)
                     # XMLData.parse($_SERVERSTRING_)
                   rescue
                     unless $!.to_s =~ /invalid byte sequence/
