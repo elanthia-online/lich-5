@@ -35,6 +35,7 @@
 
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
+# https://github.com/elanthia-online/lich-5
 
 # process ARGV for constants before loading constants.rb: issue #304
 for arg in ARGV
