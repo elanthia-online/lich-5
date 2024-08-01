@@ -42,13 +42,15 @@ module DB_Store
     return 'Error: No data to store.' unless blob
 
     begin
-      Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', [script.encode('UTF-8'), scope.encode('UTF-8'), blob])
-    rescue SQLite3::BusyException
-      sleep 0.05
-      retry
-    rescue StandardError
-      respond "--- Lich: error: #{$ERROR_INFO}"
-      respond $ERROR_INFO.backtrace[0..1]
+      Lich.db_mutex.synchronize do
+        Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', [script.encode('UTF-8'), scope.encode('UTF-8'), blob])
+      rescue SQLite3::BusyException
+        sleep 0.05
+        retry
+      rescue StandardError
+        respond "--- Lich: error: #{$ERROR_INFO}"
+        respond $ERROR_INFO.backtrace[0..1]
+      end
     end
   end
 
@@ -57,13 +59,15 @@ module DB_Store
     return 'Error: No data to store.' unless blob
 
     begin
-      Lich.db.execute('INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);', [scope.encode('UTF-8'), blob])
-    rescue SQLite3::BusyException
-      sleep 0.05
-      retry
-    rescue StandardError
-      respond "--- Lich: error: #{$ERROR_INFO}"
-      respond $ERROR_INFO.backtrace[0..1]
+      Lich.db_mutex.synchronize do
+        Lich.db.execute('INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);', [scope.encode('UTF-8'), blob])
+      rescue SQLite3::BusyException
+        sleep 0.05
+        retry
+      rescue StandardError
+        respond "--- Lich: error: #{$ERROR_INFO}"
+        respond $ERROR_INFO.backtrace[0..1]
+      end
     end
   end
 end
