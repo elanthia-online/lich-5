@@ -226,17 +226,17 @@ module Infomon
           Infomon.mutex_unlock
           :ok
         when Pattern::NoWarcries
-          Infomon.upsert_batch([['psm.bertrandts_bellow', 0],
-                                ['psm.yerties_yowlp', 0],
-                                ['psm.gerrelles_growl', 0],
-                                ['psm.seanettes_shout', 0],
-                                ['psm.carns_cry', 0],
-                                ['psm.horlands_holler', 0]])
+          Infomon.upsert_batch([['warcry.bertrandts_bellow', 0],
+                                ['warcry.yerties_yowlp', 0],
+                                ['warcry.gerrelles_growl', 0],
+                                ['warcry.seanettes_shout', 0],
+                                ['warcry.carns_cry', 0],
+                                ['warcry.horlands_holler', 0]])
           :ok
         # end of blob saves
         when Pattern::Warcries
           match = Regexp.last_match
-          Infomon.set('psm.%s' % match[:name].split(' ')[1], 1)
+          Infomon.set('warcry.%s' % match[:name].split(' ')[1], 1)
           :ok
         when Pattern::Levelup
           match = Regexp.last_match
