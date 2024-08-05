@@ -539,11 +539,11 @@ describe Infomon::Parser, ".parse" do
 
     it "handles Learning a new PSM" do
       # Check LearnPSM
-      Infomon.set('psm.krynch', 1)
-      Infomon.set('psm.vaultkick', 0)
+      Infomon.set('cman.krynch', 1)
+      Infomon.set('cman.vaultkick', 0)
       # Check LearnTechnique
-      Infomon.set('psm.perfectself', 0)
-      Infomon.set('psm.pin', 2)
+      Infomon.set('feat.perfectself', 0)
+      Infomon.set('shield.pin', 2)
       output = <<~Learning
         You have now achieved rank 2 of Rolling Krynch Stance, costing 6 Combat Maneuver points.
         You have now achieved rank 1 of Vault Kick, costing 2 Combat Maneuver points.
@@ -559,13 +559,13 @@ describe Infomon::Parser, ".parse" do
 
     it "handles Unlearning an existing PSM" do
       # Check UnlearnPSM
-      Infomon.set('psm.krynch', 1)
-      Infomon.set('psm.vaultkick', 5)
+      Infomon.set('cman.krynch', 1)
+      Infomon.set('cman.vaultkick', 5)
       # Check UnlearnTechnique
-      Infomon.set('psm.stealth', 2)
-      Infomon.set('psm.pin', 2)
+      Infomon.set('armor.stealth', 2)
+      Infomon.set('shield.pin', 2)
       # Check LostTechnique
-      Infomon.set("psm.fury", 1)
+      Infomon.set("weapon.fury", 1)
       output = <<~Unlearnings
         You decide to unlearn rank 5 of Vault Kick, regaining 20 Combat Maneuver points.
         You decide to unlearn rank 1 of Rolling Krynch Stance, regaining 2 Combat Maneuver points.
@@ -594,8 +594,8 @@ describe Infomon::Parser, ".parse" do
             Horland's Holler
         Warcry
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
-      expect(Infomon.get("psm.cry")).to eq(1)
-      expect(Infomon.get("psm.yowlp")).to eq(1)
+      expect(Infomon.get("warcry.cry")).to eq(1)
+      expect(Infomon.get("warcry.yowlp")).to eq(1)
     end
   end
 
