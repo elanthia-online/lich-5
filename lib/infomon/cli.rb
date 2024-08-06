@@ -66,6 +66,6 @@ module Infomon
 
   def self.db_refresh_needed?
     # Change date below to the last date of infomon.db structure change to allow for a forced reset of data.
-    Infomon.get("infomon.last_sync").nil? || Infomon.get("infomon.last_sync") < Time.new(2024, 08, 05, 20, 00, 00).to_i
+    Infomon.get("infomon.last_sync").nil? || (Infomon.get("infomon.last_sync") < Time.new(2024, 08, 05, 20, 00, 00).to_i)
   end
 end
