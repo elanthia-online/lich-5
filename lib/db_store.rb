@@ -40,7 +40,7 @@ module DB_Store
   def self.store_data(scope = "#{XMLData.game}:#{XMLData.name}", script, val)
     blob = SQLite3::Blob.new(Marshal.dump(val))
     return 'Error: No data to store.' unless blob
-    
+
     Lich.db_mutex.synchronize do
       begin
         Lich.db.execute('INSERT OR REPLACE INTO script_auto_settings(script,scope,hash) VALUES(?,?,?);', [script.encode('UTF-8'), scope.encode('UTF-8'), blob])
