@@ -29,6 +29,7 @@ module GameLoader
     require File.join(LIB_DIR, 'infomon', 'currency.rb')
     require File.join(LIB_DIR, 'character', 'disk.rb')
     require File.join(LIB_DIR, 'character', 'group.rb')
+    require File.join(LIB_DIR, 'critranks')
     # self.common_after
   end
 
