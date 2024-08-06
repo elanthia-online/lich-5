@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        ruby: ['3.3.3']
+        ruby: ['3.3.4']
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,6 +45,7 @@ jobs:
           cp lich.rbw Lich5/
           cp -r lib Lich5/
           gem install activesupport ascii_charts concurrent-ruby curses ftools gtk3 json jwt mechanize nokogiri redis sequel sqlite3 terminal-table tomlib tzinfo tzinfo-data webrick xmpp4r --no-document
+          gem list
           rm -r -fo C:\msys64\ucrt64\share\man\*
           rm -r -fo C:\msys64\usr\share\man\*
           rm -r -fo C:\msys64\var\cache\pacman\pkg\*
