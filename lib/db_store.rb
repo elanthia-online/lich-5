@@ -58,7 +58,7 @@ module DB_Store
     blob = SQLite3::Blob.new(Marshal.dump(val))
     return 'Error: No data to store.' unless blob
 
-    Lich.db_mutex.synchronize do    
+    Lich.db_mutex.synchronize do
       begin
         Lich.db.execute('INSERT OR REPLACE INTO uservars(scope,hash) VALUES(?,?);', [scope.encode('UTF-8'), blob])
       rescue SQLite3::BusyException
