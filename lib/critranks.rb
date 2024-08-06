@@ -19,7 +19,7 @@ module Games
 
       def self.init
         return unless @critical_table.empty?
-        Dir.glob("#{File.join(LIB_DIR, "crit_tables")}/*critical_table.rb").each do |file|
+        Dir.glob("#{File.join(LIB_DIR, "crit_tables", "*critical_table.rb")}").each do |file|
           require file
         end
         create_indices
