@@ -7,7 +7,7 @@ module Status
   def self.thorned? # added 2024-09-08
     Infomon.get_bool("status.thorned")
   end
-  
+
   def self.bound?
     Infomon.get_bool("status.bound") && (Effects::Debuffs.active?('Bind') || Effects::Debuffs.active?(214))
   end
