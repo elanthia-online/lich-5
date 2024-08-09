@@ -231,12 +231,12 @@ module Infomon
           Infomon.mutex_unlock
           :ok
         when Pattern::NoWarcries
-          Infomon.upsert_batch([['psm.bertrandts_bellow', 0],
-                                ['psm.yerties_yowlp', 0],
-                                ['psm.gerrelles_growl', 0],
-                                ['psm.seanettes_shout', 0],
-                                ['psm.carns_cry', 0],
-                                ['psm.horlands_holler', 0]])
+          Infomon.upsert_batch([['warcries.bertrandts_bellow', 0],
+                                ['warcries.yerties_yowlp', 0],
+                                ['warcries.gerrelles_growl', 0],
+                                ['warcries.seanettes_shout', 0],
+                                ['warcries.carns_cry', 0],
+                                ['warcries.horlands_holler', 0]])
           :ok
         # end of blob saves
         when Pattern::Warcries
