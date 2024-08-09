@@ -204,7 +204,7 @@ module Games
                   @@infomon_loaded = true
                 end
 
-                if @@autostarted and !@@cli_scripts and $_SERVERSTRING_ =~ /roomDesc/
+                if @@autostarted and !@@cli_scripts and defined? XMLData.game
                   if (arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ })
                     for script_name in arg.sub('--start-scripts=', '').split(',')
                       Script.start(script_name)
