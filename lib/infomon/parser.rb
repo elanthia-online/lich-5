@@ -241,7 +241,7 @@ module Infomon
         # end of blob saves
         when Pattern::Warcries
           match = Regexp.last_match
-          Infomon.set('psm.%s' % match[:name].split(' ')[1], 1)
+          Infomon.set('warcry.%s' % match[:name].split(' ')[1], 1)
           :ok
         when Pattern::Levelup
           match = Regexp.last_match
