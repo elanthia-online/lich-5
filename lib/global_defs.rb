@@ -1989,7 +1989,6 @@ def fb_to_sf(line)
     Lich.log("--- Error: fb_to_sf: #{$!}\n\t#{$!.backtrace.join("\n\t")}")
     Lich.log("$_SERVERSTRING_: #{$_SERVERSTRING_}")
     Lich.log("Line: #{line}")
-
   end
 end
 
@@ -2063,7 +2062,6 @@ def sf_to_wiz(line)
     Lich.log("--- Error: sf_to_wiz: #{$!}\n\t#{$!.backtrace.join("\n\t")}")
     Lich.log("$_SERVERSTRING_: #{$_SERVERSTRING_}")
     Lich.log("Line: #{line}")
-
   end
 end
 
