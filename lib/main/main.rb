@@ -760,10 +760,10 @@ reconnect_if_wanted = proc {
   wait_while { $offline_mode }
 
   if $frontend == 'wizard'
-    $link_highlight_start = "\207"
-    $link_highlight_end = "\240"
-    $speech_highlight_start = "\212"
-    $speech_highlight_end = "\240"
+    $link_highlight_start = "\207".force_encoding(Encoding::ASCII_8BIT)
+    $link_highlight_end = "\240".force_encoding(Encoding::ASCII_8BIT)
+    $speech_highlight_start = "\212".force_encoding(Encoding::ASCII_8BIT)
+    $speech_highlight_end = "\240".force_encoding(Encoding::ASCII_8BIT)
   end
 
   client_thread.priority = 3
