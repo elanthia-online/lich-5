@@ -1985,7 +1985,11 @@ def fb_to_sf(line)
     return line
   rescue
     $_CLIENT_.puts "--- Error: fb_to_sf: #{$!}"
-    $_CLIENT_.puts '$_SERVERSTRING_: ' + $_SERVERSTRING_.to_s
+    $_CLIENT_.puts "$_SERVERSTRING_: #{$_SERVERSTRING_}"
+    Lich.log("--- Error: fb_to_sf: #{$!}\n\t#{$!.backtrace.join("\n\t")}")
+    Lich.log("$_SERVERSTRING_: #{$_SERVERSTRING_}")
+    Lich.log("Line: #{line}")
+
   end
 end
 
@@ -2055,7 +2059,11 @@ def sf_to_wiz(line)
     return line
   rescue
     $_CLIENT_.puts "--- Error: sf_to_wiz: #{$!}"
-    $_CLIENT_.puts '$_SERVERSTRING_: ' + $_SERVERSTRING_.to_s
+    $_CLIENT_.puts "$_SERVERSTRING_: #{$_SERVERSTRING_}"
+    Lich.log("--- Error: sf_to_wiz: #{$!}\n\t#{$!.backtrace.join("\n\t")}")
+    Lich.log("$_SERVERSTRING_: #{$_SERVERSTRING_}")
+    Lich.log("Line: #{line}")
+
   end
 end
 
