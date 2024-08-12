@@ -5,7 +5,7 @@ require "ostruct"
 
 module Status
   def self.thorned? # added 2024-09-08
-    (Infomon.get_bool("status.thorned") && Effects::Debuffs.active?(/Wall of Thorns Poison [1-5]/)
+    (Infomon.get_bool("status.thorned") && Effects::Debuffs.active?(/Wall of Thorns Poison [1-5]/))
   end
 
   def self.bound?
