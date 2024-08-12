@@ -45,6 +45,9 @@ module Games
       def self.display
         effect_out = Terminal::Table.new :headings => ["ID", "Type", "Name", "Duration"]
         titles = ["Spells", "Cooldowns", "Buffs", "Debuffs"]
+        existing_spell_nums = []
+        active_spells = Spell.active
+        active_spells.each { |s| existing_spell_nums << s.num }
         circle = nil
         [Effects::Spells, Effects::Cooldowns, Effects::Buffs, Effects::Debuffs].each { |effect|
           title = titles.shift
@@ -71,9 +74,13 @@ module Games
                 circle = Spell[sn].circlename
               end
               effect_out.add_row [sn, title, stext, duration]
+              existing_spell_nums.delete_if { |s| Spell[s].name == stext || s == sn }
             }
           end
-          effect_out.add_separator unless title == 'Debuffs'
+          effect_out.add_separator unless title == 'Debuffs' && existing_spell_nums.empty?
+        }
+        existing_spell_nums.each { |sn|
+          effect_out.add_row [sn, "Other", Spell[sn].name, (Spell[sn].timeleft.as_time)]
         }
         Lich::Messaging.mono(effect_out.to_s)
       end
