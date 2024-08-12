@@ -67,6 +67,10 @@ module Infomon
       CalmNoActive = /^You are enraged by .*? attack!|^The feeling of calm leaves you\./.freeze
       CutthroatActive = /slices deep into your vocal cords!$|^All you manage to do is cough up some blood\.$/.freeze
       CutthroatNoActive = /^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$|^That tingles, but there are no head injuries to repair\.$/.freeze
+      ThornPoisonStart = /^One of the vines surrouding lashes out at you, driving a thorn into your skin! You feel poison coursing through your veins\.$/.freeze
+      ThornPoisonProgression = /^You begin to feel a strange fatigue, spreading throughout your body\.$|^The strange lassitude is growing worse, making it difficult to keep up with any strenuous activities\.$|^You find yourself gradually slowing down, your muscles trembling with fatigue\.$|^It\'s getting increasingly difficult to move. It feels almost as if the air itself is growing thick as molasses\.$|^No longer able to fight this odd paralysis, you collapse to the ground, as limp as an old washrag\.$/.freeze
+      ThornPoisonDeprogression = /^With a shaky gasp and trembling muscles, you regain at least some small ability to move, however slowly\.$|Although you can\'t seem to move as quickly as you usually can, you\'re feeling better than you were just moments ago\.$|^Fine coordination is difficult, but at least you can move at something close to your normal speed again\.$|^While you\'re still a bit shaky, your muscles are responding better than they were\.$/.freeze
+      ThornPoisonEnd = /^Your body begins to respond normally again\.$|^Your skin takes on a more pinkish tint\.$/.freeze
 
       # Adding spell regexes.  Does not save to infomon.db.  Used by Spell and by ActiveSpells
       SpellUpMsgs = /^#{Games::Gemstone::Spell.upmsgs.join('$|^')}$/o.freeze
@@ -81,7 +85,8 @@ module Infomon
                          SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
                          Resource, Suffused, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketBlackscrip,
                          TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
-                         WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed)
+                         WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
+                         ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd)
     end
 
     def self.find_cat(category)
@@ -372,6 +377,12 @@ module Infomon
           :ok
 
         # TODO: refactor / streamline?
+        when Pattern::ThornPoisonStart, Pattern::ThornPoisonProgression, Pattern::ThornPoisonDeprogression
+          Infomon.set('status.thorned', true)
+          :ok
+        when Pattern::ThornPoisonEnd
+          Infomon.set('status.thorned', false)
+          :ok
         when Pattern::SleepActive
           Infomon.set('status.sleeping', true)
           :ok
