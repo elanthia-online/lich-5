@@ -103,7 +103,7 @@ module Infomon
           end
         when Pattern::Also_Here_Arrival
           if Lich::Claim::Lock.locked?
-            line.scan(%r{<a exist=(?:'|")(?<id>.*?)(?:'|") noun=(?:'|")(?<noun>.*?)(?:'|")>(?<name>.*?)</a>}).each { |match| XMLData.arrival_pcs.push(match[1]) unless XMLData.arrival_pcs.include?(match[1]) }
+            line.scan(%r{<a exist=(?:'|")(?<id>.*?)(?:'|") noun=(?:'|")(?<noun>.*?)(?:'|")>(?<name>.*?)</a>}).each { |player_found| XMLData.arrival_pcs.push(player_found[1]) unless XMLData.arrival_pcs.include?(player_found[1]) }
             :ok
           else
             :noop
