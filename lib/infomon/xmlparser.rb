@@ -78,7 +78,7 @@ module Infomon
       )
       NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? #{NpcDeathPostfix}[\.!]\r?\n?$/
 
-      All = Regexp.union(NpcDeathMessage, Group_Short)
+      All = Regexp.union(NpcDeathMessage, Group_Short, Also_Here_Arrival)
     end
 
     def self.parse(line)
@@ -95,21 +95,13 @@ module Infomon
           end
           :ok
         when Pattern::Group_Short
-          if (match_data = Group::Observer.wants?(line))
-            Group::Observer.consume(line.strip, match_data)
-            :ok
-          else
-            :noop
-          end
+          return :noop unless (match_data = Group::Observer.wants?(line))
+          Group::Observer.consume(line.strip, match_data)
+          :ok
         when Pattern::Also_Here_Arrival
-          if Lich::Claim::Lock.locked?
-            line.scan(%r{<a exist=(?:'|")(?<id>.*?)(?:'|") noun=(?:'|")(?<noun>.*?)(?:'|")>(?<name>.*?)</a>}).each { |player_found| XMLData.arrival_pcs.push(player_found[1]) unless XMLData.arrival_pcs.include?(player_found[1]) }
-            :ok
-          else
-            :noop
-          end
-        else
-          :noop
+          return :noop unless Lich::Claim::Lock.locked?
+          line.scan(%r{<a exist=(?:'|")(?<id>.*?)(?:'|") noun=(?:'|")(?<noun>.*?)(?:'|")>(?<name>.*?)</a>}).each { |player_found| XMLData.arrival_pcs.push(player_found[1]) unless XMLData.arrival_pcs.include?(player_found[1]) }
+          :ok
         end
       rescue StandardError
         respond "--- Lich: error: Infomon::XMLParser.parse: #{$!}"
