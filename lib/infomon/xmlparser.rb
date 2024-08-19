@@ -5,6 +5,7 @@ module Infomon
   module XMLParser
     module Pattern
       Group_Short = /(?:group|following you|IconJOINED)|^You are leading/
+      Also_Here_Arrival = /^Also here: /
       NpcDeathPrefix = Regexp.union(
         /The fire in the/,
         /With a surprised grunt, the/,
@@ -96,6 +97,13 @@ module Infomon
         when Pattern::Group_Short
           if (match_data = Group::Observer.wants?(line))
             Group::Observer.consume(line.strip, match_data)
+            :ok
+          else
+            :noop
+          end
+        when Pattern::Also_Here_Arrival
+          if Lich::Claim::Lock.owned?
+            line.scan(%r{<a exist=(?:'|")(?<id>.*?)(?:'|") noun=(?:'|")(?<noun>.*?)(?:'|")>(?<name>.*?)</a>}).each { |match| XMLData.arrival_pcs.push(match[1]) unless XMLData.arrival_pcs.include?(match[1]) }
             :ok
           else
             :noop
