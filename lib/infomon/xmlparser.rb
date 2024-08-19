@@ -102,7 +102,7 @@ module Infomon
             :noop
           end
         when Pattern::Also_Here_Arrival
-          if Lich::Claim::Lock.owned?
+          if Lich::Claim::Lock.locked?
             line.scan(%r{<a exist=(?:'|")(?<id>.*?)(?:'|") noun=(?:'|")(?<noun>.*?)(?:'|")>(?<name>.*?)</a>}).each { |match| XMLData.arrival_pcs.push(match[1]) unless XMLData.arrival_pcs.include?(match[1]) }
             :ok
           else
