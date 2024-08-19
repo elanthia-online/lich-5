@@ -54,7 +54,7 @@ module Log
         retry
       end
       val = // if val.nil?
-      @@log_filter = val
+      @@log_filter = Regexp.new(val)
     end
     return @@log_filter
   end
