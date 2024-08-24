@@ -21,6 +21,10 @@ class Society
     XMLData.society_task
   end
 
+  def self.favor
+    Infomon.get('resources.voln_favor')
+  end
+
   def self.serialize
     [self.status, self.rank]
   end
