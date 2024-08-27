@@ -78,7 +78,7 @@ elsif defined?(Wine)
     $wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
     $sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Simutronics\\STORM32\\Directory')
   end
-  
+
   if $wiz_fe_loc_temp
     $wiz_fe_loc = $wiz_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
   end
