@@ -322,10 +322,10 @@ module Games
         a = Array.new
         XMLData.current_target_ids.each { |id|
           unless (npc = @@npcs.find { |n| n.id == id })
-            a.push(npc)
+            a.push(id)
           end
         }
-        a # returns nil when final target in GameObj.targets is cleared.  Check both .empty? / .nil?
+        a
       end
 
       def GameObj.target
