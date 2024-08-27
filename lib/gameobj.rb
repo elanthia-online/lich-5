@@ -318,6 +318,16 @@ module Games
         a
       end
 
+      def GameObj.hidden_targets
+        a = Array.new
+        XMLData.current_target_ids.each { |id|
+          unless (npc = @@npcs.find { |n| n.id == id })
+            a.push(npc)
+          end
+        }
+        a # returns nil when final target in GameObj.targets is cleared.  Check both .empty? / .nil?
+      end
+
       def GameObj.target
         return (@@npcs + @@pcs).find { |n| n.id == XMLData.current_target_id }
       end
