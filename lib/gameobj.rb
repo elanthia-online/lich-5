@@ -318,6 +318,16 @@ module Games
         a
       end
 
+      def GameObj.hidden_targets
+        a = Array.new
+        XMLData.current_target_ids.each { |id|
+          unless @@npcs.find { |n| n.id == id }
+            a.push(id)
+          end
+        }
+        a
+      end
+
       def GameObj.target
         return (@@npcs + @@pcs).find { |n| n.id == XMLData.current_target_id }
       end
