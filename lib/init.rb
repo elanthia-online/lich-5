@@ -78,14 +78,14 @@ elsif defined?(Wine)
   ## if we have a nil, we have no directory, or if we have a path but cannot find that path (directory) we have an error
   if $sf_fe_loc.nil? # no directory
     Lich.log("STORM equivalent FE is not installed under WINE.")
-  else 
+  else
     unless $sf_fe_loc.is_a? String and File.exist?($sf_fe_loc) # cannot confirm directory location
       Lich.log("Cannot find STORM equivalent FE to launch under WINE.")
     end
   end
   if $wiz_fe_loc.nil? # no directory
     Lich.log("WIZARD FE is not installed under WINE.")
-  else 
+  else
     unless $wiz_fe_loc.is_a? String and File.exist?($wiz_fe_loc) # cannot confirm directory location
       Lich.log("Cannot find WIZARD FE to launch under WINE.")
     end
