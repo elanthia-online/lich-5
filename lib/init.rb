@@ -71,22 +71,19 @@ elsif defined?(Wine)
     wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
   end
 
-  unless sf_fe_loc_temp || wiz_fe_loc_temp
-    $sf_fe_loc = ''
+  sf_fe_loc_temp ? $sf_fe_loc = sf_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c') : $sf_fe_loc = ''
+  wiz_fe_loc_temp ? $wiz_fe_loc = wiz_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c') : $wiz_fe_loc = ''
+
+  unless File.exist?($sf_fe_loc)
+    $sf_fe_loc =~ /SIMU/ ? $sf_fe_loc = $sf_fe_loc.gsub("SIMU", "Simu") : $sf_fe_loc = $sf_fe_loc.gsub("Simu", "SIMU")
+    Lich.log("Cannot find STORM equivalent FE to launch.") unless File.exist?($sf_fe_loc)
   end
 
-  if wiz_fe_loc_temp
-    $wiz_fe_loc = wiz_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
-  end
-  if sf_fe_loc_temp
-    $sf_fe_loc = sf_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
-  end
-  if !File.exist?($sf_fe_loc)
-    $sf_fe_loc =~ /SIMU/ ? $sf_fe_loc = $sf_fe_loc.gsub("SIMU", "Simu") : $sf_fe_loc = $sf_fe_loc.gsub("Simu", "SIMU")
-    Lich.log("Cannot find STORM equivalent FE to launch.") if !File.exist?($sf_fe_loc)
+  unless File.exist?($wiz_fe_loc)
+    $wiz_fe_loc =~ /SIMU/ ? $wiz_fe_loc = $wiz_fe_loc.gsub("SIMU", "Simu") : $wiz_fe_loc = $wiz_fe_loc.gsub("Simu", "SIMU")
+    Lich.log("Cannot find WIZARD FE to launch.") unless File.exist?($wiz_fe_loc)
   end
 end
-
 ## The following should be deprecated with the direct-frontend-launch-method
 ## TODO: remove as part of chore/Remove unnecessary Win32 calls
 ## Temporarily reinstatated for DR
