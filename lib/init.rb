@@ -63,26 +63,37 @@ if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
     end
   end
 elsif defined?(Wine)
-  ## Needs improvement - iteration and such.  Quick slam test.  Why does Linux != MacOS (ver 9)?
-  unless (sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\STORM32\\Directory'))
+  ## reminder Wine is defined in the file wine.rb by confirming prefix, directory and executable
+  unless sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\STORM32\\Directory')
     sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory')
   end
-  unless (wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\WIZ32\\Directory'))
+  unless wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\WIZ32\\Directory')
     wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
   end
-
-  sf_fe_loc_temp ? $sf_fe_loc = sf_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c') : $sf_fe_loc = ''
-  wiz_fe_loc_temp ? $wiz_fe_loc = wiz_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c') : $wiz_fe_loc = ''
-
-  unless File.exist?($sf_fe_loc)
-    $sf_fe_loc =~ /SIMU/ ? $sf_fe_loc = $sf_fe_loc.gsub("SIMU", "Simu") : $sf_fe_loc = $sf_fe_loc.gsub("Simu", "SIMU")
-    Lich.log("Cannot find STORM equivalent FE to launch.") unless File.exist?($sf_fe_loc)
+  ## at this point, the temp variables are either FalseClass or have what wine believes is the Directory subkey from registry
+  ## fix it up so we can use it on a *nix based system.  If the return is FalseClass, leave it FalseClass
+  sf_fe_loc_temp ? $sf_fe_loc = sf_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c') : :noop
+  wiz_fe_loc_temp ? $wiz_fe_loc = wiz_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c') : :noop
+  ## if we have a String class (directory) and the directory exists -- no error detectable at this level
+  ## if we have a nil, we have no directory, or if we have a path but cannot find that path (directory) we have an error
+  if $sf_fe_loc.nil? # no directory
+    Lich.log("STORM equivalent FE is not installed under WINE.")
+  else 
+    unless $sf_fe_loc.is_a? String and File.exist?($sf_fe_loc) # cannot confirm directory location
+      Lich.log("Cannot find STORM equivalent FE to launch under WINE.")
+    end
   end
-
-  unless File.exist?($wiz_fe_loc)
-    $wiz_fe_loc =~ /SIMU/ ? $wiz_fe_loc = $wiz_fe_loc.gsub("SIMU", "Simu") : $wiz_fe_loc = $wiz_fe_loc.gsub("Simu", "SIMU")
-    Lich.log("Cannot find WIZARD FE to launch.") unless File.exist?($wiz_fe_loc)
+  if $wiz_fe_loc.nil? # no directory
+    Lich.log("WIZARD FE is not installed under WINE.")
+  else 
+    unless $wiz_fe_loc.is_a? String and File.exist?($wiz_fe_loc) # cannot confirm directory location
+      Lich.log("Cannot find WIZARD FE to launch under WINE.")
+    end
   end
+  if $sf_fe_loc.nil? and $wiz_fe_loc.nil? # got nuttin - no FE installed under WINE in registry (or something changed. . . )
+    Lich.log("This system has WINE installed but does not have a suitable FE from Simu installed under WINE.")
+  end
+  ## We have either declared an error, or the global variables for Simu FE are populated with a confirmed path
 end
 ## The following should be deprecated with the direct-frontend-launch-method
 ## TODO: remove as part of chore/Remove unnecessary Win32 calls
