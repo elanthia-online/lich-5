@@ -45,6 +45,7 @@ module Infomon
       LostTechnique = /^\[You are no longer trained in (?<cat>[A-z]+) .*: (?<psm>[A-z\s]+)\.\]$/.freeze
       Resource = /^(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck Inspiration|Guile|Vitality): (?<weekly>[0-9,]+)\/50,000 \(Weekly\)\s+(?<total>[0-9,]+)\/200,000 \(Total\)$/.freeze
       Suffused = /^Suffused (?<type>(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck Inspiration|Guile|Vitality)): (?<suffused>[0-9,]+)$/.freeze
+      VolnFavor = /^Voln Favor: (?<favor>[-\d,]+)$/.freeze
       GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments\.$/.freeze
       RedsteelMarks = /^\s* Redsteel Marks:            (?<redsteel_marks>[\d,]+)$/.freeze
       TicketGeneral = /^\s*General - (?<tickets>[\d,]+) tickets\.$/.freeze
@@ -67,6 +68,10 @@ module Infomon
       CalmNoActive = /^You are enraged by .*? attack!|^The feeling of calm leaves you\./.freeze
       CutthroatActive = /slices deep into your vocal cords!$|^All you manage to do is cough up some blood\.$/.freeze
       CutthroatNoActive = /^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$|^That tingles, but there are no head injuries to repair\.$/.freeze
+      ThornPoisonStart = /^One of the vines surrouding lashes out at you, driving a thorn into your skin! You feel poison coursing through your veins\.$/.freeze
+      ThornPoisonProgression = /^You begin to feel a strange fatigue, spreading throughout your body\.$|^The strange lassitude is growing worse, making it difficult to keep up with any strenuous activities\.$|^You find yourself gradually slowing down, your muscles trembling with fatigue\.$|^It\'s getting increasingly difficult to move. It feels almost as if the air itself is growing thick as molasses\.$|^No longer able to fight this odd paralysis, you collapse to the ground, as limp as an old washrag\.$/.freeze
+      ThornPoisonDeprogression = /^With a shaky gasp and trembling muscles, you regain at least some small ability to move, however slowly\.$|Although you can\'t seem to move as quickly as you usually can, you\'re feeling better than you were just moments ago\.$|^Fine coordination is difficult, but at least you can move at something close to your normal speed again\.$|^While you\'re still a bit shaky, your muscles are responding better than they were\.$/.freeze
+      ThornPoisonEnd = /^Your body begins to respond normally again\.$|^Your skin takes on a more pinkish tint\.$/.freeze
 
       # Adding spell regexes.  Does not save to infomon.db.  Used by Spell and by ActiveSpells
       SpellUpMsgs = /^#{Games::Gemstone::Spell.upmsgs.join('$|^')}$/o.freeze
@@ -79,9 +84,27 @@ module Infomon
                          BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
                          CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
                          SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
-                         Resource, Suffused, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketBlackscrip,
-                         TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
-                         WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed)
+                         Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral,
+                         TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
+                         WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
+                         ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd)
+    end
+
+    def self.find_cat(category)
+      case category
+      when /Armor/
+        'Armor'
+      when /Ascension/
+        'Ascension'
+      when /Combat/
+        'CMan'
+      when /Feat/
+        'Feat'
+      when /Shield/
+        'Shield'
+      when /Weapon/
+        'Weapon'
+      end
     end
 
     def self.parse(line)
@@ -197,33 +220,29 @@ module Infomon
         when Pattern::PSMStart
           match = Regexp.last_match
           @psm_hold = []
-          if match[:cat] =~ /Ascension/
-            @psm_cat = 'ascension'
-          else
-            @psm_cat = 'psm'
-          end
+          @psm_cat = find_cat(match[:cat])
           Infomon.mutex_lock
           :ok
         when Pattern::PSM
           match = Regexp.last_match
-          @psm_hold.push(["#{@psm_cat}.%s" % match[:command], match[:ranks].to_i])
+          @psm_hold.push(["#{@psm_cat.downcase}.%s" % match[:command], match[:ranks].to_i])
           :ok
         when Pattern::PSMEnd
           Infomon.upsert_batch(@psm_hold)
           Infomon.mutex_unlock
           :ok
         when Pattern::NoWarcries
-          Infomon.upsert_batch([['psm.bertrandts_bellow', 0],
-                                ['psm.yerties_yowlp', 0],
-                                ['psm.gerrelles_growl', 0],
-                                ['psm.seanettes_shout', 0],
-                                ['psm.carns_cry', 0],
-                                ['psm.horlands_holler', 0]])
+          Infomon.upsert_batch([['warcry.bertrandts_bellow', 0],
+                                ['warcry.yerties_yowlp', 0],
+                                ['warcry.gerrelles_growl', 0],
+                                ['warcry.seanettes_shout', 0],
+                                ['warcry.carns_cry', 0],
+                                ['warcry.horlands_holler', 0]])
           :ok
         # end of blob saves
         when Pattern::Warcries
           match = Regexp.last_match
-          Infomon.set('psm.%s' % match[:name].split(' ')[1], 1)
+          Infomon.set('warcry.%s' % match[:name].split(' ')[1], 1)
           :ok
         when Pattern::Levelup
           match = Regexp.last_match
@@ -280,43 +299,25 @@ module Infomon
           :ok
         when Pattern::LearnPSM, Pattern::LearnTechnique
           match = Regexp.last_match
-          category = match[:cat]
-          category = "CMan" if category =~ /Combat/
-          if category =~ /Ascension/
-            @psm_cat = 'ascension'
-          else
-            @psm_cat = 'psm'
-          end
+          @psm_cat = find_cat(match[:cat])
           seek_name = PSMS.name_normal(match[:psm])
-          db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", match[:rank].to_i)
+          db_name = PSMS.find_name(seek_name, @psm_cat)
+          Infomon.set("#{@psm_cat.downcase}.#{db_name[:short_name]}", match[:rank].to_i)
           :ok
         when Pattern::UnlearnPSM, Pattern::UnlearnTechnique
           match = Regexp.last_match
-          category = match[:cat]
-          category = "CMan" if category =~ /Combat/
-          if category =~ /Ascension/
-            @psm_cat = 'ascension'
-          else
-            @psm_cat = 'psm'
-          end
+          @psm_cat = find_cat(match[:cat])
           seek_name = PSMS.name_normal(match[:psm])
           no_decrement = (match.string =~ /have decreased to/)
-          db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
+          db_name = PSMS.find_name(seek_name, @psm_cat)
+          Infomon.set("#{@psm_cat.downcase}.#{db_name[:short_name]}", (no_decrement ? match[:rank].to_i : match[:rank].to_i - 1))
           :ok
         when Pattern::LostTechnique
           match = Regexp.last_match
-          category = match[:cat]
-          category = "CMan" if category =~ /Combat/
-          if category =~ /Ascension/
-            @psm_cat = 'ascension'
-          else
-            @psm_cat = 'psm'
-          end
+          @psm_cat = find_cat(match[:cat])
           seek_name = PSMS.name_normal(match[:psm])
-          db_name = PSMS.find_name(seek_name, category)
-          Infomon.set("#{@psm_cat}.#{db_name[:short_name]}", 0)
+          db_name = PSMS.find_name(seek_name, @psm_cat)
+          Infomon.set("#{@psm_cat.downcase}.#{db_name[:short_name]}", 0)
           :ok
         when Pattern::Resource
           match = Regexp.last_match
@@ -327,6 +328,10 @@ module Infomon
           match = Regexp.last_match
           Infomon.set('resources.type', match[:type].to_s)
           Infomon.set('resources.suffused', match[:suffused].delete(',').to_i)
+          :ok
+        when Pattern::VolnFavor
+          match = Regexp.last_match
+          Infomon.set('resources.voln_favor', match[:favor].delete(',').to_i)
           :ok
         when Pattern::GigasArtifactFragments
           match = Regexp.last_match
@@ -377,6 +382,12 @@ module Infomon
           :ok
 
         # TODO: refactor / streamline?
+        when Pattern::ThornPoisonStart, Pattern::ThornPoisonProgression, Pattern::ThornPoisonDeprogression
+          Infomon.set('status.thorned', true)
+          :ok
+        when Pattern::ThornPoisonEnd
+          Infomon.set('status.thorned', false)
+          :ok
         when Pattern::SleepActive
           Infomon.set('status.sleeping', true)
           :ok

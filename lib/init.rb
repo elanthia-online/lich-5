@@ -19,7 +19,7 @@ if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
   exit
 end
 
-require 'lib/wine'
+require File.join(LIB_DIR, 'wine.rb')
 
 begin
   # stupid workaround for Windows
@@ -63,10 +63,21 @@ if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
     end
   end
 elsif defined?(Wine)
-  ## Needs improvement - iteration and such.  Quick slam test.
-  $sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\STORM32\\Directory') || ''
-  $wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
-  $sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory')
+  ## Needs improvement - iteration and such.  Quick slam test.  Why does Linux != MacOS (ver 9)?
+  case RUBY_PLATFORM
+  when /linux/
+    $sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\STORM32\\Directory') || ''
+    $wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\WIZ32\\Directory')
+    $sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\STORM32\\Directory')
+  when /darwin/
+    $sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory') || ''
+    $wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
+    $sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory')
+  else # prior result - probably no longer valid, but may be needed in break/fix
+    $sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\STORM32\\Directory') || ''
+    $wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
+    $sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Simutronics\\STORM32\\Directory')
+  end
 
   if $wiz_fe_loc_temp
     $wiz_fe_loc = $wiz_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')

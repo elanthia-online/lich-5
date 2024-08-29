@@ -16,17 +16,23 @@ module Games
           to_h.each { |k, v| yield(k, v) }
         end
 
+        def expiration(effect)
+          if effect.is_a?(Regexp)
+            to_h.find { |k, _v| k.to_s =~ effect }[1] || 0
+          else
+            to_h.fetch(effect, 0)
+          end
+        end
+
         def active?(effect)
-          expiry = to_h.fetch(effect, 0)
-          expiry.to_f > Time.now.to_f
+          expiration(effect).to_f > Time.now.to_f
         end
 
         def time_left(effect)
-          expiry = to_h.fetch(effect, 0)
-          if to_h.fetch(effect, 0) != 0
-            ((expiry - Time.now) / 60.to_f)
+          if expiration(effect) != 0
+            ((expiration(effect) - Time.now) / 60.to_f)
           else
-            expiry
+            expiration(effect)
           end
         end
       end
@@ -39,6 +45,9 @@ module Games
       def self.display
         effect_out = Terminal::Table.new :headings => ["ID", "Type", "Name", "Duration"]
         titles = ["Spells", "Cooldowns", "Buffs", "Debuffs"]
+        existing_spell_nums = []
+        active_spells = Spell.active
+        active_spells.each { |s| existing_spell_nums << s.num }
         circle = nil
         [Effects::Spells, Effects::Cooldowns, Effects::Buffs, Effects::Debuffs].each { |effect|
           title = titles.shift
@@ -65,9 +74,13 @@ module Games
                 circle = Spell[sn].circlename
               end
               effect_out.add_row [sn, title, stext, duration]
+              existing_spell_nums.delete_if { |s| Spell[s].name =~ /#{stext}/ || stext =~ /#{Spell[s].name}/ || s == sn }
             }
           end
-          effect_out.add_separator unless title == 'Debuffs'
+          effect_out.add_separator unless title == 'Debuffs' && existing_spell_nums.empty?
+        }
+        existing_spell_nums.each { |sn|
+          effect_out.add_row [sn, "Other", Spell[sn].name, (Spell[sn].timeleft.as_time)]
         }
         Lich::Messaging.mono(effect_out.to_s)
       end

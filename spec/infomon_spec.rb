@@ -417,8 +417,8 @@ describe Infomon::Parser, ".parse" do
         Shield
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
-      expect(Infomon.get("psm.bash")).to eq(4)
-      expect(Infomon.get("psm.throw")).to eq(5)
+      expect(Infomon.get("shield.bash")).to eq(4)
+      expect(Infomon.get("shield.throw")).to eq(5)
     end
 
     it "handles cman info" do
@@ -461,8 +461,8 @@ describe Infomon::Parser, ".parse" do
 
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
 
-      expect(Infomon.get("psm.toughness")).to eq(3)
-      expect(Infomon.get("psm.subdue")).to eq(6)
+      expect(Infomon.get("cman.toughness")).to eq(3)
+      expect(Infomon.get("cman.subdue")).to eq(6)
     end
 
     it "handles armor info" do
@@ -489,8 +489,8 @@ describe Infomon::Parser, ".parse" do
            Subcategory: all
         Armor
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
-      expect(Infomon.get("psm.support")).to eq(3)
-      expect(Infomon.get("psm.crush")).to eq(2)
+      expect(Infomon.get("armor.support")).to eq(3)
+      expect(Infomon.get("armor.crush")).to eq(2)
     end
 
     it "handles weapon info" do
@@ -510,8 +510,8 @@ describe Infomon::Parser, ".parse" do
            Subcategory: all
         Weapon
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
-      expect(Infomon.get("psm.flurry")).to eq(5)
-      expect(Infomon.get("psm.riposte")).to eq(5)
+      expect(Infomon.get("weapon.flurry")).to eq(5)
+      expect(Infomon.get("weapon.riposte")).to eq(5)
     end
 
     it "handles feat info" do
@@ -533,17 +533,17 @@ describe Infomon::Parser, ".parse" do
            Subcategory: all
         Feat
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
-      expect(Infomon.get("psm.martialmastery")).to eq(1)
-      expect(Infomon.get("psm.silentstrike")).to eq(5)
+      expect(Infomon.get("feat.martialmastery")).to eq(1)
+      expect(Infomon.get("feat.silentstrike")).to eq(5)
     end
 
     it "handles Learning a new PSM" do
       # Check LearnPSM
-      Infomon.set('psm.krynch', 1)
-      Infomon.set('psm.vaultkick', 0)
+      Infomon.set('cman.krynch', 1)
+      Infomon.set('cman.vaultkick', 0)
       # Check LearnTechnique
-      Infomon.set('psm.perfectself', 0)
-      Infomon.set('psm.pin', 2)
+      Infomon.set('feat.perfectself', 0)
+      Infomon.set('shield.pin', 2)
       output = <<~Learning
         You have now achieved rank 2 of Rolling Krynch Stance, costing 6 Combat Maneuver points.
         You have now achieved rank 1 of Vault Kick, costing 2 Combat Maneuver points.
@@ -551,21 +551,21 @@ describe Infomon::Parser, ".parse" do
         [You have increased to rank 3 of Shield Specialization: Pin.]
       Learning
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
-      expect(Infomon.get("psm.krynch")).to eq(2)
-      expect(Infomon.get("psm.vaultkick")).to eq(1)
-      expect(Infomon.get("psm.perfectself")).to eq(1)
-      expect(Infomon.get("psm.pin")).to eq(3)
+      expect(Infomon.get("cman.krynch")).to eq(2)
+      expect(Infomon.get("cman.vaultkick")).to eq(1)
+      expect(Infomon.get("feat.perfectself")).to eq(1)
+      expect(Infomon.get("shield.pin")).to eq(3)
     end
 
     it "handles Unlearning an existing PSM" do
       # Check UnlearnPSM
-      Infomon.set('psm.krynch', 1)
-      Infomon.set('psm.vaultkick', 5)
+      Infomon.set('cman.krynch', 1)
+      Infomon.set('cman.vaultkick', 5)
       # Check UnlearnTechnique
-      Infomon.set('psm.stealth', 2)
-      Infomon.set('psm.pin', 2)
+      Infomon.set('armor.stealth', 2)
+      Infomon.set('shield.pin', 2)
       # Check LostTechnique
-      Infomon.set("psm.fury", 1)
+      Infomon.set("weapon.fury", 1)
       output = <<~Unlearnings
         You decide to unlearn rank 5 of Vault Kick, regaining 20 Combat Maneuver points.
         You decide to unlearn rank 1 of Rolling Krynch Stance, regaining 2 Combat Maneuver points.
@@ -574,11 +574,11 @@ describe Infomon::Parser, ".parse" do
         [You are no longer trained in Weapon Technique: Fury.]
       Unlearnings
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
-      expect(Infomon.get("psm.krynch")).to eq(0)
-      expect(Infomon.get('psm.vaultkick')).to eq(4)
-      expect(Infomon.get("psm.stealth")).to eq(1)
-      expect(Infomon.get("psm.pin")).to eq(1)
-      expect(Infomon.get("psm.fury")).to eq(0)
+      expect(Infomon.get("cman.krynch")).to eq(0)
+      expect(Infomon.get('cman.vaultkick')).to eq(4)
+      expect(Infomon.get("armor.stealth")).to eq(1)
+      expect(Infomon.get("shield.pin")).to eq(1)
+      expect(Infomon.get("weapon.fury")).to eq(0)
     end
   end
 
@@ -594,8 +594,8 @@ describe Infomon::Parser, ".parse" do
             Horland's Holler
         Warcry
       output.split("\n").map { |line| Infomon::Parser.parse(line) }
-      expect(Infomon.get("psm.cry")).to eq(1)
-      expect(Infomon.get("psm.yowlp")).to eq(1)
+      expect(Infomon.get("warcry.cry")).to eq(1)
+      expect(Infomon.get("warcry.yowlp")).to eq(1)
     end
   end
 
@@ -662,16 +662,16 @@ describe Infomon::Parser, ".parse" do
 
   context "Infomon.show displays 0 values, or not" do
     it "handles Infomon.show(full = true) and (full = false)" do
-      Infomon.set('psm.krynch', 1)
+      Infomon.set('cman.krynch', 1)
       Infomon.set('skill.ambush', 1)
       Infomon.set('skill.swimming', 0)
       Infomon.set('society.status', 'None')
       test_results = Infomon.show(true)
-      expect(test_results.any? { |s| s.include?('psm.krynch : 1') }).to be(true)
+      expect(test_results.any? { |s| s.include?('cman.krynch : 1') }).to be(true)
       expect(test_results.any? { |s| s.include?('skill.swimming : 0') }).to be(true)
       expect(test_results.any? { |s| s.include?('society.status : "None"') }).to be(true)
       test2_results = Infomon.show
-      expect(test2_results.any? { |s| s.include?('psm.krynch : 1') }).to be(true)
+      expect(test2_results.any? { |s| s.include?('cman.krynch : 1') }).to be(true)
       expect(test2_results.any? { |s| s.include?('skill.ambush : 1') }).to be(true)
       expect(test2_results.any? { |s| s.include?('skill.swimming : 0') }).to be(false)
     end
@@ -680,14 +680,14 @@ describe Infomon::Parser, ".parse" do
   context "db feature method - Infomon.delete!(key)" do
     it "allows for selective deletion of a row in the infomon.db" do
       Infomon.set('skill.edged_weapon', 1)
-      Infomon.set('psm.pummel', 5)
+      Infomon.set('weapon.pummel', 5)
       Infomon.set('stat.aura_bonus', 18)
       expect(Infomon.get('skill.edged_weapon')).to eq(1)
-      expect(Infomon.get('psm.pummel')).to eq(5)
+      expect(Infomon.get('weapon.pummel')).to eq(5)
       expect(Infomon.get('stat.aura_bonus')).to eq(18)
-      Infomon.delete!('psm.pummel')
+      Infomon.delete!('weapon.pummel')
       expect(Infomon.get('skill.edged_weapon')).to eq(1)
-      expect(Infomon.get('psm.pummel')).to be(nil)
+      expect(Infomon.get('weapon.pummel')).to be(nil)
       expect(Infomon.get('stat.aura_bonus')).to eq(18)
       Infomon.delete!('stat.aura_bonus')
       expect(Infomon.get('skill.edged_weapon')).to eq(1)

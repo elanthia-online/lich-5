@@ -4,12 +4,36 @@ module Lich
   @@last_warn_deprecated = 0
   @@deprecated_log       = []
 
+  @@db_mutex             ||= Mutex.new
+
   # settings
   @@display_lichid       = nil # boolean
   @@display_uid          = nil # boolean
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
+
+  def self.db_mutex
+    @@db_mutex
+  end
+
+  def self.mutex_lock
+    begin
+      self.db_mutex.lock unless self.db_mutex.owned?
+    rescue StandardError
+      respond "--- Lich: error: Lich.mutex_lock: #{$!}"
+      Lich.log "error: Lich.mutex_lock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    end
+  end
+
+  def self.mutex_unlock
+    begin
+      self.db_mutex.unlock if self.db_mutex.owned?
+    rescue StandardError
+      respond "--- Lich: error: Lich.mutex_unlock: #{$!}"
+      Lich.log "error: Lich.mutex_unlock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    end
+  end
 
   def Lich.method_missing(arg1, arg2 = '')
     if (Time.now.to_i - @@last_warn_deprecated) > 300
@@ -65,6 +89,12 @@ module Lich
     Lich.log(msg) if debug_log
     _respond Lich::Messaging.monsterbold(msg) if fe_log
     @@deprecated_log.push(msg) unless @@deprecated_log.include?(msg)
+  end
+
+  def Lich.show_deprecated_log
+    @@deprecated_log.each do |msg|
+      respond(msg)
+    end
   end
 
   def Lich.msgbox(args)
@@ -616,6 +646,26 @@ module Lich
     @@display_lichid = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_lichid',?);", [@@display_lichid.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    return nil
+  end
+
+  def Lich.core_updated_with_lich_version
+    begin
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='core_updated_with_lich_version';")
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    return val.to_s
+  end
+
+  def Lich.core_updated_with_lich_version=(val)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('core_updated_with_lich_version',?);", [val.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry

@@ -136,6 +136,10 @@ module Games
         @@after_stance = val
       end
 
+      def Spell.after_stance
+        @@after_stance
+      end
+
       def Spell.load(filename = nil)
         if filename.nil?
           filename = File.join(DATA_DIR, 'effect-list.xml')

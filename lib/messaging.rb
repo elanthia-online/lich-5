@@ -43,7 +43,7 @@ module Lich
 
     def self.stream_window(msg, window = "familiar")
       if XMLData.game =~ /^GS/
-        allowed_streams = ["familiar", "speech", "thoughts", "loot"]
+        allowed_streams = ["familiar", "speech", "thoughts", "loot", "voln"]
       elsif XMLData.game =~ /^DR/
         allowed_streams = ["familiar", "speech", "thoughts", "combat"]
       end
@@ -60,6 +60,9 @@ module Lich
         elsif window =~ /thoughts/i
           stream_window_before_txt = "You hear the faint thoughts of LICH-MESSAGE echo in your mind:\r\n"
           stream_window_after_txt = ""
+        elsif window =~ /voln/i
+          stream_window_before_txt = %{The Symbol of Thought begins to burn in your mind and you hear LICH-MESSAGE thinking, "}
+          stream_window_after_txt = %{"\r\n}
         end
       end
 
