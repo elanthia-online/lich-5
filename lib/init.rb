@@ -64,28 +64,23 @@ if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
   end
 elsif defined?(Wine)
   ## Needs improvement - iteration and such.  Quick slam test.  Why does Linux != MacOS (ver 9)?
-  case RUBY_PLATFORM
-  when /linux/
-    $sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\STORM32\\Directory') || ''
-    $wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\WIZ32\\Directory')
-    $sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\STORM32\\Directory')
-  when /darwin/
-    $sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory') || ''
-    $wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
-    $sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory')
-  else # prior result - probably no longer valid, but may be needed in break/fix
-    $sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\STORM32\\Directory') || ''
-    $wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
-    $sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Simutronics\\STORM32\\Directory')
+  unless sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\STORM32\\Directory')
+    sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory')
+  end
+  unless wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\WIZ32\\Directory')
+    wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
   end
 
-  if $wiz_fe_loc_temp
-    $wiz_fe_loc = $wiz_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
-  end
-  if $sf_fe_loc_temp
-    $sf_fe_loc = $sf_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
+  unless sf_fe_loc_temp || wiz_fe_loc_temp
+    $sf_fe_loc = ''
   end
 
+  if wiz_fe_loc_temp
+    $wiz_fe_loc = wiz_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
+  end
+  if sf_fe_loc_temp
+    $sf_fe_loc = sf_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
+  end
   if !File.exist?($sf_fe_loc)
     $sf_fe_loc =~ /SIMU/ ? $sf_fe_loc = $sf_fe_loc.gsub("SIMU", "Simu") : $sf_fe_loc = $sf_fe_loc.gsub("Simu", "SIMU")
     Lich.log("Cannot find STORM equivalent FE to launch.") if !File.exist?($sf_fe_loc)
