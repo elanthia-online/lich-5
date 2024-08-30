@@ -204,7 +204,7 @@ module Games
                   @@infomon_loaded = true
                 end
 
-                if @@autostarted && !@@cli_scripts && defined?(XMLData.game) && !XMLData.name.empty?
+                if @@autostarted && !@@cli_scripts && !XMLData.name.empty?
                   if (arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ })
                     for script_name in arg.sub('--start-scripts=', '').split(',')
                       Script.start(script_name)
