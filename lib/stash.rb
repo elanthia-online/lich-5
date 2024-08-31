@@ -142,7 +142,7 @@ module Lich
         if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/)\
           and Lich::Stash::wear_to_inv(left_hand)
           actions.unshift proc {
-            dothistimeout "remove ##{left_hand.id}", 3, /^You (?:remove|sling|unsling)|^With a slight roll of your shoulder, you|^You .*#{left_hand.noun}|^Remove what\?/
+            fput "remove ##{left_hand.id}"
             20.times { break if GameObj.left_hand.id == left_hand.id or GameObj.right_hand.id == left_hand.id; sleep 0.1 }
 
             if GameObj.right_hand.id == left_hand.id
