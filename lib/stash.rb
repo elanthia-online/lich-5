@@ -67,6 +67,17 @@ module Lich
       end
     end
 
+    def self.wear_to_inv(item)
+      try_or_fail(command: "wear ##{item.id}") do
+        20.times {
+          return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) and GameObj.inv.to_a.map(&:id).include?(item.id))
+          return true if item.name =~ /^ethereal \w+$/ && ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id)
+          sleep 0.1
+        }
+        return false
+      end
+    end
+
     def self.sheath_bags
       # find ready list settings for sheaths only; regex courtesy Eloot
       @sheath = {}
@@ -129,9 +140,9 @@ module Lich
       if (left || both) && left_hand.id
         waitrt?
         if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/)\
-          and (wear_result = dothistimeout("wear ##{left_hand.id}", 8, /^You .*#{left_hand.noun}|^With careful precision, you|^You toss the shield|^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)) and (wear_result !~ /^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)
+          and Lich::Stash::wear_to_inv(left_hand)
           actions.unshift proc {
-            dothistimeout "remove ##{left_hand.id}", 3, /^You (?:remove|sling|unsling)|^With a slight roll of your shoulder, you|^You .*#{left_hand.noun}|^Remove what\?/
+            fput "remove ##{left_hand.id}"
             20.times { break if GameObj.left_hand.id == left_hand.id or GameObj.right_hand.id == left_hand.id; sleep 0.1 }
 
             if GameObj.right_hand.id == left_hand.id
