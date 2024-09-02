@@ -1073,7 +1073,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /Spine ripped from .*?s's body and thrown to the ground./ } },
+                                  :regex           => /Spine ripped from .*?'s body and thrown to the ground./ } },
           :right_arm  =>
                          { 1 =>
                                 { :type            => "Disruption",
