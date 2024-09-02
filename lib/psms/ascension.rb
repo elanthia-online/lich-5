@@ -76,7 +76,8 @@ module Ascension
      { long_name: 'two_handed_weapons',        short_name: 'twohandedweapon', cost: 0 },
      { long_name: 'unbalance_resistance',      short_name: 'resistunbalance', cost: 0 },
      { long_name: 'vacuum_resistance',         short_name: 'resistvacuum',    cost: 0 },
-     { long_name: 'wisdom',                    short_name: 'wisdom',          cost: 0 }]
+     { long_name: 'wisdom',                    short_name: 'wisdom',          cost: 0 },
+     { long_name: 'transcend_destiny',         short_name: 'trandest',        cost: 0 }]
   end
 
   def Ascension.[](name)
@@ -94,7 +95,7 @@ module Ascension
   def Ascension.available?(name)
     Ascension.known?(name) and Ascension.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
   end
-  
+
   Ascension.ascension_lookups.each { |ascension|
     self.define_singleton_method(ascension[:short_name]) do
       Ascension[ascension[:short_name]]
