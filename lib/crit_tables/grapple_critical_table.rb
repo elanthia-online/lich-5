@@ -144,7 +144,7 @@ module Games
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /(?:.*?'s h|H)ead is cracked as (?:it|she|he is thrown|you throw .*?) to the ground./ },
+                                                      /(?:.*?'s h|H)ead (?:is )?cracked as (?:it|she|he is thrown|you throw .*?) to the ground./ },
                            8 =>
                                 { :type            => "Grapple",
                                   :location        => "Head",
@@ -643,7 +643,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Hard blow to chest knocks .*? back and winds it./ },
+                                  :regex           => /Hard blow to chest knocks .*? back and winds (?:she|he|it)./ },
                            6 =>
                                 { :type            => "Grapple",
                                   :location        => "Chest",
