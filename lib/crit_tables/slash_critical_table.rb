@@ -1026,7 +1026,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Feint to the left goes astray as .*? dodges./ },
+                                  :regex           => /Feint to the left (?:goes astray )?as .*? dodges(?: that way)?./ },
                            3 =>
                                 { :type            => "Slash",
                                   :location        => "Back",

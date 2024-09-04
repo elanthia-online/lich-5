@@ -128,7 +128,7 @@ module Games
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /.*?'s head wavers as your attack passes right through it./ },
+                                                      /.*?'s head wavers as (?:your|the) attack passes right through it./ },
                            6 =>
                                 { :type            => "Non-corporeal",
                                   :location        => "Head",
@@ -206,7 +206,7 @@ module Games
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Head disappears in the breeze as a new one forms on .*?'s shoulders./ } },
+                                                      /Strong attack separates head from shoulders. Head disappears in the breeze as a new one forms on .*?'s shoulders./ } },
           :neck       =>
                          { 0 =>
                                 { :type            => "Non-corporeal",
@@ -266,7 +266,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
-                                  :regex           => /Ethereal fluids spray forth and quickly vanish into vapor./ },
+                                  :regex           => /Flashy attack passes through the side of the neck. Ethereal fluids spray forth and quickly vanish into vapor./ },
                            3 =>
                                 { :type            => "Non-corporeal",
                                   :location        => "Neck",
@@ -285,7 +285,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
-                                  :regex           => /Smoky tendrils rise from neck as your attack sweeps through./ },
+                                  :regex           => /Smoky tendrils rise from neck as (?:your|the) attack sweeps through./ },
                            4 =>
                                 { :type            => "Non-corporeal",
                                   :location        => "Neck",
@@ -325,7 +325,7 @@ module Games
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /To your horror, .*?'s substance flows around the wound without leaving a trace./ },
+                                                      /Strong attack rips through the neck! To your horror, .*?'s substance flows around the wound without leaving a trace./ },
                            6 =>
                                 { :type            => "Non-corporeal",
                                   :rank            => 6,
@@ -384,7 +384,7 @@ module Games
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /The head floats up and settles back in place as easily as a hat./ },
+                                                      /Brutal blow to the neck sends head flying. The head floats up and settles back in place as easily as a hat. What is this, a haberdashery./ },
                            9 =>
                                 { :type            => "Non-corporeal",
                                   :location        => "Neck",
@@ -403,7 +403,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
-                                  :regex           => /Vapor rushes from the neck following the blow./ } },
+                                  :regex           => /Tremendous strike. Vapor rushes from the neck following the blow./ } },
           :right_eye  =>
                          { 0 =>
                                 { :type            => "Non-corporeal",
@@ -1449,7 +1449,7 @@ module Games
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Right shoulder is ripped from (?:its|her|his) socket, then wriggles back into place./ },
+                                                      /Good hit. Right shoulder is ripped from (?:its|her|his) socket, then wriggles back into place./ },
                            7 =>
                                 { :type            => "Non-corporeal",
                                   :location        => "Right arm",
@@ -1625,7 +1625,7 @@ module Games
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Left shoulder is ripped from (?:its|her|his) socket, then wriggles back into place./ },
+                                                      /Good hit. Left shoulder is ripped from (?:its|her|his) socket, then wriggles back into place./ },
                            6 =>
                                 { :type            => "Non-corporeal",
                                   :location        => "Left arm",
@@ -2246,7 +2246,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
-                                  :regex           => /A fine strike pins the left leg for an instant./ },
+                                  :regex           => /A fine strike (?:pins|immobilizes) the left leg for an instant./ },
                            5 =>
                                 { :type            => "Non-corporeal",
                                   :location        => "Left leg",
