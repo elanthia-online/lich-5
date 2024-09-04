@@ -144,7 +144,7 @@ module Games
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /.*?'s head is cracked as (?:it|she|he) is thrown to the ground./ },
+                                                      /(?:.*?'s h|H)ead is cracked as (?:it|she|he is thrown|you throw .*?) to the ground./ },
                            8 =>
                                 { :type            => "Grapple",
                                   :location        => "Head",
@@ -182,7 +182,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /Head crushed! Resulting death is... messy./ } },
+                                  :regex           => /Head crushed!  Resulting death is... messy./ } },
           :neck       =>
                          { 1 =>
                                 { :type            => "Grapple",
@@ -854,7 +854,7 @@ module Games
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /.*? takes a hard fall from being, cracking (?:its|her|his) hip./ },
+                                                      /.*? (?:takes a hard fall from being|thrown down hard), cracking (?:its|her|his) hip./ },
                            8 =>
                                 { :type            => "Grapple",
                                   :location        => "Abdomen",
@@ -1626,7 +1626,7 @@ module Games
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /.*?'s left leg is wrenched hard as it is thrown to the ground./ },
+                                                      /(?:.*?'s l|L)eft leg is wrenched hard as (?:she|he|it|opponent) is thrown to the ground./ },
                            8 =>
                                 { :type            => "Grapple",
                                   :location        => "Left leg",
@@ -1704,10 +1704,10 @@ module Games
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /.*?'s right leg is wrenched hard as it is thrown to the ground./ },
+                                                      /(?:.*?'s r|R)ight leg is wrenched hard as (?:she|he|it|opponent) is thrown to the ground./ },
                            8 =>
                                 { :type            => "Grapple",
-                                  :location        => "Left leg",
+                                  :location        => "Right leg",
                                   :rank            => 8,
                                   :damage          => 40,
                                   :position        => "PRONE",
