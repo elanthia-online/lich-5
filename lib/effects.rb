@@ -74,7 +74,7 @@ module Games
                 circle = Spell[sn].circlename
               end
               effect_out.add_row [sn, title, stext, duration]
-              existing_spell_nums.delete_if { |s| Spell[s].name =~ /#{stext}/ || stext =~ /#{Spell[s].name}/ || s == sn }
+              existing_spell_nums.delete_if { |s| Spell[s].name =~ /#{Regexp.escape(stext)}/ || stext =~ /#{Regexp.escape(Spell[s].name)}/ || s == sn }
             }
           end
           effect_out.add_separator unless title == 'Debuffs' && existing_spell_nums.empty?
