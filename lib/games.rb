@@ -49,37 +49,26 @@ module Games
 
         ## Fix combat wrapping components - Why, DR, Why?
         server_string = server_string.gsub("<pushStream id=\"combat\" /><component id=", "<component id=")
-        # server_string = server_string.gsub("<pushStream id=\"combat\" /><prompt ","<prompt ")
 
         # Fixes xml with \r\n in the middle of it like:
-        # <component id='room exits'>Obvious paths: clockwise, widdershins.\r\n
-        # <compass></compass></component>\r\n
         # We close the first line and in the next segment, we remove the trailing bits
-        # Because we can only match line by line, this couldn't be fixed in one matching block...
-        if server_string == "<component id='room exits'>Obvious paths: clockwise, widdershins.\r\n"
-          Lich.log "Unclosed component tag detected: #{server_string.inspect}"
-          server_string = "<component id='room exits'>Obvious paths: <d>clockwise</d>, <d>widdershins</d>.<compass></compass></component>"
-          Lich.log "Unclosed component tag fixed to: #{server_string.inspect}"
-          # retry
-        end
-        # This is an actual DR line "<compass></compass></component>\r\n" which happens when the above is sent... subbing it out since we fix the tag above.
-        if server_string == "<compass></compass></component>\r\n"
-          Lich.log "Extraneous closed tag detected: #{server_string.inspect}"
-          server_string = ""
-          Lich.log "Extraneous closed tag fixed: #{server_string.inspect}"
+        # <component id='room objs'>  You also see a granite altar with several candles and a water jug on it, and a granite font.\r\n
+        # <component id='room extra'>Placed around the interior, you see: some furniture and other bits of interest.\r\n
+        # <component id='room exits'>Obvious paths: clockwise, widdershins.\r\n
+
+        # Followed by in a closing line such as one of these:
+        # </component>\r\n
+        # <compass></compass></component>\r\n
+
+        # If the pattern is on the left of the =~ the named capture gets assigned as a variable
+        if /^<(?<xmltag>dynaStream|component) id='.*'>[^<]*(?!<\/\k<xmltag>>)\r\n$/ =~ server_string
+          Lich.log "Open-ended #{xmltag} tag: #{server_string.inspect}"
+          server_string.gsub!("\r\n", "</#{xmltag}>")
+          Lich.log "Open-ended #{xmltag} tag tag fixed to: #{server_string.inspect}"
         end
 
-        # "<component id='room objs'>  You also see a granite altar with several candles and a water jug on it, and a granite font.\r\n"
-        # "<component id='room extra'>Placed around the interior, you see: some furniture and other bits of interest.\r\n
-        # Followed by in a new line.
-        # "</component>\r\n"
-        if server_string =~ /^<component id='room (?:objs|extra)'>[^<]*(?!<\/component>)\r\n/
-          Lich.log "Open-ended room objects component id tag: #{server_string.inspect}"
-          server_string.gsub!("\r\n", "</component>")
-          Lich.log "Open-ended room objects component id tag fixed to: #{server_string.inspect}"
-        end
-        # "</component>\r\n"
-        if server_string == "</component>\r\n"
+        # Remove the now dangling closing tag
+        if server_string =~ /^(?:(\"|<compass><\/compass>))?<\/(dynaStream|component)>\r\n/
           Lich.log "Extraneous closing tag detected and deleted: #{server_string.inspect}"
           server_string = ""
         end
