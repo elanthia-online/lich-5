@@ -815,7 +815,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Hard blow to stomach knocks .*? back and winds it./ },
+                                  :regex           => /Hard blow to stomach knocks .*? back and winds (?:she|he|it)./ },
                            6 =>
                                 { :type            => "Grapple",
                                   :location        => "Abdomen",
