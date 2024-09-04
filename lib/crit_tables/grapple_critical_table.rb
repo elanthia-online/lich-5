@@ -1432,7 +1432,7 @@ module Games
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /.*?'s left hand is wrenched hard as (?:it|she|he) is thrown to the ground./ },
+                                                      /(?:.*?'s l|L)eft hand is wrenched hard as (?:she|he|it|opponent) is thrown to the ground./ },
                            8 =>
                                 { :type            => "Grapple",
                                   :location        => "Left hand",
@@ -1491,7 +1491,7 @@ module Games
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /.*?'s right hand is wrenched hard as she is thrown to the ground./ } },
+                                                      /(?:.*?'s r|R)ight hand is wrenched hard as (?:she|he|it|opponent) is thrown to the ground./ } },
           :left_leg   =>
                          { 1 =>
                                 { :type            => "Grapple",
