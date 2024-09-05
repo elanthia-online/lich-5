@@ -3,7 +3,7 @@
 # 2024-09-05
 
 module SessionVars
-  @@svars = Hash.new
+  @@svars ||= Hash.new
 
   def SessionVars.[](name)
     @@svars[name]
