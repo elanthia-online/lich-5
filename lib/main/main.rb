@@ -689,7 +689,58 @@ reconnect_if_wanted = proc {
         end
         if $_DETACHABLE_CLIENT_
           begin
-            unless ARGV.include?('--genie')
+            if ARGV.include?('--genie')
+              #reset FE to genie since detachable sometimes seems to lose this.
+              $frontend = 'genie'
+              Thread.new {
+                # sleep a bit so that genie has time to stabilize - doesn't like 'malformed' xml
+                sleep 5
+                # inject xml for things like 
+                #   - roomname / roomdesc / roomexits etc
+                # init_str = "<nav/>"
+                # init_str.concat "<streamWindow id='main' title='Story' subtitle=\" - #{}\" location='center' target='drop'/>"
+                # init_str.concat "<streamWindow id='room' title='Room' subtitle=\" - #{}\" location='center' target='drop' ifClosed='' resident='true'/>"
+                # init_str.concat "<component id='room desc'>#{}</component>"
+                # init_str.concat "<component id='room objs'>#{}</component>"
+                # init_str.concat "<component id='room players'>#{}</component>"
+                # init_str.concat "<component id='room exits'>Obvious paths: <d>east</d>, <d>southeast</d>.<compass></compass></component>"
+                # init_str.concat "<component id='room extra'></component>"
+                # init_str.concat "<resource picture="0"/><style id=\"roomName\" />#{}"
+                # init_str.concat "<style id=\"\"/><preset id='roomDesc'>#{}"
+                # init_str.concat "Obvious paths: <d>east</d>, <d>southeast</d>."
+                # init_str.concat "<compass><dir value=\"e\"/><dir value=\"se\"/></compass><component id='room players'></component>"
+
+                #   - player status (standing, kneeling, sitting, bleeding, etc)
+                init_str = ""
+                XMLData.indicator.each do |indicator, value|
+                  init_str.concat "<indicator id='#{indicator}' visible='#{value}'/>"
+                end
+                $_DETACHABLE_CLIENT_.puts init_str
+
+                #   - player resources (vit,mana,stam etc)
+                init_str = "<progressBar id='health' value='#{XMLData.health}' text='health #{XMLData.health}%' left='0%' customText='t' top='0%' width='20%' height='100%'/>"
+                init_str.concat "<progressBar id='mana' value='#{XMLData.mana}' text='mana #{XMLData.mana}%' left='20%' customText='t' top='0%' width='20%' height='100%'/>"
+                init_str.concat "<progressBar id='stamina' value='#{XMLData.stamina}' text='fatigue #{XMLData.stamina}%' left='40%' customText='t' top='0%' width='20%' height='100%'/>"
+                init_str.concat "<progressBar id='spirit' value='#{XMLData.spirit}' text='spirit #{XMLData.spirit}%' left='60%' customText='t' top='0%' width='20%' height='100%'/>"
+                init_str.concat "<progressBar id='concentration' value='#{XMLData.concentration}' text='concentration #{XMLData.concentration}%' left='80%' customText='t' top='0%' width='20%' height='100%'/>"
+                $_DETACHABLE_CLIENT_.puts init_str
+
+                #   - hands / inventory / stow
+                init_str = "<left>Empty</left>"
+                if GameObj.left_hand != 'Empty'
+                  init_str.concat "<left exist=\"#{GameObj.left_hand.id}\" noun=\"#{GameObj.left_hand.noun}\">#{GameObj.left_hand.name}</left>"
+                end
+                $_DETACHABLE_CLIENT_.puts init_str
+
+                init_str = "<right>Empty</right>"
+                if GameObj.right_hand.name != 'Empty'
+                  init_str.concat "<right exist=\"#{GameObj.right_hand.id}\" noun=\"#{GameObj.right_hand.noun}\">#{GameObj.right_hand.name}</right>"
+                end
+                $_DETACHABLE_CLIENT_.puts init_str
+
+                nil
+              }
+            else
               $frontend = 'profanity'
               Thread.new {
                 100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
