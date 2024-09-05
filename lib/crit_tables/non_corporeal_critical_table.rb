@@ -325,7 +325,7 @@ module Games
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Strong attack rips through the neck! To your horror, .*?'s substance flows around the wound without leaving a trace./ },
+                                                      /To your horror, .*?'s substance flows around the wound without leaving a trace./ },
                            6 =>
                                 { :type            => "Non-corporeal",
                                   :rank            => 6,
