@@ -317,7 +317,7 @@ module Games
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Grab to the head sprains .*?'s neck badly before it hits the ground./ },
+                                                      /Grab to the head sprains .*?'s neck badly before (?:he|she|it) hits the ground./ },
                            8 =>
                                 { :type            => "Grapple",
                                   :location        => "Neck",
