@@ -470,7 +470,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Dirt gets in .*?'s eyes as it is pushed to the ground./ },
+                                  :regex           => /Dirt gets in .*?'s eyes as (?:she|he|it) is pushed to the ground./ },
                            6 =>
                                 { :type            => "Grapple",
                                   :location        => "Left eye",
@@ -643,7 +643,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Hard blow to chest knocks .*? back and winds (?:she|he|it)./ },
+                                  :regex           => /Hard blow to chest knocks .*? back and winds (?:it|him|her)./ },
                            6 =>
                                 { :type            => "Grapple",
                                   :location        => "Chest",
