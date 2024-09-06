@@ -11,10 +11,21 @@ end
 
 if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
   if (RUBY_PLATFORM =~ /mingw|win/) and (RUBY_PLATFORM !~ /darwin/i)
-    require 'fiddle'
-    Fiddle::Function.new(Fiddle.dlopen('user32.dll')['MessageBox'], [Fiddle::TYPE_INT, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_INT], Fiddle::TYPE_INT).call(0, "Upgrade Ruby to version #{REQUIRED_RUBY} or newer!", "Lich v#{LICH_VERSION}", 16)
+    require 'win32ole'
+    shell = WIN32OLE.new('WScript.Shell')
+    message = "!!ALERT!!\nYour version of Ruby is too old!\nUpgrade Ruby to version #{REQUIRED_RUBY} or newer!\nClick OK to launch browser to go to documentation now!"
+    title = "Lich v#{LICH_VERSION}"
+    type = 1 + 64  # OK/Cancel buttons + Information icon
+    result = shell.Popup(message, 0, title, type)
+
+    if result == 1 # OK button clicked
+      shell.Run("https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich")
+    end
   else
+    puts "!!ALERT!!"
+    puts "Your version of Ruby is too old!"
     puts "Upgrade Ruby to version #{REQUIRED_RUBY} or newer!"
+    puts "Go to https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich for more info!"
   end
   exit
 end
