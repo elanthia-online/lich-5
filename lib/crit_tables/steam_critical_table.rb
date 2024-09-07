@@ -281,7 +281,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Hot burst to neck leaves .*? a li'l steamed./ },
+                                  :regex           => /Hot burst (?:to to|to) neck leaves .*? a li'l steamed./ },
                            4 =>
                                 { :type            => "Steam",
                                   :location        => "Neck",
