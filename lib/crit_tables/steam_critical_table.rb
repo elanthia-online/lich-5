@@ -1206,7 +1206,7 @@ module Games
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Scalding blast peels large layers of skin off .*?'s back./ },
+                                                      /Scaldl?ing blast peels large layers of skin off .*?'s back./ },
                            7 =>
                                 { :type            => "Steam",
                                   :location        => "Back",
@@ -1517,7 +1517,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /.*?'s jerks (?:her |his |its )?right arm away from the hot steam./ },
+                                  :regex           => /.*? jerks (?:her |his |its )?right arm away from the hot steam./ },
                            4 =>
                                 { :type            => "Steam",
                                   :location        => "Right arm",
