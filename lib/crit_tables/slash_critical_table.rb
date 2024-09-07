@@ -1467,7 +1467,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /Deep slash to .*?'s right forearm./ },
+                                  :regex           => /(?:Deep s|S)lash to .*?'s right (?:forearm|arm)./ },
                            6 =>
                                 { :type            => "Slash",
                                   :location        => "Right arm",
