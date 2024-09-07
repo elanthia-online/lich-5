@@ -1692,7 +1692,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Breief exposure to hot vapors on left hand startles .*?./ },
+                                  :regex           => /Brief exposure to hot vapors on left hand startles .*?./ },
                            3 =>
                                 { :type            => "Steam",
                                   :location        => "Left hand",
