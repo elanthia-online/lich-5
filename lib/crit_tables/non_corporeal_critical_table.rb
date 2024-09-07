@@ -285,7 +285,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
-                                  :regex           => /Smoky tendrils rise from neck as (?:your|the) attack sweeps through./ },
+                                  :regex           => /Smoky tendrils rise from (?:.*?)?neck as (?:your|the) attack sweeps through./ },
                            4 =>
                                 { :type            => "Non-corporeal",
                                   :location        => "Neck",
@@ -344,7 +344,7 @@ module Games
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /.*? wails eerily as your blow passes through (?:its|her|his) vocal cords./ },
+                                                      /.*? wails eerily as (?:your|the) blow passes through (?:its|her|his) vocal cords./ },
                            7 =>
                                 { :type            => "Non-corporeal",
                                   :location        => "Neck",
@@ -1449,7 +1449,7 @@ module Games
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Right shoulder is ripped from (?:its|her|his) socket, then wriggles back into place./ },
+                                                      /Right shoulder is ripped from (?:its|her|his) socket,? then wriggles back into place./ },
                            7 =>
                                 { :type            => "Non-corporeal",
                                   :location        => "Right arm",
@@ -1625,7 +1625,7 @@ module Games
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Left shoulder is ripped from (?:its|her|his) socket, then wriggles back into place./ },
+                                                      /Left shoulder is ripped from (?:its|her|his) socket,? then wriggles back into place./ },
                            6 =>
                                 { :type            => "Non-corporeal",
                                   :location        => "Left arm",
