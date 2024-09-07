@@ -1704,7 +1704,7 @@ module Games
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /(?:.*?'s r|R)ight leg is wrenched hard as (?:she|he|it|opponent) is thrown to the ground./ },
+                                                      /(?:.*?'s r|R)ight leg (?:is )?wrenched hard as (?:she|he|it|opponent) is thrown to the ground./ },
                            8 =>
                                 { :type            => "Grapple",
                                   :location        => "Right leg",
