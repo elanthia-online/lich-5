@@ -106,7 +106,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /.*? is slashed across (?:its|her|his) forehead./ },
+                                  :regex           => /(?:Quick flick slashes|The) (.*?) (?:is slashed across (?:its|her|his) )?forehead./ },
                            5 =>
                                 { :type            => "Slash",
                                   :location        => "Head",
