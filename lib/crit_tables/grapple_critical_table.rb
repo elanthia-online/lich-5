@@ -394,7 +394,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
-                                  :regex           => /Weak eye gouge, probably distracting./ },
+                                  :regex           => /Weak eye gouge, (?:probably distracting|you may have .*?'s attention now)./ },
                            2 =>
                                 { :type            => "Grapple",
                                   :location        => "Left eye",
