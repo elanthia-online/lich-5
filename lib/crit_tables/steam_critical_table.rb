@@ -417,7 +417,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Steamy gust to (?:the)?right eye causes .*? to blink repeatedly./ },
+                                  :regex           => /Steamy gust to (?:the )?right eye causes .*? to blink repeatedly./ },
                            3 =>
                                 { :type            => "Steam",
                                   :location        => "Right eye",
