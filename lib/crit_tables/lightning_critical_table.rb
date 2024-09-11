@@ -2616,7 +2616,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /Electrical blast goes right to the heart./ },
+                                  :regex           => /Electric blast goes right to the heart.  Fibrillation can be fun./ },
                            6 =>
                                 { :type            => "Lightning",
                                   :location        => "Nerves",
