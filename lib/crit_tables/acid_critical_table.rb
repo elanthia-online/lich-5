@@ -801,7 +801,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Acid reaches the chest causing a nasty rash!/ },
+                                  :regex           => /Acid reaches the chest causing a nasty rash./ },
                            3 =>
                                 { :type            => "Acid",
                                   :location        => "Chest",
