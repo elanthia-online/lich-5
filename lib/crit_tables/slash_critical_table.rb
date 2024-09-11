@@ -87,7 +87,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /(?!.*removes skull.)Blow to head(?:\.|\!)/ },
+                                  :regex           => /(?!.*removes skull.)Blow to head./ },
                            4 =>
                                 { :type            => "Slash",
                                   :location        => "Head",
