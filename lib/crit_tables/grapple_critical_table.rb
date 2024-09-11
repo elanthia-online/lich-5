@@ -182,7 +182,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /Head crushed!  Resulting death is... messy./ } },
+                                  :regex           => /Head crushed.  Resulting death is... messy./ } },
           :neck       =>
                          { 1 =>
                                 { :type            => "Grapple",
