@@ -471,7 +471,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /An unscheduled flush./ },
+                                  :regex           => /Acid gets in eye.  An unscheduled flush./ },
                            4 =>
                                 { :type            => "Acid",
                                   :location        => "Left eye",
