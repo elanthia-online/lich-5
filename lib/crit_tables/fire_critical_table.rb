@@ -1143,7 +1143,7 @@ module Games
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Intestines rupture from intense heat; dies a slow, painful death./ },
+                                                      /Intestines rupture from intense heat; .*? dies a slow, painful death./ },
                            9 =>
                                 { :type            => "Fire",
                                   :location        => "Abdomen",
