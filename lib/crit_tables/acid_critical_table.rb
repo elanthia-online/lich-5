@@ -335,7 +335,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /Dissolved larynx opens windpipe./ },
+                                  :regex           => /Dissolved larynx opens windpipe.  Unfortunately it quickly fills with blood./ },
                            7 =>
                                 { :type            => "Acid",
                                   :location        => "Neck",
@@ -803,7 +803,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /Acid hole in the ribs makes it hard to breathe./ },
+                                  :regex           => /Acid hole in the ribs makes it hard to breathe.  Better get that checked./ },
                            8 =>
                                 { :type            => "Acid",
                                   :location        => "Chest",
@@ -1015,7 +1015,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /Acid dissolves the outside of the stomach./ },
+                                  :regex           => /Acid dissolves the outside of the stomach.  Now that's fire in the belly./ },
                            9 =>
                                 { :type            => "Acid",
                                   :location        => "Abdomen",
