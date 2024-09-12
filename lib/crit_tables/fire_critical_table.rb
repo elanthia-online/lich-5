@@ -297,7 +297,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /Flames incinerate muscle tissue in neck exposing trachea./ },
+                                  :regex           => /Flames incinerate muscle tissue in neck exposing the trachea.  More than you ever wanted to see./ },
                            5 =>
                                 { :type            => "Fire",
                                   :location        => "Neck",
