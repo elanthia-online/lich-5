@@ -355,7 +355,7 @@ module Games
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /A .*? takes a breath of super\-heated air and expires gasping./ },
+                                                      /.*? takes a breath of super\-heated air and expires gasping./ },
                            8 =>
                                 { :type            => "Fire",
                                   :location        => "Neck",
