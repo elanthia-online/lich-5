@@ -1787,7 +1787,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /Acid very slowly eats off hand./ } },
+                                  :regex           => /Acid very slowly eats off .*? hand./ } },
           :right_hand =>
                          { 2 =>
                                 { :type            => "Acid",
