@@ -124,7 +124,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /Flames incinerate scalp completely and blacken scullcap./ },
+                                  :regex           => /Flames incinerate scalp completely and blacken skullcap.  Not very fashionable./ },
                            6 =>
                                 { :type            => "Fire",
                                   :location        => "Head",
