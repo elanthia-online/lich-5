@@ -240,7 +240,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Minor strike to neck./ },
+                                  :regex           => /Minor strike to (?:the )?neck./ },
                            2 =>
                                 { :type            => "Puncture",
                                   :location        => "Neck",
