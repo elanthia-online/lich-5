@@ -605,7 +605,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Solid chest grapple, a .*? is winded./ },
+                                  :regex           => /Solid chest grapple, .*? is winded./ },
                            4 =>
                                 { :type            => "Grapple",
                                   :location        => "Chest",
