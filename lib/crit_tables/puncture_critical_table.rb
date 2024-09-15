@@ -794,7 +794,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
-                                  :regex           => /Blow slides along ribs./ },
+                                  :regex           => /Blow slides along (?:the )?ribs./ },
                            1 =>
                                 { :type            => "Puncture",
                                   :location        => "Chest",
