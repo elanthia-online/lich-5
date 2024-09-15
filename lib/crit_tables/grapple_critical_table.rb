@@ -1549,7 +1549,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Leg sweep keeps a .*?'s feet overhead./ },
+                                  :regex           => /Leg sweep keeps .*?'s feet overhead./ },
                            4 =>
                                 { :type            => "Grapple",
                                   :location        => "Left leg",
