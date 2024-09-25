@@ -1,4 +1,4 @@
-module Games
+module Lich
   module Gemstone
     class Spellsong
       @@renewed ||= 0.to_f
@@ -8,7 +8,7 @@ module Games
       def self.sync
         timed_spell = Effects::Spells.to_h.keys.find { |k| k.to_s.match(/10[0-9][0-9]/) }
         return 'No active bard spells' if timed_spell.nil?
-        @@renewed = Time.at(Time.now.to_f - self.duration.to_f + (Effects::Spells.time_left(timed_spell) * 60.to_f))
+        @@renewed = Time.at(Time.now.to_f - self.timeleft.to_f + (Effects::Spells.time_left(timed_spell) * 60.to_f)) #duration
       end
 
       def self.renewed
