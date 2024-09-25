@@ -641,7 +641,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       fput 'stand'
       waitrt?
       put_dir.call
-    elsif line =~ /^You're still recovering from your recent/
+    elsif line == "You're still recovering from your recent cast."
       sleep 2
       put_dir.call
     elsif line =~ /^The ground approaches you at an alarming rate/
@@ -2268,7 +2268,7 @@ def do_client(client_string)
       did_something = false
       nil
     elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
-      require "lib/hmr"
+      require "lib/Common/hmr"
       HMR.reload %r{#{Regexp.last_match[:pattern]}}
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
       ExecScript.start("Infomon.sync", { :quiet => true })
