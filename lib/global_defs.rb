@@ -987,7 +987,7 @@ end
 
 def percentconcentration(num = nil)
   if XMLData.max_concentration == 0
-    percent == 100
+    percent = 100
   else
     percent = ((XMLData.concentration.to_f / XMLData.max_concentration.to_f) * 100).to_i
   end
