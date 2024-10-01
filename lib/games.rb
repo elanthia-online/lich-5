@@ -8,8 +8,8 @@ module Lich
   end
 
   module Common
-    module Game
-    end
+    # module Game
+    # end
   end
 
   module Gemstone
