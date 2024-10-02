@@ -11,21 +11,10 @@ end
 
 if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
   if (RUBY_PLATFORM =~ /mingw|win/) and (RUBY_PLATFORM !~ /darwin/i)
-    require 'win32ole'
-    shell = WIN32OLE.new('WScript.Shell')
-    message = "!!ALERT!!\nYour version #{RUBY_VERSION} of Ruby is too old!\nUpgrade Ruby to version #{REQUIRED_RUBY} or newer!\nClick OK to launch browser to go to documentation now!"
-    title = "Lich v#{LICH_VERSION}"
-    type = 1 + 64  # OK/Cancel buttons + Information icon
-    result = shell.Popup(message, 0, title, type)
-
-    if result == 1 # OK button clicked
-      shell.Run("https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich")
-    end
+    require 'fiddle'
+    Fiddle::Function.new(Fiddle.dlopen('user32.dll')['MessageBox'], [Fiddle::TYPE_INT, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_INT], Fiddle::TYPE_INT).call(0, "Upgrade Ruby to version #{REQUIRED_RUBY} or newer!", "Lich v#{LICH_VERSION}", 16)
   else
-    puts "!!ALERT!!"
-    puts "Your version #{RUBY_VERSION} of Ruby is too old!"
     puts "Upgrade Ruby to version #{REQUIRED_RUBY} or newer!"
-    puts "Go to https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich for more info!"
   end
   exit
 end
@@ -88,14 +77,14 @@ elsif defined?(Wine)
   ## if we have a String class (directory) and the directory exists -- no error detectable at this level
   ## if we have a nil, we have no directory, or if we have a path but cannot find that path (directory) we have an error
   if $sf_fe_loc.nil? # no directory
-    Lich.log("STORM equivalent FE is not installed under WINE.")
+    Lich.log("STORM equivalent FE is not installed under WINE.") if $debug
   else
     unless $sf_fe_loc.is_a? String and File.exist?($sf_fe_loc) # cannot confirm directory location
       Lich.log("Cannot find STORM equivalent FE to launch under WINE.")
     end
   end
   if $wiz_fe_loc.nil? # no directory
-    Lich.log("WIZARD FE is not installed under WINE.")
+    Lich.log("WIZARD FE is not installed under WINE.") if $debug
   else
     unless $wiz_fe_loc.is_a? String and File.exist?($wiz_fe_loc) # cannot confirm directory location
       Lich.log("Cannot find WIZARD FE to launch under WINE.")
