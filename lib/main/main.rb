@@ -43,7 +43,7 @@ reconnect_if_wanted = proc {
   $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
-  require File.join(LIB_DIR, 'eaccess.rb')
+  require File.join(LIB_DIR, 'Common', 'eaccess.rb')
 
   if ARGV.include?('--login')
     if File.exist?(File.join(DATA_DIR, "entry.dat"))
@@ -123,6 +123,7 @@ reconnect_if_wanted = proc {
   ## GUI starts here
 
   elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
+    require File.join(LIB_DIR, 'Common', 'gui-login.rb')
     gui_login
   end
 
@@ -151,8 +152,10 @@ reconnect_if_wanted = proc {
   if @launch_data
     if @launch_data.find { |opt| opt =~ /GAMECODE=DR/ }
       gamecodeshort = "DR"
+      include Lich::DragonRealms
     else
       gamecodeshort = "GS"
+      include Lich::Gemstone
     end
     unless (gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ })
       $stdout.puts "error: launch_data contains no GAMECODE info"
