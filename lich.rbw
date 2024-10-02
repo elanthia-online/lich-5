@@ -68,7 +68,7 @@ require 'resolv'
 require 'digest/md5'
 require 'json'
 require 'terminal-table'
-require 'sorted_set'
+# require 'sorted_set'
 
 # TODO: Move all local requires to top of file
 if defined? LIB_DIR
