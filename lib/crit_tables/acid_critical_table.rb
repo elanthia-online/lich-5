@@ -1635,7 +1635,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /Acid very slowly eats off (?:.*)?hand./ } },
+                                  :regex           => /Acid very slowly eats off .*?hand./ } },
           :right_hand =>
                          { 2 =>
                                 { :type            => "Acid",
@@ -1812,7 +1812,7 @@ module Games
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Acid dissolves the knee ligaments.  The .*? tibia passes (?its|her|his) femur in a very unpleasant manner./ },
+                                                      /Acid dissolves the knee ligaments.  The .*? tibia passes (?:its|her|his) femur in a very unpleasant manner./ },
                            7 =>
                                 { :type            => "Acid",
                                   :location        => "Left leg",
