@@ -1085,7 +1085,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Fierce arm lock twists a .*?'s right arm./ },
+                                  :regex           => /Fierce arm lock twists an? .*?'s right arm./ },
                            7 =>
                                 { :type            => "Grapple",
                                   :location        => "Right arm",
