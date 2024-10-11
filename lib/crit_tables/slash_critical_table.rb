@@ -164,7 +164,7 @@ module Games
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Wild upward slash remove .*?'s face from (?:its|her|his) skull./ },
+                                                      /Wild upward slash removes? .*?'s face from (?:its|her|his) skull./ },
                            8 =>
                                 { :type            => "Slash",
                                   :location        => "Head",
