@@ -1850,7 +1850,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /Slash to .*?'s weapon hand./ },
+                                  :regex           => /(?:Quick flick at .*?|Slash to .*?'s) weapon hand./ },
                            6 =>
                                 { :type            => "Slash",
                                   :location        => "Right hand",
