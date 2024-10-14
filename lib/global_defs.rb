@@ -641,7 +641,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       fput 'stand'
       waitrt?
       put_dir.call
-    elsif line == "You're still recovering from your recent cast."
+    elsif line =~ /^You're still recovering from your recent/
       sleep 2
       put_dir.call
     elsif line =~ /^The ground approaches you at an alarming rate/
@@ -987,7 +987,7 @@ end
 
 def percentconcentration(num = nil)
   if XMLData.max_concentration == 0
-    percent == 100
+    percent = 100
   else
     percent = ((XMLData.concentration.to_f / XMLData.max_concentration.to_f) * 100).to_i
   end

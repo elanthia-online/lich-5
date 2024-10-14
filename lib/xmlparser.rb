@@ -6,9 +6,11 @@ xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.7
-    version: 1.3.0
+    version: 1.3.1
 
   changelog:
+    v1.3.1 (2024-09-11)
+      Split out if/elif block for better tag detection in DR
     v1.3.0 (2023-11-19)
       Add usage of new Lich::Claim module
     v1.2.1 (2022-05-29)
@@ -252,59 +254,7 @@ class XMLParser
           @room_exits = Array.new
         end
       end
-
-      if name =~ /^(?:a|right|left)$/
-        @obj_exist = attributes['exist']
-        @obj_noun = attributes['noun']
-      elsif name == 'inv'
-        if attributes['id'] == 'stow'
-          @obj_location = @stow_container_id
-        else
-          @obj_location = attributes['id']
-        end
-        @obj_exist = nil
-        @obj_noun = nil
-        @obj_name = nil
-        @obj_before_name = nil
-        @obj_after_name = nil
-      elsif name == 'dialogData' and attributes['clear'] == 't' and PSM_3_DIALOG_IDS.include?(attributes["id"])
-        @dialogs[attributes["id"]] ||= {}
-        @dialogs[attributes["id"]].clear
-        # detect a clear board request for effects, and send to activespell
-        ActiveSpell.request_update
-      elsif name == 'resource'
-        nil
-      elsif name == 'pushStream'
-        @in_stream = true
-        @current_stream = attributes['id'].to_s
-        GameObj.clear_inv if attributes['id'].to_s == 'inv'
-      elsif name == 'popStream'
-        if attributes['id'] == 'room'
-          unless @room_window_disabled
-            @room_count += 1
-            $room_count += 1
-          end
-        end
-        @in_stream = false
-        if attributes['id'] == 'bounty'
-          @bounty_task.strip!
-        end
-        @current_stream = String.new
-      elsif name == 'pushBold'
-        @bold = true
-      elsif name == 'popBold'
-        @bold = false
-      elsif (name == 'streamWindow')
-        if (attributes['id'] == 'main') and attributes['subtitle']
-          @room_title = '[' + attributes['subtitle'][3..-1] + ']'
-        end
-      elsif name == 'style'
-        @current_style = attributes['id']
-      elsif name == 'prompt'
-        @server_time = attributes['time'].to_i
-        @server_time_offset = (Time.now.to_i - @server_time)
-        $_CLIENT_.puts "\034GSq#{sprintf('%010d', @server_time)}\r\n" if @send_fake_tags
-      elsif (name == 'compDef') or (name == 'component')
+      if (name == 'compDef') or (name == 'component')
         if attributes['id'] == 'room objs'
           GameObj.clear_loot
           GameObj.clear_npcs
@@ -317,15 +267,81 @@ class XMLParser
           @room_description = String.new
           GameObj.clear_room_desc
         end
-      elsif name == 'clearContainer'
+      end
+
+      if name =~ /^(?:a|right|left)$/
+        @obj_exist = attributes['exist']
+        @obj_noun = attributes['noun']
+      end
+      if name == 'inv'
+        if attributes['id'] == 'stow'
+          @obj_location = @stow_container_id
+        else
+          @obj_location = attributes['id']
+        end
+        @obj_exist = nil
+        @obj_noun = nil
+        @obj_name = nil
+        @obj_before_name = nil
+        @obj_after_name = nil
+      end
+      if name == 'dialogData' and attributes['clear'] == 't' and PSM_3_DIALOG_IDS.include?(attributes["id"])
+        @dialogs[attributes["id"]] ||= {}
+        @dialogs[attributes["id"]].clear
+        # detect a clear board request for effects, and send to activespell
+        ActiveSpell.request_update
+      end
+      if name == 'resource'
+        nil
+      end
+      if name == 'pushStream'
+        @in_stream = true
+        @current_stream = attributes['id'].to_s
+        GameObj.clear_inv if attributes['id'].to_s == 'inv'
+      end
+      if name == 'popStream'
+        if attributes['id'] == 'room'
+          unless @room_window_disabled
+            @room_count += 1
+            $room_count += 1
+          end
+        end
+        @in_stream = false
+        if attributes['id'] == 'bounty'
+          @bounty_task.strip!
+        end
+        @current_stream = String.new
+      end
+      if name == 'pushBold'
+        @bold = true
+      end
+      if name == 'popBold'
+        @bold = false
+      end
+      if (name == 'streamWindow')
+        if (attributes['id'] == 'main') and attributes['subtitle']
+          @room_title = '[' + attributes['subtitle'][3..-1] + ']'
+        end
+      end
+      if name == 'style'
+        @current_style = attributes['id']
+      end
+      if name == 'prompt'
+        @server_time = attributes['time'].to_i
+        @server_time_offset = (Time.now.to_i - @server_time)
+        $_CLIENT_.puts "\034GSq#{sprintf('%010d', @server_time)}\r\n" if @send_fake_tags
+      end
+      if name == 'clearContainer'
         if attributes['id'] == 'stow'
           GameObj.clear_container(@stow_container_id)
         else
           GameObj.clear_container(attributes['id'])
         end
-      elsif name == 'deleteContainer'
+      end
+      if name == 'deleteContainer'
         GameObj.delete_container(attributes['id'])
-      elsif name == 'progressBar'
+      end
+      if name == 'progressBar'
         if attributes['id'] == 'pbarStance'
           @stance_text = attributes['text'].split.first
           @stance_value = attributes['value'].to_i
@@ -376,12 +392,15 @@ class XMLParser
           # since we received an updated spell duration, let's signal infomon to update
           ActiveSpell.request_update
         end
-      elsif name == 'roundTime'
+      end
+      if name == 'roundTime'
         @roundtime_end = attributes['value'].to_i
         $_CLIENT_.puts "\034GSQ#{sprintf('%010d', @roundtime_end)}\r\n" if @send_fake_tags
-      elsif name == 'castTime'
+      end
+      if name == 'castTime'
         @cast_roundtime_end = attributes['value'].to_i
-      elsif name == 'dropDownBox'
+      end
+      if name == 'dropDownBox'
         if attributes['id'] == 'dDBTarget'
           @current_target_ids.clear
           attributes['content_value'].split(',').each { |t|
@@ -395,7 +414,8 @@ class XMLParser
             @current_target_id = nil
           end
         end
-      elsif name == 'indicator'
+      end
+      if name == 'indicator'
         @indicator[attributes['id']] = attributes['visible']
         if @send_fake_tags
           if attributes['id'] == 'IconPOISONED'
@@ -415,7 +435,8 @@ class XMLParser
             $_CLIENT_.puts "\034GSP#{sprintf('%-30s', gsl_prompt)}\r\n"
           end
         end
-      elsif (name == 'image') and @active_ids.include?('injuries')
+      end
+      if (name == 'image') and @active_ids.include?('injuries')
         if @injuries.keys.include?(attributes['id'])
           if attributes['name'] =~ /Injury/i
             @injuries[attributes['id']]['wound'] = attributes['name'].slice(/\d/).to_i
@@ -486,9 +507,11 @@ class XMLParser
           end
         end
         $_CLIENT_.puts "\034GSV#{sprintf('%010d%010d%010d%010d%010d%010d%010d%010d', @max_health.to_i, @health.to_i, @max_spirit.to_i, @spirit.to_i, @max_mana.to_i, @mana.to_i, make_wound_gsl, make_scar_gsl)}\r\n" if @send_fake_tags
-      elsif @room_window_disabled and (name == 'dir') and @active_tags.include?('compass')
+      end
+      if @room_window_disabled and (name == 'dir') and @active_tags.include?('compass')
         @room_exits.push(LONGDIR[attributes['value']])
-      elsif name == 'radio'
+      end
+      if name == 'radio'
         if attributes['id'] == 'injrRad'
           @injury_mode = 0 if attributes['value'] == '1'
         elsif attributes['id'] == 'scarRad'
@@ -496,26 +519,31 @@ class XMLParser
         elsif attributes['id'] == 'bothRad'
           @injury_mode = 2 if attributes['value'] == '1'
         end
-      elsif name == 'label'
+      end
+      if name == 'label'
         if attributes['id'] == 'yourLvl'
           @level = attributes['value'].slice(/\d+/).to_i
         elsif attributes['id'] == 'encumblurb'
           @encumbrance_full_text = attributes['value']
         end
-      elsif (name == 'container') and (attributes['id'] == 'stow')
+      end
+      if (name == 'container') and (attributes['id'] == 'stow')
         @stow_container_id = attributes['target'].sub('#', '')
-      elsif (name == 'clearStream')
+      end
+      if (name == 'clearStream')
         if attributes['id'] == 'bounty'
           @bounty_task = String.new
         end
-      elsif (name == 'playerID')
+      end
+      if (name == 'playerID')
         @player_id = attributes['id']
         unless $frontend =~ /^(?:wizard|avalon)$/
           if Lich.inventory_boxes(@player_id)
             DownstreamHook.remove('inventory_boxes_off')
           end
         end
-      elsif name == 'settingsInfo'
+      end
+      if name == 'settingsInfo'
         if (game = attributes['instance'])
           if game == 'GS4'
             @game = 'GSIV'
@@ -525,7 +553,8 @@ class XMLParser
             @game = game
           end
         end
-      elsif (name == 'app') and (@name = attributes['char'])
+      end
+      if (name == 'app') and (@name = attributes['char'])
         @game = attributes['game'] if @game =~ /^DR/
         if @game.nil? or @game.empty?
           @game = 'unknown'

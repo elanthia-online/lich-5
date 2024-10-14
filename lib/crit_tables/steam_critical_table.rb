@@ -281,7 +281,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Hot burst to neck leaves .*? a li'l steamed./ },
+                                  :regex           => /Hot burst (?:to to|to) neck leaves .*? a li'l steamed./ },
                            4 =>
                                 { :type            => "Steam",
                                   :location        => "Neck",
@@ -417,7 +417,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Steamy gust to right eye causes .*? to blink repeatedly./ },
+                                  :regex           => /Steamy gust to (?:the )?right eye causes .*? to blink repeatedly./ },
                            3 =>
                                 { :type            => "Steam",
                                   :location        => "Right eye",
@@ -551,7 +551,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Steamy gust to left eye causes .*? to blink repeatedly./ },
+                                  :regex           => /Steamy gust to (?:the )?left eye causes .*? to blink repeatedly./ },
                            3 =>
                                 { :type            => "Steam",
                                   :location        => "Left eye",
@@ -742,7 +742,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Swirling vapors to upper body cause noticeable discomfort./ },
+                                  :regex           => /(?:Sweltering|Swirling) vapors to upper body cause noticeable discomfort./ },
                            3 =>
                                 { :type            => "Steam",
                                   :location        => "Chest",
@@ -972,7 +972,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /Seething vapors causes severe abdominal pains./ },
+                                  :regex           => /Seething vapors causes? severe abdominal pains./ },
                            5 =>
                                 { :type            => "Steam",
                                   :location        => "Abdomen",
@@ -1206,7 +1206,7 @@ module Games
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Scalding blast peels large layers of skin off .*?'s back./ },
+                                                      /Scaldl?ing blast peels large layers of skin off .*?'s back./ },
                            7 =>
                                 { :type            => "Steam",
                                   :location        => "Back",
@@ -1342,7 +1342,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /.*? jerks left arm away from hot steam./ },
+                                  :regex           => /.*? jerks (?:his |her |its )?left arm away from the hot steam./ },
                            4 =>
                                 { :type            => "Steam",
                                   :location        => "Left arm",
@@ -1517,7 +1517,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /.*?'s jerks right arm away from the hot steam./ },
+                                  :regex           => /.*? jerks (?:her |his |its )?right arm away from the hot steam./ },
                            4 =>
                                 { :type            => "Steam",
                                   :location        => "Right arm",
@@ -1692,7 +1692,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Breief exposure to hot vapors on left hand startles .*?./ },
+                                  :regex           => /Brief exposure to hot vapors on left hand startles .*?./ },
                            3 =>
                                 { :type            => "Steam",
                                   :location        => "Left hand",
@@ -2063,7 +2063,7 @@ module Games
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /.*? shakes its right leg trying to cool off hot clinging mist./ },
+                                                      /.*? shakes (?:its|her|his) right leg trying to cool off hot clinging mist./ },
                            4 =>
                                 { :type            => "Steam",
                                   :location        => "Right leg",
@@ -2238,7 +2238,7 @@ module Games
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /.*? shakes its left leg trying to cool off hot clinging mist./ },
+                                                      /.*? shakes (?:its|his|her) left leg trying to cool off hot clinging mist./ },
                            4 =>
                                 { :type            => "Steam",
                                   :location        => "Left leg",
@@ -2314,7 +2314,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /Exposure to broiling vapors render left leg barely usable./ },
+                                  :regex           => /Exposure to broiling vapors renders? left leg barely usable./ },
                            8 =>
                                 { :type            => "Steam",
                                   :location        => "Left leg",
