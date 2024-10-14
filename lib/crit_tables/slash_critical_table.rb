@@ -87,7 +87,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /(?!.*removes skull.)Blow to head\./ },
+                                  :regex           => /(?!.*removes skull.)Blow to head./ },
                            4 =>
                                 { :type            => "Slash",
                                   :location        => "Head",
@@ -106,7 +106,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /.*? is slashed across (?:its|her|his) forehead./ },
+                                  :regex           => /(?:Quick flick slashes|The) (.*?) (?:is slashed across (?:its|her|his) )?forehead./ },
                            5 =>
                                 { :type            => "Slash",
                                   :location        => "Head",
@@ -164,7 +164,7 @@ module Games
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Wild upward slash remove .*?'s face from (?:its|her|his) skull./ },
+                                                      /Wild upward slash removes? .*?'s face from (?:its|her|his) skull./ },
                            8 =>
                                 { :type            => "Slash",
                                   :location        => "Head",
@@ -1467,7 +1467,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /Deep slash to .*?'s right forearm./ },
+                                  :regex           => /(?:Deep s|S)lash to .*?'s right (?:forearm|arm)./ },
                            6 =>
                                 { :type            => "Slash",
                                   :location        => "Right arm",
@@ -1850,7 +1850,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /Slash to .*?'s weapon hand./ },
+                                  :regex           => /(?:Quick flick at .*?|Slash to .*?'s) weapon hand./ },
                            6 =>
                                 { :type            => "Slash",
                                   :location        => "Right hand",
@@ -2041,7 +2041,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /Slash to .*?'s shield hand./ },
+                                  :regex           => /Slash to .*?'s (?:left|shield) hand./ },
                            6 =>
                                 { :type            => "Slash",
                                   :location        => "Left hand",
@@ -2404,7 +2404,7 @@ module Games
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /Deft slash to .*?'s left leg digs deep./ },
+                                  :regex           => /Deft slash to .*?'s (?:left )?leg digs deep./ },
                            5 =>
                                 { :type            => "Slash",
                                   :location        => "Left leg",
