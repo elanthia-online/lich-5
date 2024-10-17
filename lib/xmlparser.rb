@@ -320,7 +320,9 @@ class XMLParser
       end
       if (name == 'streamWindow')
         if (attributes['id'] == 'main') and attributes['subtitle']
-          @room_title = '[' + attributes['subtitle'][3..-1] + ']'
+          unless attributes['subtitle'].empty?
+            @room_title = '[' + attributes['subtitle'][3..-1] + ']'
+          end
         end
       end
       if name == 'style'
