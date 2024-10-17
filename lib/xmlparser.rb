@@ -320,8 +320,13 @@ class XMLParser
       end
       if (name == 'streamWindow')
         if (attributes['id'] == 'main') and attributes['subtitle']
-          unless attributes['subtitle'].empty?
-            @room_title = '[' + attributes['subtitle'][3..-1] + ']'
+          unless attributes['subtitle'].empty? || attributes['subtitle'].nil?
+            if Lich.display_uid == false && attributes['subtitle'][3..-1] =~ / - \d+$/
+              Lich.display_uid = true
+            end
+            @room_title = '[' + attributes['subtitle'][3..-1].gsub(/ - \d+$/, '') + ']'
+          else
+            @room_title = String.new
           end
         end
       end
