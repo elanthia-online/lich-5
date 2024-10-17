@@ -6,9 +6,11 @@ xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.7
-    version: 1.3.1
+    version: 1.3.2
 
   changelog:
+    v1.3.2 (2024-10-17)
+      Bugfix: Simu breaking change for UID and roomname logic
     v1.3.1 (2024-09-11)
       Split out if/elif block for better tag detection in DR
     v1.3.0 (2023-11-19)
