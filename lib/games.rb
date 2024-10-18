@@ -207,10 +207,12 @@ module Games
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
                   if (Lich.display_lichid == true or Lich.display_uid == true) and XMLData.game =~ /^GS/ and alt_string =~ /^<resource picture=.*roomName/
                     if (Lich.display_lichid == true and Lich.display_uid == true)
+                      alt_string.sub!(/] \(\d+\)/) { "]" }
                       alt_string.sub!(']') { " - #{Map.current.id}] (u#{XMLData.room_id})" }
                     elsif Lich.display_lichid == true
                       alt_string.sub!(']') { " - #{Map.current.id}]" }
                     elsif Lich.display_uid == true
+                      alt_string.sub!(/] \(\d+\)/) { "]" }
                       alt_string.sub!(']') { "] (u#{XMLData.room_id})" }
                     end
                   end
