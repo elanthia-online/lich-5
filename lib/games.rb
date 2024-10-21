@@ -208,12 +208,12 @@ module Games
                   if (Lich.display_lichid == true or Lich.display_uid == true) and XMLData.game =~ /^GS/ and alt_string =~ /^<resource picture=.*roomName/
                     if (Lich.display_lichid == true and Lich.display_uid == true)
                       alt_string.sub!(/] \(\d+\)/) { "]" }
-                      alt_string.sub!(']') { " - #{Map.current.id}] (u#{XMLData.room_id == 0 ? "nknown" : XMLData.room_id})" }
+                      alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
                     elsif Lich.display_lichid == true
                       alt_string.sub!(']') { " - #{Map.current.id}]" }
                     elsif Lich.display_uid == true
                       alt_string.sub!(/] \(\d+\)/) { "]" }
-                      alt_string.sub!(']') { "] (u#{XMLData.room_id == 0 ? "nknown" : XMLData.room_id})" }
+                      alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
                     end
                   end
                   if $frontend =~ /^(?:wizard|avalon)$/
