@@ -86,6 +86,7 @@ class XMLParser
 
     @room_count = 0
     @room_title = String.new
+    @room_name = String.new
     @room_description = String.new
     @room_exits = Array.new
     @room_exits_string = String.new
@@ -615,6 +616,11 @@ class XMLParser
     begin
       # fixme: /<stream id="Spells">.*?<\/stream>/m
       # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))
+
+      if @current_style == 'roomName'
+        @room_name = text_string
+      end
+
       if @active_tags.include?('inv')
         if @active_tags[-1] == 'a'
           @obj_name = text_string
