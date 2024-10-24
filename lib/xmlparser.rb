@@ -31,7 +31,7 @@ class XMLParser
   attr_reader :mana, :max_mana, :health, :max_health, :spirit, :max_spirit, :last_spirit,
               :stamina, :max_stamina, :stance_text, :stance_value, :mind_text, :mind_value,
               :prepared_spell, :encumbrance_text, :encumbrance_full_text, :encumbrance_value,
-              :indicator, :injuries, :injury_mode, :room_count, :room_title, :room_description,
+              :indicator, :injuries, :injury_mode, :room_count, :room_name, :room_title, :room_description,
               :room_exits, :room_exits_string, :familiar_room_title, :familiar_room_description,
               :familiar_room_exits, :bounty_task, :server_time, :server_time_offset,
               :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
@@ -86,6 +86,7 @@ class XMLParser
 
     @room_count = 0
     @room_title = String.new
+    @room_name = String.new
     @room_description = String.new
     @room_exits = Array.new
     @room_exits_string = String.new
@@ -615,6 +616,11 @@ class XMLParser
     begin
       # fixme: /<stream id="Spells">.*?<\/stream>/m
       # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))
+
+      if @current_style == 'roomName'
+        @room_name = text_string
+      end
+
       if @active_tags.include?('inv')
         if @active_tags[-1] == 'a'
           @obj_name = text_string
