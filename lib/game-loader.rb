@@ -37,7 +37,13 @@ module GameLoader
     self.common_before
     require File.join(LIB_DIR, 'map', 'map_dr.rb')
     require File.join(LIB_DIR, 'attributes', 'char.rb')
-    # self.common_after
+    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drinfomon.rb')
+    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'global_defs.rb')
+    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'global_variables.rb')
+    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drparser.rb')
+    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drskill.rb')
+    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drstats.rb')
+    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drroom.rb')
   end
 
   def self.common_after
