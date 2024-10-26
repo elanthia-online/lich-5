@@ -47,30 +47,30 @@ module DRParser
         DRRoom.pcs = find_pcs(Regexp.last_match(1).dup)
         DRRoom.pcs_prone = find_pcs_prone(Regexp.last_match(1).dup)
         DRRoom.pcs_sitting = find_pcs_sitting(Regexp.last_match(1).dup)
-      when RoomObjs
+      when Pattern::RoomObjs
         DRRoom.npcs = find_npcs(Regexp.last_match(1).dup)
         UserVars.npcs = DRRoom.npcs
         DRRoom.dead_npcs = find_dead_npcs(Regexp.last_match(1).dup)
         DRRoom.room_objs = find_objects(Regexp.last_match(1).dup)
-      when RoomObjsEmpty
+      when Pattern::RoomObjsEmpty
         DRRoom.npcs = []
         DRRoom.dead_npcs = []
         DRRoom.room_objs = []
-      when GroupMembersEmpty
+      when Pattern::GroupMembersEmpty
         DRRoom.group_members = []
-      when GroupMembers
+      when Pattern::GroupMembers
         DRRoom.group_members << Regexp.last_match(1)
       when Pattern::BriefExpOn, Pattern::BriefExpOff
         skill   = Regexp.last_match[:skill]
         rank    = Regexp.last_match[:rank].to_i
         rate    = Regexp.last_match[:rate].to_i > 0 ? Regexp.last_match[:rate] : DR_LEARNING_RATES.index(Regexp.last_match[:rate])
         percent = Regexp.last_match[:percent]
+        Lich.log("Skill is #{skill}. Rank is #{rank}. Rate is #{rate}. Percent is #{percent}.")
         DRSkill.update(skill, rank, rate, percent)
       when Pattern::ExpClearMindstate
         skill = Regexp.last_match[:skill]
         DRSkill.clear_mind(skill)
       when Pattern::ExpColumns
-        # Lich.log(line)
         :ok
         line.scan(Pattern::ExpColumns) do |skill_value, rank_value, percent_value, rate_as_word|
           rate_as_number = DR_LEARNING_RATES.index(rate_as_word) # convert word to number

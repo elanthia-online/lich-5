@@ -34,16 +34,11 @@ module GameLoader
   end
 
   def self.dragon_realms
+    Lich.log("In game-loader DR")
     self.common_before
     require File.join(LIB_DIR, 'map', 'map_dr.rb')
     require File.join(LIB_DIR, 'attributes', 'char.rb')
     require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drinfomon.rb')
-    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'global_defs.rb')
-    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'global_variables.rb')
-    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drparser.rb')
-    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drskill.rb')
-    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drstats.rb')
-    require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drroom.rb')
   end
 
   def self.common_after
