@@ -71,7 +71,6 @@ module DRParser
         skill = Regexp.last_match[:skill]
         DRSkill.clear_mind(skill)
       when Pattern::ExpColumns
-        :ok
         line.scan(Pattern::ExpColumns) do |skill_value, rank_value, percent_value, rate_as_word|
           rate_as_number = DR_LEARNING_RATES.index(rate_as_word) # convert word to number
           DRSkill.update(skill_value, rank_value, rate_as_number, percent_value)
