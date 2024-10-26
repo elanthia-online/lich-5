@@ -171,7 +171,7 @@ DR_SKILLS_DATA = {
   }
 }
 
-KRONAR_Banks = ['Crossings', 'Dirge', 'Ilaya Taipa', 'Leth Deriel']
+KRONAR_BANKS = ['Crossings', 'Dirge', 'Ilaya Taipa', 'Leth Deriel']
 LIRUM_BANKS = ["Aesry Surlaenis'a", "Hara'jaal", "Mer'Kresh", "Muspar'i", "Ratha", "Riverhaven", "Rossman's Landing", "Therenborough", "Throne City"]
 DOKORA_BANKS = ["Ain Ghazal", "Boar Clan", "Chyolvea Tayeu'a", "Hibarnhvidar", "Fang Cove", "Raven's Point", "Shard"]
 

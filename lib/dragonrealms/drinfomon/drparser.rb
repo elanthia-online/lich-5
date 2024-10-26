@@ -79,10 +79,10 @@ module DRParser
         :noop
       end
     rescue StandardError
-      # respond "--- Lich: error: Infomon::Parser.parse: #{$!}"
-      # respond "--- Lich: error: line: #{line}"
-      # Lich.log "error: Infomon::Parser.parse: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-      # Lich.log "error: line: #{line}\n\t"
+      respond "--- Lich: error: DRParser.parse: #{$!}"
+      respond "--- Lich: error: line: #{line}"
+      Lich.log "error: DRParser.parse: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      Lich.log "error: line: #{line}\n\t"
     end
   end
 end
