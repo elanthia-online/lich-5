@@ -162,6 +162,10 @@ module DRStats
     @@encumbrance = val
   end
 
+  def self.name
+    XMLData.name
+  end
+
   def self.health
     XMLData.health
   end

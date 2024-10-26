@@ -207,12 +207,10 @@ module Games
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
                   if (Lich.display_lichid == true or Lich.display_uid == true) and XMLData.game =~ /^GS/ and alt_string =~ /^<resource picture=.*roomName/
                     if (Lich.display_lichid == true and Lich.display_uid == true)
-                      alt_string.sub!(/] \(\d+\)/) { "]" }
                       alt_string.sub!(']') { " - #{Map.current.id}] (u#{XMLData.room_id})" }
                     elsif Lich.display_lichid == true
                       alt_string.sub!(']') { " - #{Map.current.id}]" }
                     elsif Lich.display_uid == true
-                      alt_string.sub!(/] \(\d+\)/) { "]" }
                       alt_string.sub!(']') { "] (u#{XMLData.room_id})" }
                     end
                   end
@@ -273,15 +271,20 @@ module Games
                     end
                     XMLData.reset
                   end
-                  if Module.const_defined?(:GameLoader) && XMLData.game =~ /^GS/
+                  if Module.const_defined?(:GameLoader)
                     infomon_serverstring = $_SERVERSTRING_.dup
-                    Infomon::XMLParser.parse(infomon_serverstring)
-                    stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
-                    stripped_infomon_serverstring.split("\r\n").each { |line|
-                      unless line.empty?
-                        Infomon::Parser.parse(line)
-                      end
-                    }
+                    if XMLData.game =~ /^GS/
+                      # infomon_serverstring = $_SERVERSTRING_.dup
+                      Infomon::XMLParser.parse(infomon_serverstring)
+                      stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
+                      stripped_infomon_serverstring.split("\r\n").each { |line|
+                        unless line.empty?
+                          Infomon::Parser.parse(line)
+                        end
+                      }
+                    elsif XMLData.game =~/^DR/
+                      DRParser.parse(infomon_serverstring)
+                    end
                   end
                   Script.new_downstream_xml($_SERVERSTRING_)
                   stripped_server = strip_xml($_SERVERSTRING_, type: 'main')

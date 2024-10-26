@@ -1,7 +1,9 @@
 $DRINFOMON_VERSION = '3.0'
 
-require_relative "./global_defs"
-require_relative "./global_variables"
+DRINFOMON_IN_CORE_LICH = true
+
+require_relative "./drdefs"
+require_relative "./drvariables"
 require_relative "./drparser"
 require_relative "./drskill"
 require_relative "./drstats"

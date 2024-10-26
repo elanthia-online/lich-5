@@ -8,6 +8,7 @@ module DRParser
     NameRaceGuild = /^Name:\s+\b(?<name>.+)\b\s+Race:\s+\b(?<race>.+)\b\s+Guild:\s+\b(?<guild>.+)\b\s+/
     GenderAgeCircle = /^Gender:\s+\b(?<gender>.+)\b\s+Age:\s+\b(?<age>.+)\b\s+Circle:\s+\b(?<circle>.+)/
     StatValue = /(?<stat>Strength|Agility|Discipline|Intelligence|Reflex|Charisma|Wisdom|Stamina|Favors|TDPs)\s+:\s+(?<value>\d+)/
+    TDPValue = /You have (\d+) TDPs\./
     EncumbranceValue = /^\s*Encumbrance\s+:\s+(?<encumbrance>[\w\s'?!]+)$/
     LuckValue = /^\s*Luck\s+:\s+.*\((?<luck>[-\d]+)\/3\)/
     BalanceValue = /^(?:You are|\[You're) (?<balance>#{Regexp.union(DR_BALANCE_VALUES)}) balanced?/
@@ -39,6 +40,9 @@ module DRParser
         line.scan(Pattern::StatValue) do |stat, value|
           DRStats.send("#{stat.downcase}=", value.to_i)
         end
+      when Pattern::TDPValue
+        DRStats.tdps = Regexp.last_match(1).to_i
+        CharSettings['Stats'] = DRStats.serialize
       when Pattern::BalanceValue
         DRStats.balance = DR_BALANCE_VALUES.index(Regexp.last_match[:balance])
       when Pattern::RoomPlayersEmpty
@@ -65,7 +69,6 @@ module DRParser
         rank    = Regexp.last_match[:rank].to_i
         rate    = Regexp.last_match[:rate].to_i > 0 ? Regexp.last_match[:rate] : DR_LEARNING_RATES.index(Regexp.last_match[:rate])
         percent = Regexp.last_match[:percent]
-        Lich.log("Skill is #{skill}. Rank is #{rank}. Rate is #{rate}. Percent is #{percent}.")
         DRSkill.update(skill, rank, rate, percent)
       when Pattern::ExpClearMindstate
         skill = Regexp.last_match[:skill]
