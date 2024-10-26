@@ -274,7 +274,6 @@ module Games
                   if Module.const_defined?(:GameLoader)
                     infomon_serverstring = $_SERVERSTRING_.dup
                     if XMLData.game =~ /^GS/
-                      # infomon_serverstring = $_SERVERSTRING_.dup
                       Infomon::XMLParser.parse(infomon_serverstring)
                       stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
                       stripped_infomon_serverstring.split("\r\n").each { |line|
