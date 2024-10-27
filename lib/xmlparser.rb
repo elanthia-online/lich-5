@@ -31,9 +31,9 @@ class XMLParser
   attr_reader :mana, :max_mana, :health, :max_health, :spirit, :max_spirit, :last_spirit,
               :stamina, :max_stamina, :stance_text, :stance_value, :mind_text, :mind_value,
               :prepared_spell, :encumbrance_text, :encumbrance_full_text, :encumbrance_value,
-              :indicator, :injuries, :injury_mode, :room_count, :room_name, :room_title, :room_description,
+              :indicator, :injuries, :injury_mode, :room_count, :room_title, :room_name, :room_description,
               :room_exits, :room_exits_string, :familiar_room_title, :familiar_room_description,
-              :familiar_room_exits, :bounty_task, :server_time, :server_time_offset,
+              :familiar_room_exits, :bounty_task, :server_time, :server_time_offset, :dr_active_spells,
               :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
               :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
               :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
@@ -99,6 +99,8 @@ class XMLParser
     @bounty_task = String.new
     @society_task = String.new
 
+    @dr_active_spells = Array.new
+    @dr_active_spell_tracking = false
     @name = String.new
     @game = String.new
     @player_id = String.new
@@ -257,6 +259,16 @@ class XMLParser
           @room_exits = Array.new
         end
       end
+
+      if (name == 'clearStream' && attributes['id'] == 'percWindow')
+        @dr_active_spells = []
+        # Lich.log("In reset percWindow")
+      end
+
+      if (name == 'pushStream' && attributes['id'] == 'percWindow')
+          @dr_active_spell_tracking = true
+      end
+
       if (name == 'compDef') or (name == 'component')
         if attributes['id'] == 'room objs'
           GameObj.clear_loot
@@ -335,6 +347,9 @@ class XMLParser
       end
       if name == 'style'
         @current_style = attributes['id']
+        # if @current_style[attributes['id']] == "roomName"
+        #   @room_name == @current_style[attributes['id']]["roomName"]
+        # end
       end
       if name == 'prompt'
         @server_time = attributes['time'].to_i
@@ -616,6 +631,15 @@ class XMLParser
     begin
       # fixme: /<stream id="Spells">.*?<\/stream>/m
       # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))
+      # if @active_tags.include?('style') and (@active_ids.include?('roomName'))
+      # if text_string =~ /<style id="roomName" \/>/
+      # # if (name == 'style') and @active_ids.include?('roomName')
+      #   @room_name = text_string
+      # end
+
+      if @dr_active_spell_tracking
+        @dr_active_spells << text_string.strip.sub!("  ", ' ')
+      end
 
       if @current_style == 'roomName'
         @room_name = text_string
@@ -792,6 +816,10 @@ class XMLParser
           @room_count += 1
           $room_count += 1
         end
+      end
+
+      if name == 'popStream'
+        @dr_active_spell_tracking = false
       end
 
       if name == 'inv'
