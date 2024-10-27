@@ -262,7 +262,6 @@ class XMLParser
 
       if (name == 'clearStream' && attributes['id'] == 'percWindow')
         @dr_active_spells = []
-        # Lich.log("In reset percWindow")
       end
 
       if (name == 'pushStream' && attributes['id'] == 'percWindow')
@@ -347,9 +346,6 @@ class XMLParser
       end
       if name == 'style'
         @current_style = attributes['id']
-        # if @current_style[attributes['id']] == "roomName"
-        #   @room_name == @current_style[attributes['id']]["roomName"]
-        # end
       end
       if name == 'prompt'
         @server_time = attributes['time'].to_i
