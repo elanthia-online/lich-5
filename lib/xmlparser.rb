@@ -264,6 +264,10 @@ class XMLParser
         @dr_active_spells = []
       end
 
+      if name == 'popStream'
+        @dr_active_spell_tracking = false
+      end
+
       if (name == 'pushStream' && attributes['id'] == 'percWindow')
           @dr_active_spell_tracking = true
       end
@@ -807,10 +811,6 @@ class XMLParser
           @room_count += 1
           $room_count += 1
         end
-      end
-
-      if name == 'popStream'
-        @dr_active_spell_tracking = false
       end
 
       if name == 'inv'
