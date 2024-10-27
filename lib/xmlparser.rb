@@ -31,7 +31,7 @@ class XMLParser
   attr_reader :mana, :max_mana, :health, :max_health, :spirit, :max_spirit, :last_spirit,
               :stamina, :max_stamina, :stance_text, :stance_value, :mind_text, :mind_value,
               :prepared_spell, :encumbrance_text, :encumbrance_full_text, :encumbrance_value,
-              :indicator, :injuries, :injury_mode, :room_count, :room_title, :room_name, :room_description,
+              :indicator, :injuries, :injury_mode, :room_count, :room_name, :room_title, :room_description,
               :room_exits, :room_exits_string, :familiar_room_title, :familiar_room_description,
               :familiar_room_exits, :bounty_task, :server_time, :server_time_offset, :dr_active_spells,
               :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
