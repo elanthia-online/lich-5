@@ -631,11 +631,6 @@ class XMLParser
     begin
       # fixme: /<stream id="Spells">.*?<\/stream>/m
       # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))
-      # if @active_tags.include?('style') and (@active_ids.include?('roomName'))
-      # if text_string =~ /<style id="roomName" \/>/
-      # # if (name == 'style') and @active_ids.include?('roomName')
-      #   @room_name = text_string
-      # end
 
       if @dr_active_spell_tracking
         @dr_active_spells << text_string.strip.sub!("  ", ' ')
