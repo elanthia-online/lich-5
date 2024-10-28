@@ -34,7 +34,7 @@ class XMLParser
               :indicator, :injuries, :injury_mode, :room_count, :room_name, :room_title, :room_description,
               :room_exits, :room_exits_string, :familiar_room_title, :familiar_room_description,
               :familiar_room_exits, :bounty_task, :server_time, :server_time_offset,
-              :dr_active_spells, :dr_active_spells_stellar_percentage, :dr_active_spells_slivers
+              :dr_active_spells, :dr_active_spells_stellar_percentage, :dr_active_spells_slivers,
               :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
               :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
               :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
@@ -632,6 +632,7 @@ class XMLParser
       # fixme: /<stream id="Spells">.*?<\/stream>/m
       # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))
 
+      # DR Active Spell tracking and handling
       if @dr_active_spell_tracking
         spell = nil
         duration = nil
@@ -647,7 +648,7 @@ class XMLParser
         when /(?<spell>[^<>]+?)\s+\((?<duration>indefinite|om)\)/i
           # Cyclic spell or Osrel Meraud cyclic spell
           spell = Regexp.last_match[:spell]
-          duration = UNKNOWN_DURATION
+          duration = 1000
         when /(?<spell>Stellar Collector)\s+\((?<percentage>\d+)%,\s*(?<duration>\d+)?\s*(?<unit>(?:roisae?n|anlaen|fading))/
           # Stellar collector special case
           # XML looks like:
@@ -662,14 +663,14 @@ class XMLParser
           # Spells with inexact duration verbiage, such as with
           # Barbarians without knowledge of Power Monger mastery
           spell = Regexp.last_match[:spell]
-          duration = UNKNOWN_DURATION
+          duration = 1000
         when /.*orbiting sliver.*/i
           # Moon Mage slivers
           @dr_active_spells_slivers = true
         when /^(.*)$/
           # No idea what we received, just a general catch all
           spell = Regexp.last_match(1)
-          duration = UNKNOWN_DURATION
+          duration = 1000
         end
         spell.strip!
         if spell
