@@ -6,9 +6,11 @@ xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.7
-    version: 1.3.2
+    version: 1.3.3
 
   changelog:
+    v1.3.3 (2024-10-28)
+      Add logic for XMLData.dr_active_spells
     v1.3.2 (2024-10-17)
       Bugfix: Simu breaking change for UID and roomname logic
     v1.3.1 (2024-09-11)
@@ -262,10 +264,6 @@ class XMLParser
 
       if (name == 'clearStream' && attributes['id'] == 'percWindow')
         @dr_active_spells = []
-      end
-
-      if name == 'popStream'
-        @dr_active_spell_tracking = false
       end
 
       if (name == 'pushStream' && attributes['id'] == 'percWindow')
@@ -633,7 +631,7 @@ class XMLParser
       # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))
 
       if @dr_active_spell_tracking
-        @dr_active_spells << text_string.strip.sub!("  ", ' ')
+        @dr_active_spells << text_string.strip.sub("  ", ' ')
       end
 
       if @current_style == 'roomName'
@@ -811,6 +809,10 @@ class XMLParser
           @room_count += 1
           $room_count += 1
         end
+      end
+
+      if name == 'popStream'
+        @dr_active_spell_tracking = false
       end
 
       if name == 'inv'
