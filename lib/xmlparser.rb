@@ -6,11 +6,9 @@ xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.7
-    version: 1.3.3
+    version: 1.3.2
 
   changelog:
-    v1.3.3 (2024-10-28)
-      Add logic for XMLData.dr_active_spells
     v1.3.2 (2024-10-17)
       Bugfix: Simu breaking change for UID and roomname logic
     v1.3.1 (2024-09-11)
@@ -101,8 +99,10 @@ class XMLParser
     @bounty_task = String.new
     @society_task = String.new
 
-    @dr_active_spells = Array.new
+    @dr_active_spells = Hash.new
     @dr_active_spell_tracking = false
+    @dr_active_spells_stellar_percentage = 0
+    @dr_active_spells_slivers = false
     @name = String.new
     @game = String.new
     @player_id = String.new
@@ -192,25 +192,26 @@ class XMLParser
     @scar_gsl = sprintf("0b0%02b%02b%02b%02b%02b%02b%02b%02b%02b%02b%02b%02b%02b%02b", @injuries['nsys']['scar'], @injuries['leftEye']['scar'], @injuries['rightEye']['scar'], @injuries['back']['scar'], @injuries['abdomen']['scar'], @injuries['chest']['scar'], @injuries['leftHand']['scar'], @injuries['rightHand']['scar'], @injuries['leftLeg']['scar'], @injuries['rightLeg']['scar'], @injuries['leftArm']['scar'], @injuries['rightArm']['scar'], @injuries['neck']['scar'], @injuries['head']['scar'])
   end
 
-  def parse(line)
-    @buffer.concat(line)
-    loop {
-      if (str = @buffer.slice!(/^[^<]+/))
-        text(str.gsub(/&(lt|gt|quot|apos|amp)/) { @unescape[$1] })
-      elsif (str = @buffer.slice!(/^<\/[^<]+>/))
-        element = /^<\/([^\s>\/]+)/.match(str).captures.first
-        tag_end(element)
-      elsif (str = @buffer.slice!(/^<[^<]+>/))
-        element = /^<([^\s>\/]+)/.match(str).captures.first
-        attributes = Hash.new
-        str.scan(/([A-z][A-z0-9_\-]*)=(["'])(.*?)\2/).each { |attr| attributes[attr[0]] = attr[2] }
-        tag_start(element, attributes)
-        tag_end(element) if str =~ /\/>$/
-      else
-        break
-      end
-    }
-  end
+  # def parse(line)
+  #   Lich.log(line)
+  #   @buffer.concat(line)
+  #   loop {
+  #     if (str = @buffer.slice!(/^[^<]+/))
+  #       text(str.gsub(/&(lt|gt|quot|apos|amp)/) { @unescape[$1] })
+  #     elsif (str = @buffer.slice!(/^<\/[^<]+>/))
+  #       element = /^<\/([^\s>\/]+)/.match(str).captures.first
+  #       tag_end(element)
+  #     elsif (str = @buffer.slice!(/^<[^<]+>/))
+  #       element = /^<([^\s>\/]+)/.match(str).captures.first
+  #       attributes = Hash.new
+  #       str.scan(/([A-z][A-z0-9_\-]*)=(["'])(.*?)\2/).each { |attr| attributes[attr[0]] = attr[2] }
+  #       tag_start(element, attributes)
+  #       tag_end(element) if str =~ /\/>$/
+  #     else
+  #       break
+  #     end
+  #   }
+  # end
 
   DECADE = 10 * 31_536_000
 
@@ -263,7 +264,7 @@ class XMLParser
       end
 
       if (name == 'clearStream' && attributes['id'] == 'percWindow')
-        @dr_active_spells = []
+        @dr_active_spells = {}
       end
 
       if (name == 'pushStream' && attributes['id'] == 'percWindow')
@@ -631,7 +632,51 @@ class XMLParser
       # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))
 
       if @dr_active_spell_tracking
-        @dr_active_spells << text_string.strip.sub("  ", ' ')
+        spell = nil
+        duration = nil
+        case text_string
+        when /(?<spell>[^<>]+?)\s+\((?:\D*)(?<duration>\d+)\s*(?:%|roisae?n)\)/i
+          # Spell with known duration remaining
+          spell = Regexp.last_match[:spell]
+          duration = Regexp.last_match[:duration].to_i
+        when /(?<spell>[^<>]+?)\s+\(fading\)/i
+          # Spell fading away
+          spell = Regexp.last_match[:spell]
+          duration = 0
+        when /(?<spell>[^<>]+?)\s+\((?<duration>indefinite|om)\)/i
+          # Cyclic spell or Osrel Meraud cyclic spell
+          spell = Regexp.last_match[:spell]
+          duration = UNKNOWN_DURATION
+        when /(?<spell>Stellar Collector)\s+\((?<percentage>\d+)%,\s*(?<duration>\d+)?\s*(?<unit>(?:roisae?n|anlaen|fading))/
+          # Stellar collector special case
+          # XML looks like:
+          # Stellar Collector  (0%, 4 anlaen)
+          # Stellar Collector  (0%, fading)
+          spell = Regexp.last_match[:spell]
+          duration = Regexp.last_match[:duration].to_i
+          @dr_active_spells_stellar_percentage = Regexp.last_match[:percentage].to_i
+          unit = Regexp.last_match[:unit]
+          duration = unit == 'anlaen' ? duration * 30 : duration
+        when /(?<spell>[^<>]+?)\s+\(.+\)/i
+          # Spells with inexact duration verbiage, such as with
+          # Barbarians without knowledge of Power Monger mastery
+          spell = Regexp.last_match[:spell]
+          duration = UNKNOWN_DURATION
+        when /.*orbiting sliver.*/i
+          # Moon Mage slivers
+          @dr_active_spells_slivers = true
+        when /^(.*)$/
+          # No idea what we received, just a general catch all
+          spell = Regexp.last_match(1)
+          duration = UNKNOWN_DURATION
+        end
+        spell.strip!
+        if spell
+          @dr_active_spells[spell] = duration
+          # @dr_active_spells.refresh_data[spell] = true
+        end
+
+        # @dr_active_spells << text_string.strip.sub("  ", ' ')
       end
 
       if @current_style == 'roomName'
@@ -811,7 +856,7 @@ class XMLParser
         end
       end
 
-      if name == 'popStream'
+      if (name == 'popStream')
         @dr_active_spell_tracking = false
       end
 
