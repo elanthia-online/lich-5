@@ -227,7 +227,7 @@ class XMLParser
   PSM_3_DIALOG_IDS = ["Buffs", "Active Spells", "Debuffs", "Cooldowns"]
 
   def tag_start(name, attributes)
-    # This is called once per element by REXML
+    # This is called once per element by REXML in games.rb
     # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
     begin
       @active_tags.push(name)
@@ -615,7 +615,7 @@ class XMLParser
   end
 
   def text(text_string)
-    # This is called once per element with text in it by REXML
+    # This is called once per element with text in it by REXML in games.rb
     # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
     begin
       # fixme: /<stream id="Spells">.*?<\/stream>/m
@@ -785,7 +785,7 @@ class XMLParser
   end
 
   def tag_end(name)
-    # This is called once per element by REXML
+    # This is called once per element by REXML in games.rb
     # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
 
     begin
