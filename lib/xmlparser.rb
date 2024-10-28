@@ -47,7 +47,7 @@ class XMLParser
 
   def initialize
     @buffer = String.new
-    @unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
+    # @unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
     @bold = false
     @active_tags = Array.new
     @active_ids = Array.new
@@ -188,25 +188,25 @@ class XMLParser
     @scar_gsl = sprintf("0b0%02b%02b%02b%02b%02b%02b%02b%02b%02b%02b%02b%02b%02b%02b", @injuries['nsys']['scar'], @injuries['leftEye']['scar'], @injuries['rightEye']['scar'], @injuries['back']['scar'], @injuries['abdomen']['scar'], @injuries['chest']['scar'], @injuries['leftHand']['scar'], @injuries['rightHand']['scar'], @injuries['leftLeg']['scar'], @injuries['rightLeg']['scar'], @injuries['leftArm']['scar'], @injuries['rightArm']['scar'], @injuries['neck']['scar'], @injuries['head']['scar'])
   end
 
-  def parse(line)
-    @buffer.concat(line)
-    loop {
-      if (str = @buffer.slice!(/^[^<]+/))
-        text(str.gsub(/&(lt|gt|quot|apos|amp)/) { @unescape[$1] })
-      elsif (str = @buffer.slice!(/^<\/[^<]+>/))
-        element = /^<\/([^\s>\/]+)/.match(str).captures.first
-        tag_end(element)
-      elsif (str = @buffer.slice!(/^<[^<]+>/))
-        element = /^<([^\s>\/]+)/.match(str).captures.first
-        attributes = Hash.new
-        str.scan(/([A-z][A-z0-9_\-]*)=(["'])(.*?)\2/).each { |attr| attributes[attr[0]] = attr[2] }
-        tag_start(element, attributes)
-        tag_end(element) if str =~ /\/>$/
-      else
-        break
-      end
-    }
-  end
+  # def parse(line)
+  #   @buffer.concat(line)
+  #   loop {
+  #     if (str = @buffer.slice!(/^[^<]+/))
+  #       text(str.gsub(/&(lt|gt|quot|apos|amp)/) { @unescape[$1] })
+  #     elsif (str = @buffer.slice!(/^<\/[^<]+>/))
+  #       element = /^<\/([^\s>\/]+)/.match(str).captures.first
+  #       tag_end(element)
+  #     elsif (str = @buffer.slice!(/^<[^<]+>/))
+  #       element = /^<([^\s>\/]+)/.match(str).captures.first
+  #       attributes = Hash.new
+  #       str.scan(/([A-z][A-z0-9_\-]*)=(["'])(.*?)\2/).each { |attr| attributes[attr[0]] = attr[2] }
+  #       tag_start(element, attributes)
+  #       tag_end(element) if str =~ /\/>$/
+  #     else
+  #       break
+  #     end
+  #   }
+  # end
 
   DECADE = 10 * 31_536_000
 
@@ -227,6 +227,8 @@ class XMLParser
   PSM_3_DIALOG_IDS = ["Buffs", "Active Spells", "Debuffs", "Cooldowns"]
 
   def tag_start(name, attributes)
+    # This is called once per element by REXML
+    # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
     begin
       @active_tags.push(name)
       @active_ids.push(attributes['id'].to_s)
@@ -613,6 +615,8 @@ class XMLParser
   end
 
   def text(text_string)
+    # This is called once per element with text in it by REXML
+    # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
     begin
       # fixme: /<stream id="Spells">.*?<\/stream>/m
       # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))
@@ -781,6 +785,9 @@ class XMLParser
   end
 
   def tag_end(name)
+    # This is called once per element by REXML
+    # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
+
     begin
       if @game =~ /^DR/
         if name == 'compass' and $nav_seen
