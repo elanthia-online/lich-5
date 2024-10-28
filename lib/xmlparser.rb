@@ -678,10 +678,7 @@ class XMLParser
         spell.strip!
         if spell
           @dr_active_spells[spell] = duration
-          # @dr_active_spells.refresh_data[spell] = true
         end
-
-        # @dr_active_spells << text_string.strip.sub("  ", ' ')
       end
 
       if @current_style == 'roomName'
