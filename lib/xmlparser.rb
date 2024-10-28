@@ -48,7 +48,7 @@ class XMLParser
 
   def initialize
     @buffer = String.new
-    @unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
+    # @unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
     @bold = false
     @active_tags = Array.new
     @active_ids = Array.new
@@ -194,7 +194,6 @@ class XMLParser
   end
 
   # def parse(line)
-  #   Lich.log(line)
   #   @buffer.concat(line)
   #   loop {
   #     if (str = @buffer.slice!(/^[^<]+/))
@@ -233,6 +232,8 @@ class XMLParser
   PSM_3_DIALOG_IDS = ["Buffs", "Active Spells", "Debuffs", "Cooldowns"]
 
   def tag_start(name, attributes)
+    # This is called once per element by REXML in games.rb
+    # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
     begin
       @active_tags.push(name)
       @active_ids.push(attributes['id'].to_s)
@@ -628,6 +629,8 @@ class XMLParser
   end
 
   def text(text_string)
+    # This is called once per element with text in it by REXML in games.rb
+    # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
     begin
       # fixme: /<stream id="Spells">.*?<\/stream>/m
       # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))
@@ -845,6 +848,9 @@ class XMLParser
   end
 
   def tag_end(name)
+    # This is called once per element by REXML in games.rb
+    # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
+
     begin
       if @game =~ /^DR/
         if name == 'compass' and $nav_seen
