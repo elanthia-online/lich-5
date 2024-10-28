@@ -12,6 +12,10 @@ def convert2copper(amt, denomination)
   end
 end
 
+def check_exp_mods
+  Lich::Util.issue_command("exp mods", /The following skills are currently under the influence of a modifier/, /^<output class=""/, quiet: true, include_end: false, usexml: false)
+end
+
 def convert2plats(copper)
   denominations = [[10_000, 'platinum'], [1000, 'gold'], [100, 'silver'], [10, 'bronze'], [1, 'copper']]
   denominations.inject([copper, []]) do |result, denomination|

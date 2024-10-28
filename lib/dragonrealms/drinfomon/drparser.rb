@@ -1,28 +1,47 @@
 # frozen_string_literal: true
 
 module DRParser
+
   module Pattern
-    ExpColumns = /(?:\s*(?<skill>[a-zA-Z\s]+)\b:\s*(?<rank>\d+)\s+(?<percent>\d+)%\s+(?<rate>[a-zA-Z\s]+)\b)/
-    BriefExpOn = %r{<component id='exp .*?<d cmd='skill (?<skill>[a-zA-Z\s]+)'.*:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s*\[\s?(?<rate>\d+)\/34\].*?<\/component>}
-    BriefExpOff = %r{<component id='exp .*?\b(?<skill>[a-zA-Z\s]+)\b:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s+\b(?<rate>[a-zA-Z\s]+)\b.*?<\/component>}
-    NameRaceGuild = /^Name:\s+\b(?<name>.+)\b\s+Race:\s+\b(?<race>.+)\b\s+Guild:\s+\b(?<guild>.+)\b\s+/
-    GenderAgeCircle = /^Gender:\s+\b(?<gender>.+)\b\s+Age:\s+\b(?<age>.+)\b\s+Circle:\s+\b(?<circle>.+)/
-    StatValue = /(?<stat>Strength|Agility|Discipline|Intelligence|Reflex|Charisma|Wisdom|Stamina|Favors|TDPs)\s+:\s+(?<value>\d+)/
-    TDPValue = /You have (\d+) TDPs\./
-    EncumbranceValue = /^\s*Encumbrance\s+:\s+(?<encumbrance>[\w\s'?!]+)$/
-    LuckValue = /^\s*Luck\s+:\s+.*\((?<luck>[-\d]+)\/3\)/
-    BalanceValue = /^(?:You are|\[You're) (?<balance>#{Regexp.union(DR_BALANCE_VALUES)}) balanced?/
-    ExpClearMindstate = %r{<component id='exp (?<skill>[a-zA-Z\s]+)'><\/component>}
-    RoomPlayers = %r{\'room players\'>Also here: (.*)\.</component>}
-    RoomPlayersEmpty = %r{\'room players\'></component>}
-    RoomObjs = %r{\'room objs\'>(.*)</component>}
-    RoomObjsEmpty = %r{\'room objs\'></component>}
-    RoomExits = /Obvious (exits|paths):/
-    GroupMembers = %r{<pushStream id="group"/>  (\w+):}
-    GroupMembersEmpty = %r{<pushStream id="group"/>Members of your group:}
+    ExpColumns = /(?:\s*(?<skill>[a-zA-Z\s]+)\b:\s*(?<rank>\d+)\s+(?<percent>\d+)%\s+(?<rate>[a-zA-Z\s]+)\b)/.freeze
+    BriefExpOn = %r{<component id='exp .*?<d cmd='skill (?<skill>[a-zA-Z\s]+)'.*:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s*\[\s?(?<rate>\d+)\/34\].*?<\/component>}.freeze
+    BriefExpOff = %r{<component id='exp .*?\b(?<skill>[a-zA-Z\s]+)\b:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s+\b(?<rate>[a-zA-Z\s]+)\b.*?<\/component>}.freeze
+    NameRaceGuild = /^Name:\s+\b(?<name>.+)\b\s+Race:\s+\b(?<race>.+)\b\s+Guild:\s+\b(?<guild>.+)\b\s+/.freeze
+    GenderAgeCircle = /^Gender:\s+\b(?<gender>.+)\b\s+Age:\s+\b(?<age>.+)\b\s+Circle:\s+\b(?<circle>.+)/.freeze
+    StatValue = /(?<stat>Strength|Agility|Discipline|Intelligence|Reflex|Charisma|Wisdom|Stamina|Favors|TDPs)\s+:\s+(?<value>\d+)/.freeze
+    TDPValue = /You have (\d+) TDPs\./.freeze
+    EncumbranceValue = /^\s*Encumbrance\s+:\s+(?<encumbrance>[\w\s'?!]+)$/.freeze
+    LuckValue = /^\s*Luck\s+:\s+.*\((?<luck>[-\d]+)\/3\)/.freeze
+    BalanceValue = /^(?:You are|\[You're) (?<balance>#{Regexp.union(DR_BALANCE_VALUES)}) balanced?/.freeze
+    ExpClearMindstate = %r{<component id='exp (?<skill>[a-zA-Z\s]+)'><\/component>}.freeze
+    RoomPlayers = %r{\'room players\'>Also here: (.*)\.</component>}.freeze
+    RoomPlayersEmpty = %r{\'room players\'></component>}.freeze
+    RoomObjs = %r{\'room objs\'>(.*)</component>}.freeze
+    RoomObjsEmpty = %r{\'room objs\'></component>}.freeze
+    RoomExits = /Obvious (exits|paths):/.freeze
+    GroupMembers = %r{<pushStream id="group"/>  (\w+):}.freeze
+    GroupMembersEmpty = %r{<pushStream id="group"/>Members of your group:}.freeze
+    ExpModsStart = /^(<.*?\/>)?The following skills are currently under the influence of a modifier/.freeze
+    MultiEnd = %r{^<output class=""/>}.freeze
+    ExpMods = /^<preset id="speech">(?<sign>\+|\-)+(?<value>\d+) \b(?<skill>[\w\s]+)\b<\/preset>/.freeze
+  end
+
+  @parsing_exp_mods_output = false
+
+  def self.check_events(server_string)
+    Flags.matchers.each do |key, regexes|
+      regexes.each do |regex|
+        if (matches = server_string.match(regex))
+          Flags.flags[key] = matches
+          break
+        end
+      end
+    end
+    server_string
   end
 
   def self.parse(line)
+    check_events(line)
     begin
       case line
       when Pattern::GenderAgeCircle
@@ -78,6 +97,110 @@ module DRParser
           rate_as_number = DR_LEARNING_RATES.index(rate_as_word) # convert word to number
           DRSkill.update(skill_value, rank_value, rate_as_number, percent_value)
         end
+      when Pattern::ExpModsStart
+        @parsing_exp_mods_output = true
+        DRSkill.exp_modifiers.clear
+      when Pattern::ExpMods
+        if @parsing_exp_mods_output
+          skill = Regexp.last_match[:skill]
+          sign = Regexp.last_match[:sign]
+          value = Regexp.last_match[:value].to_i
+          value = (value * -1) if sign == '-'
+          DRSkill.update_mods(skill, value)
+        end
+      when Pattern::MultiEnd
+        @parsing_exp_mods_output = false
+      when /^You will .* (?<format>column-formatted|non-column) output for the SPELLS verb/
+        # Parse `toggle spellbook` command
+        DRSpells.spellbook_format = Regexp.last_match[:format]
+      when /^You recall the spells you have learned/
+        DRSpells.grabbing_known_spells = true
+        DRSpells.known_spells.clear()
+        DRSpells.known_feats.clear()
+        DRSpells.spellbook_format = 'non-column' # assume original format
+      when /^<output class="mono"\/>/
+        # Matched an xml tag while parsing spells, must be column-formatted output
+        if DRSpells.grabbing_known_spells
+          DRSpells.spellbook_format = 'column-formatted'
+        end
+      when /^[\w\s]+:/
+        # Matched the spellbook name in column-formatted output, ignore
+      when /Slot\(s\): \d+ \s+ Min Prep: \d+ \s+ Max Prep: \d+/
+        # Matched the spell info in column-formatted output, parse
+        if DRSpells.grabbing_known_spells && DRSpells.spellbook_format == 'column-formatted'
+          spell = line
+                  .sub('<popBold/>', '') # remove xml tag at start of some lines
+                  .slice(10, 32) # grab the spell name, after the alias and before Slots
+                  .strip
+          if !spell.empty?
+            DRSpells.known_spells[spell] = true
+          end
+        end
+      when /^In the chapter entitled|^You have temporarily memorized|^From your apprenticeship you remember practicing/
+        if DRSpells.grabbing_known_spells
+          line
+            .sub(/^In the chapter entitled "[\w\s\'-]+", you have notes on the /, '')
+            .sub(/^You have temporarily memorized the /, '')
+            .sub(/^From your apprenticeship you remember practicing with the /, '')
+            .sub(/ spells?\./, '')
+            .sub(/,? and /, ',')
+            .split(',')
+            .map { |mapped_spell| mapped_spell.include?('[') ? mapped_spell.slice(0, mapped_spell.index('[')) : mapped_spell }
+            .map(&:strip)
+            .reject { |rejected_spell| rejected_spell.nil? || rejected_spell.empty? }
+            .each { |each_spell| DRSpells.known_spells[each_spell] = true }
+        end
+      when /^You recall proficiency with the magic feats of/
+        if DRSpells.grabbing_known_spells
+          # The feats are listed without the Oxford comma separating the last item.
+          # This makes splitting the string by comma difficult because the next to last and last
+          # items would be captured together. The workaround is we'll replace ' and ' with a comma
+          # and hope no feats ever have the word 'and' in them...
+          line
+            .sub(/^You recall proficiency with the magic feats of/, '')
+            .sub(/,? and /, ',')
+            .sub('.', '')
+            .split(',')
+            .map(&:strip)
+            .reject { |feat| feat.nil? || feat.empty? }
+            .each { |feat| DRSpells.known_feats[feat] = true }
+        end
+      when /^You can use SPELL STANCE|^You have (no|yet to receive any) training in the magical arts|You have no desire to soil yourself with magical trickery|^You really shouldn't be loitering here|\(Use SPELL|\(Use PREPARE/
+        DRSpells.grabbing_known_spells = false
+      when /^(<(push|pop)Bold\/>)?You know the (Berserks|Forms|Roars|Meditations):(<(push|pop)Bold\/>)?/
+        DRSpells.grabbing_known_spells = true
+        line
+          .sub(/^(<(push|pop)Bold\/>)?You know the (Berserks|Forms|Roars|Meditations):(<(push|pop)Bold\/>)?/, '')
+          .sub('.', '')
+          .split(',')
+          .map(&:strip)
+          .reject { |ability| ability.nil? || ability.empty? }
+          .each { |ability| DRSpells.known_spells[ability] = true }
+      when /^(<(push|pop)Bold\/>)?You know the (Masteries):(<(push|pop)Bold\/>)?/
+        # Barbarian masteries are the equivalent of magical feats.
+        if DRSpells.grabbing_known_spells
+          line
+            .sub(/^(<(push|pop)Bold\/>)?You know the (Masteries):(<(push|pop)Bold\/>)?/, '')
+            .sub('.', '')
+            .split(',')
+            .map(&:strip)
+            .reject { |mastery| mastery.nil? || mastery.empty? }
+            .each { |mastery| DRSpells.known_feats[mastery] = true }
+        end
+      when /^You recall that you have (\d+) training sessions? remaining with the Guild/
+        DRSpells.grabbing_known_spells = false
+      when /^From the (Subtlety|Finesse|Potence) tree, you know the following khri:/
+        DRSpells.grabbing_known_spells = true
+        line
+          .sub(/^From the (Subtlety|Finesse|Potence) tree, you know the following khri:/, '')
+          .sub('.', '')
+          .gsub(/\(.+?\)/, '')
+          .split(',')
+          .map(&:strip)
+          .reject { |ability| ability.nil? || ability.empty? }
+          .each { |ability| DRSpells.known_spells[ability] = true }
+      when /^You have (\d+) available slots?/
+        DRSpells.grabbing_known_spells = false
       else
         :noop
       end
