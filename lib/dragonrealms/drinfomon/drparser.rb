@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 module DRParser
+  Lich.log("DRParser Caller location is #{caller_locations(0)}")
 
   module Pattern
     ExpColumns = /(?:\s*(?<skill>[a-zA-Z\s]+)\b:\s*(?<rank>\d+)\s+(?<percent>\d+)%\s+(?<rate>[a-zA-Z\s]+)\b)/.freeze
