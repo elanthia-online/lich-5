@@ -34,6 +34,7 @@ class XMLParser
               :indicator, :injuries, :injury_mode, :room_count, :room_name, :room_title, :room_description,
               :room_exits, :room_exits_string, :familiar_room_title, :familiar_room_description,
               :familiar_room_exits, :bounty_task, :server_time, :server_time_offset,
+              :dr_active_spells, :dr_active_spells_stellar_percentage, :dr_active_spells_slivers,
               :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
               :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
               :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
@@ -47,7 +48,7 @@ class XMLParser
 
   def initialize
     @buffer = String.new
-    # @unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
+    @unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
     @bold = false
     @active_tags = Array.new
     @active_ids = Array.new
@@ -99,6 +100,10 @@ class XMLParser
     @bounty_task = String.new
     @society_task = String.new
 
+    @dr_active_spells = Hash.new
+    @dr_active_spell_tracking = false
+    @dr_active_spells_stellar_percentage = 0
+    @dr_active_spells_slivers = false
     @name = String.new
     @game = String.new
     @player_id = String.new
@@ -189,6 +194,7 @@ class XMLParser
   end
 
   # def parse(line)
+  #   Lich.log(line)
   #   @buffer.concat(line)
   #   loop {
   #     if (str = @buffer.slice!(/^[^<]+/))
@@ -227,8 +233,6 @@ class XMLParser
   PSM_3_DIALOG_IDS = ["Buffs", "Active Spells", "Debuffs", "Cooldowns"]
 
   def tag_start(name, attributes)
-    # This is called once per element by REXML in games.rb
-    # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
     begin
       @active_tags.push(name)
       @active_ids.push(attributes['id'].to_s)
@@ -259,6 +263,15 @@ class XMLParser
           @room_exits = Array.new
         end
       end
+
+      if (name == 'clearStream' && attributes['id'] == 'percWindow')
+        @dr_active_spells = {}
+      end
+
+      if (name == 'pushStream' && attributes['id'] == 'percWindow')
+        @dr_active_spell_tracking = true
+      end
+
       if (name == 'compDef') or (name == 'component')
         if attributes['id'] == 'room objs'
           GameObj.clear_loot
@@ -615,11 +628,58 @@ class XMLParser
   end
 
   def text(text_string)
-    # This is called once per element with text in it by REXML in games.rb
-    # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
     begin
       # fixme: /<stream id="Spells">.*?<\/stream>/m
       # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))
+
+      # DR Active Spell tracking and handling
+      if @dr_active_spell_tracking
+        spell = nil
+        duration = nil
+        case text_string
+        when /(?<spell>[^<>]+?)\s+\((?:\D*)(?<duration>\d+)\s*(?:%|roisae?n)\)/i
+          # Spell with known duration remaining
+          spell = Regexp.last_match[:spell]
+          duration = Regexp.last_match[:duration].to_i
+        when /(?<spell>[^<>]+?)\s+\(fading\)/i
+          # Spell fading away
+          spell = Regexp.last_match[:spell]
+          duration = 0
+        when /(?<spell>[^<>]+?)\s+\((?<duration>indefinite|om)\)/i
+          # Cyclic spell or Osrel Meraud cyclic spell
+          spell = Regexp.last_match[:spell]
+          duration = 1000
+        when /(?<spell>Stellar Collector)\s+\((?<percentage>\d+)%,\s*(?<duration>\d+)?\s*(?<unit>(?:roisae?n|anlaen|fading))/
+          # Stellar collector special case
+          # XML looks like:
+          # Stellar Collector  (0%, 4 anlaen)
+          # Stellar Collector  (0%, fading)
+          spell = Regexp.last_match[:spell]
+          duration = Regexp.last_match[:duration].to_i
+          @dr_active_spells_stellar_percentage = Regexp.last_match[:percentage].to_i
+          unit = Regexp.last_match[:unit]
+          duration = unit == 'anlaen' ? duration * 30 : duration
+        when /(?<spell>[^<>]+?)\s+\(.+\)/i
+          # Spells with inexact duration verbiage, such as with
+          # Barbarians without knowledge of Power Monger mastery
+          spell = Regexp.last_match[:spell]
+          duration = 1000
+        when /.*orbiting sliver.*/i
+          # Moon Mage slivers
+          @dr_active_spells_slivers = true
+        when /^(.*)$/
+          # No idea what we received, just a general catch all
+          spell = Regexp.last_match(1)
+          duration = 1000
+        end
+        spell.strip!
+        if spell
+          @dr_active_spells[spell] = duration
+          # @dr_active_spells.refresh_data[spell] = true
+        end
+
+        # @dr_active_spells << text_string.strip.sub("  ", ' ')
+      end
 
       if @current_style == 'roomName'
         @room_name = text_string
@@ -785,9 +845,6 @@ class XMLParser
   end
 
   def tag_end(name)
-    # This is called once per element by REXML in games.rb
-    # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
-
     begin
       if @game =~ /^DR/
         if name == 'compass' and $nav_seen
@@ -799,6 +856,10 @@ class XMLParser
           @room_count += 1
           $room_count += 1
         end
+      end
+
+      if (name == 'popStream')
+        @dr_active_spell_tracking = false
       end
 
       if name == 'inv'
