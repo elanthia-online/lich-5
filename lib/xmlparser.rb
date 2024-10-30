@@ -865,7 +865,7 @@ class XMLParser
       end
 
       if (name == 'popStream')
-        @dr_active_spell_tracking = false
+        @dr_active_spell_tracking = false if @dr_active_spell_tracking
       end
 
       if name == 'inv'
