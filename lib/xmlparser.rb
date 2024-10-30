@@ -267,6 +267,7 @@ class XMLParser
 
       if (name == 'clearStream' && attributes['id'] == 'percWindow')
         @dr_active_spells = {}
+        @dr_active_spells_slivers = false
       end
 
       if (name == 'pushStream' && attributes['id'] == 'percWindow')
