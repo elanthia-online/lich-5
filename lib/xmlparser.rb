@@ -848,6 +848,7 @@ class XMLParser
   def tag_end(name)
     # This is called once per element by REXML in games.rb
     # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
+
     begin
       if @game =~ /^DR/
         if name == 'compass' and $nav_seen
