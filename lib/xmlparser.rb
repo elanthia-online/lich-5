@@ -48,7 +48,7 @@ class XMLParser
 
   def initialize
     @buffer = String.new
-    @unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
+    # @unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
     @bold = false
     @active_tags = Array.new
     @active_ids = Array.new
