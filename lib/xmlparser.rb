@@ -194,7 +194,6 @@ class XMLParser
   end
 
   # def parse(line)
-  #   Lich.log(line)
   #   @buffer.concat(line)
   #   loop {
   #     if (str = @buffer.slice!(/^[^<]+/))
