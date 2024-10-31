@@ -39,10 +39,7 @@ module Lich
         self.common_before
         require File.join(LIB_DIR, 'map', 'map_dr.rb')
         require File.join(LIB_DIR, 'attributes', 'char.rb')
-        require File.join(LIB_DIR, 'attributes', 'stats.rb')
-        require File.join(LIB_DIR, 'attributes', 'spells.rb')
-        require File.join(LIB_DIR, 'attributes', 'skills.rb')
-        require File.join(LIB_DIR, 'attributes', 'society.rb')
+        require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drinfomon.rb')
         # self.common_after
       end
 
