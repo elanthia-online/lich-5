@@ -1,5 +1,5 @@
 module Lich
-  module Gemstone # test this?
+  # module Gemstone # test this?
     module Claim
       Lock            = Mutex.new
       @claimed_room ||= nil
@@ -106,5 +106,5 @@ module Lich
         end
       end
     end
-  end
+  # end
 end
