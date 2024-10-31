@@ -57,18 +57,23 @@ for arg in ARGV
   end
 end
 
-require 'time'
-require 'socket'
+require 'base64'
+require 'digest/md5'
+require 'digest/sha1'
+require 'drb/drb'
+require 'json'
+require 'monitor'
+require 'net/http'
+require 'ostruct'
+require 'resolv'
 require 'rexml/document'
 require 'rexml/streamlistener'
+require 'socket'
 require 'stringio'
-require 'zlib'
-require 'drb/drb'
-require 'resolv'
-require 'digest/md5'
-require 'json'
 require 'terminal-table'
-# require 'sorted_set'
+require 'time'
+require 'yaml'
+require 'zlib'
 
 # TODO: Move all local requires to top of file
 if defined? LIB_DIR
