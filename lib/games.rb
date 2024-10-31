@@ -932,6 +932,5 @@ module Lich
         @@_buffer
       end
     end
-
   end
 end
