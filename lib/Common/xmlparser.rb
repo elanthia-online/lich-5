@@ -247,6 +247,9 @@ module Lich
 
           if name == 'compass'
             if defined?(Lich::Claim) && Lich::Claim::Lock.owned?
+              if @room_id == 0
+                @room_id = Digest::MD5.hexdigest([@room_title, @room_description, @room_exits_string].to_s).to_i(16)
+              end
               if @room_player_hidden
                 @arrival_pcs.push(:hidden)
                 @check_obvious_hiding = false
@@ -817,6 +820,9 @@ module Lich
             gsl_exits = nil
           elsif @room_window_disabled and (name == 'compass')
             if defined?(Lich::Claim) && Lich::Claim::Lock.owned?
+              if @room_id == 0
+                @room_id = Digest::MD5.hexdigest([@room_title, @room_description, @room_exits_string].to_s).to_i(16)
+              end
               if @room_player_hidden
                 @arrival_pcs.push(:hidden)
                 @check_obvious_hiding = false
