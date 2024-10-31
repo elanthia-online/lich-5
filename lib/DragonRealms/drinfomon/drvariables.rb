@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 DR_LEARNING_RATES = [
   'clear',
   'dabbling',
@@ -326,3 +329,5 @@ $VOL_MAP = {
   'small'    => 2,
   'tiny'     => 1
 }
+end
+end

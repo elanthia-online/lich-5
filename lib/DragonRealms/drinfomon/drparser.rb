@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+module Lich
+  module DragonRealms
+    module DRInfomon
+
 module DRParser
   Lich.log("DRParser Caller location is #{caller_locations(0)}")
 
@@ -212,4 +216,7 @@ module DRParser
       Lich.log "error: line: #{line}\n\t"
     end
   end
+end
+end
+end
 end

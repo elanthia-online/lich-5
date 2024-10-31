@@ -1,3 +1,7 @@
+module Lich
+  module DragonRealms
+    module DRInfomon
+
 class DRSkill
   @@skills_data ||= DR_SKILLS_DATA
   @@gained_skills ||= []
@@ -148,4 +152,8 @@ class DRSkill
   def lookup_skillset(skill)
     @@skills_data[:skillsets].find { |_skillset, skills| skills.include?(skill) }.first
   end
+end
+
+end
+end
 end
