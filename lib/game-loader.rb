@@ -38,6 +38,7 @@ module GameLoader
     require File.join(LIB_DIR, 'map', 'map_dr.rb')
     require File.join(LIB_DIR, 'attributes', 'char.rb')
     require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drinfomon.rb')
+    require File.join(LIB_DIR, 'dragonrealms', 'commons', 'loader.rb')
     # self.common_after
   end
 
