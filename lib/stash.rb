@@ -2,24 +2,6 @@
 stash.rb: Core lich file for extending free_hands, empty_hands functions in
   item / container script indifferent method.  Usage will ensure no regex is
   required to be maintained.
-
-    Maintainer: Elanthia-Online
-    Original Author: Tillmen, Ondreian, others
-    game: Gemstone
-    tags: CORE, spells
-    required: Lich > 5.0.19
-    version: 1.2.1
-
-  changelog:
-    version 1.2.1
-     * Added support for weapon displayers
-    version 1.2.0
-     * Added sheath support and TWC support
-    version 1.1.0
-     * Added ethereal weapon support
-    version 1.0.0
-     * Initial release
-
 =end
 
 module Lich
@@ -89,7 +71,10 @@ module Lich
         if line =~ sheath_list_match
           sheath_obj = Regexp.last_match(3).to_s.downcase
           sheath_type = Regexp.last_match(1).to_s.downcase.gsub('2', 'secondary_')
-          @sheath.store(sheath_type.to_sym, Stash.find_container(sheath_obj))
+          found_container = Stash.find_container(sheath_obj, loud_fail: false)
+          unless found_container.nil?
+            @sheath.store(sheath_type.to_sym, found_container)
+          end
         end
       }
       @checked_sheaths = true
