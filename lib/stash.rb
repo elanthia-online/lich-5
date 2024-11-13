@@ -75,7 +75,7 @@ module Lich
           unless found_container.nil?
             @sheath.store(sheath_type.to_sym, found_container)
           else
-            respond "Lich::Stash.sheath_bags Error: Could not find sheath(#{sheath_obj}) in inventory. Not using, possibly hidden or tucked."
+            respond "Lich::Stash.sheath_bags Error: Could not find sheath(#{sheath_obj}) in inventory. Not using, possibly hidden, tucked, or missing."
           end
         end
       }
