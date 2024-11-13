@@ -5,8 +5,8 @@ class DRSkill
   @@list ||= []
   @@exp_modifiers ||= {}
 
-  attr_reader :name, :rank, :exp, :percent, :current, :baseline, :skillset
-  attr_writer :rank, :exp, :percent, :current, :baseline
+  attr_reader :name, :skillset
+  attr_accessor :rank, :exp, :percent, :current, :baseline
 
   def initialize(name, rank, exp, percent)
     @name = name # skill name like 'Evasion'

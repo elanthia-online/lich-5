@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 module DRParser
-  Lich.log("DRParser Caller location is #{caller_locations(0)}")
-
   module Pattern
     ExpColumns = /(?:\s*(?<skill>[a-zA-Z\s]+)\b:\s*(?<rank>\d+)\s+(?<percent>\d+)%\s+(?<rate>[a-zA-Z\s]+)\b)/.freeze
     BriefExpOn = %r{<component id='exp .*?<d cmd='skill (?<skill>[a-zA-Z\s]+)'.*:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s*\[\s?(?<rate>\d+)\/34\].*?<\/component>}.freeze
@@ -23,8 +21,10 @@ module DRParser
     GroupMembers = %r{<pushStream id="group"/>  (\w+):}.freeze
     GroupMembersEmpty = %r{<pushStream id="group"/>Members of your group:}.freeze
     ExpModsStart = /^(<.*?\/>)?The following skills are currently under the influence of a modifier/.freeze
-    MultiEnd = %r{^<output class=""/>}.freeze
-    ExpMods = /^<preset id="speech">(?<sign>\+|\-)+(?<value>\d+) \b(?<skill>[\w\s]+)\b<\/preset>/.freeze
+    KnownSpellsStart = /^You recall the spells you have learned/.freeze
+    BarbarianAbilitiesStart = /^You know the (Berserks:)/.freeze
+    ThiefKhriStart = /^From the Subtlety tree, you know the following khri:/.freeze
+    SpellBookFormat = /^You will .* (?<format>column-formatted|non-column) output for the SPELLS verb/.freeze
   end
 
   @parsing_exp_mods_output = false
@@ -37,6 +37,198 @@ module DRParser
           break
         end
       end
+    end
+    server_string
+  end
+
+  def self.check_exp_mods(server_string)
+    case server_string
+    when %r{^<preset id="speech">}, %r{^<preset id="thought">}
+      if @parsing_exp_mods_output
+        match = /(?<sign>\+|\-)+(?<value>\d+) \b(?<skill>[\w\s]+)\b/.match(server_string)
+        if match
+          skill = match[:skill]
+          sign = match[:sign]
+          value = match[:value].to_i
+          value = (value * -1) if sign == '-'
+          DRSkill.update_mods(skill, value)
+        end
+      end
+    when %r{^<output class=""/>}
+      if @parsing_exp_mods_output
+        @parsing_exp_mods_output = false
+      end
+    end
+    server_string
+  end
+
+  def self.check_known_spells(server_string)
+    # This method parses the output from `spells` command for magic users
+    # and populates the known spells/feats based on the output.
+    #
+    # As of June 2022, There are two different output formats: column-formatted and non-column.
+    # https://elanthipedia.play.net/Post:Tuesday_Tidings_-_120_-_Spells_-_06/07/2022_-_18:34
+    #
+    # The XML stream for DragonRealms is whack at best.
+    #
+    # Examples of non-column output:
+    #     You recall the spells you have learned from your training.
+    #     In the chapter entitled "Analogous Patterns", you have notes on the Manifest Force [maf] and Gauge Flow [gaf] spells.
+    #     You have temporarily memorized the Tailwind [tw] spell.
+    #     You recall proficiency with the magic feats of Sorcerous Patterns, Alternate Preparation and Augmentation Mastery.
+    #     You are NOT currently set to recognize known spells when prepared by someone else in the area.  (Use SPELL RECOGNIZE ON to change this.)
+    #     You are currently set to display full cast messaging.  (Use SPELL BRIEFMSG ON to change this.)
+    #     You are currently attempting to hide your spell preparing.  (Use PREPARE /HIDE to change this.)
+    #     You can use SPELL STANCE [HELP] to view or modify your spellcasting preferences.
+    #
+    # Examples of column-formatted output:
+    #     You recall the spells you have learned from your training.
+    #     <output class="mono"/>
+    #     <pushBold/>
+    #     Analogous Patterns:
+    #     <popBold/>     maf  Manifest Force                  Slot(s): 1   Min Prep: 1     Max Prep: 100
+    #          gaf  Gauge Flow                      Slot(s): 2   Min Prep: 5     Max Prep: 100
+    #     <pushBold/>
+    #     Synthetic Creation:
+    #     <popBold/>     acs  Acid Splash                     Slot(s): 1   Min Prep: 1     Max Prep: 50
+    #           vs  Viscous Solution                Slot(s): 2   Min Prep: 10    Max Prep: 66
+    #     <output class=""/>
+    #     <output class="mono"/>
+    #     <pushBold/>
+    #     Temporarily Memorized:
+    #     <popBold/>      tw  Tailwind                        Slot(s): 1   Min Prep: 5     Max Prep: 100
+    #     <output class=""/>
+    #     You recall proficiency with the magic feats of Sorcerous Patterns, Alternate Preparation and Augmentation Mastery.
+    #     You are NOT currently set to recognize known spells when prepared by someone else in the area.  (Use SPELL RECOGNIZE ON to change this.)
+    #     You are currently set to display full cast messaging.  (Use SPELL BRIEFMSG ON to change this.)
+    #     You are currently attempting to hide your spell preparing.  (Use PREPARE /HIDE to change this.)
+    #     You can use SPELL STANCE [HELP] to view or modify your spellcasting preferences.
+    #
+    # One or more spells may be listed between a <popBold/> <pushBold/> pair,
+    # but only one spell and its information are ever listed per line.
+    case server_string
+    when /^<output class="mono"\/>/
+      # Matched an xml tag while parsing spells, must be column-formatted output
+      if DRSpells.grabbing_known_spells
+        DRSpells.spellbook_format = 'column-formatted'
+      end
+    when /^[\w\s]+:/
+      # Matched the spellbook name in column-formatted output, ignore
+    when /Slot\(s\): \d+ \s+ Min Prep: \d+ \s+ Max Prep: \d+/
+      # Matched the spell info in column-formatted output, parse
+      if DRSpells.grabbing_known_spells && DRSpells.spellbook_format == 'column-formatted'
+        spell = server_string
+                .sub('<popBold/>', '') # remove xml tag at start of some lines
+                .slice(10, 32) # grab the spell name, after the alias and before Slots
+                .strip
+        if !spell.empty?
+          DRSpells.known_spells[spell] = true
+        end
+      end
+      # Preserve the pop bold command we removed from start of spell line
+      # otherwise lots of game text suddenly are highlighted yellow
+    when /^In the chapter entitled|^You have temporarily memorized|^From your apprenticeship you remember practicing/
+      if DRSpells.grabbing_known_spells
+        server_string
+          .sub(/^In the chapter entitled "[\w\s\'-]+", you have notes on the /, '')
+          .sub(/^You have temporarily memorized the /, '')
+          .sub(/^From your apprenticeship you remember practicing with the /, '')
+          .sub(/ spells?\./, '')
+          .sub(/,? and /, ',')
+          .split(',')
+          .map { |mapped_spell| mapped_spell.include?('[') ? mapped_spell.slice(0, mapped_spell.index('[')) : mapped_spell }
+          .map(&:strip)
+          .reject { |rejected_spell| rejected_spell.nil? || rejected_spell.empty? }
+          .each { |each_spell| DRSpells.known_spells[each_spell] = true }
+      end
+    when /^You recall proficiency with the magic feats of/
+      if DRSpells.grabbing_known_spells
+        # The feats are listed without the Oxford comma separating the last item.
+        # This makes splitting the string by comma difficult because the next to last and last
+        # items would be captured together. The workaround is we'll replace ' and ' with a comma
+        # and hope no feats ever have the word 'and' in them...
+        server_string
+          .sub(/^You recall proficiency with the magic feats of/, '')
+          .sub(/,? and /, ',')
+          .sub('.', '')
+          .split(',')
+          .map(&:strip)
+          .reject { |feat| feat.nil? || feat.empty? }
+          .each { |feat| DRSpells.known_feats[feat] = true }
+      end
+    when /^You can use SPELL STANCE|^You have (no|yet to receive any) training in the magical arts|You have no desire to soil yourself with magical trickery|^You really shouldn't be loitering here|\(Use SPELL|\(Use PREPARE/
+      DRSpells.grabbing_known_spells = false
+    end
+    server_string
+  end
+
+  def self.check_known_barbarian_abilities(server_string)
+    # This method parses the output from `ability` command for Barbarians
+    # and populates the known spells/feats based on the known abilities/masteries.
+    #
+    # The XML stream for DragonRealms is whack at best.
+    #
+    # Examples of the data we're looking for:
+    #     You know the Berserks:<pushBold/> Avalanche, Drought.
+    #     <popBold/>You know the Forms:<pushBold/> Monkey.
+    #     <popBold/>You know the Roars:<pushBold/> Anger the Earth.
+    #     <popBold/>You know the Meditations:<pushBold/> Flame, Power, Contemplation.
+    #     <popBold/>You know the Masteries:<pushBold/> Juggernaut, Duelist.
+    #     <popBold/>
+    #     You recall that you have 0 training sessions remaining with the Guild.
+    case server_string
+    when /^(<(push|pop)Bold\/>)?You know the (Berserks|Forms|Roars|Meditations):(<(push|pop)Bold\/>)?/
+      if DRSpells.check_known_barbarian_abilities
+        server_string
+          .sub(/^(<(push|pop)Bold\/>)?You know the (Berserks|Forms|Roars|Meditations):(<(push|pop)Bold\/>)?/, '')
+          .sub('.', '')
+          .split(',')
+          .map(&:strip)
+          .reject { |ability| ability.nil? || ability.empty? }
+          .each { |ability| DRSpells.known_spells[ability] = true }
+      end
+    when /^(<(push|pop)Bold\/>)?You know the (Masteries):(<(push|pop)Bold\/>)?/
+      # Barbarian masteries are the equivalent of magical feats.
+      if DRSpells.check_known_barbarian_abilities
+        server_string
+          .sub(/^(<(push|pop)Bold\/>)?You know the (Masteries):(<(push|pop)Bold\/>)?/, '')
+          .sub('.', '')
+          .split(',')
+          .map(&:strip)
+          .reject { |mastery| mastery.nil? || mastery.empty? }
+          .each { |mastery| DRSpells.known_feats[mastery] = true }
+      end
+    when /^You recall that you have (\d+) training sessions? remaining with the Guild/
+      DRSpells.check_known_barbarian_abilities = false
+    end
+    server_string
+  end
+
+  def self.check_known_thief_khri(server_string)
+    # This method parses the output from `ability` command for Thieves
+    # and populates the known spells/feats based on the known khri.
+    #
+    # The XML stream for DragonRealms is whack at best.
+    #
+    # Examples of the data we're looking for:
+    #     From the Subtlety tree, you know the following khri: Darken (Aug), Dampen (Util/Ward), Strike (Aug), Silence (Util), Shadowstep (Util), Harrier (Aug)
+    #     From the Finesse tree, you know the following khri: Hasten (Util), Safe (Aug), Avoidance (Aug), Plunder (Aug), Flight (Aug/Ward), Elusion (Aug), Slight (Util)
+    #     From the Potence tree, you know the following khri: Focus (Aug), Prowess (Debil), Sight (Aug), Calm (Util), Steady (Aug), Eliminate (Debil), Serenity (Ward), Sagacity (Ward), Terrify (Debil)
+    #     You have 7 available slots.
+    case server_string
+    when /^From the (Subtlety|Finesse|Potence) tree, you know the following khri:/
+      if DRSpells.grabbing_known_khri
+        server_string
+          .sub(/^From the (Subtlety|Finesse|Potence) tree, you know the following khri:/, '')
+          .sub('.', '')
+          .gsub(/\(.+?\)/, '')
+          .split(',')
+          .map(&:strip)
+          .reject { |ability| ability.nil? || ability.empty? }
+          .each { |ability| DRSpells.known_spells[ability] = true }
+      end
+    when /^You have (\d+) available slots?/
+      DRSpells.grabbing_known_khri = false
     end
     server_string
   end
@@ -62,7 +254,7 @@ module DRParser
         end
       when Pattern::TDPValue
         DRStats.tdps = Regexp.last_match(1).to_i
-        CharSettings['Stats'] = DRStats.serialize
+        # CharSettings['Stats'] = DRStats.serialize
       when Pattern::BalanceValue
         DRStats.balance = DR_BALANCE_VALUES.index(Regexp.last_match[:balance])
       when Pattern::RoomPlayersEmpty
@@ -101,110 +293,30 @@ module DRParser
       when Pattern::ExpModsStart
         @parsing_exp_mods_output = true
         DRSkill.exp_modifiers.clear
-      when Pattern::ExpMods
-        if @parsing_exp_mods_output
-          skill = Regexp.last_match[:skill]
-          sign = Regexp.last_match[:sign]
-          value = Regexp.last_match[:value].to_i
-          value = (value * -1) if sign == '-'
-          DRSkill.update_mods(skill, value)
-        end
-      when Pattern::MultiEnd
-        @parsing_exp_mods_output = false
-      when /^You will .* (?<format>column-formatted|non-column) output for the SPELLS verb/
+      when Pattern::SpellBookFormat
         # Parse `toggle spellbook` command
         DRSpells.spellbook_format = Regexp.last_match[:format]
-      when /^You recall the spells you have learned/
+      when Pattern::KnownSpellsStart
         DRSpells.grabbing_known_spells = true
         DRSpells.known_spells.clear()
         DRSpells.known_feats.clear()
         DRSpells.spellbook_format = 'non-column' # assume original format
-      when /^<output class="mono"\/>/
-        # Matched an xml tag while parsing spells, must be column-formatted output
-        if DRSpells.grabbing_known_spells
-          DRSpells.spellbook_format = 'column-formatted'
-        end
-      when /^[\w\s]+:/
-        # Matched the spellbook name in column-formatted output, ignore
-      when /Slot\(s\): \d+ \s+ Min Prep: \d+ \s+ Max Prep: \d+/
-        # Matched the spell info in column-formatted output, parse
-        if DRSpells.grabbing_known_spells && DRSpells.spellbook_format == 'column-formatted'
-          spell = line
-                  .sub('<popBold/>', '') # remove xml tag at start of some lines
-                  .slice(10, 32) # grab the spell name, after the alias and before Slots
-                  .strip
-          if !spell.empty?
-            DRSpells.known_spells[spell] = true
-          end
-        end
-      when /^In the chapter entitled|^You have temporarily memorized|^From your apprenticeship you remember practicing/
-        if DRSpells.grabbing_known_spells
-          line
-            .sub(/^In the chapter entitled "[\w\s\'-]+", you have notes on the /, '')
-            .sub(/^You have temporarily memorized the /, '')
-            .sub(/^From your apprenticeship you remember practicing with the /, '')
-            .sub(/ spells?\./, '')
-            .sub(/,? and /, ',')
-            .split(',')
-            .map { |mapped_spell| mapped_spell.include?('[') ? mapped_spell.slice(0, mapped_spell.index('[')) : mapped_spell }
-            .map(&:strip)
-            .reject { |rejected_spell| rejected_spell.nil? || rejected_spell.empty? }
-            .each { |each_spell| DRSpells.known_spells[each_spell] = true }
-        end
-      when /^You recall proficiency with the magic feats of/
-        if DRSpells.grabbing_known_spells
-          # The feats are listed without the Oxford comma separating the last item.
-          # This makes splitting the string by comma difficult because the next to last and last
-          # items would be captured together. The workaround is we'll replace ' and ' with a comma
-          # and hope no feats ever have the word 'and' in them...
-          line
-            .sub(/^You recall proficiency with the magic feats of/, '')
-            .sub(/,? and /, ',')
-            .sub('.', '')
-            .split(',')
-            .map(&:strip)
-            .reject { |feat| feat.nil? || feat.empty? }
-            .each { |feat| DRSpells.known_feats[feat] = true }
-        end
-      when /^You can use SPELL STANCE|^You have (no|yet to receive any) training in the magical arts|You have no desire to soil yourself with magical trickery|^You really shouldn't be loitering here|\(Use SPELL|\(Use PREPARE/
-        DRSpells.grabbing_known_spells = false
-      when /^(<(push|pop)Bold\/>)?You know the (Berserks|Forms|Roars|Meditations):(<(push|pop)Bold\/>)?/
-        DRSpells.grabbing_known_spells = true
-        line
-          .sub(/^(<(push|pop)Bold\/>)?You know the (Berserks|Forms|Roars|Meditations):(<(push|pop)Bold\/>)?/, '')
-          .sub('.', '')
-          .split(',')
-          .map(&:strip)
-          .reject { |ability| ability.nil? || ability.empty? }
-          .each { |ability| DRSpells.known_spells[ability] = true }
-      when /^(<(push|pop)Bold\/>)?You know the (Masteries):(<(push|pop)Bold\/>)?/
-        # Barbarian masteries are the equivalent of magical feats.
-        if DRSpells.grabbing_known_spells
-          line
-            .sub(/^(<(push|pop)Bold\/>)?You know the (Masteries):(<(push|pop)Bold\/>)?/, '')
-            .sub('.', '')
-            .split(',')
-            .map(&:strip)
-            .reject { |mastery| mastery.nil? || mastery.empty? }
-            .each { |mastery| DRSpells.known_feats[mastery] = true }
-        end
-      when /^You recall that you have (\d+) training sessions? remaining with the Guild/
-        DRSpells.grabbing_known_spells = false
-      when /^From the (Subtlety|Finesse|Potence) tree, you know the following khri:/
-        DRSpells.grabbing_known_spells = true
-        line
-          .sub(/^From the (Subtlety|Finesse|Potence) tree, you know the following khri:/, '')
-          .sub('.', '')
-          .gsub(/\(.+?\)/, '')
-          .split(',')
-          .map(&:strip)
-          .reject { |ability| ability.nil? || ability.empty? }
-          .each { |ability| DRSpells.known_spells[ability] = true }
-      when /^You have (\d+) available slots?/
-        DRSpells.grabbing_known_spells = false
+      when Pattern::BarbarianAbilitiesStart
+        DRSpells.check_known_barbarian_abilities = true
+        DRSpells.known_spells.clear()
+        DRSpells.known_feats.clear()
+      when Pattern::ThiefKhriStart
+        DRSpells.grabbing_known_khri = true
+        DRSpells.known_spells.clear()
+        DRSpells.known_feats.clear()
       else
         :noop
       end
+
+      check_exp_mods(line) if @parsing_exp_mods_output
+      check_known_barbarian_abilities(line) if DRSpells.check_known_barbarian_abilities
+      check_known_thief_khri(line) if DRSpells.grabbing_known_khri
+      check_known_spells(line) if DRSpells.grabbing_known_spells
     rescue StandardError
       respond "--- Lich: error: DRParser.parse: #{$!}"
       respond "--- Lich: error: line: #{line}"
