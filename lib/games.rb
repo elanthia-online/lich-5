@@ -206,16 +206,16 @@ module Games
 
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if (Lich.display_lichid == true || Lich.display_uid == true) && alt_string =~ /^<resource picture=.*roomName/
+                  if (Lich.display_lichid == true || Lich.display_uid == true) && alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
                     if XMLData.game =~ /^GS/
                       if (Lich.display_lichid == true && Lich.display_uid == true)
                         alt_string.sub!(/] \(\d+\)/) { "]" }
-                        alt_string.sub!(']') { " - #{Map.current.id}] (u#{XMLData.room_id})" }
+                        alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
                       elsif Lich.display_lichid == true
                         alt_string.sub!(']') { " - #{Map.current.id}]" }
                       elsif Lich.display_uid == true
                         alt_string.sub!(/] \(\d+\)/) { "]" }
-                        alt_string.sub!(']') { "] (u#{XMLData.room_id})" }
+                        alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
                       end
                     elsif XMLData.game =~ /^DR/
                       @@room_number_after_ready = true
