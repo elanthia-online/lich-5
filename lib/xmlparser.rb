@@ -38,7 +38,7 @@ class XMLParser
               :indicator, :injuries, :injury_mode, :room_count, :room_name, :room_title, :room_description,
               :room_exits, :room_exits_string, :familiar_room_title, :familiar_room_description,
               :familiar_room_exits, :bounty_task, :server_time, :server_time_offset,
-              :dr_active_spells, :dr_active_spells_stellar_percentage, :dr_active_spells_slivers, :dr_room_number,
+              :dr_active_spells, :dr_active_spells_stellar_percentage, :dr_active_spells_slivers, :dr_room_id,
               :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
               :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
               :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
@@ -108,8 +108,8 @@ class XMLParser
     @dr_active_spell_tracking = false
     @dr_active_spells_stellar_percentage = 0
     @dr_active_spells_slivers = false
-    @dr_room_number_ready = false
-    @dr_room_number = 0
+    @dr_room_id_ready = false
+    @dr_room_id = 0
     @name = String.new
     @game = String.new
     @player_id = String.new
@@ -362,14 +362,15 @@ class XMLParser
 
       if name == 'preset'
         if attributes['id'] == 'roomDesc' && !XMLData.in_stream
-          @dr_room_number_ready = true
+          @dr_room_id_ready = true
         end
       end
 
       if name == 'prompt'
-        if @game =~ /^DR/ && Room.current && @dr_room_number_ready
-          @dr_room_number = Room.current.id
-          @dr_room_number_ready = false
+        if @game =~ /^DR/ && Room.current && @dr_room_id_ready
+          @dr_room_id = Room.current.id
+          @room_id = Room.current.id
+          @dr_room_id_ready = false
         end
         @server_time = attributes['time'].to_i
         @server_time_offset = (Time.now.to_i - @server_time)
