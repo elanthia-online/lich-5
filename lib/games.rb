@@ -19,7 +19,7 @@ module Games
       @@autostarted = false
       @@cli_scripts = false
       @@infomon_loaded = false
-      @@room_number_after_ready
+      @@room_number_after_ready = false
 
       def self.clean_gs_serverstring(server_string)
         # The Rift, Scatter is broken...
