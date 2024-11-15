@@ -19,6 +19,7 @@ module Games
       @@autostarted = false
       @@cli_scripts = false
       @@infomon_loaded = false
+      @@room_number_after_ready
 
       def self.clean_gs_serverstring(server_string)
         # The Rift, Scatter is broken...
@@ -205,16 +206,28 @@ module Games
 
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if (Lich.display_lichid == true or Lich.display_uid == true) and XMLData.game =~ /^GS/ and alt_string =~ /^<resource picture=.*roomName/
-                    if (Lich.display_lichid == true and Lich.display_uid == true)
-                      alt_string.sub!(/] \(\d+\)/) { "]" }
-                      alt_string.sub!(']') { " - #{Map.current.id}] (u#{XMLData.room_id})" }
-                    elsif Lich.display_lichid == true
-                      alt_string.sub!(']') { " - #{Map.current.id}]" }
-                    elsif Lich.display_uid == true
-                      alt_string.sub!(/] \(\d+\)/) { "]" }
-                      alt_string.sub!(']') { "] (u#{XMLData.room_id})" }
+                  if (Lich.display_lichid == true || Lich.display_uid == true) && alt_string =~ /^<resource picture=.*roomName/
+                    if XMLData.game =~ /^GS/
+                      if (Lich.display_lichid == true && Lich.display_uid == true)
+                        alt_string.sub!(/] \(\d+\)/) { "]" }
+                        alt_string.sub!(']') { " - #{Map.current.id}] (u#{XMLData.room_id})" }
+                      elsif Lich.display_lichid == true
+                        alt_string.sub!(']') { " - #{Map.current.id}]" }
+                      elsif Lich.display_uid == true
+                        alt_string.sub!(/] \(\d+\)/) { "]" }
+                        alt_string.sub!(']') { "] (u#{XMLData.room_id})" }
+                      end
+                    elsif XMLData.game =~ /^DR/
+                      @@room_number_after_ready = true
                     end
+                  end
+                  if @@room_number_after_ready && alt_string =~ /<prompt /
+                    room_number = ""
+                    room_number += "#{Map.current.id}" if Lich.display_lichid
+                    room_number += " - " if Lich.display_lichid && Lich.display_uid
+                    room_number += "#{XMLData.room_id}" if Lich.display_uid
+                    respond("#Room Number: #{room_number}")
+                    @@room_number_after_ready = false
                   end
                   if $frontend =~ /^(?:wizard|avalon)$/
                     alt_string = sf_to_wiz(alt_string)
