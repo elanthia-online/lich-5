@@ -235,6 +235,10 @@ module Games
                       end
                     end
                     respond("Room Exits: #{room_exits.join(', ')}") unless room_exits.empty?
+                    if $frontend == 'stormfront'
+                      _respond("<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>")
+                      _respond("<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>")
+                    end
                     @@room_number_after_ready = false
                   end
                   if $frontend =~ /^(?:wizard|avalon)$/
