@@ -234,7 +234,7 @@ module Games
                         room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
                       end
                     end
-                    respond("Room Exits: #{room_exits}") unless room_exits.empty?
+                    respond("Room Exits: #{room_exits.join(', ')}") unless room_exits.empty?
                     @@room_number_after_ready = false
                   end
                   if $frontend =~ /^(?:wizard|avalon)$/
