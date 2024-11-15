@@ -6,9 +6,11 @@ xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.7
-    version: 1.3.3
+    version: 1.3.4
 
   changelog:
+    v1.3.4 (2024-11-15)
+      feature: Add DR room numbers to XMLData
     v1.3.3 (2024-10-31)
       Feature: Add DR Active Spells to XMLData
     v1.3.2 (2024-10-17)
@@ -36,7 +38,7 @@ class XMLParser
               :indicator, :injuries, :injury_mode, :room_count, :room_name, :room_title, :room_description,
               :room_exits, :room_exits_string, :familiar_room_title, :familiar_room_description,
               :familiar_room_exits, :bounty_task, :server_time, :server_time_offset,
-              :dr_active_spells, :dr_active_spells_stellar_percentage, :dr_active_spells_slivers,
+              :dr_active_spells, :dr_active_spells_stellar_percentage, :dr_active_spells_slivers, :dr_room_number,
               :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
               :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
               :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
@@ -106,6 +108,8 @@ class XMLParser
     @dr_active_spell_tracking = false
     @dr_active_spells_stellar_percentage = 0
     @dr_active_spells_slivers = false
+    @dr_room_number_ready = false
+    @dr_room_number = 0
     @name = String.new
     @game = String.new
     @player_id = String.new
@@ -295,6 +299,7 @@ class XMLParser
         @obj_exist = attributes['exist']
         @obj_noun = attributes['noun']
       end
+
       if name == 'inv'
         if attributes['id'] == 'stow'
           @obj_location = @stow_container_id
@@ -355,7 +360,16 @@ class XMLParser
       if name == 'style'
         @current_style = attributes['id']
       end
+
+      if name == 'preset' && attributes['id'] && !XMLData.in_stream
+        @dr_room_number_ready = true
+      end
+
       if name == 'prompt'
+        if @game =~ /^DR/ && Room.current && @dr_room_number_ready
+          @dr_room_number = Room.current.id
+          @dr_room_number_ready = false
+        end
         @server_time = attributes['time'].to_i
         @server_time_offset = (Time.now.to_i - @server_time)
         $_CLIENT_.puts "\034GSq#{sprintf('%010d', @server_time)}\r\n" if @send_fake_tags
