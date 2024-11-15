@@ -227,6 +227,14 @@ module Games
                     room_number += " - " if Lich.display_lichid && Lich.display_uid
                     room_number += "#{XMLData.room_id}" if Lich.display_uid
                     respond("Room Number: #{room_number}")
+                    room_exits = []
+                    Map.current.wayto.each_value do |value|
+                      if value.class != Proc
+                        # Don't include cardinals / up/down/out (usually just climb/go)
+                        room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
+                      end
+                    end
+                    respond("Room Exits: #{room_exits}") unless room_exits.empty?
                     @@room_number_after_ready = false
                   end
                   if $frontend =~ /^(?:wizard|avalon)$/
