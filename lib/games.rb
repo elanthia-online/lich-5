@@ -235,7 +235,7 @@ module Games
                       end
                     end
                     respond("Room Exits: #{room_exits.join(', ')}") unless room_exits.empty?
-                    if $frontend == 'stormfront'
+                    unless ['genie', 'frostbite'].include?($frontend)
                       _respond("<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>")
                       _respond("<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>")
                     end
