@@ -299,7 +299,6 @@ class XMLParser
         @obj_exist = attributes['exist']
         @obj_noun = attributes['noun']
       end
-
       if name == 'inv'
         if attributes['id'] == 'stow'
           @obj_location = @stow_container_id
