@@ -226,7 +226,7 @@ module Games
                     room_number += "#{Map.current.id}" if Lich.display_lichid
                     room_number += " - " if Lich.display_lichid && Lich.display_uid
                     room_number += "#{XMLData.room_id}" if Lich.display_uid
-                    respond("#Room Number: #{room_number}")
+                    respond("Room Number: #{room_number}")
                     @@room_number_after_ready = false
                   end
                   if $frontend =~ /^(?:wizard|avalon)$/
