@@ -360,8 +360,10 @@ class XMLParser
         @current_style = attributes['id']
       end
 
-      if name == 'preset' && attributes['id'] && !XMLData.in_stream
-        @dr_room_number_ready = true
+      if name == 'preset'
+        if attributes['id'] == 'roomDesc' && !XMLData.in_stream
+          @dr_room_number_ready = true
+        end
       end
 
       if name == 'prompt'
