@@ -204,6 +204,38 @@ module Games
                   Lich.log("info: logged in as #{XMLData.game}:#{XMLData.name}")
                 end
 
+                begin
+                  pp $_SERVERSTRING_ if $deep_debug
+                  # Check for valid XML prior to sending to client, corrects 
+                  REXML::Document.new("<root>#{$_SERVERSTRING_}</root>")
+                rescue
+                  unless $!.to_s =~ /invalid byte sequence/
+                    # Fixes invalid XML with nested single quotes in it such as:
+                    # From DR intro tips
+                    # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
+                    # From GS
+                    # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
+                    while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
+                      Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
+                      $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
+                      Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
+                      retry
+                    end
+                    # Fixes invalid XML with nested double quotes in it such as:
+                    # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
+                    while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
+                      Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
+                      $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
+                      Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
+                      retry
+                    end
+                    $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                    Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
+                    Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                  end
+                  XMLData.reset
+                end
+
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
                   if (Lich.display_lichid == true || Lich.display_uid == true) && alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
@@ -272,30 +304,6 @@ module Games
                     REXML::Document.parse_stream("<root>#{$_SERVERSTRING_}</root>", XMLData)
                     # XMLData.parse($_SERVERSTRING_)
                   rescue
-                    unless $!.to_s =~ /invalid byte sequence/
-                      # Fixes invalid XML with nested single quotes in it such as:
-                      # From DR intro tips
-                      # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
-                      # From GS
-                      # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
-                      while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
-                        Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
-                        Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      # Fixes invalid XML with nested double quotes in it such as:
-                      # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
-                      while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
-                        Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
-                        Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                      Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
-                      Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    end
                     XMLData.reset
                   end
                   if Module.const_defined?(:GameLoader) && XMLData.game =~ /^GS/
