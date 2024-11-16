@@ -206,7 +206,7 @@ module Games
 
                 begin
                   pp $_SERVERSTRING_ if $deep_debug
-                  # Check for valid XML prior to sending to client, corrects 
+                  # Check for valid XML prior to sending to client, corrects double and single nested quotes
                   REXML::Document.new("<root>#{$_SERVERSTRING_}</root>")
                 rescue
                   unless $!.to_s =~ /invalid byte sequence/
