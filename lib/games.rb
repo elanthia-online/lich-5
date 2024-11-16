@@ -204,35 +204,66 @@ module Games
                   Lich.log("info: logged in as #{XMLData.game}:#{XMLData.name}")
                 end
 
-                begin
-                  pp $_SERVERSTRING_ if $deep_debug
-                  # Check for valid XML prior to sending to client, corrects double and single nested quotes
-                  REXML::Document.new("<root>#{$_SERVERSTRING_}</root>")
-                rescue
-                  unless $!.to_s =~ /invalid byte sequence/
-                    # Fixes invalid XML with nested single quotes in it such as:
-                    # From DR intro tips
-                    # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
-                    # From GS
-                    # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
-                    while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
-                      Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                      $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
-                      Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                      retry
-                    end
-                    # Fixes invalid XML with nested double quotes in it such as:
-                    # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
-                    while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
-                      Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                      $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
-                      Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                      retry
-                    end
-                    $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
-                    Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                unless $_SERVERSTRING_ =~ /^<settings /
+                  # Fixed invalid xml such as:
+                  # <mode id="GAME"/><settingsInfo  space not found crc='0' instance='DR'/>
+                  # <settingsInfo  space not found crc='0' instance='DR'/>
+                  if $_SERVERSTRING_ =~ /<settingsInfo .*?space not found /
+                    Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_.inspect}"
+                    $_SERVERSTRING_.sub!('space not found', '')
+                    Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                   end
+                  begin
+                    pp $_SERVERSTRING_ if $deep_debug
+                    REXML::Document.parse_stream("<root>#{$_SERVERSTRING_}</root>", XMLData)
+                    # XMLData.parse($_SERVERSTRING_)
+                  rescue
+                    unless $!.to_s =~ /invalid byte sequence/
+                      # Fixes invalid XML with nested single quotes in it such as:
+                      # From DR intro tips
+                      # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
+                      # From GS
+                      # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
+                      while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
+                        Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
+                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
+                        Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
+                        retry
+                      end
+                      # Fixes invalid XML with nested double quotes in it such as:
+                      # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
+                      while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
+                        Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
+                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
+                        Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
+                        retry
+                      end
+                      $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                      Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
+                      Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                    end
+                    XMLData.reset
+                  end
+                  if Module.const_defined?(:GameLoader) && XMLData.game =~ /^GS/
+                    infomon_serverstring = $_SERVERSTRING_.dup
+                    Infomon::XMLParser.parse(infomon_serverstring)
+                    stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
+                    stripped_infomon_serverstring.split("\r\n").each { |line|
+                      unless line.empty?
+                        Infomon::Parser.parse(line)
+                      end
+                    }
+                  end
+                  Script.new_downstream_xml($_SERVERSTRING_)
+                  stripped_server = strip_xml($_SERVERSTRING_, type: 'main')
+                  stripped_server.split("\r\n").each { |line|
+                    @@buffer.update(line) if TESTING
+                    if defined?(Map) and Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
+                      Map.last_seen_objects = $1 # DR only: copy loot line to Map.last_seen_objects
+                    end
+
+                    Script.new_downstream(line) if !line.empty?
+                  }
                 end
 
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
@@ -288,48 +319,6 @@ module Games
                   else
                     $_CLIENT_.write(alt_string)
                   end
-                end
-                unless $_SERVERSTRING_ =~ /^<settings /
-                  # Fixed invalid xml such as:
-                  # <mode id="GAME"/><settingsInfo  space not found crc='0' instance='DR'/>
-                  # <settingsInfo  space not found crc='0' instance='DR'/>
-                  if $_SERVERSTRING_ =~ /<settingsInfo .*?space not found /
-                    Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_.inspect}"
-                    $_SERVERSTRING_.sub!('space not found', '')
-                    Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                  end
-                  begin
-                    pp $_SERVERSTRING_ if $deep_debug
-                    REXML::Document.parse_stream("<root>#{$_SERVERSTRING_}</root>", XMLData)
-                    # XMLData.parse($_SERVERSTRING_)
-                  rescue
-                    unless $!.to_s =~ /invalid byte sequence/
-                      $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                      Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
-                      Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    end
-                    XMLData.reset
-                  end
-                  if Module.const_defined?(:GameLoader) && XMLData.game =~ /^GS/
-                    infomon_serverstring = $_SERVERSTRING_.dup
-                    Infomon::XMLParser.parse(infomon_serverstring)
-                    stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
-                    stripped_infomon_serverstring.split("\r\n").each { |line|
-                      unless line.empty?
-                        Infomon::Parser.parse(line)
-                      end
-                    }
-                  end
-                  Script.new_downstream_xml($_SERVERSTRING_)
-                  stripped_server = strip_xml($_SERVERSTRING_, type: 'main')
-                  stripped_server.split("\r\n").each { |line|
-                    @@buffer.update(line) if TESTING
-                    if defined?(Map) and Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
-                      Map.last_seen_objects = $1 # DR only: copy loot line to Map.last_seen_objects
-                    end
-
-                    Script.new_downstream(line) if !line.empty?
-                  }
                 end
               rescue
                 $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
