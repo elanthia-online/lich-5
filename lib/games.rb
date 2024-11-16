@@ -233,7 +233,6 @@ module Games
                     Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
                     Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                   end
-                  XMLData.reset
                 end
 
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
