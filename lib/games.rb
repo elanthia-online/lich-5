@@ -304,6 +304,11 @@ module Games
                     REXML::Document.parse_stream("<root>#{$_SERVERSTRING_}</root>", XMLData)
                     # XMLData.parse($_SERVERSTRING_)
                   rescue
+                    unless $!.to_s =~ /invalid byte sequence/
+                      $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                      Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
+                      Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                    end
                     XMLData.reset
                   end
                   if Module.const_defined?(:GameLoader) && XMLData.game =~ /^GS/
