@@ -229,7 +229,7 @@ module Games
                       room_number += " - " if Lich.display_lichid && Lich.display_uid
                       room_number += "#{XMLData.room_id}" if Lich.display_uid
                       unless room_number.empty?
-                        respond("Room Number: #{room_number}") 
+                        respond("Room Number: #{room_number}")
                         unless ['genie', 'frostbite'].include?($frontend)
                           _respond("<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>")
                           _respond("<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>")
