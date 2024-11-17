@@ -9,7 +9,7 @@ module Lich
   # settings
   @@display_lichid       = nil # boolean
   @@display_uid          = nil # boolean
-  @@display_exits          = nil # boolean
+  @@display_exits        = nil # boolean
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
