@@ -206,38 +206,45 @@ module Games
 
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if (Lich.display_lichid == true || Lich.display_uid == true) && alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
-                    if XMLData.game =~ /^GS/
-                      if (Lich.display_lichid == true && Lich.display_uid == true)
-                        alt_string.sub!(/] \(\d+\)/) { "]" }
-                        alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                      elsif Lich.display_lichid == true
-                        alt_string.sub!(']') { " - #{Map.current.id}]" }
-                      elsif Lich.display_uid == true
-                        alt_string.sub!(/] \(\d+\)/) { "]" }
-                        alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                  if alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
+                    if (Lich.display_lichid == true || Lich.display_uid == true)
+                      if XMLData.game =~ /^GS/
+                        if (Lich.display_lichid == true && Lich.display_uid == true)
+                          alt_string.sub!(/] \(\d+\)/) { "]" }
+                          alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                        elsif Lich.display_lichid == true
+                          alt_string.sub!(']') { " - #{Map.current.id}]" }
+                        elsif Lich.display_uid == true
+                          alt_string.sub!(/] \(\d+\)/) { "]" }
+                          alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                        end
                       end
-                    elsif XMLData.game =~ /^DR/
-                      @@room_number_after_ready = true
                     end
+                    @@room_number_after_ready = true
                   end
                   if @@room_number_after_ready && alt_string =~ /<prompt /
-                    room_number = ""
-                    room_number += "#{Map.current.id}" if Lich.display_lichid
-                    room_number += " - " if Lich.display_lichid && Lich.display_uid
-                    room_number += "#{XMLData.room_id}" if Lich.display_uid
-                    respond("Room Number: #{room_number}")
-                    room_exits = []
-                    Map.current.wayto.each_value do |value|
-                      if value.class != Proc
-                        # Don't include cardinals / up/down/out (usually just climb/go)
-                        room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
+                    if XMLData.game =~ /^DR/
+                      room_number = ""
+                      room_number += "#{Map.current.id}" if Lich.display_lichid
+                      room_number += " - " if Lich.display_lichid && Lich.display_uid
+                      room_number += "#{XMLData.room_id}" if Lich.display_uid
+                      unless room_number.empty?
+                        respond("Room Number: #{room_number}") 
+                        unless ['genie', 'frostbite'].include?($frontend)
+                          _respond("<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>")
+                          _respond("<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>")
+                        end
                       end
                     end
-                    respond("Room Exits: #{room_exits.join(', ')}") unless room_exits.empty?
-                    unless ['genie', 'frostbite'].include?($frontend)
-                      _respond("<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>")
-                      _respond("<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>")
+                    if Lich.display_exits == true
+                      room_exits = []
+                      Map.current.wayto.each_value do |value|
+                        if value.class != Proc
+                          # Don't include cardinals / up/down/out (usually just climb/go)
+                          room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
+                        end
+                      end
+                      respond("Room Exits: #{room_exits.join(', ')}") unless room_exits.empty?
                     end
                     @@room_number_after_ready = false
                   end
