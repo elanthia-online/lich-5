@@ -707,7 +707,7 @@ module Lich
         sleep 0.1
         retry
       end
-      val = (XMLData.game =~ /^DR/ ? true : false) if val.nil? and XMLData.game != ""; # default false if GS, otherwise default true
+      val = false if val.nil? and XMLData.game != ""; # default false
       @@display_exits = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
     end
     return @@display_exits
