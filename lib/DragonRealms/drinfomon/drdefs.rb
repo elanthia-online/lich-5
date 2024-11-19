@@ -1,6 +1,5 @@
 module Lich
   module DragonRealms
-
     def convert2copper(amt, denomination)
       if denomination =~ /platinum/
         (amt.to_i * 10_000)
@@ -60,23 +59,23 @@ module Lich
 
     def find_npcs(room_objs)
       room_objs.sub(/You also see/, '').sub(/ with a [\w\s]+ sitting astride its back/, '').strip
-              .scan(%r{<pushBold/>[^<>]*<popBold/> which appears dead|<pushBold/>[^<>]*<popBold/> \(dead\)|<pushBold/>[^<>]*<popBold/>})
-              .reject { |obj| obj =~ /which appears dead|\(dead\)/ }
-              .map { |obj| obj.sub(/.*alfar warrior.*/, 'alfar warrior') }
-              .map { |obj| obj.sub(/.*sinewy leopard.*/, 'sinewy leopard') }
-              .map { |obj| obj.sub(/.*lesser naga.*/, 'lesser naga') }
-              .map { |obj| obj.sub('<pushBold/>', '').sub(%r{<popBold/>.*}, '') }
-              .map { |obj| obj.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '') }
-              .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
+               .scan(%r{<pushBold/>[^<>]*<popBold/> which appears dead|<pushBold/>[^<>]*<popBold/> \(dead\)|<pushBold/>[^<>]*<popBold/>})
+               .reject { |obj| obj =~ /which appears dead|\(dead\)/ }
+               .map { |obj| obj.sub(/.*alfar warrior.*/, 'alfar warrior') }
+               .map { |obj| obj.sub(/.*sinewy leopard.*/, 'sinewy leopard') }
+               .map { |obj| obj.sub(/.*lesser naga.*/, 'lesser naga') }
+               .map { |obj| obj.sub('<pushBold/>', '').sub(%r{<popBold/>.*}, '') }
+               .map { |obj| obj.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '') }
+               .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
     end
 
     def find_dead_npcs(room_objs)
       room_objs.sub(/You also see/, '').sub(/ with a [\w\s]+ sitting astride its back/, '')
-              .strip.scan(%r{<pushBold/>[^<>]*<popBold/> which appears dead|<pushBold/>[^<>]*<popBold/> \(dead\)|<pushBold/>[^<>]*<popBold/>})
-              .select { |obj| obj =~ /which appears dead|\(dead\)/ }
-              .map { |obj| obj.sub('<pushBold/>', '').sub(%r{<popBold/>.*}, '') }
-              .map { |obj| obj.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '') }
-              .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
+               .strip.scan(%r{<pushBold/>[^<>]*<popBold/> which appears dead|<pushBold/>[^<>]*<popBold/> \(dead\)|<pushBold/>[^<>]*<popBold/>})
+               .select { |obj| obj =~ /which appears dead|\(dead\)/ }
+               .map { |obj| obj.sub('<pushBold/>', '').sub(%r{<popBold/>.*}, '') }
+               .map { |obj| obj.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '') }
+               .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
     end
 
     def find_objects(room_objs)
