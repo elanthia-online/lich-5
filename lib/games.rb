@@ -229,10 +229,10 @@ module Games
                       room_number += " - " if Lich.display_lichid && Lich.display_uid
                       room_number += "#{XMLData.room_id}" if Lich.display_uid
                       unless room_number.empty?
-                        respond("Room Number: #{room_number}")
+                        alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
                         unless ['genie', 'frostbite'].include?($frontend)
-                          _respond("<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>")
-                          _respond("<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>")
+                          alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
+                          alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
                         end
                       end
                     end
@@ -244,7 +244,7 @@ module Games
                           room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
                         end
                       end
-                      respond("Room Exits: #{room_exits.join(', ')}") unless room_exits.empty?
+                      alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
                     end
                     @@room_number_after_ready = false
                   end
