@@ -4,7 +4,7 @@ module Infomon
   # this module handles all of the logic for parsing game lines that infomon depends on
   module XMLParser
     module Pattern
-      Group_Short = /(?:group|following you|IconJOINED)|^You are leading/
+      Group_Short = /(?:group|following you|IconJOINED)|^You are leading|^You reach out and hold/
       Also_Here_Arrival = /^Also here: /
       NpcDeathPrefix = Regexp.union(
         /The fire in the/,
