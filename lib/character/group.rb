@@ -163,6 +163,8 @@ module Games
           LEAVE   = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> leaves your group.$}
           # You add <a exist="-10467645" noun="Oreh">Oreh</a> to your group.
           ADD     = %r{^You add <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> to your group.$}
+          # You reach out and hold <a exist="-11147853" noun="Nisugo">Nisugo's</a> hand.
+          Hold    = %r{^You reach out and hold <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)'s</a> hand.$}
           # You remove <a exist="-10467645" noun="Oreh">Oreh</a> from the group.
           REMOVE  = %r{^You remove <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> from the group.$}
           NOOP    = %r{^But <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> is already a member of your group!$}
@@ -199,6 +201,7 @@ module Games
             JOIN,
             LEAVE,
             ADD,
+            HOLD,
             REMOVE,
             DISBAND,
             NOOP,
@@ -214,7 +217,7 @@ module Games
             GAVE_LEADER_AWAY,
           )
 
-          EXIST = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a>}
+          EXIST = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)(?:'s)?</a>}
         end
 
         def self.exist(xml)
@@ -268,7 +271,7 @@ module Games
           when Term::LEADER_REMOVED_MEMBER
             (leader, removed) = people
             return Group.delete(removed) if Group.include?(leader)
-          when Term::JOIN, Term::ADD, Term::NOOP, Term::MEMBER
+          when Term::JOIN, Term::ADD, Term::NOOP, Term::MEMBER, Term::HOLD
             return Group.push(*people)
           when Term::LEAVE, Term::REMOVE
             return Group.delete(*people)
