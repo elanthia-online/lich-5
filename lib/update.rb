@@ -284,7 +284,7 @@ module Lich
         when "script"
           location = SCRIPT_DIR
           if requested_file.downcase == 'dependency.lic'
-            remote_repo = "https://raw.githubusercontent.com/rpherbig/dr-scripts/master/"
+            remote_repo = "https://raw.githubusercontent.com/elanthia-online/dr-scripts/main"
           else
             remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
           end
