@@ -107,9 +107,10 @@ module DRCTH
 
   def quick_bless_item(item_name)
     # use dummy settings object since this isn't complex enough for camb, etc.
-    DRCA.cast_spell({
-                      'abbrev' => 'bless', 'mana' => 1, 'prep_time' => 2, 'cast' => "cast my #{item_name}"
-                    }, {})
+    DRCA.cast_spell(
+      {'abbrev' => 'bless', 'mana' => 1, 'prep_time' => 2, 'cast' => "cast my #{item_name}"},
+      {}
+    )
   end
 
   def empty_cleric_hands(theurgy_supply_container)
