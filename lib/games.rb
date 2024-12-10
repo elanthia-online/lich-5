@@ -230,7 +230,7 @@ module Games
                       room_number += "#{XMLData.room_id}" if Lich.display_uid
                       unless room_number.empty?
                         alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
-                        unless ['genie', 'frostbite'].include?($frontend)
+                        if ['wrayth', 'stormfront'].include?($frontend)
                           alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
                           alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
                         end
