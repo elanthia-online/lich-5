@@ -13,7 +13,7 @@ class Bounty
   end
 
   def self.lnet(person)
-    if target_info = LNet.get_data(person.dup, 'bounty')
+    if (target_info = LNet.get_data(person.dup, 'bounty'))
       Task.new(Parser.parse(target_info))
     else
       if target_info == false
