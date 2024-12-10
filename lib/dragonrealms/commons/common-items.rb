@@ -4,7 +4,7 @@
 module DRCI
   module_function
 
-  ## How to add new trash receptacles https://github.com/rpherbig/dr-scripts/wiki/Adding-new-trash-receptacles
+  ## How to add new trash receptacles https://github.com/elanthia-online/dr-scripts/wiki/Adding-new-trash-receptacles
   TRASH_STORAGE = %w[arms barrel basin basket bin birdbath bucket chamberpot gloop hole log puddle statue stump tangle tree turtle urn gelapod]
 
   DROP_TRASH_SUCCESS_PATTERNS = [
