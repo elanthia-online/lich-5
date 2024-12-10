@@ -9,6 +9,7 @@ module Lich
   # settings
   @@display_lichid       = nil # boolean
   @@display_uid          = nil # boolean
+  @@display_exits        = nil # boolean
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
@@ -691,6 +692,31 @@ module Lich
     @@display_uid = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_uid',?);", [@@display_uid.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    return nil
+  end
+
+  def Lich.display_exits
+    if @@display_exits.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_exits';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      val = false if val.nil? and XMLData.game != ""; # default false
+      @@display_exits = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    end
+    return @@display_exits
+  end
+
+  def Lich.display_exits=(val)
+    @@display_exits = (val.to_s =~ /on|true|yes/ ? true : false)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_exits',?);", [@@display_exits.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
