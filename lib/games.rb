@@ -298,19 +298,15 @@ module Games
                     end
                     XMLData.reset
                   end
-                  if Module.const_defined?(:GameLoader)
+                  if Module.const_defined?(:GameLoader) && XMLData.game =~ /^GS/
                     infomon_serverstring = $_SERVERSTRING_.dup
-                    if XMLData.game =~ /^GS/
-                      Infomon::XMLParser.parse(infomon_serverstring)
-                      stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
-                      stripped_infomon_serverstring.split("\r\n").each { |line|
-                        unless line.empty?
-                          Infomon::Parser.parse(line)
-                        end
-                      }
-                    elsif XMLData.game =~ /^DR/
-                      DRParser.parse(infomon_serverstring)
-                    end
+                    Infomon::XMLParser.parse(infomon_serverstring)
+                    stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
+                    stripped_infomon_serverstring.split("\r\n").each { |line|
+                      unless line.empty?
+                        Infomon::Parser.parse(line)
+                      end
+                    }
                   end
                   Script.new_downstream_xml($_SERVERSTRING_)
                   stripped_server = strip_xml($_SERVERSTRING_, type: 'main')
