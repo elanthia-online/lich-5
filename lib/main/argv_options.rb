@@ -171,6 +171,7 @@ for arg in ARGV
     end
     if defined?(Gtk)
       @theme_state = Lich.track_dark_mode = @argv_options[:dark_mode]
+      Gtk::Settings.default.gtk_application_prefer_dark_theme = true if @theme_state == true
     end
   else
     bad_args.push(arg)
