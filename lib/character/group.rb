@@ -163,6 +163,11 @@ module Games
           LEAVE   = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> leaves your group.$}
           # You add <a exist="-10467645" noun="Oreh">Oreh</a> to your group.
           ADD     = %r{^You add <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> to your group.$}
+          # Hold <person> befriend clear, cold, neutral, and warm messaging
+          HOLD_CLEAR = %r{^You reach out and hold <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)'s</a> hand.$}
+          HOLD_COLD = %r{^You grab <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)'s</a> hand.$}
+          HOLD_NEUTRAL = %r{^You gently take hold of <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)'s</a> hand.$}
+          HOLD_WARM = %r{You clasp <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)'s</a> hand tenderly.$}
           # You remove <a exist="-10467645" noun="Oreh">Oreh</a> from the group.
           REMOVE  = %r{^You remove <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> from the group.$}
           NOOP    = %r{^But <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> is already a member of your group!$}
@@ -199,6 +204,10 @@ module Games
             JOIN,
             LEAVE,
             ADD,
+            HOLD_CLEAR,
+            HOLD_COLD,
+            HOLD_NEUTRAL,
+            HOLD_WARM,
             REMOVE,
             DISBAND,
             NOOP,
@@ -214,7 +223,7 @@ module Games
             GAVE_LEADER_AWAY,
           )
 
-          EXIST = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a>}
+          EXIST = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)(?:'s)?</a>}
         end
 
         def self.exist(xml)
@@ -269,6 +278,8 @@ module Games
             (leader, removed) = people
             return Group.delete(removed) if Group.include?(leader)
           when Term::JOIN, Term::ADD, Term::NOOP, Term::MEMBER
+            return Group.push(*people)
+          when Term::HOLD_CLEAR, Term::HOLD_COLD, Term::HOLD_NEUTRAL, Term::HOLD_WARM
             return Group.push(*people)
           when Term::LEAVE, Term::REMOVE
             return Group.delete(*people)
