@@ -1,6 +1,5 @@
 module Lich
   module DragonRealms
-
 class DRRoom
   @@npcs ||= []
   @@pcs ||= []

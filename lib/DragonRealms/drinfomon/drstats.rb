@@ -1,6 +1,5 @@
 module Lich
   module DragonRealms
-
 module DRStats
   @@race = nil
   @@guild = nil
