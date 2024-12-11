@@ -35,13 +35,13 @@ Dir.mktmpdir do |dir|
   puts " Done!"
 end
 
-require "infomon/infomon"
-require "attributes/stats"
-require "attributes/resources"
-require "infomon/currency"
-require "infomon/status"
-require "experience"
-require "psms"
+require "gemstone/infomon/infomon"
+require "gemstone/attributes/stats"
+require "gemstone/attributes/resources"
+require "gemstone/infomon/currency"
+require "gemstone/infomon/status"
+require "gemstone/experience"
+require "gemstone/psms"
 
 module Infomon
   # cheat definition of `respond` to prevent having to load global_defs with dependenciesw

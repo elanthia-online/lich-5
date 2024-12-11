@@ -3,7 +3,7 @@
 # To test capture we will use the following format in the response
 # "Spell.name"=>"String") which allows the hash to be instantiated
 
-require 'infomon/activespell'
+require 'gemstone/infomon/activespell'
 
 describe ActiveSpell do
   context "updates spell information" do
