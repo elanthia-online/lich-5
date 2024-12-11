@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        ruby: ['3.3.4']
+        ruby: ['3.3.6']
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -40,7 +40,7 @@ jobs:
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/repository.lic > lich5/scripts/repository.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/vars.lic > lich5/scripts/vars.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/version.lic > lich5/scripts/version.lic
-          curl https://raw.githubusercontent.com/rpherbig/dr-scripts/master/dependency.lic > lich5/scripts/dependency.lic
+          curl https://raw.githubusercontent.com/elanthia-online/dr-scripts/master/dependency.lic > lich5/scripts/dependency.lic
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml > lich5/data/effect-list.xml
           cp lich.rbw Lich5/
           cp -r lib Lich5/
