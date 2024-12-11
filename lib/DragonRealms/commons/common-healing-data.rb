@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 # Maps bleed rates from `health` command to severity number.
 # A partially tended wound is considered more severe than
 # its non-tended counterpart because once the bandages come off
@@ -905,3 +908,5 @@ $DRCH_WOUND_SEVERITY_REGEX_MAP = {
 
 # https://elanthipedia.play.net/Damage#Wounds
 $DRCH_WOUND_COMMA_SEPARATOR = /(?<=swollen|bruised|scarred|painful),(?=\s(?:swollen|bruised|mangled|inflamed))/
+end
+end

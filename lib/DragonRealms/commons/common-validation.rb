@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 class CharacterValidator
   def initialize(announce, sleep, greet, name)
     waitrt?
@@ -61,4 +64,6 @@ class CharacterValidator
   def in_game?(character)
     DRC.bput("find #{character}", 'There are no adventurers in the realms that match the names specified', "^  #{character}.$") == "  #{character}."
   end
+end
+end
 end

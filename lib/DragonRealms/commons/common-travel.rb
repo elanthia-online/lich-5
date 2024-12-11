@@ -1,3 +1,5 @@
+module Lich
+  module DragonRealms
 module DRCT
   module_function
 
@@ -382,4 +384,6 @@ module DRCT
     echo("*** target_id = #{target_id}") if $common_travel_debug
     target_id
   end
+end
+end
 end

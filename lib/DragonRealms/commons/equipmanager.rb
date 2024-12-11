@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 class EquipmentManager
   def initialize(settings = nil)
     items(settings)
@@ -546,4 +549,6 @@ class EquipmentManager
       stow_helper("stow my #{weapon_name}", weapon_name, 'You put', 'You should unload', 'You easily strap', 'You secure your')
     end
   end
+end
+end
 end

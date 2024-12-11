@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 module DRStats
   @@race = nil
   @@guild = nil
@@ -259,4 +262,6 @@ module DRStats
   def self.warrior_mage?
     @@guild == 'Warrior Mage'
   end
+end
+end
 end

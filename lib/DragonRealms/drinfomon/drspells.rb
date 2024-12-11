@@ -1,3 +1,5 @@
+module Lich
+  module DragonRealms
 module DRSpells
   @@known_spells = {}
   @@known_feats = {}
@@ -58,4 +60,6 @@ module DRSpells
   def self.spellbook_format=(val)
     @@spellbook_format = val
   end
+end
+end
 end

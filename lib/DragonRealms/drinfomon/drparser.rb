@@ -1,5 +1,6 @@
 # frozen_string_literal: true
-
+module Lich
+  module DragonRealms
 module DRParser
   module Pattern
     ExpColumns = /(?:\s*(?<skill>[a-zA-Z\s]+)\b:\s*(?<rank>\d+)\s+(?<percent>\d+)%\s+(?<rate>[a-zA-Z\s]+)\b)/.freeze
@@ -324,4 +325,6 @@ module DRParser
       Lich.log "error: line: #{line}\n\t"
     end
   end
+end
+end
 end

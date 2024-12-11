@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 class Flags
   @@flags = {}
   @@matchers = {}
@@ -31,4 +34,6 @@ class Flags
   def self.matchers
     @@matchers
   end
+end
+end
 end

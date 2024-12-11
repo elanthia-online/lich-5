@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 module DRCS
   module_function
 
@@ -121,4 +124,6 @@ module DRCS
     waitrt?
     DRC.fix_standing
   end
+end
+end
 end

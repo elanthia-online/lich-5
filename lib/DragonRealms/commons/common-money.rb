@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 module DRCM
   module_function
 
@@ -252,4 +255,6 @@ module DRCM
   def town_currency(town)
     get_data('town')[town]['currency']
   end
+end
+end
 end

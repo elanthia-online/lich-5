@@ -1,3 +1,5 @@
+module Lich
+module DragonRealms
 module DRCA
   module_function
 
@@ -946,4 +948,6 @@ module DRCA
   def release_magical_research
     2.times { DRC.bput("release symbiosis", "Are you sure", "You intentionally wipe", "But you haven't") }
   end
+end
+end
 end

@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 class SlackBot
   def initialize
     @api_url = 'https://slack.com/api/'
@@ -70,4 +73,6 @@ class SlackBot
     user = @users_list['members'].find { |u| u['name'] == username }
     user['id']
   end
+end
+end
 end

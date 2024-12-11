@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 module DRC
   $pause_all_lock ||= Mutex.new
   $safe_pause_lock ||= Mutex.new
@@ -883,4 +886,6 @@ module DRC
     end
     _respond(make_bold ? bold(string) : string)
   end
+end
+end
 end

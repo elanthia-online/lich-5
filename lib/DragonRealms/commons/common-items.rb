@@ -1,6 +1,8 @@
 # This module should be 'bottom-level' and only depend on common.
 # Any modules that deal with items and <something> should be somewhere else
 
+module Lich
+  module DragonRealms
 module DRCI
   module_function
 
@@ -1198,4 +1200,6 @@ module DRCI
       Flags.reset("pouch-full")
     end
   end
+end
+end
 end

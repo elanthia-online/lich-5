@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 def convert2copper(amt, denomination)
   if denomination =~ /platinum/
     (amt.to_i * 10_000)
@@ -81,4 +84,6 @@ def find_objects(room_objs)
   clean_and_split(room_objs)
     .reject { |obj| obj =~ /pushBold/ }
     .map { |obj| obj.sub(/\.$/, '').strip.sub(/^a /, '').strip.sub(/^some /, '') }
+end
+end
 end

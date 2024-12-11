@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 class DRRoom
   @@npcs ||= []
   @@pcs ||= []
@@ -89,4 +92,6 @@ class DRRoom
   def self.room_objs=(val)
     @@room_objs = val
   end
+end
+end
 end
