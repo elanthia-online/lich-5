@@ -44,7 +44,7 @@ module Lich
       end
 
       def Char.max_health
-        #Object.module_eval { XMLData.max_health }
+        # Object.module_eval { XMLData.max_health }
         XMLData.max_health
       end
 

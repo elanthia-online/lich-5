@@ -92,7 +92,7 @@ require File.join(LIB_DIR, 'Util', 'update.rb')
 require File.join(LIB_DIR, 'Common', 'gtk.rb')
 # require File.join(LIB_DIR, 'Common', 'gui-login.rb')
 require File.join(LIB_DIR, 'Common', 'db_store.rb')
-#2024-06-13 carve out
+# 2024-06-13 carve out
 require File.join(LIB_DIR, 'Common', 'class_exts', 'nilclass.rb')
 require File.join(LIB_DIR, 'Common', 'class_exts', 'numeric.rb')
 require File.join(LIB_DIR, 'Common', 'class_exts', 'string.rb')

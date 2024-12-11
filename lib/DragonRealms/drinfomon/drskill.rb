@@ -1,6 +1,5 @@
 module Lich
   module DragonRealms
-
 class DRSkill
   @@skills_data ||= DR_SKILLS_DATA
   @@gained_skills ||= []
