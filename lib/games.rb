@@ -212,7 +212,8 @@ module Lich
 
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if (Lich.display_lichid == true || Lich.display_uid == true) && alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
+                  if alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
+                    if (Lich.display_lichid == true || Lich.display_uid == true)
                     if XMLData.game =~ /^GS/
                       if (Lich.display_lichid == true && Lich.display_uid == true)
                         alt_string.sub!(/] \(\d+\)/) { "]" }
@@ -223,16 +224,25 @@ module Lich
                         alt_string.sub!(/] \(\d+\)/) { "]" }
                         alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
                       end
-                    elsif XMLData.game =~ /^DR/
-                      @@room_number_after_ready = true
+                      end
                     end
+                    @@room_number_after_ready = true
                   end
                   if @@room_number_after_ready && alt_string =~ /<prompt /
+                    if XMLData.game =~ /^DR/
                     room_number = ""
                     room_number += "#{Map.current.id}" if Lich.display_lichid
                     room_number += " - " if Lich.display_lichid && Lich.display_uid
                     room_number += "#{XMLData.room_id}" if Lich.display_uid
-                    respond("Room Number: #{room_number}")
+                      unless room_number.empty?
+                        alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
+                        if ['wrayth', 'stormfront'].include?($frontend)
+                          alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
+                          alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
+                        end
+                      end
+                    end
+                    if Lich.display_exits == true
                     room_exits = []
                     Map.current.wayto.each_value do |value|
                       if value.class != Proc
@@ -240,10 +250,7 @@ module Lich
                         room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
                       end
                     end
-                    respond("Room Exits: #{room_exits.join(', ')}") unless room_exits.empty?
-                    unless ['genie', 'frostbite'].include?($frontend)
-                      _respond("<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>")
-                      _respond("<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>")
+                      alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
                     end
                     @@room_number_after_ready = false
                   end
@@ -607,6 +614,7 @@ module Lich
       @@autostarted = false
       @@cli_scripts = false
       @@infomon_loaded = false
+      @@room_number_after_ready = false
 
       def self.clean_gs_serverstring(server_string)
         # The Rift, Scatter is broken...
@@ -793,7 +801,8 @@ module Lich
 
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if (Lich.display_lichid == true || Lich.display_uid == true) && alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
+                  if alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
+                    if (Lich.display_lichid == true || Lich.display_uid == true)
                     if XMLData.game =~ /^GS/
                       if (Lich.display_lichid == true && Lich.display_uid == true)
                         alt_string.sub!(/] \(\d+\)/) { "]" }
@@ -804,16 +813,25 @@ module Lich
                         alt_string.sub!(/] \(\d+\)/) { "]" }
                         alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
                       end
-                    elsif XMLData.game =~ /^DR/
-                      @@room_number_after_ready = true
+                      end
                     end
+                    @@room_number_after_ready = true
                   end
                   if @@room_number_after_ready && alt_string =~ /<prompt /
+                    if XMLData.game =~ /^DR/
                     room_number = ""
                     room_number += "#{Map.current.id}" if Lich.display_lichid
                     room_number += " - " if Lich.display_lichid && Lich.display_uid
                     room_number += "#{XMLData.room_id}" if Lich.display_uid
-                    respond("Room Number: #{room_number}")
+                      unless room_number.empty?
+                        alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
+                        if ['wrayth', 'stormfront'].include?($frontend)
+                          alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
+                          alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
+                        end
+                      end
+                    end
+                    if Lich.display_exits == true
                     room_exits = []
                     Map.current.wayto.each_value do |value|
                       if value.class != Proc
@@ -821,10 +839,7 @@ module Lich
                         room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
                       end
                     end
-                    respond("Room Exits: #{room_exits.join(', ')}") unless room_exits.empty?
-                    unless ['genie', 'frostbite'].include?($frontend)
-                      _respond("<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>")
-                      _respond("<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>")
+                      alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
                     end
                     @@room_number_after_ready = false
                   end
@@ -885,15 +900,19 @@ module Lich
                     end
                     XMLData.reset
                   end
-                  if Module.const_defined?(:GameLoader) && XMLData.game =~ /^GS/
+                  if Module.const_defined?(:GameLoader)
                     infomon_serverstring = $_SERVERSTRING_.dup
-                    Infomon::XMLParser.parse(infomon_serverstring)
-                    stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
-                    stripped_infomon_serverstring.split("\r\n").each { |line|
-                      unless line.empty?
-                        Infomon::Parser.parse(line)
-                      end
-                    }
+                    if XMLData.game =~ /^GS/
+                      Infomon::XMLParser.parse(infomon_serverstring)
+                      stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
+                      stripped_infomon_serverstring.split("\r\n").each { |line|
+                        unless line.empty?
+                          Infomon::Parser.parse(line)
+                        end
+                      }
+                    elsif XMLData.game =~ /^DR/
+                      DRParser.parse(infomon_serverstring)
+                    end
                   end
                   Script.new_downstream_xml($_SERVERSTRING_)
                   stripped_server = strip_xml($_SERVERSTRING_, type: 'main')
