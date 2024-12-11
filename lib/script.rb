@@ -959,6 +959,8 @@ end
 class WizardScript < Script
   # FIXME: when modernized, ensure proper use of variables and init of parent class
   # rubocop:disable Lint/MissingSuper
+  # rubocop:disable Lint/UselessAssignment
+  # rubocop:disable Lint/InterpolationCheck
   def initialize(file_name, cli_vars = [])
     @name = /.*[\/\\]+([^\.]+)\./.match(file_name).captures.first
     @file_name = file_name
@@ -1030,8 +1032,8 @@ class WizardScript < Script
       while not setvars.empty? and str =~ /%(#{setvars.join('|')})%/io
         str.gsub!('%' + $1 + '%', '#{' + $1.downcase + '}')
       end
-      str.gsub!(/%c(?:%)?/i, "#{c}")
-      str.gsub!(/%s(?:%)?/i, "#{sav}")
+      str.gsub!(/%c(?:%)?/i, '#{c}')
+      str.gsub!(/%s(?:%)?/i, '#{sav}')
       while str =~ /%([0-9])(?:%)?/
         str.gsub!(/%#{$1}(?:%)?/, '#{script.vars[' + $1 + ']}')
       end
@@ -1040,72 +1042,72 @@ class WizardScript < Script
 
     fixline = proc { |line|
       if line =~ /^[\s\t]*[A-Za-z0-9_\-']+:/i
-        line.downcase.strip
+        line = line.downcase.strip
       elsif line =~ /^([\s\t]*)counter\s+(add|sub|subtract|divide|multiply|set)\s+([0-9]+)/i
-        "#{$1}c #{counter_action[$2]}= #{$3}"
+        line = "#{$1}c #{counter_action[$2]}= #{$3}"
       elsif line =~ /^([\s\t]*)counter\s+(add|sub|subtract|divide|multiply|set)\s+(.*)/i
         indent, action, arg = $1, $2, $3
-        "#{indent}c #{counter_action[action]}= #{fixstring.call(arg.inspect)}.to_i"
+        line = "#{indent}c #{counter_action[action]}= #{fixstring.call(arg.inspect)}.to_i"
       elsif line =~ /^([\s\t]*)save[\s\t]+"?(.*?)"?[\s\t]*$/i
         indent, arg = $1, $2
-        "#{indent}sav = #{fixstring.call(arg.inspect)}"
+        line = "#{indent}sav = #{fixstring.call(arg.inspect)}"
       elsif line =~ /^([\s\t]*)echo[\s\t]+(.+)/i
         indent, arg = $1, $2
-        "#{indent}echo #{fixstring.call(arg.inspect)}"
+        line = "#{indent}echo #{fixstring.call(arg.inspect)}"
       elsif line =~ /^([\s\t]*)waitfor[\s\t]+(.+)/i
         indent, arg = $1, $2
-        "#{indent}waitfor #{fixstring.call(Regexp.escape(arg).inspect.gsub("\\\\ ", ' '))}"
+        line = "#{indent}waitfor #{fixstring.call(Regexp.escape(arg).inspect.gsub("\\\\ ", ' '))}"
       elsif line =~ /^([\s\t]*)put[\s\t]+\.(.+)$/i
         indent, arg = $1, $2
         if arg.include?(' ')
-          "#{indent}start_script(#{Regexp.escape(fixstring.call(arg.split[0].inspect))}, #{fixstring.call(arg.split[1..-1].join(' ').scan(/"[^"]+"|[^"\s]+/).inspect)})\n#{indent}exit"
+          line = "#{indent}start_script(#{Regexp.escape(fixstring.call(arg.split[0].inspect))}, #{fixstring.call(arg.split[1..-1].join(' ').scan(/"[^"]+"|[^"\s]+/).inspect)})\n#{indent}exit"
         else
-          "#{indent}start_script(#{Regexp.escape(fixstring.call(arg.inspect))})\n#{indent}exit"
+          line = "#{indent}start_script(#{Regexp.escape(fixstring.call(arg.inspect))})\n#{indent}exit"
         end
       elsif line =~ /^([\s\t]*)put[\s\t]+;(.+)$/i
         indent, arg = $1, $2
         if arg.include?(' ')
-          "#{indent}start_script(#{Regexp.escape(fixstring.call(arg.split[0].inspect))}, #{fixstring.call(arg.split[1..-1].join(' ').scan(/"[^"]+"|[^"\s]+/).inspect)})"
+          line = "#{indent}start_script(#{Regexp.escape(fixstring.call(arg.split[0].inspect))}, #{fixstring.call(arg.split[1..-1].join(' ').scan(/"[^"]+"|[^"\s]+/).inspect)})"
         else
-          "#{indent}start_script(#{Regexp.escape(fixstring.call(arg.inspect))})"
+          line = "#{indent}start_script(#{Regexp.escape(fixstring.call(arg.inspect))})"
         end
       elsif line =~ /^([\s\t]*)(put|move)[\s\t]+(.+)/i
         indent, cmd, arg = $1, $2, $3
-        "#{indent}waitrt?\n#{indent}clear\n#{indent}#{cmd.downcase} #{fixstring.call(arg.inspect)}"
+        line = "#{indent}waitrt?\n#{indent}clear\n#{indent}#{cmd.downcase} #{fixstring.call(arg.inspect)}"
       elsif line =~ /^([\s\t]*)goto[\s\t]+(.+)/i
         indent, arg = $1, $2
-        "#{indent}goto #{fixstring.call(arg.inspect).downcase}"
+        line = "#{indent}goto #{fixstring.call(arg.inspect).downcase}"
       elsif line =~ /^([\s\t]*)waitforre[\s\t]+(.+)/i
         indent, arg = $1, $2
-        "#{indent}waitforre #{arg}"
+        line = "#{indent}waitforre #{arg}"
       elsif line =~ /^([\s\t]*)pause[\s\t]*(.*)/i
         indent, arg = $1, $2
         arg = '1' if arg.empty?
         arg = '0' + arg.strip if arg.strip =~ /^\.[0-9]+$/
-        "#{indent}pause #{arg}"
+        line = "#{indent}pause #{arg}"
       elsif line =~ /^([\s\t]*)match[\s\t]+([^\s\t]+)[\s\t]+(.+)/i
         indent, label, arg = $1, $2, $3
-        "#{indent}match #{fixstring.call(label.inspect).downcase}, #{fixstring.call(Regexp.escape(arg).inspect.gsub("\\\\ ", ' '))}"
+        line = "#{indent}match #{fixstring.call(label.inspect).downcase}, #{fixstring.call(Regexp.escape(arg).inspect.gsub("\\\\ ", ' '))}"
       elsif line =~ /^([\s\t]*)matchre[\s\t]+([^\s\t]+)[\s\t]+(.+)/i
         indent, label, regex = $1, $2, $3
-        "#{indent}matchre #{fixstring.call(label.inspect).downcase}, #{regex}"
+        line = "#{indent}matchre #{fixstring.call(label.inspect).downcase}, #{regex}"
       elsif line =~ /^([\s\t]*)setvariable[\s\t]+([^\s\t]+)[\s\t]+(.+)/i
         indent, var, arg = $1, $2, $3
-        "#{indent}#{var.downcase} = #{fixstring.call(arg.inspect)}"
+        line = "#{indent}#{var.downcase} = #{fixstring.call(arg.inspect)}"
       elsif line =~ /^([\s\t]*)deletevariable[\s\t]+(.+)/i
-        "#{$1}#{$2.downcase} = nil"
+        line = "#{$1}#{$2.downcase} = nil"
       elsif line =~ /^([\s\t]*)(wait|nextroom|exit|echo)\b/i
-        "#{$1}#{$2.downcase}"
+        line = "#{$1}#{$2.downcase}"
       elsif line =~ /^([\s\t]*)matchwait\b/i
-        "#{$1}matchwait"
+        line = "#{$1}matchwait"
       elsif line =~ /^([\s\t]*)if_([0-9])[\s\t]+(.*)/i
-        indent, num, _ = $1, $2, $3
-        "#{indent}if script.vars[#{num}]\n#{indent}\t#{fixline.call($3)}\n#{indent}end"
+        indent, num, stuff = $1, $2, $3
+        line = "#{indent}if script.vars[#{num}]\n#{indent}\t#{fixline.call($3)}\n#{indent}end"
       elsif line =~ /^([\s\t]*)shift\b/i
-        "#{$1}script.vars.shift"
+        line = "#{$1}script.vars.shift"
       else
         respond "--- Lich: unknown line: #{line}"
-        '#' + line
+        line = '#' + line
       end
     }
 
@@ -1164,5 +1166,7 @@ class WizardScript < Script
     @@running.push(self)
     # return self
   end
+  # rubocop:enable Lint/InterpolationCheck
+  # rubocop:enable Lint/UselessAssignment
   # rubocop:enable Lint/MissingSuper
 end

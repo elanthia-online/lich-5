@@ -33,7 +33,6 @@ if defined?(Gtk)
     #   end
     # end
 
-
     # class Gtk::Tooltips < Gtk::Tooltip
     #   def enable
     #     respond "'Gtk::Tooltips#enable' is deprecated; use 'Gtk::Tooltip' API instead"
