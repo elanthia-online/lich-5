@@ -2540,7 +2540,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /Mild electrical jolt sends .*? into spasms./ },
+                                  :regex           => /Mild electric(?:al)? jolt sends .*? into spasms./ },
                            2 =>
                                 { :type            => "Lightning",
                                   :location        => "Nerves",
@@ -2616,7 +2616,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /Electrical blast goes right to the heart./ },
+                                  :regex           => /Electric blast goes right to the heart.  Fibrillation can be fun./ },
                            6 =>
                                 { :type            => "Lightning",
                                   :location        => "Nerves",

@@ -1219,7 +1219,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /.*?'s shield arm twists oddly but snaps right back./ },
+                                  :regex           => /.*?'s (?:shield )?arm twists oddly but snaps right back./ },
                            2 =>
                                 { :type            => "Unbalance",
                                   :location        => "Left arm",
