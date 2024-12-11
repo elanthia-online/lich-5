@@ -1,7 +1,3 @@
-module Lich
-  module DragonRealms
-    module DRInfomon
-
 class DRSkill
   @@skills_data ||= DR_SKILLS_DATA
   @@gained_skills ||= []
@@ -9,8 +5,8 @@ class DRSkill
   @@list ||= []
   @@exp_modifiers ||= {}
 
-  attr_reader :name, :rank, :exp, :percent, :current, :baseline, :skillset
-  attr_writer :rank, :exp, :percent, :current, :baseline
+  attr_reader :name, :skillset
+  attr_accessor :rank, :exp, :percent, :current, :baseline
 
   def initialize(name, rank, exp, percent)
     @name = name # skill name like 'Evasion'
@@ -152,8 +148,4 @@ class DRSkill
   def lookup_skillset(skill)
     @@skills_data[:skillsets].find { |_skillset, skills| skills.include?(skill) }.first
   end
-end
-
-end
-end
 end

@@ -40,6 +40,7 @@ module Lich
         require File.join(LIB_DIR, 'map', 'map_dr.rb')
         require File.join(LIB_DIR, 'attributes', 'char.rb')
         require File.join(LIB_DIR, 'DragonRealms', 'drinfomon', 'drinfomon.rb')
+        require FIle.join(LIB_DIR, 'DragonRealms', 'commons', 'loader.rb')
         # self.common_after
       end
 

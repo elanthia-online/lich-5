@@ -1,17 +1,11 @@
-module Lich
-  module DragonRealms
-#    module DRInfomon
-
 module DRSpells
   @@known_spells = {}
   @@known_feats = {}
   @@spellbook_format = nil # 'column-formatted' or 'non-column'
 
   @@grabbing_known_spells = false
-
-  # Use this to silence the initial output
-  # of calling 'spells' command to populate our data.
-  @@silence_known_spells_hook = false
+  @@grabbing_known_barbarian_abilities = false
+  @@grabbing_known_khri = false
 
   def self.active_spells
     XMLData.dr_active_spells
@@ -41,6 +35,22 @@ module DRSpells
     @@grabbing_known_spells = val
   end
 
+  def self.check_known_barbarian_abilities
+    @@grabbing_known_barbarian_abilities
+  end
+
+  def self.check_known_barbarian_abilities=(val)
+    @@grabbing_known_barbarian_abilities = val
+  end
+
+  def self.grabbing_known_khri
+    @@grabbing_known_khri
+  end
+
+  def self.grabbing_known_khri=(val)
+    @@grabbing_known_khri = val
+  end
+
   def self.spellbook_format
     @@spellbook_format
   end
@@ -48,8 +58,4 @@ module DRSpells
   def self.spellbook_format=(val)
     @@spellbook_format = val
   end
-end
-
-# end
-end
 end
