@@ -47,10 +47,14 @@ require "Gemstone/experience"
 require "Gemstone/psms"
 require "Gemstone/psms/ascension"
 
-module Infomon
-  # cheat definition of `respond` to prevent having to load global_defs with dependenciesw
-  def self.respond(msg)
-    pp msg
+module Lich
+  module Gemstone
+    module Infomon
+      # cheat definition of `respond` to prevent having to load global_defs with dependenciesw
+      def self.respond(msg)
+        pp msg
+      end
+    end
   end
 end
 
@@ -664,7 +668,7 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get('society.rank')).to eq(0)
     end
   end
-=begin
+
   ## FIXME:  Goes to respond but errors out.  Needs research.  Test manually.
   context "Infomon.show displays 0 values, or not" do
     it "handles Infomon.show(full = true) and (full = false)" do
@@ -682,7 +686,7 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(test2_results.any? { |s| s.include?('skill.swimming : 0') }).to be(false)
     end
   end
-=end
+
 
   context "db feature method - Infomon.delete!(key)" do
     it "allows for selective deletion of a row in the infomon.db" do
