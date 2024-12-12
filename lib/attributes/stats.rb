@@ -31,13 +31,13 @@ module Lich
       @@stats.each do |stat|
         self.define_singleton_method(stat) do
           enhanced = OpenStruct.new(
-            value: Infomon.get("stat.%s.enhanced" % stat),
-            bonus: Infomon.get("stat.%s.enhanced_bonus" % stat)
+            value: Lich::Gemstone::Infomon.get("stat.%s.enhanced" % stat),
+            bonus: Lich::Gemstone::Infomon.get("stat.%s.enhanced_bonus" % stat)
           )
 
           return OpenStruct.new(
-            value: Infomon.get("stat.%s" % stat),
-            bonus: Infomon.get("stat.%s_bonus" % stat),
+            value: Lich::Gemstone::Infomon.get("stat.%s" % stat),
+            bonus: Lich::Gemstone::Infomon.get("stat.%s_bonus" % stat),
             enhanced: enhanced
           )
         end
@@ -47,12 +47,12 @@ module Lich
         # find the long-hand method we want to use as a source for this data
         long_hand = @@stats.find { |method| method.to_s.start_with?(shorthand.to_s) }
         self.define_singleton_method(shorthand) do
-          stat = Stats.send(long_hand)
+          stat = Lich::Gemstone::Stats.send(long_hand)
           [stat.value, stat.bonus]
         end
         # next we need to polyfill `enhanced_<shorthand>` for backwards compat
         self.define_singleton_method("enhanced_%s" % shorthand) do
-          stat = Stats.send(long_hand)
+          stat = Lich::Gemstone::Stats.send(long_hand)
           [stat.enhanced.value, stat.enhanced.bonus]
         end
       end

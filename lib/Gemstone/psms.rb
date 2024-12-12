@@ -24,7 +24,7 @@ module Lich
       end
 
       def self.find_name(name, type)
-        Object.const_get("#{type}").method("#{type.downcase}_lookups").call
+        Object.const_get("Lich::Gemstone::#{type}").method("#{type.downcase}_lookups").call
               .find { |h| h[:long_name].eql?(name) || h[:short_name].eql?(name) }
       end
 

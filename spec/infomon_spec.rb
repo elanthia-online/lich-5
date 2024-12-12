@@ -35,6 +35,9 @@ Dir.mktmpdir do |dir|
   puts " Done!"
 end
 
+require "Common/sharedbuffer"
+require "Common/buffer"
+require "games"
 require "Gemstone/infomon/infomon"
 require "attributes/stats"
 require "attributes/resources"
@@ -42,6 +45,7 @@ require "Gemstone/infomon/currency"
 require "Gemstone/infomon/status"
 require "Gemstone/experience"
 require "Gemstone/psms"
+require "Gemstone/psms/ascension"
 
 module Infomon
   # cheat definition of `respond` to prevent having to load global_defs with dependenciesw
@@ -214,13 +218,13 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get("stat.logic.enhanced")).to eq(118)
       expect(Lich::Gemstone::Infomon.get("stat.logic.enhanced_bonus")).to eq(34)
 
-      # expect(Lich::Common::Stats.aura.value).to eq(100)
-      # expect(Lich::Common::Stats.aura.bonus).to eq(-35)
-      # expect(Lich::Common::Stats.logic.enhanced.value).to eq(118)
-      # expect(Lich::Common::Stats.logic.enhanced.bonus).to eq(34)
+      expect(Lich::Common::Stats.aura.value).to eq(100)
+      expect(Lich::Common::Stats.aura.bonus).to eq(-35)
+      expect(Lich::Common::Stats.logic.enhanced.value).to eq(118)
+      expect(Lich::Common::Stats.logic.enhanced.bonus).to eq(34)
 
-      # expect(Lich::Common::Stats.aur).to eq([100, -35])
-      # expect(Lich::Common::Stats.enhanced_log).to eq([118, 34])
+      expect(Lich::Common::Stats.aur).to eq([100, -35])
+      expect(Lich::Common::Stats.enhanced_log).to eq([118, 34])
     end
 
     it "handles levelup" do
@@ -306,8 +310,8 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
 
       expect(Lich::Gemstone::Infomon.get("ascension.regenstamina")).to eq(19)
       expect(Lich::Gemstone::Infomon.get("ascension.swimming")).to eq(2)
-      # expect(Lich::Gemstone::Ascension['thrownweapons']).to eq(4)
-      # expect(Lich::Gemstone::Ascension['Spiritual Lore Summoning']).to eq(1)
+      expect(Lich::Gemstone::Ascension['thrownweapons']).to eq(4)
+      expect(Lich::Gemstone::Ascension['Spiritual Lore Summoning']).to eq(1)
     end
   end
 
@@ -325,10 +329,10 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get("resources.total")).to eq(78507)
       expect(Lich::Gemstone::Infomon.get("resources.suffused")).to eq(1678)
       expect(Lich::Gemstone::Infomon.get("resources.type")).to eq("Essence")
-      # expect(Lich::Resources.weekly).to eq(34000)
-      # expect(Lich::Resources.total).to eq(78507)
-      # expect(Lich::Resources.suffused).to eq(1678)
-      # expect(Lich::Resources.type).to eq("Essence")
+      expect(Lich::Resources.weekly).to eq(34000)
+      expect(Lich::Resources.total).to eq(78507)
+      expect(Lich::Resources.suffused).to eq(1678)
+      expect(Lich::Resources.type).to eq("Essence")
     end
   end
 
@@ -345,9 +349,9 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get("currency.silver")).to eq(5585)
       expect(Lich::Gemstone::Infomon.get("currency.silver_container")).to eq(6112)
       expect(Lich::Gemstone::Infomon.get("currency.gigas_artifact_fragments")).to eq(16)
-      # expect(Lich::Currency.silver).to eq(5585)
-      # expect(Lich::Currency.silver_container).to eq(6112)
-      # expect(Lich::Currency.gigas_artifact_fragments).to eq(16)
+      expect(Lich::Currency.silver).to eq(5585)
+      expect(Lich::Currency.silver_container).to eq(6112)
+      expect(Lich::Currency.gigas_artifact_fragments).to eq(16)
     end
 
     it "handles ticket balance info" do
@@ -367,12 +371,12 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get("currency.ethereal_scrip")).to eq(295702)
       expect(Lich::Gemstone::Infomon.get("currency.soul_shards")).to eq(53058)
       expect(Lich::Gemstone::Infomon.get("currency.raikhen")).to eq(38847)
-      # expect(Lich::Currency.tickets).to eq(1417)
-      # expect(Lich::Currency.blackscrip).to eq(95)
-      # expect(Lich::Currency.bloodscrip).to eq(78634)
-      # expect(Lich::Currency.ethereal_scrip).to eq(295702)
-      # expect(Lich::Currency.soul_shards).to eq(53058)
-      # expect(Lich::Currency.raikhen).to eq(38847)
+      expect(Lich::Currency.tickets).to eq(1417)
+      expect(Lich::Currency.blackscrip).to eq(95)
+      expect(Lich::Currency.bloodscrip).to eq(78634)
+      expect(Lich::Currency.ethereal_scrip).to eq(295702)
+      expect(Lich::Currency.soul_shards).to eq(53058)
+      expect(Lich::Currency.raikhen).to eq(38847)
     end
 
     it "handles beast status info" do
@@ -391,7 +395,7 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       output.split("\n").map { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
 
       expect(Lich::Gemstone::Infomon.get("currency.redsteel_marks")).to eq(3441)
-      # expect(Lich::Currency.redsteel_marks).to eq(3441)
+      expect(Lich::Currency.redsteel_marks).to eq(3441)
     end
   end
 
@@ -536,7 +540,7 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get("feat.martialmastery")).to eq(1)
       expect(Lich::Gemstone::Infomon.get("feat.silentstrike")).to eq(5)
     end
-=begin
+
     ## FIXME: Error out due to name CMan in psms.rb not fully qualified / works in prod
     it "handles Learning a new PSM" do
       # Check LearnPSM
@@ -581,7 +585,6 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get("shield.pin")).to eq(1)
       expect(Lich::Gemstone::Infomon.get("weapon.fury")).to eq(0)
     end
-=end
   end
 
   context "warcry" do
@@ -661,23 +664,25 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get('society.rank')).to eq(0)
     end
   end
-
-  # context "Infomon.show displays 0 values, or not" do
-  #  it "handles Infomon.show(full = true) and (full = false)" do
-  #    Lich::Gemstone::Infomon.set('cman.krynch', 1)
-  #    Lich::Gemstone::Infomon.set('skill.ambush', 1)
-  #   Lich::Gemstone::Infomon.set('skill.swimming', 0)
-  #    Lich::Gemstone::Infomon.set('society.status', 'None')
-  #    test_results = Lich::Gemstone::Infomon.show(true)
-  #    expect(test_results.any? { |s| s.include?('cman.krynch : 1') }).to be(true)
-  #    expect(test_results.any? { |s| s.include?('skill.swimming : 0') }).to be(true)
-  #    expect(test_results.any? { |s| s.include?('society.status : "None"') }).to be(true)
-  #    test2_results = Lich::Gemstone::Infomon.show
-  #    expect(test2_results.any? { |s| s.include?('cman.krynch : 1') }).to be(true)
-  #    expect(test2_results.any? { |s| s.include?('skill.ambush : 1') }).to be(true)
-  #    expect(test2_results.any? { |s| s.include?('skill.swimming : 0') }).to be(false)
-  #  end
-  # end
+=begin
+  ## FIXME:  Goes to respond but errors out.  Needs research.  Test manually.
+  context "Infomon.show displays 0 values, or not" do
+    it "handles Infomon.show(full = true) and (full = false)" do
+      Lich::Gemstone::Infomon.set('cman.krynch', 1)
+      Lich::Gemstone::Infomon.set('skill.ambush', 1)
+      Lich::Gemstone::Infomon.set('skill.swimming', 0)
+      Lich::Gemstone::Infomon.set('society.status', 'None')
+      test_results = Lich::Gemstone::Infomon.show(true)
+      expect(test_results.any? { |s| s.include?('cman.krynch : 1') }).to be(true)
+      expect(test_results.any? { |s| s.include?('skill.swimming : 0') }).to be(true)
+      expect(test_results.any? { |s| s.include?('society.status : "None"') }).to be(true)
+      test2_results = Lich::Gemstone::Infomon.show
+      expect(test2_results.any? { |s| s.include?('cman.krynch : 1') }).to be(true)
+      expect(test2_results.any? { |s| s.include?('skill.ambush : 1') }).to be(true)
+      expect(test2_results.any? { |s| s.include?('skill.swimming : 0') }).to be(false)
+    end
+  end
+=end
 
   context "db feature method - Infomon.delete!(key)" do
     it "allows for selective deletion of a row in the infomon.db" do

@@ -113,7 +113,6 @@ describe Lich::Gemstone::PSMS, ".name_normal(name)" do
   end
 end
 
-=begin
 ## FIXME: Error out due to name CMan in psms.rb not fully qualified / works in prod
 describe Lich::Gemstone::PSMS, "assess(name, type)" do
   context "<psm>.name should return rank known" do
@@ -129,10 +128,10 @@ describe Lich::Gemstone::PSMS, "assess(name, type)" do
       expect(Lich::Gemstone::Armor.known?("blessing")).to be(false)
       expect(Lich::Gemstone::Feat.known?("Martial MASTERY")).to be(true)
     end
-    # it "or determines if an unknown PSM (error) is requested" do
-    #   expect { Lich::Gemstone::CMan["Doug Spell"] }.to raise_error(StandardError, "Aborting script - The referenced CMan skill doug_spell is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of doug_spell.")
-    #   expect { Lich::Gemstone::Armor.known?(:favorite_dessert) }.to raise_error(StandardError, "Aborting script - The referenced Armor skill favorite_dessert is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of favorite_dessert.")
-    # end
+    it "or determines if an unknown PSM (error) is requested" do
+      expect { Lich::Gemstone::CMan["Doug Spell"] }.to raise_error(StandardError, "Aborting script - The referenced CMan skill doug_spell is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of doug_spell.")
+      expect { Lich::Gemstone::Armor.known?(:favorite_dessert) }.to raise_error(StandardError, "Aborting script - The referenced Armor skill favorite_dessert is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of favorite_dessert.")
+    end
   end
 end
 
@@ -143,9 +142,8 @@ describe Lich::Gemstone::PSMS, ".affordable?(name)" do
       expect(Lich::Gemstone::Armor.affordable?(:support)).to be(true)
       expect(Lich::Gemstone::CMan.affordable?("rolling_krynch_stance")).to be(false)
     end
-    # it "or returns erroneous requests as above" do
-    #   expect { Lich::Gemstone::Feat.affordable?("Touch this!") }.to raise_error(StandardError, "Aborting script - The referenced Feat skill touch_this! is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of touch_this!.")
-    # end
+    it "or returns erroneous requests as above" do
+      expect { Lich::Gemstone::Feat.affordable?("Touch this!") }.to raise_error(StandardError, "Aborting script - The referenced Feat skill touch_this! is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of touch_this!.")
+    end
   end
 end
-=end
