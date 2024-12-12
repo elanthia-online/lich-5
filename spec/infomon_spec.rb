@@ -669,7 +669,6 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
     end
   end
 
-  ## FIXME:  Goes to respond but errors out.  Needs research.  Test manually.
   context "Infomon.show displays 0 values, or not" do
     it "handles Infomon.show(full = true) and (full = false)" do
       Lich::Gemstone::Infomon.set('cman.krynch', 1)
