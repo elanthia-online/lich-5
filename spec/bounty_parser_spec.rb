@@ -1,4 +1,4 @@
-require 'gemstone/bounty/parser'
+require 'Gemstone/bounty/parser'
 
 class Bounty
   describe Lich::Gemstone::Bounty::Parser, "#parse" do
