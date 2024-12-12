@@ -686,7 +686,6 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
     end
   end
 
-
   context "db feature method - Infomon.delete!(key)" do
     it "allows for selective deletion of a row in the infomon.db" do
       Lich::Gemstone::Infomon.set('skill.edged_weapon', 1)
