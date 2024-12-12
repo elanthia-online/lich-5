@@ -30,10 +30,8 @@ module Lich
         @entry_data = Array.new
       end
       @save_entry_data = false
-      done = false
 
       Gtk.queue {
-        login_server = nil
         @window = nil
         install_tab_loaded = false
 
@@ -59,7 +57,7 @@ module Lich
         @notebook.append_page(@quick_game_entry_tab, Gtk::Label.new('Saved Entry'))
         @notebook.append_page(@game_entry_tab, Gtk::Label.new('Manual Entry'))
 
-        @notebook.signal_connect('switch-page') { |who, page, page_num|
+        @notebook.signal_connect('switch-page') { |_who, _page, page_num|
           if (page_num == 2) and not install_tab_loaded
             refresh_button.clicked
           end

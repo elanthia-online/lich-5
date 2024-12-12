@@ -14,7 +14,6 @@ if @entry_data.empty?
   @quick_game_entry_tab.pack_start(box, :expand => true, :fill => true, :padding => 0)
 else
   last_user_id = nil
-  account_array = []
 
   if @tab_layout_state == true
 
@@ -74,7 +73,7 @@ else
                   button:hover { background-color: darkgrey; } ")
 
         @play_button = Gtk::Button.new()
-        char_label = Gtk::Label.new("#{realm} - #{login_info[:char_name]}")
+        Gtk::Label.new("#{realm} - #{login_info[:char_name]}")
         char_label = Gtk::Label.new("#{login_info[:char_name]}")
         char_label.set_width_chars(15)
         fe_label = Gtk::Label.new("(#{login_info[:frontend].capitalize})")
@@ -106,7 +105,7 @@ else
         char_box.pack_start(@play_button, :expand => true, :fill => true, :padding => 0)
         account_box.pack_start(char_box, :expand => false, :fill => false, :padding => 0)
 
-        @play_button.signal_connect('button-release-event') { |owner, ev|
+        @play_button.signal_connect('button-release-event') { |_owner, ev|
           if (ev.event_type == Gdk::EventType::BUTTON_RELEASE)
             if (ev.button == 1)
               @play_button.sensitive = false
@@ -137,7 +136,7 @@ else
           end
         }
 
-        @remove_button.signal_connect('button-release-event') { |owner, ev|
+        @remove_button.signal_connect('button-release-event') { |_owner, ev|
           if (ev.event_type == Gdk::EventType::BUTTON_RELEASE) and (ev.button == 1)
             if (ev.state.inspect =~ /shift-mask/)
               @entry_data.delete(login_info)
@@ -147,7 +146,6 @@ else
               dialog = Gtk::MessageDialog.new(:parent => nil, :flags => :modal, :type => :question, :buttons => :yes_no, :message => "Delete record?")
               dialog.title = "Confirm"
               dialog.set_icon(@default_icon)
-              response = nil
               response = dialog.run
               dialog.destroy
               if response == Gtk::ResponseType::YES
@@ -193,7 +191,7 @@ else
       char_box.pack_end(remove_button, :expand => false, :fill => false, :padding => 0)
       char_box.pack_end(play_button, :expand => false, :fill => false, :padding => 0)
       quick_box.pack_start(char_box, :expand => false, :fill => false, :padding => 0)
-      play_button.signal_connect('button-release-event') { |owner, ev|
+      play_button.signal_connect('button-release-event') { |_owner, ev|
         if (ev.event_type == Gdk::EventType::BUTTON_RELEASE)
           if (ev.button == 1)
             play_button.sensitive = false
@@ -224,7 +222,7 @@ else
         end
       }
 
-      remove_button.signal_connect('button-release-event') { |owner, ev|
+      remove_button.signal_connect('button-release-event') { |_owner, ev|
         if (ev.event_type == Gdk::EventType::BUTTON_RELEASE) and (ev.button == 1)
           if (ev.state.inspect =~ /shift-mask/)
             @entry_data.delete(login_info)
@@ -234,7 +232,6 @@ else
             dialog = Gtk::MessageDialog.new(:parent => nil, :flags => :modal, :type => :question, :buttons => :yes_no, :message => "Delete record?")
             dialog.title = "Confirm"
             dialog.set_icon(@default_icon)
-            response = nil
             response = dialog.run
             dialog.destroy
             if response == Gtk::ResponseType::YES
@@ -276,7 +273,7 @@ else
   add_character_pane.add1(add_char_label)
   add_character_pane.pack2(add_char_entry)
 
-  add_inst_select = Gtk::ComboBoxEntry.new()
+  add_inst_select = Gtk::ComboBoxText.new(:entry => true) # Gtk::ComboBoxEntry.new()
   add_inst_select.child.text = "Prime"
   add_inst_select.append_text("Prime")
   add_inst_select.append_text("Platinum")
@@ -365,7 +362,7 @@ else
     @slider_box.visible = @settings_option.active?
   }
 
-  theme_select.signal_connect('notify::active') { |s|
+  theme_select.signal_connect('notify::active') { |_s|
     if theme_select.active?
       Gtk::Settings.default.gtk_application_prefer_dark_theme = true
       @play_button.style_context.remove_provider(@button_provider) if defined?(@button_provider)
@@ -382,11 +379,11 @@ else
     end
   }
 
-  tab_select.signal_connect('notify::active') { |s|
+  tab_select.signal_connect('notify::active') { |_s|
     Lich.track_layout_state = tab_select.active? ? true : false
   }
 
-  sort_select.signal_connect('notify::active') { |s|
+  sort_select.signal_connect('notify::active') { |_s|
     Lich.track_autosort_state = sort_select.active? ? true : false
   }
 

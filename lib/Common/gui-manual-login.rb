@@ -136,7 +136,7 @@ connect_button.signal_connect('clicked') {
       end
       disconnect_button.sensitive = true
     end
-    login_server = true
+    # true
   }
 }
 
@@ -148,7 +148,6 @@ disconnect_button.signal_connect('clicked') {
   disconnect_button.sensitive = false
   play_button.sensitive = false
   liststore.clear
-  login_server = false
   connect_button.sensitive = true
   user_id_entry.sensitive = true
   pass_entry.sensitive = true
@@ -201,7 +200,8 @@ play_button.signal_connect('clicked') {
       custom_launch = nil
       custom_launch_dir = nil
     end
-    @entry_data.push h = { :char_name => treeview.selection.selected[3], :game_code => treeview.selection.selected[0], :game_name => treeview.selection.selected[1], :user_id => user_id_entry.text, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir }
+    h = { :char_name => treeview.selection.selected[3], :game_code => treeview.selection.selected[0], :game_name => treeview.selection.selected[1], :user_id => user_id_entry.text, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir }
+    @entry_data.push h
     @save_entry_data = true
   end
 

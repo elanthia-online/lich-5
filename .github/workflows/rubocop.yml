@@ -23,15 +23,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v44
-        with:
-          files: |
-            **/*.lic
-            **/*.rb
-#            lich.rbw
-        
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
@@ -45,6 +36,4 @@ jobs:
       - run: bundle install
       - name: Rubocop
         run: |
-          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
-            bundle exec rubocop $file
-          done
+          bundle exec rubocop

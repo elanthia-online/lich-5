@@ -64,10 +64,9 @@ module Lich
         # fixme: look in wizard script directory
         # fixme: allow subdirectories?
         file_list = Dir.children(File.join(SCRIPT_DIR, "custom")).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }.map { |s| s.prepend("/custom/") } + Dir.children(SCRIPT_DIR).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
-        if file_name = (file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i })
+        if (file_name = (file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i }))
           script_name = file_name.sub(/\..{1,3}$/, '')
         end
-        file_list = nil
         if file_name.nil?
           respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR} or #{SCRIPT_DIR}/custom"
           next nil
@@ -105,7 +104,7 @@ module Lich
         new_thread = Thread.new {
           100.times { break if Script.current == script_obj; sleep 0.01 }
 
-          if script = Script.current
+          if (script = Script.current)
             eval('script = Script.current', script_binding, script.name)
             Thread.current.priority = 1
             respond("--- Lich: #{script.name} active.") unless script.quiet
@@ -135,7 +134,7 @@ module Lich
               rescue SystemStackError
                 respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
                 Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue Exception
+              rescue StandardError # Exception
                 if $! == JUMP
                   retry if Script.current.get_next_label != JUMP_ERROR
                   respond "--- label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!"
@@ -174,7 +173,7 @@ module Lich
                 Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
               rescue SecurityError
                 respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                if name = Script.current.name
+                if (name = Script.current.name)
                   respond "--- Lich: review this script (#{name}) to make sure it isn't malicious, and type #{$clean_lich_char}trust #{name}"
                 end
                 Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
@@ -184,7 +183,7 @@ module Lich
               rescue SystemStackError
                 respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
                 Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue Exception
+              rescue StandardError # Exception
                 if $! == JUMP
                   retry if Script.current.get_next_label != JUMP_ERROR
                   respond "--- label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!"
@@ -227,7 +226,7 @@ module Lich
         end
       }
       @@elevated_log = proc { |data|
-        if script = Script.current
+        if (script = Script.current)
           if script.name =~ /\\|\//
             nil
           else
@@ -246,7 +245,7 @@ module Lich
         end
       }
       @@elevated_db = proc {
-        if script = Script.current
+        if (script = Script.current)
           if script.name =~ /^lich$/i
             respond '--- error: Script.db cannot be used by a script named lich'
             nil
@@ -261,8 +260,8 @@ module Lich
           nil
         end
       }
-      @@elevated_open_file = proc { |ext, mode, block|
-        if script = Script.current
+      @@elevated_open_file = proc { |ext, mode, _block|
+        if (script = Script.current)
           if script.name =~ /^lich$/i
             respond '--- error: Script.open_file cannot be used by a script named lich'
             nil
@@ -293,17 +292,16 @@ module Lich
       def Script.version(script_name, script_version_required = nil)
         script_name = script_name.sub(/[.](lic|rb|cmd|wiz)$/, '')
         file_list = Dir.children(File.join(SCRIPT_DIR, "custom")).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }.map { |s| s.prepend("/custom/") } + Dir.children(SCRIPT_DIR).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
-        if file_name = (file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i })
+        if (file_name = (file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i }))
           script_name = file_name.sub(/\..{1,3}$/, '')
         end
-        file_list = nil
         if file_name.nil?
           respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR}"
           return nil
         end
 
         script_version = '0.0.0'
-        script_data = open("#{SCRIPT_DIR}/#{file_name}", 'r').read
+        script_data = File.open("#{SCRIPT_DIR}/#{file_name}", 'r').read
         if script_data =~ /^=begin\r?\n?(.+?)^=end/m
           comments = $1.split("\n")
         else
@@ -333,7 +331,7 @@ module Lich
       end
 
       def Script.current
-        if script = @@running.find { |s| s.has_thread?(Thread.current) }
+        if (script = @@running.find { |s| s.has_thread?(Thread.current) })
           sleep 0.2 while script.paused? and not script.ignore_pause
           script
         else
@@ -346,7 +344,7 @@ module Lich
       end
 
       def Script.run(*args)
-        if s = @@elevated_script_start.call(args)
+        if (s = @@elevated_script_start.call(args))
           sleep 0.1 while @@running.include?(s)
         end
       end
@@ -360,7 +358,7 @@ module Lich
           Script.current.pause
           Script.current
         else
-          if s = (@@running.find { |i| (i.name == name) and not i.paused? }) || (@@running.find { |i| (i.name =~ /^#{name}$/i) and not i.paused? })
+          if (s = (@@running.find { |i| (i.name == name) and not i.paused? }) || (@@running.find { |i| (i.name =~ /^#{name}$/i) and not i.paused? }))
             s.pause
             true
           else
@@ -370,7 +368,7 @@ module Lich
       end
 
       def Script.unpause(name)
-        if s = (@@running.find { |i| (i.name == name) and i.paused? }) || (@@running.find { |i| (i.name =~ /^#{name}$/i) and i.paused? })
+        if (s = (@@running.find { |i| (i.name == name) and i.paused? }) || (@@running.find { |i| (i.name =~ /^#{name}$/i) and i.paused? }))
           s.unpause
           true
         else
@@ -379,7 +377,7 @@ module Lich
       end
 
       def Script.kill(name)
-        if s = (@@running.find { |i| i.name == name }) || (@@running.find { |i| i.name =~ /^#{name}$/i })
+        if (s = (@@running.find { |i| i.name == name }) || (@@running.find { |i| i.name =~ /^#{name}$/i }))
           s.kill
           true
         else
@@ -388,7 +386,7 @@ module Lich
       end
 
       def Script.paused?(name)
-        if s = (@@running.find { |i| i.name == name }) || (@@running.find { |i| i.name =~ /^#{name}$/i })
+        if (s = (@@running.find { |i| i.name == name }) || (@@running.find { |i| i.name =~ /^#{name}$/i }))
           s.paused?
         else
           nil
@@ -451,7 +449,7 @@ module Lich
       end
 
       def Script.at_exit(&block)
-        if script = Script.current
+        if (script = Script.current)
           script.at_exit(&block)
         else
           respond "--- Lich: error: Script.at_exit: can't identify calling script"
@@ -460,7 +458,7 @@ module Lich
       end
 
       def Script.clear_exit_procs
-        if script = Script.current
+        if (script = Script.current)
           script.clear_exit_procs
         else
           respond "--- Lich: error: Script.clear_exit_procs: can't identify calling script"
@@ -469,7 +467,7 @@ module Lich
       end
 
       def Script.exit!
-        if script = Script.current
+        if (script = Script.current)
           script.exit!
         else
           respond "--- Lich: error: Script.exit!: can't identify calling script"
@@ -554,11 +552,11 @@ module Lich
           list
         end
       else
-        def Script.trust(script_name)
+        def Script.trust(_script_name)
           true
         end
 
-        def Script.distrust(script_name)
+        def Script.distrust(_script_name)
           false
         end
 
@@ -575,7 +573,7 @@ module Lich
             @vars = Array.new
           else
             @vars = [args[:args]]
-            @vars.concat args[:args].scan(/[^\s"]*(?<!\\)"(?:\\"|[^"])+(?<!\\)"[^\s]*|(?:\\"|[^"\s])+/).collect { |s| s.gsub(/(?<!\\)"/, '').gsub('\\"', '"') }
+            @vars.concat(args[:args].scan(/[^\s"]*(?<!\\)"(?:\\"|[^"])+(?<!\\)"[^\s]*|(?:\\"|[^"\s])+/).collect { |s| s.gsub(/(?<!\\)"/, '').gsub('\\"', '"') })
           end
         elsif args[:args].class == Array
           unless (args[:args].nil? || args[:args].empty?)
@@ -617,14 +615,14 @@ module Lich
             Zlib::GzipReader.open(@file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
           rescue
             respond "--- Lich: error reading script file (#{@file_name}): #{$!}"
-            return nil
+            # return nil
           end
         else
           begin
             File.open(@file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
           rescue
             respond "--- Lich: error reading script file (#{@file_name}): #{$!}"
-            return nil
+            # return nil
           end
         end
         @quiet = true if data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i
@@ -644,7 +642,7 @@ module Lich
         @current_label = @label_order[0]
         @thread_group = ThreadGroup.new
         @@running.push(self)
-        return self
+        # return self
       end
 
       def kill
@@ -699,9 +697,9 @@ module Lich
         kill
       end
 
-      def instance_variable_get(*a); nil; end
+      def instance_variable_get(*_a); nil; end
 
-      def instance_eval(*a);         nil; end
+      def instance_eval(*_a);         nil; end
 
       def labels
         @labels
@@ -741,11 +739,11 @@ module Lich
         if !@jump_label
           @current_label = @label_order[@label_order.index(@current_label) + 1]
         else
-          if label = @labels.keys.find { |val| val =~ /^#{@jump_label}$/ }
+          if (label = @labels.keys.find { |val| val =~ /^#{@jump_label}$/ })
             @current_label = label
-          elsif label = @labels.keys.find { |val| val =~ /^#{@jump_label}$/i }
+          elsif (label = @labels.keys.find { |val| val =~ /^#{@jump_label}$/i })
             @current_label = label
-          elsif label = @labels.keys.find { |val| val =~ /^labelerror$/i }
+          elsif (label = @labels.keys.find { |val| val =~ /^labelerror$/i })
             @current_label = label
           else
             @current_label = nil
@@ -843,14 +841,14 @@ module Lich
 
       def ExecScript.start(cmd_data, options = {})
         options = { :quiet => true } if options == true
-        unless new_script = ExecScript.new(cmd_data, options)
+        unless (new_script = ExecScript.new(cmd_data, options))
           respond '--- Lich: failed to start exec script'
           return false
         end
         new_thread = Thread.new {
           100.times { break if Script.current == new_script; sleep 0.01 }
 
-          if script = Script.current
+          if (script = Script.current)
             Thread.current.priority = 1
             respond("--- Lich: #{script.name} active.") unless script.quiet
             begin
@@ -896,7 +894,7 @@ module Lich
               respond $!.backtrace.first
               Lich.log "SystemStackError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
               Script.current.kill
-            rescue Exception
+            rescue StandardError # Exception
               respond "--- Exception: #{$!}"
               respond $!.backtrace.first
               Lich.log "Exception: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
@@ -915,6 +913,8 @@ module Lich
         new_script
       end
 
+      # FIXME: when modernized, ensure proper use of variables and init of parent class
+      # rubocop:disable Lint/MissingSuper
       def initialize(cmd_data, flags = Hash.new)
         @cmd_data = cmd_data
         @vars = Array.new
@@ -951,8 +951,8 @@ module Lich
           @name = "#{flags[:name]}#{num}"
         end
         @@running.push(self)
-        self
       end
+      # rubocop:enable Lint/MissingSuper
 
       def get_next_label
         echo 'goto labels are not available in exec scripts.'
@@ -961,6 +961,10 @@ module Lich
     end
 
     class WizardScript < Script
+      # FIXME: when modernized, ensure proper use of variables and init of parent class
+      # rubocop:disable Lint/MissingSuper
+      # rubocop:disable Lint/UselessAssignment
+      # rubocop:disable Lint/InterpolationCheck
       def initialize(file_name, cli_vars = [])
         @name = /.*[\/\\]+([^\.]+)\./.match(file_name).captures.first
         @file_name = file_name
@@ -1008,7 +1012,7 @@ module Lich
             File.open(file_name) { |f| data = f.readlines.collect { |line| line.chomp } }
           rescue
             respond "--- Lich: error reading script file (#{file_name}): #{$!}"
-            return nil
+            # return nil
           end
         end
         @quiet = true if data[0] =~ /^[\t\s]*#?[\t\s]*(?:quiet|hush)$/i
@@ -1164,8 +1168,11 @@ module Lich
         @current_label = @label_order[0]
         @thread_group = ThreadGroup.new
         @@running.push(self)
-        return self
+        # return self
       end
+      # rubocop:enable Lint/InterpolationCheck
+      # rubocop:enable Lint/UselessAssignment
+      # rubocop:enable Lint/MissingSuper
     end
   end
 end
