@@ -583,7 +583,7 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
     end
 =end
   end
-  
+
   context "warcry" do
     it "handles warcry info" do
       output = <<~Warcry
@@ -806,7 +806,7 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
         All you manage to do is cough up some blood.
       TestInput
       output.split("\n").map { |line|
-      Lich::Gemstone::Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
+        Lich::Gemstone::Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
       XMLData.save_dialogs("Debuffs", { 'Major Bleed' => (Time.now + 5) }) # to test if Effects has this key
       expect(Lich::Gemstone::Status.cutthroat?).to be(true)
@@ -818,7 +818,7 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
         The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat.
       TestInput
       output.split("\n").map { |line|
-      Lich::Gemstone::Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
+        Lich::Gemstone::Infomon::Parser.parse(line).eql?(:ok) or fail("did not parse:\n%s" % line)
       }
       expect(Lich::Gemstone::Status.cutthroat?).to be(false)
       expect(Lich::Gemstone::Status.muckled?).to be(false)
