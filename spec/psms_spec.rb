@@ -35,7 +35,6 @@ Dir.mktmpdir do |dir|
   puts " Done!"
 end
 
-
 require "Gemstone/psms"
 require "Gemstone/infomon/infomon"
 
