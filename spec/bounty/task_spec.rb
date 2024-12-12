@@ -1,7 +1,7 @@
-require 'bounty'
+require_relative '../../lib/gemstone/bounty'
 
 shared_examples "task predicate examples" do
-  let(:falsey_types) { Bounty::KNOWN_TASKS - truthy_types }
+  let(:falsey_types) { Lich::Gemstone::Bounty::KNOWN_TASKS - truthy_types }
 
   it "truthy types" do
     truthy_types.each do |type|
@@ -18,7 +18,7 @@ shared_examples "task predicate examples" do
   end
 end
 
-class Bounty
+class Lich::Gemstone::Bounty
   describe Task do
     let(:requirements) { {} }
 
