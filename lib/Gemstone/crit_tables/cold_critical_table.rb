@@ -341,7 +341,7 @@ module Lich
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
                                   :regex           =>
-                                                      /Icy blast to neck freezes .*?'s words in mid\-speech and leaves it speechless./ },
+                                                      /Icy blast to neck freezes .*?'s words in mid\-speech and leaves (?:her|him|it) speechless\.\.\.permanently./ },
                            7 =>
                                 { :type            => "Cold",
                                   :location        => "Neck",

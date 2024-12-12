@@ -210,9 +210,6 @@ module Lich
           _respond; _respond 'Copying updated lich files to their locations.'
 
           ## We do not care about local edits from players in the Lich5 / lib location
-          # so, delete all existing lib files
-          FileUtils.rm_f(Dir.glob(File.join(LIB_DIR, "*")))
-          # then move the new version files into place
           FileUtils.copy_entry(File.join(TEMP_DIR, filename, "lib"), File.join(LIB_DIR))
           _respond; _respond "All Lich lib files have been updated."; _respond
 
@@ -287,7 +284,7 @@ module Lich
         when "script"
           location = SCRIPT_DIR
           if requested_file.downcase == 'dependency.lic'
-            remote_repo = "https://raw.githubusercontent.com/rpherbig/dr-scripts/master/"
+            remote_repo = "https://raw.githubusercontent.com/elanthia-online/dr-scripts/main"
           else
             remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
           end

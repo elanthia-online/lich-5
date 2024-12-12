@@ -1,7 +1,7 @@
-require 'bounty/parser'
+require 'Gemstone/bounty/parser'
 
 class Bounty
-  describe Parser, "#parse" do
+  describe Lich::Gemstone::Bounty::Parser, "#parse" do
     context "no bounty task" do
       it "can tell when we don't have a task" do
         bounty = described_class.parse "You are not currently assigned a task."

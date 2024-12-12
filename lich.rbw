@@ -106,6 +106,7 @@ require File.join(LIB_DIR, 'Common', 'settings', 'settings.rb')
 require File.join(LIB_DIR, 'Common', 'settings', 'gamesettings.rb')
 require File.join(LIB_DIR, 'Common', 'settings', 'charsettings.rb')
 require File.join(LIB_DIR, 'Common', 'vars.rb')
+require File.join(LIB_DIR, 'sessionvars.rb')
 
 # Script classes move to lib 230305
 require File.join(LIB_DIR, 'Common', 'script.rb')
