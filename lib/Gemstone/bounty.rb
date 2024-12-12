@@ -1,5 +1,8 @@
-require_relative "./bounty/parser"
-require_relative "./bounty/task"
+#require_relative "./bounty/parser"
+#require_relative "./bounty/task"
+
+require 'bounty/parser'
+require 'bounty/task'
 
 module Lich
   module Gemstone
