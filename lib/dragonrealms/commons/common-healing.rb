@@ -1,3 +1,5 @@
+module Lich
+module DragonRealms
 module DRCH
   module_function
 
@@ -369,11 +371,12 @@ module DRCH
   class Wound
     attr_accessor :body_part, :severity, :bleeding_rate
 
+    # The part of the body that's wounded, like 'left hand' or 'abdomen'.
+    # At this time, at what rate is the wound bleeding, like 'light' or 'moderate(tended)'.
     def initialize(
-      # The part of the body that's wounded, like 'left hand' or 'abdomen'.
       body_part: nil,
       severity: nil,
-      # At this time, at what rate is the wound bleeding, like 'light' or 'moderate(tended)'.
+
       bleeding_rate: nil,
       is_internal: false,
       is_scar: false,
@@ -427,4 +430,6 @@ module DRCH
       scar? ? 'scar' : 'wound'
     end
   end
+end
+end
 end

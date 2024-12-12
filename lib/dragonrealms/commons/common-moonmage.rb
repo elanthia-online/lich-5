@@ -1,4 +1,7 @@
-module DRCMM
+module Lich
+module DragonRealms
+
+  module DRCMM
   module_function
 
   def observe(thing)
@@ -378,4 +381,6 @@ module DRCMM
     echo "Run `#{$clean_lich_char}e autostart('moonwatch')` to avoid this in the future"
     pause 0.5 while UserVars.moons.empty?
   end
+end
+end
 end

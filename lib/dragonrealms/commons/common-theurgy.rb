@@ -1,3 +1,6 @@
+module Lich
+  module DragonRealms
+
 module DRCTH
   module_function
 
@@ -273,4 +276,6 @@ module DRCTH
       'commune_ready'   => commune_ready
     }
   end
+end
+end
 end

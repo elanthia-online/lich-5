@@ -1,3 +1,5 @@
+module Lich
+  module DragonRealms
 module DRCC
   module_function
 
@@ -553,4 +555,6 @@ module DRCC
     end
     type.nil? ? (return h) : (return h[type])
   end
+end
+end
 end

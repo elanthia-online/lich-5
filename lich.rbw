@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # encoding: US-ASCII
 
-######
+#####
 # Copyright (C) 2005-2006 Murray Miron
 # All rights reserved.
 #
@@ -31,7 +31,7 @@
 # LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-######
+#####
 
 # Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
@@ -85,68 +85,70 @@ require File.join(LIB_DIR, 'version.rb')
 
 require File.join(LIB_DIR, 'lich.rb')
 require File.join(LIB_DIR, 'init.rb')
-require File.join(LIB_DIR, 'front-end.rb')
-require File.join(LIB_DIR, 'update.rb')
+require File.join(LIB_DIR, 'Common', 'front-end.rb')
+require File.join(LIB_DIR, 'Util', 'update.rb')
 
 # TODO: Need to split out initiatilzation functions to move require to top of file
-require File.join(LIB_DIR, 'gtk.rb')
-require File.join(LIB_DIR, 'gui-login.rb')
-require File.join(LIB_DIR, 'db_store.rb')
-#2024-06-13 carve out
-require File.join(LIB_DIR, 'class_exts', 'nilclass.rb')
-require File.join(LIB_DIR, 'class_exts', 'numeric.rb')
-require File.join(LIB_DIR, 'class_exts', 'string.rb')
-require File.join(LIB_DIR, 'class_exts', 'stringproc.rb')
-require File.join(LIB_DIR, 'class_exts', 'synchronizedsocket.rb')
-require File.join(LIB_DIR, 'limitedarray.rb')
-require File.join(LIB_DIR, 'xmlparser.rb')
-require File.join(LIB_DIR, 'upstreamhook.rb')
-require File.join(LIB_DIR, 'downstreamhook.rb')
-require File.join(LIB_DIR, 'settings', 'settings.rb')
-require File.join(LIB_DIR, 'settings', 'gamesettings.rb')
-require File.join(LIB_DIR, 'settings', 'charsettings.rb')
-require File.join(LIB_DIR, 'vars.rb')
+require File.join(LIB_DIR, 'Common', 'gtk.rb')
+# require File.join(LIB_DIR, 'Common', 'gui-login.rb')
+require File.join(LIB_DIR, 'Common', 'db_store.rb')
+# 2024-06-13 carve out
+require File.join(LIB_DIR, 'Common', 'class_exts', 'nilclass.rb')
+require File.join(LIB_DIR, 'Common', 'class_exts', 'numeric.rb')
+require File.join(LIB_DIR, 'Common', 'class_exts', 'string.rb')
+require File.join(LIB_DIR, 'Common', 'class_exts', 'stringproc.rb')
+require File.join(LIB_DIR, 'Common', 'class_exts', 'synchronizedsocket.rb')
+require File.join(LIB_DIR, 'Common', 'limitedarray.rb')
+require File.join(LIB_DIR, 'Common', 'xmlparser.rb')
+require File.join(LIB_DIR, 'Common', 'upstreamhook.rb')
+require File.join(LIB_DIR, 'Common', 'downstreamhook.rb')
+require File.join(LIB_DIR, 'Common', 'settings', 'settings.rb')
+require File.join(LIB_DIR, 'Common', 'settings', 'gamesettings.rb')
+require File.join(LIB_DIR, 'Common', 'settings', 'charsettings.rb')
+require File.join(LIB_DIR, 'Common', 'vars.rb')
 require File.join(LIB_DIR, 'sessionvars.rb')
 
 # Script classes move to lib 230305
-require File.join(LIB_DIR, 'script.rb')
-require File.join(LIB_DIR, 'watchfor.rb')
+require File.join(LIB_DIR, 'Common', 'script.rb')
+require File.join(LIB_DIR, 'Common', 'watchfor.rb')
 
 ## adding util to the list of defs
 
-require File.join(LIB_DIR, 'util.rb')
+require File.join(LIB_DIR, 'Util', 'util.rb')
 require File.join(LIB_DIR, 'messaging.rb')
 require File.join(LIB_DIR, 'global_defs.rb')
-require File.join(LIB_DIR, 'buffer.rb')
+require File.join(LIB_DIR, 'Common', 'buffer.rb')
 
-require File.join(LIB_DIR, 'sharedbuffer.rb')
+require File.join(LIB_DIR, 'Common', 'sharedbuffer.rb')
 
-require File.join(LIB_DIR, 'spellranks.rb')
+require File.join(LIB_DIR, 'Gemstone', 'spellranks.rb')
 
 require File.join(LIB_DIR, 'games.rb')
-require File.join(LIB_DIR, 'gameobj.rb')
-
-include Games::Gemstone
-
-JUMP = Exception.exception('JUMP')
-JUMP_ERROR = Exception.exception('JUMP_ERROR')
-
-XMLData = XMLParser.new
-
-#
-# Start deprecated stuff
-#
-require File.join(LIB_DIR, 'deprecated.rb')
-#
-# End deprecated stuff
-#
-require File.join(LIB_DIR, 'uservars.rb')
+require File.join(LIB_DIR, 'Common', 'gameobj.rb')
 
 #
 # Program start
 #
 require File.join(LIB_DIR, 'main', 'argv_options.rb')
 require File.join(LIB_DIR, 'main', 'main.rb')
+
+include Lich::Common
+
+XMLData = Lich::Common::XMLParser.new
+
+#
+# Start deprecated stuff
+#
+JUMP = Exception.exception('JUMP')
+JUMP_ERROR = Exception.exception('JUMP_ERROR')
+
+require File.join(LIB_DIR, 'deprecated.rb')
+#
+# End deprecated stuff
+#
+require File.join(LIB_DIR, 'Common', 'uservars.rb')
+
+## was here ##
 
 if defined?(Gtk)
   Thread.current.priority = -10

@@ -1,16 +1,19 @@
-def convert2copper(amt, denomination)
-  if denomination =~ /platinum/
-    (amt.to_i * 10_000)
-  elsif denomination =~ /gold/
-    (amt.to_i * 1000)
-  elsif denomination =~ /silver/
-    (amt.to_i * 100)
-  elsif denomination =~ /bronze/
-    (amt.to_i * 10)
-  else
-    amt
-  end
-end
+module Lich
+  module DragonRealms
+
+    def convert2copper(amt, denomination)
+      if denomination =~ /platinum/
+        (amt.to_i * 10_000)
+      elsif denomination =~ /gold/
+        (amt.to_i * 1000)
+      elsif denomination =~ /silver/
+        (amt.to_i * 100)
+      elsif denomination =~ /bronze/
+        (amt.to_i * 10)
+      else
+        amt
+      end
+    end
 
 def check_exp_mods
   Lich::Util.issue_command("exp mods", /The following skills are currently under the influence of a modifier/, /^<output class=""/, quiet: true, include_end: false, usexml: false)
@@ -55,31 +58,32 @@ def find_pcs_sitting(room_players)
               .map { |obj| obj.strip.scan(/\w+$/).first }
 end
 
-def find_npcs(room_objs)
-  room_objs.sub(/You also see/, '').sub(/ with a [\w\s]+ sitting astride its back/, '').strip
-           .scan(%r{<pushBold/>[^<>]*<popBold/> which appears dead|<pushBold/>[^<>]*<popBold/> \(dead\)|<pushBold/>[^<>]*<popBold/>})
-           .reject { |obj| obj =~ /which appears dead|\(dead\)/ }
-           .map { |obj| obj.sub(/.*alfar warrior.*/, 'alfar warrior') }
-           .map { |obj| obj.sub(/.*sinewy leopard.*/, 'sinewy leopard') }
-           .map { |obj| obj.sub(/.*lesser naga.*/, 'lesser naga') }
-           .map { |obj| obj.sub(/.*Shadow Servant.*/, 'Shadow Servant') }
-           .map { |obj| obj.sub('<pushBold/>', '').sub(%r{<popBold/>.*}, '') }
-           .map { |obj| obj.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '') }
-           .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
-end
+    def find_npcs(room_objs)
+      room_objs.sub(/You also see/, '').sub(/ with a [\w\s]+ sitting astride its back/, '').strip
+               .scan(%r{<pushBold/>[^<>]*<popBold/> which appears dead|<pushBold/>[^<>]*<popBold/> \(dead\)|<pushBold/>[^<>]*<popBold/>})
+               .reject { |obj| obj =~ /which appears dead|\(dead\)/ }
+               .map { |obj| obj.sub(/.*alfar warrior.*/, 'alfar warrior') }
+               .map { |obj| obj.sub(/.*sinewy leopard.*/, 'sinewy leopard') }
+               .map { |obj| obj.sub(/.*lesser naga.*/, 'lesser naga') }
+               .map { |obj| obj.sub('<pushBold/>', '').sub(%r{<popBold/>.*}, '') }
+               .map { |obj| obj.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '') }
+               .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
+    end
 
-def find_dead_npcs(room_objs)
-  room_objs.sub(/You also see/, '').sub(/ with a [\w\s]+ sitting astride its back/, '')
-           .strip.scan(%r{<pushBold/>[^<>]*<popBold/> which appears dead|<pushBold/>[^<>]*<popBold/> \(dead\)|<pushBold/>[^<>]*<popBold/>})
-           .select { |obj| obj =~ /which appears dead|\(dead\)/ }
-           .map { |obj| obj.sub('<pushBold/>', '').sub(%r{<popBold/>.*}, '') }
-           .map { |obj| obj.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '') }
-           .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
-end
+    def find_dead_npcs(room_objs)
+      room_objs.sub(/You also see/, '').sub(/ with a [\w\s]+ sitting astride its back/, '')
+               .strip.scan(%r{<pushBold/>[^<>]*<popBold/> which appears dead|<pushBold/>[^<>]*<popBold/> \(dead\)|<pushBold/>[^<>]*<popBold/>})
+               .select { |obj| obj =~ /which appears dead|\(dead\)/ }
+               .map { |obj| obj.sub('<pushBold/>', '').sub(%r{<popBold/>.*}, '') }
+               .map { |obj| obj.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '') }
+               .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
+    end
 
 def find_objects(room_objs)
   room_objs.sub!("<pushBold/>a domesticated gelapod<popBold/>", 'domesticated gelapod')
   clean_and_split(room_objs)
     .reject { |obj| obj =~ /pushBold/ }
     .map { |obj| obj.sub(/\.$/, '').strip.sub(/^a /, '').strip.sub(/^some /, '') }
+end
+end
 end

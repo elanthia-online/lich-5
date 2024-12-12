@@ -565,6 +565,7 @@ module Lich
       sleep 0.1
       retry
     end
+    nil
   end
 
   def Lich.fix_game_host_port(gamehost, gameport)
