@@ -76,8 +76,8 @@ module Lich
           ThornPoisonEnd = /^Your body begins to respond normally again\.$|^Your skin takes on a more pinkish tint\.$/.freeze
 
           # Adding spell regexes.  Does not save to infomon.db.  Used by Spell and by ActiveSpells
-          SpellUpMsgs = /^#{Lich::Gemstone::Spell.upmsgs.join('$|^')}$/o.freeze
-          SpellDnMsgs = /^#{Lich::Gemstone::Spell.dnmsgs.join('$|^')}$/o.freeze
+          SpellUpMsgs = /^#{Lich::Common::Spell.upmsgs.join('$|^')}$/o.freeze
+          SpellDnMsgs = /^#{Lich::Common::Spell.dnmsgs.join('$|^')}$/o.freeze
           SpellsongRenewed = /^Your songs? renews?/.freeze
 
           All = Regexp.union(CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
