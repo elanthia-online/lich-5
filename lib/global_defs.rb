@@ -2387,8 +2387,8 @@ def do_client(client_string)
         respond "   #{$clean_lich_char}infomon effects           toggle display of effect durations"
         respond "   #{$clean_lich_char}infomon show              shows all current Infomon values for character"
       end
-        respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# in Room Title"
-        respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# in Room Title"
+      respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# in Room Title"
+      respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# in Room Title"
       respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
       respond
       respond 'If you liked this help message, you might also enjoy:'

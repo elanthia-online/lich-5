@@ -214,26 +214,26 @@ module Lich
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
                   if alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
                     if (Lich.display_lichid == true || Lich.display_uid == true)
-                    if XMLData.game =~ /^GS/
-                      if (Lich.display_lichid == true && Lich.display_uid == true)
-                        alt_string.sub!(/] \(\d+\)/) { "]" }
-                        alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                      elsif Lich.display_lichid == true
-                        alt_string.sub!(']') { " - #{Map.current.id}]" }
-                      elsif Lich.display_uid == true
-                        alt_string.sub!(/] \(\d+\)/) { "]" }
-                        alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                      end
+                      if XMLData.game =~ /^GS/
+                        if (Lich.display_lichid == true && Lich.display_uid == true)
+                          alt_string.sub!(/] \(\d+\)/) { "]" }
+                          alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                        elsif Lich.display_lichid == true
+                          alt_string.sub!(']') { " - #{Map.current.id}]" }
+                        elsif Lich.display_uid == true
+                          alt_string.sub!(/] \(\d+\)/) { "]" }
+                          alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                        end
                       end
                     end
                     @@room_number_after_ready = true
                   end
                   if @@room_number_after_ready && alt_string =~ /<prompt /
                     if XMLData.game =~ /^DR/
-                    room_number = ""
-                    room_number += "#{Map.current.id}" if Lich.display_lichid
-                    room_number += " - " if Lich.display_lichid && Lich.display_uid
-                    room_number += "#{XMLData.room_id}" if Lich.display_uid
+                      room_number = ""
+                      room_number += "#{Map.current.id}" if Lich.display_lichid
+                      room_number += " - " if Lich.display_lichid && Lich.display_uid
+                      room_number += "#{XMLData.room_id}" if Lich.display_uid
                       unless room_number.empty?
                         alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
                         if ['wrayth', 'stormfront'].include?($frontend)
@@ -243,13 +243,13 @@ module Lich
                       end
                     end
                     if Lich.display_exits == true
-                    room_exits = []
-                    Map.current.wayto.each_value do |value|
-                      if value.class != Proc
-                        # Don't include cardinals / up/down/out (usually just climb/go)
-                        room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
+                      room_exits = []
+                      Map.current.wayto.each_value do |value|
+                        if value.class != Proc
+                          # Don't include cardinals / up/down/out (usually just climb/go)
+                          room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
+                        end
                       end
-                    end
                       alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
                     end
                     @@room_number_after_ready = false
@@ -803,26 +803,26 @@ module Lich
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
                   if alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
                     if (Lich.display_lichid == true || Lich.display_uid == true)
-                    if XMLData.game =~ /^GS/
-                      if (Lich.display_lichid == true && Lich.display_uid == true)
-                        alt_string.sub!(/] \(\d+\)/) { "]" }
-                        alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                      elsif Lich.display_lichid == true
-                        alt_string.sub!(']') { " - #{Map.current.id}]" }
-                      elsif Lich.display_uid == true
-                        alt_string.sub!(/] \(\d+\)/) { "]" }
-                        alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                      end
+                      if XMLData.game =~ /^GS/
+                        if (Lich.display_lichid == true && Lich.display_uid == true)
+                          alt_string.sub!(/] \(\d+\)/) { "]" }
+                          alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                        elsif Lich.display_lichid == true
+                          alt_string.sub!(']') { " - #{Map.current.id}]" }
+                        elsif Lich.display_uid == true
+                          alt_string.sub!(/] \(\d+\)/) { "]" }
+                          alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                        end
                       end
                     end
                     @@room_number_after_ready = true
                   end
                   if @@room_number_after_ready && alt_string =~ /<prompt /
                     if XMLData.game =~ /^DR/
-                    room_number = ""
-                    room_number += "#{Map.current.id}" if Lich.display_lichid
-                    room_number += " - " if Lich.display_lichid && Lich.display_uid
-                    room_number += "#{XMLData.room_id}" if Lich.display_uid
+                      room_number = ""
+                      room_number += "#{Map.current.id}" if Lich.display_lichid
+                      room_number += " - " if Lich.display_lichid && Lich.display_uid
+                      room_number += "#{XMLData.room_id}" if Lich.display_uid
                       unless room_number.empty?
                         alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
                         if ['wrayth', 'stormfront'].include?($frontend)
@@ -832,13 +832,13 @@ module Lich
                       end
                     end
                     if Lich.display_exits == true
-                    room_exits = []
-                    Map.current.wayto.each_value do |value|
-                      if value.class != Proc
-                        # Don't include cardinals / up/down/out (usually just climb/go)
-                        room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
+                      room_exits = []
+                      Map.current.wayto.each_value do |value|
+                        if value.class != Proc
+                          # Don't include cardinals / up/down/out (usually just climb/go)
+                          room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
+                        end
                       end
-                    end
                       alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
                     end
                     @@room_number_after_ready = false

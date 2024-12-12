@@ -30,9 +30,9 @@ module Lich
         @@flags
       end
 
-  def self.matchers
-    @@matchers
+      def self.matchers
+        @@matchers
+      end
+    end
   end
-end
-end
 end
