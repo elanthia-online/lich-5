@@ -1,4 +1,4 @@
-require 'gemstone/bounty'
+require 'Gemstone/bounty'
 
 shared_examples "task predicate examples" do
   let(:falsey_types) { Lich::Gemstone::Bounty::KNOWN_TASKS - truthy_types }
