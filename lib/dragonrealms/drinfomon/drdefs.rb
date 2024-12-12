@@ -62,6 +62,7 @@ def find_npcs(room_objs)
            .map { |obj| obj.sub(/.*alfar warrior.*/, 'alfar warrior') }
            .map { |obj| obj.sub(/.*sinewy leopard.*/, 'sinewy leopard') }
            .map { |obj| obj.sub(/.*lesser naga.*/, 'lesser naga') }
+           .map { |obj| obj.sub(/.*Shadow Servant.*/, 'Shadow Servant') }
            .map { |obj| obj.sub('<pushBold/>', '').sub(%r{<popBold/>.*}, '') }
            .map { |obj| obj.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '') }
            .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
