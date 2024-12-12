@@ -1,4 +1,4 @@
-require_relative '../lib/gemstone/bounty/parser'
+require 'gemstone/bounty/parser'
 
 class Bounty
   describe Lich::Gemstone::Bounty::Parser, "#parse" do
