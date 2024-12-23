@@ -46,7 +46,7 @@ module Infomon
       Resource = /^(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck Inspiration|Guile|Vitality): (?<weekly>[0-9,]+)\/50,000 \(Weekly\)\s+(?<total>[0-9,]+)\/200,000 \(Total\)$/.freeze
       Suffused = /^Suffused (?<type>(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck Inspiration|Guile|Vitality)): (?<suffused>[0-9,]+)$/.freeze
       VolnFavor = /^Voln Favor: (?<favor>[-\d,]+)$/.freeze
-      CovertArtsCharges = /^Covert Arts Charges: (?<charges>[-\d,]+)/200$/.freeze
+      CovertArtsCharges = /^Covert Arts Charges: (?<charges>[-\d,]+)\/200$/.freeze
       GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments\.$/.freeze
       RedsteelMarks = /^\s* Redsteel Marks:            (?<redsteel_marks>[\d,]+)$/.freeze
       TicketGeneral = /^\s*General - (?<tickets>[\d,]+) tickets\.$/.freeze
