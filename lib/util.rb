@@ -93,7 +93,7 @@ module Lich
               line
             end
           })
-          use_fput ? fput command : put command
+          use_fput ? fput(command) : put(command)
 
           until (line = get) =~ start_pattern; end
           result << line.rstrip
