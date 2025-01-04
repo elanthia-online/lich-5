@@ -243,8 +243,10 @@ class XMLParser
       if name == 'nav'
         Lich::Claim.lock if defined?(Lich::Claim)
         @check_obvious_hiding = true
-        @previous_nav_rm = @room_id
-        @room_id = attributes['rm'].to_i
+        unless XMLData.game =~ /^DR/
+          @previous_nav_rm = @room_id
+          @room_id = attributes['rm'].to_i
+        end
         @arrival_pcs = []
         $nav_seen = true
         Map.last_seen_objects = nil if Map.method_defined?(:last_seen_objects); # DR Only
@@ -346,12 +348,19 @@ class XMLParser
       if (name == 'streamWindow')
         if (attributes['id'] == 'main') and attributes['subtitle']
           unless attributes['subtitle'].empty? || attributes['subtitle'].nil?
-            if Lich.display_uid == false && attributes['subtitle'][3..-1] =~ / - \d+$/
-              Lich.display_uid = true
+            if XMLData.game =~ /^GS/
+              if Lich.display_uid == false && attributes['subtitle'][3..-1] =~ / - \d+$/
+                Lich.display_uid = true
+              end
+              @room_title = '[' + attributes['subtitle'][3..-1].gsub(/ - \d+$/, '') + ']'
+            elsif XMLData.game =~ /^DR/
+              # - [Bosque Deriel, Hermit's Shacks] (230008)
+              Lich.log("Attributes are #{attributes['subtitle']}")
+              room = attributes['subtitle'].match(/(?<roomtitle>\[.*?\])(?:\s\((?<uid>(\d+))\))?/)
+              @room_title = "[#{room[:roomtitle]}]"
+              @room_id = room[:uid].to_i
+              Lich.log("@room_title is #{@room_title}")
             end
-            @room_title = '[' + attributes['subtitle'][3..-1].gsub(/ - \d+$/, '') + ']'
-          else
-            @room_title = String.new
           end
         end
       end
@@ -688,7 +697,9 @@ class XMLParser
       end
 
       if @current_style == 'roomName'
-        @room_name = text_string
+        # text.sub(/(\(.*?\))/) { str1 = $1 }
+        # @room_name = text_string
+        text_string.sub(/(\[.*?\])/) { @room_name = $1 }
       end
 
       if @active_tags.include?('inv')
