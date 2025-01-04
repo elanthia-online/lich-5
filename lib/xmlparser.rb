@@ -355,11 +355,11 @@ class XMLParser
               @room_title = '[' + attributes['subtitle'][3..-1].gsub(/ - \d+$/, '') + ']'
             elsif XMLData.game =~ /^DR/
               # - [Bosque Deriel, Hermit's Shacks] (230008)
-              Lich.log("Attributes are #{attributes['subtitle']}")
               room = attributes['subtitle'].match(/(?<roomtitle>\[.*?\])(?:\s\((?<uid>(\d+))\))?/)
               @room_title = "[#{room[:roomtitle]}]"
               @room_id = room[:uid].to_i
-              Lich.log("@room_title is #{@room_title}")
+            else
+              @room_title = String.new
             end
           end
         end
@@ -697,8 +697,6 @@ class XMLParser
       end
 
       if @current_style == 'roomName'
-        # text.sub(/(\(.*?\))/) { str1 = $1 }
-        # @room_name = text_string
         text_string.sub(/(\[.*?\])/) { @room_name = $1 }
       end
 
