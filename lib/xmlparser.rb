@@ -697,7 +697,7 @@ class XMLParser
       end
 
       if @current_style == 'roomName'
-        text_string.sub(/(\[.*?\])/) { @room_name = $1 }
+        @room_name = text_string.match(/(?<roomname>\[.*?\])/)[:roomname]
       end
 
       if @active_tags.include?('inv')
