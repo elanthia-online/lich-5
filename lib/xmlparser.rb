@@ -357,7 +357,7 @@ class XMLParser
               @room_title = '[' + attributes['subtitle'][3..-1].gsub(/ - \d+$/, '') + ']'
             elsif XMLData.game =~ /^DR/
               # - [Bosque Deriel, Hermit's Shacks] (230008)
-              room = attributes['subtitle'].match(/(?<roomtitle>\[.*?\])(?:\s\((?<uid>(\d+))\))?/)
+              room = attributes['subtitle'].match(/(?<roomtitle>\[.*?\])(?:\s\((?<uid>\d+)\))?/)
               @room_title = "[#{room[:roomtitle]}]"
               @room_id = room[:uid].to_i
             else
