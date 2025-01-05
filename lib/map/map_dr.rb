@@ -15,8 +15,9 @@ class Map
   @@uids                     = {}
 
   attr_reader :id
-  attr_accessor :title, :description, :paths, :uid, :location, :climate, :terrain, :wayto, :timeto, :image, :image_coords, :tags, :check_location, :unique_loot, :uid, :room_objects
-  def initialize(id, title, description, paths, uid = [], location=nil, climate=nil, terrain=nil, wayto={}, timeto={}, image=nil, image_coords=nil, tags=[], check_location=nil, unique_loot=nil, room_objects=nil)
+  attr_accessor :title, :description, :paths, :location, :climate, :terrain, :wayto, :timeto, :image, :image_coords, :tags, :check_location, :unique_loot, :uid, :room_objects
+
+  def initialize(id, title, description, paths, uid = [], location = nil, climate = nil, terrain = nil, wayto = {}, timeto = {}, image = nil, image_coords = nil, tags = [], check_location = nil, unique_loot = nil, _room_objects = nil)
     @id, @title, @description, @paths, @uid, @location, @climate, @terrain, @wayto, @timeto, @image, @image_coords, @tags, @check_location, @unique_loot = id, title, description, paths, uid, location, climate, terrain, wayto, timeto, image, image_coords, tags, check_location, unique_loot
     @@list[@id] = self
   end
@@ -35,7 +36,7 @@ class Map
 
   def Map.get_free_id
     Map.load unless @@loaded
-    return @@list.compact.max_by{ |r| r.id}.id + 1
+    return @@list.compact.max_by { |r| r.id }.id + 1
   end
 
   def Map.list
@@ -60,6 +61,7 @@ class Map
   def Map.previous
     return @@list[@@previous_room_id]
   end
+
   def Map.previous_uid
     return XMLData.previous_nav_rm
   end
@@ -94,77 +96,10 @@ class Map
     return @@list[id]
   end
 
-  def Map.match_current(script) # returns id
+  def Map.match_current(_script) # returns id
     @@current_room_mutex.synchronize {
-      peer_history = Hash.new
+      Hash.new
       need_set_desc_off = false
-      check_peer_tag = proc { |r|
-        begin
-          script.ignore_pause = true
-          peer_room_count = XMLData.room_count
-          if (peer_tag = r.tags.find { |tag| tag =~ /^(set desc on; )?peer [a-z]+ =~ \/.+\/$/ })
-            good = false
-            need_desc, peer_direction, peer_requirement = /^(set desc on; )?peer ([a-z]+) =~ \/(.+)\/$/.match(peer_tag).captures
-            need_desc = need_desc ? true : false
-            if peer_history[peer_room_count][peer_direction][need_desc].nil?
-              if need_desc
-                unless (last_roomdesc = $_SERVERBUFFER_.reverse.find { |line| line =~ /<style id="roomDesc"\/>/ }) and (last_roomdesc =~ /<style id="roomDesc"\/>[^<]/)
-                  put 'set description on'
-                  need_set_desc_off = true
-                end
-              end
-              save_want_downstream = script.want_downstream
-              script.want_downstream = true
-              squelch_started = false
-              squelch_proc = proc { |server_string|
-                if squelch_started
-                  if server_string =~ /<prompt/
-                    DownstreamHook.remove('squelch-peer')
-                  end
-                  nil
-                elsif server_string =~ /^You peer/
-                  squelch_started = true
-                  nil
-                else
-                  server_string
-                end
-              }
-              DownstreamHook.add('squelch-peer', squelch_proc)
-              result = dothistimeout "peer #{peer_direction}", 3, /^You peer|^\[Usage: PEER/
-              if result =~ /^You peer/
-                peer_results = Array.new
-                5.times {
-                  if (line = get?)
-                    peer_results.push line
-                    break if line =~ /^Obvious/
-                  end
-                }
-                if XMLData.room_count == peer_room_count
-                  peer_history[peer_room_count] ||= Hash.new
-                  peer_history[peer_room_count][peer_direction] ||= Hash.new
-                  if need_desc
-                    peer_history[peer_room_count][peer_direction][true] = peer_results
-                    peer_history[peer_room_count][peer_direction][false] = peer_results
-                  else
-                    peer_history[peer_room_count][peer_direction][false] = peer_results
-                  end
-                end
-              end
-              script.want_downstream = save_want_downstream
-            end
-            if peer_history[peer_room_count][peer_direction][need_desc].any? { |line| line =~ /#{peer_requirement}/ }
-              good = true
-            else
-              good = false
-            end
-          else
-            good = true
-          end
-        ensure
-          script.ignore_pause = false
-        end
-        good
-      }
       begin
         begin
           @@current_room_count = XMLData.room_count
@@ -336,14 +271,14 @@ class Map
     Map.load unless @@loaded
     @@uids.clear
     @@list.each { |r|
-        r.uid.each { |u|
+      r.uid.each { |u|
         if @@uids[u].nil?
-          @@uids[u] = [ r.id ]
+          @@uids[u] = [r.id]
         else
           @@uids[u] << r.id if !@@uids[u].include?(r.id)
         end
-        }
-       }
+      }
+    }
   end
 
   def Map.ids_from_uid(n)
@@ -365,17 +300,17 @@ class Map
     Map.load
   end
 
-  def Map.load(filename=nil)
+  def Map.load(filename = nil)
     if filename.nil?
       file_list = Dir.entries("#{DATA_DIR}/#{XMLData.game}").find_all { |filename| filename =~ /^map\-[0-9]+\.(?:dat|xml|json)$/i }.collect { |filename| "#{DATA_DIR}/#{XMLData.game}/#{filename}" }.sort.reverse
     else
-      file_list = [ filename ]
+      file_list = [filename]
     end
     if file_list.empty?
       respond "--- Lich: error: no map database found"
       return false
     end
-    while filename = file_list.shift
+    while (filename = file_list.shift)
       if filename =~ /\.json$/i
         if Map.load_json(filename)
           return true
@@ -393,28 +328,27 @@ class Map
     return false
   end
 
-  def Map.load_json(filename=nil)
+  def Map.load_json(filename = nil)
     @@load_mutex.synchronize {
       if @@loaded
         return true
       else
         if filename
-          file_list = [ filename ]
-          #respond "--- loading #{filename}" #if error
+          file_list = [filename]
+          # respond "--- loading #{filename}" #if error
         else
           file_list = Dir.entries("#{DATA_DIR}/#{XMLData.game}").find_all { |filename|
             filename =~ /^map\-[0-9]+\.json$/i
           }.collect { |filename|
             "#{DATA_DIR}/#{XMLData.game}/#{filename}"
           }.sort.reverse
-          #respond "--- loading #{filename}" #if error
+          # respond "--- loading #{filename}" #if error
         end
         if file_list.empty?
           respond "--- Lich: error: no map database found"
           return false
         end
-        error = false
-        while filename = file_list.shift
+        while (filename = file_list.shift)
           if File.exist?(filename)
             File.open(filename) { |f|
               JSON.parse(f.read).each { |room|
@@ -434,7 +368,7 @@ class Map
               }
             }
             @@tags.clear
-            respond "--- Map loaded #{filename}" #if error
+            respond "--- Map loaded #{filename}" # if error
             @@loaded = true
             Map.load_uids
             return true
@@ -444,7 +378,7 @@ class Map
     }
   end
 
-  def Map.load_dat(filename=nil)
+  def Map.load_dat(filename = nil)
     @@load_mutex.synchronize {
       if @@loaded
         return true
@@ -452,24 +386,22 @@ class Map
         if filename.nil?
           file_list = Dir.entries("#{DATA_DIR}/#{XMLData.game}").find_all { |filename| filename =~ /^map\-[0-9]+\.dat$/ }.collect { |filename| "#{DATA_DIR}/#{XMLData.game}/#{filename}" }.sort.reverse
         else
-          file_list = [ filename ]
+          file_list = [filename]
           respond "--- file_list = #{filename.inspect}"
         end
         if file_list.empty?
           respond "--- Lich: error: no map database found"
           return false
         end
-        error = false
-        while filename = file_list.shift
+        while (filename = file_list.shift)
           begin
             @@list = File.open(filename, 'rb') { |f| Marshal.load(f.read) }
-            respond "--- Map loaded #{filename}" #if error
+            respond "--- Map loaded #{filename}" # if error
 
             @@loaded = true
             Map.load_uids
             return true
           rescue
-            error = true
             if file_list.empty?
               respond "--- Lich: error: failed to load #{filename}: #{$!}"
             else
@@ -481,7 +413,8 @@ class Map
       end
     }
   end
-  def Map.load_xml(filename="#{DATA_DIR}/#{XMLData.game}/map.xml")
+
+  def Map.load_xml(filename = "#{DATA_DIR}/#{XMLData.game}/map.xml")
     @@load_mutex.synchronize {
       if @@loaded
         return true
@@ -495,7 +428,7 @@ class Map
         room = nil
         buffer = String.new
         unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
-        tag_start = proc { |element,attributes|
+        tag_start = proc { |element, attributes|
           current_tag = element
           current_attributes = attributes
           if element == 'room'
@@ -515,7 +448,7 @@ class Map
             room['room_objects'] = Array.new
           elsif element =~ /^(?:image|tsoran)$/ and attributes['name'] and attributes['x'] and attributes['y'] and attributes['size']
             room['image'] = attributes['name']
-            room['image_coords'] = [ (attributes['x'].to_i - (attributes['size']/2.0).round), (attributes['y'].to_i - (attributes['size']/2.0).round), (attributes['x'].to_i + (attributes['size']/2.0).round), (attributes['y'].to_i + (attributes['size']/2.0).round) ]
+            room['image_coords'] = [(attributes['x'].to_i - (attributes['size'] / 2.0).round), (attributes['y'].to_i - (attributes['size'] / 2.0).round), (attributes['x'].to_i + (attributes['size'] / 2.0).round), (attributes['y'].to_i + (attributes['size'] / 2.0).round)]
           elsif (element == 'image') and attributes['name'] and attributes['coords'] and (attributes['coords'] =~ /[0-9]+,[0-9]+,[0-9]+,[0-9]+/)
             room['image'] = attributes['name']
             room['image_coords'] = attributes['coords'].split(',').collect { |num| num.to_i }
@@ -533,8 +466,6 @@ class Map
           elsif current_tag == 'exit' and current_attributes['target']
             if current_attributes['type'].downcase == 'string'
               room['wayto'][current_attributes['target']] = text_string
-            elsif
-              room['wayto'][current_attributes['target']] = StringProc.new(text_string)
             end
             if current_attributes['cost'] =~ /^[0-9\.]+$/
               room['timeto'][current_attributes['target']] = current_attributes['cost'].to_f
@@ -557,12 +488,12 @@ class Map
         }
         begin
           File.open(filename) { |file|
-            while line = file.gets
+            while (line = file.gets)
               buffer.concat(line)
               # fixme: remove   (?=<)   ?
-              while str = buffer.slice!(/^<([^>]+)><\/\1>|^[^<]+(?=<)|^<[^<]+>/)
-                if str[0,1] == '<'
-                  if str[1,1] == '/'
+              while (str = buffer.slice!(/^<([^>]+)><\/\1>|^[^<]+(?=<)|^<[^<]+>/))
+                if str[0, 1] == '<'
+                  if str[1, 1] == '/'
                     element = /^<\/([^\s>\/]+)/.match(str).captures.first
                     tag_end.call(element)
                   else
@@ -576,7 +507,7 @@ class Map
                       attributes = Hash.new
                       str.scan(/([A-z][A-z0-9_\-]*)=(["'])(.*?)\2/).each { |attr| attributes[attr[0]] = attr[2].gsub(/&(#{unescape.keys.join('|')});/) { unescape[$1] } }
                       tag_start.call(element, attributes)
-                      tag_end.call(element) if str[-2,1] == '/'
+                      tag_end.call(element) if str[-2, 1] == '/'
                     end
                   end
                 else
@@ -601,7 +532,7 @@ class Map
     }
   end
 
-  def Map.save(filename="#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.dat")
+  def Map.save(filename = "#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.dat")
     if File.exist?(filename)
       respond "--- Backing up map database"
       begin
@@ -628,27 +559,29 @@ class Map
     @@list.delete_if { |r| r.nil? }
     @@list.to_json(args)
   end
-  def to_json(*args)
+
+  def to_json(*_args)
     mapjson = ({
-      :id => @id,
-      :title => @title,
-      :description => @description,
-      :paths => @paths,
-      :location => @location,
-      :climate => @climate,
-      :terrain => @terrain,
-      :wayto => @wayto,
-      :timeto => @timeto,
-      :image => @image,
-      :image_coords => @image_coords,
-      :tags => @tags,
+      :id             => @id,
+      :title          => @title,
+      :description    => @description,
+      :paths          => @paths,
+      :location       => @location,
+      :climate        => @climate,
+      :terrain        => @terrain,
+      :wayto          => @wayto,
+      :timeto         => @timeto,
+      :image          => @image,
+      :image_coords   => @image_coords,
+      :tags           => @tags,
       :check_location => @check_location,
-      :unique_loot => @unique_loot,
-      :uid => @uid,
-    }).delete_if { |a,b| b.nil? or (b.class == Array and b.empty?) };
+      :unique_loot    => @unique_loot,
+      :uid            => @uid,
+    }).delete_if { |_a, b| b.nil? or (b.class == Array and b.empty?) };
     JSON.pretty_generate(mapjson);
   end
-  def Map.save_json(filename="#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.json")
+
+  def Map.save_json(filename = "#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.json")
     if File.exist?(filename)
       respond "File exists!  Backing it up before proceeding..."
       begin
@@ -667,7 +600,8 @@ class Map
     }
     respond "#{filename} saved"
   end
-  def Map.save_xml(filename="#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.xml")
+
+  def Map.save_xml(filename = "#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.xml")
     if File.exist?(filename)
       respond "File exists!  Backing it up before proceeding..."
       begin
@@ -745,7 +679,7 @@ class Map
     time = 0.to_f
     until array.length < 2
       room = array.shift
-      if t = Map[room].timeto[array.first.to_s]
+      if (t = Map[room].timeto[array.first.to_s])
         if t.class == Proc
           time += t.call.to_f
         else
@@ -757,24 +691,26 @@ class Map
     end
     time
   end
-  def Map.dijkstra(source, destination=nil)
+
+  def Map.dijkstra(source, destination = nil)
     if source.class == Map
       source.dijkstra(destination)
-    elsif room = Map[source]
+    elsif (room = Map[source])
       room.dijkstra(destination)
     else
       echo "Map.dijkstra: error: invalid source room"
       nil
     end
   end
-  def dijkstra(destination=nil)
+
+  def dijkstra(destination = nil)
     begin
       Map.load unless @@loaded
       source = @id
       visited = Array.new
       shortest_distances = Array.new
       previous = Array.new
-      pq = [ source ]
+      pq = [source]
       pq_push = proc { |val|
         for i in 0...pq.size
           if shortest_distances[val] <= shortest_distances[pq[i]]
@@ -782,7 +718,7 @@ class Map
             break
           end
         end
-        pq.push(val) if i.nil? or (i == pq.size-1)
+        pq.push(val) if i.nil? or (i == pq.size - 1)
       }
       visited[source] = true
       shortest_distances[source] = 0
@@ -866,53 +802,58 @@ class Map
       nil
     end
   end
+
   def Map.findpath(source, destination)
     if source.class == Map
       source.path_to(destination)
-    elsif room = Map[source]
+    elsif (room = Map[source])
       room.path_to(destination)
     else
       echo "Map.findpath: error: invalid source room"
       nil
     end
   end
+
   def path_to(destination)
     Map.load unless @@loaded
     destination = destination.to_i
-    previous, shortest_distances = dijkstra(destination)
+    previous, _ = dijkstra(destination)
     return nil unless previous[destination]
-    path = [ destination ]
+    path = [destination]
     path.push(previous[path[-1]]) until previous[path[-1]] == @id
     path.reverse!
     path.pop
     return path
   end
+
   def find_nearest_by_tag(tag_name)
     target_list = Array.new
     @@list.each { |room| target_list.push(room.id) if room.tags.include?(tag_name) }
-    previous, shortest_distances = Map.dijkstra(@id, target_list)
+    _, shortest_distances = Map.dijkstra(@id, target_list)
     if target_list.include?(@id)
       @id
     else
       target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
-      target_list.sort { |a,b| shortest_distances[a] <=> shortest_distances[b] }.first
+      target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }.first
     end
   end
+
   def find_all_nearest_by_tag(tag_name)
     target_list = Array.new
     @@list.each { |room| target_list.push(room.id) if room.tags.include?(tag_name) }
-    previous, shortest_distances = Map.dijkstra(@id)
+    _, shortest_distances = Map.dijkstra(@id)
     target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
-    target_list.sort { |a,b| shortest_distances[a] <=> shortest_distances[b] }
+    target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }
   end
+
   def find_nearest(target_list)
     target_list = target_list.collect { |num| num.to_i }
     if target_list.include?(@id)
       @id
     else
-      previous, shortest_distances = Map.dijkstra(@id, target_list)
+      _, shortest_distances = Map.dijkstra(@id, target_list)
       target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
-      target_list.sort { |a,b| shortest_distances[a] <=> shortest_distances[b] }.first
+      target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }.first
     end
   end
 end
@@ -928,23 +869,27 @@ class Map
   def desc
     @description
   end
+
   def map_name
     @image
   end
+
   def map_x
     if @image_coords.nil?
       nil
     else
-      ((image_coords[0] + image_coords[2])/2.0).round
+      ((image_coords[0] + image_coords[2]) / 2.0).round
     end
   end
+
   def map_y
     if @image_coords.nil?
       nil
     else
-      ((image_coords[1] + image_coords[3])/2.0).round
+      ((image_coords[1] + image_coords[3]) / 2.0).round
     end
   end
+
   def map_roomsize
     if @image_coords.nil?
       nil
@@ -952,6 +897,7 @@ class Map
       image_coords[2] - image_coords[0]
     end
   end
+
   def geo
     nil
   end
