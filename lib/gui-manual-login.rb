@@ -47,7 +47,7 @@ sw = Gtk::ScrolledWindow.new
 sw.set_policy(:automatic, :automatic)
 sw.add(treeview)
 
-stormfront_option = Gtk::RadioButton.new(:label => 'Stormfront | Wrayth')
+stormfront_option = Gtk::RadioButton.new(:label => 'Wrayth')
 wizard_option = Gtk::RadioButton.new(:label => 'Wizard', :member => stormfront_option)
 avalon_option = Gtk::RadioButton.new(:label => 'Avalon', :member => stormfront_option)
 suks_option = Gtk::RadioButton.new(:label => 'suks', :member => stormfront_option)
