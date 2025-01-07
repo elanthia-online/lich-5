@@ -337,7 +337,7 @@ module Infomon
           :ok
         when Pattern::CovertArtsCharges
           match = Regexp.last_match
-          Infomon.set('resource.covert_arts_charges', match[:charges].delete(',').to_9)
+          Infomon.set('resource.covert_arts_charges', match[:charges].delete(',').to_i)
           :ok
         when Pattern::GigasArtifactFragments
           match = Regexp.last_match
