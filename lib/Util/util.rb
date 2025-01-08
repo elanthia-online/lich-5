@@ -50,7 +50,7 @@ module Lich
       "Util::#{prefix}-#{now}-#{Random.rand(10000)}"
     end
 
-    def self.issue_command(command, start_pattern, end_pattern = /<prompt/, include_end: true, timeout: 5, silent: nil, usexml: true, quiet: false)
+    def self.issue_command(command, start_pattern, end_pattern = /<prompt/, include_end: true, timeout: 5, silent: nil, usexml: true, quiet: false, use_fput: true)
       result = []
       name = self.anon_hook
       filter = false
@@ -93,7 +93,7 @@ module Lich
               line
             end
           })
-          fput command
+          use_fput ? fput(command) : put(command)
 
           until (line = get) =~ start_pattern; end
           result << line.rstrip
