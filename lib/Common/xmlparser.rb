@@ -31,7 +31,9 @@ xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
 
 =end
 
-class XMLParser
+module Lich
+  module Common
+    class XMLParser
   attr_reader :mana, :max_mana, :health, :max_health, :spirit, :max_spirit, :last_spirit,
               :stamina, :max_stamina, :stance_text, :stance_value, :mind_text, :mind_value,
               :prepared_spell, :encumbrance_text, :encumbrance_full_text, :encumbrance_value,
@@ -938,4 +940,6 @@ class XMLParser
     end
     @active_spells.keys
   end
+end
+end
 end
