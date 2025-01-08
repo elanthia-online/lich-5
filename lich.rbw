@@ -85,46 +85,46 @@ require File.join(LIB_DIR, 'version.rb')
 
 require File.join(LIB_DIR, 'lich.rb')
 require File.join(LIB_DIR, 'init.rb')
-require File.join(LIB_DIR, 'Common', 'front-end.rb')
-require File.join(LIB_DIR, 'Util', 'update.rb')
+require File.join(LIB_DIR, 'common', 'front-end.rb')
+require File.join(LIB_DIR, 'util', 'update.rb')
 
 # TODO: Need to split out initiatilzation functions to move require to top of file
-require File.join(LIB_DIR, 'Common', 'gtk.rb')
-# require File.join(LIB_DIR, 'Common', 'gui-login.rb')
-require File.join(LIB_DIR, 'Common', 'db_store.rb')
+require File.join(LIB_DIR, 'common', 'gtk.rb')
+# require File.join(LIB_DIR, 'common','gui-login.rb')
+require File.join(LIB_DIR, 'common', 'db_store.rb')
 # 2024-06-13 carve out
-require File.join(LIB_DIR, 'Common', 'class_exts', 'nilclass.rb')
-require File.join(LIB_DIR, 'Common', 'class_exts', 'numeric.rb')
-require File.join(LIB_DIR, 'Common', 'class_exts', 'string.rb')
-require File.join(LIB_DIR, 'Common', 'class_exts', 'stringproc.rb')
-require File.join(LIB_DIR, 'Common', 'class_exts', 'synchronizedsocket.rb')
-require File.join(LIB_DIR, 'Common', 'limitedarray.rb')
-require File.join(LIB_DIR, 'Common', 'xmlparser.rb')
-require File.join(LIB_DIR, 'Common', 'upstreamhook.rb')
-require File.join(LIB_DIR, 'Common', 'downstreamhook.rb')
-require File.join(LIB_DIR, 'Common', 'settings', 'settings.rb')
-require File.join(LIB_DIR, 'Common', 'settings', 'gamesettings.rb')
-require File.join(LIB_DIR, 'Common', 'settings', 'charsettings.rb')
-require File.join(LIB_DIR, 'Common', 'vars.rb')
+require File.join(LIB_DIR, 'common', 'class_exts', 'nilclass.rb')
+require File.join(LIB_DIR, 'common', 'class_exts', 'numeric.rb')
+require File.join(LIB_DIR, 'common', 'class_exts', 'string.rb')
+require File.join(LIB_DIR, 'common', 'class_exts', 'stringproc.rb')
+require File.join(LIB_DIR, 'common', 'class_exts', 'synchronizedsocket.rb')
+require File.join(LIB_DIR, 'common', 'limitedarray.rb')
+require File.join(LIB_DIR, 'common', 'xmlparser.rb')
+require File.join(LIB_DIR, 'common', 'upstreamhook.rb')
+require File.join(LIB_DIR, 'common', 'downstreamhook.rb')
+require File.join(LIB_DIR, 'common', 'settings', 'settings.rb')
+require File.join(LIB_DIR, 'common', 'settings', 'gamesettings.rb')
+require File.join(LIB_DIR, 'common', 'settings', 'charsettings.rb')
+require File.join(LIB_DIR, 'common', 'vars.rb')
 require File.join(LIB_DIR, 'sessionvars.rb')
 
 # Script classes move to lib 230305
-require File.join(LIB_DIR, 'Common', 'script.rb')
-require File.join(LIB_DIR, 'Common', 'watchfor.rb')
+require File.join(LIB_DIR, 'common', 'script.rb')
+require File.join(LIB_DIR, 'common', 'watchfor.rb')
 
 ## adding util to the list of defs
 
-require File.join(LIB_DIR, 'Util', 'util.rb')
+require File.join(LIB_DIR, 'util', 'util.rb')
 require File.join(LIB_DIR, 'messaging.rb')
 require File.join(LIB_DIR, 'global_defs.rb')
-require File.join(LIB_DIR, 'Common', 'buffer.rb')
+require File.join(LIB_DIR, 'common', 'buffer.rb')
 
-require File.join(LIB_DIR, 'Common', 'sharedbuffer.rb')
+require File.join(LIB_DIR, 'common', 'sharedbuffer.rb')
 
-require File.join(LIB_DIR, 'Gemstone', 'spellranks.rb')
+require File.join(LIB_DIR, 'gemstone', 'spellranks.rb')
 
 require File.join(LIB_DIR, 'games.rb')
-require File.join(LIB_DIR, 'Common', 'gameobj.rb')
+require File.join(LIB_DIR, 'common', 'gameobj.rb')
 
 #
 # Program start
@@ -146,7 +146,7 @@ require File.join(LIB_DIR, 'deprecated.rb')
 #
 # End deprecated stuff
 #
-require File.join(LIB_DIR, 'Common', 'uservars.rb')
+require File.join(LIB_DIR, 'common', 'uservars.rb')
 
 ## was here ##
 
