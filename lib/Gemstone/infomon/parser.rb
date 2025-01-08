@@ -48,6 +48,7 @@ module Lich
           Resource = /^(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck Inspiration|Guile|Vitality): (?<weekly>[0-9,]+)\/50,000 \(Weekly\)\s+(?<total>[0-9,]+)\/200,000 \(Total\)$/.freeze
           Suffused = /^Suffused (?<type>(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck Inspiration|Guile|Vitality)): (?<suffused>[0-9,]+)$/.freeze
           VolnFavor = /^Voln Favor: (?<favor>[-\d,]+)$/.freeze
+          CovertArtsCharges = /^Covert Arts Charges: (?<charges>[-\d,]+)\/200$/.freeze
           GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments\.$/.freeze
           RedsteelMarks = /^\s* Redsteel Marks:            (?<redsteel_marks>[\d,]+)$/.freeze
           TicketGeneral = /^\s*General - (?<tickets>[\d,]+) tickets\.$/.freeze
@@ -89,7 +90,7 @@ module Lich
                              Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral,
                              TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
                              WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
-                             ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd)
+                             ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges)
         end
 
         def self.find_cat(category)
@@ -334,6 +335,10 @@ module Lich
             when Pattern::VolnFavor
               match = Regexp.last_match
               Infomon.set('resources.voln_favor', match[:favor].delete(',').to_i)
+              :ok
+            when Pattern::CovertArtsCharges
+              match = Regexp.last_match
+              Infomon.set('resource.covert_arts_charges', match[:charges].delete(',').to_i)
               :ok
             when Pattern::GigasArtifactFragments
               match = Regexp.last_match
