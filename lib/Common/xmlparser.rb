@@ -263,9 +263,9 @@ module Lich
               end
               if @room_player_hidden
                 @arrival_pcs.push(:hidden)
-                @check_obvious_hiding = false
                 @room_player_hidden = false
               end
+              @check_obvious_hiding = false
               Lich::Claim.parser_handle(@room_id, @arrival_pcs)
               Lich::Claim.unlock
             end
@@ -904,9 +904,9 @@ module Lich
               end
               if @room_player_hidden
                 @arrival_pcs.push(:hidden)
-                @check_obvious_hiding = false
                 @room_player_hidden = false
               end
+              @check_obvious_hiding = false
               Lich::Claim.parser_handle(@room_id, @arrival_pcs)
               Lich::Claim.unlock
             end
