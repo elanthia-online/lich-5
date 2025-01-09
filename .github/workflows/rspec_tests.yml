@@ -1,5 +1,10 @@
 name: RSpec Tests
-on: [push]
+on: 
+  push:
+    branches:
+      - master
+      - staging
+  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
