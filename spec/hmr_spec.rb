@@ -14,7 +14,7 @@ def _respond(first = "", *messages)
 end
 
 require 'tmpdir'
-require "Common/hmr"
+require "common/hmr"
 
 module HMR
   module Helpers

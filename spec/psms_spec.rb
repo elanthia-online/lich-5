@@ -23,7 +23,7 @@ end
 require 'rexml/document'
 require 'rexml/streamlistener'
 require 'open-uri'
-require "Common/spell"
+require "common/spell"
 require 'tmpdir'
 
 Dir.mktmpdir do |dir|
