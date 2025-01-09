@@ -1,15 +1,18 @@
 name: Rubocop
 on: 
   push:
+    branches:
+      - master
+      - staging
     paths:
       - "**/*.lic"
       - "**/*.rb"
       - "lich.rbw"
-#  pull_request:
-#    paths:
-#      - "**/*.lic"
-#      - "**/*.rb"
-#      - "lich.rbw"
+  pull_request:
+    paths:
+      - "**/*.lic"
+      - "**/*.rb"
+      - "lich.rbw"
 
 jobs:
   rubocop:
