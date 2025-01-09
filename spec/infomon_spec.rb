@@ -38,14 +38,14 @@ end
 require "common/sharedbuffer"
 require "common/buffer"
 require "games"
-require "Gemstone/infomon/infomon"
+require "gemstone/infomon/infomon"
 require "attributes/stats"
 require "attributes/resources"
-require "Gemstone/infomon/currency"
-require "Gemstone/infomon/status"
-require "Gemstone/experience"
-require "Gemstone/psms"
-require "Gemstone/psms/ascension"
+require "gemstone/infomon/currency"
+require "gemstone/infomon/status"
+require "gemstone/experience"
+require "gemstone/psms"
+require "gemstone/psms/ascension"
 
 module Lich
   module Gemstone
