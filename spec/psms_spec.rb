@@ -23,7 +23,7 @@ end
 require 'rexml/document'
 require 'rexml/streamlistener'
 require 'open-uri'
-require "Common/spell"
+require "common/spell"
 require 'tmpdir'
 
 Dir.mktmpdir do |dir|
@@ -35,8 +35,8 @@ Dir.mktmpdir do |dir|
   puts " Done!"
 end
 
-require "Gemstone/psms"
-require "Gemstone/infomon/infomon"
+require "gemstone/psms"
+require "gemstone/infomon/infomon"
 
 module Char
   def self.name

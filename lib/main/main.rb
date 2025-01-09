@@ -43,7 +43,7 @@ reconnect_if_wanted = proc {
   $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
-  require File.join(LIB_DIR, 'Common', 'eaccess.rb')
+  require File.join(LIB_DIR, 'common', 'eaccess.rb')
 
   if ARGV.include?('--login')
     if File.exist?(File.join(DATA_DIR, "entry.dat"))
@@ -123,7 +123,7 @@ reconnect_if_wanted = proc {
   ## GUI starts here
 
   elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
-    require File.join(LIB_DIR, 'Common', 'gui-login.rb')
+    require File.join(LIB_DIR, 'common', 'gui-login.rb')
     gui_login
   end
 

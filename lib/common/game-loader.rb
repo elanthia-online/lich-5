@@ -4,34 +4,34 @@ module Lich
   module Common
     module GameLoader
       def self.common_before
-        require File.join(LIB_DIR, 'Common', 'log.rb')
-        require File.join(LIB_DIR, 'Common', 'spell.rb')
-        require File.join(LIB_DIR, 'Util', 'util.rb')
+        require File.join(LIB_DIR, 'common', 'log.rb')
+        require File.join(LIB_DIR, 'common', 'spell.rb')
+        require File.join(LIB_DIR, 'util', 'util.rb')
       end
 
       def self.gemstone
         self.common_before
         require File.join(LIB_DIR, 'map', 'map_gs.rb')
 
-        require File.join(LIB_DIR, 'Gemstone', 'effects.rb')
-        require File.join(LIB_DIR, 'Gemstone', 'bounty.rb')
-        require File.join(LIB_DIR, 'Gemstone', 'claim.rb')
-        require File.join(LIB_DIR, 'Gemstone', 'infomon', 'infomon.rb')
+        require File.join(LIB_DIR, 'gemstone', 'effects.rb')
+        require File.join(LIB_DIR, 'gemstone', 'bounty.rb')
+        require File.join(LIB_DIR, 'gemstone', 'claim.rb')
+        require File.join(LIB_DIR, 'gemstone', 'infomon', 'infomon.rb')
         require File.join(LIB_DIR, 'attributes', 'resources.rb')
         require File.join(LIB_DIR, 'attributes', 'stats.rb')
         require File.join(LIB_DIR, 'attributes', 'spells.rb')
         require File.join(LIB_DIR, 'attributes', 'skills.rb')
         require File.join(LIB_DIR, 'attributes', 'society.rb')
-        require File.join(LIB_DIR, 'Gemstone', 'infomon', 'status.rb')
-        require File.join(LIB_DIR, 'Gemstone', 'experience.rb')
+        require File.join(LIB_DIR, 'gemstone', 'infomon', 'status.rb')
+        require File.join(LIB_DIR, 'gemstone', 'experience.rb')
         require File.join(LIB_DIR, 'attributes', 'spellsong.rb')
-        require File.join(LIB_DIR, 'Gemstone', 'infomon', 'activespell.rb')
-        require File.join(LIB_DIR, 'Gemstone', 'psms.rb')
+        require File.join(LIB_DIR, 'gemstone', 'infomon', 'activespell.rb')
+        require File.join(LIB_DIR, 'gemstone', 'psms.rb')
         require File.join(LIB_DIR, 'attributes', 'char.rb')
-        require File.join(LIB_DIR, 'Gemstone', 'infomon', 'currency.rb')
-        require File.join(LIB_DIR, 'Gemstone', 'character', 'disk.rb') # dup
-        require File.join(LIB_DIR, 'Gemstone', 'character', 'group.rb')
-        require File.join(LIB_DIR, 'Gemstone', 'critranks')
+        require File.join(LIB_DIR, 'gemstone', 'infomon', 'currency.rb')
+        require File.join(LIB_DIR, 'gemstone', 'character', 'disk.rb') # dup
+        require File.join(LIB_DIR, 'gemstone', 'character', 'group.rb')
+        require File.join(LIB_DIR, 'gemstone', 'critranks')
         self.common_after
       end
 

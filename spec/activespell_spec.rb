@@ -3,7 +3,7 @@
 # To test capture we will use the following format in the response
 # "Spell.name"=>"String") which allows the hash to be instantiated
 
-require 'Gemstone/infomon/activespell'
+require 'gemstone/infomon/activespell'
 
 describe Lich::Gemstone::ActiveSpell do
   context "updates spell information" do
