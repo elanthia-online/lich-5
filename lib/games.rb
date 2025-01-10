@@ -228,6 +228,9 @@ module Lich
                     end
                     @@room_number_after_ready = true
                   end
+                  if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+                    alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+                  end
                   if @@room_number_after_ready && alt_string =~ /<prompt /
                     if XMLData.game =~ /^DR/
                       room_number = ""
@@ -816,6 +819,9 @@ module Lich
                       end
                     end
                     @@room_number_after_ready = true
+                  end
+                  if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+                    alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
                   end
                   if @@room_number_after_ready && alt_string =~ /<prompt /
                     if XMLData.game =~ /^DR/
