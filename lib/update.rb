@@ -207,6 +207,9 @@ module Lich
           FileUtils.remove_dir(File.join(TEMP_DIR, filename))
           FileUtils.mv(File.join(TEMP_DIR, new_target[0]), File.join(TEMP_DIR, filename))
 
+          # delete all existing lib files to not leave old ones behind
+          FileUtils.rm_f(Dir.glob(File.join(LIB_DIR, "*")))
+
           _respond; _respond 'Copying updated lich files to their locations.'
 
           ## We do not care about local edits from players in the Lich5 / lib location
