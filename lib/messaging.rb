@@ -95,7 +95,7 @@ module Lich
           preset_color_before = ""
           preset_color_after = ""
         end
-      elsif $frontend =~ /^(?:wizard)$/
+      elsif $frontend =~ /^(?:wizard|avalon)$/
         case type
         when "error", "yellow", "bold", "monster", "creature"
           preset_color_before = monsterbold_start

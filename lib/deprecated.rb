@@ -59,11 +59,11 @@ def take(*items)
   if unsh then fput("take my #{weap} from my #{UserVars.lootsack}") end
 end
 
-class StringProc
-  def StringProc._load(string)
-    StringProc.new(string)
-  end
-end
+# class StringProc
+#  def StringProc._load(string)
+#    StringProc.new(string)
+#  end
+# end
 
 class String
   def to_a # for compatibility with Ruby 1.8

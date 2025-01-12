@@ -2268,7 +2268,7 @@ def do_client(client_string)
       did_something = false
       nil
     elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
-      require "lib/hmr"
+      require "lib/common/hmr"
       HMR.reload %r{#{Regexp.last_match[:pattern]}}
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
       ExecScript.start("Infomon.sync", { :quiet => true })
