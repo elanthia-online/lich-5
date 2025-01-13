@@ -14,7 +14,7 @@
 require 'sequel'
 require 'tmpdir'
 require 'logger'
-require File.join(LIB_DIR, 'gemstone', 'infomon', 'cache.rb') # require_relative 'gemstone/infomon/cache.rb'
+require_relative '../lib/gemstone/infomon/cache.rb'
 
 module Lich
   module Gemstone
