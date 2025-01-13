@@ -36,7 +36,7 @@ Dir.mktmpdir do |dir|
 end
 
 require "gemstone/psms"
-require "gemstone/infomon/infomon"
+require "gemstone/infomon"
 
 module Char
   def self.name
