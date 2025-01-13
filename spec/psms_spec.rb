@@ -37,8 +37,8 @@ end
 
 # LIB_DIR = '/home/runner/work/refactor-lich-5/refactor-lich-5/lib'
 
-require_relative "./gemstone/psms.rb"
-require_relative "./gemstone/infomon.rb"
+require 'psms'
+require 'infomon'
 
 module Char
   def self.name
