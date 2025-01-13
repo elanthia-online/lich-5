@@ -35,9 +35,7 @@ Dir.mktmpdir do |dir|
   puts " Done!"
 end
 
-puts File.expand_path(File.dirname(__FILE__))
-LIB_DIR = File.join(File.expand_path(File.dirname(__FILE__)), 'lib')
-puts LIB_DIR
+LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 
 require "common/sharedbuffer"
 require "common/buffer"
