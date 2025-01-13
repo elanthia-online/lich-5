@@ -38,7 +38,7 @@ end
 require "common/sharedbuffer"
 require "common/buffer"
 require "games"
-require "gemstone/infomon/infomon"
+require "gemstone/infomon"
 require "attributes/stats"
 require "attributes/resources"
 require "gemstone/infomon/currency"
