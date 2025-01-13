@@ -28,8 +28,8 @@ module Lich
         require File.join(LIB_DIR, 'gemstone', 'psms.rb')
         require File.join(LIB_DIR, 'attributes', 'char.rb')
         require File.join(LIB_DIR, 'gemstone', 'infomon', 'currency.rb')
-        require File.join(LIB_DIR, 'gemstone', 'character', 'disk.rb') # dup
-        require File.join(LIB_DIR, 'gemstone', 'character', 'group.rb')
+        # require File.join(LIB_DIR, 'gemstone', 'character', 'disk.rb') # dup
+        require File.join(LIB_DIR, 'gemstone', 'group.rb')
         require File.join(LIB_DIR, 'gemstone', 'critranks')
         self.common_after
       end
