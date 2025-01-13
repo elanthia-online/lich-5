@@ -37,8 +37,8 @@ end
 
 # LIB_DIR = '/home/runner/work/refactor-lich-5/refactor-lich-5/lib'
 
-require 'psms'
-require 'infomon'
+require 'gemstone/psms'
+require 'gemstone/infomon'
 
 module Char
   def self.name
