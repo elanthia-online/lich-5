@@ -35,8 +35,13 @@ Dir.mktmpdir do |dir|
   puts " Done!"
 end
 
-require_relative "../lib/gemstone/psms.rb"
-require_relative "../lib/gemstone/infomon.rb"
+LIB_DIR = '/home/runner/work/refactor-lich-5/refactor-lich-5/lib'
+
+#require_relative "../lib/gemstone/psms.rb"
+#require_relative "../lib/gemstone/infomon.rb"
+
+require File.join(LIB_DIR, 'gemstone', 'psms.rb')
+require File.join(LIB_DIR, 'gemstone', 'infomon.rb')
 
 module Char
   def self.name
