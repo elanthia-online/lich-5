@@ -35,8 +35,8 @@ Dir.mktmpdir do |dir|
   puts " Done!"
 end
 
-require "gemstone/psms"
-require "gemstone/infomon"
+require_relative "./gemstone/psms"
+require_relative "./gemstone/infomon"
 
 module Char
   def self.name
