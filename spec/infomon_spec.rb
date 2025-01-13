@@ -222,13 +222,13 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get("stat.logic.enhanced")).to eq(118)
       expect(Lich::Gemstone::Infomon.get("stat.logic.enhanced_bonus")).to eq(34)
 
-      expect(Lich::Common::Stats.aura.value).to eq(100)
-      expect(Lich::Common::Stats.aura.bonus).to eq(-35)
-      expect(Lich::Common::Stats.logic.enhanced.value).to eq(118)
-      expect(Lich::Common::Stats.logic.enhanced.bonus).to eq(34)
+      expect(Lich::Gemstone::Stats.aura.value).to eq(100)
+      expect(Lich::Gemstone::Stats.aura.bonus).to eq(-35)
+      expect(Lich::Gemstone::Stats.logic.enhanced.value).to eq(118)
+      expect(Lich::Gemstone::Stats.logic.enhanced.bonus).to eq(34)
 
-      expect(Lich::Common::Stats.aur).to eq([100, -35])
-      expect(Lich::Common::Stats.enhanced_log).to eq([118, 34])
+      expect(Lich::Gemstone::Stats.aur).to eq([100, -35])
+      expect(Lich::Gemstone::Stats.enhanced_log).to eq([118, 34])
     end
 
     it "handles levelup" do
