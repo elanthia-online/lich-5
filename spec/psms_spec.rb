@@ -35,7 +35,7 @@ Dir.mktmpdir do |dir|
   puts " Done!"
 end
 
-# LIB_DIR = '/home/runner/work/refactor-lich-5/refactor-lich-5/lib'
+LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 
 require 'gemstone/psms'
 require 'gemstone/infomon'
