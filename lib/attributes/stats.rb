@@ -1,7 +1,7 @@
 require "ostruct"
 
 module Lich
-  module Common
+  module Gemstone
     module Stats
       def self.race
         Infomon.get("stat.race")

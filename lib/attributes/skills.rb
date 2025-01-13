@@ -1,7 +1,7 @@
 require "ostruct"
 
 module Lich
-  module Common
+  module Gemstone
     module Skills
       # extended function, now takes INT, Symbol, String but not shorthand Symbol, String
       # Skills.to_bonus(Skills.combatmaneuvers), Skills.to_bonus(5),
