@@ -16,7 +16,6 @@ require 'tmpdir'
 require 'logger'
 require_relative 'infomon/cache'
 
-
 module Lich
   module Gemstone
     module Infomon
