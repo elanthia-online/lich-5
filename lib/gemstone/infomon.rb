@@ -221,7 +221,7 @@ module Lich
 
       require_relative 'infomon/parser'
       require_relative 'infomon/xmlparser'
-      require_relative 'infomon/cli.rb'
+      require_relative 'infomon/cli'
     end
   end
 end
