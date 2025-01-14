@@ -105,6 +105,7 @@ require File.join(LIB_DIR, 'common', 'downstreamhook.rb')
 require File.join(LIB_DIR, 'common', 'settings', 'settings.rb')
 require File.join(LIB_DIR, 'common', 'settings', 'gamesettings.rb')
 require File.join(LIB_DIR, 'common', 'settings', 'charsettings.rb')
+require File.join(LIB_DIR, 'common', 'uservars.rb')
 require File.join(LIB_DIR, 'common', 'vars.rb')
 require File.join(LIB_DIR, 'sessionvars.rb')
 
@@ -146,7 +147,7 @@ require File.join(LIB_DIR, 'deprecated.rb')
 #
 # End deprecated stuff
 #
-require File.join(LIB_DIR, 'common', 'uservars.rb')
+
 
 ## was here ##
 
