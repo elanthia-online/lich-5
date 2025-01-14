@@ -150,7 +150,7 @@ module Lich
 
                 unless (XMLData.game.nil? or XMLData.game.empty?)
                   unless Module.const_defined?(:GameLoader)
-                    require File.join(LIB_DIR, 'common', 'game-loader.rb')
+                    require_relative 'common/game-loader'
                     GameLoader.load!
                   end
                 end
@@ -742,7 +742,7 @@ module Lich
 
                 unless (XMLData.game.nil? or XMLData.game.empty?)
                   unless Module.const_defined?(:GameLoader)
-                    require File.join(LIB_DIR, 'common', 'game-loader.rb')
+                    require_relative 'common/game-loader'
                     GameLoader.load!
                   end
                 end
