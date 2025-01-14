@@ -35,8 +35,10 @@ Dir.mktmpdir do |dir|
   puts " Done!"
 end
 
-require "gemstone/psms"
-require "gemstone/infomon/infomon"
+LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
+
+require 'gemstone/psms'
+require 'gemstone/infomon'
 
 module Char
   def self.name
