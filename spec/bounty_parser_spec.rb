@@ -1,4 +1,6 @@
-require 'gemstone/bounty/parser'
+# LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
+# require File.join(LIB_DIR, 'gemstone', 'bounty', 'parser') # require 'gemstone/bounty/parser'
+require_relative '../lib/gemstone/bounty/parser'
 
 class Bounty
   describe Lich::Gemstone::Bounty::Parser, "#parse" do

@@ -23,8 +23,8 @@ end
 require 'rexml/document'
 require 'rexml/streamlistener'
 require 'open-uri'
-require "common/spell"
 require 'tmpdir'
+require_relative '../lib/common/spell'
 
 Dir.mktmpdir do |dir|
   local_filename = File.join(dir, "effect-list.xml")
@@ -37,8 +37,8 @@ end
 
 LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 
-require 'gemstone/psms'
-require 'gemstone/infomon'
+require File.join(LIB_DIR, 'gemstone', 'psms.rb')
+require File.join(LIB_DIR, 'gemstone', 'infomon.rb')
 
 module Char
   def self.name

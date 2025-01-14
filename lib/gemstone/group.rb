@@ -1,6 +1,6 @@
 require "ostruct"
 require "benchmark"
-require File.join(LIB_DIR, 'gemstone', 'character', 'disk.rb') # dup
+require_relative('disk.rb')
 
 module Lich
   module Gemstone

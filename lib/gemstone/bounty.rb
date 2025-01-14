@@ -1,5 +1,5 @@
-require_relative "./bounty/parser"
-require_relative "./bounty/task"
+require_relative File.join('bounty', 'parser.rb') # "./bounty/parser"
+require_relative File.join('bounty', 'task.rb') # "./bounty/task"
 
 module Lich
   module Gemstone
