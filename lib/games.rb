@@ -209,111 +209,60 @@ module Lich
                   @@cli_scripts = true
                   Lich.log("info: logged in as #{XMLData.game}:#{XMLData.name}")
                 end
-
-                if (alt_string = DownstreamHook.run($_SERVERSTRING_))
-                  #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
-                    if (Lich.display_lichid == true || Lich.display_uid == true)
-                      if XMLData.game =~ /^GS/
-                        if (Lich.display_lichid == true && Lich.display_uid == true)
-                          alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                        elsif Lich.display_lichid == true
-                          alt_string.sub!(']') { " - #{Map.current.id}]" }
-                        elsif Lich.display_uid == true
-                          alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                        end
-                      end
+                begin
+                  # Check for valid XML prior to sending to client, corrects double and single nested quotes
+                  REXML::Document.parse_stream("<root>#{$_SERVERSTRING_}</root>", XMLData)
+                rescue
+                  unless $!.to_s =~ /invalid byte sequence/
+                    # Fixed invalid xml such as:
+                    # <mode id="GAME"/><settingsInfo  space not found crc='0' instance='DR'/>
+                    # <settingsInfo  space not found crc='0' instance='DR'/>
+                    if $_SERVERSTRING_ =~ /<settingsInfo .*?space not found /
+                      Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_.inspect}"
+                      $_SERVERSTRING_.sub!(/\s+space not found/, '')
+                      Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_.inspect}"
+                      retry
                     end
-                    @@room_number_after_ready = true
-                  end
-                  if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
-                    alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-                  end
-                  if @@room_number_after_ready && alt_string =~ /<prompt /
-                    if XMLData.game =~ /^DR/
-                      room_number = ""
-                      room_number += "#{Map.current.id}" if Lich.display_lichid
-                      room_number += " - " if Lich.display_lichid && Lich.display_uid
-                      room_number += "#{XMLData.room_id}" if Lich.display_uid
-                      unless room_number.empty?
-                        alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
-                        if ['wrayth', 'stormfront'].include?($frontend)
-                          alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
-                          alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
-                        end
-                      end
+                    # Illegal character "&" in raw string "  You also see a large bin labeled \"Lost & Found\", a hastily scrawled notice, a brightly painted sign, a silver bell, the Registrar's Office and "
+                    if $_SERVERSTRING_ =~ /\&/
+                      Lich.log "Invalid \& detected: #{$_SERVERSTRING_.inspect}"
+                      $_SERVERSTRING_.gsub!("&", '&amp;')
+                      Lich.log "Invalid \& stripped out: #{$_SERVERSTRING_.inspect}"
+                      retry
                     end
-                    if Lich.display_exits == true
-                      room_exits = []
-                      Map.current.wayto.each_value do |value|
-                        if value.class != Proc
-                          # Don't include cardinals / up/down/out (usually just climb/go)
-                          room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
-                        end
-                      end
-                      alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
+                    # Illegal character "\a" in raw string "\aYOU HAVE BEEN IDLE TOO LONG. PLEASE RESPOND.\a\n"
+                    if $_SERVERSTRING_ =~ /\a/
+                      Lich.log "Invalid \a detected: #{$_SERVERSTRING_.inspect}"
+                      $_SERVERSTRING_.gsub!("\a", '')
+                      Lich.log "Invalid \a stripped out: #{$_SERVERSTRING_.inspect}"
+                      retry
                     end
-                    @@room_number_after_ready = false
-                  end
-                  if $frontend =~ /^(?:wizard|avalon)$/
-                    alt_string = sf_to_wiz(alt_string)
-                  end
-                  if $_DETACHABLE_CLIENT_
-                    begin
-                      $_DETACHABLE_CLIENT_.write(alt_string)
-                    rescue
-                      $_DETACHABLE_CLIENT_.close rescue nil
-                      $_DETACHABLE_CLIENT_ = nil
-                      respond "--- Lich: error: client_thread: #{$!}"
-                      respond $!.backtrace.first
-                      Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                    # Fixes invalid XML with nested single quotes in it such as:
+                    # From DR intro tips
+                    # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
+                    # From GS
+                    # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
+                    while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
+                      Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
+                      $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
+                      Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
+                      retry
                     end
-                  else
-                    $_CLIENT_.write(alt_string)
+                    # Fixes invalid XML with nested double quotes in it such as:
+                    # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
+                    while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
+                      Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
+                      $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
+                      Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
+                      retry
+                    end
+                    $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                    Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
+                    Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                   end
+                  XMLData.reset
                 end
                 unless $_SERVERSTRING_ =~ /^<settings /
-                  # Fixed invalid xml such as:
-                  # <mode id="GAME"/><settingsInfo  space not found crc='0' instance='DR'/>
-                  # <settingsInfo  space not found crc='0' instance='DR'/>
-                  if $_SERVERSTRING_ =~ /<settingsInfo .*?space not found /
-                    Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_.inspect}"
-                    $_SERVERSTRING_.sub!('space not found', '')
-                    Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                  end
-                  begin
-                    pp $_SERVERSTRING_ if $deep_debug
-                    REXML::Document.parse_stream("<root>#{$_SERVERSTRING_}</root>", XMLData)
-                    # XMLData.parse($_SERVERSTRING_)
-                  rescue
-                    unless $!.to_s =~ /invalid byte sequence/
-                      # Fixes invalid XML with nested single quotes in it such as:
-                      # From DR intro tips
-                      # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
-                      # From GS
-                      # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
-                      while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
-                        Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
-                        Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      # Fixes invalid XML with nested double quotes in it such as:
-                      # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
-                      while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
-                        Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
-                        Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                      Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
-                      Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    end
-                    XMLData.reset
-                  end
                   if Module.const_defined?(:GameLoader)
                     infomon_serverstring = $_SERVERSTRING_.dup
                     if XMLData.game =~ /^GS/
@@ -339,6 +288,60 @@ module Lich
                     Script.new_downstream(line) if !line.empty?
                   }
                 end
+                if (alt_string = DownstreamHook.run($_SERVERSTRING_))
+                  #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
+                  if (Lich.display_lichid == true || Lich.display_uid == true) && alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
+                    if XMLData.game =~ /^GS/
+                      if (Lich.display_lichid == true && Lich.display_uid == true)
+                        alt_string.sub!(/] \(\d+\)/) { "]" }
+                        alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                      elsif Lich.display_lichid == true
+                        alt_string.sub!(']') { " - #{Map.current.id}]" }
+                      elsif Lich.display_uid == true
+                        alt_string.sub!(/] \(\d+\)/) { "]" }
+                        alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                      end
+                    elsif XMLData.game =~ /^DR/
+                      @@room_number_after_ready = true
+                    end
+                  end
+                  if @@room_number_after_ready && alt_string =~ /<prompt /
+                    room_number = ""
+                    room_number += "#{Map.current.id}" if Lich.display_lichid
+                    room_number += " - " if Lich.display_lichid && Lich.display_uid
+                    room_number += "#{XMLData.room_id}" if Lich.display_uid
+                    respond("Room Number: #{room_number}")
+                    room_exits = []
+                    Map.current.wayto.each_value do |value|
+                      if value.class != Proc
+                        # Don't include cardinals / up/down/out (usually just climb/go)
+                        room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
+                      end
+                    end
+                    respond("Room Exits: #{room_exits.join(', ')}") unless room_exits.empty?
+                    unless ['genie', 'frostbite'].include?($frontend)
+                      _respond("<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>")
+                      _respond("<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>")
+                    end
+                    @@room_number_after_ready = false
+                  end
+                  if $frontend =~ /^(?:wizard|avalon)$/
+                    alt_string = sf_to_wiz(alt_string)
+                  end
+                  if $_DETACHABLE_CLIENT_
+                    begin
+                      $_DETACHABLE_CLIENT_.write(alt_string)
+                    rescue
+                      $_DETACHABLE_CLIENT_.close rescue nil
+                      $_DETACHABLE_CLIENT_ = nil
+                      respond "--- Lich: error: client_thread: #{$!}"
+                      respond $!.backtrace.first
+                      Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                    end
+                  else
+                    $_CLIENT_.write(alt_string)
+                  end
+                end               
               rescue
                 $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                 Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
@@ -801,111 +804,60 @@ module Lich
                   @@cli_scripts = true
                   Lich.log("info: logged in as #{XMLData.game}:#{XMLData.name}")
                 end
-
-                if (alt_string = DownstreamHook.run($_SERVERSTRING_))
-                  #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
-                    if (Lich.display_lichid == true || Lich.display_uid == true)
-                      if XMLData.game =~ /^GS/
-                        if (Lich.display_lichid == true && Lich.display_uid == true)
-                          alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                        elsif Lich.display_lichid == true
-                          alt_string.sub!(']') { " - #{Map.current.id}]" }
-                        elsif Lich.display_uid == true
-                          alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                        end
-                      end
+                begin
+                  # Check for valid XML prior to sending to client, corrects double and single nested quotes
+                  REXML::Document.parse_stream("<root>#{$_SERVERSTRING_}</root>", XMLData)
+                rescue
+                  unless $!.to_s =~ /invalid byte sequence/
+                    # Fixed invalid xml such as:
+                    # <mode id="GAME"/><settingsInfo  space not found crc='0' instance='DR'/>
+                    # <settingsInfo  space not found crc='0' instance='DR'/>
+                    if $_SERVERSTRING_ =~ /<settingsInfo .*?space not found /
+                      Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_.inspect}"
+                      $_SERVERSTRING_.sub!(/\s+space not found/, '')
+                      Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_.inspect}"
+                      retry
                     end
-                    @@room_number_after_ready = true
-                  end
-                  if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
-                    alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-                  end
-                  if @@room_number_after_ready && alt_string =~ /<prompt /
-                    if XMLData.game =~ /^DR/
-                      room_number = ""
-                      room_number += "#{Map.current.id}" if Lich.display_lichid
-                      room_number += " - " if Lich.display_lichid && Lich.display_uid
-                      room_number += "#{XMLData.room_id}" if Lich.display_uid
-                      unless room_number.empty?
-                        alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
-                        if ['wrayth', 'stormfront'].include?($frontend)
-                          alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
-                          alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
-                        end
-                      end
+                    # Illegal character "&" in raw string "  You also see a large bin labeled \"Lost & Found\", a hastily scrawled notice, a brightly painted sign, a silver bell, the Registrar's Office and "
+                    if $_SERVERSTRING_ =~ /\&/
+                      Lich.log "Invalid \& detected: #{$_SERVERSTRING_.inspect}"
+                      $_SERVERSTRING_.gsub!("&", '&amp;')
+                      Lich.log "Invalid \& stripped out: #{$_SERVERSTRING_.inspect}"
+                      retry
                     end
-                    if Lich.display_exits == true
-                      room_exits = []
-                      Map.current.wayto.each_value do |value|
-                        if value.class != Proc
-                          # Don't include cardinals / up/down/out (usually just climb/go)
-                          room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
-                        end
-                      end
-                      alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
+                    # Illegal character "\a" in raw string "\aYOU HAVE BEEN IDLE TOO LONG. PLEASE RESPOND.\a\n"
+                    if $_SERVERSTRING_ =~ /\a/
+                      Lich.log "Invalid \a detected: #{$_SERVERSTRING_.inspect}"
+                      $_SERVERSTRING_.gsub!("\a", '')
+                      Lich.log "Invalid \a stripped out: #{$_SERVERSTRING_.inspect}"
+                      retry
                     end
-                    @@room_number_after_ready = false
-                  end
-                  if $frontend =~ /^(?:wizard|avalon)$/
-                    alt_string = sf_to_wiz(alt_string)
-                  end
-                  if $_DETACHABLE_CLIENT_
-                    begin
-                      $_DETACHABLE_CLIENT_.write(alt_string)
-                    rescue
-                      $_DETACHABLE_CLIENT_.close rescue nil
-                      $_DETACHABLE_CLIENT_ = nil
-                      respond "--- Lich: error: client_thread: #{$!}"
-                      respond $!.backtrace.first
-                      Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                    # Fixes invalid XML with nested single quotes in it such as:
+                    # From DR intro tips
+                    # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
+                    # From GS
+                    # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
+                    while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
+                      Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
+                      $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
+                      Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
+                      retry
                     end
-                  else
-                    $_CLIENT_.write(alt_string)
+                    # Fixes invalid XML with nested double quotes in it such as:
+                    # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
+                    while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
+                      Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
+                      $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
+                      Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
+                      retry
+                    end
+                    $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                    Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
+                    Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                   end
+                  XMLData.reset
                 end
                 unless $_SERVERSTRING_ =~ /^<settings /
-                  # Fixed invalid xml such as:
-                  # <mode id="GAME"/><settingsInfo  space not found crc='0' instance='DR'/>
-                  # <settingsInfo  space not found crc='0' instance='DR'/>
-                  if $_SERVERSTRING_ =~ /<settingsInfo .*?space not found /
-                    Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_.inspect}"
-                    $_SERVERSTRING_.sub!('space not found', '')
-                    Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                  end
-                  begin
-                    pp $_SERVERSTRING_ if $deep_debug
-                    REXML::Document.parse_stream("<root>#{$_SERVERSTRING_}</root>", XMLData)
-                    # XMLData.parse($_SERVERSTRING_)
-                  rescue
-                    unless $!.to_s =~ /invalid byte sequence/
-                      # Fixes invalid XML with nested single quotes in it such as:
-                      # From DR intro tips
-                      # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
-                      # From GS
-                      # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
-                      while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
-                        Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
-                        Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      # Fixes invalid XML with nested double quotes in it such as:
-                      # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
-                      while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
-                        Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
-                        Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                      Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
-                      Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    end
-                    XMLData.reset
-                  end
                   if Module.const_defined?(:GameLoader)
                     infomon_serverstring = $_SERVERSTRING_.dup
                     if XMLData.game =~ /^GS/
@@ -930,6 +882,60 @@ module Lich
 
                     Script.new_downstream(line) if !line.empty?
                   }
+                end
+                if (alt_string = DownstreamHook.run($_SERVERSTRING_))
+                  #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
+                  if (Lich.display_lichid == true || Lich.display_uid == true) && alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
+                    if XMLData.game =~ /^GS/
+                      if (Lich.display_lichid == true && Lich.display_uid == true)
+                        alt_string.sub!(/] \(\d+\)/) { "]" }
+                        alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                      elsif Lich.display_lichid == true
+                        alt_string.sub!(']') { " - #{Map.current.id}]" }
+                      elsif Lich.display_uid == true
+                        alt_string.sub!(/] \(\d+\)/) { "]" }
+                        alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                      end
+                    elsif XMLData.game =~ /^DR/
+                      @@room_number_after_ready = true
+                    end
+                  end
+                  if @@room_number_after_ready && alt_string =~ /<prompt /
+                    room_number = ""
+                    room_number += "#{Map.current.id}" if Lich.display_lichid
+                    room_number += " - " if Lich.display_lichid && Lich.display_uid
+                    room_number += "#{XMLData.room_id}" if Lich.display_uid
+                    respond("Room Number: #{room_number}")
+                    room_exits = []
+                    Map.current.wayto.each_value do |value|
+                      if value.class != Proc
+                        # Don't include cardinals / up/down/out (usually just climb/go)
+                        room_exits << value if value !~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
+                      end
+                    end
+                    respond("Room Exits: #{room_exits.join(', ')}") unless room_exits.empty?
+                    unless ['genie', 'frostbite'].include?($frontend)
+                      _respond("<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>")
+                      _respond("<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>")
+                    end
+                    @@room_number_after_ready = false
+                  end
+                  if $frontend =~ /^(?:wizard|avalon)$/
+                    alt_string = sf_to_wiz(alt_string)
+                  end
+                  if $_DETACHABLE_CLIENT_
+                    begin
+                      $_DETACHABLE_CLIENT_.write(alt_string)
+                    rescue
+                      $_DETACHABLE_CLIENT_.close rescue nil
+                      $_DETACHABLE_CLIENT_ = nil
+                      respond "--- Lich: error: client_thread: #{$!}"
+                      respond $!.backtrace.first
+                      Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                    end
+                  else
+                    $_CLIENT_.write(alt_string)
+                  end
                 end
               rescue
                 $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
