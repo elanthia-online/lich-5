@@ -4,15 +4,14 @@ module Lich
       $DRINFOMON_VERSION = '3.0'
 
       DRINFOMON_IN_CORE_LICH = true
-
-      require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drdefs.rb')
-      require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drvariables.rb')
-      require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drparser.rb')
-      require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drskill.rb')
-      require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drstats.rb')
-      require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drroom.rb')
-      require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drspells.rb')
-      require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'events.rb')
+      require_relative 'drinfomon/drdefs'
+      require_relative 'drinfomon/drvariables'
+      require_relative 'drinfomon/drparser'
+      require_relative 'drinfomon/drskill'
+      require_relative 'drinfomon/drstats'
+      require_relative 'drinfomon/drroom'
+      require_relative 'drinfomon/drspells'
+      require_relative 'drinfomon/events'
     end
   end
 end

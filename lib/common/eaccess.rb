@@ -1,6 +1,6 @@
 require "openssl"
 require "socket"
-require File.join(LIB_DIR, 'common', 'account.rb')
+require_relative 'account'
 
 module Lich
   module Common

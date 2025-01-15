@@ -30,7 +30,7 @@ if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
   exit
 end
 
-require File.join(LIB_DIR, 'wine.rb')
+require_relative 'wine'
 
 begin
   # stupid workaround for Windows
