@@ -161,6 +161,8 @@ module Lich
                   $_SERVERSTRING_ = self.clean_dr_serverstring($_SERVERSTRING_)
                 end
 
+                pp $_SERVERSTRING_ if $deep_debug # retain for deep troubleshooting
+
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
 
                 if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
