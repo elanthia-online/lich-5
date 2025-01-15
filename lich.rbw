@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # encoding: US-ASCII
 
-#####
+######
 # Copyright (C) 2005-2006 Murray Miron
 # All rights reserved.
 #
@@ -31,9 +31,9 @@
 # LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#####
+######
 
-# Lich is maintained by Matt Lowe (tillmen@lichproject.org
+# Lich is maintained by Matt Lowe (tillmen@lichproject.org)
 # Lich version 5 and higher maintained by Elanthia Online and only supports GTK3 Ruby
 
 # process ARGV for constants before loading constants.rb: issue #304
@@ -77,69 +77,76 @@ require 'zlib'
 
 # TODO: Move all local requires to top of file
 if defined? LIB_DIR
-  require_relative 'constants'
+  require File.join(LIB_DIR, 'constants.rb')
 else
-  require_relative './lib/constants'
+  require_relative('./lib/constants.rb')
 end
-require_relative 'lib/version'
+require File.join(LIB_DIR, 'version.rb')
 
-require_relative 'lib/lich'
-require_relative 'lib/init'
-require_relative 'lib/common/front-end'
-require_relative 'lib/util/update'
+require File.join(LIB_DIR, 'lich.rb')
+require File.join(LIB_DIR, 'init.rb')
+require File.join(LIB_DIR, 'front-end.rb')
+require File.join(LIB_DIR, 'update.rb')
 
 # TODO: Need to split out initiatilzation functions to move require to top of file
-require_relative 'lib/common/gtk'
-require_relative 'lib/common/db_store'
-# 2024-06-13 carve out
-require_relative 'lib/common/class_exts/nilclass'
-require_relative 'lib/common/class_exts/numeric'
-require_relative 'lib/common/class_exts/string'
-require_relative 'lib/common/class_exts/stringproc'
-require_relative 'lib/common/class_exts/synchronizedsocket'
-require_relative 'lib/common/limitedarray'
-require_relative 'lib/common/xmlparser'
-require_relative 'lib/common/upstreamhook'
-require_relative 'lib/common/downstreamhook'
-require_relative 'lib/common/settings/settings'
-require_relative 'lib/common/settings/gamesettings'
-require_relative 'lib/common/settings/charsettings'
-require_relative 'lib/common/uservars'
-require_relative 'lib/common/vars'
-require_relative 'lib/sessionvars'
+require File.join(LIB_DIR, 'gtk.rb')
+require File.join(LIB_DIR, 'gui-login.rb')
+require File.join(LIB_DIR, 'db_store.rb')
+#2024-06-13 carve out
+require File.join(LIB_DIR, 'class_exts', 'nilclass.rb')
+require File.join(LIB_DIR, 'class_exts', 'numeric.rb')
+require File.join(LIB_DIR, 'class_exts', 'string.rb')
+require File.join(LIB_DIR, 'class_exts', 'stringproc.rb')
+require File.join(LIB_DIR, 'class_exts', 'synchronizedsocket.rb')
+require File.join(LIB_DIR, 'limitedarray.rb')
+require File.join(LIB_DIR, 'xmlparser.rb')
+require File.join(LIB_DIR, 'upstreamhook.rb')
+require File.join(LIB_DIR, 'downstreamhook.rb')
+require File.join(LIB_DIR, 'settings', 'settings.rb')
+require File.join(LIB_DIR, 'settings', 'gamesettings.rb')
+require File.join(LIB_DIR, 'settings', 'charsettings.rb')
+require File.join(LIB_DIR, 'vars.rb')
+require File.join(LIB_DIR, 'sessionvars.rb')
 
 # Script classes move to lib 230305
-require_relative 'lib/common/script'
-require_relative 'lib/common/watchfor'
+require File.join(LIB_DIR, 'script.rb')
+require File.join(LIB_DIR, 'watchfor.rb')
 
 ## adding util to the list of defs
-require_relative 'lib/util/util'
-require_relative 'lib/messaging'
-require_relative 'lib/global_defs'
-require_relative 'lib/common/buffer'
-require_relative 'lib/common/sharedbuffer'
-require_relative 'lib/gemstone/spellranks'
-require_relative 'lib/games'
-require_relative 'lib/common/gameobj'
 
-#
-# Program start
-#
-require_relative 'lib/main/argv_options'
-require_relative 'lib/main/main'
+require File.join(LIB_DIR, 'util.rb')
+require File.join(LIB_DIR, 'messaging.rb')
+require File.join(LIB_DIR, 'global_defs.rb')
+require File.join(LIB_DIR, 'buffer.rb')
 
-include Lich::Common
-XMLData = Lich::Common::XMLParser.new
+require File.join(LIB_DIR, 'sharedbuffer.rb')
+
+require File.join(LIB_DIR, 'spellranks.rb')
+
+require File.join(LIB_DIR, 'games.rb')
+require File.join(LIB_DIR, 'gameobj.rb')
+
+include Games::Gemstone
+
+JUMP = Exception.exception('JUMP')
+JUMP_ERROR = Exception.exception('JUMP_ERROR')
+
+XMLData = XMLParser.new
 
 #
 # Start deprecated stuff
 #
-JUMP = Exception.exception('JUMP')
-JUMP_ERROR = Exception.exception('JUMP_ERROR')
-require_relative 'lib/deprecated'
+require File.join(LIB_DIR, 'deprecated.rb')
 #
 # End deprecated stuff
 #
+require File.join(LIB_DIR, 'uservars.rb')
+
+#
+# Program start
+#
+require File.join(LIB_DIR, 'main', 'argv_options.rb')
+require File.join(LIB_DIR, 'main', 'main.rb')
 
 if defined?(Gtk)
   Thread.current.priority = -10
