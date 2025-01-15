@@ -46,9 +46,6 @@ jobs:
           cp -r lib Lich5/
           gem install activesupport ascii_charts concurrent-ruby curses ftools gtk3 json jwt logger mechanize nokogiri ostruct redis sequel sqlite3 terminal-table tomlib tzinfo tzinfo-data webrick xmpp4r --no-document
           gem list
-#          rm -r -fo C:\msys64\ucrt64\share\man\*
-#          rm -r -fo C:\msys64\usr\share\man\*
-#          rm -r -fo C:\msys64\var\cache\pacman\pkg\*
           iscc "R4LGTK3.iss"
           mv .\Output\Ruby4Lich5.exe .\Ruby4Lich5.exe
       - name: Add to Release
