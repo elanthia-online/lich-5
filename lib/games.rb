@@ -341,7 +341,7 @@ module Lich
                   else
                     $_CLIENT_.write(alt_string)
                   end
-                end               
+                end
               rescue
                 $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                 Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
