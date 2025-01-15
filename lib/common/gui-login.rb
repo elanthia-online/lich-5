@@ -44,9 +44,8 @@ module Lich
         # the following files are split out to ease interface design
         # they have to be included in the method's Gtk queue block to
         # be used, so they have to be called at this specific point.
-
-        require File.join(LIB_DIR, 'common', 'gui-saved-login.rb')
-        require File.join(LIB_DIR, 'common', 'gui-manual-login')
+        require_relative 'gui-saved-login'
+        require_relative 'gui-manual-login'
 
         #
         # put it together and show the window
