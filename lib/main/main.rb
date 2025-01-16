@@ -448,6 +448,8 @@ reconnect_if_wanted = proc {
           exit
         }
         begin
+          include Lich::Gemstone if @game_host =~ /gs/i
+          include Lich::DragonRealms if @game_host =~ /dr/i
           Game.open(@game_host, @game_port)
         rescue
           Lich.log "error: #{$!}"
