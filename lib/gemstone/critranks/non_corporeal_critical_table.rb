@@ -285,7 +285,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 0,
                                   :secondary_wound => nil,
-                                  :regex           => /Smoky tendrils rise from (?:.*?)?neck as (?:your|the) attack sweeps through./ },
+                                  :regex           => /Smoky tendrils rise from (?:.* )?neck as (?:your|the) attack sweeps through./ },
                            4 =>
                                 { :type            => "Non-corporeal",
                                   :location        => "Neck",
