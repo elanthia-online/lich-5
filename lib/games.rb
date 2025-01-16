@@ -162,7 +162,7 @@ module Lich
                 end
 
                 pp $_SERVERSTRING_ if $deep_debug # retain for deep troubleshooting
-                
+
                 $_SERVERBUFFER_.push($_SERVERSTRING_)
 
                 if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
@@ -334,9 +334,6 @@ module Lich
                         end
                       end
                       alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
-                                                                     
-                                                                                                                                                                         
-                                                                                                                                                                                                    
                     end
                     @@room_number_after_ready = false
                   end
@@ -942,9 +939,6 @@ module Lich
                         end
                       end
                       alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
-                                                                     
-                                                                                                                                                                         
-                                                                                                                                                                                                    
                     end
                     @@room_number_after_ready = false
                   end
