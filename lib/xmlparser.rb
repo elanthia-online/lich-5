@@ -6,9 +6,11 @@ xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
     game: Gemstone
     tags: CORE, spells
     required: Lich > 5.7
-    version: 1.3.3
+    version: 1.3.4
 
   changelog:
+    v1.3.4 (2025-01-04)
+      Feature: Add support for room IDs in DR
     v1.3.3 (2024-10-31)
       Feature: Add DR Active Spells to XMLData
     v1.3.2 (2024-10-17)
@@ -243,8 +245,10 @@ class XMLParser
       if name == 'nav'
         Lich::Claim.lock if defined?(Lich::Claim)
         @check_obvious_hiding = true
-        @previous_nav_rm = @room_id
-        @room_id = attributes['rm'].to_i
+        unless XMLData.game =~ /^DR/
+          @previous_nav_rm = @room_id
+          @room_id = attributes['rm'].to_i
+        end
         @arrival_pcs = []
         $nav_seen = true
         Map.last_seen_objects = nil if Map.method_defined?(:last_seen_objects); # DR Only
@@ -257,9 +261,9 @@ class XMLParser
           end
           if @room_player_hidden
             @arrival_pcs.push(:hidden)
-            @check_obvious_hiding = false
             @room_player_hidden = false
           end
+          @check_obvious_hiding = false
           Lich::Claim.parser_handle(@room_id, @arrival_pcs)
           Lich::Claim.unlock
         end
@@ -346,12 +350,19 @@ class XMLParser
       if (name == 'streamWindow')
         if (attributes['id'] == 'main') and attributes['subtitle']
           unless attributes['subtitle'].empty? || attributes['subtitle'].nil?
-            if Lich.display_uid == false && attributes['subtitle'][3..-1] =~ / - \d+$/
-              Lich.display_uid = true
+            if XMLData.game =~ /^GS/
+              if Lich.display_uid == false && attributes['subtitle'][3..-1] =~ / - \d+$/
+                Lich.display_uid = true
+              end
+              @room_title = '[' + attributes['subtitle'][3..-1].gsub(/ - \d+$/, '') + ']'
+            elsif XMLData.game =~ /^DR/
+              # - [Bosque Deriel, Hermit's Shacks] (230008)
+              room = attributes['subtitle'].match(/(?<roomtitle>\[.*?\])(?:\s\((?<uid>\d+)\))?/)
+              @room_title = "[#{room[:roomtitle]}]"
+              @room_id = room[:uid].to_i
+            else
+              @room_title = String.new
             end
-            @room_title = '[' + attributes['subtitle'][3..-1].gsub(/ - \d+$/, '') + ']'
-          else
-            @room_title = String.new
           end
         end
       end
@@ -688,7 +699,7 @@ class XMLParser
       end
 
       if @current_style == 'roomName'
-        @room_name = text_string
+        @room_name = text_string.match(/(?<roomname>\[.*?\])/)[:roomname]
       end
 
       if @active_tags.include?('inv')
@@ -891,9 +902,9 @@ class XMLParser
           end
           if @room_player_hidden
             @arrival_pcs.push(:hidden)
-            @check_obvious_hiding = false
             @room_player_hidden = false
           end
+          @check_obvious_hiding = false
           Lich::Claim.parser_handle(@room_id, @arrival_pcs)
           Lich::Claim.unlock
         end
