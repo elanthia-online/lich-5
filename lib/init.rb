@@ -517,7 +517,7 @@ rescue LoadError
   exit
 end
 
-unless ARGV.include?('--no-gui')
+unless ARGV.grep(/^--no-(?:gtk|gui)$/).any? || (ENV['DISPLAY'].nil? && !ARGV.include?('--gtk'))
   begin
     require 'gtk3'
     HAVE_GTK = true
