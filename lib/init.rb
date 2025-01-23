@@ -512,13 +512,12 @@ rescue LoadError
     end
   else
     # fixme: no sqlite3 on Linux/Mac
-    puts "The sqlite3 gem is not installed (or failed to load), you may need to: sudo gem install sqlite3"
+    puts "The sqlite3 gem is not installed (or failed to load), you may need to: gem install sqlite3"
   end
   exit
 end
 
-if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i) or ENV['DISPLAY']) and !ARGV.include?('--no-gui')
-
+unless ARGV.grep(/^--no-(?:gtk|gui)$/).any? || (ENV['DISPLAY'].nil? && !ARGV.include?('--gtk'))
   begin
     require 'gtk3'
     HAVE_GTK = true
@@ -573,7 +572,7 @@ if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i) or ENV['DIS
         end
       else
         # fixme: no gtk3 on Linux/Mac
-        puts "The gtk3 gem is not installed (or failed to load), you may need to: sudo gem install gtk3"
+        puts "The gtk3 gem is not installed (or failed to load), you may need to: gem install gtk3"
       end
       exit
     else
