@@ -43,7 +43,7 @@ reconnect_if_wanted = proc {
   $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
-  require File.join(LIB_DIR, 'eaccess.rb')
+  require File.join(LIB_DIR, 'common', 'eaccess.rb')
 
   if ARGV.include?('--login')
     if File.exist?(File.join(DATA_DIR, "entry.dat"))
@@ -123,6 +123,7 @@ reconnect_if_wanted = proc {
   ## GUI starts here
 
   elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
+    require File.join(LIB_DIR, 'common', 'gui-login.rb')
     gui_login
   end
 
@@ -151,8 +152,10 @@ reconnect_if_wanted = proc {
   if @launch_data
     if @launch_data.find { |opt| opt =~ /GAMECODE=DR/ }
       gamecodeshort = "DR"
+      include Lich::DragonRealms
     else
       gamecodeshort = "GS"
+      include Lich::Gemstone
     end
     unless (gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ })
       $stdout.puts "error: launch_data contains no GAMECODE info"
@@ -445,6 +448,8 @@ reconnect_if_wanted = proc {
           exit
         }
         begin
+          include Lich::Gemstone if @game_host =~ /gs/i
+          include Lich::DragonRealms if @game_host =~ /dr/i
           Game.open(@game_host, @game_port)
         rescue
           Lich.log "error: #{$!}"
@@ -521,7 +526,9 @@ reconnect_if_wanted = proc {
       $login_time = Time.now
 
       if $offline_mode
+        # rubocop:disable Lint/Void
         nil
+        # rubocop:enable Lint/Void
       elsif $frontend =~ /^(?:wizard|avalon)$/
         #
         # send the login key
