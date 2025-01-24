@@ -54,6 +54,7 @@ module Lich
       def self.auth(password:, account:, character: nil, game_code: nil, legacy: false)
         Account.name = account
         Account.game_code = game_code
+        Account.character = character
         conn = EAccess.socket()
         # it is vitally important to verify self-signed certs
         # because there is no chain-of-trust for them
