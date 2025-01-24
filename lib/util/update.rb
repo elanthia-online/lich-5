@@ -27,8 +27,6 @@ module Lich
             self.update_file(Regexp.last_match[:type], Regexp.last_match[:file], 'beta')
           else
             self.check_beta_participation
-            echo 'got this far'
-            echo @beta_response
             self.prep_request('beta') if @beta_response == "accepted"
           end
         when /--help|-h/
@@ -102,15 +100,15 @@ module Lich
       --update                 Update all changes for next version
       --snapshot               Grab current snapshot of Lich5 ecosystem and put in backup
       --revert                 Roll the Lich5 ecosystem back to the most recent snapshot
-      
+
       --install --version=<VERSION>     Installs the requested version of Lich
-      
+
       Example usage:
-      
+
       [One time suggestions]
       ;autostart add --global lich5-update --announce    Check for new version at login
       ;autostart add --global lich5-update --update      To auto accept all updates at login
-      
+
       [On demand suggestions]
       ;lich5-update --announce                  Check to see if a new version is available
       ;lich5-update --update                    Update the Lich5 ecosystem to the current release
@@ -118,9 +116,9 @@ module Lich
       ;lich5-update --script=<NAME>             Update an individual script file found in Lich-5
       ;lich5-update --library=<NAME>            Update an individual library file found in Lich-5
       ;lich5-update --data=<NAME>               Update an individual data file found in Lich-5
-      
+
       ;lich5-update --version=<VERSION> --library=<NAME>  Updates lib file to specific version
-      
+
       *NOTE* If you use '--snapshot' in ';autostart' you will create a new
                 snapshot folder every time you log a character in.  NOT recommended.
       \r\n")
@@ -203,7 +201,7 @@ module Lich
       def self.download_update
         ## This is the workhorse routine that does the file moves from an update
         self.prep_request if @update_to.nil? or @update_to.empty?
-         if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}") && !@back_rev
+        if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}") && !@back_rev
           _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("Lich version #{LICH_VERSION} is good.  Enjoy!\r\n"))
         else
           _respond; _respond 'Getting reaady to update.  First we will create a'
@@ -308,12 +306,12 @@ module Lich
           URI.parse(url).open.read
         rescue OpenURI::HTTPError # => error
           # test = 'Error in URL.  Most likely a non-existant version.'
-            _respond "The version or file you are requesting is not available.  Check your "
-            _respond "version or file name.  If the request is for the latest beta or release "
-            _respond "candidate use --beta --lib=<filename.rb>"
-            _respond
+          _respond "The version or file you are requesting is not available.  Check your "
+          _respond "version or file name.  If the request is for the latest beta or release "
+          _respond "candidate use --beta --lib=<filename.rb>"
+          _respond
         end
-        # test 
+        # test
       end
 
       def self.update_file(type, rf, version = 'production')
