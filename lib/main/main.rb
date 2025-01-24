@@ -285,7 +285,7 @@ reconnect_if_wanted = proc {
       end
       accept_thread = Thread.new { $_CLIENT_ = SynchronizedSocket.new(listener.accept) }
       localport = listener.addr[1]
-      Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
+      Frontend.create_session_file(Account.character, server.addr[2], server.addr[1])
       if custom_launch
         sal_filename = nil
         launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, game_key.to_s)
@@ -669,6 +669,8 @@ reconnect_if_wanted = proc {
         Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         sleep 0.2
         retry unless $_CLIENT_.closed? or Game.closed? or !Game.thread.alive? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed/i)
+      ensure
+        Frontend.cleanup_session_file
       end
       Game.close
     }
