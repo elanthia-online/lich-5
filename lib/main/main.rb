@@ -285,6 +285,7 @@ reconnect_if_wanted = proc {
       end
       accept_thread = Thread.new { $_CLIENT_ = SynchronizedSocket.new(listener.accept) }
       localport = listener.addr[1]
+      Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
       if custom_launch
         sal_filename = nil
         launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, game_key.to_s)
@@ -673,7 +674,7 @@ reconnect_if_wanted = proc {
     }
   end
 
-  if defined? @detachable_client_port
+  unless @detachable_client_port.nil?
     detachable_client_thread = Thread.new {
       loop {
         begin
