@@ -593,6 +593,20 @@ reconnect_if_wanted = proc {
           Game._puts(client_string)
         end
       else
+        if launcher_cmd =~ /mudlet/
+          Game._puts(game_key)
+          game_key = nil
+
+          client_string = "/FE:WIZARD /VERSION:1.0.1.22 /P:#{RUBY_PLATFORM} /XML"
+          $_CLIENTBUFFER_.push(client_string.dup)
+          Game._puts(client_string)
+
+          2.times {
+            sleep 0.3
+            $_CLIENTBUFFER_.push("<c>\r\n")
+            Game._puts("<c>")
+          }
+        end
         inv_off_proc = proc { |server_string|
           if server_string =~ /^<(?:container|clearContainer|exposeContainer)/
             server_string.gsub!(/<(?:container|clearContainer|exposeContainer)[^>]*>|<inv.+\/inv>/, '')
