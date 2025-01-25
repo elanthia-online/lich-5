@@ -5,6 +5,7 @@ module Lich
       @@subscription ||= nil
       @@game_code ||= nil
       @@members ||= {}
+      @@character ||= nil
 
       def self.name
         @@name
@@ -12,6 +13,14 @@ module Lich
 
       def self.name=(value)
         @@name = value
+      end
+
+      def self.character
+        @@character
+      end
+
+      def self.character=(value)
+        @@character = value
       end
 
       def self.subscription

@@ -202,7 +202,6 @@ module Lich
           FileUtils.mv(File.join(TEMP_DIR, new_target[0]), File.join(TEMP_DIR, filename))
 
           # delete all existing lib files and directories to not leave old ones behind
-          FileUtils.rm_f(Dir.glob(File.join(LIB_DIR, "*")))
           FileUtils.rm_rf(Dir.glob(File.join(LIB_DIR, "*")))
 
           _respond; _respond 'Copying updated lich files to their locations.'
@@ -243,7 +242,6 @@ module Lich
           _respond "No prior Lich5 version found. Seek assistance."
         else
           # delete all lib files
-          FileUtils.rm_f(Dir.glob(File.join(LIB_DIR, "*")))
           FileUtils.rm_rf(Dir.glob(File.join(LIB_DIR, "*")))
           # copy all backed up lib files
           FileUtils.cp_r(File.join(restore_snapshot, "lib", "."), LIB_DIR)

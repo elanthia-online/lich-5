@@ -285,6 +285,7 @@ reconnect_if_wanted = proc {
       end
       accept_thread = Thread.new { $_CLIENT_ = SynchronizedSocket.new(listener.accept) }
       localport = listener.addr[1]
+      Frontend.create_session_file(Account.character, listener.addr[2], listener.addr[1], display_session: false)
       if custom_launch
         sal_filename = nil
         launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, game_key.to_s)
@@ -592,6 +593,20 @@ reconnect_if_wanted = proc {
           Game._puts(client_string)
         end
       else
+        if launcher_cmd =~ /mudlet/
+          Game._puts(game_key)
+          game_key = nil
+
+          client_string = "/FE:WIZARD /VERSION:1.0.1.22 /P:#{RUBY_PLATFORM} /XML"
+          $_CLIENTBUFFER_.push(client_string.dup)
+          Game._puts(client_string)
+
+          2.times {
+            sleep 0.3
+            $_CLIENTBUFFER_.push("<c>\r\n")
+            Game._puts("<c>")
+          }
+        end
         inv_off_proc = proc { |server_string|
           if server_string =~ /^<(?:container|clearContainer|exposeContainer)/
             server_string.gsub!(/<(?:container|clearContainer|exposeContainer)[^>]*>|<inv.+\/inv>/, '')
@@ -668,12 +683,14 @@ reconnect_if_wanted = proc {
         Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         sleep 0.2
         retry unless $_CLIENT_.closed? or Game.closed? or !Game.thread.alive? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed/i)
+      ensure
+        Frontend.cleanup_session_file
       end
       Game.close
     }
   end
 
-  if defined? @detachable_client_port
+  unless @detachable_client_port.nil?
     detachable_client_thread = Thread.new {
       loop {
         begin
