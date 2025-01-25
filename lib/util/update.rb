@@ -15,7 +15,7 @@ module Lich
                                "jinx.lic", "lnet.lic", "log.lic", "logxml.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"]
 
       INSTALL_REGEX = %r[--install(?:\s+--version=(?<tag>(?:v)?[\d\.]+(?:-[\w\d\.]+)?))?(?:\s+--(?<type>script|lib(?:rary)?|data)=(?<file>.*\.(?:lic|rb|xml|json|yaml|ui)))?]
-      BETA_REGEX = %r[--(?:beta|test)((?:\s+--(?<type>script|lib(?:rary)?|data))=(?<file>.*\.(?:lic|rb|xml|json|yaml|ui)))?]
+      BETA_REGEX = %r[--(?:beta|test)(?:\s+--(?<type>script|lib(?:rary)?|data)=(?<file>.*\.(?:lic|rb|xml|json|yaml|ui)))?]
       VERSION_REGEX = %r[(?:v)?[\d\.]+(?:-[\w\d\.]+)?]
 
       def self.request(type = '--announce')
