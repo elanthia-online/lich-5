@@ -285,7 +285,7 @@ reconnect_if_wanted = proc {
       end
       accept_thread = Thread.new { $_CLIENT_ = SynchronizedSocket.new(listener.accept) }
       localport = listener.addr[1]
-      Frontend.create_session_file(Account.character, listener.addr[2], listener.addr[1])
+      Frontend.create_session_file(Account.character, listener.addr[2], listener.addr[1], display_session: false)
       if custom_launch
         sal_filename = nil
         launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, game_key.to_s)
