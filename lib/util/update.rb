@@ -15,7 +15,7 @@ module Lich
                                "jinx.lic", "lnet.lic", "log.lic", "logxml.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"]
 
       INSTALL_REGEX = %r[--install(?:\s+--version=(?<tag>(?:v)?[\d\.]+(?:-[\w\d\.]+)?))?(?:\s+--(?<type>script|lib(?:rary)?|data)=(?<file>.*\.(?:lic|rb|xml|json|yaml|ui)))?]
-      BETA_REGEX = %r[--(?:beta|test)(?:\s+--(?<type>script|lib(?:rary)?|data))=(?<file>.*\.(?:lic|rb|xml|json|yaml|ui))?]
+      BETA_REGEX = %r[--(?:beta|test)((?:\s+--(?<type>script|lib(?:rary)?|data))=(?<file>.*\.(?:lic|rb|xml|json|yaml|ui)))?]
       VERSION_REGEX = %r[(?:v)?[\d\.]+(?:-[\w\d\.]+)?]
 
       def self.request(type = '--announce')
@@ -36,14 +36,18 @@ module Lich
         when /--refresh/
           _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("This command has been removed.\r\n"))
         when INSTALL_REGEX
-          unless Regexp.last_match[:tag].nil?
-            if Regexp.last_match[:type].nil?
-              self.prep_request(Regexp.last_match[:tag])
+          if Gem::Version.new(LICH_VERSION) > Gem::Version.new('5.10.4')
+            unless Regexp.last_match[:tag].nil?
+              if Regexp.last_match[:type].nil?
+                self.prep_request(Regexp.last_match[:tag])
+              else
+                self.update_file(Regexp.last_match[:type], Regexp.last_match[:file], Regexp.last_match[:tag])
+              end
             else
-              self.update_file(Regexp.last_match[:type], Regexp.last_match[:file], Regexp.last_match[:tag])
+              _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("This feature does not work without specifying an existing version.\r\n"))
             end
           else
-            _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("This feature does not work without specifying an existing version.\r\n"))
+            Lich::Messaging.mono(Lich::Messaging.monsterbold("This feature is only available for Lich versions 5.11 and greater.\r\n"))
           end
         when /--revert|-r/
           self.revert
@@ -82,7 +86,6 @@ module Lich
         # we are doing this to prevent hanging the client with various other inputs by the user
         sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_
         line = sync_thread.gets until line.strip =~ /^(?:<c>)?(?:;send|;s) /i
-        pp line
         if line =~ /send Y|s Y/i
           @beta_response = 'accepted'
           Lich::Messaging.mono("Beta test installation accepted.  Thank you for assisting!\r\n")
@@ -90,38 +93,6 @@ module Lich
           @beta_response = 'rejected'
           Lich::Messaging.mono("Aborting beta test installation request.  Thank you for considering!\r\n")
         end
-        return
-      end
-
-      def self.help
-        Lich::Messaging.mono("
-      --help                   Display this message
-      --announce               Get summary of changes for next version
-      --update                 Update all changes for next version
-      --snapshot               Grab current snapshot of Lich5 ecosystem and put in backup
-      --revert                 Roll the Lich5 ecosystem back to the most recent snapshot
-
-      --install --version=<VERSION>     Installs the requested version of Lich
-
-      Example usage:
-
-      [One time suggestions]
-      ;autostart add --global lich5-update --announce    Check for new version at login
-      ;autostart add --global lich5-update --update      To auto accept all updates at login
-
-      [On demand suggestions]
-      ;lich5-update --announce                  Check to see if a new version is available
-      ;lich5-update --update                    Update the Lich5 ecosystem to the current release
-      ;lich5-update --revert                    Roll the Lich5 ecosystem back to latest snapshot
-      ;lich5-update --script=<NAME>             Update an individual script file found in Lich-5
-      ;lich5-update --library=<NAME>            Update an individual library file found in Lich-5
-      ;lich5-update --data=<NAME>               Update an individual data file found in Lich-5
-
-      ;lich5-update --version=<VERSION> --library=<NAME>  Updates lib file to specific version
-
-      *NOTE* If you use '--snapshot' in ';autostart' you will create a new
-                snapshot folder every time you log a character in.  NOT recommended.
-      \r\n")
       end
 
       def self.snapshot
@@ -171,15 +142,19 @@ module Lich
           record = JSON::parse(update_info).first # assumption: Latest beta release always first record in API
         when VERSION_REGEX
           requested_version = version.gsub(/v/, '') # if present, remove 'v' to standardize on version numbers
-          filename = "https://api.github.com/repos/elanthia-online/lich-5/releases"
-          update_info = URI.parse(filename).open.read
-          temp_record = JSON::parse(update_info).select { |h1| h1['tag_name'] == "v#{requested_version}" }
-          unless temp_record.nil? or temp_record.empty?
-            record = temp_record.first
-            @back_rev = true
+          if Gem::Version.new(requested_version) > Gem::Version.new('5.10.4')
+            filename = "https://api.github.com/repos/elanthia-online/lich-5/releases"
+            update_info = URI.parse(filename).open.read
+            temp_record = JSON::parse(update_info).select { |h1| h1['tag_name'] == "v#{requested_version}" }
+            unless temp_record.nil? or temp_record.empty?
+              record = temp_record.first
+              @back_rev = true
+            else
+              Lich::Messaging.mono(Lich::Messaging.monsterbold("The version you are requesting is not a valid Lich release.\r\n"))
+              record = nil
+            end
           else
-            Lich::Messaging.mono(Lich::Messaging.monsterbold("The version you are requesting is not a valid Lich release.\r\n"))
-            record = nil
+            Lich::Messaging.mono(Lich::Messaging.monsterbold("Only requests for Lich 5.11 or greater are supported.  There is no going back from here.\r\n"))
           end
         end
         unless record.nil?
@@ -194,15 +169,17 @@ module Lich
           }
           requested_asset = @holder.find { |x| x['name'] =~ /lich-5.tar.gz/ }
           @zipfile = requested_asset.fetch('browser_download_url')
+          self.download_update
         end
-        Lich::Util::Update.download_update
       end
 
       def self.download_update
         ## This is the workhorse routine that does the file moves from an update
         self.prep_request if @update_to.nil? or @update_to.empty?
-        if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}") && !@back_rev
-          _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("Lich version #{LICH_VERSION} is good.  Enjoy!\r\n"))
+        if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}")
+          unless @back_rev && (Gem::Version.new("#{update_to}") > Gem::Version.new('5.10.4'))
+            _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("Lich version #{LICH_VERSION} is good.  Enjoy!\r\n"))
+          end
         else
           _respond; _respond 'Getting reaady to update.  First we will create a'
           _respond 'snapshot in case there are problems with the update.'
@@ -325,6 +302,10 @@ module Lich
             remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
           end
           requested_file =~ /\.lic$/ ? requested_file_ext = ".lic" : requested_file_ext = "bad extension for script file"
+        when "data"
+          location = DATA_DIR
+          remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
+          requested_file =~ /(\.(?:xml|json|yaml|ui))$/ ? requested_file_ext = $1.dup : requested_file_ext = "bad extension for data file"
         when "library", "lib"
           location = LIB_DIR
           case version
@@ -334,16 +315,16 @@ module Lich
             remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/staging/lib"
           when VERSION_REGEX # user asked for a file from a particular release
             version.gsub!(/^v/, '') # if present, remove 'v' to standardize on version numbers
-            remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/refs/tags/v#{version}/lib/#{requested_file}"
-            remote_repo = nil unless validate_url_request(remote_repo)
+            if Gem::Version.new(version) > Gem::Version.new('5.10.4')
+              remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/refs/tags/v#{version}/lib"
+              remote_repo = nil unless validate_url_request(File.join(remote_repo, requested_file))
+            else
+              Lich::Messaging.mono(Lich::Messaging.monsterbold("Only requests for Lich 5.11 or greater are supported.  There is no going back from here.\r\n"))
+            end
           end
           requested_file =~ /\.rb$/ ? requested_file_ext = ".rb" : requested_file_ext = "bad extension for lib file"
-        when "data"
-          location = DATA_DIR
-          remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
-          requested_file =~ /(\.(?:xml|json|yaml|ui))$/ ? requested_file_ext = $1.dup : requested_file_ext = "bad extension for data file"
         end
-        unless requested_file_ext =~ /bad extension/
+        unless requested_file_ext =~ /bad extension/ || remote_repo.nil?
           File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))
           begin
             File.open(File.join(location, requested_file), "wb") do |file|
@@ -401,6 +382,39 @@ module Lich
         ## Update Lich.db value with last updated version
         Lich.core_updated_with_lich_version = version
       end
+
+      # Moving this here because it doesn't collapse in IDE
+      def self.help
+        Lich::Messaging.mono("
+      --help                   Display this message
+      --announce               Get summary of changes for next version
+      --update                 Update all changes for next version
+      --snapshot               Grab current snapshot of Lich5 ecosystem and put in backup
+      --revert                 Roll the Lich5 ecosystem back to the most recent snapshot
+
+      --install --version=<VERSION>     Installs the requested version of Lich
+
+      Example usage:
+
+      [One time suggestions]
+      ;autostart add --global lich5-update --announce    Check for new version at login
+      ;autostart add --global lich5-update --update      To auto accept all updates at login
+
+      [On demand suggestions]
+      ;lich5-update --announce                  Check to see if a new version is available
+      ;lich5-update --update                    Update the Lich5 ecosystem to the current release
+      ;lich5-update --revert                    Roll the Lich5 ecosystem back to latest snapshot
+      ;lich5-update --script=<NAME>             Update an individual script file found in Lich-5
+      ;lich5-update --library=<NAME>            Update an individual library file found in Lich-5
+      ;lich5-update --data=<NAME>               Update an individual data file found in Lich-5
+
+      ;lich5-update --version=<VERSION> --library=<NAME>  Updates lib file to specific version
+
+      *NOTE* If you use '--snapshot' in ';autostart' you will create a new
+                snapshot folder every time you log a character in.  NOT recommended.
+      \r\n")
+      end
+
       # End module definitions
     end
   end
