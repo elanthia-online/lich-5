@@ -7,7 +7,7 @@ stash.rb: Core lich file for extending free_hands, empty_hands functions in
 module Lich
   module Stash
     def self.find_container(param, loud_fail: true)
-      param = param.name if param.is_a?(Lich::Gemstone::GameObj)
+      param = param.name if param.is_a?(GameObj) # (Lich::Gemstone::GameObj)
       found_container = GameObj.inv.find do |container|
         container.name =~ %r[#{param.strip}]i || container.name =~ %r[#{param.sub(' ', ' .*')}]i
       end
@@ -108,13 +108,13 @@ module Lich
       end
       # weaponsack for both hands
       if UserVars.weapon and UserVars.weaponsack and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
-        weaponsack = nil unless (weaponsack = find_container(UserVars.weaponsack, loud_fail: false)).is_a?(Lich::Gemstone::GameObj)
+        weaponsack = nil unless (weaponsack = find_container(UserVars.weaponsack, loud_fail: false)).is_a?(GameObj)
       end
       # lootsack for both hands
       if UserVars.lootsack.nil? or UserVars.lootsack.empty?
         lootsack = nil
       else
-        lootsack = nil unless (lootsack = find_container(UserVars.lootsack, loud_fail: false)).is_a?(Lich::Gemstone::GameObj)
+        lootsack = nil unless (lootsack = find_container(UserVars.lootsack, loud_fail: false)).is_a?(GameObj)
       end
       # finding another container if needed
       other_containers_var = nil
