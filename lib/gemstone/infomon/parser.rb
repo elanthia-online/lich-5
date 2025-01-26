@@ -338,7 +338,7 @@ module Lich
               :ok
             when Pattern::CovertArtsCharges
               match = Regexp.last_match
-              Infomon.set('resource.covert_arts_charges', match[:charges].delete(',').to_i)
+              Infomon.set('resources.covert_arts_charges', match[:charges].delete(',').to_i)
               :ok
             when Pattern::GigasArtifactFragments
               match = Regexp.last_match
