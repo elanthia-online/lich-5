@@ -286,13 +286,11 @@ module Lich
             return false
           end
         rescue OpenURI::HTTPError # => error
-          # test = 'Error in URL.  Most likely a non-existant version.'
           _respond "The version or file you are requesting is not available.  Check your "
           _respond "version or file name.  If the request is for the latest beta or release "
           _respond "candidate use --beta --lib=<filename.rb>"
           _respond
         end
-        # test
       end
 
       def self.update_file(type, rf, version = 'production')
@@ -329,8 +327,7 @@ module Lich
           requested_file =~ /\.rb$/ ? requested_file_ext = ".rb" : requested_file_ext = "bad extension for lib file"
         end
         unless requested_file_ext =~ /bad extension/ || remote_repo.nil?
-          # we remove any file that is found at a specific location, whether we can download the updated version or not.  To avoid that, we will rename the file first, attempt the operation, and if the operation fails, we'll rename the file back to the original file.
-          # File.rename(File.join(location, requested_file), File.join(location, "temp_#{requested_file}")) if File.exist?(File.join(location, requested_file))
+          # we used to remove any file that is found at a specific location, whether we can download the updated version or not.  To avoid that, we will test that a file is available before we do anything else.  Full upgrades are already supported via snapshot / revert.
 
           file_available = self.validate_url_request(File.join(remote_repo, requested_file))
 
