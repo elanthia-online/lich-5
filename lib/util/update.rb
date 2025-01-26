@@ -276,9 +276,15 @@ module Lich
       end
 
       def self.validate_url_request(url)
+        response = nil
         begin
-          pp url
-          URI.parse(url).open.read
+          parsed_url = URI(url)
+          response = Net::HTTP.get_response(parsed_url)
+          if response.code[0, 1] == "2" || response.code[0, 1] == "3"
+            return true
+          else
+            return false
+          end
         rescue OpenURI::HTTPError # => error
           # test = 'Error in URL.  Most likely a non-existant version.'
           _respond "The version or file you are requesting is not available.  Check your "
@@ -323,20 +329,37 @@ module Lich
           requested_file =~ /\.rb$/ ? requested_file_ext = ".rb" : requested_file_ext = "bad extension for lib file"
         end
         unless requested_file_ext =~ /bad extension/ || remote_repo.nil?
-          File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))
-          begin
-            File.open(File.join(location, requested_file), "wb") do |file|
-              file.write URI.parse(File.join(remote_repo, requested_file)).open.read
-            end
+          # we remove any file that is found at a specific location, whether we can download the updated version or not.  To avoid that, we will rename the file first, attempt the operation, and if the operation fails, we'll rename the file back to the original file.
+          # File.rename(File.join(location, requested_file), File.join(location, "temp_#{requested_file}")) if File.exist?(File.join(location, requested_file))
+
+          file_available = self.validate_url_request(File.join(remote_repo, requested_file))
+
+          unless file_available
+            Lich::Messaging.mono("The version or file you are requesting is not available.  Possible causes:\r\n")
+            Lich::Messaging.mono("  1) A request for a non-Elanthia-Online script or data file was made.\r\n")
+            Lich::Messaging.mono("  Fix: use ;repo download <filename> for files not maintained by Elanthia Online.\r\n")
             _respond
-            _respond "#{requested_file} has been updated."
-          rescue
-            # we created a garbage file (zero bytes filename) so let's clean it up and inform.
-            sleep 1
+            Lich::Messaging.mono("  2) A request for a non-existent or deprecated Lich version was made.\r\n")
+            Lich::Messaging.mono("  Fix: Double check your request to ensure you have a good Lich version number.\r\n")
+            _respond
+            Lich::Messaging.mono("  3) The server may be down or non-responsive.\r\n")
+            Lich::Messaging.mono("  Fix: check in with the Elanthia-Online team in Discord:scripting to verify.\r\n")
+          else
             File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))
-            _respond; _respond "The filename #{requested_file} is not available via lich5-update."
-            _respond "Check the spelling of your requested file, or use ';jinx' to"
-            _respond "to download #{requested_file} from another respository."
+            begin
+              File.open(File.join(location, requested_file), "wb") do |file|
+                file.write URI.parse(File.join(remote_repo, requested_file)).open.read
+              end
+              _respond
+              _respond "#{requested_file} has been updated."
+            rescue
+              # we created a garbage file (zero bytes filename) so let's clean it up and inform.
+              sleep 1
+              File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))
+              _respond; _respond "The filename #{requested_file} is not available via lich5-update."
+              _respond "Check the spelling of your requested file, or use ';jinx' to"
+              _respond "to download #{requested_file} from another respository."
+            end
           end
         else
           _respond
