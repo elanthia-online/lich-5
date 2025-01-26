@@ -21,7 +21,7 @@ module Lich
     end
 
     def self.covert_arts_charges
-      Infomon.get('resources.covert_arts_charges')
+      Lich::Gemstone::Infomon.get('resources.covert_arts_charges')
     end
 
     def self.check(quiet = false)
