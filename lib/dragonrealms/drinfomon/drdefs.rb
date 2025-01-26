@@ -59,28 +59,27 @@ module Lich
 
     def find_all_npcs(room_objs)
       room_objs.sub(/You also see/, '').sub(/ with a [\w\s]+ sitting astride its back/, '').strip
-                .scan(%r{<pushBold/>[^<>]*<popBold/> which appears dead|<pushBold/>[^<>]*<popBold/> \(dead\)|<pushBold/>[^<>]*<popBold/>})
-    
+               .scan(%r{<pushBold/>[^<>]*<popBold/> which appears dead|<pushBold/>[^<>]*<popBold/> \(dead\)|<pushBold/>[^<>]*<popBold/>})
     end
-    
+
     def clean_npc_string(npc_string)
       tmp_npc_string = npc_string.map { |obj| obj.sub(/.*alfar warrior.*/, 'alfar warrior') }
-                .map { |obj| obj.sub(/.*sinewy leopard.*/, 'sinewy leopard') }
-                .map { |obj| obj.sub(/.*lesser naga.*/, 'lesser naga') }
-                .map { |obj| obj.sub('<pushBold/>', '').sub(%r{<popBold/>.*}, '') }
-                .map { |obj| obj.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '') }
-                .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
-                .sort
+                                 .map { |obj| obj.sub(/.*sinewy leopard.*/, 'sinewy leopard') }
+                                 .map { |obj| obj.sub(/.*lesser naga.*/, 'lesser naga') }
+                                 .map { |obj| obj.sub('<pushBold/>', '').sub(%r{<popBold/>.*}, '') }
+                                 .map { |obj| obj.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '') }
+                                 .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
+                                 .sort
       flat_npcs = []
-      tmp_npc_string.uniq.each { |npc| flat_npcs << tmp_npc_string.size.times.select {|i| tmp_npc_string[i] == npc}.size.times.map { |number| number.zero? ? tmp_npc_string[0] : tmp_npc_string[number].sub(npc, "#{$ORDINALS[number]} #{npc}") } }
+      tmp_npc_string.uniq.each { |npc| flat_npcs << tmp_npc_string.size.times.select { |i| tmp_npc_string[i] == npc }.size.times.map { |number| number.zero? ? tmp_npc_string[0] : tmp_npc_string[number].sub(npc, "#{$ORDINALS[number]} #{npc}") } }
       flat_npcs.flatten
     end
-    
+
     def find_npcs(room_objs)
       npcs = find_all_npcs(room_objs).reject { |obj| obj =~ /which appears dead|\(dead\)/ }
       clean_npc_string(npcs)
     end
-    
+
     def find_dead_npcs(room_objs)
       dead_npcs = find_all_npcs(room_objs).select { |obj| obj =~ /which appears dead|\(dead\)/ }
       clean_npc_string(dead_npcs)
