@@ -28,11 +28,13 @@ module Lich
           else
             self.check_beta_participation
             self.prep_request('beta') if @beta_response == "accepted"
+            self.download_update
           end
         when /--help|-h/
           self.help # Ok, that's just wrong.
         when /--update|-u/
           self.prep_request('latest')
+          self.download_update
         when /--refresh/
           _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("This command has been removed.\r\n"))
         when INSTALL_REGEX
@@ -43,6 +45,7 @@ module Lich
               else
                 self.update_file(Regexp.last_match[:type], Regexp.last_match[:file], Regexp.last_match[:tag])
               end
+              self.download_update
             else
               _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("This feature does not work without specifying an existing version.\r\n"))
             end
@@ -69,7 +72,7 @@ module Lich
               _respond ''; _respond ''
               _respond ''; _respond @new_features
               _respond ''
-              _respond ''; _respond "If you are interested in updating, run ';lich5-update --update' now."
+              _respond ''; Lich::Messaging.mono(Lich::Messaging.monsterbold("If you are interested in updating, run ';lich5-update --update' now."))
               _respond ''
             end
           end
@@ -169,7 +172,6 @@ module Lich
           }
           requested_asset = @holder.find { |x| x['name'] =~ /lich-5.tar.gz/ }
           @zipfile = requested_asset.fetch('browser_download_url')
-          self.download_update
         end
       end
 
