@@ -67,7 +67,7 @@ module Lich
         self.prep_request('latest')
         if "#{LICH_VERSION}".chr == '5'
           if Gem::Version.new(@current) < Gem::Version.new(@update_to)
-            if !@new_features.empty?
+            unless @new_features.empty?
               _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("*** NEW VERSION AVAILABLE ***\r\n"))
               _respond ''; _respond ''
               _respond ''; _respond @new_features
@@ -75,6 +75,8 @@ module Lich
               _respond ''; Lich::Messaging.mono(Lich::Messaging.monsterbold("If you are interested in updating, run ';lich5-update --update' now."))
               _respond ''
             end
+          else
+            _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("Lich version #{LICH_VERSION} is good.  Enjoy!\r\n"))
           end
         else
           # lich version 4 - just say 'no'
