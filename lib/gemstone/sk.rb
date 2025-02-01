@@ -1,15 +1,32 @@
 module Lich
   module Gemstone
     module SK
-      NAMESPACE = "sk/known"
-      Vars[NAMESPACE] ||= []
+      # NAMESPACE = "sk/known"
+      # Vars[NAMESPACE] ||= []
+      @sk_known = nil
+      
+      def self.sk_known
+        if @sk_known.nil?
+          val = DB_Store.read("#{XMLData.game}:#{XMLData.name}", "sk_known")
+          val = [] if val.nil? || (val.class == Hash && val.empty?)
+          @sk_known = val if !val.nil?;
+        end
+        return @sk_known
+      end
+
+      def self.sk_known=(val)
+        @sk_known = val
+        DB_Store.save("#{XMLData.game}:#{XMLData.name}", "sk_known", @sk_known)
+        return @sk_known
+      end
 
       def self.known?(spell)
-        Vars[NAMESPACE].include?(spell.num.to_s)
+        self.sk_known if @sk_known.nil?
+        @sk_known.include?(spell.num.to_s)
       end
 
       def self.list
-        respond "Current SK Spells: #{Vars[NAMESPACE].inspect}"
+        respond "Current SK Spells: #{@sk_known.inspect}"
         respond ""
       end
 
@@ -24,12 +41,12 @@ module Lich
       end
 
       def self.add(*numbers)
-        Vars[NAMESPACE] = (Vars[NAMESPACE] + numbers).uniq
+        self.sk_known = (@sk_known + numbers).uniq
         self.list
       end
 
       def self.remove(*numbers)
-        Vars[NAMESPACE] = (Vars[NAMESPACE] - numbers).uniq
+        self.sk_known = (@sk_known - numbers).uniq
         self.list
       end
 
