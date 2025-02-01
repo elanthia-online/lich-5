@@ -108,13 +108,13 @@ module Lich
       end
       # weaponsack for both hands
       if UserVars.weapon.class == String and UserVars.weaponsack.class == String and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
-        weaponsack = nil unless (weaponsack = find_container(UserVars.weaponsack, loud_fail: false)).is_a?(Lich::Gemstone::GameObj)
+        weaponsack = nil unless (weaponsack = find_container(UserVars.weaponsack, loud_fail: false)).is_a?(GameObj) # (Lich::Gemstone::GameObj)
       end
       # lootsack for both hands
       if UserVars.lootsack.class != String || UserVars.lootsack.empty?
         lootsack = nil
       else
-        lootsack = nil unless (lootsack = find_container(UserVars.lootsack, loud_fail: false)).is_a?(Lich::Gemstone::GameObj)
+        lootsack = nil unless (lootsack = find_container(UserVars.lootsack, loud_fail: false)).is_a?(GameObj) # (Lich::Gemstone::GameObj)
       end
       # finding another container if needed
       other_containers_var = nil
