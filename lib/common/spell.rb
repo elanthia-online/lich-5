@@ -291,7 +291,7 @@ module Lich
           options[:line]
         end
         result = proc { eval(formula) }.call.to_f
-        return 10.0 if SK.known?(self) && (result.nil? || result < 10)
+        return 10.0 if defined?(Lich::Gemstone::SK) && Lich::Gemstone::SK.known?(self) && (result.nil? || result < 10)
         return result
       end
 
@@ -403,7 +403,7 @@ module Lich
       end
 
       def known?
-        return true if SK.known?(self)
+        return true if defined?(Lich::Gemstone::SK) && Lich::Gemstone::SK.known?(self)
         if @num.to_s.length == 3
           circle_num = @num.to_s[0..0].to_i
         elsif @num.to_s.length == 4
