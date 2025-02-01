@@ -19,15 +19,14 @@ end
 module Lich
   module Gemstone
     module SK
-      NAMESPACE = "sk/known"
-      Vars[NAMESPACE] ||= []
+      @sks_known ||= []
 
       def self.known?(spell)
-        Vars[NAMESPACE].include?(spell.num.to_s)
+        @sks_known.include?(spell.num.to_s)
       end
 
       def self.list
-        respond "Current SK Spells: #{Vars[NAMESPACE].inspect}"
+        respond "Current SK Spells: #{@sks_known.inspect}"
       end
 
       def self.help
@@ -41,16 +40,15 @@ module Lich
       end
 
       def self.add(*numbers)
-        Vars[NAMESPACE] = (Vars[NAMESPACE] + numbers).uniq
+        @sks_known = (@sks_known + numbers).uniq
       end
 
       def self.remove(*numbers)
-        Vars[NAMESPACE] = (Vars[NAMESPACE] - numbers).uniq
+        @sks_known = (@sks_known - numbers).uniq
       end
 
-      def self.main()
-        action = Script.current.vars[1].to_sym
-        spells = Script.current.vars[2..-1]
+      def self.main(action, spells)
+        action = action.to_sym
         case action
         when :add
           self.add(*spells)
@@ -64,8 +62,6 @@ module Lich
           fail "unknown action #{action}"
         end
       end
-
-      #self.main() if Script.current.vars.size > 1
     end
   end
 end
