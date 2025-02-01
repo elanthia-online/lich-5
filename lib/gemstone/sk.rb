@@ -38,17 +38,15 @@ module Lich
         spells = spells.split(" ").uniq
         case action
         when :add
-          self.add(*spells)
+          self.add(*spells) unless spells.empty?
+          self.help if spells.empty?
         when :rm
-          self.remove(*spells)
+          self.remove(*spells) unless spells.empty?
+          self.help if spells.empty?
         when :list
           self.list
-        when :help
-          self.help
-        when nil
-          self.help
         else
-          fail "unknown action #{action}"
+          self.help
         end
       end
     end
