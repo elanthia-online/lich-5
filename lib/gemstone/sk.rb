@@ -2,7 +2,7 @@ module Lich
   module Gemstone
     module SK
       @sk_known = nil
-      
+
       def self.sk_known
         if @sk_known.nil?
           val = DB_Store.read("#{XMLData.game}:#{XMLData.name}", "sk_known")
