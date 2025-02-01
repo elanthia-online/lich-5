@@ -13,7 +13,7 @@ module Lich
   end
 
   module Gemstone
-    include Lich::Common
+    include Lich
     module Game
       @@socket    = nil
       @@mutex     = Mutex.new
@@ -620,7 +620,7 @@ module Lich
   end
 
   module DragonRealms
-    include Lich::Common
+    include Lich
     module Game
       @@socket    = nil
       @@mutex     = Mutex.new
