@@ -2291,6 +2291,8 @@ def do_client(client_string)
       end
       respond "Changing Infomon's effect duration showing to #{new_value}"
       Infomon.set('infomon.show_durations', new_value)
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^sk (add|rm|list|help)(?: ([\d\s]+))?/i
+      SK.main(Regexp.last_match(1), Regexp.last_match(2))
     elsif cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
       case Regexp.last_match(1)
@@ -2390,6 +2392,7 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# in Room Title"
       respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# in Room Title"
       respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
+      respond "   #{$clean_lich_char}sk help                   show information on modifying self-knowledge spells to be known"
       respond
       respond 'If you liked this help message, you might also enjoy:'
       respond "   #{$clean_lich_char}lnet help" if defined?(LNet)
