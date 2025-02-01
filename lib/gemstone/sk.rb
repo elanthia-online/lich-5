@@ -49,6 +49,7 @@ module Lich
       end
 
       def self.main(action = help, spells = nil)
+        self.sk_known if @sk_known.nil?
         action = action.to_sym
         spells = spells.split(" ").uniq
         case action
