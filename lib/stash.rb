@@ -107,11 +107,11 @@ module Lich
         sheath = second_sheath = nil
       end
       # weaponsack for both hands
-      if UserVars.weapon and UserVars.weaponsack and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
+      if UserVars.weapon.class == String and UserVars.weaponsack.class == String and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
         weaponsack = nil unless (weaponsack = find_container(UserVars.weaponsack, loud_fail: false)).is_a?(Lich::Gemstone::GameObj)
       end
       # lootsack for both hands
-      if UserVars.lootsack.nil? or UserVars.lootsack.empty?
+      if UserVars.lootsack.class != String || UserVars.lootsack.empty?
         lootsack = nil
       else
         lootsack = nil unless (lootsack = find_container(UserVars.lootsack, loud_fail: false)).is_a?(Lich::Gemstone::GameObj)
