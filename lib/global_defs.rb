@@ -2291,7 +2291,7 @@ def do_client(client_string)
       end
       respond "Changing Infomon's effect duration showing to #{new_value}"
       Infomon.set('infomon.show_durations', new_value)
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^sk (add|rm|list|help)(?: ([\d\s]+))?/i
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^sk\b(?: (add|rm|list|help)(?: ([\d\s]+))?)?/i
       SK.main(Regexp.last_match(1), Regexp.last_match(2))
     elsif cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
