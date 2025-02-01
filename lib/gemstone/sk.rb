@@ -1,8 +1,6 @@
 module Lich
   module Gemstone
     module SK
-      # NAMESPACE = "sk/known"
-      # Vars[NAMESPACE] ||= []
       @sk_known = nil
       
       def self.sk_known
