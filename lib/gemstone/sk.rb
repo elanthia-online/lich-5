@@ -1,22 +1,4 @@
 module Lich
-  module Common
-    class Spell
-      OLD_KNOWN_METHOD ||= Spell.instance_method(:known?)
-      OLD_TIME_PER_METHOD ||= Spell.instance_method(:time_per)
-      def known?
-        SK.known?(self) or OLD_KNOWN_METHOD.bind(self).call()
-      end
-
-      def time_per(arg = nil)
-        # dumb time per of 10m because lots of things break otherwise
-        return 10.0 if SK.known?(self) && (OLD_TIME_PER_METHOD.bind(self).call(arg).nil? || OLD_TIME_PER_METHOD.bind(self).call(arg) < 10)
-        return OLD_TIME_PER_METHOD.bind(self).call(arg)
-      end
-    end
-  end
-end
-
-module Lich
   module Gemstone
     module SK
       @sks_known ||= []
