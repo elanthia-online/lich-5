@@ -11,6 +11,7 @@ module Lich
 
       def self.gemstone
         self.common_before
+        require File.join(LIB_DIR, 'gemstone', 'sk.rb')
         require File.join(LIB_DIR, 'gemstone', 'map_gs.rb')
         require File.join(LIB_DIR, 'gemstone', 'effects.rb')
         require File.join(LIB_DIR, 'gemstone', 'bounty.rb')
