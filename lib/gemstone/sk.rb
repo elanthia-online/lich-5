@@ -7,7 +7,7 @@ module Lich
         if @sk_known.nil?
           val = DB_Store.read("#{XMLData.game}:#{XMLData.name}", "sk_known")
           if val.class == Hash && val.empty?
-            old_settings = DB_Store.read(scope = "#{XMLData.game}:#{XMLData.name}", "vars")["sk/known"]
+            old_settings = DB_Store.read("#{XMLData.game}:#{XMLData.name}", "vars")["sk/known"]
             if old_settings.class == Array
               val = old_settings
             else
