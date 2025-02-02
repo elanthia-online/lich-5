@@ -6,8 +6,16 @@ module Lich
       def self.sk_known
         if @sk_known.nil?
           val = DB_Store.read("#{XMLData.game}:#{XMLData.name}", "sk_known")
-          val = [] if val.nil? || (val.class == Hash && val.empty?)
-          @sk_known = val if !val.nil?;
+          if val.class == Hash && val.empty?
+            old_settings = DB_Store.read(scope = "#{XMLData.game}:#{XMLData.name}", "vars")["sk/known"]
+            if old_settings.class == Array
+              val = old_settings
+            else
+              val = []
+            end
+            self.sk_known = val
+          end
+          @sk_known = val unless val.nil?
         end
         return @sk_known
       end
