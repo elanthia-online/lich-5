@@ -326,7 +326,7 @@ module Lich
                     end
                     if Lich.display_exits == true
                       room_exits = []
-                      Map.current.wayto.each do |key, value|
+                      Map.current.wayto.each do |_key, value|
                         # Don't include cardinals / up/down/out (usually just climb/go)
                         next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
                         if value.class != Proc
@@ -944,7 +944,7 @@ module Lich
                     end
                     if Lich.display_exits == true
                       room_exits = []
-                      Map.current.wayto.each do |key, value|
+                      Map.current.wayto.each do |_key, value|
                         # Don't include cardinals / up/down/out (usually just climb/go)
                         next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
                         if value.class != Proc
