@@ -653,7 +653,7 @@ module Lich
       @@cli_scripts = false
       @@infomon_loaded = false
       @@room_number_after_ready = false
-      @@last_id_shown_room_window
+      @@last_id_shown_room_window = 0
 
       def self.clean_gs_serverstring(server_string)
         # The Rift, Scatter is broken...
