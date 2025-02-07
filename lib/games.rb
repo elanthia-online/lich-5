@@ -959,9 +959,12 @@ module Lich
                           room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
                         end
                       end
-                      if ['wrayth', 'stormfront'].include?($frontend) && Map.current.id != @@last_id_shown_room_window
-                        alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{room_exits.join(', ')}\r\n<popStream/>\r\n"
-                        @@last_id_shown_room_window = Map.current.id
+                      unless room_exits.empty?
+                        alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}"
+                        if ['wrayth', 'stormfront'].include?($frontend) && Map.current.id != @@last_id_shown_room_window
+                          alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{room_exits.join(', ')}\r\n<popStream/>\r\n"
+                          @@last_id_shown_room_window = Map.current.id
+                        end
                       end
                     end
                     if XMLData.game =~ /^DR/
