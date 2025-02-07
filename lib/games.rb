@@ -26,6 +26,7 @@ module Lich
       @@cli_scripts = false
       @@infomon_loaded = false
       @@room_number_after_ready = false
+      @@last_id_shown_room_window = 0
 
       def self.clean_gs_serverstring(server_string)
         # The Rift, Scatter is broken...
@@ -333,7 +334,13 @@ module Lich
                           room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
                         end
                       end
-                      alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
+                      unless room_exits.empty?
+                        alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}"
+                        if ['wrayth', 'stormfront'].include?($frontend) && Map.current.id != @@last_id_shown_room_window
+                          alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{room_exits.join(', ')}\r\n<popStream/>\r\n"
+                          @@last_id_shown_room_window = Map.current.id
+                        end
+                      end
                     end
                     if XMLData.game =~ /^DR/
                       room_number = ""
@@ -646,6 +653,7 @@ module Lich
       @@cli_scripts = false
       @@infomon_loaded = false
       @@room_number_after_ready = false
+      @@last_id_shown_room_window
 
       def self.clean_gs_serverstring(server_string)
         # The Rift, Scatter is broken...
@@ -951,7 +959,10 @@ module Lich
                           room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
                         end
                       end
-                      alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
+                      if ['wrayth', 'stormfront'].include?($frontend) && Map.current.id != @@last_id_shown_room_window
+                        alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{room_exits.join(', ')}\r\n<popStream/>\r\n"
+                        @@last_id_shown_room_window = Map.current.id
+                      end
                     end
                     if XMLData.game =~ /^DR/
                       room_number = ""
