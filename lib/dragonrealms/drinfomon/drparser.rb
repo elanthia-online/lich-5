@@ -19,7 +19,6 @@ module Lich
         RoomPlayersEmpty = %r{\'room players\'></component>}.freeze
         RoomObjs = %r{\'room objs\'>(.*)</component>}.freeze
         RoomObjsEmpty = %r{\'room objs\'></component>}.freeze
-        RoomExits = /Obvious (exits|paths):/.freeze
         GroupMembers = %r{<pushStream id="group"/>  (\w+):}.freeze
         GroupMembersEmpty = %r{<pushStream id="group"/>Members of your group:}.freeze
         ExpModsStart = /^(<.*?\/>)?The following skills are currently under the influence of a modifier/.freeze
@@ -311,9 +310,6 @@ module Lich
             DRSpells.grabbing_known_khri = true
             DRSpells.known_spells.clear()
             DRSpells.known_feats.clear()
-          when Pattern::RoomExits
-            exit_string = line.gsub('<d>', '').gsub('</d>', '').gsub('Obvious exits: ', '').gsub('Obvious paths: ', '').delete('.').gsub("\r\n", '')
-            DRRoom.exits = exit_string.split(', ') - ['none']
           else
             :noop
           end
