@@ -311,6 +311,9 @@ module Lich
             DRSpells.grabbing_known_khri = true
             DRSpells.known_spells.clear()
             DRSpells.known_feats.clear()
+          when Pattern::RoomExits
+            exit_string = line.gsub('<d>', '').gsub('</d>', '').gsub('Obvious exits: ', '').gsub('Obvious paths: ', '').delete('.').gsub("\r\n", '')
+            DRRoom.exits = exit_string.split(', ') - ['none']
           else
             :noop
           end
