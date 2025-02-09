@@ -2398,12 +2398,12 @@ def do_client(client_string)
         respond "   #{$clean_lich_char}infomon reset             resets entire character infomon db table and then syncs data (fixprof)"
         respond "   #{$clean_lich_char}infomon effects           toggle display of effect durations"
         respond "   #{$clean_lich_char}infomon show              shows all current Infomon values for character"
+        respond "   #{$clean_lich_char}sk help                   show information on modifying self-knowledge spells to be known"
       end
-      respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# in Room Title"
-      respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# in Room Title"
+      respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# when displaying room information"
+      respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"
       respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
       respond "   #{$clean_lich_char}display stringprocs       toggle display of StringProc exits known for room in mapdb if timeto is valid"
-      respond "   #{$clean_lich_char}sk help                   show information on modifying self-knowledge spells to be known"
       respond
       respond 'If you liked this help message, you might also enjoy:'
       respond "   #{$clean_lich_char}lnet help" if defined?(LNet)
