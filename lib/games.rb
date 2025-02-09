@@ -346,7 +346,7 @@ module Lich
                       room_number = ""
                       room_number += "#{Map.current.id}" if Lich.display_lichid
                       room_number += " - " if Lich.display_lichid && Lich.display_uid
-                      room_number += "u(#{XMLData.room_id == 0 ? "**" : XMLData.room_id})" if Lich.display_uid
+                      room_number += "(#{XMLData.room_id == 0 ? "**" : "u#{XMLData.room_id}"})" if Lich.display_uid
                       unless room_number.empty?
                         alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
                         if ['wrayth', 'stormfront'].include?($frontend)
@@ -971,7 +971,7 @@ module Lich
                       room_number = ""
                       room_number += "#{Map.current.id}" if Lich.display_lichid
                       room_number += " - " if Lich.display_lichid && Lich.display_uid
-                      room_number += "u(#{XMLData.room_id == 0 ? "**" : XMLData.room_id})" if Lich.display_uid
+                      room_number += "(#{XMLData.room_id == 0 ? "**" : "u#{XMLData.room_id}"})" if Lich.display_uid
                       unless room_number.empty?
                         alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
                         if ['wrayth', 'stormfront'].include?($frontend)
