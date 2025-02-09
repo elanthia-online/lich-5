@@ -29,11 +29,7 @@ module Lich
       end
 
       def self.exits
-        @@exits
-      end
-
-      def self.exits=(val)
-        @@exits = val
+        XMLData.room_exits
       end
 
       def self.title
