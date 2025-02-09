@@ -44,7 +44,7 @@ module Lich
                   :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
                   :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
                   :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
-                  :dialogs, :room_id, :previous_nav_rm, :room_objects, :concentration, :max_concentration,
+                  :dialogs, :room_id, :previous_nav_rm, :concentration, :max_concentration,
                   :arrival_pcs, :room_player_hidden
       attr_accessor :send_fake_tags
 
@@ -97,7 +97,6 @@ module Lich
         @room_description = String.new
         @room_exits = Array.new
         @room_exits_string = String.new
-        @room_objects = String.new
 
         @familiar_room_title = String.new
         @familiar_room_description = String.new
