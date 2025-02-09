@@ -704,8 +704,6 @@ module Lich
 
           if @current_style == 'roomName'
             @room_name = text_string.match(/(?<roomname>\[.*?\])/)[:roomname]
-            # Additionally setting room_title for backwards compatibility.
-            @room_title = @room_name
           end
 
           if @active_tags.include?('inv')
