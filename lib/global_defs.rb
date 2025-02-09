@@ -2313,7 +2313,7 @@ def do_client(client_string)
       end
       respond "Changing Lich's Room title display for RealID#s to #{new_value}"
       Lich.display_uid = new_value
-    elsif cmd =~ /^display exits(?: (true|false))?/i
+    elsif cmd =~ /^display exits?(?: (true|false))?/i
       new_value = !(Lich.display_exits)
       case Regexp.last_match(1)
       when 'true'
@@ -2323,6 +2323,16 @@ def do_client(client_string)
       end
       respond "Changing Lich to display Room Exits of non-StringProc/Obvious exits to #{new_value}"
       Lich.display_exits = new_value
+    elsif cmd =~ /^display stringprocs?(?: (true|false))?/i
+      new_value = !(Lich.display_stringprocs)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich to display Room Exits of StringProcs to #{new_value}"
+      Lich.display_stringprocs = new_value
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
       Lich::Util::Update.request("#{update_parameter}")
@@ -2392,6 +2402,7 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# in Room Title"
       respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# in Room Title"
       respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
+      respond "   #{$clean_lich_char}display stringprocs       toggle display of StringProc exits known for room in mapdb if timeto is valid"
       respond "   #{$clean_lich_char}sk help                   show information on modifying self-knowledge spells to be known"
       respond
       respond 'If you liked this help message, you might also enjoy:'
