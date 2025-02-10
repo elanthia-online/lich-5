@@ -44,7 +44,7 @@ module Lich
               _respond ''; _respond ''
               _respond ''; _respond @new_features
               _respond ''
-              _respond ''; _respond "If you are interested in updating, run ';lich5-update --update' now."
+              _respond ''; _respond "If you are interested in updating, run '#{$clean_lich_char}lich5-update --update' now."
               _respond ''
             end
           else
@@ -67,18 +67,18 @@ module Lich
   Example usage:
 
   [One time suggestions]
-    ;autostart add --global lich5-update --announce    Check for new version at login
-    ;autostart add --global lich5-update --update      To auto accept all updates at login
+    #{$clean_lich_char}autostart add --global lich5-update --announce    Check for new version at login
+    #{$clean_lich_char}autostart add --global lich5-update --update      To auto accept all updates at login
 
   [On demand suggestions]
-    ;lich5-update --announce                  Check to see if a new version is available
-    ;lich5-update --update                    Update the Lich5 ecosystem to the current release
-    ;lich5-update --revert                    Roll the Lich5 ecosystem back to latest snapshot
-    ;lich5-update --script=<NAME>             Update an individual script file found in Lich-5
-    ;lich5-update --library=<NAME>            Update an individual library file found in Lich-5
-    ;lich5-update --data=<NAME>               Update an individual data file found in Lich-5
+    #{$clean_lich_char}lich5-update --announce                  Check to see if a new version is available
+    #{$clean_lich_char}lich5-update --update                    Update the Lich5 ecosystem to the current release
+    #{$clean_lich_char}lich5-update --revert                    Roll the Lich5 ecosystem back to latest snapshot
+    #{$clean_lich_char}lich5-update --script=<NAME>             Update an individual script file found in Lich-5
+    #{$clean_lich_char}lich5-update --library=<NAME>            Update an individual library file found in Lich-5
+    #{$clean_lich_char}lich5-update --data=<NAME>               Update an individual data file found in Lich-5
 
-    *NOTE* If you use '--snapshot' in ';autostart' you will create a new
+    *NOTE* If you use '--snapshot' in '#{$clean_lich_char}autostart' you will create a new
                 snapshot folder every time you log a character in.  NOT recommended.
     "
       end
@@ -124,7 +124,7 @@ module Lich
           respond 'This beta test will include only Lich code, and does not include Ruby upates.'
           respond 'While we will do everything we can to ensure you have a smooth experience, '
           respond 'it is a test, and untoward things can result.  Please confirm your choice:'
-          respond 'Please confirm your participation:  ;send Y or ;send N'
+          respond 'Please confirm your participation:  #{$clean_lich_char}send Y or #{$clean_lich_char}send N'
           # we are only going to get the next client-input line, and if it does not confirm, we bail
           # we are doing this to prevent hanging the client with various other inputs by the user
           sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_
@@ -319,7 +319,7 @@ module Lich
             sleep 1
             File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))
             _respond; _respond "The filename #{requested_file} is not available via lich5-update."
-            _respond "Check the spelling of your requested file, or use ';jinx' to"
+            _respond "Check the spelling of your requested file, or use '#{$clean_lich_char}jinx' to"
             _respond "to download #{requested_file} from another respository."
           end
         else
