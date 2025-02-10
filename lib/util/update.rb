@@ -124,7 +124,7 @@ module Lich
           respond 'This beta test will include only Lich code, and does not include Ruby upates.'
           respond 'While we will do everything we can to ensure you have a smooth experience, '
           respond 'it is a test, and untoward things can result.  Please confirm your choice:'
-          respond 'Please confirm your participation:  #{$clean_lich_char}send Y or #{$clean_lich_char}send N'
+          respond "Please confirm your participation:  #{$clean_lich_char}send Y or #{$clean_lich_char}send N"
           # we are only going to get the next client-input line, and if it does not confirm, we bail
           # we are doing this to prevent hanging the client with various other inputs by the user
           sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_
