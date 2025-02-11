@@ -401,7 +401,7 @@ module Lich
             when Pattern::AccountSubscription
               if Account.subscription
                 match = Regexp.last_match
-                Account.subscription = match[:subscription].gsub('Standard', 'Basic').upcase
+                Account.subscription = match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').upcase
                 :ok
               else
                 :noop
