@@ -167,7 +167,7 @@ module Lich
 
       def wear_item?(item)
         if item.nil?
-          echo('failed to match an item, try turning on debugging with ;e UserVars.equipmanager_debug = true')
+          echo('failed to match an item, try turning on debugging with #{$clean_lich_char}e UserVars.equipmanager_debug = true')
           return false
         end
         if get_item?(item)
