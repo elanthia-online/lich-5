@@ -158,7 +158,7 @@ module Lich
           end
 
           DRC.message("Using the full name of the item you wish to craft will avoid this in the future (e.g. 'a metal pike' vs 'metal pike')")
-          echo('Please select desired recipe ;send #')
+          echo("Please select desired recipe #{$clean_lich_char}send #")
           match_names.each_with_index { |x, i| respond "    #{i + 1}: #{x}" }
           line = get until line.strip =~ /^([0-9]+)$/
           item_name = match_names[Regexp.last_match(1).to_i - 1]
@@ -512,7 +512,7 @@ module Lich
             DRCC.order_enchant(info['stock-room'], more, stock_number, bag, belt)
             return true
           else
-            DRC.message("Not enough #{sigil} sigil-scroll(s). You can purchase or harvest #{more} more. We recommend using our sigilhunter script. Run ;sigilhunter help for more information.")
+            DRC.message("Not enough #{sigil} sigil-scroll(s). You can purchase or harvest #{more} more. We recommend using our sigilhunter script. Run #{$clean_lich_char}sigilhunter help for more information.")
             return false
           end
         end
