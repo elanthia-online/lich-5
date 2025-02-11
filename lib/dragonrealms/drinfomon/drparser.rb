@@ -318,7 +318,7 @@ module Lich
             end
           when Pattern::PlayedSubscription
             if Account.subscription.nil?
-              Account.subscription = Regexp.last_match[:subscription].upcase
+              Account.subscription = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
             end
           else
             :noop
