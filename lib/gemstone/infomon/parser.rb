@@ -59,7 +59,7 @@ module Lich
           TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
           WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
           WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
-          AccountName = /^Account Name: (?<name>[\w\d]+)$/.freeze
+          AccountName = /^Account Name: (?<name>[\w\d\-\_]+)$/.freeze
           AccountSubscription = /^Account Type: (?<subscription>F2P|Standard|Premium)$/.freeze
 
           # TODO: refactor / streamline?
