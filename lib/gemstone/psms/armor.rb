@@ -97,6 +97,7 @@ module Lich
           /^You don't seem to be able to move to do that\.$/,
           /^Provoking a GameMaster is not such a good idea\.$/,
           /^You do not currently have a target\.$/,
+          /^\w+ (?:is|are) not wearing any armor that you can work with\.$/,
         )
         usage_cmd = "armor #{usage}"
         if target.class == GameObj
