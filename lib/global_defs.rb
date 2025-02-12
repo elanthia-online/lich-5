@@ -2269,7 +2269,7 @@ def do_client(client_string)
       nil
     elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
       require "lib/common/hmr"
-      HMR.reload %r{#{Regexp.last_match[:pattern]}}
+      HMR.reload %r{#{Regexp.escape(Regexp.last_match[:pattern])}}
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
       ExecScript.start("Infomon.sync", { :quiet => true })
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon (?:reset|redo)!?/i
@@ -2392,6 +2392,7 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
       respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
       respond "                              see #{$clean_lich_char}lich5-update --help"
+      respond "   #{$clean_lich_char}hmr <path/to/file>        Hot module reload a Ruby or Lich5 file without relogging"
       if XMLData.game =~ /^GS/
         respond
         respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon (fixskill)"
