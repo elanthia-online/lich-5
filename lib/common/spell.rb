@@ -290,7 +290,9 @@ module Lich
           # line = options[:line] rubocop useless assignment to line
           options[:line]
         end
-        proc { eval(formula) }.call.to_f
+        result = proc { eval(formula) }.call.to_f
+        return 10.0 if defined?(Lich::Gemstone::SK) && Lich::Gemstone::SK.known?(self) && (result.nil? || result < 10)
+        return result
       end
 
       def timeleft=(val)
@@ -401,6 +403,7 @@ module Lich
       end
 
       def known?
+        return true if defined?(Lich::Gemstone::SK) && Lich::Gemstone::SK.known?(self)
         if @num.to_s.length == 3
           circle_num = @num.to_s[0..0].to_i
         elsif @num.to_s.length == 4

@@ -29,27 +29,15 @@ module Lich
       end
 
       def self.exits
-        @@exits
-      end
-
-      def self.exits=(val)
-        @@exits = val
+        XMLData.room_exits
       end
 
       def self.title
-        @@title
-      end
-
-      def self.title=(val)
-        @@title = val
+        XMLData.room_title
       end
 
       def self.description
-        @@description
-      end
-
-      def self.description=(val)
-        @@description = val
+        XMLData.room_description
       end
 
       def self.group_members

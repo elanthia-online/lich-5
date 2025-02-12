@@ -36,7 +36,8 @@ module Lich
           self.prep_request('latest')
           self.download_update
         when /--refresh/
-          _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("This command has been removed.\r\n"))
+          _respond
+          Lich::Messaging.mono(Lich::Messaging.monsterbold("This command has been removed.\r\n"))
         when INSTALL_REGEX
           if Gem::Version.new(LICH_VERSION) > Gem::Version.new('5.10.4')
             unless Regexp.last_match[:tag].nil?
@@ -47,7 +48,8 @@ module Lich
               end
               self.download_update
             else
-              _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("This feature does not work without specifying an existing version.\r\n"))
+              _respond
+              Lich::Messaging.mono(Lich::Messaging.monsterbold("This feature does not work without specifying an existing version.\r\n"))
             end
           else
             Lich::Messaging.mono(Lich::Messaging.monsterbold("This feature is only available for Lich versions 5.11 and greater.\r\n"))
@@ -59,7 +61,9 @@ module Lich
         when /--snapshot|-s/ # this one needs to be after --script
           self.snapshot
         else
-          _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("Command '#{type}' unknown, illegitimate and ignored.  Exiting . . .\r\n")); _respond
+          _respond
+          Lich::Messaging.mono(Lich::Messaging.monsterbold("Command '#{type}' unknown, illegitimate and ignored.  Exiting . . .\r\n"))
+          _respond
         end
       end
 
@@ -68,15 +72,20 @@ module Lich
         if "#{LICH_VERSION}".chr == '5'
           if Gem::Version.new(@current) < Gem::Version.new(@update_to)
             unless @new_features.empty?
-              _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("*** NEW VERSION AVAILABLE ***\r\n"))
-              _respond ''; _respond ''
-              _respond ''; _respond @new_features
+              _respond
+              Lich::Messaging.mono(Lich::Messaging.monsterbold("*** NEW VERSION AVAILABLE ***\r\n"))
               _respond ''
-              _respond ''; Lich::Messaging.mono(Lich::Messaging.monsterbold("If you are interested in updating, run ';lich5-update --update' now."))
+              _respond ''
+              _respond ''
+              _respond @new_features
+              _respond ''
+              _respond ''
+              Lich::Messaging.mono(Lich::Messaging.monsterbold("If you are interested in updating, run '#{$clean_lich_char}lich5-update --update' now."))
               _respond ''
             end
           else
-            _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("Lich version #{LICH_VERSION} is good.  Enjoy!\r\n"))
+            _respond
+            Lich::Messaging.mono(Lich::Messaging.monsterbold("Lich version #{LICH_VERSION} is good.  Enjoy!\r\n"))
           end
         else
           # lich version 4 - just say 'no'
@@ -86,11 +95,11 @@ module Lich
 
       def self.check_beta_participation
         Lich::Messaging.mono("You are electing to participate in the beta testing of the next Lich release. This beta test will include only Lich code, and does not include Ruby upates. While we will do everything we can to ensure you have a smooth experience, it is a test, and untoward things can result.  Please confirm your choice:\r\n")
-        Lich::Messaging.mono(Lich::Messaging.monsterbold("Please confirm your participation:  ;send Y or ;send N\r\n"))
+        Lich::Messaging.mono(Lich::Messaging.monsterbold("Please confirm your participation:  #{$clean_lich_char}send Y or #{$clean_lich_char}send N\r\n"))
         # we are only going to get the next client-input line, and if it does not confirm, we bail
         # we are doing this to prevent hanging the client with various other inputs by the user
         sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_
-        line = sync_thread.gets until line.strip =~ /^(?:<c>)?(?:;send|;s) /i
+        line = sync_thread.gets until line.strip =~ /^(?:<c>)?(?:[\;\,]send|[\;\,]s) /i
         if line =~ /send Y|s Y/i
           @beta_response = 'accepted'
           Lich::Messaging.mono("Beta test installation accepted.  Thank you for assisting!\r\n")
@@ -182,16 +191,20 @@ module Lich
         self.prep_request if @update_to.nil? or @update_to.empty?
         if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}")
           unless @back_rev && (Gem::Version.new("#{update_to}") > Gem::Version.new('5.10.4'))
-            _respond; Lich::Messaging.mono(Lich::Messaging.monsterbold("Lich version #{LICH_VERSION} is good.  Enjoy!\r\n"))
+            _respond
+            Lich::Messaging.mono(Lich::Messaging.monsterbold("Lich version #{LICH_VERSION} is good.  Enjoy!\r\n"))
           end
         else
-          _respond; _respond 'Getting reaady to update.  First we will create a'
+          _respond
+          _respond 'Getting reaady to update.  First we will create a'
           _respond 'snapshot in case there are problems with the update.'
 
           self.snapshot
 
           # download the requested update (can be prod release, or beta)
-          _respond; _respond "Downloading Lich5 version #{@update_to}"; _respond
+          _respond
+          _respond "Downloading Lich5 version #{@update_to}"
+          _respond
           filename = "lich5-#{@update_to}"
           File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
             file.write URI.parse(@zipfile).open.read
@@ -208,11 +221,14 @@ module Lich
           # delete all existing lib files and directories to not leave old ones behind
           FileUtils.rm_rf(Dir.glob(File.join(LIB_DIR, "*")))
 
-          _respond; _respond 'Copying updated lich files to their locations.'
+          _respond
+          _respond 'Copying updated lich files to their locations.'
 
           ## We do not care about local edits from players in the Lich5 / lib location
           FileUtils.copy_entry(File.join(TEMP_DIR, filename, "lib"), File.join(LIB_DIR))
-          _respond; _respond "All Lich lib files have been updated."; _respond
+          _respond
+          _respond "All Lich lib files have been updated."
+          _respond
 
           ## Use new method so can be reused to do a blanket update of core data & scripts
           self.update_core_data_and_scripts(@update_to)
@@ -228,7 +244,8 @@ module Lich
           FileUtils.remove_dir(File.join(TEMP_DIR, filename)) # we know these exist because
           FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) # we just processed them
 
-          _respond; _respond "Lich5 has been updated to Lich5 version #{@update_to}"
+          _respond
+          _respond "Lich5 has been updated to Lich5 version #{@update_to}"
           _respond "You should exit the game, then log back in.  This will start the game"
           _respond "with your updated Lich.  Enjoy!"
         end
@@ -239,7 +256,8 @@ module Lich
         ## without another snapshot and without worrying about saving files
         ## that can be reinstalled with the lich5-update --update command
 
-        _respond; _respond 'Reverting Lich5 to previously installed version.'
+        _respond
+        _respond 'Reverting Lich5 to previously installed version.'
         revert_array = Dir.glob(File.join(BACKUP_DIR, "*")).sort.reverse
         restore_snapshot = revert_array[0]
         if restore_snapshot.empty? or /L5-snapshot/ !~ restore_snapshot
@@ -338,7 +356,7 @@ module Lich
           unless file_available
             Lich::Messaging.mono("The version or file you are requesting is not available.  Possible causes:\r\n")
             Lich::Messaging.mono("  1) A request for a non-Elanthia-Online script or data file was made.\r\n")
-            Lich::Messaging.mono("  Fix: use ;repo download <filename> for files not maintained by Elanthia Online.\r\n")
+            Lich::Messaging.mono("  Fix: use #{$clean_lich_char}repository download <filename> for files not maintained by Elanthia Online.\r\n")
             _respond
             Lich::Messaging.mono("  2) A request for a non-existent or deprecated Lich version was made.\r\n")
             Lich::Messaging.mono("  Fix: Double check your request to ensure you have a good Lich version number.\r\n")
@@ -357,8 +375,9 @@ module Lich
               # we created a garbage file (zero bytes filename) so let's clean it up and inform.
               sleep 1
               File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))
-              _respond; _respond "The filename #{requested_file} is not available via lich5-update."
-              _respond "Check the spelling of your requested file, or use ';jinx' to"
+              _respond
+              _respond "The filename #{requested_file} is not available via lich5-update."
+              _respond "Check the spelling of your requested file, or use '#{$clean_lich_char}jinx' to"
               _respond "to download #{requested_file} from another respository."
             end
           end
@@ -419,20 +438,20 @@ module Lich
       Example usage:
 
       [One time suggestions]
-      ;autostart add --global lich5-update --announce    Check for new version at login
-      ;autostart add --global lich5-update --update      To auto accept all updates at login
+      #{$clean_lich_char}autostart add --global lich5-update --announce    Check for new version at login
+      #{$clean_lich_char}autostart add --global lich5-update --update      To auto accept all updates at login
 
       [On demand suggestions]
-      ;lich5-update --announce                  Check to see if a new version is available
-      ;lich5-update --update                    Update the Lich5 ecosystem to the current release
-      ;lich5-update --revert                    Roll the Lich5 ecosystem back to latest snapshot
-      ;lich5-update --script=<NAME>             Update an individual script file found in Lich-5
-      ;lich5-update --library=<NAME>            Update an individual library file found in Lich-5
-      ;lich5-update --data=<NAME>               Update an individual data file found in Lich-5
+      #{$clean_lich_char}lich5-update --announce                  Check to see if a new version is available
+      #{$clean_lich_char}lich5-update --update                    Update the Lich5 ecosystem to the current release
+      #{$clean_lich_char}lich5-update --revert                    Roll the Lich5 ecosystem back to latest snapshot
+      #{$clean_lich_char}lich5-update --script=<NAME>             Update an individual script file found in Lich-5
+      #{$clean_lich_char}lich5-update --library=<NAME>            Update an individual library file found in Lich-5
+      #{$clean_lich_char}lich5-update --data=<NAME>               Update an individual data file found in Lich-5
 
-      ;lich5-update --version=<VERSION> --library=<NAME>  Updates lib file to specific version
+      #{$clean_lich_char}lich5-update --version=<VERSION> --library=<NAME>  Updates lib file to specific version
 
-      *NOTE* If you use '--snapshot' in ';autostart' you will create a new
+      *NOTE* If you use '--snapshot' in '#{$clean_lich_char}autostart' you will create a new
                 snapshot folder every time you log a character in.  NOT recommended.
       \r\n")
       end

@@ -1,5 +1,5 @@
 module Lich
-  module DragonRealms
+  module Common
     class Map
       @@loaded                   = false
       @@load_mutex               = Mutex.new

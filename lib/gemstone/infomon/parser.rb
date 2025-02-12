@@ -59,6 +59,8 @@ module Lich
           TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
           WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
           WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
+          AccountName = /^Account Name: (?<name>[\w\d\-\_]+)$/.freeze
+          AccountSubscription = /^Account Type: (?<subscription>F2P|Standard|Premium)$/.freeze
 
           # TODO: refactor / streamline?
           SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$|^That is impossible to do while unconscious$/.freeze
@@ -90,7 +92,8 @@ module Lich
                              Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral,
                              TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
                              WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
-                             ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges)
+                             ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
+                             AccountName, AccountSubscription)
         end
 
         def self.find_cat(category)
@@ -338,7 +341,7 @@ module Lich
               :ok
             when Pattern::CovertArtsCharges
               match = Regexp.last_match
-              Infomon.set('resource.covert_arts_charges', match[:charges].delete(',').to_i)
+              Infomon.set('resources.covert_arts_charges', match[:charges].delete(',').to_i)
               :ok
             when Pattern::GigasArtifactFragments
               match = Regexp.last_match
@@ -387,6 +390,22 @@ module Lich
               match = Regexp.last_match
               Infomon.set('currency.silver_container', match[:silver].delete(',').to_i)
               :ok
+            when Pattern::AccountName
+              if Account.name.nil?
+                match = Regexp.last_match
+                Account.name = match[:name].upcase
+                :ok
+              else
+                :noop
+              end
+            when Pattern::AccountSubscription
+              if Account.subscription
+                match = Regexp.last_match
+                Account.subscription = match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').upcase
+                :ok
+              else
+                :noop
+              end
 
             # TODO: refactor / streamline?
             when Pattern::ThornPoisonStart, Pattern::ThornPoisonProgression, Pattern::ThornPoisonDeprogression

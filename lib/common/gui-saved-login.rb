@@ -172,7 +172,7 @@ else
         quick_box.pack_start(Gtk::Label.new("Account: " + last_user_id), :expand => false, :fill => false, :padding => 6)
       end
 
-      label = Gtk::Label.new("#{login_info[:char_name]} (#{login_info[:game_name]}, #{login_info[:frontend]})")
+      label = Gtk::Label.new("#{login_info[:char_name]} (#{login_info[:game_name]}, #{login_info[:frontend].capitalize == 'Stormfront' ? 'Wrayth' : login_info[:frontend].capitalize}#{login_info[:custom_launch] ? ' custom' : ''})")
       play_button = Gtk::Button.new(:label => 'Play')
       remove_button = Gtk::Button.new(:label => 'X')
 

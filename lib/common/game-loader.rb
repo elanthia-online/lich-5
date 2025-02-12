@@ -11,7 +11,8 @@ module Lich
 
       def self.gemstone
         self.common_before
-        require File.join(LIB_DIR, 'gemstone', 'map_gs.rb')
+        require File.join(LIB_DIR, 'gemstone', 'sk.rb')
+        require File.join(LIB_DIR, 'common', 'map', 'map_gs.rb')
         require File.join(LIB_DIR, 'gemstone', 'effects.rb')
         require File.join(LIB_DIR, 'gemstone', 'bounty.rb')
         require File.join(LIB_DIR, 'gemstone', 'claim.rb')
@@ -36,7 +37,7 @@ module Lich
 
       def self.dragon_realms
         self.common_before
-        require File.join(LIB_DIR, 'dragonrealms', 'map_dr.rb')
+        require File.join(LIB_DIR, 'common', 'map', 'map_dr.rb')
         require File.join(LIB_DIR, 'attributes', 'char.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'drinfomon.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'commons.rb')
