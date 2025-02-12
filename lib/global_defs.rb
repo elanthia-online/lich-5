@@ -2392,7 +2392,7 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
       respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
       respond "                              see #{$clean_lich_char}lich5-update --help"
-      respond "   #{$clean_lich_char}hmr <path/to/file>        Hot module reload a Ruby or Lich5 file without relogging"
+      respond "   #{$clean_lich_char}hmr <regex filepath>      Hot module reload a Ruby or Lich5 file without relogging, uses Regular Expression matching"
       if XMLData.game =~ /^GS/
         respond
         respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon (fixskill)"
