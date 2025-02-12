@@ -2157,7 +2157,7 @@ def do_client(client_string)
       target = $2
       script = Script.running.find { |s_running| s_running.name == target } || Script.hidden.find { |s_hidden| s_hidden.name == target } || Script.running.find { |s_running| s_running.name =~ /^#{target}/i } || Script.hidden.find { |s_hidden| s_hidden.name =~ /^#{target}/i }
       if script.nil?
-        respond "--- Lich: #{target} does not appear to be running! Use ';list' or ';listall' to see what's active."
+        respond "--- Lich: #{target} does not appear to be running! Use '#{$clean_lich_char}list' or '#{$clean_lich_char}listall' to see what's active."
       elsif action =~ /^(?:k|kill|stop)$/
         script.kill
       elsif action =~ /^(?:p|pause)$/
