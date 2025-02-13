@@ -2269,7 +2269,18 @@ def do_client(client_string)
       nil
     elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
       require "lib/common/hmr"
-      HMR.reload %r{#{Regexp.escape(Regexp.last_match[:pattern])}}
+      begin
+        HMR.reload %r{#{Regexp.last_match[:pattern]}}
+      rescue ArgumentError
+        if $!.to_s == 'invalid Unicode escape'
+          respond "--- Lich: error: invalid Unicode escape"
+          respond "--- Lich:   cmd: #{cmd}"
+          respond "--- Lich: \\u is unicode escape, did you mean to use a / instead?"
+        else
+          respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
+          Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+        end
+      end
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
       ExecScript.start("Infomon.sync", { :quiet => true })
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon (?:reset|redo)!?/i
