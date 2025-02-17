@@ -212,7 +212,6 @@ module Lich
                   @@cli_scripts = true
                   Lich.log("info: logged in as #{XMLData.game}:#{XMLData.name}")
                 end
-
                 unless $_SERVERSTRING_ =~ /^<settings /
                   begin
                     # Check for valid XML prior to sending to client, corrects double and single nested quotes
