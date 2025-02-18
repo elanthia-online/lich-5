@@ -8,8 +8,8 @@ module Lich
       @theme_state = Lich.track_dark_mode
 
       @launch_data = nil
-      if File.exist?("#{DATA_DIR}/entry.dat")
-        @entry_data = File.open("#{DATA_DIR}/entry.dat", 'r') { |file|
+      if File.exist?(File.join(DATA_DIR, "entry.dat"))
+        @entry_data = File.open(File.join(DATA_DIR, "entry.dat"), 'r') { |file|
           begin
             if @autosort_state == true
               # Sort in list by instance name, account name, and then character name
@@ -69,7 +69,7 @@ module Lich
         @window.border_width = 5
         @window.add(@notebook)
         @window.signal_connect('delete_event') { @window.destroy; @done = true }
-        @window.default_width = 550
+        @window.default_width = 590
         @window.default_height = 550
         @window.show_all
 
@@ -85,7 +85,7 @@ module Lich
       wait_until { @done }
 
       if @save_entry_data
-        File.open("#{DATA_DIR}/entry.dat", 'w') { |file|
+        File.open(File.join(DATA_DIR, "entry.dat"), 'w') { |file|
           file.write([Marshal.dump(@entry_data)].pack('m'))
         }
       end
