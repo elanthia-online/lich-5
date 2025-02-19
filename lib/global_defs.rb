@@ -2268,7 +2268,6 @@ def do_client(client_string)
       did_something = false
       nil
     elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
-      require "lib/common/hmr"
       begin
         HMR.reload %r{#{Regexp.last_match[:pattern]}}
       rescue ArgumentError
