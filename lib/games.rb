@@ -284,10 +284,6 @@ module Lich
                   stripped_server = strip_xml($_SERVERSTRING_, type: 'main')
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
-                    if defined?(Map) and Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
-                      Map.last_seen_objects = $1 # DR only: copy loot line to Map.last_seen_objects
-                    end
-
                     Script.new_downstream(line) if !line.empty?
                   }
                 end
@@ -909,10 +905,6 @@ module Lich
                   stripped_server = strip_xml($_SERVERSTRING_, type: 'main')
                   stripped_server.split("\r\n").each { |line|
                     @@buffer.update(line) if TESTING
-                    if defined?(Map) and Map.method_defined?(:last_seen_objects) and !Map.last_seen_objects and line =~ /(You also see .*)$/
-                      Map.last_seen_objects = $1 # DR only: copy loot line to Map.last_seen_objects
-                    end
-
                     Script.new_downstream(line) if !line.empty?
                   }
                 end
