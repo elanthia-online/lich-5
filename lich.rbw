@@ -86,7 +86,7 @@ require File.join(LIB_DIR, 'version.rb')
 require File.join(LIB_DIR, 'lich.rb')
 require File.join(LIB_DIR, 'init.rb')
 require File.join(LIB_DIR, 'common', 'front-end.rb')
-require File.join(LIB_DIR, 'util', 'update.rb')
+require File.join(LIB_DIR, 'update.rb')
 
 # TODO: Need to split out initiatilzation functions to move require to top of file
 require File.join(LIB_DIR, 'common', 'gtk.rb')
