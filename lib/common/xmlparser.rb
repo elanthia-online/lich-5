@@ -245,6 +245,10 @@ module Lich
 
           if name == 'nav'
             Lich::Claim.lock if defined?(Lich::Claim)
+            GameObj.clear_loot
+            GameObj.clear_npcs
+            GameObj.clear_pcs
+            GameObj.clear_room_desc
             @check_obvious_hiding = true
             unless XMLData.game =~ /^DR/
               @previous_nav_rm = @room_id
@@ -252,7 +256,6 @@ module Lich
             end
             @arrival_pcs = []
             $nav_seen = true
-            Map.last_seen_objects = nil if Map.method_defined?(:last_seen_objects); # DR Only
           end
 
           if name == 'compass'
