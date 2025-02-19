@@ -46,6 +46,7 @@ module Lich
 
       def self.common_after
         ActiveSpell.watch!
+        require File.join(LIB_DIR, 'common', 'hmr.rb')
         # nil
       end
 
