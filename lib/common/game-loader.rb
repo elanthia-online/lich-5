@@ -32,6 +32,8 @@ module Lich
         # require File.join(LIB_DIR, 'gemstone', 'character', 'disk.rb') # dup
         require File.join(LIB_DIR, 'gemstone', 'group.rb')
         require File.join(LIB_DIR, 'gemstone', 'critranks')
+        require File.join(LIB_DIR, 'gemstone', 'olib', 'exist.rb')
+        Dir[File.join(LIB_DIR, "gemstone", "olib/**/*.rb")].each {|file| require(file) }
         self.common_after
       end
 
