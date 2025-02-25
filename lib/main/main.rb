@@ -43,7 +43,7 @@ reconnect_if_wanted = proc {
   $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
-  require File.join(LIB_DIR, 'eaccess.rb')
+  require File.join(LIB_DIR, 'common', 'eaccess.rb')
 
   if ARGV.include?('--login')
     if File.exist?(File.join(DATA_DIR, "entry.dat"))
@@ -123,6 +123,7 @@ reconnect_if_wanted = proc {
   ## GUI starts here
 
   elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
+    require File.join(LIB_DIR, 'common', 'gui-login.rb')
     gui_login
   end
 
@@ -151,8 +152,10 @@ reconnect_if_wanted = proc {
   if @launch_data
     if @launch_data.find { |opt| opt =~ /GAMECODE=DR/ }
       gamecodeshort = "DR"
+      include Lich::DragonRealms
     else
       gamecodeshort = "GS"
+      include Lich::Gemstone
     end
     unless (gamecode = @launch_data.find { |line| line =~ /GAMECODE=/ })
       $stdout.puts "error: launch_data contains no GAMECODE info"
@@ -282,6 +285,7 @@ reconnect_if_wanted = proc {
       end
       accept_thread = Thread.new { $_CLIENT_ = SynchronizedSocket.new(listener.accept) }
       localport = listener.addr[1]
+      Frontend.create_session_file(Account.character, listener.addr[2], listener.addr[1], display_session: false)
       if custom_launch
         sal_filename = nil
         launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, game_key.to_s)
@@ -445,6 +449,8 @@ reconnect_if_wanted = proc {
           exit
         }
         begin
+          include Lich::Gemstone if @game_host =~ /gs/i
+          include Lich::DragonRealms if @game_host =~ /dr/i
           Game.open(@game_host, @game_port)
         rescue
           Lich.log "error: #{$!}"
@@ -521,7 +527,9 @@ reconnect_if_wanted = proc {
       $login_time = Time.now
 
       if $offline_mode
+        # rubocop:disable Lint/Void
         nil
+        # rubocop:enable Lint/Void
       elsif $frontend =~ /^(?:wizard|avalon)$/
         #
         # send the login key
@@ -585,6 +593,20 @@ reconnect_if_wanted = proc {
           Game._puts(client_string)
         end
       else
+        if launcher_cmd =~ /mudlet/
+          Game._puts(game_key)
+          game_key = nil
+
+          client_string = "/FE:WIZARD /VERSION:1.0.1.22 /P:#{RUBY_PLATFORM} /XML"
+          $_CLIENTBUFFER_.push(client_string.dup)
+          Game._puts(client_string)
+
+          2.times {
+            sleep 0.3
+            $_CLIENTBUFFER_.push("<c>\r\n")
+            Game._puts("<c>")
+          }
+        end
         inv_off_proc = proc { |server_string|
           if server_string =~ /^<(?:container|clearContainer|exposeContainer)/
             server_string.gsub!(/<(?:container|clearContainer|exposeContainer)[^>]*>|<inv.+\/inv>/, '')
@@ -661,12 +683,14 @@ reconnect_if_wanted = proc {
         Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         sleep 0.2
         retry unless $_CLIENT_.closed? or Game.closed? or !Game.thread.alive? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed/i)
+      ensure
+        Frontend.cleanup_session_file
       end
       Game.close
     }
   end
 
-  if defined? @detachable_client_port
+  unless @detachable_client_port.nil?
     detachable_client_thread = Thread.new {
       loop {
         begin

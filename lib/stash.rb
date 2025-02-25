@@ -2,30 +2,12 @@
 stash.rb: Core lich file for extending free_hands, empty_hands functions in
   item / container script indifferent method.  Usage will ensure no regex is
   required to be maintained.
-
-    Maintainer: Elanthia-Online
-    Original Author: Tillmen, Ondreian, others
-    game: Gemstone
-    tags: CORE, spells
-    required: Lich > 5.0.19
-    version: 1.2.1
-
-  changelog:
-    version 1.2.1
-     * Added support for weapon displayers
-    version 1.2.0
-     * Added sheath support and TWC support
-    version 1.1.0
-     * Added ethereal weapon support
-    version 1.0.0
-     * Initial release
-
 =end
 
 module Lich
   module Stash
     def self.find_container(param, loud_fail: true)
-      param = param.name if param.is_a?(Games::Gemstone::GameObj)
+      param = param.name if param.is_a?(GameObj) # (Lich::Gemstone::GameObj)
       found_container = GameObj.inv.find do |container|
         container.name =~ %r[#{param.strip}]i || container.name =~ %r[#{param.sub(' ', ' .*')}]i
       end
@@ -89,7 +71,13 @@ module Lich
         if line =~ sheath_list_match
           sheath_obj = Regexp.last_match(3).to_s.downcase
           sheath_type = Regexp.last_match(1).to_s.downcase.gsub('2', 'secondary_')
-          @sheath.store(sheath_type.to_sym, Stash.find_container(sheath_obj))
+          found_container = Stash.find_container(sheath_obj, loud_fail: false)
+          unless found_container.nil?
+            @sheath.store(sheath_type.to_sym, found_container)
+          else
+            respond("Lich::Stash.sheath_bags Error: Could not find sheath(#{sheath_obj}) in inventory. Not using, possibly hidden, tucked, or missing.")
+            Lich.log("Lich::Stash.sheath_bags Error: Could not find sheath(#{sheath_obj}) in inventory. Not using, possibly hidden, tucked, or missing.")
+          end
         end
       }
       @checked_sheaths = true
@@ -119,14 +107,14 @@ module Lich
         sheath = second_sheath = nil
       end
       # weaponsack for both hands
-      if UserVars.weapon and UserVars.weaponsack and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
-        weaponsack = nil unless (weaponsack = find_container(UserVars.weaponsack, loud_fail: false)).is_a?(Games::Gemstone::GameObj)
+      if UserVars.weapon.class == String and UserVars.weaponsack.class == String and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
+        weaponsack = nil unless (weaponsack = find_container(UserVars.weaponsack, loud_fail: false)).is_a?(GameObj) # (Lich::Gemstone::GameObj)
       end
       # lootsack for both hands
-      if UserVars.lootsack.nil? or UserVars.lootsack.empty?
+      if UserVars.lootsack.class != String || UserVars.lootsack.empty?
         lootsack = nil
       else
-        lootsack = nil unless (lootsack = find_container(UserVars.lootsack, loud_fail: false)).is_a?(Games::Gemstone::GameObj)
+        lootsack = nil unless (lootsack = find_container(UserVars.lootsack, loud_fail: false)).is_a?(GameObj) # (Lich::Gemstone::GameObj)
       end
       # finding another container if needed
       other_containers_var = nil

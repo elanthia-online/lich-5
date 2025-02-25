@@ -30,7 +30,7 @@ if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
   exit
 end
 
-require File.join(LIB_DIR, 'wine.rb')
+require_relative 'wine'
 
 begin
   # stupid workaround for Windows
@@ -88,14 +88,14 @@ elsif defined?(Wine)
   ## if we have a String class (directory) and the directory exists -- no error detectable at this level
   ## if we have a nil, we have no directory, or if we have a path but cannot find that path (directory) we have an error
   if $sf_fe_loc.nil? # no directory
-    Lich.log("STORM equivalent FE is not installed under WINE.")
+    Lich.log("STORM equivalent FE is not installed under WINE.") if $debug
   else
     unless $sf_fe_loc.is_a? String and File.exist?($sf_fe_loc) # cannot confirm directory location
       Lich.log("Cannot find STORM equivalent FE to launch under WINE.")
     end
   end
   if $wiz_fe_loc.nil? # no directory
-    Lich.log("WIZARD FE is not installed under WINE.")
+    Lich.log("WIZARD FE is not installed under WINE.") if $debug
   else
     unless $wiz_fe_loc.is_a? String and File.exist?($wiz_fe_loc) # cannot confirm directory location
       Lich.log("Cannot find WIZARD FE to launch under WINE.")
@@ -512,13 +512,12 @@ rescue LoadError
     end
   else
     # fixme: no sqlite3 on Linux/Mac
-    puts "The sqlite3 gem is not installed (or failed to load), you may need to: sudo gem install sqlite3"
+    puts "The sqlite3 gem is not installed (or failed to load), you may need to: gem install sqlite3"
   end
   exit
 end
 
-if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i) or ENV['DISPLAY']) and !ARGV.include?('--no-gui')
-
+unless (ARGV.grep(/^--no-(?:gtk|gui)$/).any? || RUBY_PLATFORM !~ /mingw/ && (ENV['DISPLAY'].nil? && !ARGV.include?('--gtk')))
   begin
     require 'gtk3'
     HAVE_GTK = true
@@ -573,7 +572,7 @@ if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i) or ENV['DIS
         end
       else
         # fixme: no gtk3 on Linux/Mac
-        puts "The gtk3 gem is not installed (or failed to load), you may need to: sudo gem install gtk3"
+        puts "The gtk3 gem is not installed (or failed to load), you may need to: gem install gtk3"
       end
       exit
     else

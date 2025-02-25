@@ -57,17 +57,23 @@ for arg in ARGV
   end
 end
 
-require 'time'
-require 'socket'
+require 'base64'
+require 'digest/md5'
+require 'digest/sha1'
+require 'drb/drb'
+require 'json'
+require 'monitor'
+require 'net/http'
+require 'ostruct'
+require 'resolv'
 require 'rexml/document'
 require 'rexml/streamlistener'
+require 'socket'
 require 'stringio'
-require 'zlib'
-require 'drb/drb'
-require 'resolv'
-require 'digest/md5'
-require 'json'
 require 'terminal-table'
+require 'time'
+require 'yaml'
+require 'zlib'
 
 # TODO: Move all local requires to top of file
 if defined? LIB_DIR
@@ -79,68 +85,70 @@ require File.join(LIB_DIR, 'version.rb')
 
 require File.join(LIB_DIR, 'lich.rb')
 require File.join(LIB_DIR, 'init.rb')
-require File.join(LIB_DIR, 'front-end.rb')
+require File.join(LIB_DIR, 'common', 'front-end.rb')
 require File.join(LIB_DIR, 'update.rb')
 
 # TODO: Need to split out initiatilzation functions to move require to top of file
-require File.join(LIB_DIR, 'gtk.rb')
-require File.join(LIB_DIR, 'gui-login.rb')
-require File.join(LIB_DIR, 'db_store.rb')
-#2024-06-13 carve out
-require File.join(LIB_DIR, 'class_exts', 'nilclass.rb')
-require File.join(LIB_DIR, 'class_exts', 'numeric.rb')
-require File.join(LIB_DIR, 'class_exts', 'string.rb')
-require File.join(LIB_DIR, 'class_exts', 'stringproc.rb')
-require File.join(LIB_DIR, 'class_exts', 'synchronizedsocket.rb')
-require File.join(LIB_DIR, 'limitedarray.rb')
-require File.join(LIB_DIR, 'xmlparser.rb')
-require File.join(LIB_DIR, 'upstreamhook.rb')
-require File.join(LIB_DIR, 'downstreamhook.rb')
-require File.join(LIB_DIR, 'settings', 'settings.rb')
-require File.join(LIB_DIR, 'settings', 'gamesettings.rb')
-require File.join(LIB_DIR, 'settings', 'charsettings.rb')
-require File.join(LIB_DIR, 'vars.rb')
+require File.join(LIB_DIR, 'common', 'gtk.rb')
+# require File.join(LIB_DIR, 'common','gui-login.rb')
+require File.join(LIB_DIR, 'common', 'db_store.rb')
+# 2024-06-13 carve out
+require File.join(LIB_DIR, 'common', 'class_exts', 'nilclass.rb')
+require File.join(LIB_DIR, 'common', 'class_exts', 'numeric.rb')
+require File.join(LIB_DIR, 'common', 'class_exts', 'string.rb')
+require File.join(LIB_DIR, 'common', 'class_exts', 'stringproc.rb')
+require File.join(LIB_DIR, 'common', 'class_exts', 'synchronizedsocket.rb')
+require File.join(LIB_DIR, 'common', 'limitedarray.rb')
+require File.join(LIB_DIR, 'common', 'xmlparser.rb')
+require File.join(LIB_DIR, 'common', 'upstreamhook.rb')
+require File.join(LIB_DIR, 'common', 'downstreamhook.rb')
+require File.join(LIB_DIR, 'common', 'settings', 'settings.rb')
+require File.join(LIB_DIR, 'common', 'settings', 'gamesettings.rb')
+require File.join(LIB_DIR, 'common', 'settings', 'charsettings.rb')
+require File.join(LIB_DIR, 'common', 'vars.rb')
 require File.join(LIB_DIR, 'sessionvars.rb')
 
 # Script classes move to lib 230305
-require File.join(LIB_DIR, 'script.rb')
-require File.join(LIB_DIR, 'watchfor.rb')
+require File.join(LIB_DIR, 'common', 'script.rb')
+require File.join(LIB_DIR, 'common', 'watchfor.rb')
 
 ## adding util to the list of defs
 
-require File.join(LIB_DIR, 'util.rb')
+require File.join(LIB_DIR, 'util', 'util.rb')
 require File.join(LIB_DIR, 'messaging.rb')
 require File.join(LIB_DIR, 'global_defs.rb')
-require File.join(LIB_DIR, 'buffer.rb')
+require File.join(LIB_DIR, 'common', 'buffer.rb')
 
-require File.join(LIB_DIR, 'sharedbuffer.rb')
+require File.join(LIB_DIR, 'common', 'sharedbuffer.rb')
 
-require File.join(LIB_DIR, 'spellranks.rb')
+require File.join(LIB_DIR, 'gemstone', 'spellranks.rb')
 
 require File.join(LIB_DIR, 'games.rb')
-require File.join(LIB_DIR, 'gameobj.rb')
-
-include Games::Gemstone
-
-JUMP = Exception.exception('JUMP')
-JUMP_ERROR = Exception.exception('JUMP_ERROR')
-
-XMLData = XMLParser.new
-
-#
-# Start deprecated stuff
-#
-require File.join(LIB_DIR, 'deprecated.rb')
-#
-# End deprecated stuff
-#
-require File.join(LIB_DIR, 'uservars.rb')
+require File.join(LIB_DIR, 'common', 'gameobj.rb')
 
 #
 # Program start
 #
 require File.join(LIB_DIR, 'main', 'argv_options.rb')
 require File.join(LIB_DIR, 'main', 'main.rb')
+
+include Lich::Common
+
+XMLData = Lich::Common::XMLParser.new
+
+#
+# Start deprecated stuff
+#
+JUMP = Exception.exception('JUMP')
+JUMP_ERROR = Exception.exception('JUMP_ERROR')
+
+require File.join(LIB_DIR, 'deprecated.rb')
+#
+# End deprecated stuff
+#
+require File.join(LIB_DIR, 'common', 'uservars.rb')
+
+## was here ##
 
 if defined?(Gtk)
   Thread.current.priority = -10

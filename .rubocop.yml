@@ -1,14 +1,12 @@
 AllCops:
-  TargetRubyVersion: 3.3
+  SuggestExtensions: false
+  TargetRubyVersion: 3.4
   NewCops: disable
   Include:
     - '**/*.lic'
     - '**/*.rb'
 
-Naming:
-  Enabled: false
-
-Style:
+Layout/ClosingHeredocIndentation:
   Enabled: false
 
 Layout/EmptyLineAfterGuardClause:
@@ -23,13 +21,10 @@ Layout/FirstHashElementIndentation:
 Layout/HashAlignment:
   EnforcedHashRocketStyle: table
 
-Layout/LineLength:
-  Enabled: false
-
 Layout/HeredocIndentation:
   Enabled: false
 
-Layout/ClosingHeredocIndentation:
+Layout/LineLength:
   Enabled: false
 
 Metrics/AbcSize:
@@ -55,8 +50,11 @@ Metrics/ModuleLength:
 
 Metrics/PerceivedComplexity:
   Enabled: false
-
+  
 Metrics/ParameterLists:
+  Enabled: false
+
+Naming:
   Enabled: false
 
 Security/Eval:
@@ -64,3 +62,7 @@ Security/Eval:
   
 Security/MarshalLoad:
   Enabled: false
+
+Style:
+  Enabled: false
+  

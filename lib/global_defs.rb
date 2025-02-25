@@ -2157,7 +2157,7 @@ def do_client(client_string)
       target = $2
       script = Script.running.find { |s_running| s_running.name == target } || Script.hidden.find { |s_hidden| s_hidden.name == target } || Script.running.find { |s_running| s_running.name =~ /^#{target}/i } || Script.hidden.find { |s_hidden| s_hidden.name =~ /^#{target}/i }
       if script.nil?
-        respond "--- Lich: #{target} does not appear to be running! Use ';list' or ';listall' to see what's active."
+        respond "--- Lich: #{target} does not appear to be running! Use '#{$clean_lich_char}list' or '#{$clean_lich_char}listall' to see what's active."
       elsif action =~ /^(?:k|kill|stop)$/
         script.kill
       elsif action =~ /^(?:p|pause)$/
@@ -2268,8 +2268,18 @@ def do_client(client_string)
       did_something = false
       nil
     elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
-      require "lib/hmr"
-      HMR.reload %r{#{Regexp.last_match[:pattern]}}
+      begin
+        HMR.reload %r{#{Regexp.last_match[:pattern]}}
+      rescue ArgumentError
+        if $!.to_s == 'invalid Unicode escape'
+          respond "--- Lich: error: invalid Unicode escape"
+          respond "--- Lich:   cmd: #{cmd}"
+          respond "--- Lich: \\u is unicode escape, did you mean to use a / instead?"
+        else
+          respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
+          Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+        end
+      end
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
       ExecScript.start("Infomon.sync", { :quiet => true })
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon (?:reset|redo)!?/i
@@ -2291,7 +2301,9 @@ def do_client(client_string)
       end
       respond "Changing Infomon's effect duration showing to #{new_value}"
       Infomon.set('infomon.show_durations', new_value)
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid(?: (true|false))?/i
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^sk\b(?: (add|rm|list|help)(?: ([\d\s]+))?)?/i
+      SK.main(Regexp.last_match(1), Regexp.last_match(2))
+    elsif cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
       case Regexp.last_match(1)
       when 'true'
@@ -2301,7 +2313,7 @@ def do_client(client_string)
       end
       respond "Changing Lich's Room title display for Lich ID#s to #{new_value}"
       Lich.display_lichid = new_value
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^display uid(?: (true|false))?/i
+    elsif cmd =~ /^display uid(?: (true|false))?/i
       new_value = !(Lich.display_uid)
       case Regexp.last_match(1)
       when 'true'
@@ -2311,6 +2323,26 @@ def do_client(client_string)
       end
       respond "Changing Lich's Room title display for RealID#s to #{new_value}"
       Lich.display_uid = new_value
+    elsif cmd =~ /^display exits?(?: (true|false))?/i
+      new_value = !(Lich.display_exits)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich to display Room Exits of non-StringProc/Obvious exits to #{new_value}"
+      Lich.display_exits = new_value
+    elsif cmd =~ /^display stringprocs?(?: (true|false))?/i
+      new_value = !(Lich.display_stringprocs)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich to display Room Exits of StringProcs to #{new_value}"
+      Lich.display_stringprocs = new_value
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
       Lich::Util::Update.request("#{update_parameter}")
@@ -2370,15 +2402,19 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
       respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
       respond "                              see #{$clean_lich_char}lich5-update --help"
+      respond "   #{$clean_lich_char}hmr <regex filepath>      Hot module reload a Ruby or Lich5 file without relogging, uses Regular Expression matching"
       if XMLData.game =~ /^GS/
         respond
         respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon (fixskill)"
         respond "   #{$clean_lich_char}infomon reset             resets entire character infomon db table and then syncs data (fixprof)"
         respond "   #{$clean_lich_char}infomon effects           toggle display of effect durations"
         respond "   #{$clean_lich_char}infomon show              shows all current Infomon values for character"
-        respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# in Room Title"
-        respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# in Room Title"
+        respond "   #{$clean_lich_char}sk help                   show information on modifying self-knowledge spells to be known"
       end
+      respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# when displaying room information"
+      respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"
+      respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
+      respond "   #{$clean_lich_char}display stringprocs       toggle display of StringProc exits known for room in mapdb if timeto is valid"
       respond
       respond 'If you liked this help message, you might also enjoy:'
       respond "   #{$clean_lich_char}lnet help" if defined?(LNet)
