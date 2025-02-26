@@ -666,7 +666,7 @@ module Lich
       val = false if val.nil? and XMLData.game != ""; # default false
       @@hide_uid_flag = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
     end
-    return @@display_lichid
+    return @@hide_uid_flag
   end
 
   def Lich.hide_uid_flag=(val)
