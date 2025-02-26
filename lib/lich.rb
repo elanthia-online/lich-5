@@ -11,6 +11,7 @@ module Lich
   @@display_uid          = nil # boolean
   @@display_exits        = nil # boolean
   @@display_stringprocs  = nil # boolean
+  @@hide_uid_flag        = nil # boolean
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
@@ -647,6 +648,31 @@ module Lich
     @@display_lichid = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_lichid',?);", [@@display_lichid.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    return nil
+  end
+
+  def Lich.hide_uid_flag
+    if @@hide_uid_flag.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='hide_uid_flag';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      val = false if val.nil? and XMLData.game != ""; # default false
+      @@hide_uid_flag = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    end
+    return @@display_lichid
+  end
+
+  def Lich.hide_uid_flag=(val)
+    @@hide_uid_flag = (val.to_s =~ /on|true|yes/ ? true : false)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('hide_uid_flag',?);", [@@hide_uid_flag.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
