@@ -23,7 +23,6 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
-          bundler-cache: true
       - name: Create Core Lich-5 package
         id: install_core_scripts
         run: |
@@ -46,6 +45,8 @@ jobs:
           cp lich.rbw Lich5/
           cp -r lib Lich5/
           gem install activesupport ascii_charts concurrent-ruby curses ftools gtk3 json jwt logger mechanize nokogiri ostruct redis sequel sqlite3 terminal-table tomlib tzinfo tzinfo-data webrick xmpp4r --no-document
+          gem uninstall rexml --force
+          gem install rexml --version 3.3.1
           gem list
           iscc "R4LGTK3.iss"
           mv .\Output\Ruby4Lich5.exe .\Ruby4Lich5.exe
