@@ -2311,7 +2311,7 @@ def do_client(client_string)
       when 'false'
         new_value = false
       end
-      respond "Changing Lich to display Room Title RealIDs while FLAG ShowRoomID ON to #{new_value}"
+      respond "Changing Lich to NOT display Room Title RealIDs while FLAG ShowRoomID ON to #{new_value}"
       Lich.hide_uid_flag = new_value
     elsif cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
