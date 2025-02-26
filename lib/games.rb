@@ -301,6 +301,12 @@ module Lich
                           alt_string.sub!(/] \(\d+\)/) { "]" }
                           alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
                         end
+                      elsif XMLData.game =~ /^DR/
+                        if Lich.display_uid == true
+                          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+                        elsif Lich.hide_uid_flag == true
+                          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+                        end
                       end
                     end
                     @@room_number_after_ready = true
@@ -921,6 +927,12 @@ module Lich
                         elsif Lich.display_uid == true
                           alt_string.sub!(/] \(\d+\)/) { "]" }
                           alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                        end
+                      elsif XMLData.game =~ /^DR/
+                        if Lich.display_uid == true
+                          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+                        elsif Lich.hide_uid_flag == true
+                          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
                         end
                       end
                     end
