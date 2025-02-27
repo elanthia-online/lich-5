@@ -294,7 +294,7 @@ module Lich
         Flags.add('spell-full-prep', /^This pattern may only be cast with full preparation/)
         Flags.add('spell-backfired', /^Your spell .*backfires/)
         @@backfired_status = false
-        
+
         case DRC.bput(cast_command || 'cast', get_data('spells').cast_messages)
         when /^Your target pattern dissipates/, /^You can't cast that at yourself/, /^You need to specify a body part to consume/, /^There is nothing else to face/
           DRC.bput('release spell', 'You let your concentration lapse', "You aren't preparing a spell")
