@@ -7,6 +7,7 @@ module Lich
         require File.join(LIB_DIR, 'common', 'log.rb')
         require File.join(LIB_DIR, 'common', 'spell.rb')
         require File.join(LIB_DIR, 'util', 'util.rb')
+        require File.join(LIB_DIR, 'common', 'hmr.rb')
       end
 
       def self.gemstone
@@ -32,6 +33,7 @@ module Lich
         # require File.join(LIB_DIR, 'gemstone', 'character', 'disk.rb') # dup
         require File.join(LIB_DIR, 'gemstone', 'group.rb')
         require File.join(LIB_DIR, 'gemstone', 'critranks')
+        ActiveSpell.watch!
         self.common_after
       end
 
@@ -41,12 +43,10 @@ module Lich
         require File.join(LIB_DIR, 'attributes', 'char.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'drinfomon.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'commons.rb')
-        # self.common_after
+        self.common_after
       end
 
       def self.common_after
-        ActiveSpell.watch!
-        require File.join(LIB_DIR, 'common', 'hmr.rb')
         # nil
       end
 
