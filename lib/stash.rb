@@ -2,43 +2,31 @@
 stash.rb: Core lich file for extending free_hands, empty_hands functions in
   item / container script indifferent method.  Usage will ensure no regex is
   required to be maintained.
-
-    Maintainer: Elanthia-Online
-    Original Author: Tillmen, Ondreian, others
-    game: Gemstone
-    tags: CORE, spells
-    required: Lich > 5.0.19
-    version: 1.2.1
-
-  changelog:
-    version 1.2.1
-     * Added support for weapon displayers
-    version 1.2.0
-     * Added sheath support and TWC support
-    version 1.1.0
-     * Added ethereal weapon support
-    version 1.0.0
-     * Initial release
-
 =end
 
 module Lich
   module Stash
-    def self.find_container(param)
-      GameObj.inv.find do |container|
-        container.name =~ %r[#{param}]
-      end or fail "could not find Container[name: #{param}]"
+    def self.find_container(param, loud_fail: true)
+      param = param.name if param.is_a?(GameObj) # (Lich::Gemstone::GameObj)
+      found_container = GameObj.inv.find do |container|
+        container.name =~ %r[#{param.strip}]i || container.name =~ %r[#{param.sub(' ', ' .*')}]i
+      end
+      if found_container.nil? && loud_fail
+        fail "could not find Container[name: #{param}]"
+      else
+        return found_container
+      end
     end
 
     def self.container(param)
       @weapon_displayer ||= []
-      container = find_container(param)
-      unless @weapon_displayer.include?(container.id)
-        result = Lich::Util.issue_command("look in ##{container.id}", /In the .*$|That is closed\.|^You glance at/, silent: true, quiet: true) if container.contents.nil?
-        fput "open ##{container.id}" if result.include?('That is closed.')
-        @weapon_displayer.push(container.id) if GameObj.containers.find { |item| item[0] == container.id }.nil?
+      container_to_check = find_container(param)
+      unless @weapon_displayer.include?(container_to_check.id)
+        result = Lich::Util.issue_command("look in ##{container_to_check.id}", /In the .*$|That is closed\.|^You glance at/, silent: true, quiet: true) if container_to_check.contents.nil?
+        fput "open ##{container_to_check.id}" if result.include?('That is closed.')
+        @weapon_displayer.push(container_to_check.id) if GameObj.containers.find { |item| item[0] == container_to_check.id }.nil?
       end
-      return container
+      return container_to_check
     end
 
     def self.try_or_fail(seconds: 2, command: nil)
@@ -61,6 +49,17 @@ module Lich
       end
     end
 
+    def self.wear_to_inv(item)
+      try_or_fail(command: "wear ##{item.id}") do
+        20.times {
+          return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) and GameObj.inv.to_a.map(&:id).include?(item.id))
+          return true if item.name =~ /^ethereal \w+$/ && ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id)
+          sleep 0.1
+        }
+        return false
+      end
+    end
+
     def self.sheath_bags
       # find ready list settings for sheaths only; regex courtesy Eloot
       @sheath = {}
@@ -72,7 +71,13 @@ module Lich
         if line =~ sheath_list_match
           sheath_obj = Regexp.last_match(3).to_s.downcase
           sheath_type = Regexp.last_match(1).to_s.downcase.gsub('2', 'secondary_')
-          @sheath.store(sheath_type.to_sym, Stash.find_container(sheath_obj))
+          found_container = Stash.find_container(sheath_obj, loud_fail: false)
+          unless found_container.nil?
+            @sheath.store(sheath_type.to_sym, found_container)
+          else
+            respond("Lich::Stash.sheath_bags Error: Could not find sheath(#{sheath_obj}) in inventory. Not using, possibly hidden, tucked, or missing.")
+            Lich.log("Lich::Stash.sheath_bags Error: Could not find sheath(#{sheath_obj}) in inventory. Not using, possibly hidden, tucked, or missing.")
+          end
         end
       }
       @checked_sheaths = true
@@ -102,14 +107,14 @@ module Lich
         sheath = second_sheath = nil
       end
       # weaponsack for both hands
-      if UserVars.weapon and UserVars.weaponsack and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
-        weaponsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.weaponsack).sub(' ', ' .*')}/i }
+      if UserVars.weapon.class == String and UserVars.weaponsack.class == String and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
+        weaponsack = nil unless (weaponsack = find_container(UserVars.weaponsack, loud_fail: false)).is_a?(GameObj) # (Lich::Gemstone::GameObj)
       end
       # lootsack for both hands
-      if UserVars.lootsack.nil? or UserVars.lootsack.empty?
+      if UserVars.lootsack.class != String || UserVars.lootsack.empty?
         lootsack = nil
       else
-        lootsack = GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack.strip)}/i } || GameObj.inv.find { |obj| obj.name =~ /#{Regexp.escape(UserVars.lootsack).sub(' ', ' .*')}/i }
+        lootsack = nil unless (lootsack = find_container(UserVars.lootsack, loud_fail: false)).is_a?(GameObj) # (Lich::Gemstone::GameObj)
       end
       # finding another container if needed
       other_containers_var = nil
@@ -123,9 +128,9 @@ module Lich
       if (left || both) && left_hand.id
         waitrt?
         if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/)\
-          and (wear_result = dothistimeout("wear ##{left_hand.id}", 8, /^You .*#{left_hand.noun}|^With careful precision, you|^You toss the shield|^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)) and (wear_result !~ /^You can only wear \w+ items in that location\.$|^You can't wear that\.$/)
+          and Lich::Stash::wear_to_inv(left_hand)
           actions.unshift proc {
-            dothistimeout "remove ##{left_hand.id}", 3, /^You (?:remove|sling|unsling)|^With a slight roll of your shoulder, you|^You .*#{left_hand.noun}|^Remove what\?/
+            fput "remove ##{left_hand.id}"
             20.times { break if GameObj.left_hand.id == left_hand.id or GameObj.right_hand.id == left_hand.id; sleep 0.1 }
 
             if GameObj.right_hand.id == left_hand.id

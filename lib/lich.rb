@@ -2,13 +2,40 @@ module Lich
   @@hosts_file           = nil
   @@lich_db              = nil
   @@last_warn_deprecated = 0
+  @@deprecated_log       = []
+
+  @@db_mutex             ||= Mutex.new
 
   # settings
   @@display_lichid       = nil # boolean
   @@display_uid          = nil # boolean
+  @@display_exits        = nil # boolean
+  @@display_stringprocs  = nil # boolean
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
+
+  def self.db_mutex
+    @@db_mutex
+  end
+
+  def self.mutex_lock
+    begin
+      self.db_mutex.lock unless self.db_mutex.owned?
+    rescue StandardError
+      respond "--- Lich: error: Lich.mutex_lock: #{$!}"
+      Lich.log "error: Lich.mutex_lock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    end
+  end
+
+  def self.mutex_unlock
+    begin
+      self.db_mutex.unlock if self.db_mutex.owned?
+    rescue StandardError
+      respond "--- Lich: error: Lich.mutex_unlock: #{$!}"
+      Lich.log "error: Lich.mutex_unlock: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+    end
+  end
 
   def Lich.method_missing(arg1, arg2 = '')
     if (Time.now.to_i - @@last_warn_deprecated) > 300
@@ -48,14 +75,28 @@ module Lich
     end
   end
 
-  def Lich.class_variable_get(*a); nil; end
+  def Lich.class_variable_get(*_a); nil; end
 
-  def Lich.class_eval(*a);         nil; end
+  def Lich.class_eval(*_a);         nil; end
 
-  def Lich.module_eval(*a);        nil; end
+  def Lich.module_eval(*_a);        nil; end
 
   def Lich.log(msg)
     $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"
+  end
+
+  def Lich.deprecated(old_object = '', new_object = '', script_location = "#{Script.current.name || 'unknown'}", debug_log: true, fe_log: false, limit_log: true)
+    msg = "Deprecated call to #{old_object} used in #{script_location}. Please change to #{new_object} instead!"
+    return if limit_log && @@deprecated_log.include?(msg)
+    Lich.log(msg) if debug_log
+    _respond Lich::Messaging.monsterbold(msg) if fe_log
+    @@deprecated_log.push(msg) unless @@deprecated_log.include?(msg)
+  end
+
+  def Lich.show_deprecated_log
+    @@deprecated_log.each do |msg|
+      respond(msg)
+    end
   end
 
   def Lich.msgbox(args)
@@ -110,8 +151,8 @@ module Lich
       args[:title] ||= "Lich v#{LICH_VERSION}"
       dialog.title = args[:title]
       response = nil
-      dialog.run { |r|
-        response = r
+      dialog.run { |d_r|
+        response = d_r
         dialog.destroy
       }
       if response == Gtk::Dialog::RESPONSE_OK
@@ -140,7 +181,6 @@ module Lich
           launcher_cmd = Win32.RegQueryValueEx(:hKey => launcher_key)[:lpData]
         end
         return launcher_cmd
-        Lich.log 'returned #{launcher_cmd}'
       ensure
         Win32.RegCloseKey(:hKey => launcher_key) rescue nil
       end
@@ -526,7 +566,6 @@ module Lich
       sleep 0.1
       retry
     end
-    nil
   end
 
   def Lich.fix_game_host_port(gamehost, gameport)
@@ -537,8 +576,8 @@ module Lich
       gamehost = 'storm.gs4.game.play.net'
       gameport = 10024
     elsif (gamehost == 'gs4.simutronics.net') and (gameport.to_i == 10321)
-      game_host = 'storm.gs4.game.play.net'
-      game_port = 10324
+      gamehost = 'storm.gs4.game.play.net'
+      gameport = 10324
     elsif (gamehost == 'prime.dr.game.play.net') and (gameport.to_i == 4901)
       gamehost = 'dr.simutronics.net'
       gameport = 11024
@@ -556,9 +595,6 @@ module Lich
     elsif (gamehost == 'storm.gs4.game.play.net') and (gameport.to_i == 10024)
       gamehost = 'gs3.simutronics.net'
       gameport = 4900
-    elsif (gamehost == 'storm.gs4.game.play.net') and (gameport.to_i == 10324)
-      game_host = 'gs4.simutronics.net'
-      game_port = 10321
     elsif (gamehost == 'dr.simutronics.net') and (gameport.to_i == 11024)
       gamehost = 'prime.dr.game.play.net'
       gameport = 4901
@@ -566,19 +602,19 @@ module Lich
     [gamehost, gameport]
   end
 
-# new feature GUI / internal settings states
+  # new feature GUI / internal settings states
 
   def Lich.debug_messaging
     if @@debug_messaging.nil?
-    begin
+      begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='debug_messaging';")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
       @@debug_messaging = (val.to_s =~ /on|true|yes/ ? true : false)
       Lich.debug_messaging = @@debug_messaging
-  end
+    end
     return @@debug_messaging
   end
 
@@ -595,15 +631,15 @@ module Lich
 
   def Lich.display_lichid
     if @@display_lichid.nil?
-    begin
+      begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_lichid';")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
       val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != ""; # default false if DR, otherwise default true
       @@display_lichid = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
-  end
+    end
     return @@display_lichid
   end
 
@@ -618,17 +654,37 @@ module Lich
     return nil
   end
 
-  def Lich.display_uid
-    if @@display_uid.nil?
+  def Lich.core_updated_with_lich_version
     begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_uid';")
+      val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='core_updated_with_lich_version';")
     rescue SQLite3::BusyException
       sleep 0.1
       retry
     end
+    return val.to_s
+  end
+
+  def Lich.core_updated_with_lich_version=(val)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('core_updated_with_lich_version',?);", [val.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    return nil
+  end
+
+  def Lich.display_uid
+    if @@display_uid.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_uid';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
       val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != ""; # default false if DR, otherwise default true
       @@display_uid = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
-  end
+    end
     return @@display_uid
   end
 
@@ -643,16 +699,66 @@ module Lich
     return nil
   end
 
-  def Lich.track_autosort_state
-    if @@track_autosort_state.nil?
+  def Lich.display_exits
+    if @@display_exits.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_exits';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      val = false if val.nil? and XMLData.game != ""; # default false
+      @@display_exits = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    end
+    return @@display_exits
+  end
+
+  def Lich.display_exits=(val)
+    @@display_exits = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
-        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_autosort_state';")
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_exits',?);", [@@display_exits.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
-end
-      @@track_autosort_state = (val.to_s =~ /on|true|yes/ ? true : false)
+    end
+    return nil
   end
+
+  def Lich.display_stringprocs
+    if @@display_stringprocs.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_stringprocs';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      val = false if val.nil? and XMLData.game != ""; # default false
+      @@display_stringprocs = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    end
+    return @@display_stringprocs
+  end
+
+  def Lich.display_stringprocs=(val)
+    @@display_stringprocs = (val.to_s =~ /on|true|yes/ ? true : false)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_stringprocs',?);", [@@display_stringprocs.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+    return nil
+  end
+
+  def Lich.track_autosort_state
+    if @@track_autosort_state.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_autosort_state';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      @@track_autosort_state = (val.to_s =~ /on|true|yes/ ? true : false)
+    end
     return @@track_autosort_state
   end
 
@@ -669,14 +775,14 @@ end
 
   def Lich.track_dark_mode
     if @@track_dark_mode.nil?
-    begin
+      begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_dark_mode';")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
       @@track_dark_mode = (val.to_s =~ /on|true|yes/ ? true : false)
-  end
+    end
     return @@track_dark_mode
   end
 
@@ -693,14 +799,14 @@ end
 
   def Lich.track_layout_state
     if @@track_layout_state.nil?
-    begin
+      begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_layout_state';")
-    rescue SQLite3::BusyException
-      sleep 0.1
-      retry
-    end
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
       @@track_layout_state = (val.to_s =~ /on|true|yes/ ? true : false)
-  end
+    end
     return @@track_layout_state
   end
 

@@ -11,15 +11,26 @@ end
 
 if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
   if (RUBY_PLATFORM =~ /mingw|win/) and (RUBY_PLATFORM !~ /darwin/i)
-    require 'fiddle'
-    Fiddle::Function.new(DL.dlopen('user32.dll')['MessageBox'], [Fiddle::TYPE_INT, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_INT], Fiddle::TYPE_INT).call(0, 'Upgrade Ruby to version 2.6', "Lich v#{LICH_VERSION}", 16)
+    require 'win32ole'
+    shell = WIN32OLE.new('WScript.Shell')
+    message = "!!ALERT!!\nYour version #{RUBY_VERSION} of Ruby is too old!\nUpgrade Ruby to version #{REQUIRED_RUBY} or newer!\nClick OK to launch browser to go to documentation now!"
+    title = "Lich v#{LICH_VERSION}"
+    type = 1 + 64  # OK/Cancel buttons + Information icon
+    result = shell.Popup(message, 0, title, type)
+
+    if result == 1 # OK button clicked
+      shell.Run("https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich")
+    end
   else
-    puts "Upgrade Ruby to version 2.6"
+    puts "!!ALERT!!"
+    puts "Your version #{RUBY_VERSION} of Ruby is too old!"
+    puts "Upgrade Ruby to version #{REQUIRED_RUBY} or newer!"
+    puts "Go to https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich for more info!"
   end
   exit
 end
 
-require 'lib/wine'
+require_relative 'wine'
 
 begin
   # stupid workaround for Windows
@@ -63,24 +74,38 @@ if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
     end
   end
 elsif defined?(Wine)
-  ## Needs improvement - iteration and such.  Quick slam test.
-  $sf_fe_loc = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Simutronics\\STORM32\\Directory') || ''
-  $wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
-  $sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory')
-
-  if $wiz_fe_loc_temp
-    $wiz_fe_loc = $wiz_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
+  ## reminder Wine is defined in the file wine.rb by confirming prefix, directory and executable
+  unless (sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\STORM32\\Directory'))
+    sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory')
   end
-  if $sf_fe_loc_temp
-    $sf_fe_loc = $sf_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
+  unless (wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\WIZ32\\Directory'))
+    wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
   end
-
-  if !File.exist?($sf_fe_loc)
-    $sf_fe_loc =~ /SIMU/ ? $sf_fe_loc = $sf_fe_loc.gsub("SIMU", "Simu") : $sf_fe_loc = $sf_fe_loc.gsub("Simu", "SIMU")
-    Lich.log("Cannot find STORM equivalent FE to launch.") if !File.exist?($sf_fe_loc)
+  ## at this point, the temp variables are either FalseClass or have what wine believes is the Directory subkey from registry
+  ## fix it up so we can use it on a *nix based system.  If the return is FalseClass, leave it FalseClass
+  sf_fe_loc_temp ? $sf_fe_loc = sf_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c') : :noop
+  wiz_fe_loc_temp ? $wiz_fe_loc = wiz_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c') : :noop
+  ## if we have a String class (directory) and the directory exists -- no error detectable at this level
+  ## if we have a nil, we have no directory, or if we have a path but cannot find that path (directory) we have an error
+  if $sf_fe_loc.nil? # no directory
+    Lich.log("STORM equivalent FE is not installed under WINE.") if $debug
+  else
+    unless $sf_fe_loc.is_a? String and File.exist?($sf_fe_loc) # cannot confirm directory location
+      Lich.log("Cannot find STORM equivalent FE to launch under WINE.")
+    end
   end
+  if $wiz_fe_loc.nil? # no directory
+    Lich.log("WIZARD FE is not installed under WINE.") if $debug
+  else
+    unless $wiz_fe_loc.is_a? String and File.exist?($wiz_fe_loc) # cannot confirm directory location
+      Lich.log("Cannot find WIZARD FE to launch under WINE.")
+    end
+  end
+  if $sf_fe_loc.nil? and $wiz_fe_loc.nil? # got nuttin - no FE installed under WINE in registry (or something changed. . . )
+    Lich.log("This system has WINE installed but does not have a suitable FE from Simu installed under WINE.")
+  end
+  ## We have either declared an error, or the global variables for Simu FE are populated with a confirmed path
 end
-
 ## The following should be deprecated with the direct-frontend-launch-method
 ## TODO: remove as part of chore/Remove unnecessary Win32 calls
 ## Temporarily reinstatated for DR
@@ -487,13 +512,12 @@ rescue LoadError
     end
   else
     # fixme: no sqlite3 on Linux/Mac
-    puts "The sqlite3 gem is not installed (or failed to load), you may need to: sudo gem install sqlite3"
+    puts "The sqlite3 gem is not installed (or failed to load), you may need to: gem install sqlite3"
   end
   exit
 end
 
-if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i) or ENV['DISPLAY']) and !ARGV.include?('--no-gui')
-
+unless (ARGV.grep(/^--no-(?:gtk|gui)$/).any? || RUBY_PLATFORM !~ /mingw/ && (ENV['DISPLAY'].nil? && !ARGV.include?('--gtk')))
   begin
     require 'gtk3'
     HAVE_GTK = true
@@ -548,7 +572,7 @@ if ((RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i) or ENV['DIS
         end
       else
         # fixme: no gtk3 on Linux/Mac
-        puts "The gtk3 gem is not installed (or failed to load), you may need to: sudo gem install gtk3"
+        puts "The gtk3 gem is not installed (or failed to load), you may need to: gem install gtk3"
       end
       exit
     else

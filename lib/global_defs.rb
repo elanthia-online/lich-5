@@ -1,7 +1,74 @@
 # global_defs carveout for lich5
 # this needs to be broken up even more - OSXLich-Doug (2022-04-13)
 # rubocop changes and DR toplevel command handling (2023-06-28)
+# sadly adding global level script methods (2024-06-12)
 
+# added 2024
+
+def start_script(script_name, cli_vars = [], flags = Hash.new)
+  if flags == true
+    flags = { :quiet => true }
+  end
+  Script.start(script_name, cli_vars.join(' '), flags)
+end
+
+def start_scripts(*script_names)
+  script_names.flatten.each { |script_name|
+    start_script(script_name)
+    sleep 0.02
+  }
+end
+
+def force_start_script(script_name, cli_vars = [], flags = {})
+  flags = Hash.new unless flags.class == Hash
+  flags[:force] = true
+  start_script(script_name, cli_vars, flags)
+end
+
+def before_dying(&code)
+  Script.at_exit(&code)
+end
+
+def undo_before_dying
+  Script.clear_exit_procs
+end
+
+def abort!
+  Script.exit!
+end
+
+def stop_script(*target_names)
+  numkilled = 0
+  target_names.each { |target_name|
+    condemned = Script.list.find { |s_sock| s_sock.name =~ /^#{target_name}/i }
+    if condemned.nil?
+      respond("--- Lich: '#{Script.current}' tried to stop '#{target_name}', but it isn't running!")
+    else
+      if condemned.name =~ /^#{Script.current.name}$/i
+        exit
+      end
+      condemned.kill
+      respond("--- Lich: '#{condemned}' has been stopped by #{Script.current}.")
+      numkilled += 1
+    end
+  }
+  if numkilled == 0
+    return false
+  else
+    return numkilled
+  end
+end
+
+def running?(*snames)
+  snames.each { |checking| (return false) unless (Script.running.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.running.find { |lscr| lscr.name =~ /^#{checking}/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}/i }) }
+  true
+end
+
+def start_exec_script(cmd_data, options = Hash.new)
+  ExecScript.start(cmd_data, options)
+end
+
+# prior to 2024
 def hide_me
   Script.current.hidden = !Script.current.hidden
 end
@@ -496,7 +563,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       Script.current.downstream_buffer.flatten!
       # return nil instead of false to show the direction shouldn't be removed from the map database
       return nil
-    elsif line =~ /^You grab [A-Z][a-z]+ and try to drag h(?:im|er), but s?he (?:is too heavy|doesn't budge)\.$|^Tentatively, you attempt to swim through the nook\.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!$|^Guards(?:wo)?man [A-Z][a-z]+ stops you and says, "(?:Stop\.|Halt!)  You need to make sure you check in|^You step into the root, but can see no way to climb the slippery tendrils inside\.  After a moment, you step back out\.$|^As you start .*? back to safe ground\.$|^You stumble a bit as you try to enter the pool but feel that your persistence will pay off\.$|^A shimmering field of magical crimson and gold energy flows through the area\.$|^You attempt to navigate your way through the fog, but (?:quickly become entangled|get turned around)|^Trying to judge the climb, you peer over the edge\.\s*A wave of dizziness hits you, and you back away from the .*\.$|^You approach the .*, but the steepness is intimidating\.$|^You make your way up the .*\.\s*Partway up, you make the mistake of looking down\. Struck by vertigo, you cling to the .* for a few moments, then slowly climb back down\.$|^You pick your way up the .*, but reach a point where your footing is questionable.\s*Reluctantly, you climb back down.$/
+    elsif line =~ /^You grab [A-Z][a-z]+ and try to drag h(?:im|er), but s?he (?:is too heavy|doesn't budge)\.$|^Tentatively, you attempt to swim through the nook\.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!$|^Guards(?:wo)?man [A-Z][a-z]+ stops you and says, "(?:Stop\.|Halt!)  You need to make sure you check in|^You step into the root, but can see no way to climb the slippery tendrils inside\.  After a moment, you step back out\.$|^As you start .*? back to safe ground\.$|^You stumble a bit as you try to enter the pool but feel that your persistence will pay off\.$|^A shimmering field of magical crimson and gold energy flows through the area\.$|^You attempt to navigate your way through the fog, but (?:quickly become entangled|get turned around)|^Trying to judge the climb, you peer over the edge\.\s*A wave of dizziness hits you, and you back away from the .*\.$|^You approach the .*, but the steepness is intimidating\.$|^You make your way (?:up|down) the .*\.\s*Partway (?:up|down), you make the mistake of looking down\. Struck by vertigo, you cling to the .* for a few moments, then slowly climb back (?:up|down)\.$|^You pick your way up the .*, but reach a point where your footing is questionable.\s*Reluctantly, you climb back down.$/
       sleep 1
       waitrt?
       put_dir.call
@@ -574,7 +641,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       fput 'stand'
       waitrt?
       put_dir.call
-    elsif line == "You're still recovering from your recent cast."
+    elsif line =~ /^You're still recovering from your recent/
       sleep 2
       put_dir.call
     elsif line =~ /^The ground approaches you at an alarming rate/
@@ -813,6 +880,7 @@ def checksaturated
 end
 
 def checkmana(num = nil)
+  Lich.deprecated('checkmana', 'Char.mana')
   if num.nil?
     XMLData.mana
   else
@@ -821,10 +889,12 @@ def checkmana(num = nil)
 end
 
 def maxmana
+  Lich.deprecated('maxmana', 'Char.maxmana')
   XMLData.max_mana
 end
 
 def percentmana(num = nil)
+  Lich.deprecated('percentmana', 'Char.percent_mana')
   if XMLData.max_mana == 0
     percent = 100
   else
@@ -838,6 +908,7 @@ def percentmana(num = nil)
 end
 
 def checkhealth(num = nil)
+  Lich.deprecated('checkhealth', 'Char.health')
   if num.nil?
     XMLData.health
   else
@@ -846,10 +917,12 @@ def checkhealth(num = nil)
 end
 
 def maxhealth
+  Lich.deprecated('maxhealth', 'Char.max_health')
   XMLData.max_health
 end
 
 def percenthealth(num = nil)
+  Lich.deprecated('percenthealth', 'Char.percent_health')
   if num.nil?
     ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i
   else
@@ -858,6 +931,7 @@ def percenthealth(num = nil)
 end
 
 def checkspirit(num = nil)
+  Lich.deprecated('checkspirit', 'Char.spirit')
   if num.nil?
     XMLData.spirit
   else
@@ -866,10 +940,12 @@ def checkspirit(num = nil)
 end
 
 def maxspirit
+  Lich.deprecated('maxspirit', 'Char.max_spirit')
   XMLData.max_spirit
 end
 
 def percentspirit(num = nil)
+  Lich.deprecated('percentspirit', 'Char.percent_spirit')
   if num.nil?
     ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i
   else
@@ -878,6 +954,7 @@ def percentspirit(num = nil)
 end
 
 def checkstamina(num = nil)
+  Lich.deprecated('checkstamina', 'Char.stamina')
   if num.nil?
     XMLData.stamina
   else
@@ -886,10 +963,12 @@ def checkstamina(num = nil)
 end
 
 def maxstamina()
+  Lich.deprecated('maxstamina', 'Char.max_stamina')
   XMLData.max_stamina
 end
 
 def percentstamina(num = nil)
+  Lich.deprecated('percentstamina', 'Char.percent_stamina')
   if XMLData.max_stamina == 0
     percent = 100
   else
@@ -908,7 +987,7 @@ end
 
 def percentconcentration(num = nil)
   if XMLData.max_concentration == 0
-    percent == 100
+    percent = 100
   else
     percent = ((XMLData.concentration.to_f / XMLData.max_concentration.to_f) * 100).to_i
   end
@@ -920,6 +999,7 @@ def percentconcentration(num = nil)
 end
 
 def checkstance(num = nil)
+  Lich.deprecated('checkstance', 'Char.stance')
   if num.nil?
     XMLData.stance_text
   elsif (num.class == String) and (num.to_i == 0)
@@ -948,6 +1028,7 @@ def checkstance(num = nil)
 end
 
 def percentstance(num = nil)
+  Lich.deprecated('percentstance', 'Char.percent_stance')
   if num.nil?
     XMLData.stance_value
   else
@@ -956,6 +1037,7 @@ def percentstance(num = nil)
 end
 
 def checkencumbrance(string = nil)
+  Lich.deprecated('checkencumbrance', 'Char.encumbrance')
   if string.nil?
     XMLData.encumbrance_text
   elsif (string.class == Integer) or (string =~ /^[0-9]+$/ and (string = string.to_i))
@@ -971,6 +1053,7 @@ def checkencumbrance(string = nil)
 end
 
 def percentencumbrance(num = nil)
+  Lich.deprecated('percentencumbrance', 'Char.percent_encumbrance')
   if num.nil?
     XMLData.encumbrance_value
   else
@@ -1686,7 +1769,7 @@ def noded_pulse
     else
       stats = [0, 0]
     end
-    return (maxmana * 25 / 100) + (stats.max / 10) + (stats.min / 20)
+    return (XMLData.max_mana * 25 / 100) + (stats.max / 10) + (stats.min / 20)
   else
     return 0 # this method is not used by DR
   end
@@ -1705,7 +1788,7 @@ def unnoded_pulse
     else
       stats = [0, 0]
     end
-    return (maxmana * 15 / 100) + (stats.max / 10) + (stats.min / 20)
+    return (XMLData.max_mana * 15 / 100) + (stats.max / 10) + (stats.min / 20)
   else
     return 0 # this method is not used by DR
   end
@@ -1902,7 +1985,10 @@ def fb_to_sf(line)
     return line
   rescue
     $_CLIENT_.puts "--- Error: fb_to_sf: #{$!}"
-    $_CLIENT_.puts '$_SERVERSTRING_: ' + $_SERVERSTRING_.to_s
+    $_CLIENT_.puts "$_SERVERSTRING_: #{$_SERVERSTRING_}"
+    Lich.log("--- Error: fb_to_sf: #{$!}\n\t#{$!.backtrace.join("\n\t")}")
+    Lich.log("$_SERVERSTRING_: #{$_SERVERSTRING_}")
+    Lich.log("Line: #{line}")
   end
 end
 
@@ -1972,22 +2058,26 @@ def sf_to_wiz(line)
     return line
   rescue
     $_CLIENT_.puts "--- Error: sf_to_wiz: #{$!}"
-    $_CLIENT_.puts '$_SERVERSTRING_: ' + $_SERVERSTRING_.to_s
+    $_CLIENT_.puts "$_SERVERSTRING_: #{$_SERVERSTRING_}"
+    Lich.log("--- Error: sf_to_wiz: #{$!}\n\t#{$!.backtrace.join("\n\t")}")
+    Lich.log("$_SERVERSTRING_: #{$_SERVERSTRING_}")
+    Lich.log("Line: #{line}")
   end
 end
 
-def strip_xml(line)
+def strip_xml(line, type: 'main')
   return line if line == "\r\n"
 
-  if $strip_xml_multiline
-    $strip_xml_multiline = $strip_xml_multiline + line
-    line = $strip_xml_multiline
+  if $strip_xml_multiline[type]
+    $strip_xml_multiline[type] = $strip_xml_multiline[type] + line
+    line = $strip_xml_multiline[type]
   end
   if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
-    $strip_xml_multiline = line
+    $strip_xml_multiline ||= {}
+    $strip_xml_multiline[type] = line
     return nil
   end
-  $strip_xml_multiline = nil
+  $strip_xml_multiline[type] = nil
 
   line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
   line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
@@ -2004,10 +2094,8 @@ end
 def monsterbold_start
   if $frontend =~ /^(?:wizard|avalon)$/
     "\034GSL\r\n"
-  elsif $frontend =~ /^(?:stormfront|frostbite)$/
+  elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/
     '<pushBold/>'
-  elsif $frontend == 'profanity'
-    '<b>'
   else
     ''
   end
@@ -2016,10 +2104,8 @@ end
 def monsterbold_end
   if $frontend =~ /^(?:wizard|avalon)$/
     "\034GSM\r\n"
-  elsif $frontend =~ /^(?:stormfront|frostbite)$/
+  elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/
     '<popBold/>'
-  elsif $frontend == 'profanity'
-    '</b>'
   else
     ''
   end
@@ -2071,7 +2157,7 @@ def do_client(client_string)
       target = $2
       script = Script.running.find { |s_running| s_running.name == target } || Script.hidden.find { |s_hidden| s_hidden.name == target } || Script.running.find { |s_running| s_running.name =~ /^#{target}/i } || Script.hidden.find { |s_hidden| s_hidden.name =~ /^#{target}/i }
       if script.nil?
-        respond "--- Lich: #{target} does not appear to be running! Use ';list' or ';listall' to see what's active."
+        respond "--- Lich: #{target} does not appear to be running! Use '#{$clean_lich_char}list' or '#{$clean_lich_char}listall' to see what's active."
       elsif action =~ /^(?:k|kill|stop)$/
         script.kill
       elsif action =~ /^(?:p|pause)$/
@@ -2182,8 +2268,18 @@ def do_client(client_string)
       did_something = false
       nil
     elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
-      require "lib/hmr"
-      HMR.reload %r{#{Regexp.last_match[:pattern]}}
+      begin
+        HMR.reload %r{#{Regexp.last_match[:pattern]}}
+      rescue ArgumentError
+        if $!.to_s == 'invalid Unicode escape'
+          respond "--- Lich: error: invalid Unicode escape"
+          respond "--- Lich:   cmd: #{cmd}"
+          respond "--- Lich: \\u is unicode escape, did you mean to use a / instead?"
+        else
+          respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
+          Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+        end
+      end
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
       ExecScript.start("Infomon.sync", { :quiet => true })
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon (?:reset|redo)!?/i
@@ -2205,7 +2301,9 @@ def do_client(client_string)
       end
       respond "Changing Infomon's effect duration showing to #{new_value}"
       Infomon.set('infomon.show_durations', new_value)
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^display lichid(?: (true|false))?/i
+    elsif XMLData.game =~ /^GS/ && cmd =~ /^sk\b(?: (add|rm|list|help)(?: ([\d\s]+))?)?/i
+      SK.main(Regexp.last_match(1), Regexp.last_match(2))
+    elsif cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
       case Regexp.last_match(1)
       when 'true'
@@ -2215,7 +2313,7 @@ def do_client(client_string)
       end
       respond "Changing Lich's Room title display for Lich ID#s to #{new_value}"
       Lich.display_lichid = new_value
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^display uid(?: (true|false))?/i
+    elsif cmd =~ /^display uid(?: (true|false))?/i
       new_value = !(Lich.display_uid)
       case Regexp.last_match(1)
       when 'true'
@@ -2225,6 +2323,26 @@ def do_client(client_string)
       end
       respond "Changing Lich's Room title display for RealID#s to #{new_value}"
       Lich.display_uid = new_value
+    elsif cmd =~ /^display exits?(?: (true|false))?/i
+      new_value = !(Lich.display_exits)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich to display Room Exits of non-StringProc/Obvious exits to #{new_value}"
+      Lich.display_exits = new_value
+    elsif cmd =~ /^display stringprocs?(?: (true|false))?/i
+      new_value = !(Lich.display_stringprocs)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich to display Room Exits of StringProcs to #{new_value}"
+      Lich.display_stringprocs = new_value
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
       Lich::Util::Update.request("#{update_parameter}")
@@ -2284,15 +2402,19 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
       respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
       respond "                              see #{$clean_lich_char}lich5-update --help"
+      respond "   #{$clean_lich_char}hmr <regex filepath>      Hot module reload a Ruby or Lich5 file without relogging, uses Regular Expression matching"
       if XMLData.game =~ /^GS/
         respond
         respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon (fixskill)"
         respond "   #{$clean_lich_char}infomon reset             resets entire character infomon db table and then syncs data (fixprof)"
         respond "   #{$clean_lich_char}infomon effects           toggle display of effect durations"
         respond "   #{$clean_lich_char}infomon show              shows all current Infomon values for character"
-        respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# in Room Title"
-        respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# in Room Title"
+        respond "   #{$clean_lich_char}sk help                   show information on modifying self-knowledge spells to be known"
       end
+      respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# when displaying room information"
+      respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"
+      respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
+      respond "   #{$clean_lich_char}display stringprocs       toggle display of StringProc exits known for room in mapdb if timeto is valid"
       respond
       respond 'If you liked this help message, you might also enjoy:'
       respond "   #{$clean_lich_char}lnet help" if defined?(LNet)
@@ -2358,3 +2480,66 @@ def report_errors(&block)
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
   end
 end
+
+def alias_deprecated
+  # todo: add command reference, possibly add calling script
+  echo "The alias command you're attempting to use is deprecated.  Fix your script."
+end
+
+## Alias block from Lich (needs further cleanup)
+
+undef :abort
+alias :mana :checkmana
+alias :mana? :checkmana
+alias :max_mana :maxmana
+alias :health :checkhealth
+alias :health? :checkhealth
+alias :spirit :checkspirit
+alias :spirit? :checkspirit
+alias :stamina :checkstamina
+alias :stamina? :checkstamina
+alias :stunned? :checkstunned
+alias :bleeding? :checkbleeding
+alias :reallybleeding? :alias_deprecated
+alias :poisoned? :checkpoison
+alias :diseased? :checkdisease
+alias :dead? :checkdead
+alias :hiding? :checkhidden
+alias :hidden? :checkhidden
+alias :hidden :checkhidden
+alias :checkhiding :checkhidden
+alias :invisible? :checkinvisible
+alias :standing? :checkstanding
+alias :kneeling? :checkkneeling
+alias :sitting? :checksitting
+alias :stance? :checkstance
+alias :stance :checkstance
+alias :joined? :checkgrouped
+alias :checkjoined :checkgrouped
+alias :group? :checkgrouped
+alias :myname? :checkname
+alias :active? :checkspell
+alias :righthand? :checkright
+alias :lefthand? :checkleft
+alias :righthand :checkright
+alias :lefthand :checkleft
+alias :mind? :checkmind
+alias :checkactive :checkspell
+alias :forceput :fput
+alias :send_script :send_scripts
+alias :stop_scripts :stop_script
+alias :kill_scripts :stop_script
+alias :kill_script :stop_script
+alias :fried? :checkfried
+alias :saturated? :checksaturated
+alias :webbed? :checkwebbed
+alias :pause_scripts :pause_script
+alias :roomdescription? :checkroomdescrip
+alias :prepped? :checkprep
+alias :checkprepared :checkprep
+alias :unpause_scripts :unpause_script
+alias :priority? :setpriority
+alias :checkoutside :outside?
+alias :toggle_status :status_tags
+alias :encumbrance? :checkencumbrance
+alias :bounty? :checkbounty

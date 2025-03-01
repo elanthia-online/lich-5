@@ -1,19 +1,27 @@
 module Lich
   module Resources
     def self.weekly
-      Infomon.get('resources.weekly')
+      Lich::Gemstone::Infomon.get('resources.weekly')
     end
 
     def self.total
-      Infomon.get('resources.total')
+      Lich::Gemstone::Infomon.get('resources.total')
     end
 
     def self.suffused
-      Infomon.get('resources.suffused')
+      Lich::Gemstone::Infomon.get('resources.suffused')
     end
 
     def self.type
-      Infomon.get('resources.type')
+      Lich::Gemstone::Infomon.get('resources.type')
+    end
+
+    def self.voln_favor
+      Lich::Gemstone::Infomon.get('resources.voln_favor')
+    end
+
+    def self.covert_arts_charges
+      Lich::Gemstone::Infomon.get('resources.covert_arts_charges')
     end
 
     def self.check(quiet = false)
