@@ -36,7 +36,8 @@ module Lich
         updated = Sequel::SQL::Blob.new(Marshal.dump(current))
         self.table
             .where(script: Script.current.name, scope: scope)
-            .update(hash: updated)
+            .insert_conflict(:replace)
+            .insert(script: Script.current.name, scope: scope, hash: updated)
       end
 
       def self.[](name)
