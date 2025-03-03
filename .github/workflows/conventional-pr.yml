@@ -1,0 +1,22 @@
+# .github/workflows/conventional-pr.yml
+name: conventional-pr
+on:
+  pull_request:
+    branches:
+      - staging # todo: change this to main when we move to trunk based workflow
+    types:
+      - opened
+      - edited
+      - synchronize
+jobs:
+  lint-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      # check for the most recent release: https://github.com/CondeNast/conventional-pull-request-action/releases
+      - uses: CondeNast/conventional-pull-request-action@v0.2.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # if you squash merge PRs and enabled "Default to PR title for squash merge commits", you can disable all linting of commits
+          ignoreCommits: "true"
