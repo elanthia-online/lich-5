@@ -409,7 +409,7 @@ module Lich
               end
             when Pattern::HouseCHE
               match = Regexp.last_match
-              Infomon.set('che', (match[:none] ? 'none' : match[:house].downcase.gsub(' ', '_')))
+              Infomon.set('che', (match[:none] ? 'none' : Lich::Util.name_normal(match[:house])))
               :ok
 
             # TODO: refactor / streamline?
