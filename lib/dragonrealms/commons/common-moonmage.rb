@@ -68,14 +68,15 @@ module Lich
       end
 
       def peer_telescope
-        DRC.bput('peer my telescope',
-                 'The pain is too much',
-                 'You see nothing regarding the future',
-                 "You believe you've learned all that you can about",
-                 get_data('constellations').observe_finished_messages,
-                 'open it',
-                 'Your vision is too fuzzy',
-                 'Roundtime')
+        telescope_regex_patterns = Regexp.union(
+          /The pain is too much/,
+          /You see nothing regarding the future/,
+          /You believe you've learned all that you can about/,
+          Regexp.union(get_data('constellations').observe_finished_messages),
+          /open it/,
+          /Your vision is too fuzzy/,
+        )
+        Lich::Util.issue_command("peer my telescope", telescope_regex_patterns, /Roundtime: /, usexml: false)
       end
 
       def center_telescope(target)
