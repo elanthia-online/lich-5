@@ -715,7 +715,6 @@ module Lich
             calculate_mana(Regexp.last_match(1).to_i, Regexp.last_match(2).to_i, discern_data, data['cyclic'] || data['ritual'], settings)
           end
         end
-        pause 1
         waitrt?
         UserVars.discerns[data['abbrev']] = discern_data
         data['mana'] = discern_data['mana']
