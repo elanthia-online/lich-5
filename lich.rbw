@@ -152,6 +152,8 @@ require File.join(LIB_DIR, 'common', 'uservars.rb')
 
 if defined?(Gtk)
   Thread.current.priority = -10
+  @theme_state = Lich.track_dark_mode
+  Gtk::Settings.default.gtk_application_prefer_dark_theme = true if @theme_state == true
   Gtk.main
 else
   @main_thread.join
