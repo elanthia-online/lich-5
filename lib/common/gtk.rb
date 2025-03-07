@@ -229,6 +229,7 @@ module Lich
             # gtk_sleep_while_idle
             sleep 0.01
           end
+          @theme_state = Lich.track_dark_mode
         }
       rescue
         nil # fixme
