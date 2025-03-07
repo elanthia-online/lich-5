@@ -169,13 +169,14 @@ for arg in ARGV
     elsif value =~ /^(false|off)$/i
       @argv_options[:dark_mode] = false
     end
-    if defined?(Gtk)
-      @theme_state = Lich.track_dark_mode = @argv_options[:dark_mode]
-      Gtk::Settings.default.gtk_application_prefer_dark_theme = true if @theme_state == true
-    end
+    @theme_state = Lich.track_dark_mode = @argv_options[:dark_mode]
   else
     bad_args.push(arg)
   end
+end
+
+if defined?(Gtk) && Lich.track_dark_mode
+  Gtk::Settings.default.gtk_application_prefer_dark_theme = true
 end
 # rubocop:disable Lint/UselessAssignment
 
