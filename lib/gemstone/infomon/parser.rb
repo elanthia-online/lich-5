@@ -50,7 +50,8 @@ module Lich
           VolnFavor = /^Voln Favor: (?<favor>[-\d,]+)$/.freeze
           CovertArtsCharges = /^Covert Arts Charges: (?<charges>[-\d,]+)\/200$/.freeze
           GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments\.$/.freeze
-          RedsteelMarks = /^\s* Redsteel Marks:            (?<redsteel_marks>[\d,]+)$/.freeze
+          RedsteelMarks = /^(?:\s* Redsteel Marks:           |You are carrying) (?<redsteel_marks>[\d,]+)(?: redsteel marks\.)?$/.freeze
+          GemstoneDust = /^You are carrying (?<gemstone_dust>[\d,]+) Dust in your reserves\.$/.freeze
           TicketGeneral = /^\s*General - (?<tickets>[\d,]+) tickets\.$/.freeze
           TicketBlackscrip = /^\s*Troubled Waters - (?<blackscrip>[\d,]+) blackscrip\.$/.freeze
           TicketBloodscrip = /^\s*Duskruin Arena - (?<bloodscrip>[\d,]+) bloodscrip\.$/.freeze
@@ -94,7 +95,7 @@ module Lich
                              TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
                              WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
                              ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
-                             AccountName, AccountSubscription, HouseCHE)
+                             AccountName, AccountSubscription, HouseCHE, GemstoneDust)
         end
 
         def self.find_cat(category)
@@ -351,6 +352,10 @@ module Lich
             when Pattern::RedsteelMarks
               match = Regexp.last_match
               Infomon.set('currency.redsteel_marks', match[:redsteel_marks].delete(',').to_i)
+              :ok
+            when Pattern::GemstoneDust
+              match = Regexp.last_match
+              Infomon.set('currency.gemstone_dust', match[:gemstone_dust].delete(',').to_i)
               :ok
             when Pattern::TicketGeneral
               match = Regexp.last_match
