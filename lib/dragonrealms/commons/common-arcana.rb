@@ -289,7 +289,7 @@ module Lich
 
         Flags.add('unknown-command', "Please rephrase that command")
         Flags.add('barrage-fail', "That was an invalid attack choice.", "Wouldn't it be better if you used a melee weapon?", "You'll need to be using a weapon to BARRAGE your target", "You must have a fully developed target matrix to make a barrage attack", "You are unable to muster the energy to do that", "You do not know how to manipulate that pathway.", "You cannot BARRAGE with that spell.")
-        Flags.add('spell-fail', 'Currently lacking the skill to complete the pattern', /^Your spell .*backfires/, 'Something is interfering with the spell', 'There is nothing else to face', 'You strain, but are too mentally fatigued', 'The spell pattern resists the influx of unfocused mana', 'Your target pattern dissipates because')
+        Flags.add('spell-fail', 'Currently lacking the skill to complete the pattern', "You don't have a spell prepared!", /^Your spell .*backfires/, 'Something is interfering with the spell', 'There is nothing else to face', 'You strain, but are too mentally fatigued', 'The spell pattern resists the influx of unfocused mana', 'Your target pattern dissipates because')
         Flags.add('cyclic-too-recent', 'The mental strain of initiating a cyclic spell so recently prevents you from formulating the spell pattern')
         Flags.add('spell-full-prep', /^This pattern may only be cast with full preparation/)
         Flags.add('spell-backfired', /^Your spell .*backfires/)
