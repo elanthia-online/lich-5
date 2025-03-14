@@ -1042,7 +1042,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_ranks => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_ranks => 3 },
                                   :regex           => /^.*? abdomen is parboiled./ },
                            9 =>
                                 { :type            => "steam",
@@ -1061,7 +1061,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^Superheated steam turns .*? intestines into a fine delicacy./ } },
           :back       =>
                          { 0 =>
@@ -1233,7 +1233,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^.*? back is cooked to tender perfection./ },
                            9 =>
                                 { :type            => "steam",
@@ -1252,7 +1252,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^Superheated steam cooks .*? spine and fuses nerves./ } },
           :left_arm   =>
                          { 0 =>
