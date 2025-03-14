@@ -1290,7 +1290,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^.*? vertebrae reduced to a fine powder./ },
                            9 =>
                                 { :type            => "disintegrate",
