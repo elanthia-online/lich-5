@@ -239,7 +239,7 @@ module Lich
                                    :silenced        => false,
                                    :slowed          => false,
                                    :wound_rank      => 3,
-                                   :secondary_wound => { :location => "BOTH_EYES", :wound_rank => 2 },
+                                   :secondary_wound => { :location => "both eyes", :wound_rank => 2 }, # only instance of 2 secondary wounds in lib
                                    :regex           => /^Explosive punch to the face leaves little else than a pulpy mass of blood, bone, and brain matter./ } },
           :neck       =>
                          { 0  =>
