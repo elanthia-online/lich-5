@@ -92,6 +92,10 @@ require File.join(LIB_DIR, 'update.rb')
 require File.join(LIB_DIR, 'common', 'gtk.rb')
 # require File.join(LIB_DIR, 'common','gui-login.rb')
 require File.join(LIB_DIR, 'common', 'db_store.rb')
+# 2025-03-14 added extensions
+require File.join(LIB_DIR, 'common', 'class_exts', 'float.rb')
+require File.join(LIB_DIR, 'common', 'class_exts', 'hash.rb')
+require File.join(LIB_DIR, 'common', 'class_exts', 'matchdata.rb')
 # 2024-06-13 carve out
 require File.join(LIB_DIR, 'common', 'class_exts', 'nilclass.rb')
 require File.join(LIB_DIR, 'common', 'class_exts', 'numeric.rb')
