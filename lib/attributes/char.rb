@@ -136,11 +136,15 @@ module Lich
       end
 
       def Char.citizenship
-        Infomon.get('citizenship') if XMLData.game =~ /GS/
+        Infomon.get('citizenship') if XMLData.game =~ /^GS/
       end
 
       def Char.citizenship=(_val)
         echo "Updating via Char.citizenship is no longer supported. Update or fix your script."
+      end
+
+      def Char.che
+        Infomon.get('che') if XMLData.game =~ /^GS/
       end
     end
   end
