@@ -2498,7 +2498,7 @@ module Lich
           :nerves     =>
                          { 1 =>
                                 { :type            => "lightning",
-                                  :location        => "Nerves",
+                                  :location        => "nerves",
                                   :rank            => 1,
                                   :damage          => 5,
                                   :position        => nil,
@@ -2517,7 +2517,7 @@ module Lich
                                   :regex           => /^Mild electric(?:al)? jolt sends .*? into spasms./ },
                            2 =>
                                 { :type            => "lightning",
-                                  :location        => "Nerves",
+                                  :location        => "nerves",
                                   :rank            => 2,
                                   :damage          => 10,
                                   :position        => nil,
@@ -2536,7 +2536,7 @@ module Lich
                                   :regex           => /^Electric shot gives .*? a really bad cramp./ },
                            3 =>
                                 { :type            => "lightning",
-                                  :location        => "Nerves",
+                                  :location        => "nerves",
                                   :rank            => 3,
                                   :damage          => 15,
                                   :position        => nil,
@@ -2555,7 +2555,7 @@ module Lich
                                   :regex           => /^Hard jolt knocks .*? back on .*? heels./ },
                            4 =>
                                 { :type            => "lightning",
-                                  :location        => "Nerves",
+                                  :location        => "nerves",
                                   :rank            => 4,
                                   :damage          => 20,
                                   :position        => "PRONE",
@@ -2574,7 +2574,7 @@ module Lich
                                   :regex           => /^Heavy shock gives .*? fits./ },
                            5 =>
                                 { :type            => "lightning",
-                                  :location        => "Nerves",
+                                  :location        => "nerves",
                                   :rank            => 5,
                                   :damage          => 30,
                                   :position        => nil,
@@ -2593,7 +2593,7 @@ module Lich
                                   :regex           => /^Electric blast goes right to the heart.  Fibrillation can be fun./ },
                            6 =>
                                 { :type            => "lightning",
-                                  :location        => "Nerves",
+                                  :location        => "nerves",
                                   :rank            => 6,
                                   :damage          => 50,
                                   :position        => nil,
@@ -2612,7 +2612,7 @@ module Lich
                                   :regex           => /^Electrical charge toasts .*?./ },
                            7 =>
                                 { :type            => "lightning",
-                                  :location        => "Nerves",
+                                  :location        => "nerves",
                                   :rank            => 7,
                                   :damage          => 50,
                                   :position        => nil,
@@ -2631,7 +2631,7 @@ module Lich
                                   :regex           => /^Powerful blast reduces .*? to a smoldering pile of ash./ },
                            8 =>
                                 { :type            => "lightning",
-                                  :location        => "Nerves",
+                                  :location        => "nerves",
                                   :rank            => 8,
                                   :damage          => 60,
                                   :position        => nil,
@@ -2650,7 +2650,7 @@ module Lich
                                   :regex           => /^Electric shock causes a strong enough convulsion to snap .*? neck./ },
                            9 =>
                                 { :type            => "lightning",
-                                  :location        => "Nerves",
+                                  :location        => "nerves",
                                   :rank            => 9,
                                   :damage          => 70,
                                   :position        => nil,
