@@ -56,9 +56,9 @@ module Lich
 
       def self.clean_key(key)
         return key.to_i if key.is_a?(Integer) || key =~ (/^\d+$/)
-        return key.upcase if key.is_a?(Symbol)
+        return key.downcase if key.is_a?(Symbol)
 
-        key.strip.upcase.gsub(' ', '_')
+        key.strip.downcase.gsub(/[ -]/, '_')
       end
 
       def self.validate(key, valid)
