@@ -1271,7 +1271,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^.*? back is shattered into icy oblivion./ },
                            9 =>
                                 { :type            => "cold",
@@ -1290,7 +1290,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^Deadly accuracy shatters .*? spine into a thousand tiny icy shards./ } },
           :left_arm   =>
                          { 0 =>
