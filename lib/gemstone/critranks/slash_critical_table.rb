@@ -1137,7 +1137,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^Kidneys sliced and diced./ },
                            9 =>
                                 { :type            => "slash",
@@ -1156,7 +1156,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^Masterful slash to .*? lower back./ } },
           :abdomen    =>
                          { 0 =>
@@ -1233,7 +1233,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 2,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 1 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 1 },
                                   :regex           => /^Hard slash to belly severs a few nerve endings./ },
                            4 =>
                                 { :type            => "slash",
