@@ -1327,7 +1327,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^Flame engulfs back. .*? flambe./ },
                            9 =>
                                 { :type            => "fire",
@@ -1346,7 +1346,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^Back burnt to the bone./ } },
           :right_arm  =>
                          { 0 =>
