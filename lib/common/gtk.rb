@@ -1,55 +1,55 @@
 module Lich
   module Common
     if defined?(Gtk)
-        # Calling Gtk API in a thread other than the main thread may cause random segfaults
-        def Gtk.queue(&block)
-          GLib::Timeout.add(1) {
-            begin
-              block.call
-            rescue StandardError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue SyntaxError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue SystemExit
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              nil
-            rescue SecurityError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue ThreadError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue SystemStackError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue LoadError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue NoMemoryError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            end
-            false # don't repeat timeout
-          }
-        end
+      # Calling Gtk API in a thread other than the main thread may cause random segfaults
+      def Gtk.queue(&block)
+        GLib::Timeout.add(1) {
+          begin
+            block.call
+          rescue StandardError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue SyntaxError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue SystemExit
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            nil
+          rescue SecurityError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue ThreadError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue SystemStackError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue LoadError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue NoMemoryError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          end
+          false # don't repeat timeout
+        }
       end
+    end
 
-      unless File.exist?('logo.png')
-        File.open('logo.png', 'wb') { |f|
-          f.write '
+    unless File.exist?('logo.png')
+      File.open('logo.png', 'wb') { |f|
+        f.write '
       iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAA
       CqaXHeAAAPrUlEQVR4Ae1bDVRT5xl+t7azXY/b2rOu7ep2zuaZm5unbqX7s7
       rjduywrVrrTuZW7arxZ7auorUVu0JN3awVa/3hyKp2sTYFNQrIb6EkBRQSJC
@@ -141,22 +141,20 @@ module Lich
       zXeXl5IolE0gJ+AjEIQuHU1NTMGGn1bQUI6gA1H330kb/Uhk0PoN+QiqMAg3
       N4e6w8W7ZsYevWrTMlJycPa+/QbYVCoCAC3gE8PxwvViCsOC0TJkxQx8XF7R
       MIBM/8L/yL9HabuC+mvP8B+EBfr/SZ7ZMAAAAASUVORK5CYII='.unpack('m')[0]
-        }
-      end
+      }
+    end
 
-      begin
-        Gtk.queue {
-          @default_icon = GdkPixbuf::Pixbuf.new(:file => 'logo.png')
-          # Add a function to call for when GTK is idle
-          GLib::Idle.add do
-            sleep 0.01
-          end
-          @theme_state = Lich.track_dark_mode
-        }
-      rescue
-        nil # fixme
-      end
-
+    begin
+      Gtk.queue {
+        @default_icon = GdkPixbuf::Pixbuf.new(:file => 'logo.png')
+        # Add a function to call for when GTK is idle
+        GLib::Idle.add do
+          sleep 0.01
+        end
+        @theme_state = Lich.track_dark_mode
+      }
+    rescue
+      nil # fixme
     end
   end
 end
