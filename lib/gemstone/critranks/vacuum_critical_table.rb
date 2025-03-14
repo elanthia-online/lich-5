@@ -1100,7 +1100,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^Spine leaps out and shatters into many small pieces./ },
                            9 =>
                                 { :type            => "vacuum",
@@ -1119,7 +1119,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "NERVES", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^Back erupts in a bloody display of bone and gore./ } },
           :left_arm   =>
                          { 0 =>
