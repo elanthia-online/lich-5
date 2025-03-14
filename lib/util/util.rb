@@ -51,7 +51,7 @@ module Lich
       normal_name = name.to_s.downcase
       normal_name.gsub!(' ', '_') if name =~ (/\s/)
       normal_name.gsub!('-', '_') if name =~ (/-/)
-      normal_name.gsub!(":", '_') if name =~ (/:/)
+      normal_name.gsub!(":", '') if name =~ (/:/)
       normal_name.gsub!("'", '') if name =~ (/'/)
       normal_name
     end
