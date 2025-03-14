@@ -1138,7 +1138,7 @@ module Lich
                                    :slowed          => false,
                                    :wound_rank      => 1,
                                    :secondary_wound => nil,
-                                   :regex           => /^Slap across the belly doesn't barely leaves? a mark./ },
+                                   :regex           => /^Slap across the belly (?:doesn't|barely) leaves? a mark./ },
                            2  =>
                                  { :type            => "ucs-punch",
                                    :location        => "abdomen",
