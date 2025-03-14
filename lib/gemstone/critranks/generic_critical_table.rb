@@ -1,7 +1,14 @@
 #
-#  Creating critical table hashes by extending module CritRanks
-#  2024/06/25
+#  2024/06/25 - Creating critical table hashes by extending module CritRanks
+#  2025/03/14 - Standardizing regex to /^String and downcase to all type / location
+#             - support XML parsing by using consistent .*?
 #
+
+#  Generic crits are crits where the specifics of the crit are not defined by the crit table.
+#  This means that the crit is not specific to a location or type, and can be applied to any
+#  location or type.  An example of this would be a crit that causes the target to be stunned,
+#  but does not specify where the stun occurs or what type of crit it is, such as a snake that
+#  gets an RIGHT ARM critical that would stun, but has no RIGHT ARM.
 
 # requireds template for a crit
 # GENERIC:                                              <<-- the 'crit table name'
@@ -32,13 +39,13 @@ module Lich
       CritRanks.table[:generic] =
         { :unspecified =>
                           { 0 =>
-                                 { :type            => "Generic",
-                                   :location        => "Unspecified",
+                                 { :type            => "generic",
+                                   :location        => "unspecified",
                                    :rank            => 0,
                                    :damage          => 0,
                                    :position        => nil,
                                    :fatal           => false,
-                                   :stunned         => 999,
+                                   :stunned         => 999, # generic crits cannot have legitimate stun values (or any other value)
                                    :amputated       => false,
                                    :crippled        => false,
                                    :sleeping        => false,
