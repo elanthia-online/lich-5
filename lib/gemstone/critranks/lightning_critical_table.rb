@@ -1328,7 +1328,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "Nerves", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^Terrifying electrical arc destroys spinal column one vertebra at a time./ },
                            9 =>
                                 { :type            => "lightning",
@@ -1347,7 +1347,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "Nerves", :wound_rank => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^Massive electrical bolt burns a hole through the back and kidneys./ } },
           :right_arm  =>
                          { 0 =>
