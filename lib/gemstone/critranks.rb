@@ -84,7 +84,7 @@ module Lich
 
       def self.parse(line)
         @index_rx.filter do |rx, _data|
-          rx =~ line
+          rx =~ line.strip # need to strip spaces to support anchored regex in tables
         end
       end
 
