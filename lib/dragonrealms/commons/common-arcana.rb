@@ -293,7 +293,6 @@ module Lich
         Flags.add('cyclic-too-recent', 'The mental strain of initiating a cyclic spell so recently prevents you from formulating the spell pattern')
         Flags.add('spell-full-prep', /^This pattern may only be cast with full preparation/)
         Flags.add('spell-backfired', /^Your spell .*backfires/)
-        @@backfired_status = false
 
         case DRC.bput(cast_command || 'cast', get_data('spells').cast_messages)
         when /^Your target pattern dissipates/, /^You can't cast that at yourself/, /^You need to specify a body part to consume/, /^There is nothing else to face/
@@ -324,7 +323,7 @@ module Lich
           DRC.bput('release mana', 'You release all', "You aren't harnessing any mana")
         end
 
-        @@backfired_status = true if Flags['spell-backfired']
+        @@backfired_status = Flags['spell-backfired']
 
         !Flags['spell-fail']
       end
