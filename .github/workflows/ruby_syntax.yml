@@ -28,7 +28,7 @@ jobs:
           
       - name: Get changed files
         id: changed-files
-        uses: tj-actions/changed-files@v44
+        uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1
         with:
           files: |
             **/*.lic
@@ -39,12 +39,6 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-          
-      - name: Install ruby gem dependencies with bundler
-        run: |
-          gem install bundler
-          bundle config path vendor/bundle
-          bundle install --jobs 4 --retry 3
           
       - name: Run Ruby syntax check on changed scripts
         run: |
