@@ -203,7 +203,7 @@ module Lich
                   @@infomon_loaded = true
                 end
 
-                if !@@cli_scripts && @@autostarted && !XMLData.name.nil?  && !XMLData.name.empty?
+                if !@@cli_scripts && @@autostarted && !XMLData.name.nil? && !XMLData.name.empty?
                   if (arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ })
                     for script_name in arg.sub('--start-scripts=', '').split(',')
                       Script.start(script_name)
@@ -830,7 +830,7 @@ module Lich
                   @@infomon_loaded = true
                 end
 
-                if !@@cli_scripts && @@autostarted && !XMLData.name.nil?  && !XMLData.name.empty?
+                if !@@cli_scripts && @@autostarted && !XMLData.name.nil? && !XMLData.name.empty?
                   if (arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ })
                     for script_name in arg.sub('--start-scripts=', '').split(',')
                       Script.start(script_name)
