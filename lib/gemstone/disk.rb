@@ -15,6 +15,10 @@ module Lich
         Disk.new(disk)
       end
 
+      def self.mine
+        find_by_name(Char.name)
+      end
+
       def self.all()
         (GameObj.loot || []).select do |item|
           is_disk?(item)
