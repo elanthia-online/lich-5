@@ -40,8 +40,8 @@ module Lich
       end
 
       def self.disks
-        return [Disk.find_by_name(Char.name)].compact unless Group.leader?
-        members.map(&:noun).map do |noun| Disk.find_by_name(noun) end.compact
+        return [Disk.find_by_name(Char.name)].compact if Group.leader? && members.empty?
+        (members.map(&:noun).map { |noun| Disk.find_by_name(noun) } | [Disk.find_by_name(Char.name)]).compact
       end
 
       def self.to_s
