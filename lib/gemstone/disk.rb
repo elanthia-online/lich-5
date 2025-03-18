@@ -40,10 +40,6 @@ module Lich
         self == other
       end
 
-      def hash
-        id.hash
-      end
-
       def method_missing(method, *args)
         GameObj[@id].send(method, *args)
       end
