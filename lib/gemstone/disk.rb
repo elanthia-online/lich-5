@@ -32,6 +32,18 @@ module Lich
         end
       end
 
+      def ==(other)
+        other.is_a?(Disk) && other.id == self.id
+      end
+
+      def eql?(other)
+        self == other
+      end
+
+      def hash
+        id.hash
+      end
+
       def method_missing(method, *args)
         GameObj[@id].send(method, *args)
       end
