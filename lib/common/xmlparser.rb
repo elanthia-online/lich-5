@@ -599,12 +599,11 @@ module Lich
               elsif (game == 'GSX') or (game == 'GS4X')
                 @game = 'GSPlat'
               else
-                @game = game
+                @game = game # covers DR, DRT, DRF, GST, GSF
               end
             end
           end
           if (name == 'app') and (@name = attributes['char'])
-            @game = attributes['game'] if @game =~ /^DR/
             if @game.nil? or @game.empty?
               @game = 'unknown'
             end
