@@ -13,7 +13,7 @@ module Lich
          { long_name: 'covert_art_poisoncraft',    short_name: 'poisoncraft',        cost:  0 },
          { long_name: 'covert_art_sidestep',       short_name: 'sidestep',           cost: 10 },
          { long_name: 'covert_art_swift_recovery', short_name: 'swiftrecovery',      cost:  0 },
-         { long_name: 'covert_art_throw_poison',   short_name: 'throwpoison',        cost:  0 },
+         { long_name: 'covert_art_throw_poison',   short_name: 'throwpoison',        cost: 15 },
          { long_name: 'covert_arts',               short_name: 'covert',             cost:  0 },
          { long_name: 'critical_counter',          short_name: 'criticalcounter',    cost:  0 },
          { long_name: 'dispel_magic',              short_name: 'dispelmagic',        cost: 30 },
