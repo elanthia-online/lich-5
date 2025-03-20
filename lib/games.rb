@@ -246,17 +246,21 @@ module Lich
                       # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
                       # From GS
                       # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
-                      while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
+                      while (matches = $_SERVERSTRING_.scan(/'([^=>]*'[^=>]*)'/))
                         Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
+                        matches.flatten.each do |match|
+                          $_SERVERSTRING_.gsub!(match, match.gsub(/'/, '&apos;'))
+                        end
                         Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                         retry
                       end
                       # Fixes invalid XML with nested double quotes in it such as:
                       # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
-                      while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
+                      while (matches = $_SERVERSTRING_.scan(/"([^=]*"[^=]*)"/))
                         Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
+                        matches.flatten.each do |match|
+                          $_SERVERSTRING_.gsub!(match, match.gsub(/"/, '&quot;'))
+                        end
                         Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                         retry
                       end
@@ -873,17 +877,21 @@ module Lich
                       # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
                       # From GS
                       # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
-                      while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
+                      while (matches = $_SERVERSTRING_.scan(/'([^=>]*'[^=>]*)'/))
                         Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
+                        matches.flatten.each do |match|
+                          $_SERVERSTRING_.gsub!(match, match.gsub(/'/, '&apos;'))
+                        end
                         Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                         retry
                       end
                       # Fixes invalid XML with nested double quotes in it such as:
                       # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
-                      while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
+                      while (matches = $_SERVERSTRING_.scan(/"([^=]*"[^=]*)"/))
                         Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
+                        matches.flatten.each do |match|
+                          $_SERVERSTRING_.gsub!(match, match.gsub(/"/, '&quot;'))
+                        end
                         Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                         retry
                       end
