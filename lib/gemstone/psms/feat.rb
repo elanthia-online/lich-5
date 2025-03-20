@@ -41,7 +41,7 @@ module Lich
       @@feats = {
         "absorbmagic"     => {
           :cost  => 0,
-          :regex => /You open yourself to the ravenous void at the core of your being, allowing it to surface\.  Muted veins of metallic grey ripple just beneath your skin\.|You strain, but the void within remains stubbornly out of reach\.  You need more time\./i,
+          :regex => /You open yourself to the ravenous void at the core of your being, allowing it to surface\.  Muted veins of metallic grey ripple just beneath your skin\.|You strain, but the void within remains stubbornly out of reach\.  You need more time\./,
           :usage => "absorbmagic"
         },
         "chainarmor"      => {
@@ -157,7 +157,7 @@ module Lich
         },
         "platearmor"      => {
           :cost  => 0,
-          :regex => /Plate Armor Proficiency is passive and cannot be activated\./i,
+          :regex => /Plate Armor Proficiency is passive and cannot be activated\./,
           :usage => nil
         },
         "protect"         => {
