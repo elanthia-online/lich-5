@@ -15,6 +15,10 @@ module Lich
         Disk.new(disk)
       end
 
+      def self.mine
+        find_by_name(Char.name)
+      end
+
       def self.all()
         (GameObj.loot || []).select do |item|
           is_disk?(item)
@@ -30,6 +34,14 @@ module Lich
         @name = obj.name.split(" ").find do |word|
           word[0].upcase.eql?(word[0])
         end
+      end
+
+      def ==(other)
+        other.is_a?(Disk) && other.id == self.id
+      end
+
+      def eql?(other)
+        self == other
       end
 
       def method_missing(method, *args)
