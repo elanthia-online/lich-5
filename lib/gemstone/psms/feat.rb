@@ -42,7 +42,7 @@ module Lich
         "absorbmagic"     => {
           :cost  => 0,
           :regex => /You open yourself to the ravenous void at the core of your being, allowing it to surface\.  Muted veins of metallic grey ripple just beneath your skin\.|You strain, but the void within remains stubbornly out of reach\.  You need more time\./i,
-          :usage => "feat absorbmagic"
+          :usage => "absorbmagic"
         },
         "chainarmor"      => {
           :cost  => 0,
@@ -57,7 +57,7 @@ module Lich
         "escapeartist"    => {
           :cost  => 15, # cost is actually 0 if "recent evasion" is present
           :regex => /You roll your shoulders and subtly test the flexion of your joints, staying limber for ready escapes\.|You were unable to find any targets that meet Covert Art\: Escape Artist\'s reaction requirements./,
-          :usage => "feat escapeartist"
+          :usage => "escapeartist"
         },
         "keeneye"         => {
           :cost  => 0,
@@ -72,7 +72,7 @@ module Lich
         "sidestep"        => {
           :cost  => 10,
           :regex => /You tread lightly and keep your head on a swivel, prepared to sidestep any loose salvos that might stray your way\./,
-          :usage => "feat sidestep"
+          :usage => "sidestep"
         },
         "swiftrecovery"   => {
           :cost  => 0,
@@ -82,7 +82,7 @@ module Lich
         "throwpoison"     => {
           :cost  => 15,
           :regex => /What did the (.+) ever do to you\?|You pop the cork on (.+) and, with a nimble flick of the wrist, fling a portion of its contents in a wide arc\!|Covert Art\: Throw Poison what\?/,
-          :usage => "feat throwpoison"
+          :usage => "throwpoison"
         },
         "covert"          => {
           :cost  => 0,
@@ -97,7 +97,7 @@ module Lich
         "dispelmagic"     => {
           :cost  => 30,
           :regex => /You reach for the emptiness within, but there are no spells afflicting you to dispel\.|You reach for the emptiness within\.  A single, hollow note reverberates through your core, resonating outward and scouring away the energies that cling to you\./,
-          :usage => "feat dispelmagic"
+          :usage => "dispelmagic"
         },
         "dragonscaleskin" => {
           :cost  => 0,
@@ -143,7 +143,7 @@ module Lich
         "mysticstrike"    => {
           :cost  => 10,
           :regex => /You prepare yourself to deliver a Mystic Strike with your next attack\./,
-          :usage => "feat mysticstrike"
+          :usage => "mysticstrike"
         },
         "tattoo"          => {
           :cost  => 0,
@@ -184,12 +184,12 @@ module Lich
         "silentstrike"    => {
           :cost  => 20,
           :regex => /Silent Strike can not be used with fire as the attack type\.|You quickly leap from hiding to attack\!/,
-          :usage => "feat silentstrike"
+          :usage => "silentstrike"
         },
         "vanish"          => {
           :cost  => 30,
           :regex => /With subtlety and speed, you aim to clandestinely vanish into the shadows\./,
-          :usage => "feat vanish"
+          :usage => "vanish"
         },
         "weaponbonding"   => {
           :cost  => 0,
@@ -234,7 +234,7 @@ module Lich
           /^Provoking a GameMaster is not such a good idea\.$/,
           /^You do not currently have a target\.$/,
         )
-        usage_cmd = "#{usage}"
+        usage_cmd = (['guard', 'protect'].include?(usage) ? "#{usage}" : "feat #{usage}")
         if target.class == GameObj
           usage_cmd += " ##{target.id}"
         elsif target.class == Integer
