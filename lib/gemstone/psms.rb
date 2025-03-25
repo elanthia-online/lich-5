@@ -12,7 +12,7 @@ module Lich
   module Gemstone
     module PSMS
       def self.name_normal(name)
-        Lich::Util.name_normal(name)
+        Lich::Util.normalize_name(name)
       end
 
       def self.find_name(name, type)
