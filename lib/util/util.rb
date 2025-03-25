@@ -43,7 +43,7 @@ module Lich
       end
     end
 
-    def self.name_normal(name)
+    def self.normalize_name(name)
       # there are five cases to normalize
       # "vault_kick", "vault kick", "vault-kick", :vault_kick, :vaultkick
       # "predator's eye"
