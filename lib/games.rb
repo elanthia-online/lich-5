@@ -887,7 +887,7 @@ module Lich
                       end
                       # Fixes invalid XML with nested double quotes in it such as:
                       # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
-                      unless (matches = $_SERVERSTRING_.scan(/"([^=]*"[^=]*)"/)).empty
+                      unless (matches = $_SERVERSTRING_.scan(/"([^=]*"[^=]*)"/)).empty?
                         Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
                         matches.flatten.each do |match|
                           $_SERVERSTRING_.gsub!(match, match.gsub(/"/, '&quot;'))
