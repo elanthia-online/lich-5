@@ -1,45 +1,5 @@
 module Lich
   module DragonRealms
-    DR_LEARNING_RATES = [
-      'clear',
-      'dabbling',
-      'perusing',
-      'learning',
-      'thoughtful',
-      'thinking',
-      'considering',
-      'pondering',
-      'ruminating',
-      'concentrating',
-      'attentive',
-      'deliberative',
-      'interested',
-      'examining',
-      'understanding',
-      'absorbing',
-      'intrigued',
-      'scrutinizing',
-      'analyzing',
-      'studious',
-      'focused',
-      'very focused',
-      'engaged',
-      'very engaged',
-      'cogitating',
-      'fascinated',
-      'captivated',
-      'engrossed',
-      'riveted',
-      'very riveted',
-      'rapt',
-      'very rapt',
-      'enthralled',
-      'nearly locked',
-      'mind lock'
-    ]
-
-    LONGEST_LEARNING_RATE_LENGTH = DR_LEARNING_RATES.sort_by(&:length).last.length
-
     DR_BALANCE_VALUES = [
       'completely',
       'hopelessly',

@@ -5,8 +5,6 @@ module Lich
     module DRParser
       module Pattern
         ExpColumns = /(?:\s*(?<skill>[a-zA-Z\s]+)\b:\s*(?<rank>\d+)\s+(?<percent>\d+)%\s+(?<rate>[a-zA-Z\s]+)\b)/.freeze
-        BriefExpOn = %r{<component id='exp .*?<d cmd='skill (?<skill>[a-zA-Z\s]+)'.*:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s*\[\s?(?<rate>\d+)\/34\].*?<\/component>}.freeze
-        BriefExpOff = %r{<component id='exp .*?\b(?<skill>[a-zA-Z\s]+)\b:\s+(?<rank>\d+)\s+(?<percent>\d+)%\s+\b(?<rate>[a-zA-Z\s]+)\b.*?<\/component>}.freeze
         NameRaceGuild = /^Name:\s+\b(?<name>.+)\b\s+Race:\s+\b(?<race>.+)\b\s+Guild:\s+\b(?<guild>.+)\b\s+/.freeze
         GenderAgeCircle = /^Gender:\s+\b(?<gender>.+)\b\s+Age:\s+\b(?<age>.+)\b\s+Circle:\s+\b(?<circle>.+)/.freeze
         StatValue = /(?<stat>Strength|Agility|Discipline|Intelligence|Reflex|Charisma|Wisdom|Stamina|Favors|TDPs)\s+:\s+(?<value>\d+)/.freeze
@@ -279,36 +277,6 @@ module Lich
             DRRoom.group_members = []
           when Pattern::GroupMembers
             DRRoom.group_members << Regexp.last_match(1)
-          when Pattern::BriefExpOn
-            skill = Regexp.last_match[:skill]
-            rank = Regexp.last_match[:rank]
-            rate = Regexp.last_match[:rate] # already a number
-            percent = Regexp.last_match[:percent]
-            DRSkill.update(skill, rank, rate, percent)
-            # Show to the right of the experience learning rate the gained ranks this session.
-            if UserVars.track_exp || UserVars.track_exp.nil?
-              # Historically, this feature to show gained exp was on by default
-              # and could be turned off by setting `UserVars.track_exp = false`.
-              # As of February 2022, we want features to be opt-in to minimize
-              # impact to players who don't want Lich to change out from under them.
-              # To get to that point with this feature, we need to correct the data
-              # and set to true if it was already nil. In a subsequent update we'll
-              # change the IF condition to only run if `UserVars.track_exp` is true
-              # as well as remove this comment block and the initialization assignment.
-              UserVars.track_exp ||= true
-              line.sub!(/(\/34\])/, "\\1 #{sprintf('%0.2f', DRSkill.gained_exp(skill))}")
-            end
-          when Pattern::BriefExpOff
-            skill = Regexp.last_match[:skill]
-            rank = Regexp.last_match[:rank]
-            rate_word = Regexp.last_match[:rate]
-            rate = DR_LEARNING_RATES.index(rate_word) # convert word to number
-            percent = Regexp.last_match[:percent]
-            DRSkill.update(skill, rank, rate, percent)
-            # Show to the right of the experience learning rate the gained ranks this session.
-            if UserVars.track_exp
-              line.sub!(/(%\s+)(#{rate_word})/, "\\1 #{rate_word.ljust(LONGEST_LEARNING_RATE_LENGTH)} #{sprintf('%0.2f', DRSkill.gained_exp(skill))}")
-            end
           when Pattern::ExpClearMindstate
             skill = Regexp.last_match[:skill]
             DRSkill.clear_mind(skill)
