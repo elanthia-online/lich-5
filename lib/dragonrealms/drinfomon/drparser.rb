@@ -28,11 +28,9 @@ module Lich
         SpellBookFormat = /^You will .* (?<format>column-formatted|non-column) output for the SPELLS verb/.freeze
         PlayedAccount = /^(?:<.*?\/>)?Account Info for (?<account>.+):/.freeze
         PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium)/.freeze
-        LTB_Info = %r{^(As of your last logon:|You are not currently)}.freeze
       end
 
       @parsing_exp_mods_output = false
-      @parsing_ltb_info_output = false
 
       def self.check_events(server_string)
         Flags.matchers.each do |key, regexes|
@@ -64,18 +62,6 @@ module Lich
             @parsing_exp_mods_output = false
           end
         end
-        server_string
-      end
-
-      def self.check_ltb_info(server_string)
-        case server_string
-        when /Your premium service has been/
-          UserVars.premium = true
-        when /^For more information on LTBs/
-          @parsing_ltb_info_output = false
-        end
-        UserVars.premium = true if XMLData.game == 'DRF'
-
         server_string
       end
 
@@ -334,13 +320,16 @@ module Lich
             if Account.subscription.nil?
               Account.subscription = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
             end
-          when Pattern::LTB_Info
-            @parsing_ltb_info_output = true
+            if Account.subscription == 'Premium'
+              UserVars.premium = true
+            else
+              UserVars.premium = false
+            end
+            UserVars.premium = true if XMLData.game == 'DRF'
           else
             :noop
           end
 
-          check_ltb_info(line) if @parsing_ltb_info_output
           check_exp_mods(line) if @parsing_exp_mods_output
           check_known_barbarian_abilities(line) if DRSpells.check_known_barbarian_abilities
           check_known_thief_khri(line) if DRSpells.grabbing_known_khri
