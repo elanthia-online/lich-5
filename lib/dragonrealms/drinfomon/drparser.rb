@@ -320,6 +320,11 @@ module Lich
             if Account.subscription.nil?
               Account.subscription = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
             end
+            if Account.subscription == 'Premium' || XMLData.game == 'DRF'
+              UserVars.premium = true
+            else
+              UserVars.premium = false
+            end
           else
             :noop
           end
