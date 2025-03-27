@@ -308,7 +308,7 @@ module Lich
         end
         if !id.nil? # existing room
           room = Map[id]
-          unless XMLData.room_id > 4294967296 || room.uid.include?(XMLData.room_id
+          unless XMLData.room_id > 4294967296 || room.uid.include?(XMLData.room_id)
             room.uid << XMLData.room_id
             Map.uids_add(XMLData.room_id, room.id)
             echo "Map: Adding new uid for #{room.id}: #{XMLData.room_id}"
