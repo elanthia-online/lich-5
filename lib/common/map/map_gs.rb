@@ -101,12 +101,12 @@ module Lich
       def Map.current # returns Map/Room
         Map.load unless @@loaded
         if Script.current
-          return @@list[@@current_room_id] if XMLData.room_count == @@current_room_count and !@@current_room_id.nil?;
+          return @@list[@@current_room_id] if XMLData.room_count == @@current_room_count and !@@current_room_id.nil?
         else
-          return @@list[@@current_room_id] if XMLData.room_count == @@fuzzy_room_count and !@@current_room_id.nil?;
+          return @@list[@@current_room_id] if XMLData.room_count == @@fuzzy_room_count and !@@current_room_id.nil?
         end
-        ids = Map.ids_from_uid(XMLData.room_id);
-        return Map.set_current(ids[0]) if ids.size == 1;
+        ids = ((XMLData.room_id > 4294967296) ? [] : Map.ids_from_uid(XMLData.room_id))
+        return Map.set_current(ids[0]) if ids.size == 1
         if ids.size > 1 and !@@current_room_id.nil? and (id = Map.match_multi_ids(ids))
           return Map.set_current(id)
         end
@@ -295,10 +295,10 @@ module Lich
       def Map.current_or_new # returns Map/Room
         return nil unless Script.current
         Map.load unless @@loaded
-        ids = Map.ids_from_uid(XMLData.room_id);
+        ids = ((XMLData.room_id > 4294967296) ? [] : Map.ids_from_uid(XMLData.room_id))
         room = nil
-        id = ids[0] if ids.size == 1;
-        id = Map.match_multi_ids(ids) if ids.size > 1;
+        id = ids[0] if ids.size == 1
+        id = Map.match_multi_ids(ids) if ids.size > 1
         if id.nil?
           id = Map.match_current(Script.current)
           # prevent loading uids into existing rooms with a single id unless tagged meta:map:multi-uid
@@ -308,7 +308,7 @@ module Lich
         end
         if !id.nil? # existing room
           room = Map[id]
-          if !room.uid.include?(XMLData.room_id)
+          unless XMLData.room_id > 4294967296 || room.uid.include?(XMLData.room_id
             room.uid << XMLData.room_id
             Map.uids_add(XMLData.room_id, room.id)
             echo "Map: Adding new uid for #{room.id}: #{XMLData.room_id}"
@@ -360,9 +360,9 @@ module Lich
         title            = [XMLData.room_title]
         description      = [XMLData.room_description.strip]
         paths            = [XMLData.room_exits_string.strip]
-        uid              = [XMLData.room_id]
+        uid              = (XMLData.room_id > 4294967296 ? [] : [XMLData.room_id])
         room             = Map.new(Map.get_free_id, title, description, paths, uid, current_location)
-        Map.uids_add(XMLData.room_id, room.id)
+        Map.uids_add(XMLData.room_id, room.id) unless XMLData.room_id > 4294967296
         # flag identical rooms with different locations
         identical_rooms = @@list.find_all { |r|
           (r.location != current_location) and
