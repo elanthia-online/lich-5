@@ -438,6 +438,7 @@ module Lich
             when Pattern::ResignCHE
               match = Regexp.last_match
               Infomon.set('che', (match[:none] ? 'none' : Lich::Util.normalize_name(match[:house])))
+              :ok
 
             # TODO: refactor / streamline?
             when Pattern::ThornPoisonStart, Pattern::ThornPoisonProgression, Pattern::ThornPoisonDeprogression
