@@ -38,6 +38,8 @@ module Lich
       'mind lock'
     ]
 
+    LONGEST_LEARNING_RATE_LENGTH = DR_LEARNING_RATES.sort_by(&:length).last.length
+
     DR_BALANCE_VALUES = [
       'completely',
       'hopelessly',

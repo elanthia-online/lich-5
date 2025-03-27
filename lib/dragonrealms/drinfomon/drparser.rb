@@ -293,12 +293,36 @@ module Lich
             DRRoom.group_members = []
           when Pattern::GroupMembers
             DRRoom.group_members << Regexp.last_match(1)
-          when Pattern::BriefExpOn, Pattern::BriefExpOff
-            skill   = Regexp.last_match[:skill]
-            rank    = Regexp.last_match[:rank].to_i
-            rate    = Regexp.last_match[:rate].to_i > 0 ? Regexp.last_match[:rate] : DR_LEARNING_RATES.index(Regexp.last_match[:rate])
+          when Pattern::BriefExpOn
+            skill = Regexp.last_match[:skill]
+            rank = Regexp.last_match[:rank]
+            rate = Regexp.last_match[:rate] # already a number
             percent = Regexp.last_match[:percent]
             DRSkill.update(skill, rank, rate, percent)
+            # Show to the right of the experience learning rate the gained ranks this session.
+            if UserVars.track_exp || UserVars.track_exp.nil?
+              # Historically, this feature to show gained exp was on by default
+              # and could be turned off by setting `UserVars.track_exp = false`.
+              # As of February 2022, we want features to be opt-in to minimize
+              # impact to players who don't want Lich to change out from under them.
+              # To get to that point with this feature, we need to correct the data
+              # and set to true if it was already nil. In a subsequent update we'll
+              # change the IF condition to only run if `UserVars.track_exp` is true
+              # as well as remove this comment block and the initialization assignment.
+              UserVars.track_exp ||= true
+              line.sub!(/(\/34\])/, "\\1 #{sprintf('%0.2f', DRSkill.gained_exp(skill))}")
+            end
+          when Pattern::BriefExpOff
+            skill = Regexp.last_match[:skill]
+            rank = Regexp.last_match[:rank]
+            rate_word = Regexp.last_match[:rate]
+            rate = DR_LEARNING_RATES.index(rate_word) # convert word to number
+            percent = Regexp.last_match[:percent]
+            DRSkill.update(skill, rank, rate, percent)
+            # Show to the right of the experience learning rate the gained ranks this session.
+            if UserVars.track_exp
+              line.sub!(/(%\s+)(#{rate_word})/, "\\1 #{rate_word.ljust(LONGEST_LEARNING_RATE_LENGTH)} #{sprintf('%0.2f', DRSkill.gained_exp(skill))}")
+            end
           when Pattern::ExpClearMindstate
             skill = Regexp.last_match[:skill]
             DRSkill.clear_mind(skill)
