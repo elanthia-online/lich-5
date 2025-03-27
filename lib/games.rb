@@ -297,13 +297,15 @@ module Lich
                     if (Lich.display_lichid == true || Lich.display_uid == true)
                       if XMLData.game =~ /^GS/
                         if (Lich.display_lichid == true && Lich.display_uid == true)
+                          uid_from_string = alt_string.match(/] \((?<uid>\d+)\)/)
                           alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                          alt_string.sub!(']') { " - #{Map.current.id}] (#{XMLData.room_id == uid_from_string[:uid].to_i ? ((XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "unknown" : "u#{XMLData.room_id}") : uid_from_string[:uid].to_i })" }
                         elsif Lich.display_lichid == true
                           alt_string.sub!(']') { " - #{Map.current.id}]" }
                         elsif Lich.display_uid == true
+                          uid_from_string = alt_string.match(/] \((?<uid>\d+)\)/)
                           alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                          alt_string.sub!(']') { "] (#{XMLData.room_id == uid_from_string[:uid].to_i ? ((XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "unknown" : "u#{XMLData.room_id}") : uid_from_string[:uid].to_i })" }
                         end
                       elsif XMLData.game =~ /^DR/
                         if Lich.display_uid == true
@@ -928,13 +930,15 @@ module Lich
                     if (Lich.display_lichid == true || Lich.display_uid == true)
                       if XMLData.game =~ /^GS/
                         if (Lich.display_lichid == true && Lich.display_uid == true)
+                          uid_from_string = alt_string.match(/] \((?<uid>\d+)\)/)
                           alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                          alt_string.sub!(']') { " - #{Map.current.id}] (#{XMLData.room_id == uid_from_string[:uid].to_i ? ((XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "unknown" : "u#{XMLData.room_id}") : uid_from_string[:uid].to_i })" }
                         elsif Lich.display_lichid == true
                           alt_string.sub!(']') { " - #{Map.current.id}]" }
                         elsif Lich.display_uid == true
+                          uid_from_string = alt_string.match(/] \((?<uid>\d+)\)/)
                           alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                          alt_string.sub!(']') { "] (#{XMLData.room_id == uid_from_string[:uid].to_i ? ((XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "unknown" : "u#{XMLData.room_id}") : uid_from_string[:uid].to_i })" }
                         end
                       elsif XMLData.game =~ /^DR/
                         if Lich.display_uid == true
