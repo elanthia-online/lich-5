@@ -198,12 +198,12 @@ module Lich
                   end
                 end
 
-                if !@@infomon_loaded && (defined?(Infomon) || !$DRINFOMON_VERSION.nil?) && !XMLData.name.empty? && !XMLData.dialogs.empty?
+                if !@@infomon_loaded && (defined?(Infomon) || !$DRINFOMON_VERSION.nil?) && !XMLData.name.nil? && !XMLData.name.empty? && !XMLData.dialogs.empty?
                   ExecScript.start("Infomon.redo!", { :quiet => true, :name => "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
                   @@infomon_loaded = true
                 end
 
-                if !@@cli_scripts && @@autostarted && !XMLData.name.empty?
+                if !@@cli_scripts && @@autostarted && !XMLData.name.nil? && !XMLData.name.empty?
                   if (arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ })
                     for script_name in arg.sub('--start-scripts=', '').split(',')
                       Script.start(script_name)
@@ -246,17 +246,21 @@ module Lich
                       # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
                       # From GS
                       # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
-                      while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
+                      unless (matches = $_SERVERSTRING_.scan(/'([^=>]*'[^=>]*)'/)).empty?
                         Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
+                        matches.flatten.each do |match|
+                          $_SERVERSTRING_.gsub!(match, match.gsub(/'/, '&apos;'))
+                        end
                         Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                         retry
                       end
                       # Fixes invalid XML with nested double quotes in it such as:
                       # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
-                      while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
+                      unless (matches = $_SERVERSTRING_.scan(/"([^=]*"[^=]*)"/)).empty?
                         Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
+                        matches.flatten.each do |match|
+                          $_SERVERSTRING_.gsub!(match, match.gsub(/"/, '&quot;'))
+                        end
                         Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                         retry
                       end
@@ -300,6 +304,12 @@ module Lich
                         elsif Lich.display_uid == true
                           alt_string.sub!(/] \(\d+\)/) { "]" }
                           alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                        end
+                      elsif XMLData.game =~ /^DR/
+                        if Lich.display_uid == true
+                          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+                        elsif Lich.hide_uid_flag == true
+                          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
                         end
                       end
                     end
@@ -819,12 +829,12 @@ module Lich
                   end
                 end
 
-                if !@@infomon_loaded && (defined?(Infomon) || !$DRINFOMON_VERSION.nil?) && !XMLData.name.empty? && !XMLData.dialogs.empty?
+                if !@@infomon_loaded && (defined?(Infomon) || !$DRINFOMON_VERSION.nil?) && !XMLData.name.nil? && !XMLData.name.empty? && !XMLData.dialogs.empty?
                   ExecScript.start("Infomon.redo!", { :quiet => true, :name => "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
                   @@infomon_loaded = true
                 end
 
-                if !@@cli_scripts && @@autostarted && !XMLData.name.empty?
+                if !@@cli_scripts && @@autostarted && !XMLData.name.nil? && !XMLData.name.empty?
                   if (arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ })
                     for script_name in arg.sub('--start-scripts=', '').split(',')
                       Script.start(script_name)
@@ -867,17 +877,21 @@ module Lich
                       # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
                       # From GS
                       # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
-                      while (data = $_SERVERSTRING_.match(/'([^=>]*'[^=>]*)'/))
+                      unless (matches = $_SERVERSTRING_.scan(/'([^=>]*'[^=>]*)'/)).empty?
                         Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/'/, '&apos;'))
+                        matches.flatten.each do |match|
+                          $_SERVERSTRING_.gsub!(match, match.gsub(/'/, '&apos;'))
+                        end
                         Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                         retry
                       end
                       # Fixes invalid XML with nested double quotes in it such as:
                       # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
-                      while (data = $_SERVERSTRING_.match(/"([^=]*"[^=]*)"/))
+                      unless (matches = $_SERVERSTRING_.scan(/"([^=]*"[^=]*)"/)).empty?
                         Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!(data[1], data[1].gsub!(/"/, '&quot;'))
+                        matches.flatten.each do |match|
+                          $_SERVERSTRING_.gsub!(match, match.gsub(/"/, '&quot;'))
+                        end
                         Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
                         retry
                       end
@@ -921,6 +935,12 @@ module Lich
                         elsif Lich.display_uid == true
                           alt_string.sub!(/] \(\d+\)/) { "]" }
                           alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
+                        end
+                      elsif XMLData.game =~ /^DR/
+                        if Lich.display_uid == true
+                          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+                        elsif Lich.hide_uid_flag == true
+                          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
                         end
                       end
                     end

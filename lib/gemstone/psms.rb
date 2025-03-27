@@ -12,15 +12,7 @@ module Lich
   module Gemstone
     module PSMS
       def self.name_normal(name)
-        # there are five cases to normalize
-        # "vault_kick", "vault kick", "vault-kick", :vault_kick, :vaultkick
-        # "predator's eye"
-        # if present, convert spaces to underscore; convert all to downcase string
-        normal_name = name.to_s.downcase
-        normal_name.gsub!(' ', '_') if name =~ (/\s/)
-        normal_name.gsub!('-', '_') if name =~ (/-/)
-        normal_name.gsub!("'", '') if name =~ (/'/)
-        normal_name
+        Lich::Util.normalize_name(name)
       end
 
       def self.find_name(name, type)

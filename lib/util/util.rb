@@ -43,6 +43,19 @@ module Lich
       end
     end
 
+    def self.normalize_name(name)
+      # there are five cases to normalize
+      # "vault_kick", "vault kick", "vault-kick", :vault_kick, :vaultkick
+      # "predator's eye"
+      # if present, convert spaces to underscore; convert all to downcase string
+      normal_name = name.to_s.downcase
+      normal_name.gsub!(' ', '_') if name =~ (/\s/)
+      normal_name.gsub!('-', '_') if name =~ (/-/)
+      normal_name.gsub!(":", '') if name =~ (/:/)
+      normal_name.gsub!("'", '') if name =~ (/'/)
+      normal_name
+    end
+
     ## Lifted from LR foreach.lic
 
     def self.anon_hook(prefix = '')

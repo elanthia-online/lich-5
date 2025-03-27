@@ -43,5 +43,9 @@ module Lich
     def self.gigas_artifact_fragments
       Lich::Gemstone::Infomon.get('currency.gigas_artifact_fragments')
     end
+
+    def self.gemstone_dust
+      Lich::Gemstone::Infomon.get('currency.gemstone_dust')
+    end
   end
 end
