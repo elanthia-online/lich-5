@@ -29,6 +29,7 @@ module Lich
           ProfileStart = /^PERSONAL INFORMATION$/.freeze
           ProfileName = /^Name: (?<name>\w+)$/.freeze
           ProfileHouseCHE = /^[A-z\- ]+? (?:of House of the |of House of |of House |of )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?$|^(?<none>No House affiliation)$/.freeze
+          ResignCHE = /^(?:Once you have resigned from your House, you will be unable to rejoin without being inducted again by the |If you wish to renounce your membership in the |Before you can resign from the )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?|^(?<none>The RESIGN command is for resigning your membership in a House, but you don't currently belong to any of the Cooperative Houses of Elanthia)\.$/.freeze
 
           # Single / low impact - single db write
           Levelup = /^\s+(?<stat>\w+)\s+\(\w{3}\)\s+:\s+(?<value>\d+)\s+(?:\+1)\s+\.\.\.\s+(?<bonus>\d+)(?:\s+\+1)?$/.freeze
@@ -97,7 +98,7 @@ module Lich
                              TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
                              WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
                              ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
-                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, GemstoneDust)
+                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, GemstoneDust)
         end
 
         def self.find_cat(category)
@@ -434,6 +435,9 @@ module Lich
               else
                 :noop
               end
+            when Pattern::ResignCHE
+              match = Regexp.last_match
+              Infomon.set('che', (match[:none] ? 'none' : Lich::Util.normalize_name(match[:house])))
 
             # TODO: refactor / streamline?
             when Pattern::ThornPoisonStart, Pattern::ThornPoisonProgression, Pattern::ThornPoisonDeprogression
