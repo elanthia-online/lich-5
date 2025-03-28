@@ -75,7 +75,7 @@ module Lich
         else
           return @@list[@@current_room_id] if XMLData.room_count == @@fuzzy_room_count and !@@current_room_id.nil?;
         end
-        ids = Map.ids_from_uid(XMLData.room_id);
+        ids = (XMLData.room_id.zero? ? [] : Map.ids_from_uid(XMLData.room_id))
         return Map.set_current(ids[0]) if (ids.size == 1)
         if ids.size > 1 and !@@current_room_id.nil? and (id = Map.match_multi_ids(ids))
           return Map.set_current(id)
@@ -218,7 +218,7 @@ module Lich
         echo("Map: current room id is #{id.inspect}")
         unless id.nil?
           room = Map[id]
-          unless room.uid.include?(XMLData.room_id)
+          unless XMLData.room_id.zero? || room.uid.include?(XMLData.room_id)
             room.uid << XMLData.room_id
             Map.uids_add(XMLData.room_id, room.id)
             echo "Map: Adding new uid for #{room.id}: #{XMLData.room_id}"
@@ -229,8 +229,8 @@ module Lich
         title            = [XMLData.room_title]
         description      = [XMLData.room_description.strip]
         paths            = [XMLData.room_exits_string.strip]
-        uid              = [XMLData.room_id]
-        room             = Map.new(Map.get_free_id, title, description, paths, uid)
+        uid              = (XMLData.room_id.zero? ? [] : [XMLData.room_id])
+        room             = Map.new(id, title, description, paths, uid)
         Map.uids_add(XMLData.room_id, room.id)
         echo "mapped new room, set current room to #{room.id}"
         return Map.set_current(id)
