@@ -355,13 +355,13 @@ module Lich
           return Map.set_current(room.id)
         end
         # new room
-        current_location = Map.get_location
         id               = Map.get_free_id
         title            = [XMLData.room_title]
         description      = [XMLData.room_description.strip]
         paths            = [XMLData.room_exits_string.strip]
         uid              = (XMLData.room_id > 4294967296 ? [] : [XMLData.room_id])
-        room             = Map.new(Map.get_free_id, title, description, paths, uid, current_location)
+        current_location = Map.get_location
+        room             = Map.new(id, title, description, paths, uid, current_location)
         Map.uids_add(XMLData.room_id, room.id) unless XMLData.room_id > 4294967296
         # flag identical rooms with different locations
         identical_rooms = @@list.find_all { |r|
