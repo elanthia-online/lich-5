@@ -231,7 +231,7 @@ module Lich
         paths            = [XMLData.room_exits_string.strip]
         uid              = (XMLData.room_id.zero? ? [] : [XMLData.room_id])
         room             = Map.new(id, title, description, paths, uid)
-        Map.uids_add(XMLData.room_id, room.id)
+        Map.uids_add(XMLData.room_id, room.id) unless XMLData.room_id.zero?
         echo "mapped new room, set current room to #{room.id}"
         return Map.set_current(id)
       end
