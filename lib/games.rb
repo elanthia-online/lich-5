@@ -298,7 +298,7 @@ module Lich
                                          : lichid_from_uid_string = Room["u#{uid_from_string[:uid]}"].id.to_i
                     if (Lich.display_lichid == true || Lich.display_uid == true || Lich.hide_uid_flag == true)
                       # build the string left to right
-                      if XMLData.game =~ /^GS/ 
+                      if XMLData.game =~ /^GS/
                         if Lich.display_lichid == true
                           alt_string.sub!(']') { " - #{lichid_from_uid_string}]" }
                         end
