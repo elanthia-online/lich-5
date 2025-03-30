@@ -358,7 +358,7 @@ module Lich
               unless attributes['subtitle'].empty? || attributes['subtitle'].nil?
                 if XMLData.game =~ /^GS/
                   if Lich.display_uid == false && attributes['subtitle'][3..-1] =~ / - \d+$/
-                    Lich.display_uid = true
+                    Lich.display_uid = true unless Lich.hide_uid_flag
                   end
                   @room_title = '[' + attributes['subtitle'][3..-1].gsub(/ - \d+$/, '') + ']'
                 elsif XMLData.game =~ /^DR/

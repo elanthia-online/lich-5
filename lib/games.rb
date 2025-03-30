@@ -292,20 +292,22 @@ module Lich
                   }
                 end
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
-                  #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
+                  if alt_string =~ /^(<pushStream id="familiar" ifClosedStyle="watching"\/>)?(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
+                    uid_from_string = alt_string.match(/] \((?<uid>\d+)\)/)
+                    uid_from_string.nil? ? lichid_from_uid_string = Room.current.id
+                                         : lichid_from_uid_string = Room["u#{uid_from_string[:uid]}"].id.to_i
                     if (Lich.display_lichid == true || Lich.display_uid == true || Lich.hide_uid_flag == true)
-                      if XMLData.game =~ /^GS/
-                        if (Lich.display_lichid == true && Lich.display_uid == true)
-                          uid_from_string = alt_string.match(/] \((?<uid>\d+)\)/)
-                          alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { " - #{Map.current.id}] (#{(uid_from_string.nil? || XMLData.room_id == uid_from_string[:uid].to_i) ? ((XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "unknown" : "u#{XMLData.room_id}") : uid_from_string[:uid].to_i})" }
-                        elsif Lich.display_lichid == true
-                          alt_string.sub!(']') { " - #{Map.current.id}]" }
-                        elsif Lich.display_uid == true
-                          uid_from_string = alt_string.match(/] \((?<uid>\d+)\)/)
+                      # build the string left to right
+                      if XMLData.game =~ /^GS/ 
+                        if Lich.display_lichid == true
+                          alt_string.sub!(']') { " - #{lichid_from_uid_string}]" }
+                        end
+                        if Lich.display_uid == true
                           alt_string.sub!(/] \(\d+\)/) { "]" }
                           alt_string.sub!(']') { "] (#{(uid_from_string.nil? || XMLData.room_id == uid_from_string[:uid].to_i) ? ((XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "unknown" : "u#{XMLData.room_id}") : uid_from_string[:uid].to_i})" }
+                        end
+                        if Lich.display_uid == false && Lich.hide_uid_flag == true
+                          alt_string.sub!(/] \(\d+\)/) { "]" }
                         end
                       elsif XMLData.game =~ /^DR/
                         if Lich.display_uid == true
