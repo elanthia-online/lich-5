@@ -294,7 +294,7 @@ module Lich
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
                   if alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
-                    if (Lich.display_lichid == true || Lich.display_uid == true)
+                    if (Lich.display_lichid == true || Lich.display_uid == true || Lich.hide_uid_flag == true)
                       if XMLData.game =~ /^GS/
                         if (Lich.display_lichid == true && Lich.display_uid == true)
                           alt_string.sub!(/] \(\d+\)/) { "]" }
@@ -925,7 +925,7 @@ module Lich
                 if (alt_string = DownstreamHook.run($_SERVERSTRING_))
                   #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
                   if alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
-                    if (Lich.display_lichid == true || Lich.display_uid == true)
+                    if (Lich.display_lichid == true || Lich.display_uid == true || Lich.hide_uid_flag == true)
                       if XMLData.game =~ /^GS/
                         if (Lich.display_lichid == true && Lich.display_uid == true)
                           alt_string.sub!(/] \(\d+\)/) { "]" }
