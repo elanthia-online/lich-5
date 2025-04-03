@@ -356,15 +356,7 @@ module Lich
       end
 
       def GameObj.load_data(filename = nil)
-        if filename.nil?
-          if File.exist?("#{DATA_DIR}/gameobj-data.xml")
-            filename = "#{DATA_DIR}/gameobj-data.xml"
-          elsif File.exist?("#{SCRIPT_DIR}/gameobj-data.xml") # deprecated
-            filename = "#{SCRIPT_DIR}/gameobj-data.xml"
-          else
-            filename = "#{DATA_DIR}/gameobj-data.xml"
-          end
-        end
+        filename = File.join(DATA_DIR, 'gameobj-data.xml') if filename.nil?
         if File.exist?(filename)
           begin
             @@type_data = Hash.new
@@ -427,6 +419,7 @@ module Lich
           rescue
             echo "error: Custom GameObj.load_data: #{$!}"
             respond $!.backtrace[0..1]
+            false
           end
         end
         true
