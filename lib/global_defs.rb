@@ -1794,7 +1794,7 @@ def unnoded_pulse
   end
 end
 
-require './lib/stash.rb'
+require_relative File.join(LIB_DIR, "stash.rb")
 
 def empty_hands
   waitrt?
@@ -2103,7 +2103,7 @@ end
 
 def monsterbold_end
   if $frontend =~ /^(?:wizard|avalon)$/
-    "\034GSM\r\n"
+    "\034GSM\r\n\r\n"
   elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/
     '<popBold/>'
   else

@@ -68,6 +68,7 @@ require 'ostruct'
 require 'resolv'
 require 'rexml/document'
 require 'rexml/streamlistener'
+require 'sorted_set' # (used for deep diagnostics in namespace)
 require 'socket'
 require 'stringio'
 require 'terminal-table'
