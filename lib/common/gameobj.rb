@@ -386,13 +386,13 @@ module Lich
             @@sellable_data = nil
             echo "error: GameObj.load_data: #{$!}"
             respond $!.backtrace[0..1]
-            false
+            return false
           end
         else
           @@type_data = nil
           @@sellable_data = nil
           echo "error: GameObj.load_data: file does not exist: #{filename}"
-          false
+          return false
         end
         filename = File.join(DATA_DIR, 'gameobj-custom', 'gameobj-data.xml')
         if (File.exist?(filename))
@@ -410,19 +410,19 @@ module Lich
               doc.elements.each('data/sellable') { |e|
                 if (sellable = e.attributes['name'])
                   @@sellable_data[sellable] ||= Hash.new
-                  @@sellable_data[sellable][:name]	  = GameObj.merge_data(@@type_data[type][:name], Regexp.new(e.elements['name'].text)) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
-                  @@sellable_data[sellable][:noun]	  = GameObj.merge_data(@@type_data[type][:noun], Regexp.new(e.elements['noun'].text)) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
-                  @@sellable_data[sellable][:exclude] = GameObj.merge_data(@@type_data[type][:exclude], Regexp.new(e.elements['exclude'].text)) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
+                  @@sellable_data[sellable][:name]	  = GameObj.merge_data(@@sellable_data[sellable][:name], Regexp.new(e.elements['name'].text)) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
+                  @@sellable_data[sellable][:noun]	  = GameObj.merge_data(@@sellable_data[sellable][:noun], Regexp.new(e.elements['noun'].text)) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
+                  @@sellable_data[sellable][:exclude] = GameObj.merge_data(@@sellable_data[sellable][:exclude], Regexp.new(e.elements['exclude'].text)) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
                 end
               }
             }
           rescue
             echo "error: Custom GameObj.load_data: #{$!}"
             respond $!.backtrace[0..1]
-            false
+            return false
           end
         end
-        true
+        return true
       end
 
       def GameObj.type_data
