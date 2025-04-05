@@ -571,8 +571,11 @@ module Lich
 
       def modify_room_display(alt_string)
         uid_from_string = alt_string.match(/] \((?<uid>\d+)\)/)
-        uid_from_string.nil? ? lichid_from_uid_string = Room.current.id
-                             : lichid_from_uid_string = Room["u#{uid_from_string[:uid]}"].id.to_i
+        if uid_from_string.nil?
+          lichid_from_uid_string = Room.current.id
+        else
+          lichid_from_uid_string = Room["u#{uid_from_string[:uid]}"].id.to_i
+        end
         if Lich.display_lichid == true
           alt_string.sub!(']') { " - #{lichid_from_uid_string}]" }
         end
