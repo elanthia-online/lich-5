@@ -5,9 +5,36 @@ require_relative File.join(DATA_DIR, 'mock_database_adapter.rb')
 LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 require_relative File.join(LIB_DIR, 'common', 'settings.rb')
 
-XMLData = OpenStruct.new
-XMLData.game = "GSIV"
-XMLData.name = "TestCharacter"
+# XMLData = OpenStruct.new
+module XMLData
+  @dialogs = {}
+  def self.game
+    "GSIV"
+  end
+
+  def self.name
+    "TestCharacter"
+  end
+
+  def self.indicator
+    # shimming together a hash to test 'muckled?' results
+    { 'IconSTUNNED' => 'n',
+      'IconDEAD'    => 'n',
+      'IconWEBBED'  => false }
+  end
+
+  def self.save_dialogs(kind, attributes)
+    # shimming together response for testing status checks
+    @dialogs[kind] ||= {}
+    return @dialogs[kind] = attributes
+  end
+
+  def self.dialogs
+    @dialogs ||= {}
+  end
+end
+# XMLData.game = "GSIV"
+# XMLData.name = "TestCharacter"
 
 RSpec.describe Lich::Common::Settings do
   before(:each) do
