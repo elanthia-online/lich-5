@@ -7,7 +7,7 @@ module Lich
       class << self
         attr_reader :gift_start, :pulse_count
 
-        def initialize
+        def init_gift
           @gift_start = Time.now
           @pulse_count = 0
         end
