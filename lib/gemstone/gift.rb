@@ -48,7 +48,7 @@ module Lich
       end
 
       # Initialize the class
-      initialize
+      init_gift
     end
   end
 end
