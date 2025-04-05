@@ -91,7 +91,7 @@ module Lich
         # Helper method to get scar level for any body part
         def scar_level(part)
           fix_injury_mode
-          XMLData.injuries[part] && XMLData.injuries[part]['scar']
+          XMLData.injuries[part.to_s] && XMLData.injuries[part.to_s]['scar']
         end
 
         # Helper method to get all scar levels
