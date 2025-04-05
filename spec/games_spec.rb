@@ -1,11 +1,12 @@
 require 'rspec'
 
-require_relative '../lib/common/sharedbuffer.rb'
+LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 
-require_relative '../lib/games.rb'
-require_relative '../lib/gemstone/wounds.rb'
-require_relative '../lib/gemstone/scars.rb'
-require_relative '../lib/gemstone/gift.rb'
+require File.join(LIB_DIR, "common", "sharedbuffer.rb")
+require File.join(LIB_DIR, "games.rb")
+require File.join(LIB_DIR, "gemstone", "wounds.rb")
+require File.join(LIB_DIR, "gemstone", "scars.rb")
+require File.join(LIB_DIR, "gemstone", "gift.rb")
 
 # Mock classes and modules needed for testing
 module XMLData

@@ -2,54 +2,102 @@
 
 module Lich
   module Gemstone
-    # Scars class for tracking character scars
+    # Scars class for tracking character wounds
     class Scars < Gemstone::CharacterStatus # GameBase::CharacterStatus
       class << self
-        def leftEye;   fix_injury_mode; XMLData.injuries['leftEye']['scar'];   end
-        def leye;      fix_injury_mode; XMLData.injuries['leftEye']['scar'];   end
-        def rightEye;  fix_injury_mode; XMLData.injuries['rightEye']['scar'];  end
-        def reye;      fix_injury_mode; XMLData.injuries['rightEye']['scar'];  end
-        def head;      fix_injury_mode; XMLData.injuries['head']['scar'];      end
-        def neck;      fix_injury_mode; XMLData.injuries['neck']['scar'];      end
-        def back;      fix_injury_mode; XMLData.injuries['back']['scar'];      end
-        def chest;     fix_injury_mode; XMLData.injuries['chest']['scar'];     end
-        def abdomen;   fix_injury_mode; XMLData.injuries['abdomen']['scar'];   end
-        def abs;       fix_injury_mode; XMLData.injuries['abdomen']['scar'];   end
-        def leftArm;   fix_injury_mode; XMLData.injuries['leftArm']['scar'];   end
-        def larm;      fix_injury_mode; XMLData.injuries['leftArm']['scar'];   end
-        def rightArm;  fix_injury_mode; XMLData.injuries['rightArm']['scar'];  end
-        def rarm;      fix_injury_mode; XMLData.injuries['rightArm']['scar'];  end
-        def rightHand; fix_injury_mode; XMLData.injuries['rightHand']['scar']; end
-        def rhand;     fix_injury_mode; XMLData.injuries['rightHand']['scar']; end
-        def leftHand;  fix_injury_mode; XMLData.injuries['leftHand']['scar'];  end
-        def lhand;     fix_injury_mode; XMLData.injuries['leftHand']['scar'];  end
-        def leftLeg;   fix_injury_mode; XMLData.injuries['leftLeg']['scar'];   end
-        def lleg;      fix_injury_mode; XMLData.injuries['leftLeg']['scar'];   end
-        def rightLeg;  fix_injury_mode; XMLData.injuries['rightLeg']['scar'];  end
-        def rleg;      fix_injury_mode; XMLData.injuries['rightLeg']['scar'];  end
-        def leftFoot;  fix_injury_mode; XMLData.injuries['leftFoot']['scar'];  end
-        def rightFoot; fix_injury_mode; XMLData.injuries['rightFoot']['scar']; end
-        def nsys;      fix_injury_mode; XMLData.injuries['nsys']['scar'];      end
-        def nerves;    fix_injury_mode; XMLData.injuries['nsys']['scar'];      end
+        # Body part accessor methods
+        # XML from Simutronics drives the structure of the scar naming (eg. leftEye)
+        # The following is a hash of the body parts and shorthand aliases created for more idiomatic Ruby
+        BODY_PARTS = {
+          leftEye: ['leye'],
+          rightEye: ['reye'],
+          head: [],
+          neck: [],
+          back: [],
+          chest: [],
+          abdomen: ['abs'],
+          leftArm: ['larm'],
+          rightArm: ['rarm'],
+          rightHand: ['rhand'],
+          leftHand: ['lhand'],
+          leftLeg: ['lleg'],
+          rightLeg: ['rleg'],
+          leftFoot: ['lfoot'],
+          rightFoot: ['rfoot'],
+          nsys: ['nerves']
+        }.freeze
 
+        # Define methods for each body part and its aliases
+        BODY_PARTS.each do |part, aliases|
+          # Define the primary method
+          define_method(part) do
+            fix_injury_mode
+
+            XMLData.injuries[part.to_s] && XMLData.injuries[part.to_s]['scar']
+          end
+
+          # Define shorthand alias methods
+          aliases.each do |ali|
+            alias_method ali, part
+          end
+        end
+
+        # Alias snake_case methods for overachievers
+        def left_eye; leftEye; end
+        def right_eye; rightEye; end
+        def left_arm; leftArm; end
+        def right_arm; rightArm; end
+        def left_hand; leftHand; end
+        def right_hand; rightHand; end
+        def left_leg; leftLeg; end
+        def right_leg; rightLeg; end
+        def left_foot; leftFoot; end
+        def right_foot; rightFoot; end
+
+        # Composite scar methods
         def arms
           fix_injury_mode
-          [XMLData.injuries['leftArm']['scar'], XMLData.injuries['rightArm']['scar'],
-           XMLData.injuries['leftHand']['scar'], XMLData.injuries['rightHand']['scar']].max
+          [
+            XMLData.injuries['leftArm']['scar'],
+            XMLData.injuries['rightArm']['scar'],
+            XMLData.injuries['leftHand']['scar'],
+            XMLData.injuries['rightHand']['scar']
+          ].max
         end
 
         def limbs
           fix_injury_mode
-          [XMLData.injuries['leftArm']['scar'], XMLData.injuries['rightArm']['scar'],
-           XMLData.injuries['leftHand']['scar'], XMLData.injuries['rightHand']['scar'],
-           XMLData.injuries['leftLeg']['scar'], XMLData.injuries['rightLeg']['scar']].max
+          [
+            XMLData.injuries['leftArm']['scar'],
+            XMLData.injuries['rightArm']['scar'],
+            XMLData.injuries['leftHand']['scar'],
+            XMLData.injuries['rightHand']['scar'],
+            XMLData.injuries['leftLeg']['scar'],
+            XMLData.injuries['rightLeg']['scar']
+          ].max
         end
 
         def torso
           fix_injury_mode
-          [XMLData.injuries['rightEye']['scar'], XMLData.injuries['leftEye']['scar'],
-           XMLData.injuries['chest']['scar'], XMLData.injuries['abdomen']['scar'],
-           XMLData.injuries['back']['scar']].max
+          [
+            XMLData.injuries['rightEye']['scar'],
+            XMLData.injuries['leftEye']['scar'],
+            XMLData.injuries['chest']['scar'],
+            XMLData.injuries['abdomen']['scar'],
+            XMLData.injuries['back']['scar']
+          ].max
+        end
+
+        # Helper method to get scar level for any body part
+        def scar_level(part)
+          fix_injury_mode
+          XMLData.injuries[part] && XMLData.injuries[part]['scar']
+        end
+
+        # Helper method to get all scar levels
+        def all_scars
+          fix_injury_mode
+          XMLData.injuries.transform_values { |v| v['scar'] }
         end
       end
     end
