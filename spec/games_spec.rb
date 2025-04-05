@@ -16,7 +16,7 @@ module XMLData
       @game = nil
       @injuries = {}
       @name = nil
-      @dialogs = []
+      @dialogs = {}
       @room_id = 0
       @room_title = nil
       @injury_mode ||= 2
