@@ -2,7 +2,7 @@
 
 module Lich
   module Gemstone
-    # Scars class for tracking character wounds
+    # Scars class for tracking character scars
     class Scars < Gemstone::CharacterStatus # GameBase::CharacterStatus
       class << self
         # Body part accessor methods
