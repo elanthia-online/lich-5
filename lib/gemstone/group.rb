@@ -30,6 +30,12 @@ module Lich
         @@members.reject! do |m| gone.include?(m.id) end
       end
 
+      def self.refresh(*members)
+        gone = members.map(&:id)
+        @@members.reject! do |member| !gone.include?(member.id) end
+        members.each do |member| @@members.push(member) unless include?(member) end
+      end
+
       def self.members
         maybe_check
         @@members.dup
@@ -270,8 +276,10 @@ module Lich
           when Term::LEADER_REMOVED_MEMBER
             (leader, removed) = people
             return Group.delete(removed) if Group.include?(leader)
-          when Term::JOIN, Term::ADD, Term::NOOP, Term::MEMBER
+          when Term::JOIN, Term::ADD, Term::NOOP
             return Group.push(*people)
+          when Term::MEMBER
+            return Group.refresh(*people)
           when Term::LEAVE, Term::REMOVE
             return Group.delete(*people)
           end
