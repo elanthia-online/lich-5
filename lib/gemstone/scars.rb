@@ -31,7 +31,7 @@ module Lich
         BODY_PARTS.each do |part, aliases|
           # Define the primary method
           define_method(part) do
-            fix_injury_mode('scar')
+            fix_injury_mode('both') # continue to use 'both' (_injury2) for now
 
             XMLData.injuries[part.to_s] && XMLData.injuries[part.to_s]['scar']
           end
@@ -56,7 +56,7 @@ module Lich
 
         # Composite scar methods
         def arms
-          fix_injury_mode('scar')
+          fix_injury_mode('both')
           [
             XMLData.injuries['leftArm']['scar'],
             XMLData.injuries['rightArm']['scar'],
@@ -66,7 +66,7 @@ module Lich
         end
 
         def limbs
-          fix_injury_mode('scar')
+          fix_injury_mode('both')
           [
             XMLData.injuries['leftArm']['scar'],
             XMLData.injuries['rightArm']['scar'],
@@ -78,7 +78,7 @@ module Lich
         end
 
         def torso
-          fix_injury_mode('scar')
+          fix_injury_mode('both')
           [
             XMLData.injuries['rightEye']['scar'],
             XMLData.injuries['leftEye']['scar'],
@@ -90,13 +90,13 @@ module Lich
 
         # Helper method to get scar level for any body part
         def scar_level(part)
-          fix_injury_mode('scar')
+          fix_injury_mode('both')
           XMLData.injuries[part.to_s] && XMLData.injuries[part.to_s]['scar']
         end
 
         # Helper method to get all scar levels
         def all_scars
-          fix_injury_mode('scar')
+          fix_injury_mode('scar') # for this one call, we want to get actual scar level data
           XMLData.injuries.transform_values { |v| v['scar'] }
         end
       end
