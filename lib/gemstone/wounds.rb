@@ -31,7 +31,7 @@ module Lich
         BODY_PARTS.each do |part, aliases|
           # Define the primary method
           define_method(part) do
-            fix_injury_mode
+            fix_injury_mode('wound')
 
             XMLData.injuries[part.to_s] && XMLData.injuries[part.to_s]['wound']
           end
@@ -56,7 +56,7 @@ module Lich
 
         # Composite wound methods
         def arms
-          fix_injury_mode
+          fix_injury_mode('wound')
           [
             XMLData.injuries['leftArm']['wound'],
             XMLData.injuries['rightArm']['wound'],
@@ -66,7 +66,7 @@ module Lich
         end
 
         def limbs
-          fix_injury_mode
+          fix_injury_mode('wound')
           [
             XMLData.injuries['leftArm']['wound'],
             XMLData.injuries['rightArm']['wound'],
@@ -78,7 +78,7 @@ module Lich
         end
 
         def torso
-          fix_injury_mode
+          fix_injury_mode('wound')
           [
             XMLData.injuries['rightEye']['wound'],
             XMLData.injuries['leftEye']['wound'],
@@ -90,13 +90,13 @@ module Lich
 
         # Helper method to get wound level for any body part
         def wound_level(part)
-          fix_injury_mode
+          fix_injury_mode('Wound')
           XMLData.injuries[part.to_s] && XMLData.injuries[part.to_s]['wound']
         end
 
         # Helper method to get all wound levels
         def all_wounds
-          fix_injury_mode
+          fix_injury_mode('wound')
           XMLData.injuries.transform_values { |v| v['wound'] }
         end
       end

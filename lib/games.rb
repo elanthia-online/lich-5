@@ -492,11 +492,22 @@ module Lich
     # Base class for character status tracking
     class CharacterStatus
       class << self
-        def fix_injury_mode
-          unless XMLData.injury_mode == 2
+        def fix_injury_mode(mode = 'both')
+          case mode
+          when 'scar', 'scars'
+            Game._puts '_injury 1'
+            150.times { sleep 0.05; break if XMLData.injury_mode == 1 }
+          when 'wound', 'wounds'
+            Game._puts '_injury 0'
+            150.times { sleep 0.05; break if XMLData.injury_mode == 0 }
+          else
             Game._puts '_injury 2'
             150.times { sleep 0.05; break if XMLData.injury_mode == 2 }
           end
+          # unless XMLData.injury_mode == 2
+          #  Game._puts '_injury 2'
+          #  150.times { sleep 0.05; break if XMLData.injury_mode == 2 }
+          # end
         end
 
         def method_missing(_method_name = nil)
