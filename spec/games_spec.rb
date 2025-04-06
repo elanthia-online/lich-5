@@ -34,7 +34,7 @@ module Lich
     end
   end
   module Messaging
-    def self.msg_format('format', 'msg')
+    def self.msg_format(format, msg)
       # Mock implementation for testing - Lich::Messaging.monsterbold(msg) calls _respond with success returning nil
     end
 
