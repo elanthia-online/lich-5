@@ -57,8 +57,6 @@ for arg in ARGV
   end
 end
 
-LICH_DEBUG = ENV['LICH_DEBUG'] || ENV['DEBUG'] || ENV['DEBUG_LICH'] || ENV['DEBUG_LICH5'] || ENV['DEBUG_LICH5_ALL']
-
 require 'base64'
 require 'digest/md5'
 require 'digest/sha1'
@@ -70,7 +68,6 @@ require 'ostruct'
 require 'resolv'
 require 'rexml/document'
 require 'rexml/streamlistener'
-require 'sorted_set' if LICH_DEBUG # (used for deep diagnostics in namespace)
 require 'socket'
 require 'stringio'
 require 'terminal-table'
