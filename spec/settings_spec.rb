@@ -5,7 +5,6 @@ require_relative File.join(DATA_DIR, 'mock_database_adapter.rb')
 LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 require_relative File.join(LIB_DIR, 'common', 'settings.rb')
 
-# XMLData = OpenStruct.new
 module XMLData
   @dialogs = {}
   def self.game
@@ -33,8 +32,6 @@ module XMLData
     @dialogs ||= {}
   end
 end
-# XMLData.game = "GSIV"
-# XMLData.name = "TestCharacter"
 
 RSpec.describe Lich::Common::Settings do
   before(:each) do

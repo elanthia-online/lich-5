@@ -65,7 +65,7 @@ module Lich
       def self.save_to_database(current, scope = ":")
         script_name = Script.current.name
         cache_key = "#{script_name}::#{scope}"
-        @settings_cache[cache_key] = current.dup
+        @settings_cache[cache_key] = Marshal.load(Marshal.dump(current)) # current.dup
 
         @db_adapter.save_settings(script_name, current, scope)
       end
