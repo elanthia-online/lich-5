@@ -492,7 +492,7 @@ module Lich
     # Base class for character status tracking
     class CharacterStatus
       class << self
-        def fix_injury_mode(mode = 'both') # Default mode 'both' handles wounds (prcedence) then scars
+        def fix_injury_mode(mode = 'both') # Default mode 'both' handles wounds (precedence) then scars
           case mode
           when 'scar', 'scars'
             unless XMLData.injury_mode == 1
