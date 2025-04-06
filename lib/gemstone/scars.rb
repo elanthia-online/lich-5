@@ -97,7 +97,9 @@ module Lich
         # Helper method to get all scar levels
         def all_scars
           fix_injury_mode('scar') # for this one call, we want to get actual scar level data
-          XMLData.injuries.transform_values { |v| v['scar'] }
+          result = XMLData.injuries.transform_values { |v| v['scar'] }
+          fix_injury_mode('both') # reset to both
+          return result
         end
       end
     end
