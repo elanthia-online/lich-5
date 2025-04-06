@@ -515,7 +515,7 @@ module Lich
         end
 
         def method_missing(_method_name = nil)
-          result = Lich::Messaging.mono(Lich::Messaging.monsterbold("#{self.name.split('::').last}: Invalid area, try one of these: arms, limbs, torso, #{XMLData.injuries.keys.join(', ')}"))
+          result = Lich::Messaging.mono(Lich::Messaging.msg_format("bold", "#{self.name.split('::').last}: Invalid area, try one of these: arms, limbs, torso, #{XMLData.injuries.keys.join(', ')}"))
           # the _respond method used in Lich::Messaging returns nil upon success
           return result
         end
