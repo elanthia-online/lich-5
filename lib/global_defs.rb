@@ -2103,7 +2103,7 @@ end
 
 def monsterbold_end
   if $frontend =~ /^(?:wizard|avalon)$/
-    "\034GSM\r\n\r\n"
+    "\034GSM\r\n"
   elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/
     '<popBold/>'
   else
