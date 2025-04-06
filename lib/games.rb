@@ -492,7 +492,7 @@ module Lich
     # Base class for character status tracking
     class CharacterStatus
       class << self
-        def fix_injury_mode(mode = 'both')
+        def fix_injury_mode(mode = 'both') # Default mode 'both' handles both scars and wounds
           case mode
           when 'scar', 'scars'
             Game._puts '_injury 1'
