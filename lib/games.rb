@@ -504,10 +504,6 @@ module Lich
             Game._puts '_injury 2'
             150.times { sleep 0.05; break if XMLData.injury_mode == 2 }
           end
-          # unless XMLData.injury_mode == 2
-          #  Game._puts '_injury 2'
-          #  150.times { sleep 0.05; break if XMLData.injury_mode == 2 }
-          # end
         end
 
         def method_missing(_method_name = nil)

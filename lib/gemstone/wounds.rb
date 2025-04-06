@@ -90,7 +90,7 @@ module Lich
 
         # Helper method to get wound level for any body part
         def wound_level(part)
-          fix_injury_mode('Wound')
+          fix_injury_mode('wound')
           XMLData.injuries[part.to_s] && XMLData.injuries[part.to_s]['wound']
         end
 
