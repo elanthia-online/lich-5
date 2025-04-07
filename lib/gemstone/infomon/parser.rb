@@ -101,6 +101,28 @@ module Lich
                              AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, GemstoneDust)
         end
 
+        module State
+          @state = :ready
+          Goals = :goals
+          Profile = :profile
+          Ready = :ready
+
+          def self.set(state)
+            case state
+            when Goals, Profile
+              unless @state.eql?(Ready)
+                respond "--- Lich: error: Infomon::Parser::State is in invalid state(#{@state} - caller: #{caller[0]}"
+                Lich.log "error: Infomon::Parser::State is in invalid state(#{@state} - caller: #{caller[0]}"
+              end
+            end
+            @state = state
+          end
+
+          def self.get
+            @state
+          end
+        end
+
         def self.find_cat(category)
           case category
           when /Armor/
