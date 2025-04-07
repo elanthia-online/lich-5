@@ -31,9 +31,7 @@ module Lich
       end
 
       def self.refresh(*members)
-        gone = members.map(&:id)
-        @@members.reject! do |member| !gone.include?(member.id) end
-        members.each do |member| @@members.push(member) unless include?(member) end
+        @@members = members
       end
 
       def self.members
