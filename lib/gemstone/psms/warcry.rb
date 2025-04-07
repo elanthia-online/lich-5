@@ -18,7 +18,7 @@ module Lich
         },
         "yowlp"  => {
           :regex => /You throw back your shoulders and let out a resounding yowlp!/i,
-          :buff  => /Yertie's Yowlp/,
+          :buff  => "Yertie's Yowlp",
         },
         "growl"  => {
           :regex => /Your face contorts as you unleash a guttural, deep-throated growl at .+!/i,
