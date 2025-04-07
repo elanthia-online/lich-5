@@ -336,7 +336,7 @@ module Lich
             else
               tz = '-0500'
             end
-            $last_logoff = Time.new(matches[:year], matches[:month], matches[:day], matches[:hour], matches[:minute], matches[:second], tz).getlocal
+            $last_logoff = Time.new(matches[:year].to_i, month, matches[:day].to_i, matches[:hour].to_i, matches[:minute].to_i, matches[:second].to_i, tz).getlocal
           else
             :noop
           end
