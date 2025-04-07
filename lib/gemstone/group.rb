@@ -31,7 +31,7 @@ module Lich
       end
 
       def self.refresh(*members)
-        @@members = members
+        @@members = members.dup
       end
 
       def self.members
