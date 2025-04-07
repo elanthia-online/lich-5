@@ -331,7 +331,7 @@ module Lich
             month = Date::ABBR_MONTHNAMES.find_index(matches[:month])
             weekdays = [nil, 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
             dst_check = matches[:day].to_i - weekdays.find_index(matches[:weekday])
-            if month.between?(4,10) || (month == 3 && dst_check >= 7) || (month == 11 && dst_check < 0)
+            if month.between?(4, 10) || (month == 3 && dst_check >= 7) || (month == 11 && dst_check < 0)
               tz = '-0400'
             else
               tz = '-0500'
