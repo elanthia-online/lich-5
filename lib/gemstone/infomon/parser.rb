@@ -234,11 +234,11 @@ module Lich
                 :noop
               end
             when Pattern::GoalsDetected
-              @goals_detected = true
+              State.set(State::Goals)
               :ok
             when Pattern::GoalsEnded
-              if @goals_detected
-                @goals_detected = false
+              if State.get.eql?(State::Goals)
+                State.set(State::Ready)
                 respond
                 _respond Lich::Messaging.monsterbold('You just trained your character.  Lich will gather your updated skills.')
                 respond
@@ -438,21 +438,21 @@ module Lich
                 :noop
               end
             when Pattern::ProfileStart
-              @profile_self_output = true
+              State.set(State::Profile)
               :ok
             when Pattern::ProfileName
               match = Regexp.last_match
-              if @profile_self_output && match[:name].split(' ').last != Char.name
-                @profile_self_output = false
+              if State.get.eql?(State::Profile) && match[:name].split(' ').last != Char.name
+                State.set(State::Ready)
                 :ok
               else
                 :noop
               end
             when Pattern::ProfileHouseCHE
-              if @profile_self_output
+              if State.get.eql?(State::Profile)
                 match = Regexp.last_match
                 Infomon.set('che', (match[:none] ? 'none' : Lich::Util.normalize_name(match[:house])))
-                @profile_self_output = false
+                State.set(State::Ready)
                 :ok
               else
                 :noop
