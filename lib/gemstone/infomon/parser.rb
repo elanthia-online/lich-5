@@ -111,8 +111,8 @@ module Lich
             case state
             when Goals, Profile
               unless @state.eql?(Ready)
-                respond "--- Lich: error: Infomon::Parser::State is in invalid state(#{@state} - caller: #{caller[0]}"
-                Lich.log "error: Infomon::Parser::State is in invalid state(#{@state} - caller: #{caller[0]}"
+                Lich.log "error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
+                fail "--- Lich: error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
               end
             end
             @state = state
