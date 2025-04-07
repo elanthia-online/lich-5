@@ -146,6 +146,8 @@ module Lich
 
       def self.broken?
         if Group.leader?
+          return true if (GameObj.pcs.empty? || GameObj.pcs.nil?) && !@@members.empty?
+          return false if (GameObj.pcs.empty? || GameObj.pcs.nil?) && @@members.empty?
           (GameObj.pcs.map(&:noun) & @@members.map(&:noun)).size < @@members.size
         else
           GameObj.pcs.find do |pc| pc.noun.eql?(Group.leader.noun) end.nil?
