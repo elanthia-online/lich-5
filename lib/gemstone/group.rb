@@ -312,7 +312,7 @@ module Lich
           when Term::HOLD_FRIENDLY_SECOND, Term::HOLD_NEUTRAL_SECOND, Term::HOLD_RESERVED_SECOND, Term::HOLD_WARM_SECOND
             Group.push(people.first)
             return Group.leader = people.first
-          when Term::HOLD_FRIENDLY_THIRD, Term::HOLD_NEUTRAL_THIRD, Term::HOLD_RESERVED_THIRD, Term::HOLD_FRIENDLY_THIRD
+          when Term::HOLD_FRIENDLY_THIRD, Term::HOLD_NEUTRAL_THIRD, Term::HOLD_RESERVED_THIRD, Term::HOLD_WARM_THIRD
             (leader, added) = people
             Group.push(added) if Group.include?(leader)
           when Term::LEAVE, Term::REMOVE
