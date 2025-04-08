@@ -4,6 +4,13 @@
 module Lich
   module Common
     module GameSettings
+      private
+
+      def self.deprecated_method_call(method_name)
+        Lich.deprecated("GameSettings.", method_name, 'not using, not applicable,', caller[0], fe_log: true)
+        nil
+      end
+
       def GameSettings.[](name)
         Settings.to_hash(XMLData.game)[name]
       end
@@ -18,37 +25,37 @@ module Lich
 
       # deprecated
       def GameSettings.load
-        Lich.deprecated('GameSettings.load', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('load')
         nil
       end
 
       def GameSettings.save
-        Lich.deprecated('GameSettings.save', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('save')
         nil
       end
 
       def GameSettings.save_all
-        Lich.deprecated('GameSettings.save_all', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('save_all')
         nil
       end
 
       def GameSettings.clear
-        Lich.deprecated('GameSettings.clear', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('clear')
         nil
       end
 
       def GameSettings.auto=(_val)
-        Lich.deprecated('GameSettings.auto=(val)', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('auto=(val)')
         return nil
       end
 
       def GameSettings.auto
-        Lich.deprecated('GameSettings.auto', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('auto')
         nil
       end
 
       def GameSettings.autoload
-        Lich.deprecated('GameSettings.autoload', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('autoload')
         nil
       end
     end

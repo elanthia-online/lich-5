@@ -4,6 +4,13 @@
 module Lich
   module Common
     module CharSettings
+      private
+
+      def self.deprecated_method_call(method_name)
+        Lich.deprecated("CharSettings.", method_name, 'not using, not applicable,', caller[0], fe_log: true)
+        nil
+      end
+
       def CharSettings.[](name)
         Settings.to_hash("#{XMLData.game}:#{XMLData.name}")[name]
       end
@@ -18,37 +25,37 @@ module Lich
 
       # deprecated
       def CharSettings.load
-        Lich.deprecated('CharSettings.load', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('load')
         nil
       end
 
       def CharSettings.save
-        Lich.deprecated('CharSettings.save', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('save')
         nil
       end
 
       def CharSettings.save_all
-        Lich.deprecated('CharSettings.save_all', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('save_all')
         nil
       end
 
       def CharSettings.clear
-        Lich.deprecated('CharSettings.clear', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('clear')
         nil
       end
 
       def CharSettings.auto=(_val)
-        Lich.deprecated('CharSettings.auto=(val)', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('auto=(val)')
         return nil
       end
 
       def CharSettings.auto
-        Lich.deprecated('CharSettings.auto', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('auto')
         nil
       end
 
       def CharSettings.autoload
-        Lich.deprecated('CharSettings.autoload', 'not using, not applicable,', caller[0], fe_log: true)
+        deprecated_method_call('autoload')
         nil
       end
     end
