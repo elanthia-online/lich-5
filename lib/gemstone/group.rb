@@ -249,6 +249,7 @@ module Lich
             HOLD_NEUTRAL_THIRD,
             HOLD_FRIENDLY_THIRD,
             HOLD_WARM_THIRD,
+            OTHER_JOINED_GROUP,
           )
 
           EXIST = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a>}
