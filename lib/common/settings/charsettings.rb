@@ -15,6 +15,42 @@ module Lich
       def CharSettings.to_hash
         Settings.to_hash("#{XMLData.game}:#{XMLData.name}")
       end
+
+      # deprecated
+      def CharSettings.load
+        Lich.deprecated('CharSettings.load', 'not using, not applicable,', caller[0], fe_log: true)
+        nil
+      end
+
+      def CharSettings.save
+        Lich.deprecated('CharSettings.save', 'not using, not applicable,', caller[0], fe_log: true)
+        nil
+      end
+
+      def CharSettings.save_all
+        Lich.deprecated('CharSettings.save_all', 'not using, not applicable,', caller[0], fe_log: true)
+        nil
+      end
+
+      def CharSettings.clear
+        Lich.deprecated('CharSettings.clear', 'not using, not applicable,', caller[0], fe_log: true)
+        nil
+      end
+
+      def CharSettings.auto=(_val)
+        Lich.deprecated('CharSettings.auto=(val)', 'not using, not applicable,', caller[0], fe_log: true)
+        return nil
+      end
+
+      def CharSettings.auto
+        Lich.deprecated('CharSettings.auto', 'not using, not applicable,', caller[0], fe_log: true)
+        nil
+      end
+
+      def CharSettings.autoload
+        Lich.deprecated('CharSettings.autoload', 'not using, not applicable,', caller[0], fe_log: true)
+        nil
+      end
     end
   end
 end

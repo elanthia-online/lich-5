@@ -302,12 +302,32 @@ module Lich
 
       # Deprecated calls
       def Settings.load
-        Lich.deprecated('Settings.load', 'not using, not applicable,', caller[0])
+        Lich.deprecated('Settings.load', 'not using, not applicable,', caller[0], fe_log: true)
         nil
       end
 
       def Settings.save_all
-        Lich.deprecated('Settings.save_all', 'not using, not applicable,', caller[0])
+        Lich.deprecated('Settings.save_all', 'not using, not applicable,', caller[0], fe_log: true)
+        nil
+      end
+
+      def Settings.clear
+        Lich.deprecated('Settings.clear', 'not using, not applicable,', caller[0], fe_log: true)
+        nil
+      end
+
+      def Settings.auto=(_val)
+        Lich.deprecated('Settings.auto=(val)', 'not using, not applicable,', caller[0], fe_log: true)
+        return nil
+      end
+
+      def Settings.auto
+        Lich.deprecated('Settings.auto', 'not using, not applicable,', caller[0], fe_log: true)
+        nil
+      end
+
+      def Settings.autoload
+        Lich.deprecated('Settings.autoload', 'not using, not applicable,', caller[0], fe_log: true)
         nil
       end
     end
