@@ -205,6 +205,8 @@ module Lich
           HOLD_NEUTRAL_THIRD = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> reaches out and holds <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> hand.$}
           HOLD_FRIENDLY_THIRD = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> gently takes hold of <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> hand.$}
           HOLD_WARM_THIRD = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> clasps <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> hand tenderly.$}
+          # <a exist="-10154507" noun="Zoleta">Zoleta</a> joins <a exist="-10966483" noun="Nisugi">Nisugi's</a> group.
+          OTHER_JOINED_GROUP = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> joins <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> group.$}
           ##
           ## active messages
           ##
@@ -249,7 +251,7 @@ module Lich
             HOLD_WARM_THIRD,
           )
 
-          EXIST = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a>}
+          EXIST = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a>}
         end
 
         def self.exist(xml)
@@ -291,6 +293,7 @@ module Lich
             Group.push(people.first)
             return Group.leader = people.first
           when Term::ADDED_TO_NEW_GROUP, Term::JOINED_NEW_GROUP
+            Group.checked = false
             Group.push(people.first)
             return Group.leader = people.first
           when Term::SWAP_LEADER
@@ -310,10 +313,14 @@ module Lich
           when Term::HOLD_FRIENDLY_FIRST, Term::HOLD_NEUTRAL_FIRST, Term::HOLD_RESERVED_FIRST, Term::HOLD_WARM_FIRST
             return Group.push(people.first)
           when Term::HOLD_FRIENDLY_SECOND, Term::HOLD_NEUTRAL_SECOND, Term::HOLD_RESERVED_SECOND, Term::HOLD_WARM_SECOND
+            Group.checked = false
             Group.push(people.first)
             return Group.leader = people.first
           when Term::HOLD_FRIENDLY_THIRD, Term::HOLD_NEUTRAL_THIRD, Term::HOLD_RESERVED_THIRD, Term::HOLD_WARM_THIRD
             (leader, added) = people
+            Group.push(added) if Group.include?(leader)
+          when Term::OTHER_JOINED_GROUP
+            (added, leader) = people
             Group.push(added) if Group.include?(leader)
           when Term::LEAVE, Term::REMOVE
             return Group.delete(*people)
