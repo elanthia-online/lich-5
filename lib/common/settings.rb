@@ -299,6 +299,17 @@ module Lich
 
         reset_path_and_return(target.is_a?(Array) ? target.include?(item) : false)
       end
+
+      # Deprecated calls 
+      def Settings.load
+        Lich.deprecated('Settings.load', 'not using, not applicable,', caller[0])
+        nil
+      end
+      
+      def Settings.save_all
+        Lich.deprecated('Settings.save_all', 'not using, not applicable,', caller[0])
+        nil
+      end
     end
   end
 end
