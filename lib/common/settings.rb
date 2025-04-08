@@ -305,7 +305,7 @@ module Lich
         Lich.deprecated('Settings.load', 'not using, not applicable,', caller[0])
         nil
       end
-      
+
       def Settings.save_all
         Lich.deprecated('Settings.save_all', 'not using, not applicable,', caller[0])
         nil
