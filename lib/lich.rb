@@ -90,7 +90,7 @@ module Lich
     msg = "Deprecated call to #{old_object} used in #{script_location}. Please change to #{new_object} instead!"
     return if limit_log && @@deprecated_log.include?(msg)
     Lich.log(msg) if debug_log
-    _respond Lich::Messaging.monsterbold(msg) if fe_log
+    Lich::Messaging.msg("bold", msg) if fe_log
     @@deprecated_log.push(msg) unless @@deprecated_log.include?(msg)
   end
 
