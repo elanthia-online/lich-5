@@ -300,7 +300,7 @@ module Lich
         reset_path_and_return(target.is_a?(Array) ? target.include?(item) : false)
       end
 
-      # Deprecated calls 
+      # Deprecated calls
       def Settings.load
         Lich.deprecated('Settings.load', 'not using, not applicable,', caller[0])
         nil
