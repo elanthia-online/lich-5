@@ -15,6 +15,7 @@ module Lich
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
+  @@debug_messaging      = nil # boolean
 
   def self.db_mutex
     @@db_mutex
