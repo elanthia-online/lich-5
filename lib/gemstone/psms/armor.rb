@@ -95,7 +95,7 @@ module Lich
           /^\w+ (?:is|are) not wearing any armor that you can work with\.$/
           )
 
-        if results_of_interest.class == Regexp
+        if results_of_interest.is_a?(Regexp)
           results_regex = Regexp.union(results_regex, results_of_interest)
         end
 
