@@ -161,7 +161,7 @@ module Lich
           in_cooldown_regex
         )
 
-        if results_of_interest.class == Regexp
+        if results_of_interest.is_a?(Regexp)
           results_regex = Regexp.union(results_regex, results_of_interest)
         end
 

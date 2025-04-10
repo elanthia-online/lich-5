@@ -232,7 +232,7 @@ module Lich
           /^#{name} what\?$/i
         )
 
-        if results_of_interest.class == Regexp
+        if results_of_interest.is_a?(Regexp)
           results_regex = Regexp.union(results_regex, results_of_interest)
         end
 
