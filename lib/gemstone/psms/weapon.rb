@@ -204,7 +204,7 @@ module Lich
       end
 
       def Weapon.regexp(name)
-        @@weapon_techniques_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+        @@weapon_techniques.fetch(name.to_s.gsub(/[�-\s\-]/, '_').gsub("'", "").downcase)[:regex]
       end
 
       Weapon.weapon_lookups.each { |weapon|
