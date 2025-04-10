@@ -40,6 +40,7 @@ LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 require "common/sharedbuffer"
 require "common/buffer"
 require "games"
+require "util/util"
 require "gemstone/infomon"
 require "attributes/stats"
 require "attributes/resources"
