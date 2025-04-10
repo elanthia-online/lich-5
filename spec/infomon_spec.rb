@@ -160,10 +160,12 @@ module Lich
       end
     
       def GameObj.npcs
-      if @@npcs.empty?
-      nil
-    else
-      @@npcs.dup
+        if @@npcs.empty?
+          nil
+        else
+          @@npcs.dup
+        end
+      end
     end
   end
 end
