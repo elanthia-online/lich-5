@@ -37,29 +37,6 @@ end
 
 LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 
-require "common/sharedbuffer"
-require "common/buffer"
-require "games"
-require "gemstone/infomon"
-require "attributes/stats"
-require "attributes/resources"
-require "gemstone/infomon/currency"
-require "gemstone/infomon/status"
-require "gemstone/experience"
-require "gemstone/psms"
-require "gemstone/psms/ascension"
-
-module Lich
-  module Gemstone
-    module Infomon
-      # cheat definition of `respond` to prevent having to load global_defs with dependenciesw
-      def self.respond(msg)
-        pp msg
-      end
-    end
-  end
-end
-
 module XMLData
   @dialogs = {}
   def self.game
@@ -130,8 +107,6 @@ module Lich
   end
 end
 
-require "util/util"
-
 module Lich
   module Gemstone
     class Spellsong
@@ -159,13 +134,37 @@ module Lich
         @before_name = before
         @after_name = after
       end
-    
+
       def GameObj.npcs
         if @@npcs.empty?
           nil
         else
           @@npcs.dup
         end
+      end
+    end
+  end
+end
+
+require "common/sharedbuffer"
+require "common/buffer"
+require "games"
+require "gemstone/infomon"
+require "attributes/stats"
+require "attributes/resources"
+require "gemstone/infomon/currency"
+require "gemstone/infomon/status"
+require "gemstone/experience"
+require "util/util"
+require "gemstone/psms"
+require "gemstone/psms/ascension"
+
+module Lich
+  module Gemstone
+    module Infomon
+      # cheat definition of `respond` to prevent having to load global_defs with dependenciesw
+      def self.respond(msg)
+        pp msg
       end
     end
   end
