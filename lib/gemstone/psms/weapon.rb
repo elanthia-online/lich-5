@@ -35,7 +35,7 @@ module Lich
 
       @@weapon_techniques = {
         "barrage"          => {
-          :regex      => /Drawing several arrows from your (?:.+), you grip them loosely between your fingers in preparation for a rapid barrage\./,
+          :regex      => /Drawing several (arrows|bolts) from your (?:.+), you grip them loosely between your fingers in preparation for a rapid barrage\./,
           :assault_rx => /Your satisfying display of dexterity bolsters you and inspires those around you\!/,
           :buff       => "Enh. Dexterity (+10)",
         },
@@ -76,7 +76,7 @@ module Lich
           :regex => /On the heels of (?:.+) parry, you erupt into motion, determined to overpower (?:.+) defenses\!/,
         },
         "pin_down"         => {
-          :regex => /You take quick assessment and raise your (?:.+), several arrows nocked to your string in parallel\./,
+          :regex => /You take quick assessment and raise your (?:.+), several (arrows|bolts) nocked to your string in parallel\./,
           :usage => "pindown",
         },
         "pulverize"        => {
@@ -113,7 +113,7 @@ module Lich
           :regex => /You raise your hands high, lace them together and bring them crashing down towards the (?:.+)\!/,
         },
         "volley"           => {
-          :regex => /Raising your (?:.+) high, you loose arrow after arrow as fast as you can, filling the sky with a volley of deadly projectiles\!/,
+          :regex => /Raising your (?:.+) high, you loose (arrow|bolt) after (arrow|bolt) as fast as you can, filling the sky with a volley of deadly projectiles\!/,
         },
         "whirling_blade"   => {
           :regex => /With a broad flourish, you sweep your (?:.+) into a whirling display of keen-edged menace\!/,
@@ -146,25 +146,25 @@ module Lich
         Effects::Buffs.active?(@@weapon_techniques.fetch(name)[:buff])
       end
 
-      def Weapon.use(name, target = "")
+      def Weapon.use(name, target = "", results_of_interest: nil)
         return unless Weapon.available?(name)
         name = PSMS.name_normal(name)
         technique = @@weapon_techniques.fetch(name)
         usage = technique.key?(:usage) ? technique[:usage] : name
 
-        in_cooldown_regex = /^#{name} is still in cooldown/
+        in_cooldown_regex = /^#{name} is still in cooldown\./
+
         results_regex = Regexp.union(
-          technique[:regex],
+          PSMS::RegexCommonFailures,
+          @@weapon_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
           /^#{name} what\?$/i,
-          /You were unable to find any targets that meet #{name}'s reaction requirements/,
-          /^Roundtime: [0-9]+ sec\.$/,
-          /^And give yourself away!  Never!$/,
-          /^You are unable to do that right now\.$/,
-          /^You don't seem to be able to move to do that\.$/,
-          /^Provoking a GameMaster is not such a good idea\.$/,
-          /^You do not currently have a target\.$/,
           in_cooldown_regex
         )
+
+        if results_of_interest.class == Regexp
+          results_regex = Regexp.union(results_regex, results_of_interest)
+        end
+
         usage_cmd = "weapon #{usage}"
         if target.class == GameObj
           usage_cmd += " ##{target.id}"
@@ -201,6 +201,10 @@ module Lich
           end
         end
         usage_result
+      end
+
+      def Weapon.regexp(name)
+        @@weapon_techniques_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
       end
 
       Weapon.weapon_lookups.each { |weapon|

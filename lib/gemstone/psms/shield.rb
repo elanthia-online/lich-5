@@ -105,7 +105,7 @@ module Lich
         },
         "shield_bash"           => {
           :cost  => 9,
-          :regex => /Shield Bash what?|You lunge forward at (.*) with your (.*) and attempt a shield bash\!/i,
+          :regex => /You lunge forward at (.*) with your (.*) and attempt a shield bash\!/i,
           :usage => "bash",
         },
         "shield_charge"         => {
@@ -221,21 +221,21 @@ module Lich
       end
 
       # unmodified from 5.6.2
-      def Shield.use(name, target = "")
+      def Shield.use(name, target = "", results_of_interest: nil)
         return unless Shield.available?(name)
         usage = @@shield_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:usage]
         return if usage.nil?
 
         results_regex = Regexp.union(
+          PSMS::RegexCommonFailures,
           @@shield_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-          /^#{name} what\?$/i,
-          /^Roundtime: [0-9]+ sec\.$/,
-          /^And give yourself away!  Never!$/,
-          /^You are unable to do that right now\.$/,
-          /^You don't seem to be able to move to do that\.$/,
-          /^Provoking a GameMaster is not such a good idea\.$/,
-          /^You do not currently have a target\.$/,
+          /^#{name} what\?$/i
         )
+
+        if results_of_interest.class == Regexp
+          results_regex = Regexp.union(results_regex, results_of_interest)
+        end
+
         usage_cmd = "shield #{usage}"
         if target.class == GameObj
           usage_cmd += " ##{target.id}"
@@ -252,6 +252,10 @@ module Lich
           usage_result = dothistimeout usage_cmd, 5, results_regex
         end
         usage_result
+      end
+
+      def Shield.regexp(name)
+        @@shield_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
       end
 
       Shield.shield_lookups.each { |shield|

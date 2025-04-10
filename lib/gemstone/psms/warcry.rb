@@ -18,7 +18,7 @@ module Lich
         },
         "yowlp"  => {
           :regex => /You throw back your shoulders and let out a resounding yowlp!/i,
-          :buff  => /Yertie's Yowlp/,
+          :buff  => "Yertie's Yowlp",
         },
         "growl"  => {
           :regex => /Your face contorts as you unleash a guttural, deep-throated growl at .+!/i,
@@ -58,21 +58,21 @@ module Lich
         Lich::Util.normalize_lookup('Buffs', buff)
       end
 
-      def Warcry.use(name, target = "")
+      def Warcry.use(name, target = "", results_of_interest: nil)
         return unless Warcry.available?(name)
         return if Warcry.buffActive?(name)
         name = PSMS.name_normal(name)
 
         results_regex = Regexp.union(
-          @@warcries.fetch(name)[:regex],
-          /^#{name} what\?$/i,
-          /^Roundtime: [0-9]+ sec\.$/,
-          /^And give yourself away!  Never!$/,
-          /^You are unable to do that right now\.$/,
-          /^You don't seem to be able to move to do that\.$/,
-          /^Provoking a GameMaster is not such a good idea\.$/,
-          /^You do not currently have a target\.$/,
+          PSMS::RegexCommonFailures,
+          @@warcries.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
+          /^#{name} what\?$/i
         )
+
+        if results_of_interest.class == Regexp
+          results_regex = Regexp.union(results_regex, results_of_interest)
+        end
+
         usage_cmd = "warcry #{name}"
         if target.class == GameObj
           usage_cmd += " ##{target.id}"
@@ -89,6 +89,10 @@ module Lich
           usage_result = dothistimeout(usage_cmd, 5, results_regex)
         end
         usage_result
+      end
+
+      def Warcry.regexp(name)
+        @@warcries.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
       end
 
       Warcry.warcry_lookups.each { |warcry|

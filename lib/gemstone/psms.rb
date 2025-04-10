@@ -36,6 +36,19 @@ module Lich
           Infomon.get("#{type.downcase}.#{seek_psm[:short_name]}")
         end
       end
+
+      # Common failure messages potentially used across all PSMs.
+      RegexCommonFailures = Regexp.union(
+        /^Roundtime: [0-9]+ sec\.$/,
+        /^And give yourself away!  Never!$/,
+        /^You are unable to do that right now\.$/,
+        /^You don't seem to be able to move to do that\.$/,
+        /^Provoking a GameMaster is not such a good idea\.$/,
+        /^You do not currently have a target\.$/,
+        /^Your mind clouds with confusion and you glance around uncertainly\.$/,
+        /^But your hands are full\!$/,
+        /^You are still stunned\.$/
+      )
     end
   end
 end
