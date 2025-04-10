@@ -45,62 +45,62 @@ module Lich
       @@shield_techniques = {
         "adamantine_bulwark"    => {
           :cost  => 0,
-          :regex => /Adamantine Bulwark does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+          :regex => /Adamantine Bulwark does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./i,
           :usage => nil,
         },
         "block_the_elements"    => {
           :cost  => 0,
-          :regex => /Block the Elements does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+          :regex => /Block the Elements does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./i,
           :usage => nil,
         },
         "deflect_magic"         => {
           :cost  => 0,
-          :regex => /Deflect Magic does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization./i,
+          :regex => /Deflect Magic does not need to be activated once you have learned it\.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization\./i,
           :usage => nil,
         },
         "deflect_missiles"      => {
           :cost  => 0,
-          :regex => /Deflect Missiles does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization./i,
+          :regex => /Deflect Missiles does not need to be activated once you have learned it\.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization\./i,
           :usage => nil,
         },
         "deflect_the_elements"  => {
           :cost  => 0,
-          :regex => /Deflect the Elements does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+          :regex => /Deflect the Elements does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./i,
           :usage => nil,
         },
         "disarming_presence"    => {
           :cost  => 20,
-          :regex => /You assume the Disarming Presence Stance, adjusting your footing and grip to allow for the proper pivot and thrust technique to disarm attacking foes.|You re-settle into the Disarming Presence Stance, re-ensuring your footing and grip are properly positioned./i,
+          :regex => /You assume the Disarming Presence Stance, adjusting your footing and grip to allow for the proper pivot and thrust technique to disarm attacking foes.|You re\-settle into the Disarming Presence Stance, re-ensuring your footing and grip are properly positioned\./i,
           :usage => "dpresence",
         },
         "guard_mastery"         => {
           :cost  => 0,
-          :regex => /Guard Mastery does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+          :regex => /Guard Mastery does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./i,
           :usage => nil,
         },
         "large_shield_focus"    => {
           :cost  => 0,
-          :regex => /Large Shield Focus does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+          :regex => /Large Shield Focus does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./i,
           :usage => nil,
         },
         "medium_shield_focus"   => {
           :cost  => 0,
-          :regex => /Medium Shield Focus does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+          :regex => /Medium Shield Focus does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./i,
           :usage => nil,
         },
         "phalanx"               => {
           :cost  => 0,
-          :regex => /Phalanx does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+          :regex => /Phalanx does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./i,
           :usage => nil,
         },
         "prop_up"               => {
           :cost  => 0,
-          :regex => /Prop Up does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization./i,
+          :regex => /Prop Up does not need to be activated once you have learned it\.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization\./i,
           :usage => nil,
         },
         "protective_wall"       => {
           :cost  => 0,
-          :regex => /Protective Wall does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+          :regex => /Protective Wall does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./i,
           :usage => nil,
         },
         "shield_bash"           => {
@@ -110,17 +110,17 @@ module Lich
         },
         "shield_charge"         => {
           :cost  => 14,
-          :regex => /You charge forward at (.*) with your (.*) and attempt a shield charge!/i,
+          :regex => /You charge forward at (.*) with your (.*) and attempt a shield charge\!/i,
           :usage => "charge",
         },
         "shield_forward"        => {
           :cost  => 0,
-          :regex => /Shield Forward does not need to be activated once you have learned it.  It will automatically activate upon the use of a shield attack./i,
+          :regex => /Shield Forward does not need to be activated once you have learned it\.  It will automatically activate upon the use of a shield attack\./i,
           :usage => "forward",
         },
         "shield_mind"           => {
           :cost  => 10,
-          :regex => /You must be wielding an ensorcelled or anti-magical shield to be able to properly shield your mind and soul.|/i,
+          :regex => /You must be wielding an ensorcelled or anti-magical shield to be able to properly shield your mind and soul\./i,
           :usage => "mind",
         },
         "shield_pin"            => {
@@ -130,17 +130,17 @@ module Lich
         },
         "shield_push"           => {
           :cost  => 7,
-          :regex => /You raise your (.*) before you and attempt to push (.*) away!/i,
+          :regex => /You raise your (.*) before you and attempt to push (.*) away\!/i,
           :usage => "push",
         },
         "shield_riposte"        => {
           :cost  => 20,
-          :regex => /You assume the Shield Riposte Stance, preparing yourself to lash out at a moment's notice.|You re\-settle into the Shield Riposte Stance, preparing yourself to lash out at a moment's notice./i,
+          :regex => /You assume the Shield Riposte Stance, preparing yourself to lash out at a moment's notice\.|You re\-settle into the Shield Riposte Stance, preparing yourself to lash out at a moment's notice\./i,
           :usage => "riposte",
         },
         "shield_spike_mastery"  => {
           :cost  => 0,
-          :regex => /Shield Spike Mastery does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+          :regex => /Shield Spike Mastery does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./i,
           :usage => nil,
         },
         "shield_strike"         => {
@@ -150,12 +150,12 @@ module Lich
         },
         "shield_strike_mastery" => {
           :cost  => 0,
-          :regex => /Shield Strike Mastery does not need to be activated once you have learned it.  It will automatically apply to all relevant focused multi-attacks, provided that you maintain the prerequisite ranks of Shield Bash./i,
+          :regex => /Shield Strike Mastery does not need to be activated once you have learned it\.  It will automatically apply to all relevant focused multi\-attacks, provided that you maintain the prerequisite ranks of Shield Bash\./i,
           :usage => nil,
         },
         "shield_swiftness"      => {
           :cost  => 0,
-          :regex => /Shield Swiftness does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks, provided that you are wielding a small or medium shield and have at least 3 ranks of the relevant Shield Focus specialization./i,
+          :regex => /Shield Swiftness does not need to be activated once you have learned it\.  It will automatically apply to all relevant attacks, provided that you are wielding a small or medium shield and have at least 3 ranks of the relevant Shield Focus specialization\./i,
           :usage => nil,
         },
         "shield_throw"          => {
@@ -170,37 +170,37 @@ module Lich
         },
         "shielded_brawler"      => {
           :cost  => 0,
-          :regex => /Shielded Brawler does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization./i,
+          :regex => /Shielded Brawler does not need to be activated once you have learned it\.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization\./i,
           :usage => nil,
         },
         "small_shield_focus"    => {
           :cost  => 0,
-          :regex => /Small Shield Focus does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+          :regex => /Small Shield Focus does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./i,
           :usage => nil,
         },
         "spell_block"           => {
           :cost  => 0,
-          :regex => /Spell Block does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization./i,
+          :regex => /Spell Block does not need to be activated once you have learned it\.  It will automatically apply to all relevant attacks, provided that you are wielding a shield and possess 3 ranks of the relevant Shield Focus specialization\./i,
           :usage => nil,
         },
         "steady_shield"         => {
           :cost  => 0,
-          :regex => /Steady Shield does not need to be activated once you have learned it.  It will automatically apply to all relevant attacks against you, provided that you maintain the prerequisite ranks of Stun Maneuvers./i,
+          :regex => /Steady Shield does not need to be activated once you have learned it\.  It will automatically apply to all relevant attacks against you, provided that you maintain the prerequisite ranks of Stun Maneuvers\./i,
           :usage => nil,
         },
         "steely_resolve"        => {
           :cost  => 30,
-          :regex => /You focus your mind in a steely resolve to block all attacks against you.|You are still mentally fatigued from your last invocation of your Steely Resolve./i,
+          :regex => /You focus your mind in a steely resolve to block all attacks against you\.|You are still mentally fatigued from your last invocation of your Steely Resolve\./i,
           :usage => "resolve",
         },
         "tortoise_stance"       => {
           :cost  => 20,
-          :regex => /You assume the Stance of the Tortoise, holding back some of your offensive power in order to maximize your defense.|You re\-settle into the Stance of the Tortoise, holding back your offensive power in order to maximize your defense./i,
+          :regex => /You assume the Stance of the Tortoise, holding back some of your offensive power in order to maximize your defense\.|You re\-settle into the Stance of the Tortoise, holding back your offensive power in order to maximize your defense\./i,
           :usage => "tortoise",
         },
         "tower_shield_focus"    => {
           :cost  => 0,
-          :regex => /Tower Shield Focus does not need to be activated.  If you are wielding the appropriate type of shield, it will always be active./i,
+          :regex => /Tower Shield Focus does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./i,
           :usage => nil,
         },
       }

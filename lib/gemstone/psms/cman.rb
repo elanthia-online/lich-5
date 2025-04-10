@@ -96,13 +96,13 @@ module Lich
         "bearhug"                => {
           :cost  => 10,
           :type  => "concentration",
-          :regex => /You charge towards (.+) and attempt to grasp (.+) in a ferocious bearhug!|A forest trali manages to fend off your grasp\!/,
+          :regex => /You charge towards (.+) and attempt to grasp (.+) in a ferocious bearhug!|(.+) manages to fend off your grasp\!/,
           :usage => "bearhug"
         },
         "berserk"                => {
           :cost  => 20,
           :type  => "attack",
-          :regex => /Everything around you turns red as you work yourself into a berserker's rage!/,
+          :regex => /Everything around you turns red as you work yourself into a berserker's rage\!/,
           :usage => "berserk"
         },
         "block_specialization"   => {
