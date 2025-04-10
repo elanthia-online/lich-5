@@ -93,7 +93,7 @@ module Lich
           @@armor_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
           /^#{name} what\?$/i,
           /^\w+ (?:is|are) not wearing any armor that you can work with\.$/
-          )
+        )
 
         if results_of_interest.is_a?(Regexp)
           results_regex = Regexp.union(results_regex, results_of_interest)
