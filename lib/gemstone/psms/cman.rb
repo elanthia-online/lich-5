@@ -266,7 +266,7 @@ module Lich
           :cost  => 10,
           :type  => "concentration",
           :regex => /You fling your (.+) around (.+) neck and snap it taut\.  Success\!/, # #TODO: Need Failure Message
-          :usage => "garrote"
+          :usage => nil # "garrote" # Set to nil as the messaging is missing to test properly
         },
         "grappel_specialization" => {
           :cost  => 0,
@@ -415,8 +415,8 @@ module Lich
         "spell_cleave"           => {
           :cost  => 7,
           :type  => "setup",
-          :regex => /You might have more success with anti-magical equipment\./,  # #TODO: Need Success Message
-          :usage => "scleave"
+          :regex => /You might have more success with anti-magical equipment\./, # #TODO: Need Success Message
+          :usage => nil # "scleave" # Set to nil as the messaging is missing to test properly
         },
         "spell_parry"            => {
           :cost  => 0,
@@ -427,8 +427,8 @@ module Lich
         "spell_thieve"           => {
           :cost  => 7,
           :type  => "setup",
-          :regex => /You might have more success with anti-magical equipment\./,  # #TODO: Need Success Message
-          :usage => "sthieve"
+          :regex => /You might have more success with anti-magical equipment\./, # #TODO: Need Success Message
+          :usage => nil # "sthieve" # Set to nil as the messaging is missing to test properly
         },
         "spike_focus"            => {
           :cost  => 0,
