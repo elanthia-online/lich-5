@@ -570,7 +570,6 @@ module Lich
           :regex => /You assume the Whirling Dervish stance, ready to switch targets at a moment\'s notice\.|You re-settle into the Whirling Dervish stance, ready to switch targets at a moment\'s notice\./,
           :usage => "dervish"
         }
-
       }
 
       def CMan.[](name)
@@ -601,7 +600,8 @@ module Lich
         results_regex = Regexp.union(
           PSMS::RegexCommonFailures,
           @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-          /^#{name} what\?$/i
+          /^#{name} what\?$/i,
+          @@combat_mans_customs.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
         )
 
         if results_of_interest.is_a?(Regexp)
@@ -626,8 +626,17 @@ module Lich
         usage_result
       end
 
-      def CMan.regexp(name)
-        @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+      def CMan.regexp(name, exclude_customs: false)
+        if exclude_customs
+          results_regex = @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+        else
+          results_regex = Regexp.union(
+            @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
+            @@combat_mans_customs.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+          )
+        end
+
+        results_regex
       end
 
       CMan.cman_lookups.each { |cman|
