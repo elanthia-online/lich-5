@@ -157,7 +157,12 @@ module Lich
         "coup_de_grace"          => {
           :cost  => 20,
           :type  => "attack",
-          :regex => /You lunge towards (.+), intending to finish (him|her|it) off!|You move towards (.+) to finish (him|her|it) off, but (he|she|it) isn\'t injured enough to be susceptible to a Coup de Grace\./,
+          :regex => Regexp.union(/You lunge towards (.+), intending to finish (him|her|it) off!/, # Standard
+                                 /You move towards (.+) to finish (him|her|it) off, but (he|she|it) isn\'t injured enough to be susceptible to a Coup de Grace\./, # Standard
+                                 /You advance upon (.+) with grim finality\./, # RW2025
+                                 /As (.+) shows signs of weakness, you seize the opportunity to launch a mortal blow\!/, # RW2025
+                                 /Seeing your chance, you lunge toward (.+) with its death your only goal\!/, # RW2025
+                                 /As (.+) falters, you surge forward with murderous intent\!/), # RW2025
           :usage => "coupdegrace"
         },
         "crowd_press"            => {
@@ -283,7 +288,11 @@ module Lich
         "groin_kick"             => {
           :cost  => 7,
           :type  => "setup",
-          :regex => /You attempt to deliver a kick to (.+) groin!/,
+          :regex => Regexp.union(/You attempt to deliver a kick to (.+) groin!/, # Standard
+                                 /Leaning close to (.+), you quickly raise your knee in an attempt to make debilitating contact with (his|her|its) groin\!/, # RW2025
+                                 /Scuffing your foot upon the ground, you pivot at the hip, targeting your foot at (.+) groin\!/, # RW2025
+                                 /Performing a shuffling skip, you viciously kick out at (.+) groin with malicious intent\!/, # RW2025
+                                 /You aim a vicious kick square at (.+) nether regions\!/), # RW2025
           :usage => "gkick"
         },
         "hamstring"              => {
@@ -301,7 +310,11 @@ module Lich
         "headbutt"               => {
           :cost  => 9,
           :type  => "setup",
-          :regex => /You charge towards (.+) and attempt to headbutt (.+)!/,
+          :regex => Regexp.union(/You charge towards (.+) and attempt to headbutt (.+)!/, # Standard
+                                 /Coiling your trapezius muscles, you feel your neck tense before springing into action and slamming your head down toward (.+)\!/, # RW2025
+                                 /Shrugging almost casually, you quickly snap your head foward in an attempt to headbutt (.+)\!/, # RW2025
+                                 /Rising on your tip toes, you cock back your head and slam it down towards (.+)\!/, # RW2025
+                                 /Bellowing like an angry bull, you lower your head and charge straight at (.+)\!/), # RW2025
           :usage => "headbutt"
         },
         "inner_harmony"          => {
@@ -439,7 +452,11 @@ module Lich
         "spin_attack"            => {
           :cost  => 0,
           :type  => "attack",
-          :regex => /You let out a shrill yell and leap, spinning through the air and into the fracas\!/,
+          :regex => Regexp.union(/You let out a shrill yell and leap, spinning through the air and into the fracas\!/, # Standard
+                                 /You spin on your toes, deliberate in your motion as you lunge at (.+)\!/, # RW2025
+                                 /Giving voice to manic laughter, you whirl toward (.+) with vicious glee\!/, # RW2025
+                                 /Snapping around, you pivot on one foot and spin toward (.+)\!/, # RW2025
+                                 /Silent and intent, you pivot on the ball of one foot and whirl toward (.+)\!/), # RW2025
           :usage => "sattack"
         },
         "staggering_blow"        => {
@@ -600,8 +617,7 @@ module Lich
         results_regex = Regexp.union(
           PSMS::RegexCommonFailures,
           @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-          /^#{name} what\?$/i,
-          @@combat_mans_customs.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+          /^#{name} what\?$/i
         )
 
         if results_of_interest.is_a?(Regexp)
@@ -626,17 +642,8 @@ module Lich
         usage_result
       end
 
-      def CMan.regexp(name, exclude_customs: false)
-        if exclude_customs
-          results_regex = @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
-        else
-          results_regex = Regexp.union(
-            @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-            @@combat_mans_customs.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
-          )
-        end
-
-        results_regex
+      def CMan.regexp(name)
+        @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
       end
 
       CMan.cman_lookups.each { |cman|
