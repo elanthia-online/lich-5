@@ -600,10 +600,6 @@ module Lich
           alt_string.sub!(']') { "] (#{(uid_from_string.nil? || XMLData.room_id == uid_from_string[:uid].to_i) ? ((XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "unknown" : "u#{XMLData.room_id}") : uid_from_string[:uid].to_i})" }
         end
 
-        if Lich.display_uid == false && Lich.hide_uid_flag == true
-          alt_string.sub!(/] \(\d+\)/) { "]" }
-        end
-
         alt_string
       end
 
