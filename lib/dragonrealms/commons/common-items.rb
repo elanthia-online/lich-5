@@ -769,8 +769,9 @@ module Lich
       # TIE/UNTIE ITEM
       #########################################
 
-      def tie_item?(item, container)
-        case DRC.bput("tie my #{item} to my #{container}", TIE_ITEM_SUCCESS_PATTERNS, TIE_ITEM_FAILURE_PATTERNS)
+      def tie_item?(item, container = nil)
+        place = container ? "to my #{container}" : nil
+        case DRC.bput("tie my #{item} #{place}", TIE_ITEM_SUCCESS_PATTERNS, TIE_ITEM_FAILURE_PATTERNS)
         when *TIE_ITEM_SUCCESS_PATTERNS
           true
         else
