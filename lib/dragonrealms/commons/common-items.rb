@@ -220,6 +220,7 @@ module Lich
 
       PUT_AWAY_ITEM_FAILURE_PATTERNS = [
         /^Stow what/,
+        /^I can't find your container for stowing things in/,
         /^Please rephrase that command/,
         /^What were you referring to/,
         /^I could not find what you were referring to/,
@@ -236,11 +237,14 @@ module Lich
         /^Containers can't be placed in/,
         /^The .* is not designed to carry anything/,
         /^You can't put that.*there/,
+        /^Weirdly, you can't manage .* to fit/,
+        /^\[Containers can't be placed in/,
         /even after stuffing it/,
         /is too .* to (fit|hold)/,
         /no matter how you arrange it/,
         /close the fan/,
         /to fit in the/,
+        /doesn't seem to want to leave you/, # trying to put a pet in a home within a container
         # You may get the next message if you've been cursed and unable to let go of items.
         # Find a Cleric to uncurse you.
         /Oddly, when you attempt to stash it away safely/,
