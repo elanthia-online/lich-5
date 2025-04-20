@@ -24,6 +24,7 @@ module Lich
         /^What were you referring to/,
         /^I could not find/,
         /^But you aren't holding that/,
+        /^Perhaps you should be holding that first/,
         /^You're kidding, right/,
         /^You can't do that/,
         /^No littering/,
@@ -72,6 +73,7 @@ module Lich
       ]
 
       GET_ITEM_FAILURE_PATTERNS = [
+        /^A magical force keeps you from grasping/,
         /^You need a free hand/,
         /^You can't pick that up with your hand that damaged/,
         /^Your (left|right) hand is too injured/,
@@ -80,6 +82,7 @@ module Lich
         /^You can't reach that from here/, # on a mount like a flying carpet
         /^You don't seem to be able to move/,
         /^You should untie/,
+        /^You can't do that/,
         /^Get what/,
         /^I could not/,
         /^What were you/,
