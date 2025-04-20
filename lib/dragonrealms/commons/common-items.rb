@@ -133,8 +133,7 @@ module Lich
 
       TIE_ITEM_SUCCESS_PATTERNS = [
         /^You .* tie/,
-        /^You attach/,
-        /^You untie/
+        /^You attach/
       ]
 
       TIE_ITEM_FAILURE_PATTERNS = [
