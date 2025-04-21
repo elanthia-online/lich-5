@@ -191,19 +191,18 @@ module Lich
       gems_to_install.each do |gem, required?|
         begin
           unless installed_gems.include?(gem)
-            echo "Installing missing ruby gem '#{gem}' now, please wait!"
+            echo("Installing missing ruby gem '#{gem}' now, please wait!")
             installer.install(gem)
-            echo "Done installing '#{gem}' gem!"
+            echo("Done installing '#{gem}' gem!")
           end
           require gem if required
         rescue
-          echo "Failed to install Ruby gem: #{gem}"
+          echo("Failed to install Ruby gem: #{gem}")
           failed_gems.push(gem)
         end
       end
       unless failed_gems.empty?
-        echo "Please install the failed gems: #{failed_gems.join(', ')} to run #{$lich_char}#{Script.current.name}"
-        exit
+        fail("Please install the failed gems: #{failed_gems.join(', ')} to run #{$lich_char}#{Script.current.name}")
       end
     end
   end
