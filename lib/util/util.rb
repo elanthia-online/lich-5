@@ -180,6 +180,8 @@ module Lich
       return result.gsub(',', '').to_i
     end
 
+    # Expects hash to be passed to the method.
+    # Each keypair should consist of a gem name and whether to require it after attempting to install gem
     def self.install_gem_requirements(gems_to_install)
       raise ArgumentError, "install_gem_requirements must be passed a Hash" unless gems_to_install.is_a?(Hash)
       require "rubygems"
