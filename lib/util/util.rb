@@ -196,13 +196,16 @@ module Lich
         end
         begin
           unless installed_gems.include?(gem_name)
-            echo("Installing missing ruby gem '#{gem_name}' now, please wait!")
+            respond("--- Lich: Installing missing ruby gem '#{gem_name}' now, please wait!")
             installer.install(gem_name)
-            echo("Done installing '#{gem_name}' gem!")
+            respond("--- Lich: Done installing '#{gem_name}' gem!")
           end
           require gem_name if should_require
         rescue StandardError
-          echo("Failed to install Ruby gem: #{gem_name}")
+          respond("--- Lich: error: Failed to install Ruby gem: #{gem_name}")
+          respond("--- Lich: error: #{$!}")
+          Lich.log("error: Failed to install Ruby gem: #{gem_name}")
+          Lich.log("error: #{$!}")
           failed_gems.push(gem_name)
         end
       end
