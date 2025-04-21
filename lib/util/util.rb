@@ -192,7 +192,7 @@ module Lich
 
       gems_to_install.each do |gem_name, should_require|
         unless gem_name.is_a?(String) && (should_require.is_a?(TrueClass) || should_require.is_a?(FalseClass))
-          raise AArgumentError, "install_gem_requirements must be passed a Hash with String key and TrueClass/FalseClass as value"
+          raise ArgumentError, "install_gem_requirements must be passed a Hash with String key and TrueClass/FalseClass as value"
         end
         begin
           unless installed_gems.include?(gem_name)
