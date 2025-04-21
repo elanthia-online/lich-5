@@ -188,7 +188,7 @@ module Lich
       installed_gems = Gem::Specification.map { |gem| gem.name }.sort.uniq
       failed_gems = []
 
-      gems_to_install.each do |gem, required?|
+      gems_to_install.each do |gem, required|
         begin
           unless installed_gems.include?(gem)
             echo("Installing missing ruby gem '#{gem}' now, please wait!")
