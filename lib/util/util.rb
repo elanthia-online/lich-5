@@ -181,7 +181,7 @@ module Lich
     end
 
     def self.install_gem_requirements(gems_to_install)
-      return unless gems_to_install.is_a?(Hash)
+      raise ArgumentError, "install_gem_requirements must be passed a Hash" unless gems_to_install.is_a?(Hash)
       require "rubygems"
       require "rubygems/dependency_installer"
       installer = Gem::DependencyInstaller.new({ :user_install => true, :document => nil })
@@ -189,6 +189,9 @@ module Lich
       failed_gems = []
 
       gems_to_install.each do |gem_name, should_require|
+        unless gem_name.is_a?(String) && (should_require.is_a?(TrueClass) || should_require.is_a?(FalseClass))
+          raise AArgumentError, "install_gem_requirements must be passed a Hash with String key and TrueClass/FalseClass as value"
+        end
         begin
           unless installed_gems.include?(gem_name)
             echo("Installing missing ruby gem '#{gem_name}' now, please wait!")
