@@ -188,21 +188,21 @@ module Lich
       installed_gems = Gem::Specification.map { |gem| gem.name }.sort.uniq
       failed_gems = []
 
-      gems_to_install.each do |gem, required|
+      gems_to_install.each do |gem_name, should_require|
         begin
-          unless installed_gems.include?(gem)
-            echo("Installing missing ruby gem '#{gem}' now, please wait!")
-            installer.install(gem)
-            echo("Done installing '#{gem}' gem!")
+          unless installed_gems.include?(gem_name)
+            echo("Installing missing ruby gem '#{gem_name}' now, please wait!")
+            installer.install(gem_name)
+            echo("Done installing '#{gem_name}' gem!")
           end
-          require gem if required
-        rescue
-          echo("Failed to install Ruby gem: #{gem}")
-          failed_gems.push(gem)
+          require gem_name if should_require
+        rescue StandardError
+          echo("Failed to install Ruby gem: #{gem_name}")
+          failed_gems.push(gem_name)
         end
       end
       unless failed_gems.empty?
-        fail("Please install the failed gems: #{failed_gems.join(', ')} to run #{$lich_char}#{Script.current.name}")
+        raise("Please install the failed gems: #{failed_gems.join(', ')} to run #{$lich_char}#{Script.current.name}")
       end
     end
   end
