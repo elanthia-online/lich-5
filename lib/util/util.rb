@@ -179,5 +179,32 @@ module Lich
       end
       return result.gsub(',', '').to_i
     end
+
+    def self.install_gem_requirements(gems_to_install)
+      return unless gems_to_install.is_a?(Hash)
+      require "rubygems"
+      require "rubygems/dependency_installer"
+      installer = Gem::DependencyInstaller.new({ :user_install => true, :document => nil })
+      installed_gems = Gem::Specification.map { |gem| gem.name }.sort.uniq
+      failed_gems = []
+
+      gems_to_install.each do |gem, required?|
+        begin
+          unless installed_gems.include?(gem)
+            echo "Installing missing ruby gem '#{gem}' now, please wait!"
+            installer.install(gem)
+            echo "Done installing '#{gem}' gem!"
+          end
+          require gem if required
+        rescue
+          echo "Failed to install Ruby gem: #{gem}"
+          failed_gems.push(gem)
+        end
+      end
+      unless failed_gems.empty?
+        echo "Please install the failed gems: #{failed_gems.join(', ')} to run #{$lich_char}#{Script.current.name}"
+        exit
+      end
+    end
   end
 end
