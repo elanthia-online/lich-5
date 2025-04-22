@@ -111,9 +111,9 @@ module Lich
         end
 
         def determine_town(captured_town)
-          if description =~ /^You succeeded in your task and should report back to the sentry just outside town\.$/
+          if description =~ /the sentry just outside town\.$/
             "Kraken's Fall"
-          elsif description =~ /^You succeeded in your task and should report back to the tavernkeeper at Rawknuckle's Common House\.$/
+          elsif description =~ /the tavernkeeper at Rawknuckle's Common House\.$/
             "Cold River"
           else
             captured_town
