@@ -537,7 +537,7 @@ module Lich
         "subdue"                 => {
           :cost  => 9,
           :type  => "setup",
-          :regex => Regex.union(/You haven\'t learned how to subdue without a weapon\!/,
+          :regex => Regexp.union(/You haven\'t learned how to subdue without a weapon\!/,
                                 /You spring from hiding and aim a blow at .+ head\!/,
                                 /The .+ head is out of reach\!/,
                                 /For this to work, you\'ll need to take your target by surprise\.  Try hiding first\./),
