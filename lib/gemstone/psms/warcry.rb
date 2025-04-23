@@ -14,24 +14,24 @@ module Lich
 
       @@warcries = {
         "bellow" => {
-          :regex => /You glare at .+ and let out a nerve-shattering bellow! /i,
+          :regex => /You glare at .+ and let out a nerve-shattering bellow!/,
         },
         "yowlp"  => {
-          :regex => /You throw back your shoulders and let out a resounding yowlp!/i,
+          :regex => /You throw back your shoulders and let out a resounding yowlp!/,
           :buff  => "Yertie's Yowlp",
         },
         "growl"  => {
-          :regex => /Your face contorts as you unleash a guttural, deep-throated growl at .+!/i,
+          :regex => /Your face contorts as you unleash a guttural, deep-throated growl at .+!/,
         },
         "shout"  => {
-          :regex => /You let loose an echoing shout!/i,
+          :regex => /You let loose an echoing shout!/,
           :buff  => 'Empowered (+20)',
         },
         "cry"    => {
-          :regex => /You stare down .+ and let out an eerie, modulating cry!/i,
+          :regex => /You stare down .+ and let out an eerie, modulating cry!/,
         },
         "holler" => {
-          :regex => /You throw back your head and let out a thundering holler!/i,
+          :regex => /You throw back your head and let out a thundering holler!/,
           :buff  => 'Enh. Health (+20)',
         },
       }
@@ -58,21 +58,21 @@ module Lich
         Lich::Util.normalize_lookup('Buffs', buff)
       end
 
-      def Warcry.use(name, target = "")
+      def Warcry.use(name, target = "", results_of_interest: nil)
         return unless Warcry.available?(name)
         return if Warcry.buffActive?(name)
         name = PSMS.name_normal(name)
 
         results_regex = Regexp.union(
-          @@warcries.fetch(name)[:regex],
-          /^#{name} what\?$/i,
-          /^Roundtime: [0-9]+ sec\.$/,
-          /^And give yourself away!  Never!$/,
-          /^You are unable to do that right now\.$/,
-          /^You don't seem to be able to move to do that\.$/,
-          /^Provoking a GameMaster is not such a good idea\.$/,
-          /^You do not currently have a target\.$/,
+          PSMS::FAILURES_REGEXES,
+          @@warcries.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
+          /^#{name} what\?$/i
         )
+
+        if results_of_interest.is_a?(Regexp)
+          results_regex = Regexp.union(results_regex, results_of_interest)
+        end
+
         usage_cmd = "warcry #{name}"
         if target.class == GameObj
           usage_cmd += " ##{target.id}"
@@ -89,6 +89,10 @@ module Lich
           usage_result = dothistimeout(usage_cmd, 5, results_regex)
         end
         usage_result
+      end
+
+      def Warcry.regexp(name)
+        @@warcries.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
       end
 
       Warcry.warcry_lookups.each { |warcry|

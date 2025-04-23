@@ -39,164 +39,173 @@ module Lich
       end
 
       @@feats = {
-        "absorbmagic"     => {
+        "absorb_magic"              => {
           :cost  => 0,
-          :regex => /You open yourself to the ravenous void at the core of your being, allowing it to surface\.  Muted veins of metallic grey ripple just beneath your skin\.|You strain, but the void within remains stubbornly out of reach\.  You need more time\./,
+          :regex => Regexp.union(/You open yourself to the ravenous void at the core of your being, allowing it to surface\.  Muted veins of metallic grey ripple just beneath your skin\./,
+                                 /You strain, but the void within remains stubbornly out of reach\.  You need more time\./),
           :usage => "absorbmagic"
         },
-        "chainarmor"      => {
+        "chain_armor_proficiency"   => {
           :cost  => 0,
           :regex => /Chain Armor Proficiency is passive and cannot be activated\./,
           :usage => nil
         },
-        "combatmastery"   => {
+        "combat_mastery"            => {
           :cost  => 0,
           :regex => /Combat Mastery is passive and cannot be activated\./,
           :usage => nil
         },
-        "escapeartist"    => {
+        "covert_art_escape_artist"  => {
           :cost  => 15, # cost is actually 0 if "recent evasion" is present
-          :regex => /You roll your shoulders and subtly test the flexion of your joints, staying limber for ready escapes\.|You were unable to find any targets that meet Covert Art\: Escape Artist\'s reaction requirements./,
+          :regex => Regex.union(/You roll your shoulders and subtly test the flexion of your joints, staying limber for ready escapes\./,
+                                /You were unable to find any targets that meet Covert Art\: Escape Artist\'s reaction requirements./),
           :usage => "escapeartist"
         },
-        "keeneye"         => {
+        "covert_art_keen_eye"       => {
           :cost  => 0,
           :regex => /Covert Art\: Keen Eye is always active as long as you stay up to date on training\./,
           :usage => nil
         },
-        "poisoncraft"     => {
+        "covert_art_poisoncraft"    => {
           :cost  => 0,
           :regex => /USAGE\: FEAT POISONCRAFT \{options\} \[args\]/, #  USAGE: FEAT POISONCRAFT {options} [args]
           :usage => nil # usage set to NIL as not currently supported due to complexity
         },
-        "sidestep"        => {
+        "covert_art_sidestep"       => {
           :cost  => 10,
           :regex => /You tread lightly and keep your head on a swivel, prepared to sidestep any loose salvos that might stray your way\./,
           :usage => "sidestep"
         },
-        "swiftrecovery"   => {
+        "covert_art_swift_recovery" => {
           :cost  => 0,
           :regex => /Covert Art\: Swift Recovery is always active as long as you stay up to date on training\./,
           :usage => nil
         },
-        "throwpoison"     => {
+        "covert_art_throw_poison"   => {
           :cost  => 15,
-          :regex => /What did the (.+) ever do to you\?|You pop the cork on (.+) and, with a nimble flick of the wrist, fling a portion of its contents in a wide arc\!|Covert Art\: Throw Poison what\?/,
+          :regex => Regexp.union(/What did the .+ ever do to you\?/,
+                                 /You pop the cork on .+ and, with a nimble flick of the wrist, fling a portion of its contents in a wide arc\!/,
+                                 /Covert Art\: Throw Poison what\?/),
           :usage => "throwpoison"
         },
-        "covert"          => {
+        "covert_arts"               => {
           :cost  => 0,
           :regex => /USAGE\: FEAT COVERT \{options\} \[args\]/, #  USAGE: FEAT COVERT {options} [args]
           :usage => nil # usage not supported at this time, complicated and used to train others in the skills
         },
-        "criticalcounter" => {
+        "critical_counter"          => {
           :cost  => 0,
           :regex => /Critical Counter is passive and cannot be activated\./,
           :usage => nil
         },
-        "dispelmagic"     => {
+        "dispel_magic"              => {
           :cost  => 30,
-          :regex => /You reach for the emptiness within, but there are no spells afflicting you to dispel\.|You reach for the emptiness within\.  A single, hollow note reverberates through your core, resonating outward and scouring away the energies that cling to you\./,
+          :regex => Regexp.union(/You reach for the emptiness within, but there are no spells afflicting you to dispel\./,
+                                 /You reach for the emptiness within\.  A single, hollow note reverberates through your core, resonating outward and scouring away the energies that cling to you\./),
           :usage => "dispelmagic"
         },
-        "dragonscaleskin" => {
+        "dragonscale_skin"          => {
           :cost  => 0,
           :regex => /The Dragonscale Skin\s{1,2}feat is always active once you have learned it\./, # Note: Game has a typo with two spaces after the name of the feat, modified regex to match 1 or 2 spaces so this doesn't break if the typo gets fixed.
           :usage => nil
         },
-        "guard"           => {
+        "guard"                     => {
           :cost  => 0,
-          :regex => /Guard what\?|You move over to (.+) and prepare to guard (him|her|it) from attack\.|You stop guarding (.+), move over to (.+), and prepare to guard (him|her|it) from attack\.You stop protecting (.+), move over to (.+), and prepare to guard (him|her|it) from attack\.|You stop protecting (.+) and prepare to guard (him|her|it) instead\.|You are already guarding (.+)\./,
-          # "any variation of "feat guard" or bad target:  Protect what\?"
-          # "Guard <target>": You move over to (.+) and prepare to guard (him|her|it) from attack\.
-          # "Guard <target2>" while already guarding <target1>:  You stop guarding (.+), move over to (.+), and prepare to guard (him|her|it) from attack\.
-          # "Guard <target2>" while protecting <target1>:  You stop protecting (.+), move over to (.+), and prepare to guard (him|her|it) from attack\.
-          # "Guard <target>" while protecting <target>:  You stop protecting (.+) and prepare to guard (him|her|it) instead\.
-          # "Guard <target>" while already doing so:  You are already guarding (.+)\.
+          :regex => Regexp.union(/Guard what\?/, # "any variation of "feat guard" or bad target
+                                 /You move over to .+ and prepare to guard [a-z]+ from attack\./, # "Guard <target>"
+                                 /You stop guarding .+, move over to .+, and prepare to guard [a-z]+ from attack\./, # "Guard <target2>" while already guarding <target1>
+                                 /You stop protecting .+, move over to .+, and prepare to guard [a-z]+ from attack\./, # "Guard <target2>" while protecting <target1>
+                                 /You stop protecting .+ and prepare to guard [a-z]+ instead\./, # "Guard <target>" while protecting <target>
+                                 /You are already guarding .+\./), # "Guard <target>" while already doing so
           :usage => "guard"
         },
-        "kroderinesoul"   => {
+        "kroderine_soul"            => {
           :cost  => 0,
           :regex => /Kroderine Soul is passive and always active as long as you do not learn any spells\.  You have access to two new abilities\:/,
           :usage => nil
         },
-        "lightarmor"      => {
+        "light_armor_proficiency"   => {
           :cost  => 0,
           :regex => /Light Armor Proficiency is passive and cannot be activated\./,
           :usage => nil
         },
-        "martialarts"     => {
+        "martial_arts_mastery"      => {
           :cost  => 0,
           :regex => /Martial Arts Mastery is passive and cannot be activated\./,
           :usage => nil
         },
-        "martialmastery"  => {
+        "martial_mastery"           => {
           :cost  => 0,
           :regex => /Martial Mastery is passive and cannot be activated\./,
           :usage => nil
         },
-        "mentalacuity"    => {
+        "mental_acuity"             => {
           :cost  => 0,
           :regex => /The Mental Acuity\s{1,2}feat is always active once you have learned it\./, # Note: Game has a typo with two spaces after the name of the feat, modified regex to match 1 or 2 spaces so this doesn't break if the typo gets fixed.
           :usage => nil
         },
-        "mysticstrike"    => {
+        "mystic_strike"             => {
           :cost  => 10,
           :regex => /You prepare yourself to deliver a Mystic Strike with your next attack\./,
           :usage => "mysticstrike"
         },
-        "tattoo"          => {
+        "mystic_tattoo"             => {
           :cost  => 0,
           :regex => /Usage\:/,
           :usage => nil # usage not supported at this time, complicated and used for a service
         },
-        "perfectself"     => {
+        "perfect_self"              => {
           :cost  => 0,
           :regex => /The Perfect Self feat is always active once you have learned it\.  It provides a constant enhancive bonus to all your stats\./,
           :usage => nil
         },
-        "platearmor"      => {
+        "plate_armor_proficiency"   => {
           :cost  => 0,
           :regex => /Plate Armor Proficiency is passive and cannot be activated\./,
           :usage => nil
         },
-        "protect"         => {
+        "protect"                   => {
           :cost  => 0,
-          :regex => /Protect what\?|You move over to (.+) and prepare to protect (him|her|it) from attack\.|while already protecting <target1>: You stop protecting (.+), move over to (.+), and prepare to protect (him|her|it) from attack\.|You stop guarding (.+), move over to (.+), and prepare to protect (him|her|it) from attack\.|You stop guarding (.+) and prepare to protect (him|her|it) instead\.|You are already protecting (.+)\./,
-          #  any variation of "feat protect" or bad target:  Protect what\?
-          #  "protect <target>": You move over to (.+) and prepare to protect (him|her|it) from attack\.
-          #  "protect <target2>" while already protecting <target1>: You stop protecting (.+), move over to (.+), and prepare to protect (him|her|it) from attack\.
-          #  "protect <target2>" while guarding <target1>:  You stop guarding (.+), move over to (.+), and prepare to protect (him|her|it) from attack\.
-          #  "protect <target>" while already guarding <target>:  You stop guarding (.+) and prepare to protect (him|her|it) instead\.
-          #  "protect <target>" while already protecting <target>: You are already protecting (.+)\.
+          :regex => Regexp.union(/Protect what\?/, #  any variation of "feat protect" or bad target:
+                                 /You move over to .+ and prepare to protect [a-z]+ from attack\./, #  "protect <target>"
+                                 /You stop protecting .+, move over to .+, and prepare to protect [a-z]+ from attack\./, #  "protect <target2>" while already protecting <target1>
+                                 /You stop guarding .+, move over to .+, and prepare to protect [a-z]+ from attack\./, #  "protect <target2>" while guarding <target1>
+                                 /You stop guarding .+ and prepare to protect [a-z]+ instead\./, #  "protect <target>" while already guarding <target>
+                                 /You are already protecting .+\./), #  "protect <target>" while already protecting <target>
           :usage => "protect"
         },
-        "scalearmor"      => {
+        "scale_armor_proficiency"   => {
           :cost  => 0,
           :regex => /Scale Armor Proficiency is passive and cannot be activated\./,
           :usage => nil
         },
-        "shadowdance"     => {
+        "shadow_dance"              => {
           :cost  => 30,
           :regex => /You focus your mind and body on the shadows\./,
           :usage => nil
         },
-        "silentstrike"    => {
+        "silent_strike"             => {
           :cost  => 20,
-          :regex => /Silent Strike can not be used with fire as the attack type\.|You quickly leap from hiding to attack\!/,
+          :regex => Regexp.union(/Silent Strike can not be used with fire as the attack type\./,
+                                 /You quickly leap from hiding to attack\!/),
           :usage => "silentstrike"
         },
-        "vanish"          => {
+        "vanish"                    => {
           :cost  => 30,
           :regex => /With subtlety and speed, you aim to clandestinely vanish into the shadows\./,
           :usage => "vanish"
         },
-        "weaponbonding"   => {
+        "weapon_bonding"            => {
           :cost  => 0,
           :regex => /USAGE\:/,
           :usage => nil # not currently supported due to complexity
         },
-        "wps"             => {
+        "weighting"                 => {
+          :cost  => 0,
+          :regex => /USAGE\: FEAT WPS \{options\} \[args\]/, # USAGE: FEAT WPS {options} [args]
+          :usage => nil # not currently supported due to complexity
+        },
+        "padding"                   => {
           :cost  => 0,
           :regex => /USAGE\: FEAT WPS \{options\} \[args\]/, # USAGE: FEAT WPS {options} [args]
           :usage => nil # not currently supported due to complexity
@@ -219,21 +228,21 @@ module Lich
         Feat.known?(name) and Feat.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
       end
 
-      def Feat.use(name, target = "")
+      def Feat.use(name, target = "", results_of_interest: nil)
         return unless Feat.available?(name)
         usage = @@feats.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:usage]
         return if usage.nil?
 
         results_regex = Regexp.union(
+          PSMS::FAILURES_REGEXES,
           @@feats.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-          /^#{name} what\?$/i,
-          /^Roundtime: [0-9]+ sec\.$/,
-          /^And give yourself away!  Never!$/,
-          /^You are unable to do that right now\.$/,
-          /^You don't seem to be able to move to do that\.$/,
-          /^Provoking a GameMaster is not such a good idea\.$/,
-          /^You do not currently have a target\.$/,
+          /^#{name} what\?$/i
         )
+
+        if results_of_interest.is_a?(Regexp)
+          results_regex = Regexp.union(results_regex, results_of_interest)
+        end
+
         usage_cmd = (['guard', 'protect'].include?(usage) ? "#{usage}" : "feat #{usage}")
         if target.class == GameObj
           usage_cmd += " ##{target.id}"
@@ -250,6 +259,10 @@ module Lich
           usage_result = dothistimeout usage_cmd, 5, results_regex
         end
         usage_result
+      end
+
+      def Feat.regexp(name)
+        @@feats.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
       end
 
       Feat.feat_lookups.each { |feat|

@@ -37,29 +37,6 @@ end
 
 LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 
-require "common/sharedbuffer"
-require "common/buffer"
-require "games"
-require "gemstone/infomon"
-require "attributes/stats"
-require "attributes/resources"
-require "gemstone/infomon/currency"
-require "gemstone/infomon/status"
-require "gemstone/experience"
-require "gemstone/psms"
-require "gemstone/psms/ascension"
-
-module Lich
-  module Gemstone
-    module Infomon
-      # cheat definition of `respond` to prevent having to load global_defs with dependenciesw
-      def self.respond(msg)
-        pp msg
-      end
-    end
-  end
-end
-
 module XMLData
   @dialogs = {}
   def self.game
@@ -126,7 +103,7 @@ module Effects
   Cooldowns = Registry.new("Cooldowns")
 end
 
-module Games
+module Lich
   module Gemstone
     class Spellsong
       @@renewed ||= Time.at(Time.now.to_i - 1200)
@@ -142,21 +119,49 @@ module Games
 end
 
 # fake GameObj to allow for passing.
-class GameObj
-  @@npcs = Array.new
-  def initialize(id, noun, name, before = nil, after = nil)
-    @id = id
-    @noun = noun
-    @name = name
-    @before_name = before
-    @after_name = after
-  end
+module Lich
+  module Common
+    class GameObj
+      @@npcs = Array.new
+      def initialize(id, noun, name, before = nil, after = nil)
+        @id = id
+        @noun = noun
+        @name = name
+        @before_name = before
+        @after_name = after
+      end
 
-  def GameObj.npcs
-    if @@npcs.empty?
-      nil
-    else
-      @@npcs.dup
+      def GameObj.npcs
+        if @@npcs.empty?
+          nil
+        else
+          @@npcs.dup
+        end
+      end
+    end
+  end
+end
+
+require "common/sharedbuffer"
+require "common/buffer"
+require "games"
+require "gemstone/infomon"
+require "attributes/stats"
+require "attributes/resources"
+require "gemstone/infomon/currency"
+require "gemstone/infomon/status"
+require "gemstone/experience"
+require "util/util"
+require "gemstone/psms"
+require "gemstone/psms/ascension"
+
+module Lich
+  module Gemstone
+    module Infomon
+      # cheat definition of `respond` to prevent having to load global_defs with dependenciesw
+      def self.respond(msg)
+        pp msg
+      end
     end
   end
 end

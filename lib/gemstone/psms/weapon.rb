@@ -35,32 +35,32 @@ module Lich
 
       @@weapon_techniques = {
         "barrage"          => {
-          :regex      => /Drawing several arrows from your (?:.+), you grip them loosely between your fingers in preparation for a rapid barrage\./,
+          :regex      => /Drawing several (?:arrows|bolts) from your .+, you grip them loosely between your fingers in preparation for a rapid barrage\./,
           :assault_rx => /Your satisfying display of dexterity bolsters you and inspires those around you\!/,
           :buff       => "Enh. Dexterity (+10)",
         },
         "charge"           => {
-          :regex => /You rush forward at (?:.+) with your (?:.+) and attempt a charge\!/,
+          :regex => /You rush forward at .+ with your .+ and attempt a charge\!/,
         },
         "clash"            => {
           :regex => /Steeling yourself for a brawl, you plunge into the fray\!/,
         },
         "clobber"          => {
-          :regex => /You redirect the momentum of your parry, hauling your (?:.+) around to clobber (?:.+)\!/,
+          :regex => /You redirect the momentum of your parry, hauling your .+ around to clobber .+\!/,
         },
         "cripple"          => {
-          :regex => /You reverse your grip on your (?:.+) and dart toward (?:.+) at an angle\!/,
+          :regex => /You reverse your grip on your .+ and dart toward .+ at an angle\!/,
         },
         "cyclone"          => {
-          :regex => /You weave your (?:.+) in an under arm spin, swiftly picking up speed until it becomes a blurred cyclone of (?:.+)\!/,
+          :regex => /You weave your .+ in an under arm spin, swiftly picking up speed until it becomes a blurred cyclone of .+\!/,
         },
         "dizzying_swing"   => {
-          :regex => /You heft your (?:.+) and, looping it once to build momentum, lash out in a strike at (?:.+) head\!/,
+          :regex => /You heft your .+ and, looping it once to build momentum, lash out in a strike at .+ head\!/,
           :usage => "dizzyingswing",
         },
         "flurry"           => {
-          :regex      => /You rotate your wrist, your (?:.+) executing a casual spin to establish your flow as you advance upon (?:.+)\!/,
-          :assault_rx => /The mesmerizing sway of body and blade glides to its inevitable end with one final twirl of your (.+)\./,
+          :regex      => /You rotate your wrist, your .+ executing a casual spin to establish your flow as you advance upon .+\!/,
+          :assault_rx => /The mesmerizing sway of body and blade glides to its inevitable end with one final twirl of your .+\./,
           :buff       => "Slashing Strikes",
         },
         "fury"             => {
@@ -69,54 +69,54 @@ module Lich
           :buff       => "Enh. Constitution (+10)",
         },
         "guardant_thrusts" => {
-          :regex => /Retaining a defensive profile, you raise your (?:.+) in a hanging guard and prepare to unleash a barrage of guardant thrusts upon (?:.+)\!/,
+          :regex => /Retaining a defensive profile, you raise your .+ in a hanging guard and prepare to unleash a barrage of guardant thrusts upon .+\!/,
           :usage => "gthrusts",
         },
         "overpower"        => {
-          :regex => /On the heels of (?:.+) parry, you erupt into motion, determined to overpower (?:.+) defenses\!/,
+          :regex => /On the heels of .+ parry, you erupt into motion, determined to overpower .+ defenses\!/,
         },
         "pin_down"         => {
-          :regex => /You take quick assessment and raise your (?:.+), several arrows nocked to your string in parallel\./,
+          :regex => /You take quick assessment and raise your .+, several (?:arrows|bolts) nocked to your string in parallel\./,
           :usage => "pindown",
         },
         "pulverize"        => {
-          :regex => /You wheel your (?:.+) overhead before slamming it around in a wide arc to pulverize your foes\!/,
+          :regex => /You wheel your .+ overhead before slamming it around in a wide arc to pulverize your foes\!/,
         },
         "pummel"           => {
-          :regex      => /You take a menacing step toward (?:.+), sweeping your (?:.+) out low to your side in your advance\./,
-          :assault_rx => /With a final snap of your wrist, you sweep your (.+) back to the ready, your assault complete\./,
+          :regex      => /You take a menacing step toward .+, sweeping your .+ out low to your side in your advance\./,
+          :assault_rx => /With a final snap of your wrist, you sweep your .+ back to the ready, your assault complete\./,
           :buff       => "Concussive Blows",
         },
         "radial_sweep"     => {
-          :regex => /Crouching low, you sweep your (?:.+) in a broad arc\!/,
+          :regex => /Crouching low, you sweep your .+ in a broad arc\!/,
           :usage => "radialsweep",
         },
         "reactive_shot"    => {
-          :regex => /You fire off a quick shot at the (?:.+), then make a hasty retreat\!/,
+          :regex => /You fire off a quick shot at the .+, then make a hasty retreat\!/,
           :usage => "reactiveshot",
         },
         "reverse_strike"   => {
-          :regex => /Spotting an opening in (?:.+) defenses, you quickly reverse the direction of your (?:.+) and strike from a different angle\!/,
+          :regex => /Spotting an opening in .+ defenses, you quickly reverse the direction of your .+ and strike from a different angle\!/,
           :usage => "reversestrike",
         },
         "riposte"          => {
-          :regex => /Before (?:.+) can recover, you smoothly segue from parry to riposte\!/,
+          :regex => /Before .+ can recover, you smoothly segue from parry to riposte\!/,
         },
         "spin_kick"        => {
           :regex => /Stepping with deliberation, you wheel into a leaping spin\!/,
           :usage => "spinkick",
         },
         "thrash"           => {
-          :regex => /You rush (?:.+), raising your (?:.+) high to deliver a sound thrashing\!/,
+          :regex => /You rush .+, raising your .+ high to deliver a sound thrashing\!/,
         },
         "twin_hammerfists" => {
-          :regex => /You raise your hands high, lace them together and bring them crashing down towards the (?:.+)\!/,
+          :regex => /You raise your hands high, lace them together and bring them crashing down towards the .+\!/,
         },
         "volley"           => {
-          :regex => /Raising your (?:.+) high, you loose arrow after arrow as fast as you can, filling the sky with a volley of deadly projectiles\!/,
+          :regex => /Raising your .+ high, you loose (?:arrow|bolt) after (?:arrow|bolt) as fast as you can, filling the sky with a volley of deadly projectiles\!/,
         },
         "whirling_blade"   => {
-          :regex => /With a broad flourish, you sweep your (?:.+) into a whirling display of keen-edged menace\!/,
+          :regex => /With a broad flourish, you sweep your .+ into a whirling display of keen-edged menace\!/,
           :usage => "wblade",
         },
         "whirlwind"        => {
@@ -146,25 +146,25 @@ module Lich
         Effects::Buffs.active?(@@weapon_techniques.fetch(name)[:buff])
       end
 
-      def Weapon.use(name, target = "")
+      def Weapon.use(name, target = "", results_of_interest: nil)
         return unless Weapon.available?(name)
         name = PSMS.name_normal(name)
         technique = @@weapon_techniques.fetch(name)
         usage = technique.key?(:usage) ? technique[:usage] : name
 
-        in_cooldown_regex = /^#{name} is still in cooldown/
+        in_cooldown_regex = /^#{name} is still in cooldown\./
+
         results_regex = Regexp.union(
-          technique[:regex],
+          PSMS::FAILURES_REGEXES,
+          @@weapon_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
           /^#{name} what\?$/i,
-          /You were unable to find any targets that meet #{name}'s reaction requirements/,
-          /^Roundtime: [0-9]+ sec\.$/,
-          /^And give yourself away!  Never!$/,
-          /^You are unable to do that right now\.$/,
-          /^You don't seem to be able to move to do that\.$/,
-          /^Provoking a GameMaster is not such a good idea\.$/,
-          /^You do not currently have a target\.$/,
           in_cooldown_regex
         )
+
+        if results_of_interest.is_a?(Regexp)
+          results_regex = Regexp.union(results_regex, results_of_interest)
+        end
+
         usage_cmd = "weapon #{usage}"
         if target.class == GameObj
           usage_cmd += " ##{target.id}"
@@ -201,6 +201,10 @@ module Lich
           end
         end
         usage_result
+      end
+
+      def Weapon.regexp(name)
+        @@weapon_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
       end
 
       Weapon.weapon_lookups.each { |weapon|
