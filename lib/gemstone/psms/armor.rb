@@ -54,15 +54,21 @@ module Lich
           :usage => "stealth",
         },
         "crush_protection"    => {
-          :regex => /You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\.|You must specify an armor slot\.|You don't seem to have the necessary armor fittings in hand\./i,
+          :regex => Regexp.union(/You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
+                                 /You must specify an armor slot\./,
+                                 /|You don't seem to have the necessary armor fittings in hand\./),
           :usage => "crush",
         },
         "puncture_protection" => {
-          :regex => /You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\.|You must specify an armor slot\.|You don't seem to have the necessary armor fittings in hand\./i,
+          :regex => Regexp.union(/You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
+                                 /You must specify an armor slot\./,
+                                 /You don't seem to have the necessary armor fittings in hand\./),
           :usage => "puncture",
         },
         "slash_protection"    => {
-          :regex => /You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\.|You must specify an armor slot\.|You don't seem to have the necessary armor fittings in hand\./i,
+          :regex => Regexp.union(/You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
+                                 /You must specify an armor slot\./,
+                                 /You don't seem to have the necessary armor fittings in hand\./),
           :usage => "slash",
         },
       }
@@ -89,10 +95,10 @@ module Lich
         return if usage.nil?
 
         results_regex = Regexp.union(
-          PSMS::RegexCommonFailures,
+          PSMS::FAILURES_REGEXES,
           @@armor_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
           /^#{name} what\?$/i,
-          /^\w+ (?:is|are) not wearing any armor that you can work with\.$/
+          /^\w+ [a-z]+ not wearing any armor that you can work with\.$/
         )
 
         if results_of_interest.is_a?(Regexp)

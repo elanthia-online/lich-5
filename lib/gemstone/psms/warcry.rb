@@ -14,24 +14,24 @@ module Lich
 
       @@warcries = {
         "bellow" => {
-          :regex => /You glare at .+ and let out a nerve-shattering bellow! /i,
+          :regex => /You glare at .+ and let out a nerve-shattering bellow!/,
         },
         "yowlp"  => {
-          :regex => /You throw back your shoulders and let out a resounding yowlp!/i,
+          :regex => /You throw back your shoulders and let out a resounding yowlp!/,
           :buff  => "Yertie's Yowlp",
         },
         "growl"  => {
-          :regex => /Your face contorts as you unleash a guttural, deep-throated growl at .+!/i,
+          :regex => /Your face contorts as you unleash a guttural, deep-throated growl at .+!/,
         },
         "shout"  => {
-          :regex => /You let loose an echoing shout!/i,
+          :regex => /You let loose an echoing shout!/,
           :buff  => 'Empowered (+20)',
         },
         "cry"    => {
-          :regex => /You stare down .+ and let out an eerie, modulating cry!/i,
+          :regex => /You stare down .+ and let out an eerie, modulating cry!/,
         },
         "holler" => {
-          :regex => /You throw back your head and let out a thundering holler!/i,
+          :regex => /You throw back your head and let out a thundering holler!/,
           :buff  => 'Enh. Health (+20)',
         },
       }
@@ -64,7 +64,7 @@ module Lich
         name = PSMS.name_normal(name)
 
         results_regex = Regexp.union(
-          PSMS::RegexCommonFailures,
+          PSMS::FAILURES_REGEXES,
           @@warcries.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
           /^#{name} what\?$/i
         )

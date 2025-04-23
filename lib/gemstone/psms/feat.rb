@@ -41,7 +41,8 @@ module Lich
       @@feats = {
         "absorb_magic"              => {
           :cost  => 0,
-          :regex => /You open yourself to the ravenous void at the core of your being, allowing it to surface\.  Muted veins of metallic grey ripple just beneath your skin\.|You strain, but the void within remains stubbornly out of reach\.  You need more time\./,
+          :regex => Regexp.union(/You open yourself to the ravenous void at the core of your being, allowing it to surface\.  Muted veins of metallic grey ripple just beneath your skin\./,
+                                 /You strain, but the void within remains stubbornly out of reach\.  You need more time\./),
           :usage => "absorbmagic"
         },
         "chain_armor_proficiency"   => {
@@ -56,7 +57,8 @@ module Lich
         },
         "covert_art_escape_artist"  => {
           :cost  => 15, # cost is actually 0 if "recent evasion" is present
-          :regex => /You roll your shoulders and subtly test the flexion of your joints, staying limber for ready escapes\.|You were unable to find any targets that meet Covert Art\: Escape Artist\'s reaction requirements./,
+          :regex => Regex.union(/You roll your shoulders and subtly test the flexion of your joints, staying limber for ready escapes\./,
+                                /You were unable to find any targets that meet Covert Art\: Escape Artist\'s reaction requirements./),
           :usage => "escapeartist"
         },
         "covert_art_keen_eye"       => {
@@ -81,7 +83,9 @@ module Lich
         },
         "covert_art_throw_poison"   => {
           :cost  => 15,
-          :regex => /What did the (.+) ever do to you\?|You pop the cork on (.+) and, with a nimble flick of the wrist, fling a portion of its contents in a wide arc\!|Covert Art\: Throw Poison what\?/,
+          :regex => Regexp.union(/What did the .+ ever do to you\?/,
+                                 /You pop the cork on .+ and, with a nimble flick of the wrist, fling a portion of its contents in a wide arc\!/,
+                                 /Covert Art\: Throw Poison what\?/),
           :usage => "throwpoison"
         },
         "covert_arts"               => {
@@ -96,7 +100,8 @@ module Lich
         },
         "dispel_magic"              => {
           :cost  => 30,
-          :regex => /You reach for the emptiness within, but there are no spells afflicting you to dispel\.|You reach for the emptiness within\.  A single, hollow note reverberates through your core, resonating outward and scouring away the energies that cling to you\./,
+          :regex => Regexp.union(/You reach for the emptiness within, but there are no spells afflicting you to dispel\./,
+                                 /You reach for the emptiness within\.  A single, hollow note reverberates through your core, resonating outward and scouring away the energies that cling to you\./),
           :usage => "dispelmagic"
         },
         "dragonscale_skin"          => {
@@ -106,13 +111,12 @@ module Lich
         },
         "guard"                     => {
           :cost  => 0,
-          :regex => /Guard what\?|You move over to (.+) and prepare to guard (him|her|it) from attack\.|You stop guarding (.+), move over to (.+), and prepare to guard (him|her|it) from attack\.You stop protecting (.+), move over to (.+), and prepare to guard (him|her|it) from attack\.|You stop protecting (.+) and prepare to guard (him|her|it) instead\.|You are already guarding (.+)\./,
-          # "any variation of "feat guard" or bad target:  Protect what\?"
-          # "Guard <target>": You move over to (.+) and prepare to guard (him|her|it) from attack\.
-          # "Guard <target2>" while already guarding <target1>:  You stop guarding (.+), move over to (.+), and prepare to guard (him|her|it) from attack\.
-          # "Guard <target2>" while protecting <target1>:  You stop protecting (.+), move over to (.+), and prepare to guard (him|her|it) from attack\.
-          # "Guard <target>" while protecting <target>:  You stop protecting (.+) and prepare to guard (him|her|it) instead\.
-          # "Guard <target>" while already doing so:  You are already guarding (.+)\.
+          :regex => Regexp.union(/Guard what\?/, # "any variation of "feat guard" or bad target
+                                 /You move over to .+ and prepare to guard [a-z]+ from attack\./, # "Guard <target>"
+                                 /You stop guarding .+, move over to .+, and prepare to guard [a-z]+ from attack\./, # "Guard <target2>" while already guarding <target1>
+                                 /You stop protecting .+, move over to .+, and prepare to guard [a-z]+ from attack\./, # "Guard <target2>" while protecting <target1>
+                                 /You stop protecting .+ and prepare to guard [a-z]+ instead\./, # "Guard <target>" while protecting <target>
+                                 /You are already guarding .+\./), # "Guard <target>" while already doing so
           :usage => "guard"
         },
         "kroderine_soul"            => {
@@ -162,13 +166,12 @@ module Lich
         },
         "protect"                   => {
           :cost  => 0,
-          :regex => /Protect what\?|You move over to (.+) and prepare to protect (him|her|it) from attack\.|while already protecting <target1>: You stop protecting (.+), move over to (.+), and prepare to protect (him|her|it) from attack\.|You stop guarding (.+), move over to (.+), and prepare to protect (him|her|it) from attack\.|You stop guarding (.+) and prepare to protect (him|her|it) instead\.|You are already protecting (.+)\./,
-          #  any variation of "feat protect" or bad target:  Protect what\?
-          #  "protect <target>": You move over to (.+) and prepare to protect (him|her|it) from attack\.
-          #  "protect <target2>" while already protecting <target1>: You stop protecting (.+), move over to (.+), and prepare to protect (him|her|it) from attack\.
-          #  "protect <target2>" while guarding <target1>:  You stop guarding (.+), move over to (.+), and prepare to protect (him|her|it) from attack\.
-          #  "protect <target>" while already guarding <target>:  You stop guarding (.+) and prepare to protect (him|her|it) instead\.
-          #  "protect <target>" while already protecting <target>: You are already protecting (.+)\.
+          :regex => Regexp.union(/Protect what\?/, #  any variation of "feat protect" or bad target:
+                                 /You move over to .+ and prepare to protect [a-z]+ from attack\./, #  "protect <target>"
+                                 /You stop protecting .+, move over to .+, and prepare to protect [a-z]+ from attack\./, #  "protect <target2>" while already protecting <target1>
+                                 /You stop guarding .+, move over to .+, and prepare to protect [a-z]+ from attack\./, #  "protect <target2>" while guarding <target1>
+                                 /You stop guarding .+ and prepare to protect [a-z]+ instead\./, #  "protect <target>" while already guarding <target>
+                                 /You are already protecting .+\./), #  "protect <target>" while already protecting <target>
           :usage => "protect"
         },
         "scale_armor_proficiency"   => {
@@ -183,7 +186,8 @@ module Lich
         },
         "silent_strike"             => {
           :cost  => 20,
-          :regex => /Silent Strike can not be used with fire as the attack type\.|You quickly leap from hiding to attack\!/,
+          :regex => Regexp.union(/Silent Strike can not be used with fire as the attack type\./,
+                                 /You quickly leap from hiding to attack\!/),
           :usage => "silentstrike"
         },
         "vanish"                    => {
@@ -230,7 +234,7 @@ module Lich
         return if usage.nil?
 
         results_regex = Regexp.union(
-          PSMS::RegexCommonFailures,
+          PSMS::FAILURES_REGEXES,
           @@feats.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
           /^#{name} what\?$/i
         )
