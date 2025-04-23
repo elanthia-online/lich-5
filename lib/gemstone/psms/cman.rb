@@ -261,7 +261,7 @@ module Lich
         "eyepoke"                => {
           :cost  => 7,
           :type  => "setup",
-          :regex => Regex.unable(/The .+ (?:right|left) eye is out of reach\!/,
+          :regex => Regexp.union(/The .+ (?:right|left) eye is out of reach\!/,
                                  /You jab a finger at the eye of .+\!/),
           :usage => "eyepoke"
         },
@@ -555,7 +555,7 @@ module Lich
         "sunder_shield"          => {
           :cost  => 7,
           :type  => "setup",
-          :regex => Regex.unable(/You can\'t use sunder shield with empty hands!/,
+          :regex => Regexp.union(/You can\'t use sunder shield with empty hands!/,
                                  /You drive your .+ directly at .+ in an attempt to split it asunder!/),
           :usage => "sunder"
         },
@@ -613,7 +613,7 @@ module Lich
         "trip"                   => {
           :cost  => 7,
           :type  => "setup",
-          :regex => Regex.unable(/You can\'t reach far enough to trip anything with .+\./,
+          :regex => Regexp.union(/You can\'t reach far enough to trip anything with .+\./,
                                  /With a fluid whirl, you plant .+ firmly into the ground near .+ and jerk the weapon sharply sideways\./),
           :usage => "trip"
         },
