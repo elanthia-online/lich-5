@@ -24,7 +24,6 @@ module Lich
         /^What were you referring to/,
         /^I could not find/,
         /^But you aren't holding that/,
-        /^Perhaps you should be holding that first/,
         /^You're kidding, right/,
         /^You can't do that/,
         /^No littering/,
@@ -73,7 +72,6 @@ module Lich
       ]
 
       GET_ITEM_FAILURE_PATTERNS = [
-        /^A magical force keeps you from grasping/,
         /^You need a free hand/,
         /^You can't pick that up with your hand that damaged/,
         /^Your (left|right) hand is too injured/,
@@ -82,7 +80,6 @@ module Lich
         /^You can't reach that from here/, # on a mount like a flying carpet
         /^You don't seem to be able to move/,
         /^You should untie/,
-        /^You can't do that/,
         /^Get what/,
         /^I could not/,
         /^What were you/,
@@ -136,7 +133,8 @@ module Lich
 
       TIE_ITEM_SUCCESS_PATTERNS = [
         /^You .* tie/,
-        /^You attach/
+        /^You attach/,
+        /^You untie/
       ]
 
       TIE_ITEM_FAILURE_PATTERNS = [
@@ -222,7 +220,6 @@ module Lich
 
       PUT_AWAY_ITEM_FAILURE_PATTERNS = [
         /^Stow what/,
-        /^I can't find your container for stowing things in/,
         /^Please rephrase that command/,
         /^What were you referring to/,
         /^I could not find what you were referring to/,
@@ -239,14 +236,11 @@ module Lich
         /^Containers can't be placed in/,
         /^The .* is not designed to carry anything/,
         /^You can't put that.*there/,
-        /^Weirdly, you can't manage .* to fit/,
-        /^\[Containers can't be placed in/,
         /even after stuffing it/,
         /is too .* to (fit|hold)/,
         /no matter how you arrange it/,
         /close the fan/,
         /to fit in the/,
-        /doesn't seem to want to leave you/, # trying to put a pet in a home within a container
         # You may get the next message if you've been cursed and unable to let go of items.
         # Find a Cleric to uncurse you.
         /Oddly, when you attempt to stash it away safely/,
@@ -775,9 +769,8 @@ module Lich
       # TIE/UNTIE ITEM
       #########################################
 
-      def tie_item?(item, container = nil)
-        place = container ? "to my #{container}" : nil
-        case DRC.bput("tie my #{item} #{place}", TIE_ITEM_SUCCESS_PATTERNS, TIE_ITEM_FAILURE_PATTERNS)
+      def tie_item?(item, container)
+        case DRC.bput("tie my #{item} to my #{container}", TIE_ITEM_SUCCESS_PATTERNS, TIE_ITEM_FAILURE_PATTERNS)
         when *TIE_ITEM_SUCCESS_PATTERNS
           true
         else

@@ -348,7 +348,7 @@ module Lich
       #  above the horizon and won't set for at least another ~4 minutes.
       def bright_celestial_object?
         check_moonwatch
-        (UserVars.sun['day'] && UserVars.sun['timer'] >= 4) || moon_visible?('xibar') || moon_visible?('yavash')
+        (UserVars.sun['day'] && UserVars.sun['timer'] >= 4) || visible_moons.include?('xibar') || visible_moons.include?('yavash')
       end
 
       # returns true if at least one moon (katamba, yavash, xibar) or the sun are
@@ -362,11 +362,6 @@ module Lich
       # is above the horizon and won't set for at least another ~4 minutes.
       def moons_visible?
         !visible_moons.empty?
-      end
-
-      # Returns true if the moon is above the horizon and won't set for at least another ~4 minutes.
-      def moon_visible?(moon_name)
-        visible_moons.include?(moon_name)
       end
 
       # Returns list of moon names (e.g. katamba, yavash, xibar)

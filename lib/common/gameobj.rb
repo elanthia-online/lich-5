@@ -350,13 +350,16 @@ module Lich
         GameObj.load_data(filename)
       end
 
-      def GameObj.merge_data(data, newData)
-        return newData unless data.class == Regexp
-        return Regexp.union(data, newData)
-      end
-
       def GameObj.load_data(filename = nil)
-        filename = File.join(DATA_DIR, 'gameobj-data.xml') if filename.nil?
+        if filename.nil?
+          if File.exist?("#{DATA_DIR}/gameobj-data.xml")
+            filename = "#{DATA_DIR}/gameobj-data.xml"
+          elsif File.exist?("#{SCRIPT_DIR}/gameobj-data.xml") # deprecated
+            filename = "#{SCRIPT_DIR}/gameobj-data.xml"
+          else
+            filename = "#{DATA_DIR}/gameobj-data.xml"
+          end
+        end
         if File.exist?(filename)
           begin
             @@type_data = Hash.new
@@ -381,48 +384,20 @@ module Lich
                 end
               }
             }
+            true
           rescue
             @@type_data = nil
             @@sellable_data = nil
             echo "error: GameObj.load_data: #{$!}"
             respond $!.backtrace[0..1]
-            return false
+            false
           end
         else
           @@type_data = nil
           @@sellable_data = nil
           echo "error: GameObj.load_data: file does not exist: #{filename}"
-          return false
+          false
         end
-        filename = File.join(DATA_DIR, 'gameobj-custom', 'gameobj-data.xml')
-        if (File.exist?(filename))
-          begin
-            File.open(filename) { |file|
-              doc = REXML::Document.new(file.read)
-              doc.elements.each('data/type') { |e|
-                if (type = e.attributes['name'])
-                  @@type_data[type] ||= Hash.new
-                  @@type_data[type][:name]	  = GameObj.merge_data(@@type_data[type][:name], Regexp.new(e.elements['name'].text)) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
-                  @@type_data[type][:noun]	  = GameObj.merge_data(@@type_data[type][:noun], Regexp.new(e.elements['noun'].text)) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
-                  @@type_data[type][:exclude] = GameObj.merge_data(@@type_data[type][:exclude], Regexp.new(e.elements['exclude'].text)) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
-                end
-              }
-              doc.elements.each('data/sellable') { |e|
-                if (sellable = e.attributes['name'])
-                  @@sellable_data[sellable] ||= Hash.new
-                  @@sellable_data[sellable][:name]	  = GameObj.merge_data(@@sellable_data[sellable][:name], Regexp.new(e.elements['name'].text)) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
-                  @@sellable_data[sellable][:noun]	  = GameObj.merge_data(@@sellable_data[sellable][:noun], Regexp.new(e.elements['noun'].text)) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
-                  @@sellable_data[sellable][:exclude] = GameObj.merge_data(@@sellable_data[sellable][:exclude], Regexp.new(e.elements['exclude'].text)) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
-                end
-              }
-            }
-          rescue
-            echo "error: Custom GameObj.load_data: #{$!}"
-            respond $!.backtrace[0..1]
-            return false
-          end
-        end
-        return true
       end
 
       def GameObj.type_data

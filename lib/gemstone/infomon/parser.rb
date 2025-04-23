@@ -62,10 +62,7 @@ module Lich
           WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
           AccountName = /^Account Name: (?<name>[\w\d\-\_]+)$/.freeze
           AccountSubscription = /^Account Type: (?<subscription>F2P|Standard|Premium)$/.freeze
-          ProfileStart = /^PERSONAL INFORMATION$/.freeze
-          ProfileName = /^Name: (?<name>[\w\s]+)$/.freeze
-          ProfileHouseCHE = /^[A-Za-z\- ]+? (?:of House of the |of House of |of House |of )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?$|^(?<none>No House affiliation)$/.freeze
-          ResignCHE = /^(?:Once you have resigned from your House, you will be unable to rejoin without being inducted again by the |If you wish to renounce your membership in the |Before you can resign from the )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?|^(?<none>The RESIGN command is for resigning your membership in a House, but you don't currently belong to any of the Cooperative Houses of Elanthia)\.$/.freeze
+          HouseCHE = /^[A-z\- ]+? (?:of House of the |of House of |of House |of )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?$|^(?<none>No House affiliation)$/.freeze
 
           # TODO: refactor / streamline?
           SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$|^That is impossible to do while unconscious$/.freeze
@@ -98,29 +95,7 @@ module Lich
                              TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
                              WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
                              ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
-                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, GemstoneDust)
-        end
-
-        module State
-          @state = :ready
-          Goals = :goals
-          Profile = :profile
-          Ready = :ready
-
-          def self.set(state)
-            case state
-            when Goals, Profile
-              unless @state.eql?(Ready)
-                Lich.log "error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
-                fail "--- Lich: error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
-              end
-            end
-            @state = state
-          end
-
-          def self.get
-            @state
-          end
+                             AccountName, AccountSubscription, HouseCHE, GemstoneDust)
         end
 
         def self.find_cat(category)
@@ -234,11 +209,11 @@ module Lich
                 :noop
               end
             when Pattern::GoalsDetected
-              State.set(State::Goals)
+              @goals_detected = true
               :ok
             when Pattern::GoalsEnded
-              if State.get.eql?(State::Goals)
-                State.set(State::Ready)
+              if @goals_detected
+                @goals_detected = false
                 respond
                 _respond Lich::Messaging.monsterbold('You just trained your character.  Lich will gather your updated skills.')
                 respond
@@ -437,27 +412,7 @@ module Lich
               else
                 :noop
               end
-            when Pattern::ProfileStart
-              State.set(State::Profile)
-              :ok
-            when Pattern::ProfileName
-              match = Regexp.last_match
-              if State.get.eql?(State::Profile) && match[:name].split(' ').last != Char.name
-                State.set(State::Ready)
-                :ok
-              else
-                :noop
-              end
-            when Pattern::ProfileHouseCHE
-              if State.get.eql?(State::Profile)
-                match = Regexp.last_match
-                Infomon.set('che', (match[:none] ? 'none' : Lich::Util.normalize_name(match[:house])))
-                State.set(State::Ready)
-                :ok
-              else
-                :noop
-              end
-            when Pattern::ResignCHE
+            when Pattern::HouseCHE
               match = Regexp.last_match
               Infomon.set('che', (match[:none] ? 'none' : Lich::Util.normalize_name(match[:house])))
               :ok
