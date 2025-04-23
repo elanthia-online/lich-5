@@ -56,7 +56,7 @@ module Lich
         "crush_protection"    => {
           :regex => Regexp.union(/You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
                                  /You must specify an armor slot\./,
-                                 /|You don't seem to have the necessary armor fittings in hand\./),
+                                 /You don't seem to have the necessary armor fittings in hand\./),
           :usage => "crush",
         },
         "puncture_protection" => {
