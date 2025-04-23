@@ -58,7 +58,7 @@ module Lich
         "covert_art_escape_artist"  => {
           :cost  => 15, # cost is actually 0 if "recent evasion" is present
           :regex => Regexp.union(/You roll your shoulders and subtly test the flexion of your joints, staying limber for ready escapes\./,
-                                /You were unable to find any targets that meet Covert Art\: Escape Artist\'s reaction requirements./),
+                                 /You were unable to find any targets that meet Covert Art\: Escape Artist\'s reaction requirements./),
           :usage => "escapeartist"
         },
         "covert_art_keen_eye"       => {
