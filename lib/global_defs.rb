@@ -1530,8 +1530,8 @@ def fput(message, *waitingfor)
   put(message)
 
   while (string = get)
-    if string =~ /(?:\.\.\.wait |Wait )[0-9]+/
-      hold_up = string.slice(/[0-9]+/).to_i
+    if string =~ /(?:\.\.\.wait |Wait )(?<wait_time>[0-9]+)/
+      hold_up = Regexp.last_match[:wait_time].to_i
       sleep(hold_up) unless hold_up.nil?
       clear
       put(message)
