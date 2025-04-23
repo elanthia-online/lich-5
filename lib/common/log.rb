@@ -64,7 +64,7 @@ module Lich
 
       def self.out(msg, label: :debug)
         return unless Script.current.vars.include?("--debug") || Log.on?
-        return if msg.to_s !~ Log.filter
+        return if msg !~ Log.filter
         if msg.is_a?(Exception)
           ## pretty-print exception
           _write _view(msg.message, label)

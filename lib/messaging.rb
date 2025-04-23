@@ -34,11 +34,7 @@ Entries added here should always be accessible from Lich::Messaging.feature name
 module Lich
   module Messaging
     def self.xml_encode(msg)
-      if $frontend =~ /^(wizard|avalon)$/i
-        sf_to_wiz(msg.encode(:xml => :text))
-      else
-        msg.encode(:xml => :text)
-      end
+      msg.encode(:xml => :text)
     end
 
     def self.monsterbold(msg)

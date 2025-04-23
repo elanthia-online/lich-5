@@ -15,7 +15,6 @@ module Lich
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
-  @@debug_messaging      = nil # boolean
 
   def self.db_mutex
     @@db_mutex
@@ -91,7 +90,7 @@ module Lich
     msg = "Deprecated call to #{old_object} used in #{script_location}. Please change to #{new_object} instead!"
     return if limit_log && @@deprecated_log.include?(msg)
     Lich.log(msg) if debug_log
-    Lich::Messaging.msg("bold", msg) if fe_log
+    _respond Lich::Messaging.monsterbold(msg) if fe_log
     @@deprecated_log.push(msg) unless @@deprecated_log.include?(msg)
   end
 
