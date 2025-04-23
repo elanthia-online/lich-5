@@ -179,5 +179,39 @@ module Lich
       end
       return result.gsub(',', '').to_i
     end
+
+    # Expects hash to be passed to the method.
+    # Each keypair should consist of a gem name and whether to require it after attempting to install gem
+    def self.install_gem_requirements(gems_to_install)
+      raise ArgumentError, "install_gem_requirements must be passed a Hash" unless gems_to_install.is_a?(Hash)
+      require "rubygems"
+      require "rubygems/dependency_installer"
+      installer = Gem::DependencyInstaller.new({ :user_install => true, :document => nil })
+      installed_gems = Gem::Specification.map { |gem| gem.name }.sort.uniq
+      failed_gems = []
+
+      gems_to_install.each do |gem_name, should_require|
+        unless gem_name.is_a?(String) && (should_require.is_a?(TrueClass) || should_require.is_a?(FalseClass))
+          raise ArgumentError, "install_gem_requirements must be passed a Hash with String key and TrueClass/FalseClass as value"
+        end
+        begin
+          unless installed_gems.include?(gem_name)
+            respond("--- Lich: Installing missing ruby gem '#{gem_name}' now, please wait!")
+            installer.install(gem_name)
+            respond("--- Lich: Done installing '#{gem_name}' gem!")
+          end
+          require gem_name if should_require
+        rescue StandardError
+          respond("--- Lich: error: Failed to install Ruby gem: #{gem_name}")
+          respond("--- Lich: error: #{$!}")
+          Lich.log("error: Failed to install Ruby gem: #{gem_name}")
+          Lich.log("error: #{$!}")
+          failed_gems.push(gem_name)
+        end
+      end
+      unless failed_gems.empty?
+        raise("Please install the failed gems: #{failed_gems.join(', ')} to run #{$lich_char}#{Script.current.name}")
+      end
+    end
   end
 end

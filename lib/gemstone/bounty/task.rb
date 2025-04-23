@@ -118,7 +118,7 @@ module Lich
         end
 
         def assigned?
-          type.end_with?("assignment")
+          type.to_s.end_with?("assignment")
         end
 
         def ready?
