@@ -103,7 +103,7 @@ module Lich
           preset_color_before = ""
           preset_color_after = ""
         when "cmd"
-          preset_color_before = "<d cmd='#{cmd_link}'>"
+          preset_color_before = "<d cmd='#{xml_encode(cmd_link)}'>"
           preset_color_after = "</d>"
         end
       elsif $frontend =~ /^(?:wizard|avalon)$/
