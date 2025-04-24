@@ -12,6 +12,7 @@ Entries added here should always be accessible from Lich::Messaging.feature name
   changelog:
     v1.3.0 (2025-04-24)
       Added support to generate d cmd links on supported FEs via make_cmd_link and msg_format
+      Converted monsterbold function to call msg_format with monster type
     v1.2.1 (2024-04-26
       Bugfix for Wizard closing tag
     v1.2.0 (2023-08-02)
