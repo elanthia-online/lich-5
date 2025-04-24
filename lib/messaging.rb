@@ -7,9 +7,11 @@ Entries added here should always be accessible from Lich::Messaging.feature name
     game: Gemstone
     tags: CORE, util, utilities
     required: Lich > 5.4.0
-    version: 1.2.1
+    version: 1.3.0
 
   changelog:
+    v1.3.0 (2025-04-24)
+      Added support to generate d cmd links on supported FEs via make_cmd_link and msg_format
     v1.2.1 (2024-04-26
       Bugfix for Wizard closing tag
     v1.2.0 (2023-08-02)
@@ -42,7 +44,8 @@ module Lich
     end
 
     def self.monsterbold(msg)
-      return monsterbold_start + self.xml_encode(msg) + monsterbold_end
+      # return monsterbold_start + self.xml_encode(msg) + monsterbold_end
+      return msg_format(monster, msg)
     end
 
     def self.stream_window(msg, window = "familiar")
@@ -73,7 +76,7 @@ module Lich
       _respond stream_window_before_txt + self.xml_encode(msg) + stream_window_after_txt
     end
 
-    def self.msg_format(type = "info", msg = "")
+    def self.msg_format(type = "info", msg = "", cmd_link: nil)
       preset_color_before = ""
       preset_color_after = ""
 
@@ -81,7 +84,7 @@ module Lich
         "dark red" => 133, "purple" => 134, "gold" => 135, "light grey" => 136, "blue" => 137,
         "bright green" => 138, "teal" => 139, "red" => 140, "pink" => 141, "yellow" => 142 }
 
-      if $frontend =~ /^(?:stormfront|frostbite|profanity)$/
+      if $frontend =~ /^(?:stormfront|frostbite|profanity|wrayth)$/
         case type
         when "error", "yellow", "bold", "monster", "creature"
           preset_color_before = monsterbold_start
@@ -98,6 +101,9 @@ module Lich
         when "link", "command", "selectedLink", "watching", "roomName"
           preset_color_before = ""
           preset_color_after = ""
+        when "cmd"
+          preset_color_before = "<d cmd='#{cmd_link}'>"
+          preset_color_after = "</d>"
         end
       elsif $frontend =~ /^(?:wizard|avalon)$/
         case type
@@ -114,6 +120,9 @@ module Lich
           preset_color_before = wizard_color["bright green"].chr.force_encoding(Encoding::ASCII_8BIT)
           preset_color_after = "\240".force_encoding(Encoding::ASCII_8BIT)
         when "link", "command", "selectedLink", "watching", "roomName"
+          preset_color_before = ""
+          preset_color_after = ""
+        when "cmd" # these browsers can't handle links
           preset_color_before = ""
           preset_color_after = ""
         end
@@ -134,6 +143,9 @@ module Lich
         when "link", "command", "selectedLink", "watching", "roomName"
           preset_color_before = ""
           preset_color_after = ""
+        when "cmd" # these browsers can't handle links
+          preset_color_before = ""
+          preset_color_after = ""
         end
       end
 
@@ -143,6 +155,10 @@ module Lich
     def self.msg(type = "info", msg = "")
       return if type == "debug" && (Lich.debug_messaging.nil? || Lich.debug_messaging == "false")
       _respond msg_format(type, msg)
+    end
+
+    def self.make_cmd_link(link_text, link_action)
+      return msg_format("cmd", link_text, cmd_link: link_action)
     end
 
     def self.mono(msg)
