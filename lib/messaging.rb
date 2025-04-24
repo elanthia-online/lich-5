@@ -46,7 +46,7 @@ module Lich
 
     def self.monsterbold(msg)
       # return monsterbold_start + self.xml_encode(msg) + monsterbold_end
-      return msg_format(monster, msg)
+      return msg_format("monster", msg)
     end
 
     def self.stream_window(msg, window = "familiar")
