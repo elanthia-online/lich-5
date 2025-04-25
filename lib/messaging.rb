@@ -13,9 +13,9 @@ module Lich
       end
     end
 
-    def self.monsterbold(msg)
+    def self.monsterbold(msg, encode: true)
       # return monsterbold_start + self.xml_encode(msg) + monsterbold_end
-      return msg_format("monster", msg)
+      return msg_format("monster", msg, encode: encode)
     end
 
     def self.stream_window(msg, window = "familiar", encode: true)
@@ -126,11 +126,11 @@ module Lich
 
     def self.msg(type = "info", msg = "", encode: true)
       return if type == "debug" && (Lich.debug_messaging.nil? || Lich.debug_messaging == "false")
-      _respond msg_format(type, msg, encode)
+      _respond msg_format(type, msg, encode: encode)
     end
 
-    def self.make_cmd_link(link_text, link_action)
-      return msg_format("cmd", link_text, cmd_link: link_action)
+    def self.make_cmd_link(link_text, link_action, encode: true)
+      return msg_format("cmd", link_text, cmd_link: link_action, encode: encode)
     end
 
     def self.mono(msg, encode: false)
