@@ -133,6 +133,8 @@ module Lich
       return msg_format("cmd", link_text, cmd_link: link_action, encode: encode)
     end
 
+    # defaulting encoding here to false instead of true like other methods due to backwards compatibility that it never encoded before
+    # whereas all the other methods were already encoding and therefor should default to allow for them.
     def self.mono(msg, encode: false)
       return raise StandardError.new 'Lich::Messaging.mono only works with String parameters!' unless msg.is_a?(String)
       msg = xml_encode(msg) if encode
