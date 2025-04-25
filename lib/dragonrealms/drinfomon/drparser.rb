@@ -28,6 +28,7 @@ module Lich
         SpellBookFormat = /^You will .* (?<format>column-formatted|non-column) output for the SPELLS verb/.freeze
         PlayedAccount = /^(?:<.*?\/>)?Account Info for (?<account>.+):/.freeze
         PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium)/.freeze
+        LastLogoff = /^\s+Logoff :  (?<weekday>[A-Z][a-z]{2}) (?<month>[A-Z][a-z]{2}) (?<day>[\s\d]{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2}) ET (?<year>\d{4})/.freeze
       end
 
       @parsing_exp_mods_output = false
@@ -325,6 +326,17 @@ module Lich
             else
               UserVars.premium = false
             end
+          when Pattern::LastLogoff
+            matches = Regexp.last_match
+            month = Date::ABBR_MONTHNAMES.find_index(matches[:month])
+            weekdays = [nil, 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+            dst_check = matches[:day].to_i - weekdays.find_index(matches[:weekday])
+            if month.between?(4, 10) || (month == 3 && dst_check >= 7) || (month == 11 && dst_check < 0)
+              tz = '-0400'
+            else
+              tz = '-0500'
+            end
+            $last_logoff = Time.new(matches[:year].to_i, month, matches[:day].to_i, matches[:hour].to_i, matches[:minute].to_i, matches[:second].to_i, tz).getlocal
           else
             :noop
           end
