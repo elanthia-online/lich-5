@@ -1,37 +1,6 @@
 =begin
 messaging.rb: Core lich file for collection of various messaging Lich capabilities.
 Entries added here should always be accessible from Lich::Messaging.feature namespace.
-
-    Maintainer: Elanthia-Online
-    Original Author: LostRanger, Ondreian, various others
-    game: Gemstone
-    tags: CORE, util, utilities
-    required: Lich > 5.4.0
-    version: 1.3.0
-
-  changelog:
-    v1.3.0 (2025-04-24)
-      Added support to generate d cmd links on supported FEs via make_cmd_link and msg_format
-      Converted monsterbold function to call msg_format with monster type
-    v1.2.1 (2024-04-26
-      Bugfix for Wizard closing tag
-    v1.2.0 (2023-08-02)
-      Add Lich::Messaging.mono(msg) to send msg as mono spaced text
-      Robocop code cleanup
-    v1.1.0 (2022-10-28)
-      Add loot window as an option
-    v1.0.2 (2022-11-19)
-      Bugfix for Wizard monsterbold new line
-    v1.0.1 (2022-05-05)
-      Bugfix for Wizard character encoding
-    v1.0.0 (2022-03-15)
-      Initial release
-      Supports Lich::Messaging.stream_window(msg, window) SENDS msg to stream window
-      Supports Lich::Messaging.msg(type, text) SENDS msg in colors, supports debug output
-      Supports Lich::Messaging.msg_format(type, text) RETURNS msg in colors
-      Supports Lich::Messaging.monsterbold(msg)  RETURNS msg in monsterbold
-      Supports Lich::Messaging.xml_encode(msg)  RETURNS xml encoded text
-
 =end
 
 module Lich
@@ -165,7 +134,7 @@ module Lich
     def self.mono(msg)
       return raise StandardError.new 'Lich::Messaging.mono only works with String paremeters!' unless msg.is_a?(String)
       if $frontend =~ /^(?:stormfront|wrayth|genie)$/i
-        _respond "<output class=\"mono\"/>\n" + msg + "\n<output class=\"\"/>"
+        _respond "<output class=\"mono\"/>\n" + xml_encode(msg) + "\n<output class=\"\"/>"
       else
         _respond msg.split("\n")
       end
