@@ -94,8 +94,8 @@ module Lich
 
       # extending to use sheath / 2sheath wherever possible
       if !@checked_sheaths ||
-         (@sheath.has_key?(:sheath) && !GameObj.inv.any? { |item| item == @sheath.fetch(:sheath) }) ||
-         (@sheath.has_key?(:secondary_sheath) && !GameObj.inv.any? { |item| item == @sheath.fetch(:secondary_sheath) })
+         (@sheath.has_key?(:sheath) && !GameObj.inv.any? { |item| item.id == @sheath.fetch(:sheath).id }) ||
+         (@sheath.has_key?(:secondary_sheath) && !GameObj.inv.any? { |item| item.id == @sheath.fetch(:secondary_sheath).id })
         Stash.sheath_bags
       end
       if @sheath.has_key?(:sheath)
