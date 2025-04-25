@@ -136,7 +136,7 @@ module Lich
       if $frontend =~ /^(?:stormfront|wrayth|genie)$/i
         _respond "<output class=\"mono\"/>\n" + xml_encode(msg) + "\n<output class=\"\"/>"
       else
-        _respond msg.split("\n")
+        _respond xml_encode(msg).split("\n")
       end
     end
   end
