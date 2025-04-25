@@ -93,7 +93,11 @@ module Lich
       left_hand = GameObj.left_hand
 
       # extending to use sheath / 2sheath wherever possible
-      Stash.sheath_bags unless @checked_sheaths
+      if !@checked_sheaths ||
+         (@sheath.has_key?(:sheath) && !GameObj.inv.any? { |item| item == @sheath.fetch(:sheath) }) ||
+         (@sheath.has_key?(:secondary_sheath) && !GameObj.inv.any? { |item| item == @sheath.fetch(:secondary_sheath) })
+         Stash.sheath_bags
+      end
       if @sheath.has_key?(:sheath)
         unless @sheath.has_key?(:secondary_sheath)
           sheath = second_sheath = @sheath.fetch(:sheath)
