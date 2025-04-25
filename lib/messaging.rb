@@ -18,7 +18,8 @@ module Lich
       return msg_format("monster", msg)
     end
 
-    def self.stream_window(msg, window = "familiar")
+    def self.stream_window(msg, window = "familiar", encode: true)
+      msg = xml_encode(msg) if encode
       if XMLData.game =~ /^GS/
         allowed_streams = ["familiar", "speech", "thoughts", "loot", "voln"]
       elsif XMLData.game =~ /^DR/
@@ -43,10 +44,11 @@ module Lich
         end
       end
 
-      _respond stream_window_before_txt + self.xml_encode(msg) + stream_window_after_txt
+      _respond stream_window_before_txt + msg + stream_window_after_txt
     end
 
-    def self.msg_format(type = "info", msg = "", cmd_link: nil)
+    def self.msg_format(type = "info", msg = "", cmd_link: nil, encode: true)
+      msg = xml_encode(msg) if encode
       preset_color_before = ""
       preset_color_after = ""
 
@@ -119,24 +121,25 @@ module Lich
         end
       end
 
-      return (preset_color_before + xml_encode(msg) + preset_color_after)
+      return (preset_color_before + msg + preset_color_after)
     end
 
-    def self.msg(type = "info", msg = "")
+    def self.msg(type = "info", msg = "", encode: true)
       return if type == "debug" && (Lich.debug_messaging.nil? || Lich.debug_messaging == "false")
-      _respond msg_format(type, msg)
+      _respond msg_format(type, msg, encode)
     end
 
     def self.make_cmd_link(link_text, link_action)
       return msg_format("cmd", link_text, cmd_link: link_action)
     end
 
-    def self.mono(msg)
+    def self.mono(msg, encode: false)
       return raise StandardError.new 'Lich::Messaging.mono only works with String parameters!' unless msg.is_a?(String)
+      msg = xml_encode(msg) if encode
       if $frontend =~ /^(?:stormfront|wrayth|genie)$/i
-        _respond "<output class=\"mono\"/>\n" + xml_encode(msg) + "\n<output class=\"\"/>"
+        _respond "<output class=\"mono\"/>\n" + msg + "\n<output class=\"\"/>"
       else
-        _respond xml_encode(msg).split("\n")
+        _respond msg.split("\n")
       end
     end
   end
