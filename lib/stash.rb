@@ -96,7 +96,7 @@ module Lich
       if !@checked_sheaths ||
          (@sheath.has_key?(:sheath) && !GameObj.inv.any? { |item| item == @sheath.fetch(:sheath) }) ||
          (@sheath.has_key?(:secondary_sheath) && !GameObj.inv.any? { |item| item == @sheath.fetch(:secondary_sheath) })
-         Stash.sheath_bags
+        Stash.sheath_bags
       end
       if @sheath.has_key?(:sheath)
         unless @sheath.has_key?(:secondary_sheath)
