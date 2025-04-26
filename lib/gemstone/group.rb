@@ -177,14 +177,14 @@ module Lich
           NOOP    = %r{^But <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> is already a member of your group!$}
           # <a exist="-10488845" noun="Etanamir">Etanamir</a> designates you as the new leader of the group.
           HAS_LEADER = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> designates you as the new leader of the group\.$}
-          SWAP_LEADER = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> designates <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> as the new leader of the group.}
+          SWAP_LEADER = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> designates <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> as the new leader of the group.$}
 
           # You designate <a exist="-10778599" noun="Ondreian">Ondreian</a> as the new leader of the group.
           GAVE_LEADER_AWAY = %r{You designate <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> as the new leader of the group\.$}
           # You disband your group.
           DISBAND = %r{^You disband your group}
           # <a exist="-10488845" noun="Etanamir">Etanamir</a> adds you to <a exist="-10488845" noun="Etanamir">his</a> group.
-          ADDED_TO_NEW_GROUP = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> adds you to <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> group.}
+          ADDED_TO_NEW_GROUP = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> adds you to <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> group.$}
           # You join <a exist="-10488845" noun="Etanamir">Etanamir</a>.
           JOINED_NEW_GROUP = %r{You join <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a>\.$}
           # <a exist="-10488845" noun="Etanamir">Etanamir</a> adds <a exist="-10974229" noun="Szan">Szan</a> to <a exist="-10488845" noun="Etanamir">his</a> group.
@@ -211,10 +211,10 @@ module Lich
           ##
           ## active messages
           ##
-          NO_GROUP = /You are not currently in a group/
+          NO_GROUP = /^You are not currently in a group/
           # Previous GROUP output below, left in-case something missing/needed to resolve after change
           # MEMBER   = /<a exist="(?<id>.*?)" noun="(?<name>.*?)">(?:.*?)<\/a> is (?<type>(?:the leader|also a member) of your group|following you)\./
-          MEMBER   = /You are (?:leading|grouped with) (.*)/
+          MEMBER   = /^You are (?:leading|grouped with) (.*)/
           STATUS   = /^Your group status is currently (?<status>open|closed)\./
 
           GROUP_EMPTIED    = %[<indicator id='IconJOINED' visible='n'/>]
