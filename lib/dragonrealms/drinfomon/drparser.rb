@@ -46,9 +46,35 @@ module Lich
       end
 
       def self.check_exp_mods(server_string)
+        # This method parses the output from `exp mods` command
+        # and updates the DRSkill.exp_modifiers hash with the skill and value.
+        # This is primarily used by the `skill-recorder` script.
+        #
+        # Example output without any modifiers:
+        #     The following skills are currently under the influence of a modifier:
+        #     <output class="mono"/>
+        #       None
+        #     <output class=""/>
+        #
+        # Example output with modifiers:
+        #     The following skills are currently under the influence of a modifier:
+        #     <output class="mono"/>
+        #     +75 Athletics
+        #     -10 Evasion
+        #     <output class=""/>
+        #
+        # Zero or more skills may be listed between the <output> tags
+        # but exactly one skill and its skill modifier are listed per line.
+        # The number is signed to indicate a buff (+) or debuff (-).
+        #
         case server_string
-        when %r{^<preset id="speech">}, %r{^<preset id="thought">}
+        when %r{^<output class=""/>}
           if @parsing_exp_mods_output
+            @parsing_exp_mods_output = false
+          end
+        else
+          if @parsing_exp_mods_output
+            # https://regex101.com/r/keSBYF/1
             match = /(?<sign>\+|\-)+(?<value>\d+) \b(?<skill>[\w\s]+)\b/.match(server_string)
             if match
               skill = match[:skill]
@@ -57,10 +83,6 @@ module Lich
               value = (value * -1) if sign == '-'
               DRSkill.update_mods(skill, value)
             end
-          end
-        when %r{^<output class=""/>}
-          if @parsing_exp_mods_output
-            @parsing_exp_mods_output = false
           end
         end
         server_string
