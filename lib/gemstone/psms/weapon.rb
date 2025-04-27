@@ -138,7 +138,7 @@ module Lich
       end
 
       def Weapon.available?(name, min_rank: 1)
-        Weapon.known?(name, min_rank) and Weapon.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+        Weapon.known?(name, min_rank: min_rank) and Weapon.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
       end
 
       def Weapon.active?(name)

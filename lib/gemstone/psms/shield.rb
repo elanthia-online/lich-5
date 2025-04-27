@@ -222,7 +222,7 @@ module Lich
       end
 
       def Shield.available?(name, min_rank: 1)
-        Shield.known?(name, min_rank) and Shield.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+        Shield.known?(name, min_rank: min_rank) and Shield.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
       end
 
       # unmodified from 5.6.2
