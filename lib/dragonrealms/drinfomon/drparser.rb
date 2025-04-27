@@ -74,8 +74,8 @@ module Lich
           end
         else
           if @parsing_exp_mods_output
-            # https://regex101.com/r/keSBYF/1
-            match = /(?<sign>\+|\-)+(?<value>\d+) \b(?<skill>[\w\s]+)\b/.match(server_string)
+            # https://regex101.com/r/5ZE8lq/1
+            match = /^(?<sign>[+-])(?<value>\d+)\s+(?<skill>[\w\s]+)$/.match(server_string)
             if match
               skill = match[:skill]
               sign = match[:sign]
