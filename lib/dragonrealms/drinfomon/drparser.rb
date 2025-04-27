@@ -77,7 +77,7 @@ module Lich
             # https://regex101.com/r/5ZE8lq/1
             match = /^(?<sign>[+-])(?<value>\d+)\s+(?<skill>[\w\s]+)$/.match(server_string)
             if match
-              skill = match[:skill]
+              skill = match[:skill].strip
               sign = match[:sign]
               value = match[:value].to_i
               value = (value * -1) if sign == '-'
