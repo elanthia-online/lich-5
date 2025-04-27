@@ -119,7 +119,7 @@ module Lich
           :usage => "bullrush"
         },
         "burst_of_swiftness"     => {
-          :cost               => Lich::Util.normalize_lookup('Cooldowns', 'Surge of Strength') ? 60 : 30,
+          :cost               => Lich::Util.normalize_lookup('Cooldowns', 'burst_of_swiftness') ? 60 : 30,
           :type               => "buff",
           :regex              => Regexp.union(/You prepare yourself to move swiftly at a moment\'s notice\./,
                                               /You prepare yourself to move swiftly at a moment\'s notice, overcoming the fatigue from your previous exertion\./),
@@ -560,7 +560,7 @@ module Lich
           :usage => "sunder"
         },
         "surge_of_strength"      => {
-          :cost               => Lich::Util.normalize_lookup('Cooldowns', 'Surge of Strength') ? 60 : 30,
+          :cost               => Lich::Util.normalize_lookup('Cooldowns', 'surge_of_strength') ? 60 : 30,
           :type               => "buff",
           :regex              => /You focus deep within yourself, searching for untapped sources of strength\./,
           :usage              => "surge",
