@@ -9,7 +9,7 @@ module Lich
       end
 
       def GameSettings.[]=(name, value)
-        Settings.set_script_settings("#{XMLData.game}:", name, value)
+        Settings.set_script_settings(XMLData.game, name, value)
       end
 
       def GameSettings.to_hash
