@@ -654,16 +654,17 @@ module Lich
         return PSMS.assess(name, 'CMan')
       end
 
-      def CMan.known?(name)
-        CMan[name] > 0
+      def CMan.known?(name, min_rank: 1)
+        min_rank = 1 unless min_rank >= 1 # in case a 0 or below is passed
+        CMan[name] >= min_rank
       end
 
       def CMan.affordable?(name)
         return PSMS.assess(name, 'CMan', true)
       end
 
-      def CMan.available?(name, ignore_cooldown: false)
-        return false unless CMan.known?(name)
+      def CMan.available?(name, ignore_cooldown: false, min_rank: 1)
+        return false unless CMan.known?(name, min_rank)
         return false unless CMan.affordable?(name)
         return false if Lich::Util.normalize_lookup('Cooldowns', name) unless ignore_cooldown && @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:ignorable_cooldown] # check that the request to ignore_cooldown is on something that can have the cooldown ignored as well
         return false if Lich::Util.normalize_lookup('Debuffs', 'Overexerted')

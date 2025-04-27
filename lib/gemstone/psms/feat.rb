@@ -216,16 +216,17 @@ module Lich
         return PSMS.assess(name, 'Feat')
       end
 
-      def Feat.known?(name)
-        Feat[name] > 0
+      def Feat.known?(name, min_rank: 1)
+        min_rank = 1 unless min_rank >= 1 # in case a 0 or below is passed
+        Feat[name] >= min_rank
       end
 
       def Feat.affordable?(name)
         return PSMS.assess(name, 'Feat', true)
       end
 
-      def Feat.available?(name)
-        Feat.known?(name) and Feat.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+      def Feat.available?(name, min_rank: 1)
+        Feat.known?(name, min_rank) and Feat.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
       end
 
       def Feat.use(name, target = "", results_of_interest: nil)

@@ -77,16 +77,17 @@ module Lich
         return PSMS.assess(name, 'Armor')
       end
 
-      def Armor.known?(name)
-        Armor[name] > 0
+      def Armor.known?(name, min_rank: 1)
+        min_rank = 1 unless min_rank >= 1 # in case a 0 or below is passed
+        Armor[name] >= min_rank
       end
 
       def Armor.affordable?(name)
         return PSMS.assess(name, 'Armor', true)
       end
 
-      def Armor.available?(name)
-        Armor.known?(name) and Armor.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+      def Armor.available?(name, min_rank: 1)
+        Armor.known?(name, min_rank) and Armor.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
       end
 
       def Armor.use(name, target = "", results_of_interest: nil)

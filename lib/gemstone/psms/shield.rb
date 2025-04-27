@@ -212,16 +212,17 @@ module Lich
         return PSMS.assess(name, 'Shield')
       end
 
-      def Shield.known?(name)
-        Shield[name] > 0
+      def Shield.known?(name, min_rank: 1)
+        min_rank = 1 unless min_rank >= 1 # in case a 0 or below is passed
+        Shield[name] >= min_rank
       end
 
       def Shield.affordable?(name)
         return PSMS.assess(name, 'Shield', true)
       end
 
-      def Shield.available?(name)
-        Shield.known?(name) and Shield.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+      def Shield.available?(name, min_rank: 1)
+        Shield.known?(name, min_rank) and Shield.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
       end
 
       # unmodified from 5.6.2

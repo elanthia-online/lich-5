@@ -128,16 +128,17 @@ module Lich
         return PSMS.assess(name, 'Weapon')
       end
 
-      def Weapon.known?(name)
-        Weapon[name] > 0
+      def Weapon.known?(name, min_rank: 1)
+        min_rank = 1 unless min_rank >= 1 # in case a 0 or below is passed
+        Weapon[name] >= min_rank
       end
 
       def Weapon.affordable?(name)
         return PSMS.assess(name, 'Weapon', true)
       end
 
-      def Weapon.available?(name)
-        Weapon.known?(name) and Weapon.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+      def Weapon.available?(name, min_rank: 1)
+        Weapon.known?(name, min_rank) and Weapon.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
       end
 
       def Weapon.active?(name)
