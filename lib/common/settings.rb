@@ -65,9 +65,21 @@ module Lich
       def self.save_to_database(current, scope = ":")
         script_name = Script.current.name
         cache_key = "#{script_name}::#{scope}"
-        @settings_cache[cache_key] = Marshal.load(Marshal.dump(current)) # current.dup
 
         @db_adapter.save_settings(script_name, current, scope)
+
+        # Expire cache key to force reload of saved values
+        @settings_cache.delete(cache_key) if @settings_cache.has_key?(cache_key)
+      end
+
+      def self.refresh_data(scope = ":")
+        # Reqeusts made directly to this method want a refreshed set of data.
+        # Aliased to Settings.load for backwards compatibility.
+        script_name = Script.current.name
+        cache_key = "#{script_name}::#{scope}"
+        @settings_cache.delete(cache_key) if @settings_cache.has_key?(cache_key)
+
+        current_script_settings(scope)
       end
 
       # Path navigation helpers
@@ -300,12 +312,11 @@ module Lich
         reset_path_and_return(target.is_a?(Array) ? target.include?(item) : false)
       end
 
-      # Deprecated calls
-      def Settings.load
-        Lich.deprecated('Settings.load', 'not using, not applicable,', caller[0], fe_log: true)
-        nil
+      def self.load # pulled from Deprecated calls to alias to refresh_data()
+        refresh_data()
       end
 
+      # Deprecated calls
       def Settings.save_all
         Lich.deprecated('Settings.save_all', 'not using, not applicable,', caller[0], fe_log: true)
         nil
