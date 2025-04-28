@@ -1794,7 +1794,7 @@ def unnoded_pulse
   end
 end
 
-require './lib/stash.rb'
+require_relative File.join(LIB_DIR, "stash.rb")
 
 def empty_hands
   waitrt?
