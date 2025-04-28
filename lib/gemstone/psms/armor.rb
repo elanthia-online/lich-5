@@ -54,19 +54,19 @@ module Lich
           :usage => "stealth",
         },
         "crush_protection"    => {
-          :regex => Regexp.union(/You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
+          :regex => Regexp.union(/You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
                                  /You must specify an armor slot\./,
                                  /You don't seem to have the necessary armor fittings in hand\./),
           :usage => "crush",
         },
         "puncture_protection" => {
-          :regex => Regexp.union(/You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
+          :regex => Regexp.union(/You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
                                  /You must specify an armor slot\./,
                                  /You don't seem to have the necessary armor fittings in hand\./),
           :usage => "puncture",
         },
         "slash_protection"    => {
-          :regex => Regexp.union(/You adjusts? \w+(?:'s)? [\w\s]+ with your plate armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
+          :regex => Regexp.union(/You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
                                  /You must specify an armor slot\./,
                                  /You don't seem to have the necessary armor fittings in hand\./),
           :usage => "slash",
