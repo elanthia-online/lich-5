@@ -73,7 +73,7 @@ module Lich
       end
 
       def self.refresh_data(scope = ":")
-        # Reqeusts made directly to this method want a refreshed set of data.
+        # Requests made directly to this method want a refreshed set of data.
         # Aliased to Settings.load for backwards compatibility.
         script_name = Script.current.name
         cache_key = "#{script_name}::#{scope}"
