@@ -37,9 +37,9 @@ end
 
 LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 
+require 'util/util'
 require 'gemstone/psms'
 require 'gemstone/infomon'
-require 'util/util'
 
 module Char
   def self.name
