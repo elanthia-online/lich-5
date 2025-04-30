@@ -14,12 +14,12 @@ module Lich
     end
 
     def self.monsterbold(msg, encode: true)
-      return raise StandardError.new "\n--- Lich::Messaging.monsterbold only works with String parameters!\n--- Caller: #{caller[0]}\n--- #{msg.inspect}" unless msg.is_a?(String)
+      return raise ArgumentError.new "\n--- Lich::Messaging.monsterbold only works with String parameters!\n--- Caller: #{caller[0]}\n--- #{msg.inspect}" unless msg.is_a?(String)
       return msg_format("monster", msg, encode: encode)
     end
 
     def self.stream_window(msg, window = "familiar", encode: true)
-      return raise StandardError.new "\n--- Lich::Messaging.stream_window only works with String parameters!\n--- Caller: #{caller[0]}\n--- #{msg.inspect}\n--- #{window.inspect}" unless msg.is_a?(String) && window.is_a?(String)
+      return raise ArgumentError.new "\n--- Lich::Messaging.stream_window only works with String parameters!\n--- Caller: #{caller[0]}\n--- #{msg.inspect}\n--- #{window.inspect}" unless msg.is_a?(String) && window.is_a?(String)
       msg = xml_encode(msg) if encode
       if XMLData.game =~ /^GS/
         allowed_streams = ["familiar", "speech", "thoughts", "loot", "voln"]
@@ -49,7 +49,7 @@ module Lich
     end
 
     def self.msg_format(type = "info", msg = "", cmd_link: nil, encode: true)
-      return raise StandardError.new "\n--- Lich::Messaging.msg_format only works with String parameters!\n--- Caller: #{caller[0]}\n--- #{msg.inspect}\n--- #{type.inspect}" unless msg.is_a?(String) && type.is_a?(String)
+      return raise ArgumentError.new "\n--- Lich::Messaging.msg_format only works with String parameters!\n--- Caller: #{caller[0]}\n--- #{msg.inspect}\n--- #{type.inspect}" unless msg.is_a?(String) && type.is_a?(String)
       msg = xml_encode(msg) if encode
       preset_color_before = ""
       preset_color_after = ""
@@ -128,19 +128,19 @@ module Lich
 
     def self.msg(type = "info", msg = "", encode: true)
       return if type == "debug" && (Lich.debug_messaging.nil? || Lich.debug_messaging == "false")
-      return raise StandardError.new "\n--- Lich::Messaging.msg only works with String parameters!\n--- Caller: #{caller[0]}\n--- #{msg.inspect}\n--- #{type.inspect}" unless msg.is_a?(String) && type.is_a?(String)
+      return raise ArgumentError.new "\n--- Lich::Messaging.msg only works with String parameters!\n--- Caller: #{caller[0]}\n--- #{msg.inspect}\n--- #{type.inspect}" unless msg.is_a?(String) && type.is_a?(String)
       _respond msg_format(type, msg, encode: encode)
     end
 
     def self.make_cmd_link(link_text, link_action, encode: true)
-      return raise StandardError.new "\n--- Lich::Messaging.make_cmd_link only works with String parameters!\n--- Caller: #{caller[0]}\n--- #{link_text.inspect}\n--- #{link_action.inspect}" unless link_text.is_a?(String) && link_action.is_a?(String)
+      return raise ArgumentError.new "\n--- Lich::Messaging.make_cmd_link only works with String parameters!\n--- Caller: #{caller[0]}\n--- #{link_text.inspect}\n--- #{link_action.inspect}" unless link_text.is_a?(String) && link_action.is_a?(String)
       return msg_format("cmd", link_text, cmd_link: link_action, encode: encode)
     end
 
     # defaulting encoding here to false instead of true like other methods due to backwards compatibility that it never encoded before
     # whereas all the other methods were already encoding and therefor should default to allow for them.
     def self.mono(msg, encode: false)
-      return raise StandardError.new "\n--- Lich::Messaging.mono only works with String parameters!\n--- Caller: #{caller[0]}\n--- #{msg.inspect}" unless msg.is_a?(String)
+      return raise ArgumentError.new "\n--- Lich::Messaging.mono only works with String parameters!\n--- Caller: #{caller[0]}\n--- #{msg.inspect}" unless msg.is_a?(String)
       msg = xml_encode(msg) if encode
       if $frontend =~ /^(?:stormfront|wrayth|genie)$/i
         _respond "<output class=\"mono\"/>\n" + msg + "\n<output class=\"\"/>"
