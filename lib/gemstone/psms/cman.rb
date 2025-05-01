@@ -290,7 +290,7 @@ module Lich
           :regex => Regexp.union(/You fling your garrote around .+? neck and snap it taut\.  Success!/,
                                  /You need to have your other hand clear to garrote something\./,
                                  /You need to be holding a garrote\./,
-                                 /You attempt to slip the garrote around .+? neck, but it catches the movement and dodges away just in time\./,)
+                                 /You attempt to slip the garrote around .+? neck, but it catches the movement and dodges away just in time\./),
           :usage => "garrote"
         },
         "grappel_specialization" => {
@@ -480,7 +480,7 @@ module Lich
           :regex => Regexp.union(/You might have more success with anti-magical equipment\./,
                                  /You can't use spell thieve with empty hands!/,
                                  /You hang back for a moment and concentrate on the magical wards surrounding .+?, before sneaking in an attack on them!/,
-                                 /You hang back for a moment and attempt to concentrate on the magical wards surrounding .+?, but are unable to discern the presence of any at all\./,
+                                 /You hang back for a moment and attempt to concentrate on the magical wards surrounding .+?, but are unable to discern the presence of any at all\./),
           :usage => "sthieve"
         },
         "spike_focus"            => {
