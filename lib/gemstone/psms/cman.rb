@@ -461,7 +461,8 @@ module Lich
           :type  => "setup",
           :regex => Regexp.union(/You hang back for a moment and concentrate on the magical wards surrounding .+?, before unleashing your attack upon them!/,
                                  /You hang back for a moment and attempt to concentrate on the magical wards surrounding .+?, but are unable to discern the presence of any at all\./,
-                                 /You remain mentally drained from your last attempt to perceive the threads that connect a magical ward to its bearer\./),
+                                 /You remain mentally drained from your last attempt to perceive the threads that connect a magical ward to its bearer\./
+                                 /You might have more success with anti-magical equipment\./),
           :usage => "scleave"
         },
         "spell_parry"            => {
@@ -473,8 +474,11 @@ module Lich
         "spell_thieve"           => {
           :cost  => 7,
           :type  => "setup",
-          :regex => /You might have more success with anti-magical equipment\./, # #TODO: Need Success Message
-          :usage => nil # "sthieve" # Set to nil as the messaging is missing to test properly
+          :regex => Regexp.union(/You might have more success with anti-magical equipment\./,
+                                 /You can't use spell thieve with empty hands!/,
+                                 /You hang back for a moment and concentrate on the magical wards surrounding .+?, before sneaking in an attack on them!/,
+                                 /You hang back for a moment and attempt to concentrate on the magical wards surrounding .+?, but are unable to discern the presence of any at all\./,
+          :usage => "sthieve"
         },
         "spike_focus"            => {
           :cost  => 0,
