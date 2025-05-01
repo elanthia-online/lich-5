@@ -287,8 +287,11 @@ module Lich
         "garrote"                => {
           :cost  => 10,
           :type  => "concentration",
-          :regex => /You fling your .+ around .+ neck and snap it taut\.  Success\!/, # #TODO: Need Failure Message
-          :usage => nil # "garrote" # Set to nil as the messaging is missing to test properly
+          :regex => Regexp.union(/You fling your garrote around .+? neck and snap it taut\.  Success!/,
+                                 /You need to have your other hand clear to garrote something\./,
+                                 /You need to be holding a garrote\./,
+                                 /You attempt to slip the garrote around .+? neck, but it catches the movement and dodges away just in time\./,)
+          :usage => "garrote"
         },
         "grappel_specialization" => {
           :cost  => 0,
