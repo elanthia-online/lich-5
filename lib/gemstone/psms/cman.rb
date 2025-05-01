@@ -459,8 +459,10 @@ module Lich
         "spell_cleave"           => {
           :cost  => 7,
           :type  => "setup",
-          :regex => /You might have more success with anti-magical equipment\./, # #TODO: Need Success Message
-          :usage => nil # "scleave" # Set to nil as the messaging is missing to test properly
+          :regex => Regexp.union(/You hang back for a moment and concentrate on the magical wards surrounding .+?, before unleashing your attack upon them!/,
+                                 /You hang back for a moment and attempt to concentrate on the magical wards surrounding .+?, but are unable to discern the presence of any at all\./,
+                                 /You remain mentally drained from your last attempt to perceive the threads that connect a magical ward to its bearer\./
+          :usage => "scleave"
         },
         "spell_parry"            => {
           :cost  => 0,
