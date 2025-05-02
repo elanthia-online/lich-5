@@ -1,4 +1,4 @@
-# Carve out class WatchFor
+# Carve out class Watchfor
 # 2024-06-13
 # has rubocop Lint issues (return nil) - overriding until it can be further researched
 
