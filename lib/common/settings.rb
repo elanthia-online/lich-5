@@ -19,24 +19,39 @@ module Lich
         value.is_a?(Hash) || value.is_a?(Array)
       end
 
-      # Recursively unwraps SettingsProxy instances within a data structure
-      def self.unwrap_proxies(data)
-        case data
-        when SettingsProxy
-          # If it's a proxy, unwrap its target recursively
-          unwrap_proxies(data.target)
-        when Hash
-          # If it's a hash, create a new hash with unwrapped values
-          data.each_with_object({}) do |(key, value), new_hash|
-            new_hash[key] = unwrap_proxies(value)
-          end
-        when Array
-          # If it's an array, create a new array with unwrapped elements
-          data.map { |item| unwrap_proxies(item) }
-        else
-          # Otherwise (scalar), return the data as is
-          data
-        end
+      # Recursively unwraps SettingsProxy instances within a data structure,
+      # safeguarding against circular references.
+      def self.unwrap_proxies(data, visited = Set.new)
+        # Check if we have already visited this object_id to detect cycles
+        return "[Circular Reference Detected]" if visited.include?(data.object_id)
+
+        # Add current object_id to visited set if it's a container type
+        visited.add(data.object_id) if data.is_a?(Hash) || data.is_a?(Array) || data.is_a?(SettingsProxy)
+
+        result = case data
+                 when SettingsProxy
+                   # If it's a proxy, unwrap its target recursively
+                   unwrap_proxies(data.target, visited)
+                 when Hash
+                   # If it's a hash, create a new hash with unwrapped values
+                   # Preserve key types by iterating and assigning
+                   new_hash = {}
+                   data.each do |key, value|
+                     new_hash[key] = unwrap_proxies(value, visited)
+                   end
+                   new_hash
+                 when Array
+                   # If it's an array, create a new array with unwrapped elements
+                   data.map { |item| unwrap_proxies(item, visited) }
+                 else
+                   # Otherwise (scalar), return the data as is
+                   data
+                 end
+
+        # Remove current object_id from visited set after processing its branch
+        visited.delete(data.object_id) if data.is_a?(Hash) || data.is_a?(Array) || data.is_a?(SettingsProxy)
+
+        result
       end
       private_class_method :unwrap_proxies
 
