@@ -857,7 +857,7 @@ module Lich
         !@persist_on_death
       end
 
-      # for backwards compatiblity
+      # for backwards compatibility
       def duration;      self.time_per_formula;            end
       def cost;          self.mana_cost_formula    || '0'; end
       def manaCost;      self.mana_cost_formula    || '0'; end
