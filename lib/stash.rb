@@ -83,7 +83,7 @@ module Lich
       @checked_sheaths = true
     end
 
-    def self.missing_primary_sheath? # check entry against actual inventory to catch inventory updatees
+    def self.missing_primary_sheath? # check entry against actual inventory to catch inventory updates
       @sheath.has_key?(:sheath) && !GameObj.inv.any? { |item| item.id == @sheath[:sheath].id }
     end
 
