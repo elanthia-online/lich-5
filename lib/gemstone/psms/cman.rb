@@ -287,8 +287,11 @@ module Lich
         "garrote"                => {
           :cost  => 10,
           :type  => "concentration",
-          :regex => /You fling your .+ around .+ neck and snap it taut\.  Success\!/, # #TODO: Need Failure Message
-          :usage => nil # "garrote" # Set to nil as the messaging is missing to test properly
+          :regex => Regexp.union(/You fling your garrote around .+? neck and snap it taut\.  Success!/,
+                                 /You need to have your other hand clear to garrote something\./,
+                                 /You need to be holding a garrote\./,
+                                 /You attempt to slip the garrote around .+? neck, but it catches the movement and dodges away just in time\./),
+          :usage => "garrote"
         },
         "grappel_specialization" => {
           :cost  => 0,
@@ -333,7 +336,7 @@ module Lich
           :type  => "setup",
           :regex => Regexp.union(/You charge towards .+ and attempt to headbutt .+!/, # Standard
                                  /Coiling your trapezius muscles, you feel your neck tense before springing into action and slamming your head down toward .+\!/, # RW2025
-                                 /Shrugging almost casually, you quickly snap your head foward in an attempt to headbutt .+\!/, # RW2025
+                                 /Shrugging almost casually, you quickly snap your head for?ward in an attempt to headbutt .+\!/, # RW2025
                                  /Rising on your tip toes, you cock back your head and slam it down towards .+\!/, # RW2025
                                  /Bellowing like an angry bull, you lower your head and charge straight at .+\!/), # RW2025
           :usage => "headbutt"
@@ -459,8 +462,11 @@ module Lich
         "spell_cleave"           => {
           :cost  => 7,
           :type  => "setup",
-          :regex => /You might have more success with anti-magical equipment\./, # #TODO: Need Success Message
-          :usage => nil # "scleave" # Set to nil as the messaging is missing to test properly
+          :regex => Regexp.union(/You hang back for a moment and concentrate on the magical wards surrounding .+?, before unleashing your attack upon them!/,
+                                 /You hang back for a moment and attempt to concentrate on the magical wards surrounding .+?, but are unable to discern the presence of any at all\./,
+                                 /You remain mentally drained from your last attempt to perceive the threads that connect a magical ward to its bearer\./,
+                                 /You might have more success with anti-magical equipment\./),
+          :usage => "scleave"
         },
         "spell_parry"            => {
           :cost  => 0,
@@ -471,8 +477,11 @@ module Lich
         "spell_thieve"           => {
           :cost  => 7,
           :type  => "setup",
-          :regex => /You might have more success with anti-magical equipment\./, # #TODO: Need Success Message
-          :usage => nil # "sthieve" # Set to nil as the messaging is missing to test properly
+          :regex => Regexp.union(/You might have more success with anti-magical equipment\./,
+                                 /You can't use spell thieve with empty hands!/,
+                                 /You hang back for a moment and concentrate on the magical wards surrounding .+?, before sneaking in an attack on them!/,
+                                 /You hang back for a moment and attempt to concentrate on the magical wards surrounding .+?, but are unable to discern the presence of any at all\./),
+          :usage => "sthieve"
         },
         "spike_focus"            => {
           :cost  => 0,
