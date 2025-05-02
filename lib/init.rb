@@ -590,7 +590,7 @@ unless File.exist?(LICH_DIR)
   begin
     Dir.mkdir(LICH_DIR)
   rescue
-    message = "An error occured while attempting to create directory #{LICH_DIR}\n\n"
+    message = "An error occurred while attempting to create directory #{LICH_DIR}\n\n"
     if not File.exist?(LICH_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
       message.concat "This was likely because the parent directory (#{LICH_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop}) doesn't exist."
     elsif defined?(Win32) and (Win32.GetVersionEx[:dwMajorVersion] >= 6) and (dir !~ /^[A-z]\:\\(Users|Documents and Settings)/)
@@ -609,7 +609,7 @@ unless File.exist?(TEMP_DIR)
   begin
     Dir.mkdir(TEMP_DIR)
   rescue
-    message = "An error occured while attempting to create directory #{TEMP_DIR}\n\n"
+    message = "An error occurred while attempting to create directory #{TEMP_DIR}\n\n"
     if not File.exist?(TEMP_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
       message.concat "This was likely because the parent directory (#{TEMP_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop}) doesn't exist."
     elsif defined?(Win32) and (Win32.GetVersionEx[:dwMajorVersion] >= 6) and (dir !~ /^[A-z]\:\\(Users|Documents and Settings)/)
@@ -626,7 +626,7 @@ begin
   debug_filename = "#{TEMP_DIR}/debug-#{Time.now.strftime("%Y-%m-%d-%H-%M-%S-%L")}.log"
   $stderr = File.open(debug_filename, 'w')
 rescue
-  message = "An error occured while attempting to create file #{debug_filename}\n\n"
+  message = "An error occurred while attempting to create file #{debug_filename}\n\n"
   if defined?(Win32) and (TEMP_DIR !~ /^[A-z]\:\\(Users|Documents and Settings)/) and not Win32.isXP?
     message.concat "This was likely because Lich doesn't have permission to create files and folders here.  It is recommended to put Lich in your Documents folder."
   else
@@ -648,7 +648,7 @@ unless File.exist?(DATA_DIR)
     Dir.mkdir(DATA_DIR)
   rescue
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occured while attempting to create directory #{DATA_DIR}\n\n#{$!}", :icon => :error)
+    Lich.msgbox(:message => "An error occurred while attempting to create directory #{DATA_DIR}\n\n#{$!}", :icon => :error)
     exit
   end
 end
@@ -657,7 +657,7 @@ unless File.exist?(SCRIPT_DIR)
     Dir.mkdir(SCRIPT_DIR)
   rescue
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occured while attempting to create directory #{SCRIPT_DIR}\n\n#{$!}", :icon => :error)
+    Lich.msgbox(:message => "An error occurred while attempting to create directory #{SCRIPT_DIR}\n\n#{$!}", :icon => :error)
     exit
   end
 end
@@ -666,7 +666,7 @@ unless File.exist?("#{SCRIPT_DIR}/custom")
     Dir.mkdir("#{SCRIPT_DIR}/custom")
   rescue
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occured while attempting to create directory #{SCRIPT_DIR}/custom\n\n#{$!}", :icon => :error)
+    Lich.msgbox(:message => "An error occurred while attempting to create directory #{SCRIPT_DIR}/custom\n\n#{$!}", :icon => :error)
     exit
   end
 end
@@ -675,7 +675,7 @@ unless File.exist?(MAP_DIR)
     Dir.mkdir(MAP_DIR)
   rescue
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occured while attempting to create directory #{MAP_DIR}\n\n#{$!}", :icon => :error)
+    Lich.msgbox(:message => "An error occurred while attempting to create directory #{MAP_DIR}\n\n#{$!}", :icon => :error)
     exit
   end
 end
@@ -684,7 +684,7 @@ unless File.exist?(LOG_DIR)
     Dir.mkdir(LOG_DIR)
   rescue
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occured while attempting to create directory #{LOG_DIR}\n\n#{$!}", :icon => :error)
+    Lich.msgbox(:message => "An error occurred while attempting to create directory #{LOG_DIR}\n\n#{$!}", :icon => :error)
     exit
   end
 end
@@ -693,7 +693,7 @@ unless File.exist?(BACKUP_DIR)
     Dir.mkdir(BACKUP_DIR)
   rescue
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occured while attempting to create directory #{BACKUP_DIR}\n\n#{$!}", :icon => :error)
+    Lich.msgbox(:message => "An error occurred while attempting to create directory #{BACKUP_DIR}\n\n#{$!}", :icon => :error)
     exit
   end
 end
