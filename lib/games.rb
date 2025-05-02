@@ -622,7 +622,7 @@ module Lich
           Map.current.wayto.each do |_key, value|
             # Don't include cardinals / up/down/out (usually just climb/go)
             next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
-            if value.class != Proc
+            if !value.is_a?(Proc)
               room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
             end
           end
@@ -758,7 +758,7 @@ module Lich
           Map.current.wayto.each do |_key, value|
             # Don't include cardinals / up/down/out (usually just climb/go)
             next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
-            if value.class != Proc
+            if !value.is_a?(Proc)
               room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
             end
           end
