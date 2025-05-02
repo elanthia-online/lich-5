@@ -1,6 +1,6 @@
 def respond(first = "", *messages)
   str = ''
-  if first.is_a?(Array)
+  if first.class == Array
     first.flatten.each { |ln| str += sprintf("%s\r\n", ln.to_s.chomp) }
   else
     str += sprintf("%s\r\n", first.to_s.chomp)
