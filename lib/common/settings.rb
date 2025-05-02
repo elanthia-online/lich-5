@@ -23,7 +23,7 @@ module Lich
       # safeguarding against circular references.
       def self.unwrap_proxies(data, visited = Set.new)
         # Check if we have already visited this object_id to detect cycles
-        return "[Circular Reference Detected]" if visited.include?(data.object_id)
+        raise StandardError.new("settings.rb - Circular Reference Detected") if visited.include?(data.object_id)
 
         # Add current object_id to visited set if it's a container type
         visited.add(data.object_id) if data.is_a?(Hash) || data.is_a?(Array) || data.is_a?(SettingsProxy)
