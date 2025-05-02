@@ -135,7 +135,7 @@ module Lich
             break if line.is_a?(String) && line.strip =~ /^(?:<c>)?(?:#{$clean_lich_char}send|#{$clean_lich_char}s) /i
             break if Time.now > timeout
           end
-          if line =~ /send Y|s Y/i
+          if line.is_a?(String) && line =~ /send Y|s Y/i
             @beta_response = 'accepted'
             respond 'Beta test installation accepted.  Thank you for considering!'
           else
