@@ -190,7 +190,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       else
         bInheritHandles = args[:bInheritHandles].to_i
       end
-      if args[:lpEnvironment].class == Array
+      if args[:lpEnvironment].is_a?(Array)
         # fixme
       end
       lpStartupInfo = [68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -324,17 +324,17 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
     end
 
     def Win32.RegSetValueEx(args)
-      if [REG_EXPAND_SZ, REG_SZ, REG_LINK].include?(args[:dwType]) and (args[:lpData].class == String)
+      if [REG_EXPAND_SZ, REG_SZ, REG_LINK].include?(args[:dwType]) and (args[:lpData].is_a?(String))
         lpData = args[:lpData].dup
         lpData.concat("\x00")
         cbData = lpData.length
-      elsif (args[:dwType] == REG_MULTI_SZ) and (args[:lpData].class == Array)
+      elsif (args[:dwType] == REG_MULTI_SZ) and (args[:lpData].is_a?(Array))
         lpData = args[:lpData].join("\x00").concat("\x00\x00")
         cbData = lpData.length
-      elsif (args[:dwType] == REG_DWORD) and (args[:lpData].class == Integer)
+      elsif (args[:dwType] == REG_DWORD) and (args[:lpData].is_a?(Integer))
         lpData = [args[:lpData]].pack('L')
         cbData = 4
-      elsif (args[:dwType] == REG_QWORD) and (args[:lpData].class == Integer)
+      elsif (args[:dwType] == REG_QWORD) and (args[:lpData].is_a?(Integer))
         lpData = [args[:lpData]].pack('Q')
         cbData = 8
       elsif args[:dwType] == REG_BINARY
