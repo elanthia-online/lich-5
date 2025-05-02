@@ -1,6 +1,6 @@
 # Generated during infomon separation 230305
 # script bindings are convoluted, but don't change them without testing if:
-#    class methods such as Script.start and ExecScript.start become accessible without specifying the class name (which is just a syptom of a problem that will break scripts)
+#    class methods such as Script.start and ExecScript.start become accessible without specifying the class name (which is just a symptom of a problem that will break scripts)
 #    local variables become shared between scripts
 #    local variable 'file' is shared between scripts, even though other local variables aren't
 #    defined methods are instantly inaccessible
