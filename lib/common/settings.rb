@@ -9,6 +9,11 @@ module Lich
     require_relative 'settings/path_navigator'
 
     module Settings
+      class CircularReferenceError < StandardError
+        def initialize(msg = "Circular Reference Detected")
+          super(msg)
+        end
+      end
       # Initialize database adapter and path navigator
       @db_adapter = DatabaseAdapter.new(DATA_DIR, :script_auto_settings)
       @path_navigator = PathNavigator.new(@db_adapter)
@@ -18,6 +23,42 @@ module Lich
       def self.container?(value)
         value.is_a?(Hash) || value.is_a?(Array)
       end
+
+      # Recursively unwraps SettingsProxy instances within a data structure,
+      # safeguarding against circular references.
+      def self.unwrap_proxies(data, visited = Set.new)
+        # Check if we have already visited this object_id to detect cycles
+        raise CircularReferenceError.new() if visited.include?(data.object_id)
+
+        # Add current object_id to visited set if it's a container type
+        visited.add(data.object_id) if data.is_a?(Hash) || data.is_a?(Array) || data.is_a?(SettingsProxy)
+
+        result = case data
+                 when SettingsProxy
+                   # If it's a proxy, unwrap its target recursively
+                   unwrap_proxies(data.target, visited)
+                 when Hash
+                   # If it's a hash, create a new hash with unwrapped values
+                   # Preserve key types by iterating and assigning
+                   new_hash = {}
+                   data.each do |key, value|
+                     new_hash[key] = unwrap_proxies(value, visited)
+                   end
+                   new_hash
+                 when Array
+                   # If it's an array, create a new array with unwrapped elements
+                   data.map { |item| unwrap_proxies(item, visited) }
+                 else
+                   # Otherwise (scalar), return the data as is
+                   data
+                 end
+
+        # Remove current object_id from visited set after processing its branch
+        visited.delete(data.object_id) if data.is_a?(Hash) || data.is_a?(Array) || data.is_a?(SettingsProxy)
+
+        result
+      end
+      private_class_method :unwrap_proxies
 
       # Save changes from a proxy back to the database
       def self.save_proxy_changes(proxy)
@@ -40,12 +81,12 @@ module Lich
           parent = parent[key]
         end
 
-        # Update the value at the final location
+        # Update the value at the final location with the unwrapped target
         parent[path.last] = proxy.target
 
-        # Update cache and save to database
+        # Update cache and save to database (save_to_database will handle further unwrapping if needed)
         @settings_cache[cache_key] = current
-        save_to_database(current)
+        save_to_database(current, scope)
       end
 
       # Database operations
@@ -66,7 +107,11 @@ module Lich
         script_name = Script.current.name
         cache_key = "#{script_name}::#{scope}"
 
-        @db_adapter.save_settings(script_name, current, scope)
+        # Recursively unwrap any SettingsProxy instances before saving
+        unwrapped_settings = unwrap_proxies(current)
+
+        # Pass the unwrapped settings to the database adapter
+        @db_adapter.save_settings(script_name, unwrapped_settings, scope)
 
         # Expire cache key to force reload of saved values
         @settings_cache.delete(cache_key) if @settings_cache.has_key?(cache_key)
@@ -114,30 +159,34 @@ module Lich
 
           [target, root]
         else
+          # If not in cache, use the PathNavigator's method which reads from DB
           @path_navigator.navigate_to_path(script_name, create_missing, scope)
         end
       end
 
       # Core methods
       def self.set_script_settings(scope = ":", name, value)
+        # Unwrap the value before assigning it to prevent proxies from entering the structure
+        unwrapped_value = unwrap_proxies(value)
+
         if @path_navigator.path.empty?
           # Direct assignment to top-level key
           current = current_script_settings(scope)
-          current[name] = value
+          current[name] = unwrapped_value
           save_to_database(current, scope)
         else
           # Navigate to the correct location in the hash
           target, current = navigate_to_path(true, scope)
 
-          # Set the value at the final location
-          target[name] = value
+          # Set the unwrapped value at the final location
+          target[name] = unwrapped_value
 
           # Save the updated hash to the database
           save_to_database(current, scope)
         end
 
         # Reset path after setting
-        reset_path_and_return(value)
+        reset_path_and_return(value) # Return original value/proxy as per convention
       end
 
       def self.[](name)
@@ -238,7 +287,9 @@ module Lich
             return handle_non_destructive_result(result)
           else
             # For destructive methods, operate on the original and save changes
-            result = target.send(method, *args, &block)
+            # Unwrap arguments if they are SettingsProxy instances
+            unwrapped_args = args.map { |arg| unwrap_proxies(arg) }
+            result = target.send(method, *unwrapped_args, &block)
             save_to_database(current)
             return handle_method_result(result)
           end
@@ -282,11 +333,13 @@ module Lich
       end
 
       def self.to_h
-        current_script_settings
+        # Return unwrapped hash
+        unwrap_proxies(current_script_settings)
       end
 
       def self.to_hash(scope = ":")
-        current_script_settings(scope)
+        # Return unwrapped hash
+        unwrap_proxies(current_script_settings(scope))
       end
 
       def self.save
@@ -309,7 +362,9 @@ module Lich
         target, _ = navigate_to_path(false)
         return reset_path_and_return(false) if target.nil?
 
-        reset_path_and_return(target.is_a?(Array) ? target.include?(item) : false)
+        # Unwrap item before checking inclusion
+        unwrapped_item = unwrap_proxies(item)
+        reset_path_and_return(target.is_a?(Array) ? target.include?(unwrapped_item) : false)
       end
 
       def self.load # pulled from Deprecated calls to alias to refresh_data()
@@ -329,7 +384,6 @@ module Lich
 
       def Settings.auto=(_val)
         Lich.deprecated('Settings.auto=(val)', 'not using, not applicable,', caller[0], fe_log: true)
-        return nil
       end
 
       def Settings.auto
