@@ -132,7 +132,7 @@ module Lich
           timeout = Time.now + 10
           loop do
             line = sync_thread.gets
-            break if line.strip =~ /^(?:<c>)?(?:#{$clean_lich_char}send|#{$clean_lich_char}s) /i
+            break if line.is_a?(String) && line.strip =~ /^(?:<c>)?(?:#{$clean_lich_char}send|#{$clean_lich_char}s) /i
             break if Time.now > timeout
           end
           if line =~ /send Y|s Y/i
