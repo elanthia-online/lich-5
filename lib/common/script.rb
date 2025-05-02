@@ -1105,8 +1105,8 @@ module Lich
           elsif line =~ /^([\s\t]*)matchwait\b/i
             line = "#{$1}matchwait"
           elsif line =~ /^([\s\t]*)if_([0-9])[\s\t]+(.*)/i
-            indent, num, _stuff = $1, $2, $3
-            line = "#{indent}if script.vars[#{num}]\n#{indent}\t#{fixline.call($3)}\n#{indent}end"
+            indent, num, stuff = $1, $2, $3
+            line = "#{indent}if script.vars[#{num}]\n#{indent}\t#{fixline.call(stuff)}\n#{indent}end"
           elsif line =~ /^([\s\t]*)shift\b/i
             line = "#{$1}script.vars.shift"
           else
