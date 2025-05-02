@@ -336,7 +336,7 @@ module Lich
           :type  => "setup",
           :regex => Regexp.union(/You charge towards .+ and attempt to headbutt .+!/, # Standard
                                  /Coiling your trapezius muscles, you feel your neck tense before springing into action and slamming your head down toward .+\!/, # RW2025
-                                 /Shrugging almost casually, you quickly snap your head foward in an attempt to headbutt .+\!/, # RW2025
+                                 /Shrugging almost casually, you quickly snap your head for?ward in an attempt to headbutt .+\!/, # RW2025
                                  /Rising on your tip toes, you cock back your head and slam it down towards .+\!/, # RW2025
                                  /Bellowing like an angry bull, you lower your head and charge straight at .+\!/), # RW2025
           :usage => "headbutt"
