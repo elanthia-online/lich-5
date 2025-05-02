@@ -108,7 +108,7 @@ elsif defined?(Wine)
 end
 ## The following should be deprecated with the direct-frontend-launch-method
 ## TODO: remove as part of chore/Remove unnecessary Win32 calls
-## Temporarily reinstated for DR
+## Temporarily reinstatated for DR
 
 if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
   #
@@ -190,7 +190,7 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       else
         bInheritHandles = args[:bInheritHandles].to_i
       end
-      if args[:lpEnvironment].is_a?(Array)
+      if args[:lpEnvironment].class == Array
         # fixme
       end
       lpStartupInfo = [68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -324,17 +324,17 @@ if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
     end
 
     def Win32.RegSetValueEx(args)
-      if [REG_EXPAND_SZ, REG_SZ, REG_LINK].include?(args[:dwType]) and (args[:lpData].is_a?(String))
+      if [REG_EXPAND_SZ, REG_SZ, REG_LINK].include?(args[:dwType]) and (args[:lpData].class == String)
         lpData = args[:lpData].dup
         lpData.concat("\x00")
         cbData = lpData.length
-      elsif (args[:dwType] == REG_MULTI_SZ) and (args[:lpData].is_a?(Array))
+      elsif (args[:dwType] == REG_MULTI_SZ) and (args[:lpData].class == Array)
         lpData = args[:lpData].join("\x00").concat("\x00\x00")
         cbData = lpData.length
-      elsif (args[:dwType] == REG_DWORD) and (args[:lpData].is_a?(Integer))
+      elsif (args[:dwType] == REG_DWORD) and (args[:lpData].class == Integer)
         lpData = [args[:lpData]].pack('L')
         cbData = 4
-      elsif (args[:dwType] == REG_QWORD) and (args[:lpData].is_a?(Integer))
+      elsif (args[:dwType] == REG_QWORD) and (args[:lpData].class == Integer)
         lpData = [args[:lpData]].pack('Q')
         cbData = 8
       elsif args[:dwType] == REG_BINARY
@@ -590,7 +590,7 @@ unless File.exist?(LICH_DIR)
   begin
     Dir.mkdir(LICH_DIR)
   rescue
-    message = "An error occurred while attempting to create directory #{LICH_DIR}\n\n"
+    message = "An error occured while attempting to create directory #{LICH_DIR}\n\n"
     if not File.exist?(LICH_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
       message.concat "This was likely because the parent directory (#{LICH_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop}) doesn't exist."
     elsif defined?(Win32) and (Win32.GetVersionEx[:dwMajorVersion] >= 6) and (dir !~ /^[A-z]\:\\(Users|Documents and Settings)/)
@@ -609,7 +609,7 @@ unless File.exist?(TEMP_DIR)
   begin
     Dir.mkdir(TEMP_DIR)
   rescue
-    message = "An error occurred while attempting to create directory #{TEMP_DIR}\n\n"
+    message = "An error occured while attempting to create directory #{TEMP_DIR}\n\n"
     if not File.exist?(TEMP_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop)
       message.concat "This was likely because the parent directory (#{TEMP_DIR.sub(/[\\\/]$/, '').slice(/^.+[\\\/]/).chop}) doesn't exist."
     elsif defined?(Win32) and (Win32.GetVersionEx[:dwMajorVersion] >= 6) and (dir !~ /^[A-z]\:\\(Users|Documents and Settings)/)
@@ -626,7 +626,7 @@ begin
   debug_filename = "#{TEMP_DIR}/debug-#{Time.now.strftime("%Y-%m-%d-%H-%M-%S-%L")}.log"
   $stderr = File.open(debug_filename, 'w')
 rescue
-  message = "An error occurred while attempting to create file #{debug_filename}\n\n"
+  message = "An error occured while attempting to create file #{debug_filename}\n\n"
   if defined?(Win32) and (TEMP_DIR !~ /^[A-z]\:\\(Users|Documents and Settings)/) and not Win32.isXP?
     message.concat "This was likely because Lich doesn't have permission to create files and folders here.  It is recommended to put Lich in your Documents folder."
   else
@@ -648,7 +648,7 @@ unless File.exist?(DATA_DIR)
     Dir.mkdir(DATA_DIR)
   rescue
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occurred while attempting to create directory #{DATA_DIR}\n\n#{$!}", :icon => :error)
+    Lich.msgbox(:message => "An error occured while attempting to create directory #{DATA_DIR}\n\n#{$!}", :icon => :error)
     exit
   end
 end
@@ -657,7 +657,7 @@ unless File.exist?(SCRIPT_DIR)
     Dir.mkdir(SCRIPT_DIR)
   rescue
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occurred while attempting to create directory #{SCRIPT_DIR}\n\n#{$!}", :icon => :error)
+    Lich.msgbox(:message => "An error occured while attempting to create directory #{SCRIPT_DIR}\n\n#{$!}", :icon => :error)
     exit
   end
 end
@@ -666,7 +666,7 @@ unless File.exist?("#{SCRIPT_DIR}/custom")
     Dir.mkdir("#{SCRIPT_DIR}/custom")
   rescue
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occurred while attempting to create directory #{SCRIPT_DIR}/custom\n\n#{$!}", :icon => :error)
+    Lich.msgbox(:message => "An error occured while attempting to create directory #{SCRIPT_DIR}/custom\n\n#{$!}", :icon => :error)
     exit
   end
 end
@@ -675,7 +675,7 @@ unless File.exist?(MAP_DIR)
     Dir.mkdir(MAP_DIR)
   rescue
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occurred while attempting to create directory #{MAP_DIR}\n\n#{$!}", :icon => :error)
+    Lich.msgbox(:message => "An error occured while attempting to create directory #{MAP_DIR}\n\n#{$!}", :icon => :error)
     exit
   end
 end
@@ -684,7 +684,7 @@ unless File.exist?(LOG_DIR)
     Dir.mkdir(LOG_DIR)
   rescue
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occurred while attempting to create directory #{LOG_DIR}\n\n#{$!}", :icon => :error)
+    Lich.msgbox(:message => "An error occured while attempting to create directory #{LOG_DIR}\n\n#{$!}", :icon => :error)
     exit
   end
 end
@@ -693,7 +693,7 @@ unless File.exist?(BACKUP_DIR)
     Dir.mkdir(BACKUP_DIR)
   rescue
     Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    Lich.msgbox(:message => "An error occurred while attempting to create directory #{BACKUP_DIR}\n\n#{$!}", :icon => :error)
+    Lich.msgbox(:message => "An error occured while attempting to create directory #{BACKUP_DIR}\n\n#{$!}", :icon => :error)
     exit
   end
 end

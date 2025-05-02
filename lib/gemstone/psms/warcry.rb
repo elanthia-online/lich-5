@@ -75,9 +75,9 @@ module Lich
         end
 
         usage_cmd = "warcry #{name}"
-        if target.is_a?(GameObj)
+        if target.class == GameObj
           usage_cmd += " ##{target.id}"
-        elsif target.is_a?(Integer)
+        elsif target.class == Integer
           usage_cmd += " ##{target}"
         elsif target != ""
           usage_cmd += " #{target}"
