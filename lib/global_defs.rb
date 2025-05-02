@@ -1235,7 +1235,7 @@ end
 def checkprep(spell = nil)
   if spell.nil?
     XMLData.prepared_spell
-  elsif spell.class != String
+  elsif !spell.is_a?(String)
     echo("Checkprep error, spell # not implemented!  You must use the spell name")
     false
   else
