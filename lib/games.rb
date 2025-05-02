@@ -608,7 +608,7 @@ module Lich
           room_exits = []
           Map.current.wayto.each do |key, value|
             # Don't include cardinals / up/down/out (usually just climb/go)
-            if value.class == Proc
+            if value.is_a?(Proc)
               if Map.current.timeto[key].is_a?(Numeric) || (Map.current.timeto[key].is_a?(StringProc) && Map.current.timeto[key].call.is_a?(Numeric))
                 room_exits << "<d cmd=';go2 #{key}'>#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? ('(' + Map[key].id.to_s + ')') : ''}</d>"
               end
@@ -744,7 +744,7 @@ module Lich
           room_exits = []
           Map.current.wayto.each do |key, value|
             # Don't include cardinals / up/down/out (usually just climb/go)
-            if value.class == Proc
+            if value.is_a?(Proc)
               if Map.current.timeto[key].is_a?(Numeric) || (Map.current.timeto[key].is_a?(StringProc) && Map.current.timeto[key].call.is_a?(Numeric))
                 room_exits << "<d cmd=';go2 #{key}'>#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? ('(' + Map[key].id.to_s + ')') : ''}</d>"
               end
