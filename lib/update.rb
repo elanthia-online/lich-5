@@ -128,7 +128,7 @@ module Lich
           # we are only going to get the next client-input line, and if it does not confirm, we bail
           # we are doing this to prevent hanging the client with various other inputs by the user
           sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_
-          line = sync_thread.gets until line.strip =~ /^(?:<c>)?(?:;send|;s) /i
+          line = sync_thread.gets until line.strip =~ /^(?:<c>)?(?:#{$clean_lich_char}send|#{$clean_lich_char}s) /i
           if line =~ /send Y|s Y/i
             @beta_response = 'accepted'
             respond 'Beta test installation accepted.  Thank you for considering!'
