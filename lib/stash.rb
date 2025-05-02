@@ -121,7 +121,7 @@ module Lich
         weaponsack = nil unless (weaponsack = find_container(UserVars.weaponsack, loud_fail: false)).is_a?(GameObj) # (Lich::Gemstone::GameObj)
       end
       # lootsack for both hands
-      if UserVars.lootsack.class != String || UserVars.lootsack.empty?
+      if !UserVars.lootsack.is_a?(String) || UserVars.lootsack.empty?
         lootsack = nil
       else
         lootsack = nil unless (lootsack = find_container(UserVars.lootsack, loud_fail: false)).is_a?(GameObj) # (Lich::Gemstone::GameObj)
