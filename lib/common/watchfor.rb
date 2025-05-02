@@ -1,4 +1,4 @@
-# Carve out class WatchFor
+# Carve out class Watchfor
 # 2024-06-13
 # has rubocop Lint issues (return nil) - overriding until it can be further researched
 
@@ -9,9 +9,9 @@ module Lich
       def initialize(line, theproc = nil, &block)
         return nil unless (script = Script.current)
 
-        if line.class == String
+        if line.is_a?(String)
           line = Regexp.new(Regexp.escape(line))
-        elsif line.class != Regexp
+        elsif !line.is_a?(Regexp)
           echo 'watchfor: no string or regexp given'
           return nil
         end

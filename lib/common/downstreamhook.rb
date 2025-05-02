@@ -8,7 +8,7 @@ module Lich
       @@downstream_hook_sources ||= Hash.new
 
       def DownstreamHook.add(name, action)
-        unless action.class == Proc
+        unless action.is_a?(Proc)
           echo "DownstreamHook: not a Proc (#{action})"
           return false
         end

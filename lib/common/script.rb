@@ -1,6 +1,6 @@
 # Generated during infomon separation 230305
 # script bindings are convoluted, but don't change them without testing if:
-#    class methods such as Script.start and ExecScript.start become accessible without specifying the class name (which is just a syptom of a problem that will break scripts)
+#    class methods such as Script.start and ExecScript.start become accessible without specifying the class name (which is just a symptom of a problem that will break scripts)
 #    local variables become shared between scripts
 #    local variable 'file' is shared between scripts, even though other local variables aren't
 #    defined methods are instantly inaccessible
@@ -27,20 +27,20 @@ module Lich
         if args.empty?
           # fixme: error
           next nil
-        elsif args[0].class == String
+        elsif args[0].is_a?(String)
           script_name = args[0]
           if args[1]
-            if args[1].class == String
+            if args[1].is_a?(String)
               script_args = args[1]
               if args[2]
-                if args[2].class == Hash
+                if args[2].is_a?(Hash)
                   options = args[2]
                 else
                   # fixme: error
                   next nil
                 end
               end
-            elsif args[1].class == Hash
+            elsif args[1].is_a?(Hash)
               options = args[1]
               script_args = (options[:args] || String.new)
             else
@@ -50,7 +50,7 @@ module Lich
           else
             options = Hash.new
           end
-        elsif args[0].class == Hash
+        elsif args[0].is_a?(Hash)
           options = args[0]
           if options[:name]
             script_name = options[:name]
@@ -249,7 +249,7 @@ module Lich
           if script.name =~ /^lich$/i
             respond '--- error: Script.db cannot be used by a script named lich'
             nil
-          elsif script.class == ExecScript
+          elsif script.is_a?(ExecScript)
             respond '--- error: Script.db cannot be used by exec scripts'
             nil
           else
@@ -268,7 +268,7 @@ module Lich
           elsif script.name =~ /^entry$/i
             respond '--- error: Script.open_file cannot be used by a script named entry'
             nil
-          elsif script.class == ExecScript
+          elsif script.is_a?(ExecScript)
             respond '--- error: Script.open_file cannot be used by exec scripts'
             nil
           elsif ext.downcase == 'db3'
@@ -568,14 +568,14 @@ module Lich
       def initialize(args)
         @file_name = args[:file]
         @name = /.*[\/\\]+([^\.]+)\./.match(@file_name).captures.first
-        if args[:args].class == String
+        if args[:args].is_a?(String)
           if args[:args].empty?
             @vars = Array.new
           else
             @vars = [args[:args]]
             @vars.concat(args[:args].scan(/[^\s"]*(?<!\\)"(?:\\"|[^"])+(?<!\\)"[^\s]*|(?:\\"|[^"\s])+/).collect { |s| s.gsub(/(?<!\\)"/, '').gsub('\\"', '"') })
           end
-        elsif args[:args].class == Array
+        elsif args[:args].is_a?(Array)
           unless (args[:args].nil? || args[:args].empty?)
             @vars = [args[:args].join(" ")]
             @vars.concat args[:args]
@@ -1106,7 +1106,7 @@ module Lich
             line = "#{$1}matchwait"
           elsif line =~ /^([\s\t]*)if_([0-9])[\s\t]+(.*)/i
             indent, num, stuff = $1, $2, $3
-            line = "#{indent}if script.vars[#{num}]\n#{indent}\t#{fixline.call($3)}\n#{indent}end"
+            line = "#{indent}if script.vars[#{num}]\n#{indent}\t#{fixline.call(stuff)}\n#{indent}end"
           elsif line =~ /^([\s\t]*)shift\b/i
             line = "#{$1}script.vars.shift"
           else
