@@ -130,6 +130,7 @@ module Lich
           # we are doing this to prevent hanging the client with various other inputs by the user
           sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_
           timeout = Time.now + 10
+          line = nil
           loop do
             line = sync_thread.gets
             break if line.is_a?(String) && line.strip =~ /^(?:<c>)?(?:#{$clean_lich_char}send|#{$clean_lich_char}s) /i
