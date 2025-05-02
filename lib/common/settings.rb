@@ -9,6 +9,11 @@ module Lich
     require_relative 'settings/path_navigator'
 
     module Settings
+      class CircularReferenceError < StandardError
+        def initialize(msg = "Circular Reference Detected")
+          super(msg)
+        end
+      end
       # Initialize database adapter and path navigator
       @db_adapter = DatabaseAdapter.new(DATA_DIR, :script_auto_settings)
       @path_navigator = PathNavigator.new(@db_adapter)
@@ -23,7 +28,7 @@ module Lich
       # safeguarding against circular references.
       def self.unwrap_proxies(data, visited = Set.new)
         # Check if we have already visited this object_id to detect cycles
-        raise StandardError.new("settings.rb - Circular Reference Detected") if visited.include?(data.object_id)
+        raise CircularReferenceError.new() if visited.include?(data.object_id)
 
         # Add current object_id to visited set if it's a container type
         visited.add(data.object_id) if data.is_a?(Hash) || data.is_a?(Array) || data.is_a?(SettingsProxy)
