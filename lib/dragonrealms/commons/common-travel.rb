@@ -208,7 +208,7 @@ module Lich
             timer = Time.now
             script_handle = start_script('go2', [room_num.to_s])
           end
-          # Something interferred with movement, stop script then restart
+          # Something interfered with movement, stop script then restart
           if (Time.now - timer) > 90
             kill_script(script_handle)
             pause 0.5 while Script.running.include?(script_handle)
@@ -221,7 +221,7 @@ module Lich
           if Script.running?('escort') || Script.running?('bescort') || (XMLData.room_description + XMLData.room_title) != prev_room || XMLData.room_description =~ /The terrain constantly changes as you travel along on your journey/
             timer = Time.now
           end
-          # Where did you come from, where did you go? Where did you come from, Cotten-Eye Joe?
+          # Where did you come from, where did you go? Where did you come from, Cotten-Eyed Joe?
           prev_room = XMLData.room_description + XMLData.room_title
           pause 0.5
         end
@@ -272,7 +272,7 @@ module Lich
         DRC.retreat(ignored_npcs)
       end
 
-      def find_empty_room(search_rooms, idle_room, predicate = nil, min_mana = 0, strict_mana = false, max_search_attempts = Float::INFINITY, priotize_buddies = false)
+      def find_empty_room(search_rooms, idle_room, predicate = nil, min_mana = 0, strict_mana = false, max_search_attempts = Float::INFINITY, prioritize_buddies = false)
         search_attempt = 0
         check_mana = min_mana > 0
         rooms_searched = 0
@@ -286,11 +286,11 @@ module Lich
 
             rooms_searched += 1
 
-            if priotize_buddies && (rooms_searched <= search_rooms.size)
+            if prioritize_buddies && (rooms_searched <= search_rooms.size)
               suitable_room = ((DRRoom.pcs & UserVars.friends).any? && (DRRoom.pcs & UserVars.hunting_nemesis).none?)
               if (rooms_searched == search_rooms.size && (DRRoom.pcs & UserVars.friends).empty? && (DRRoom.pcs & UserVars.hunting_nemesis).empty?)
                 echo("*** Reached last room in list, and found no buddies. Retrying for empty room. ***")
-                return find_empty_room(search_rooms, idle_room, predicate, min_mana, strict_mana, max_search_attempts, priotize_buddies = false)
+                return find_empty_room(search_rooms, idle_room, predicate, min_mana, strict_mana, max_search_attempts, prioritize_buddies = false)
               end
             else
               suitable_room = predicate ? predicate.call(search_attempt) : (DRRoom.pcs - DRRoom.group_members).empty?
