@@ -64,7 +64,7 @@ module Lich
           :buff       => "Slashing Strikes",
         },
         "fury"             => {
-          :regex      => /With a percussive snap, you shake out your arms in quick succession and bear down on a human brigand in a fury\!/,
+          :regex      => /With a percussive snap, you shake out your arms in quick succession and bear down on .+ in a fury\!/,
           :assault_rx => /Your furious assault bolsters you and inspires those around you\!/,
           :buff       => "Enh. Constitution (+10)",
         },
