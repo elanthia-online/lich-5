@@ -39,7 +39,6 @@ module Lich
 
       # Common failure messages potentially used across all PSMs.
       FAILURES_REGEXES = Regexp.union(
-        /^Roundtime: [0-9]+ sec\.$/,
         /^And give yourself away!  Never!$/,
         /^You are unable to do that right now\.$/,
         /^You don't seem to be able to move to do that\.$/,
