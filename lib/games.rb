@@ -422,7 +422,7 @@ module Lich
             if error.to_s =~ /Missing end tag for 'd'/
               echo 'landed here'
               server_string.inspect.sub!(/<d cmd=\"transfer.*$/, "more...")
-              server_string.append!("/r/n")
+              server_string << "/r/n"
               p server_string
               return process_xml_data(server_string) # Return to retry with fixed string
             end
