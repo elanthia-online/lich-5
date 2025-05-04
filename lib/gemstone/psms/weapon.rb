@@ -153,11 +153,11 @@ module Lich
         technique = @@weapon_techniques.fetch(name)
         usage = technique.key?(:usage) ? technique[:usage] : name
 
-        in_cooldown_regex = /^#{name.gsub("_"," ")} is still in cooldown\./i
+        in_cooldown_regex = /^#{name.gsub("_", " ")} is still in cooldown\./i
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
-          /^#{name.gsub("_"," ")} what\?$/i,
+          /^#{name.gsub("_", " ")} what\?$/i,
           in_cooldown_regex
         )
 
