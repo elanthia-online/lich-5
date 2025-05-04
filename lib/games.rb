@@ -109,6 +109,7 @@ module Lich
 
           # Fix nested double quotes
           unless (matches = server_string.scan(/"([^=]*"[^=]*)"/)).empty?
+            p matches
             Lich.log "Invalid nested double quotes XML tags detected: #{server_string.inspect}"
             matches.flatten.each do |match|
               server_string.gsub!(match, match.gsub(/"/, '&quot;'))
@@ -373,7 +374,16 @@ module Lich
             # Check for valid XML
             REXML::Document.parse_stream("<root>#{server_string}</root>", XMLData)
           rescue => e
-            handle_xml_error(server_string, e)
+            case e.to_s
+            when /nested single quotes|nested double quotes/
+              server_string = XMLCleaner.clean_nested_quotes(server_string)
+              retry
+            when /invalid characters/
+              server_string = XMLCleaner.fix_invalid_characters(server_string)
+              retry
+            else
+              handle_xml_error(server_string, e)
+            end
             XMLData.reset
             return
           end
@@ -395,7 +405,11 @@ module Lich
         end
 
         def handle_xml_error(server_string, error)
-          unless error.to_s =~ /invalid byte sequence/
+          # Ignoring certain XML errors
+          # Missing attribute equal: <s> - in dynamic dialogs with a single apostrophe for possessive "Tsetem's Items"
+          # Missing end tag for 'd' (got 'root') - in appraise dialogs where string is truncated at 1204 characters
+          unless error.to_s =~ /invalid byte sequence|Missing attribute equal: <s>|Missing end tag for 'd'/
+            p error.to_s
             # Handle specific XML errors
             if server_string =~ /<settingsInfo .*?space not found /
               Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
@@ -404,11 +418,14 @@ module Lich
               return process_xml_data(server_string) # Return to retry with fixed string
             end
 
-            # Fix invalid characters
-            server_string = XMLCleaner.fix_invalid_characters(server_string)
-
-            # Fix nested quotes
-            server_string = XMLCleaner.clean_nested_quotes(server_string)
+            # Not working yet -- need to fix.
+            if error.to_s =~ /Missing end tag for 'd'/
+              echo 'landed here'
+              server_string.inspect.sub!(/<d cmd=\"transfer.*$/, "more...")
+              server_string.append!("/r/n")
+              p server_string
+              return process_xml_data(server_string) # Return to retry with fixed string
+            end
 
             $stdout.puts "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
             Lich.log "Invalid XML detected - please report this: #{server_string.inspect}"
