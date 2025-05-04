@@ -153,12 +153,11 @@ module Lich
         technique = @@weapon_techniques.fetch(name)
         usage = technique.key?(:usage) ? technique[:usage] : name
 
-        in_cooldown_regex = /^#{name} is still in cooldown\./
+        in_cooldown_regex = /^#{name.gsub("_"," ")} is still in cooldown\./i
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
-          @@weapon_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-          /^#{name} what\?$/i,
+          /^#{name.gsub("_"," ")} what\?$/i,
           in_cooldown_regex
         )
 
@@ -176,9 +175,7 @@ module Lich
         end
         usage_result = nil
         if (technique.key?(:assault_rx))
-          # timeout = 10
           results_regex = Regexp.union(results_regex, technique[:assault_rx])
-
           break_out = Time.now() + 12
           loop {
             usage_result = dothistimeout(usage_cmd, 10, results_regex)
@@ -193,6 +190,7 @@ module Lich
             sleep 0.25
           }
         else
+          results_regex = Regexp.union(results_regex, technique[:regex], /^Roundtime: [0-9]+ sec\.$/)
           waitrt?
           waitcastrt?
           usage_result = dothistimeout(usage_cmd, 5, results_regex)
