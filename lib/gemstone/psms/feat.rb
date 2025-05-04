@@ -236,7 +236,7 @@ module Lich
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
-          name.gsub("_"," ")
+          /^Roundtime: [0-9]+ sec\.$/,
           @@feats.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
           /^#{name} what\?$/i
         )
