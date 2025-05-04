@@ -66,8 +66,9 @@ module Lich
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
+          /^Roundtime: [0-9]+ sec\.$/,
           @@warcries.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-          /^#{name} what\?$/i
+          /^#{name.gsub("_"," ")} what\?$/i
         )
 
         if results_of_interest.is_a?(Regexp)
