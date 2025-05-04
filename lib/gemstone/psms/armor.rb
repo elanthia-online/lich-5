@@ -97,6 +97,7 @@ module Lich
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
+          /^Roundtime: [0-9]+ sec\.$/,
           @@armor_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
           /^#{name} what\?$/i,
           /^\w+ [a-z]+ not wearing any armor that you can work with\.$/
