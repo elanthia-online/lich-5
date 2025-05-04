@@ -2,8 +2,7 @@ module Lich
   module Gemstone
     module Society
       class Voln < Society
-        # Calculate Cost of Symbol
-        # https://gswiki.play.net/Favor#Symbol_Use_Favor_Cost
+        # Calculate Cost of Symbol using data from here # https://gswiki.play.net/Favor#Symbol_Use_Favor_Cost
         @@voln_symbols = {
           "symbol_of_recognition"   => {
             :rank              => 1,
@@ -12,7 +11,7 @@ module Lich
             :cost_modifier     => 0.00,
             :duration          => nil,
             :cooldown_duration => nil,
-            :summary           => "Identifies members of the Order and any undead present.",
+            :summary           => "Detect other members of the Order and any undead creatures present in the room.",
             :spell_number      => 9801,
           },
           "symbol_of_blessing"      => {
@@ -20,19 +19,21 @@ module Lich
             :short_name        => "blessing",
             :regex             => nil,
             :cost_modifier     => 0.04, # 0.20 if magical
+            :alt_cost_modifier => 0.20, # TODO: Is this really a good solution?  Probably not.
+            :alt_cost_reason   => "magical",
             :duration          => self.rank * 2,
             :cooldown_duration => nil,
-            :summary           => "Bless weapons and other combat gear.",
+            :summary           => "Bless weapons and other combat gear, upto 2x rank (+#{(self.rank * 2)}) for Level + 2x Rank (#{Char.level + (self.rank * 2)}) swings.",
             :spell_number      => 9802,
           },
           "symbol_of_thought"       => {
             :rank              => 3,
             :short_name        => "thought",
             :regex             => nil,
-            :cost_modifier     => 0.00,
+            :cost_modifier     => nil,
             :duration          => nil,
             :cooldown_duration => nil,
-            :summary           => "Transmit thought message to all members within range.",
+            :summary           => "Transmit thought message to all members within the same realm.  Cost = ceiling((messsage length - 1) / 3)",
             :spell_number      => 9803,
           },
           "symbol_of_diminishment"  => {
@@ -40,9 +41,9 @@ module Lich
             :short_name        => "diminishment",
             :regex             => nil,
             :cost_modifier     => 0.30,
-            :duration          => nil,
+            :duration          => self.rank * 2,
             :cooldown_duration => nil,
-            :summary           => "Temporarily reduces target undead creature's DS, TD, and CMAN -1 per rank.",
+            :summary           => "Successful SSR check will temporarily reduces target undead creature's DS, TD, and CMAN -1 per rank (#{self.rank * 2}) for rank x 2 (#{self.rank * 2}) seconds.",
             :spell_number      => 9804,
           },
           "symbol_of_courage"       => {
@@ -52,7 +53,7 @@ module Lich
             :cost_modifier     => 0.10,
             :duration          => self.rank * 10,
             :cooldown_duration => nil,
-            :summary           => "Increases your AS +1 per rank (+#{self.rank}).",
+            :summary           => "Increases your generic AS and UAF by +1 per rank (+#{self.rank}).  Adds 3 phantom levels against fear-based attacks.",
             :spell_number      => 9805,
           },
           "symbol_of_protection"    => {
@@ -62,7 +63,7 @@ module Lich
             :cost_modifier     => 0.10,
             :duration          => self.rank * 20,
             :cooldown_duration => nil,
-            :summary           => "Increases your DS +1 and TD +.5 per rank (+#{self.Rank} DS / +#{(self.Rank * 0.5)} TD).",
+            :summary           => "Increases your DS +1 and TD +.5 per rank (+#{self.Rank} DS / +#{(self.Rank * 0.5).floor} TD).",
             :spell_number      => 9806,
           },
           "symbol_of_submission"    => {
@@ -72,7 +73,7 @@ module Lich
             :cost_modifier     => 0.30,
             :duration          => nil,
             :cooldown_duration => nil,
-            :summary           => "Forces undead to offensive stance and lowers DS -1 per rank (-#{self.Rank}).",
+            :summary           => "Successful SSR forces undead to offensive stance and to briefly kneel.",
             :spell_number      => 9807,
           },
           "kai's strike"            => {
@@ -82,7 +83,7 @@ module Lich
             :cost_modifier     => 0.00,
             :duration          => nil,
             :cooldown_duration => nil,
-            :summary           => "Allows unarmed combat attacks to damage undead creatures.",
+            :summary           => "Enables unarmed combat attacks to damage undead creatures without the normal requirement of blessed gear.",
             :spell_number      => 9808,
           },
           "symbol_of_holiness"      => {
@@ -92,7 +93,7 @@ module Lich
             :cost_modifier     => 0.30,
             :duration          => nil,
             :cooldown_duration => nil,
-            :summary           => "Direct damage attack against undead.",
+            :summary           => "A SSR-based fire attack against an Undead creature.", ##### RESUME HERE
             :spell_number      => 9809,
           },
           "symbol_of_recall"        => {
@@ -249,7 +250,7 @@ module Lich
             :rank              => 25,
             :short_name        => "return",
             :regex             => nil,
-            :cost_modifier     => nil, ## TODO: try to figure this out?  Is this right?
+            :cost_modifier     => 1,
             :duration          => nil,
             :cooldown_duration => nil,
             :summary           => "Immediate Teleportation of member and group to the nearest Voln outpost.",
@@ -329,7 +330,20 @@ module Lich
 
         # master?
         def self.master?
-          self.rank == 26 # is the rank of a Voln Master
+          Society.rank == 26 # is the rank of a Voln Master
+        end
+
+        # Determine if the character is a member of a given society, and optionally at a specific rank.
+        # if not passing a society_name, return the name of the society the character is a member of (or None if not a member).
+        #
+        # @param rank [Integer, nil] The optional rank to verify
+        # @return [Boolean] True if the character is a member of voln (and at the rank, if specified), false otherwise
+        def self.member?(rank = nil)
+          unless Society.member_of == "Order of Voln"
+            return false
+          end
+
+          rank.nil? || Society.rank == rank
         end
 
         Voln.symbol_lookups.each { |symbol|

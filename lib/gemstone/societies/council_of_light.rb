@@ -1,7 +1,7 @@
 module Lich
   module Gemstone
     class CouncilOfLight
-        
-    end        
+      # pending
+    end
   end
 end
