@@ -131,7 +131,7 @@ module Lich
       end
 
       def Armor.regexp(name)
-        @@armor_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+        @@armor_techniques.fetch(PSMS.name_normal(name))[:regex]
       end
 
       Armor.armor_lookups.each { |armor|
