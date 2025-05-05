@@ -13,7 +13,7 @@ module Lich
         secondary_sheath: nil,
       }
 
-      # Define class-level accessors for stow list entries
+      # Define class-level accessors for ready list entries
       @ready_list.each_key do |type|
         define_singleton_method(type) { @ready_list[type] }
         define_singleton_method("#{type}=") { |value| @ready_list[type] = value }
@@ -36,14 +36,14 @@ module Lich
 
         def valid?
           # check if existing ready items are valid or not
-          return true unless checked?
+          return false unless checked?
           @ready_list.each_value do |value|
             unless value.nil? || GameObj.inv.include?(value) || GameObj.containers.values.flatten.include?(value)
               @checked = false
-              return true
+              return false
             end
           end
-          return false
+          return true
         end
 
         def reset
