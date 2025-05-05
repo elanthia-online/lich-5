@@ -228,14 +228,19 @@ module Lich
       # unmodified from 5.6.2
       def Shield.use(name, target = "", results_of_interest: nil)
         return unless Shield.available?(name)
-        usage = @@shield_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:usage]
+        name_normalized = PSMS.name_normal(name)
+        technique = @@shield_techniques.fetch(name_normalized)
+        usage = technique[:usage]
         return if usage.nil?
+
+        in_cooldown_regex = /^#{name} is still in cooldown\./i
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
+          /^#{name} what\?$/i,
+          in_cooldown_regex,
+          technique[:regex],
           /^Roundtime: [0-9]+ sec\.$/,
-          @@shield_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-          /^#{name} what\?$/i
         )
 
         if results_of_interest.is_a?(Regexp)
