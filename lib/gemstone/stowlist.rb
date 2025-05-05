@@ -42,14 +42,14 @@ module Lich
 
         def valid?
           # check if existing containers are valid or not
-          return true unless checked?
+          return false unless checked?
           @stow_list.each_value do |value|
             unless value.nil? || GameObj.inv.include?(value)
               @checked = false
-              return true
+              return false
             end
           end
-          return false
+          return true
         end
 
         def reset
