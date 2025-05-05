@@ -34,7 +34,7 @@ module Lich
          { long_name: 'flurry_of_blows',         short_name: 'flurry',           cost: 20 },
          { long_name: 'footstomp',               short_name: 'footstomp',        cost: 7 },
          { long_name: 'garrote',                 short_name: 'garrote',          cost: 10 },
-         { long_name: 'grappel_specialization',  short_name: 'grapplespec',      cost:  0 },
+         { long_name: 'grapple_specialization',  short_name: 'grapplespec',      cost:  0 },
          { long_name: 'griffins_voice',          short_name: 'griffin',          cost: 20 },
          { long_name: 'groin_kick',              short_name: 'gkick',            cost:  7 },
          { long_name: 'hamstring',               short_name: 'hamstring',        cost:  9 },
@@ -293,7 +293,7 @@ module Lich
                                  /You attempt to slip the garrote around .+? neck, but it catches the movement and dodges away just in time\./),
           :usage => "garrote"
         },
-        "grappel_specialization" => {
+        "grapple_specialization" => {
           :cost  => 0,
           :type  => "passive",
           :regex => /The Grapple Specialization combat maneuver is always active once you have learned it\./,
