@@ -100,7 +100,7 @@ module Lich
       end
 
       def Warcry.regexp(name)
-        @@warcries.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+        @@warcries.fetch(PSMS.name_normal(name))[:regex]
       end
 
       Warcry.warcry_lookups.each { |warcry|
