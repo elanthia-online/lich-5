@@ -6,7 +6,7 @@ module Lich
       # this module handles all of the logic for parsing game lines that infomon depends on
       module XMLParser
         module Pattern
-          Group_Short = /(?:group|following you|IconJOINED)|^You are leading|(?:'s<\/a>|your) hand(?: tenderly)?\.$/
+          Group_Short = /(?:group|following you|IconJOINED)|^You are leading|(?:'s<\/a>|your) hand(?: tenderly)?\.\r?\n?$/
           Also_Here_Arrival = /^Also here: /
           NpcDeathPrefix = Regexp.union(
             /The fire in the/,
@@ -79,12 +79,24 @@ module Lich
             /sinks to the ground, the fell light in (?:his|her) eyes guttering before going out entirely/,
           )
           NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? #{NpcDeathPostfix}[\.!]\r?\n?$/
-          StowListOutputStart = /^You have the following containers set as stow targets:\r?\n?$/
-          StowListContainer = /^  (?:an?|some) <a exist="(?<id>\d+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a> (?:[^\(]+)?\((?<type>box|gem|herb|skin|wand|scroll|potion|trinket|reagent|lockpick|treasure|forageable|collectible|default)\)\r?\n?$/
-          StowSetContainer1 = /^Set "a <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>" to be your STOW (?<type>BOX|GEM|HERB|SKIN|WAND|SCROLL|POTION|TRINKET|REAGENT|LOCKPICK|TREASURE|FORAGEABLE|COLLECTIBLE) container\.\r?\n?$/
-          StowSetContainer2 = /Set "a <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>" to be your (?<type>default) STOW container\.\r?\n?$/
 
-          All = Regexp.union(NpcDeathMessage, Group_Short, Also_Here_Arrival, StowListOutputStart, StowListContainer, StowSetContainer1, StowSetContainer2)
+          # the following are for parsing STOW LIST and setting of STOW containers
+          StowListOutputStart = /^You have the following containers set as stow targets:\r?\n?$/
+          StowListContainer = /^  (?:an?|some) <a exist="(?<id>\d+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^\(]+)?\((?<type>box|gem|herb|skin|wand|scroll|potion|trinket|reagent|lockpick|treasure|forageable|collectible|default)\)\r?\n?$/
+          StowSetContainer1 = /^Set "a <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^"]+)?" to be your STOW (?<type>BOX|GEM|HERB|SKIN|WAND|SCROLL|POTION|TRINKET|REAGENT|LOCKPICK|TREASURE|FORAGEABLE|COLLECTIBLE) container\.\r?\n?$/
+          StowSetContainer2 = /Set "a <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^"]+)?" to be your (?<type>default) STOW container\.\r?\n?$/
+
+          # the following are for parsing READY LIST and setting of READY items
+          ReadyListOutputStart = /^Your current settings are:\r?\n?$/
+          ReadyListNormal = /^  (?<type>shield|(?:secondary |ranged )?weapon|ammo bundle): <d cmd="store (?:SHIELD|2?WEAPON|RANGED|AMMO) clear">(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^<]+)?<\/d> \(<d cmd='store set'>(?:worn if possible, stowed otherwise|stowed|put in (?:secondary )?sheath)<\/d>\)\r?\n?$/
+          ReadyListAmmo2 = /^  (?<type>ammo2 bundle): <d cmd="store AMMO2 clear">(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^<]+)?<\/d>\r?\n?$/
+          ReadyListSheathsSet = /^  (?<type>(?:secondary )?sheath): <d cmd="store 2?SHEATH clear">(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^<]+)?<\/d>\r?\n?$/
+          ReadyItemClear = /^Cleared your default (?<type>shield|(?:secondary |ranged )?weapon|ammo2? bundle|(?:secondary )?sheath)\.\r?\n?$/
+          ReadyItemSet = /^Setting (?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^<]+)? to be your default (?<type>shield|(?:secondary |ranged )?weapon|ammo2? bundle|(?:secondary )?sheath)\.\r?\n?$/
+          # ReadyListSheathsClear = /^  (?<type>(?:secondary )?sheath): \(<d cmd='store 2?SHEATH'>none<\/d>\)\r?\n?$/
+          
+          All = Regexp.union(NpcDeathMessage, Group_Short, Also_Here_Arrival, StowListOutputStart, StowListContainer, StowSetContainer1, StowSetContainer2,
+                             ReadyListOutputStart, ReadyListNormal, ReadyListAmmo2, ReadyListSheathsSet, ReadyItemClear, ReadyItemSet)
         end
 
         def self.parse(line)
@@ -120,6 +132,21 @@ module Lich
               end
               StowList.checked = true if line =~ Pattern::StowListContainer
               :ok
+            when Pattern::ReadyListOutputStart
+              ReadyList.reset
+              :ok
+            when Pattern::ReadyListNormal, Pattern::ReadyListAmmo2, Pattern::ReadyListSheathsSet, Pattern::ReadyItemSet
+              match = Regexp.last_match
+              if GameObj[match[:id]]
+                ReadyList.__send__("#{Lich::Util.normalize_name(match[:type].downcase)}=", GameObj[match[:id]])
+              else
+                ReadyList.__send__("#{Lich::Util.normalize_name(match[:type].downcase)}=", GameObj.new(match[:id], match[:noun], match[:name]))
+              end
+              ReadyList.checked = true
+              :ok
+            when Pattern::ReadyItemClear
+              match = Regexp.last_match
+              ReadyList.__send__("#{Lich::Util.normalize_name(match[:type].downcase)}=", nil)
             end
           rescue StandardError
             respond "--- Lich: error: Infomon::XMLParser.parse: #{$!}"
