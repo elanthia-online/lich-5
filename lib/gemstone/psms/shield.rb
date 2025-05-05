@@ -266,7 +266,7 @@ module Lich
       end
 
       def Shield.regexp(name)
-        @@shield_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+        @@shield_techniques.fetch(PSMS.name_normal(name))[:regex]
       end
 
       Shield.shield_lookups.each { |shield|
