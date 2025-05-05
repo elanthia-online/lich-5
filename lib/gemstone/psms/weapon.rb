@@ -111,6 +111,7 @@ module Lich
         },
         "twin_hammerfists" => {
           :regex => /You raise your hands high, lace them together and bring them crashing down towards the .+\!/,
+          :usage => "twinhammer",
         },
         "volley"           => {
           :regex => /Raising your .+ high, you loose (?:arrow|bolt) after (?:arrow|bolt) as fast as you can, filling the sky with a volley of deadly projectiles\!/,
