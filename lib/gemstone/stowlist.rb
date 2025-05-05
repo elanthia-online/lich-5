@@ -40,10 +40,10 @@ module Lich
           @checked = value
         end
 
-        def stale?
-          # check if existing containers are stale or not
+        def valid?
+          # check if existing containers are valid or not
           return true unless checked?
-          @stow_list.each_value do |value|
+          @stow_list.each do |type, value|
             unless value.nil? || GameObj.inv.include?(value)
               @checked = false
               return true
