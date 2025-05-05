@@ -20,7 +20,6 @@ module Lich
       end
 
       class << self
-        # attr_accessor :checked
 
         def ready_list
           @ready_list
