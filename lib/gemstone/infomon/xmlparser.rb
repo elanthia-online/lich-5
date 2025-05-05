@@ -111,22 +111,14 @@ module Lich
             when Pattern::StowListOutputStart
               StowList.reset
               :ok
-            when Pattern::StowListContainer
+            when Pattern::StowListContainer, Pattern::StowSetContainer1, Pattern::StowSetContainer2
               match = Regexp.last_match
               if GameObj[match[:id]]
                 StowList.__send__("#{match[:type].downcase}=", GameObj[match[:id]])
               else
                 StowList.__send__("#{match[:type].downcase}=", GameObj.new(match[:id], match[:noun], match[:name]))
               end
-              StowList.checked = true
-              :ok
-            when Pattern::StowSetContainer1, Pattern::StowSetContainer2
-              match = Regexp.last_match
-              if GameObj[match[:id]]
-                StowList.__send__("#{match[:type].downcase}=", GameObj[match[:id]])
-              else
-                StowList.__send__("#{match[:type].downcase}=", GameObj.new(match[:id], match[:noun], match[:name]))
-              end
+              StowList.checked = true if line =~ Pattern::StowListContainer
               :ok
             end
           rescue StandardError
