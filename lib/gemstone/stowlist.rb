@@ -43,7 +43,7 @@ module Lich
         def stale?
           # check if existing containers are stale or not
           return true unless checked?
-          @stow_list.each do |type, value|
+          @stow_list.each_value do |value|
             unless GameObj.inv.any? { |item| value.nil? || item == value }
               @checked = false
               return true
