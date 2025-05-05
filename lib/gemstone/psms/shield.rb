@@ -8,6 +8,7 @@ module Lich
         # rubocop:disable Layout/ExtraSpacing
         [{ long_name: 'acrobats_leap',           short_name: 'acrobatsleap',    cost:  0 },
          { long_name: 'adamantine_bulwark', 	   short_name: 'bulwark', 	      cost:  0 },
+         { long_name: 'block_specialization',    short_name: 'blockspec',       cost:  0 },
          { long_name: 'block_the_elements', 	   short_name: 'blockelements',	  cost:  0 },
          { long_name: 'deflect_magic',           short_name: 'deflectmagic',    cost:  0 },
          { long_name: 'deflect_missiles', 	     short_name: 'deflectmissiles', cost:  0 },
@@ -47,6 +48,12 @@ module Lich
           :cost  => 0,
           :regex => /Adamantine Bulwark does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./,
           :usage => nil,
+        },
+        "block_specialization"   => {
+          :cost  => 0,
+          :type  => "passive",
+          :regex => /The Block Specialization combat maneuver is always active once you have learned it\./,
+          :usage => nil
         },
         "block_the_elements"    => {
           :cost  => 0,
