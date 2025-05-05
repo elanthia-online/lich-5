@@ -82,18 +82,18 @@ module Lich
 
           # the following are for parsing STOW LIST and setting of STOW containers
           StowListOutputStart = /^You have the following containers set as stow targets:\r?\n?$/
-          StowListContainer = /^  (?:an?|some) <a exist="(?<id>\d+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^\(]+)?\((?<type>box|gem|herb|skin|wand|scroll|potion|trinket|reagent|lockpick|treasure|forageable|collectible|default)\)\r?\n?$/
-          StowSetContainer1 = /^Set "a <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^"]+)?" to be your STOW (?<type>BOX|GEM|HERB|SKIN|WAND|SCROLL|POTION|TRINKET|REAGENT|LOCKPICK|TREASURE|FORAGEABLE|COLLECTIBLE) container\.\r?\n?$/
-          StowSetContainer2 = /Set "a <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^"]+)?" to be your (?<type>default) STOW container\.\r?\n?$/
+          StowListContainer = /^  (?:an?|some) <a exist="(?<id>\d+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^\(]+)?\((?<type>box|gem|herb|skin|wand|scroll|potion|trinket|reagent|lockpick|treasure|forageable|collectible|default)\)\r?\n?$/
+          StowSetContainer1 = /^Set "a <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^"]+)?" to be your STOW (?<type>BOX|GEM|HERB|SKIN|WAND|SCROLL|POTION|TRINKET|REAGENT|LOCKPICK|TREASURE|FORAGEABLE|COLLECTIBLE) container\.\r?\n?$/
+          StowSetContainer2 = /Set "a <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^"]+)?" to be your (?<type>default) STOW container\.\r?\n?$/
 
           # the following are for parsing READY LIST and setting of READY items
           ReadyListOutputStart = /^Your current settings are:\r?\n?$/
-          ReadyListNormal = /^  (?<type>shield|(?:secondary |ranged )?weapon|ammo bundle): <d cmd="store (?:SHIELD|2?WEAPON|RANGED|AMMO) clear">(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^<]+)?<\/d> \(<d cmd='store set'>(?:worn if possible, stowed otherwise|stowed|put in (?:secondary )?sheath)<\/d>\)\r?\n?$/
-          ReadyListAmmo2 = /^  (?<type>ammo2 bundle): <d cmd="store AMMO2 clear">(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^<]+)?<\/d>\r?\n?$/
-          ReadyListSheathsSet = /^  (?<type>(?:secondary )?sheath): <d cmd="store 2?SHEATH clear">(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^<]+)?<\/d>\r?\n?$/
+          ReadyListNormal = /^  (?<type>shield|(?:secondary |ranged )?weapon|ammo bundle): <d cmd="store (?:SHIELD|2?WEAPON|RANGED|AMMO) clear">(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^<]+)?<\/d> \(<d cmd='store set'>(?:worn if possible, stowed otherwise|stowed|put in (?:secondary )?sheath)<\/d>\)\r?\n?$/
+          ReadyListAmmo2 = /^  (?<type>ammo2 bundle): <d cmd="store AMMO2 clear">(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^<]+)?<\/d>\r?\n?$/
+          ReadyListSheathsSet = /^  (?<type>(?:secondary )?sheath): <d cmd="store 2?SHEATH clear">(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^<]+)?<\/d>\r?\n?$/
           ReadyListFinished = /To change your default item for a category that is already set, clear the category first by clicking on the item in the list above.  Click <d cmd="ready list">here<\/d> to update the list\.\r?\n?$/
           ReadyItemClear = /^Cleared your default (?<type>shield|(?:secondary |ranged )?weapon|ammo2? bundle|(?:secondary )?sheath)\.\r?\n?$/
-          ReadyItemSet = /^Setting (?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?: [^<]+)? to be your default (?<type>shield|(?:secondary |ranged )?weapon|ammo2? bundle|(?:secondary )?sheath)\.\r?\n?$/
+          ReadyItemSet = /^Setting (?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^<]+)? to be your default (?<type>shield|(?:secondary |ranged )?weapon|ammo2? bundle|(?:secondary )?sheath)\.\r?\n?$/
 
           All = Regexp.union(NpcDeathMessage, Group_Short, Also_Here_Arrival, StowListOutputStart, StowListContainer, StowSetContainer1, StowSetContainer2,
                              ReadyListOutputStart, ReadyListNormal, ReadyListAmmo2, ReadyListSheathsSet, ReadyListFinished, ReadyItemClear, ReadyItemSet)
@@ -128,7 +128,7 @@ module Lich
               if GameObj[match[:id]]
                 StowList.__send__("#{match[:type].downcase}=", GameObj[match[:id]])
               else
-                StowList.__send__("#{match[:type].downcase}=", GameObj.new(match[:id], match[:noun], match[:name]))
+                StowList.__send__("#{match[:type].downcase}=", GameObj.new(match[:id], match[:noun], match[:name], nil, (match[:after].nil? ? nil : match[:after].strip)))
               end
               StowList.checked = true if line =~ Pattern::StowListContainer
               :ok
@@ -140,7 +140,7 @@ module Lich
               if GameObj[match[:id]]
                 ReadyList.__send__("#{Lich::Util.normalize_name(match[:type].downcase)}=", GameObj[match[:id]])
               else
-                ReadyList.__send__("#{Lich::Util.normalize_name(match[:type].downcase)}=", GameObj.new(match[:id], match[:noun], match[:name]))
+                ReadyList.__send__("#{Lich::Util.normalize_name(match[:type].downcase)}=", GameObj.new(match[:id], match[:noun], match[:name], nil, (match[:after].nil? ? nil : match[:after].strip)))
               end
               :ok
             when Pattern::ReadyListFinished
