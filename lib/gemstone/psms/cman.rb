@@ -675,7 +675,7 @@ module Lich
       def CMan.available?(name, ignore_cooldown: false, min_rank: 1)
         return false unless CMan.known?(name, min_rank: min_rank)
         return false unless CMan.affordable?(name)
-        return false if Lich::Util.normalize_lookup('Cooldowns', name) unless ignore_cooldown && @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:ignorable_cooldown] # check that the request to ignore_cooldown is on something that can have the cooldown ignored as well
+        return false if Lich::Util.normalize_lookup('Cooldowns', name) unless ignore_cooldown && @@combat_mans.fetch(PSMS.name_normal(name))[:ignorable_cooldown] # check that the request to ignore_cooldown is on something that can have the cooldown ignored as well
         return false if Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
         return true
       end
@@ -720,7 +720,7 @@ module Lich
       end
 
       def CMan.regexp(name)
-        @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+        @@combat_mans.fetch(PSMS.name_normal(name))[:regex]
       end
 
       CMan.cman_lookups.each { |cman|
