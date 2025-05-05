@@ -381,7 +381,7 @@ module Lich
               server_string = XMLCleaner.fix_invalid_characters(server_string)
               retry
             when /Invalid XML detected|Missing end tag for 'd'/
-              if server_string =~ /<d cmd="transfer .+? nerves">a/
+              if server_string =~ / and <d cmd="transfer .+? nerves">a/
                 server_string.sub!(/ and <d cmd=\"transfer .+? nerves\">a.*/, " and more...\r\n")
                 retry
               end
@@ -412,7 +412,6 @@ module Lich
           # Ignoring certain XML errors
           # Missing attribute equal: <s> - in dynamic dialogs with a single apostrophe for possessive "Tsetem's Items"
           unless error.to_s =~ /invalid byte sequence|Missing attribute equal: <s>/
-            p error.to_s
             # Handle specific XML errors
             if server_string =~ /<settingsInfo .*?space not found /
               Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
