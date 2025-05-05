@@ -382,7 +382,9 @@ module Lich
               server_string = XMLCleaner.fix_invalid_characters(server_string)
               retry
             when /Invalid XML detected|Missing end tag for 'd'/
-              server_string.sub!(/ and <d cmd=\"transfer .+? nerves\">a.*/, " and more...\r\n")
+              if server_string =~ /<d cmd="transfer .+? nerves">a/
+                server_string.sub!(/ and <d cmd=\"transfer .+? nerves\">a.*/, " and more...\r\n")
+              end
               retry
             else
               handle_xml_error(server_string, e)
