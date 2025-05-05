@@ -37,7 +37,7 @@ module Lich
         def valid?
           # check if existing ready items are valid or not
           return true unless checked?
-          @ready_list.each do |type, value|
+          @ready_list.each_value do |value|
             unless value.nil? || GameObj.inv.include?(value) || GameObj.containers.values.flatten.include?(value)
               @checked = false
               return true
