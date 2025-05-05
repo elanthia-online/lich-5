@@ -2,13 +2,8 @@
 module Lich
   module Gemstone
     class Society
-      # @return [String] The name of the society: "Order of Voln", "Council of Light", "Guardians of Sunfist", or None
-      def self.membership
-        Infomon.get("society.status")
-      end
-
       # Determines character's society membership
-      # @return [String] The name of the society the character is a member of, or "None" if not a member.
+      # @return [String] The name of the society: "Order of Voln", "Council of Light", "Guardians of Sunfist", or None
       def self.member_of
         Infomon.get("society.status")
       end
@@ -27,10 +22,17 @@ module Lich
 
       ## DEPRECATED METHODS ##
 
-      # @deprecated Use {#membership} instead.
+      # @deprecated Use {#member_of} instead.
+      # @return [String] The name of the society: "Order of Voln", "Council of Light", "Guardians of Sunfist", or None
+      def self.membership
+        Lich.deprecated("Society.membership", "Society.member_of", caller[0], fe_log: false)
+        Infomon.get("society.status")
+      end
+
+      # @deprecated Use {#member_of} instead.
       # @return [String] The current society membership
       def self.member
-        Lich.deprecated("Society.member", "Society.membership", caller[0], fe_log: false)
+        Lich.deprecated("Society.member", "Society.member_of", caller[0], fe_log: false)
         self.status.dup
       end
 
