@@ -146,6 +146,7 @@ module Lich
             when Pattern::ReadyItemClear
               match = Regexp.last_match
               ReadyList.__send__("#{Lich::Util.normalize_name(match[:type].downcase)}=", nil)
+              :ok
             end
           rescue StandardError
             respond "--- Lich: error: Infomon::XMLParser.parse: #{$!}"
