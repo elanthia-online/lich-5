@@ -39,6 +39,35 @@ module Lich
         def checked=(value)
           @checked = value
         end
+
+        def stale?
+          # check if existing containers are stale or not
+          return true unless checked?
+          @stow_list.each do |type, value|
+            unless GameObj.inv.any? { |item| value.nil? || item == value }
+              @checked = false
+              return true
+            end
+          end
+          return false
+        end
+
+        def reset
+          @checked = false
+          @stow_list.each_key do |key|
+            @stow_list[key] = nil
+          end
+        end
+
+        def check(silent: false, quiet: false)
+          if quiet
+            start_pattern = /<output class="mono"\/>/
+          else
+            start_pattern = /You have the following containers set as stow targets:/
+          end
+          Lich::Util.issue_command("stow list", start_pattern, silent: silent, quiet: quiet)
+          @checked = true
+        end
       end
     end
   end
