@@ -107,6 +107,8 @@ module Lich
               :ok
             when Pattern::StowContainer
               match = Regexp.last_match
+              StowList.__send__("#{match[:type]}=", GameObj.new(match[:id], match[:noun], match[:name]))
+              StowList.checked = true
               :ok
             end
           rescue StandardError
