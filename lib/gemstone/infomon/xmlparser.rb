@@ -79,9 +79,12 @@ module Lich
             /sinks to the ground, the fell light in (?:his|her) eyes guttering before going out entirely/,
           )
           NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? #{NpcDeathPostfix}[\.!]\r?\n?$/
-          StowContainer = /^  (?:an?|some) <a exist="(?<id>\d+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a> (?:[^\(]+)?\((?<type>box|gem|herb|skin|wand|scroll|potion|trinket|reagent|lockpick|treasure|forageable|collectible|default)\)$/
+          StowListOutputStart = /^You have the following containers set as stow targets:\r?\n?$/
+          StowListContainer = /^  (?:an?|some) <a exist="(?<id>\d+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a> (?:[^\(]+)?\((?<type>box|gem|herb|skin|wand|scroll|potion|trinket|reagent|lockpick|treasure|forageable|collectible|default)\)\r?\n?$/
+          StowSetContainer1 = /^Set "a <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>" to be your STOW (?<type>BOX|GEM|HERB|SKIN|WAND|SCROLL|POTION|TRINKET|REAGENT|LOCKPICK|TREASURE|FORAGEABLE|COLLECTIBLE) container\.\r?\n?$/
+          StowSetContainer2 = /Set "a <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>" to be your (?<type>default) STOW container\.\r?\n?$/
 
-          All = Regexp.union(NpcDeathMessage, Group_Short, Also_Here_Arrival, StowContainer)
+          All = Regexp.union(NpcDeathMessage, Group_Short, Also_Here_Arrival, StowListOutputStart, StowListContainer, StowSetContainer1, StowSetContainer2)
         end
 
         def self.parse(line)
@@ -105,10 +108,25 @@ module Lich
               return :noop unless Lich::Claim::Lock.locked?
               line.scan(%r{<a exist=(?:'|")(?<id>.*?)(?:'|") noun=(?:'|")(?<noun>.*?)(?:'|")>(?<name>.*?)</a>}).each { |player_found| XMLData.arrival_pcs.push(player_found[1]) unless XMLData.arrival_pcs.include?(player_found[1]) }
               :ok
-            when Pattern::StowContainer
+            when Pattern::StowListOutputStart
+              StowList.reset
+              :ok
+            when Pattern::StowListContainer
               match = Regexp.last_match
-              StowList.__send__("#{match[:type]}=", GameObj.new(match[:id], match[:noun], match[:name]))
+              if GameObj[match[:id]]
+                StowList.__send__("#{match[:type].downcase}=", GameObj[match[:id]])
+              else
+                StowList.__send__("#{match[:type].downcase}=", GameObj.new(match[:id], match[:noun], match[:name]))
+              end
               StowList.checked = true
+              :ok
+            when Pattern::StowSetContainer1, Pattern::StowSetContainer2
+              match = Regexp.last_match
+              if GameObj[match[:id]]
+                StowList.__send__("#{match[:type].downcase}=", GameObj[match[:id]])
+              else
+                StowList.__send__("#{match[:type].downcase}=", GameObj.new(match[:id], match[:noun], match[:name]))
+              end
               :ok
             end
           rescue StandardError
