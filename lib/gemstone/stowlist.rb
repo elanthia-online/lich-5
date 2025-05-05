@@ -26,7 +26,6 @@ module Lich
       end
 
       class << self
-
         def stow_list
           @stow_list
         end
