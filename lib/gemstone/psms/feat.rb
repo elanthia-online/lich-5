@@ -269,7 +269,7 @@ module Lich
       end
 
       def Feat.regexp(name)
-        @@feats.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+        @@feats.fetch(PSMS.name_normal(name))[:regex]
       end
 
       Feat.feat_lookups.each { |feat|
