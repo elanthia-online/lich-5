@@ -1,7 +1,68 @@
 module Lich
   module Gemstone
-    module ReadyList
-      # content here
+    class ReadyList
+      @checked = false
+      @ready_list = {
+        shield: nil,
+        weapon: nil,
+        secondary_weapon: nil,
+        ranged_weapon: nil,
+        ammo_bundle: nil,
+        ammo2_bundle: nil,
+        sheath: nil,
+        secondary_sheath: nil,
+      }
+
+      # Define class-level accessors for stow list entries
+      @ready_list.each_key do |type|
+        define_singleton_method(type) { @ready_list[type] }
+        define_singleton_method("#{type}=") { |value| @ready_list[type] = value }
+      end
+
+      class << self
+        # attr_accessor :checked
+
+        def ready_list
+          @ready_list
+        end
+
+        def checked?
+          @checked
+        end
+
+        def checked=(value)
+          @checked = value
+        end
+
+        def valid?
+          # check if existing ready items are valid or not
+          return true unless checked?
+          @ready_list.each do |type, value|
+            unless value.nil? || GameObj.inv.include?(value) || GameObj.containers.values.flatten.include?(value)
+              @checked = false
+              return true
+            end
+          end
+          return false
+        end
+
+        def reset
+          @checked = false
+          @ready_list.each_key do |key|
+            @ready_list[key] = nil
+          end
+        end
+
+        def check(silent: false, quiet: false)
+          if quiet
+            start_pattern = /<output class="mono"\/>/
+          else
+            start_pattern = /Your current settings are:/
+          end
+          Lich::Util.issue_command("ready list", start_pattern, silent: silent, quiet: quiet)
+          @checked = true
+        end
+      end
     end
   end
 end
