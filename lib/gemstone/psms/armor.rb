@@ -92,14 +92,19 @@ module Lich
 
       def Armor.use(name, target = "", results_of_interest: nil)
         return unless Armor.available?(name)
-        usage = @@armor_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:usage]
+        name_normalized = PSMS.name_normal(name)
+        technique = @@armor_techniques.fetch(name_normalized)
+        usage = technique[:usage]
         return if usage.nil?
+
+        in_cooldown_regex = /^#{name} is still in cooldown\./i
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
-          /^Roundtime: [0-9]+ sec\.$/,
-          @@armor_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
           /^#{name} what\?$/i,
+          in_cooldown_regex,
+          technique[:regex],
+          /^Roundtime: [0-9]+ sec\.$/,
           /^\w+ [a-z]+ not wearing any armor that you can work with\.$/
         )
 
