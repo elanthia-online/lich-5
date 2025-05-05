@@ -20,7 +20,6 @@ module Lich
       end
 
       class << self
-
         def ready_list
           @ready_list
         end
