@@ -109,7 +109,6 @@ module Lich
 
           # Fix nested double quotes
           unless (matches = server_string.scan(/"([^=]*"[^=]*)"/)).empty?
-            p matches
             Lich.log "Invalid nested double quotes XML tags detected: #{server_string.inspect}"
             matches.flatten.each do |match|
               server_string.gsub!(match, match.gsub(/"/, '&quot;'))
@@ -382,10 +381,10 @@ module Lich
               server_string = XMLCleaner.fix_invalid_characters(server_string)
               retry
             when /Invalid XML detected|Missing end tag for 'd'/
-              if server_string =~ / and <d cmd="transfer .+? nerves">a/
+              if server_string =~ /<d cmd="transfer .+? nerves">a/
                 server_string.sub!(/ and <d cmd=\"transfer .+? nerves\">a.*/, " and more...\r\n")
+                retry
               end
-              retry
             else
               handle_xml_error(server_string, e)
             end
