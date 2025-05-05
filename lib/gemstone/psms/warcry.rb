@@ -62,20 +62,26 @@ module Lich
       def Warcry.use(name, target = "", results_of_interest: nil)
         return unless Warcry.available?(name)
         return if Warcry.buffActive?(name)
-        name = PSMS.name_normal(name)
+        name_normalized = PSMS.name_normal(name)
+        technique = @@warcries.fetch(name_normalized)
+        usage = name_normalized
+        return if usage.nil?
+
+        in_cooldown_regex = /^#{name} is still in cooldown\./i
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
+          /^#{name} what\?$/i,
+          in_cooldown_regex,
+          technique[:regex],
           /^Roundtime: [0-9]+ sec\.$/,
-          @@warcries.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-          /^#{name.gsub("_", " ")} what\?$/i
         )
 
         if results_of_interest.is_a?(Regexp)
           results_regex = Regexp.union(results_regex, results_of_interest)
         end
 
-        usage_cmd = "warcry #{name}"
+        usage_cmd = "warcry #{usage}"
         if target.class == GameObj
           usage_cmd += " ##{target.id}"
         elsif target.class == Integer
