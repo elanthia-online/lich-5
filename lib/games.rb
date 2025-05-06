@@ -158,6 +158,12 @@ module Lich
             server_string = ""
           end
 
+          # Remove unclosed tag in long strings from empath appraisals
+          if server_string =~ / and <d cmd=\"transfer .+? nerves\">a/
+            Lich.log "Unclosed wound (nerves) tag detected and deleted: #{server_string.inspect}"
+            server_string.sub!(/ and <d cmd=\"transfer .+? nerves\">a.+?$/, " and more.")
+          end
+
           server_string
         end
       end
@@ -373,9 +379,22 @@ module Lich
             # Check for valid XML
             REXML::Document.parse_stream("<root>#{server_string}</root>", XMLData)
           rescue => e
-            handle_xml_error(server_string, e)
-            XMLData.reset
-            return
+            case e.to_s
+            # Missing attribute equal: <s> - in dynamic dialogs with a single apostrophe for possessive 'Tsetem's Items'
+            when /nested single quotes|nested double quotes|Missing attribute equal: <s>/
+              server_string = XMLCleaner.clean_nested_quotes(server_string)
+              retry
+            when /invalid characters/
+              server_string = XMLCleaner.fix_invalid_characters(server_string)
+              retry
+            when /Missing end tag for 'd'/
+              server_string = XMLCleaner.fix_xml_tags(server_string)
+              retry
+            else
+              handle_xml_error(server_string, e)
+              XMLData.reset
+              return
+            end
           end
 
           # Process game-specific data using instance
@@ -395,6 +414,7 @@ module Lich
         end
 
         def handle_xml_error(server_string, error)
+          # Ignoring certain XML errors
           unless error.to_s =~ /invalid byte sequence/
             # Handle specific XML errors
             if server_string =~ /<settingsInfo .*?space not found /
@@ -403,12 +423,6 @@ module Lich
               Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
               return process_xml_data(server_string) # Return to retry with fixed string
             end
-
-            # Fix invalid characters
-            server_string = XMLCleaner.fix_invalid_characters(server_string)
-
-            # Fix nested quotes
-            server_string = XMLCleaner.clean_nested_quotes(server_string)
 
             $stdout.puts "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
             Lich.log "Invalid XML detected - please report this: #{server_string.inspect}"
