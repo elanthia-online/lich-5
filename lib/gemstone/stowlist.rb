@@ -42,7 +42,7 @@ module Lich
           # check if existing containers are valid or not
           return false unless checked?
           @stow_list.each_value do |value|
-            unless value.nil? || GameObj.inv.map(&:id).include?(value.id)
+            unless value.nil? || GameObj.inv.include?(value)
               @checked = false
               return false
             end
