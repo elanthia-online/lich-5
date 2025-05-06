@@ -6,7 +6,7 @@ module Lich
       # this module handles all of the logic for parsing game lines that infomon depends on
       module XMLParser
         module Pattern
-          Group_Short = /(?:group|following you|IconJOINED)|^You are leading|(?:'s<\/a>|your) hand(?: tenderly)?\.$/
+          Group_Short = /(?:group|following you|IconJOINED)|^You are leading|(?:'s<\/a>|your) hand(?: tenderly)?\.\r?\n?$/
           Also_Here_Arrival = /^Also here: /
           NpcDeathPrefix = Regexp.union(
             /The fire in the/,
