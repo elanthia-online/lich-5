@@ -231,13 +231,19 @@ module Lich
 
       def Feat.use(name, target = "", results_of_interest: nil)
         return unless Feat.available?(name)
-        usage = @@feats.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:usage]
+        name_normalized = PSMS.name_normal(name)
+        technique = @@feats.fetch(name_normalized)
+        usage = technique[:usage]
         return if usage.nil?
+
+        in_cooldown_regex = /^#{name} is still in cooldown\./i
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
-          @@feats.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-          /^#{name} what\?$/i
+          /^#{name} what\?$/i,
+          in_cooldown_regex,
+          technique[:regex],
+          /^Roundtime: [0-9]+ sec\.$/,
         )
 
         if results_of_interest.is_a?(Regexp)
@@ -245,9 +251,9 @@ module Lich
         end
 
         usage_cmd = (['guard', 'protect'].include?(usage) ? "#{usage}" : "feat #{usage}")
-        if target.class == GameObj
+        if target.is_a?(GameObj)
           usage_cmd += " ##{target.id}"
-        elsif target.class == Integer
+        elsif target.is_a?(Integer)
           usage_cmd += " ##{target}"
         elsif target != ""
           usage_cmd += " #{target}"
@@ -263,7 +269,7 @@ module Lich
       end
 
       def Feat.regexp(name)
-        @@feats.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+        @@feats.fetch(PSMS.name_normal(name))[:regex]
       end
 
       Feat.feat_lookups.each { |feat|

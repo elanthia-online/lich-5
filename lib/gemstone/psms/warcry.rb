@@ -62,22 +62,29 @@ module Lich
       def Warcry.use(name, target = "", results_of_interest: nil)
         return unless Warcry.available?(name)
         return if Warcry.buffActive?(name)
-        name = PSMS.name_normal(name)
+        name_normalized = PSMS.name_normal(name)
+        technique = @@warcries.fetch(name_normalized)
+        usage = name_normalized
+        return if usage.nil?
+
+        in_cooldown_regex = /^#{name} is still in cooldown\./i
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
-          @@warcries.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-          /^#{name} what\?$/i
+          /^#{name} what\?$/i,
+          in_cooldown_regex,
+          technique[:regex],
+          /^Roundtime: [0-9]+ sec\.$/,
         )
 
         if results_of_interest.is_a?(Regexp)
           results_regex = Regexp.union(results_regex, results_of_interest)
         end
 
-        usage_cmd = "warcry #{name}"
-        if target.class == GameObj
+        usage_cmd = "warcry #{usage}"
+        if target.is_a?(GameObj)
           usage_cmd += " ##{target.id}"
-        elsif target.class == Integer
+        elsif target.is_a?(Integer)
           usage_cmd += " ##{target}"
         elsif target != ""
           usage_cmd += " #{target}"
@@ -93,7 +100,7 @@ module Lich
       end
 
       def Warcry.regexp(name)
-        @@warcries.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+        @@warcries.fetch(PSMS.name_normal(name))[:regex]
       end
 
       Warcry.warcry_lookups.each { |warcry|

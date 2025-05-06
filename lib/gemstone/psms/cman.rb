@@ -34,7 +34,7 @@ module Lich
          { long_name: 'flurry_of_blows',         short_name: 'flurry',           cost: 20 },
          { long_name: 'footstomp',               short_name: 'footstomp',        cost: 7 },
          { long_name: 'garrote',                 short_name: 'garrote',          cost: 10 },
-         { long_name: 'grappel_specialization',  short_name: 'grapplespec',      cost:  0 },
+         { long_name: 'grapple_specialization',  short_name: 'grapplespec',      cost:  0 },
          { long_name: 'griffins_voice',          short_name: 'griffin',          cost: 20 },
          { long_name: 'groin_kick',              short_name: 'gkick',            cost:  7 },
          { long_name: 'hamstring',               short_name: 'hamstring',        cost:  9 },
@@ -293,7 +293,7 @@ module Lich
                                  /You attempt to slip the garrote around .+? neck, but it catches the movement and dodges away just in time\./),
           :usage => "garrote"
         },
-        "grappel_specialization" => {
+        "grapple_specialization" => {
           :cost  => 0,
           :type  => "passive",
           :regex => /The Grapple Specialization combat maneuver is always active once you have learned it\./,
@@ -675,20 +675,26 @@ module Lich
       def CMan.available?(name, ignore_cooldown: false, min_rank: 1)
         return false unless CMan.known?(name, min_rank: min_rank)
         return false unless CMan.affordable?(name)
-        return false if Lich::Util.normalize_lookup('Cooldowns', name) unless ignore_cooldown && @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:ignorable_cooldown] # check that the request to ignore_cooldown is on something that can have the cooldown ignored as well
+        return false if Lich::Util.normalize_lookup('Cooldowns', name) unless ignore_cooldown && @@combat_mans.fetch(PSMS.name_normal(name))[:ignorable_cooldown] # check that the request to ignore_cooldown is on something that can have the cooldown ignored as well
         return false if Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
         return true
       end
 
       def CMan.use(name, target = "", ignore_cooldown: false, results_of_interest: nil)
         return unless CMan.available?(name, ignore_cooldown: ignore_cooldown)
-        usage = @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:usage]
+        name_normalized = PSMS.name_normal(name)
+        technique = @@combat_mans.fetch(name_normalized)
+        usage = technique[:usage]
         return if usage.nil?
+
+        in_cooldown_regex = /^#{name} is still in cooldown\./i
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
-          @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-          /^#{name} what\?$/i
+          /^#{name} what\?$/i,
+          in_cooldown_regex,
+          technique[:regex],
+          /^Roundtime: [0-9]+ sec\.$/,
         )
 
         if results_of_interest.is_a?(Regexp)
@@ -696,9 +702,9 @@ module Lich
         end
 
         usage_cmd = "cman #{usage}"
-        if target.class == GameObj
+        if target.is_a?(GameObj)
           usage_cmd += " ##{target.id}"
-        elsif target.class == Integer
+        elsif target.is_a?(Integer)
           usage_cmd += " ##{target}"
         elsif target != ""
           usage_cmd += " #{target}"
@@ -714,7 +720,7 @@ module Lich
       end
 
       def CMan.regexp(name)
-        @@combat_mans.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+        @@combat_mans.fetch(PSMS.name_normal(name))[:regex]
       end
 
       CMan.cman_lookups.each { |cman|

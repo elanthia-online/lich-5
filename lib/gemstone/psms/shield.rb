@@ -6,36 +6,36 @@ module Lich
     module Shield
       def self.shield_lookups
         # rubocop:disable Layout/ExtraSpacing
-        [{ long_name: 'acrobats_leap',           short_name: 'acrobatsleap',    cost:  0 },
-         { long_name: 'adamantine_bulwark', 	   short_name: 'bulwark', 	      cost:  0 },
-         { long_name: 'block_the_elements', 	   short_name: 'blockelements',	  cost:  0 },
+        [{ long_name: 'adamantine_bulwark',      short_name: 'bulwark',         cost:  0 },
+         { long_name: 'block_specialization',    short_name: 'blockspec',       cost:  0 },
+         { long_name: 'block_the_elements',      short_name: 'blockelements',   cost:  0 },
          { long_name: 'deflect_magic',           short_name: 'deflectmagic',    cost:  0 },
-         { long_name: 'deflect_missiles', 	     short_name: 'deflectmissiles', cost:  0 },
-         { long_name: 'deflect_the_elements', 	 short_name: 'deflectelements', cost:  0 },
-         { long_name: 'disarming_presence', 	   short_name: 'dpresence', 	    cost: 20 },
+         { long_name: 'deflect_missiles',        short_name: 'deflectmissiles', cost:  0 },
+         { long_name: 'deflect_the_elements',    short_name: 'deflectelements', cost:  0 },
+         { long_name: 'disarming_presence',      short_name: 'dpresence',       cost: 20 },
          { long_name: 'guard_mastery',           short_name: 'gmastery',        cost:  0 },
          { long_name: 'large_shield_focus',      short_name: 'lfocus',          cost:  0 },
-         { long_name: 'medium_shield_focus', 	   short_name: 'mfocus',          cost:  0 },
-         { long_name: 'phalanx', 	               short_name: 'phalanx',         cost:  0 },
-         { long_name: 'prop_up', 	               short_name: 'prop',            cost:  0 },
-         { long_name: 'protective_wall', 	       short_name: 'pwall',           cost:  0 },
-         { long_name: 'shield_bash', 	           short_name: 'bash', 	          cost:  9 },
-         { long_name: 'shield_charge', 	         short_name: 'charge', 	        cost: 14 },
+         { long_name: 'medium_shield_focus',     short_name: 'mfocus',          cost:  0 },
+         { long_name: 'phalanx',                 short_name: 'phalanx',         cost:  0 },
+         { long_name: 'prop_up',                 short_name: 'prop',            cost:  0 },
+         { long_name: 'protective_wall',         short_name: 'pwall',           cost:  0 },
+         { long_name: 'shield_bash',             short_name: 'bash',            cost:  9 },
+         { long_name: 'shield_charge',           short_name: 'charge',          cost: 14 },
          { long_name: 'shield_forward',          short_name: 'forward',         cost:  0 },
          { long_name: 'shield_mind',             short_name: 'mind',            cost: 10 },
          { long_name: 'shield_pin',              short_name: 'pin',             cost: 15 },
          { long_name: 'shield_push',             short_name: 'push',            cost:  7 },
-         { long_name: 'shield_riposte', 	       short_name: 'riposte',         cost: 20 },
-         { long_name: 'shield_spike_mastery', 	 short_name: 'spikemastery',    cost:  0 },
-         { long_name: 'shield_strike', 	         short_name: 'strike',          cost: 15 },
-         { long_name: 'shield_strike_mastery', 	 short_name: 'strikemastery',   cost:  0 },
-         { long_name: 'shield_swiftness', 	     short_name: 'swiftness', 	    cost:  0 },
-         { long_name: 'shield_throw', 	         short_name: 'throw', 	        cost: 20 },
-         { long_name: 'shield_trample', 	       short_name: 'trample', 	      cost: 14 },
-         { long_name: 'shielded_brawler', 	     short_name: 'brawler', 	      cost:  0 },
-         { long_name: 'small_shield_focus', 	   short_name: 'sfocus',          cost:  0 },
-         { long_name: 'spell_block', 	           short_name: 'spellblock', 	    cost:  0 },
-         { long_name: 'steady_shield', 	         short_name: 'steady', 	        cost:  0 },
+         { long_name: 'shield_riposte',          short_name: 'riposte',         cost: 20 },
+         { long_name: 'shield_spike_mastery',    short_name: 'spikemastery',    cost:  0 },
+         { long_name: 'shield_strike',           short_name: 'strike',          cost: 15 },
+         { long_name: 'shield_strike_mastery',   short_name: 'strikemastery',   cost:  0 },
+         { long_name: 'shield_swiftness',        short_name: 'swiftness',       cost:  0 },
+         { long_name: 'shield_throw',            short_name: 'throw',           cost: 20 },
+         { long_name: 'shield_trample',          short_name: 'trample',         cost: 14 },
+         { long_name: 'shielded_brawler',        short_name: 'brawler',         cost:  0 },
+         { long_name: 'small_shield_focus',      short_name: 'sfocus',          cost:  0 },
+         { long_name: 'spell_block',             short_name: 'spellblock',      cost:  0 },
+         { long_name: 'steady_shield',           short_name: 'steady',          cost:  0 },
          { long_name: 'steely_resolve',          short_name: 'resolve',         cost: 30 },
          { long_name: 'tortoise_stance',         short_name: 'tortoise',        cost: 20 },
          { long_name: 'tower_shield_focus',      short_name: 'tfocus',          cost:  0 }]
@@ -47,6 +47,12 @@ module Lich
           :cost  => 0,
           :regex => /Adamantine Bulwark does not need to be activated\.  If you are wielding the appropriate type of shield, it will always be active\./,
           :usage => nil,
+        },
+        "block_specialization"  => {
+          :cost  => 0,
+          :type  => "passive",
+          :regex => /The Block Specialization combat maneuver is always active once you have learned it\./,
+          :usage => nil
         },
         "block_the_elements"    => {
           :cost  => 0,
@@ -228,13 +234,19 @@ module Lich
       # unmodified from 5.6.2
       def Shield.use(name, target = "", results_of_interest: nil)
         return unless Shield.available?(name)
-        usage = @@shield_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:usage]
+        name_normalized = PSMS.name_normal(name)
+        technique = @@shield_techniques.fetch(name_normalized)
+        usage = technique[:usage]
         return if usage.nil?
+
+        in_cooldown_regex = /^#{name} is still in cooldown\./i
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
-          @@shield_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
-          /^#{name} what\?$/i
+          /^#{name} what\?$/i,
+          in_cooldown_regex,
+          technique[:regex],
+          /^Roundtime: [0-9]+ sec\.$/,
         )
 
         if results_of_interest.is_a?(Regexp)
@@ -242,9 +254,9 @@ module Lich
         end
 
         usage_cmd = "shield #{usage}"
-        if target.class == GameObj
+        if target.is_a?(GameObj)
           usage_cmd += " ##{target.id}"
-        elsif target.class == Integer
+        elsif target.is_a?(Integer)
           usage_cmd += " ##{target}"
         elsif target != ""
           usage_cmd += " #{target}"
@@ -260,7 +272,7 @@ module Lich
       end
 
       def Shield.regexp(name)
-        @@shield_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+        @@shield_techniques.fetch(PSMS.name_normal(name))[:regex]
       end
 
       Shield.shield_lookups.each { |shield|

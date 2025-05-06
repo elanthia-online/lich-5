@@ -64,7 +64,7 @@ module Lich
           :buff       => "Slashing Strikes",
         },
         "fury"             => {
-          :regex      => /With a percussive snap, you shake out your arms in quick succession and bear down on a human brigand in a fury\!/,
+          :regex      => /With a percussive snap, you shake out your arms in quick succession and bear down on .+ in a fury\!/,
           :assault_rx => /Your furious assault bolsters you and inspires those around you\!/,
           :buff       => "Enh. Constitution (+10)",
         },
@@ -111,6 +111,7 @@ module Lich
         },
         "twin_hammerfists" => {
           :regex => /You raise your hands high, lace them together and bring them crashing down towards the .+\!/,
+          :usage => "twinhammer",
         },
         "volley"           => {
           :regex => /Raising your .+ high, you loose (?:arrow|bolt) after (?:arrow|bolt) as fast as you can, filling the sky with a volley of deadly projectiles\!/,
@@ -149,15 +150,15 @@ module Lich
 
       def Weapon.use(name, target = "", results_of_interest: nil)
         return unless Weapon.available?(name)
-        name = PSMS.name_normal(name)
-        technique = @@weapon_techniques.fetch(name)
-        usage = technique.key?(:usage) ? technique[:usage] : name
+        name_normalized = PSMS.name_normal(name)
+        technique = @@weapon_techniques.fetch(name_normalized)
+        usage = technique.key?(:usage) ? technique[:usage] : name_normalized
+        return if usage.nil?
 
-        in_cooldown_regex = /^#{name} is still in cooldown\./
+        in_cooldown_regex = /^#{name} is still in cooldown\./i
 
         results_regex = Regexp.union(
           PSMS::FAILURES_REGEXES,
-          @@weapon_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex],
           /^#{name} what\?$/i,
           in_cooldown_regex
         )
@@ -167,18 +168,16 @@ module Lich
         end
 
         usage_cmd = "weapon #{usage}"
-        if target.class == GameObj
+        if target.is_a?(GameObj)
           usage_cmd += " ##{target.id}"
-        elsif target.class == Integer
+        elsif target.is_a?(Integer)
           usage_cmd += " ##{target}"
         elsif target != ""
           usage_cmd += " #{target}"
         end
         usage_result = nil
         if (technique.key?(:assault_rx))
-          # timeout = 10
           results_regex = Regexp.union(results_regex, technique[:assault_rx])
-
           break_out = Time.now() + 12
           loop {
             usage_result = dothistimeout(usage_cmd, 10, results_regex)
@@ -193,6 +192,7 @@ module Lich
             sleep 0.25
           }
         else
+          results_regex = Regexp.union(results_regex, technique[:regex], /^Roundtime: [0-9]+ sec\.$/)
           waitrt?
           waitcastrt?
           usage_result = dothistimeout(usage_cmd, 5, results_regex)
@@ -205,7 +205,7 @@ module Lich
       end
 
       def Weapon.regexp(name)
-        @@weapon_techniques.fetch(name.to_s.gsub(/[\s\-]/, '_').gsub("'", "").downcase)[:regex]
+        @@weapon_techniques.fetch(PSMS.name_normal(name))[:regex]
       end
 
       Weapon.weapon_lookups.each { |weapon|
