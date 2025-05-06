@@ -90,12 +90,17 @@ module Lich
       end
 
       def GameObj.[](val)
-        if val.is_a?(Integer)
-          val = val.to_s
-          respond "--- Lich: error: GameObj[] passed with integer #{val} via caller: #{caller[0]}"
+        unless val.is_a?(String) || val.is_a?(Regexp)
+          respond "--- Lich: error: GameObj[] passed with #{val.class} #{val} via caller: #{caller[0]}"
           respond "--- Lich: error: GameObj[] supports String or Regexp only"
-          Lich.log "--- Lich: error: GameObj[] passed with integer #{val} via caller: #{caller[0]}\n\t"
+          Lich.log "--- Lich: error: GameObj[] passed with #{val.class} #{val} via caller: #{caller[0]}\n\t"
           Lich.log "--- Lich: error: GameObj[] supports String or Regexp only\n\t"
+          if val.is_a?(Integer)
+            respond "--- Lich: error: GameObj[] converted Integer #{val} to String to continue"
+            val = val.to_s
+          else
+            return
+          end
         end
         if val.is_a?(String)
           if val =~ /^\-?[0-9]+$/ # ID lookup
