@@ -96,6 +96,7 @@ module Lich
           respond "--- Lich: error: GameObj[] supports String or Regexp only"
           Lich.log "--- Lich: error: GameObj[] passed with integer #{val} via caller: #{caller[0]}\n\t"
           Lich.log "--- Lich: error: GameObj[] supports String or Regexp only\n\t"
+        end
         if val.is_a?(String)
           if val =~ /^\-?[0-9]+$/ # ID lookup
             # excludes @@room_desc ID lookup due to minimal use case, but could be added in future if desired
