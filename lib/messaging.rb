@@ -125,7 +125,7 @@ module Lich
     end
 
     def self.msg(type = "info", msg = "", encode: true)
-      return if type == "debug" && (Lich.debug_messaging.nil? || Lich.debug_messaging == "false")
+      return if type == "debug" && (Lich.debug_messaging.nil? || Lich.debug_messaging == "false" || Lich.debug_messaging == false)
       _respond msg_format(type, msg, encode: encode)
     end
 
