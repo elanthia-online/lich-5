@@ -189,10 +189,10 @@ module Lich
         reset_path_and_return(value) # Return original value/proxy as per convention
       end
 
-      def self.[](name)
+      def self.[](scope = ":", name)
         if @path_navigator.path.empty?
           # Top-level access
-          value = current_script_settings[name]
+          value = current_script_settings(scope)[name]
 
           if value.nil?
             # For nil values, return nil but set up for safe navigation
@@ -211,7 +211,7 @@ module Lich
           end
 
           # Normal nested access
-          target, _ = navigate_to_path(false) # Don't create missing paths
+          target, _ = navigate_to_path(false, scope) # Don't create missing paths
 
           # If target is nil, return nil and activate safe navigation
           if target.nil?
@@ -343,7 +343,8 @@ module Lich
       end
 
       def self.save
-        # :noop
+        Lich.deprecated('Settings.save', 'not using, not applicable,', caller[0], fe_log: false)
+        nil
       end
 
       # Query methods
