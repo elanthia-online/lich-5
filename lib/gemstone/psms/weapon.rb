@@ -4,126 +4,155 @@
 module Lich
   module Gemstone
     module Weapon
-      def self.weapon_lookups
-        # rubocop:disable Layout/ExtraSpacing
-        [{ long_name: 'barrage',                  short_name: 'barrage',          cost: 15 },
-         { long_name: 'charge',                   short_name: 'charge',           cost: 14 },
-         { long_name: 'clash',			              short_name: 'clash',			      cost: 20 },
-         { long_name: 'clobber',			            short_name: 'clobber',			    cost:  0 },
-         { long_name: 'cripple',			            short_name: 'cripple',			    cost:  7 },
-         { long_name: 'cyclone',			            short_name: 'cyclone',			    cost: 20 },
-         { long_name: 'dizzying_swing',			      short_name: 'dizzyingswing',    cost:  7 },
-         { long_name: 'flurry',			              short_name: 'flurry',			      cost: 15 },
-         { long_name: 'fury',			                short_name: 'fury',			        cost: 15 },
-         { long_name: 'guardant_thrusts',         short_name: 'gthrusts',         cost: 15 },
-         { long_name: 'overpower',                short_name: 'overpower',        cost:  0 },
-         { long_name: 'pin_down',                 short_name: 'pindown',			    cost: 14 },
-         { long_name: 'pulverize',                short_name: 'pulverize',			  cost: 20 },
-         { long_name: 'pummel',			              short_name: 'pummel',           cost: 15 },
-         { long_name: 'radial_sweep',			        short_name: 'radialsweep',      cost:  0 },
-         { long_name: 'reactive_shot',            short_name: 'reactiveshot',     cost:  0 },
-         { long_name: 'reverse_strike',           short_name: 'reversestrike',    cost:  0 },
-         { long_name: 'riposte',			            short_name: 'riposte',          cost:  0 },
-         { long_name: 'spin_kick',			          short_name: 'spinkick',         cost:  0 },
-         { long_name: 'thrash',                   short_name: 'thrash',           cost: 15 },
-         { long_name: 'twin_hammerfists',         short_name: 'twinhammer',       cost:  7 },
-         { long_name: 'volley',			              short_name: 'volley',           cost: 20 },
-         { long_name: 'whirling_blade',			      short_name: 'wblade',           cost: 20 },
-         { long_name: 'whirlwind',                short_name: 'whirlwind',        cost: 20 }]
-        # rubocop:enable Layout/ExtraSpacing
-      end
-
       @@weapon_techniques = {
         "barrage"          => {
+          :short_name => "barrage",
+          :cost       => 15,
           :regex      => /Drawing several (?:arrows|bolts) from your .+, you grip them loosely between your fingers in preparation for a rapid barrage\./,
           :assault_rx => /Your satisfying display of dexterity bolsters you and inspires those around you\!/,
-          :buff       => "Enh. Dexterity (+10)",
+          :buff       => "Enh. Dexterity (+10)"
         },
         "charge"           => {
-          :regex => /You rush forward at .+ with your .+ and attempt a charge\!/,
+          :short_name => "charge",
+          :cost       => 14,
+          :regex      => /You rush forward at .+ with your .+ and attempt a charge\!/
         },
         "clash"            => {
-          :regex => /Steeling yourself for a brawl, you plunge into the fray\!/,
+          :short_name => "clash",
+          :cost       => 20,
+          :regex      => /Steeling yourself for a brawl, you plunge into the fray\!/
         },
         "clobber"          => {
-          :regex => /You redirect the momentum of your parry, hauling your .+ around to clobber .+\!/,
+          :short_name => "clobber",
+          :cost       => 0,
+          :regex      => /You redirect the momentum of your parry, hauling your .+ around to clobber .+\!/
         },
         "cripple"          => {
-          :regex => /You reverse your grip on your .+ and dart toward .+ at an angle\!/,
+          :short_name => "cripple",
+          :cost       => 7,
+          :regex      => /You reverse your grip on your .+ and dart toward .+ at an angle\!/
         },
         "cyclone"          => {
-          :regex => /You weave your .+ in an under arm spin, swiftly picking up speed until it becomes a blurred cyclone of .+\!/,
+          :short_name => "cyclone",
+          :cost       => 20,
+          :regex      => /You weave your .+ in an under arm spin, swiftly picking up speed until it becomes a blurred cyclone of .+\!/
         },
         "dizzying_swing"   => {
-          :regex => /You heft your .+ and, looping it once to build momentum, lash out in a strike at .+ head\!/,
-          :usage => "dizzyingswing",
+          :short_name => "dizzyingswing",
+          :cost       => 7,
+          :regex      => /You heft your .+ and, looping it once to build momentum, lash out in a strike at .+ head\!/,
+          :usage      => "dizzyingswing"
         },
         "flurry"           => {
+          :short_name => "flurry",
+          :cost       => 15,
           :regex      => /You rotate your wrist, your .+ executing a casual spin to establish your flow as you advance upon .+\!/,
-          :assault_rx => /The mesmerizing sway of body and blade glides to its inevitable end with one final twirl of your .+\./,
-          :buff       => "Slashing Strikes",
+          :assault_rx => /The mesmerizing sway of body and blade glides to its inevitable end with one final twirl of your .+\!/,
+          :buff       => "Slashing Strikes"
         },
         "fury"             => {
+          :short_name => "fury",
+          :cost       => 15,
           :regex      => /With a percussive snap, you shake out your arms in quick succession and bear down on .+ in a fury\!/,
           :assault_rx => /Your furious assault bolsters you and inspires those around you\!/,
-          :buff       => "Enh. Constitution (+10)",
+          :buff       => "Enh. Constitution (+10)"
         },
         "guardant_thrusts" => {
-          :regex => /Retaining a defensive profile, you raise your .+ in a hanging guard and prepare to unleash a barrage of guardant thrusts upon .+\!/,
-          :usage => "gthrusts",
+          :short_name => "gthrusts",
+          :cost       => 15,
+          :regex      => /Retaining a defensive profile, you raise your .+ in a hanging guard and prepare to unleash a barrage of guardant thrusts upon .+\!/,
+          :usage      => "gthrusts"
         },
         "overpower"        => {
-          :regex => /On the heels of .+ parry, you erupt into motion, determined to overpower .+ defenses\!/,
+          :short_name => "overpower",
+          :cost       => 0,
+          :regex      => /On the heels of .+ parry, you erupt into motion, determined to overpower .+ defenses\!/
         },
         "pin_down"         => {
-          :regex => /You take quick assessment and raise your .+, several (?:arrows|bolts) nocked to your string in parallel\./,
-          :usage => "pindown",
+          :short_name => "pindown",
+          :cost       => 14,
+          :regex      => /You take quick assessment and raise your .+, several (?:arrows|bolts) nocked to your string in parallel\./,
+          :usage      => "pindown"
         },
         "pulverize"        => {
-          :regex => /You wheel your .+ overhead before slamming it around in a wide arc to pulverize your foes\!/,
+          :short_name => "pulverize",
+          :cost       => 20,
+          :regex      => /You wheel your .+ overhead before slamming it around in a wide arc to pulverize your foes\!/
         },
         "pummel"           => {
+          :short_name => "pummel",
+          :cost       => 15,
           :regex      => /You take a menacing step toward .+, sweeping your .+ out low to your side in your advance\./,
           :assault_rx => /With a final snap of your wrist, you sweep your .+ back to the ready, your assault complete\./,
-          :buff       => "Concussive Blows",
+          :buff       => "Concussive Blows"
         },
         "radial_sweep"     => {
-          :regex => /Crouching low, you sweep your .+ in a broad arc\!/,
-          :usage => "radialsweep",
+          :short_name => "radialsweep",
+          :cost       => 0,
+          :regex      => /Crouching low, you sweep your .+ in a broad arc\!/,
+          :usage      => "radialsweep"
         },
         "reactive_shot"    => {
-          :regex => /You fire off a quick shot at the .+, then make a hasty retreat\!/,
-          :usage => "reactiveshot",
+          :short_name => "reactiveshot",
+          :cost       => 0,
+          :regex      => /You fire off a quick shot at the .+, then make a hasty retreat\!/,
+          :usage      => "reactiveshot"
         },
         "reverse_strike"   => {
-          :regex => /Spotting an opening in .+ defenses, you quickly reverse the direction of your .+ and strike from a different angle\!/,
-          :usage => "reversestrike",
+          :short_name => "reversestrike",
+          :cost       => 0,
+          :regex      => /Spotting an opening in .+ defenses, you quickly reverse the direction of your .+ and strike from a different angle\!/,
+          :usage      => "reversestrike"
         },
         "riposte"          => {
-          :regex => /Before .+ can recover, you smoothly segue from parry to riposte\!/,
+          :short_name => "riposte",
+          :cost       => 0,
+          :regex      => /Before .+ can recover, you smoothly segue from parry to riposte\!/
         },
         "spin_kick"        => {
-          :regex => /Stepping with deliberation, you wheel into a leaping spin\!/,
-          :usage => "spinkick",
+          :short_name => "spinkick",
+          :cost       => 0,
+          :regex      => /Stepping with deliberation, you wheel into a leaping spin\!/,
+          :usage      => "spinkick"
         },
         "thrash"           => {
-          :regex => /You rush .+, raising your .+ high to deliver a sound thrashing\!/,
+          :short_name => "thrash",
+          :cost       => 15,
+          :regex      => /You rush .+, raising your .+ high to deliver a sound thrashing\!/
         },
         "twin_hammerfists" => {
-          :regex => /You raise your hands high, lace them together and bring them crashing down towards the .+\!/,
-          :usage => "twinhammer",
+          :short_name => "twinhammer",
+          :cost       => 7,
+          :regex      => /You raise your hands high, lace them together and bring them crashing down towards the .+\!/,
+          :usage      => "twinhammer"
         },
         "volley"           => {
-          :regex => /Raising your .+ high, you loose (?:arrow|bolt) after (?:arrow|bolt) as fast as you can, filling the sky with a volley of deadly projectiles\!/,
+          :short_name => "volley",
+          :cost       => 20,
+          :regex      => /Raising your .+ high, you loose (?:arrow|bolt) after (?:arrow|bolt) as fast as you can, filling the sky with a volley of deadly projectiles\!/
         },
         "whirling_blade"   => {
-          :regex => /With a broad flourish, you sweep your .+ into a whirling display of keen-edged menace\!/,
-          :usage => "wblade",
+          :short_name => "wblade",
+          :cost       => 20,
+          :regex      => /With a broad flourish, you sweep your .+ into a whirling display of keen-edged menace\!/,
+          :usage      => "wblade"
         },
         "whirlwind"        => {
-          :regex => /Twisting and spinning among your foes, you lash out again and again with the force of a reaping whirlwind\!/,
-        },
+          :short_name => "whirlwind",
+          :cost       => 20,
+          :regex      => /Twisting and spinning among your foes, you lash out again and again with the force of a reaping whirlwind\!/
+        }
       }
+
+      def self.weapon_lookups
+        @@weapon_techniques.map do |long_name, psm|
+          {
+            long_name: long_name,
+            short_name: psm[:short_name],
+            cost: psm[:cost]
+          }
+        end
+      end
 
       def Weapon.[](name)
         return PSMS.assess(name, 'Weapon')

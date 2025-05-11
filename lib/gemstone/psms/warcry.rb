@@ -3,38 +3,57 @@
 module Lich
   module Gemstone
     class Warcry
-      def self.warcry_lookups
-        [{ long_name: 'bertrandts_bellow',        short_name: 'bellow',         cost: 20 }, # @todo only 10 for single
-         { long_name: 'carns_cry',                short_name: 'cry',            cost: 20 },
-         { long_name: 'gerrelles_growl',          short_name: 'growl',          cost: 14 }, # @todo only 7 for single
-         { long_name: 'horlands_holler',          short_name: 'holler',         cost: 20 },
-         { long_name: 'seanettes_shout',          short_name: 'shout',          cost: 20 },
-         { long_name: 'yerties_yowlp',            short_name: 'yowlp',          cost: 10 }]
-      end
-
       @@warcries = {
         "bellow" => {
-          :regex => /You glare at .+ and let out a nerve-shattering bellow!/,
+          :long_name  => "bertrandts_bellow",
+          :short_name => "bellow",
+          :cost       => 20, # @todo only 10 for single
+          :regex      => /You glare at .+ and let out a nerve-shattering bellow!/,
         },
         "yowlp"  => {
-          :regex => /You throw back your shoulders and let out a resounding yowlp!/,
-          :buff  => "Yertie's Yowlp",
+          :long_name  => "yerties_yowlp",
+          :short_name => "yowlp",
+          :cost       => 20,
+          :regex      => /You throw back your shoulders and let out a resounding yowlp!/,
+          :buff       => "Yertie's Yowlp",
         },
         "growl"  => {
-          :regex => /Your face contorts as you unleash a guttural, deep-throated growl at .+!/,
+          :long_name  => "gerrelles_growl",
+          :short_name => "growl",
+          :cost       => 14, # @todo only 7 for single
+          :regex      => /Your face contorts as you unleash a guttural, deep-throated growl at .+!/,
         },
         "shout"  => {
-          :regex => /You let loose an echoing shout!/,
-          :buff  => 'Empowered (+20)',
+          :long_name  => "seanettes_shout",
+          :short_name => "shout",
+          :cost       => 20,
+          :regex      => /You let loose an echoing shout!/,
+          :buff       => 'Empowered (+20)',
         },
         "cry"    => {
-          :regex => /You stare down .+ and let out an eerie, modulating cry!/,
+          :long_name  => "carns_cry",
+          :short_name => "cry",
+          :cost       => 20,
+          :regex      => /You stare down .+ and let out an eerie, modulating cry!/,
         },
         "holler" => {
-          :regex => /You throw back your head and let out a thundering holler!/,
-          :buff  => 'Enh. Health (+20)',
+          :long_name  => "horlands_holler",
+          :short_name => "holler",
+          :cost       => 20,
+          :regex      => /You throw back your head and let out a thundering holler!/,
+          :buff       => 'Enh. Health (+20)',
         },
       }
+
+      def self.warcry_lookups
+        @@warcries.map do |psm|
+          {
+            long_name: psm[:long_name],
+            short_name: psm[:short_name],
+            cost: psm[:cost]
+          }
+        end
+      end
 
       def Warcry.[](name)
         return PSMS.assess(name, 'Warcry')
