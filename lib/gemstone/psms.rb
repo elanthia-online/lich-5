@@ -20,7 +20,7 @@ module Lich
               .find { |h| h[:long_name].eql?(name) || h[:short_name].eql?(name) }
       end
 
-      def self.assess(name, type, costcheck = false, forcert_count = 0)
+      def self.assess(name, type, costcheck = false, forcert_count: 0)
         name = self.name_normal(name)
         seek_psm = self.find_name(name, type)
         # this logs then raises an exception to stop (kill) the offending script
