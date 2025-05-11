@@ -242,7 +242,6 @@ module Lich
         }
       }
 
-      # symbol_lookups
       def self.shield_lookups
         @@shield_techniques.map do |long_name, psm|
           {
