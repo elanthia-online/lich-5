@@ -20,7 +20,7 @@ module Lich
               .find { |h| h[:long_name].eql?(name) || h[:short_name].eql?(name) }
       end
 
-      def self.assess(name, type, costcheck = false)
+      def self.assess(name, type, costcheck = false, forcert_count = 0)
         name = self.name_normal(name)
         seek_psm = self.find_name(name, type)
         # this logs then raises an exception to stop (kill) the offending script
@@ -31,7 +31,12 @@ module Lich
         # otherwise process request
         case costcheck
         when true
-          seek_psm[:cost] < XMLData.stamina
+          base_cost = seek_psm[:cost]
+          if forcert_count > 0
+            return (base_cost + (base_cost * (25 + (10 * forcert_count) / 100)).truncate) < XMLData.stamina
+          else
+            return base_cost < XMLData.stamina
+          end
         else
           Infomon.get("#{type.downcase}.#{seek_psm[:short_name]}")
         end
@@ -46,7 +51,8 @@ module Lich
         /^You do not currently have a target\.$/,
         /^Your mind clouds with confusion and you glance around uncertainly\.$/,
         /^But your hands are full\!$/,
-        /^You are still stunned\.$/
+        /^You are still stunned\.$/,
+        /^You lack the momentum to attempt another skill\.$/,
       )
     end
   end
