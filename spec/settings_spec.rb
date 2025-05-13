@@ -474,10 +474,12 @@ RSpec.describe Lich::Common::Settings do
       Lich::Common::Settings[:updatable]["lich"] = false
 
       # Verify the structure
-      expect(Lich::Common::Settings[:updatable][:scripts].length).to eq(3)
-      expect(Lich::Common::Settings[:updatable][:scripts][0][:filename]).to eq("alias.lic")
-      expect(Lich::Common::Settings[:updatable][:scripts][1][:filename]).to eq("autostart.lic")
-      expect(Lich::Common::Settings[:updatable][:scripts][2][:filename]).to eq("go2.lic")
+      expect(Lich::Common::Settings[:updatable][:scripts].length).to eq(4)
+      # Reminder that index 0 of array is pre-existsing - test.lic
+      expect(Lich::Common::Settings[:updatable][:scripts][0][:filename]).to eq("test.lic")
+      expect(Lich::Common::Settings[:updatable][:scripts][1][:filename]).to eq("alias.lic")
+      expect(Lich::Common::Settings[:updatable][:scripts][2][:filename]).to eq("autostart.lic")
+      expect(Lich::Common::Settings[:updatable][:scripts][3][:filename]).to eq("go2.lic")
 
       expect(Lich::Common::Settings[:updatable][:mapdb]["GSIV"]).to be true
       expect(Lich::Common::Settings[:updatable][:mapdb]["GSF"]).to be true
@@ -490,7 +492,7 @@ RSpec.describe Lich::Common::Settings do
       storage = @mock_db.dump
       settings = storage["test_script::"][:updatable]
 
-      expect(settings[:scripts].length).to eq(3)
+      expect(settings[:scripts].length).to eq(4) # see above
       expect(settings[:mapdb].keys).to contain_exactly("GSIV", "GSF", "GSPlat", "GST")
       expect(settings["lich"]).to be false
     end
