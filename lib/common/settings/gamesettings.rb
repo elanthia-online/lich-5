@@ -20,7 +20,7 @@ module Lich
 
       def self.to_hash
         # NB:  This method does not behave like a standard Ruby hash request.
-        # It returns a root proxy for the character settings scope, allowing persistent
+        # It returns a root proxy for the game settings scope, allowing persistent
         # modifications on the returned object for legacy support.
         Settings.wrap_value_if_container(Settings.current_script_settings(active_scope), active_scope, [])
       end
