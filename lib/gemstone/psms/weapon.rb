@@ -163,12 +163,12 @@ module Lich
         Weapon[name] >= min_rank
       end
 
-      def Weapon.affordable?(name)
-        return PSMS.assess(name, 'Weapon', true)
+      def Weapon.affordable?(name, forcert_count: 0)
+        return PSMS.assess(name, 'Weapon', true, forcert_count: forcert_count)
       end
 
-      def Weapon.available?(name, min_rank: 1)
-        Weapon.known?(name, min_rank: min_rank) and Weapon.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+      def Weapon.available?(name, min_rank: 1, forcert_count: 0)
+        Weapon.known?(name, min_rank: min_rank) and Weapon.affordable?(name, forcert_count: forcert_count) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
       end
 
       def Weapon.active?(name)
@@ -177,8 +177,8 @@ module Lich
         Effects::Buffs.active?(@@weapon_techniques.fetch(name)[:buff])
       end
 
-      def Weapon.use(name, target = "", results_of_interest: nil)
-        return unless Weapon.available?(name)
+      def Weapon.use(name, target = "", results_of_interest: nil, forcert_count: 0)
+        return unless Weapon.available?(name, forcert_count: forcert_count)
         name_normalized = PSMS.name_normal(name)
         technique = @@weapon_techniques.fetch(name_normalized)
         usage = technique.key?(:usage) ? technique[:usage] : name_normalized
@@ -222,8 +222,14 @@ module Lich
           }
         else
           results_regex = Regexp.union(results_regex, technique[:regex], /^Roundtime: [0-9]+ sec\.$/)
-          waitrt?
-          waitcastrt?
+
+          if forcert_count > 0
+            usage_cmd += " forcert"
+          else # if we're using forcert, we don't want to wait for rt, but we need to otherwise
+            waitrt?
+            waitcastrt?
+          end
+
           usage_result = dothistimeout(usage_cmd, 5, results_regex)
           if usage_result == "You don't seem to be able to move to do that."
             100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }

@@ -115,16 +115,16 @@ module Lich
         Armor[name] >= min_rank
       end
 
-      def Armor.affordable?(name)
-        return PSMS.assess(name, 'Armor', true)
+      def Armor.affordable?(name, forcert_count: 0)
+        return PSMS.assess(name, 'Armor', true, forcert_count: forcert_count)
       end
 
-      def Armor.available?(name, min_rank: 1)
-        Armor.known?(name, min_rank: min_rank) and Armor.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+      def Armor.available?(name, min_rank: 1, forcert_count: 0)
+        Armor.known?(name, min_rank: min_rank) and Armor.affordable?(name, forcert_count: forcert_count) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
       end
 
-      def Armor.use(name, target = "", results_of_interest: nil)
-        return unless Armor.available?(name)
+      def Armor.use(name, target = "", results_of_interest: nil, forcert_count: 0)
+        return unless Armor.available?(name, forcert_count: forcert_count)
         name_normalized = PSMS.name_normal(name)
         technique = @@armor_techniques.fetch(name_normalized)
         usage = technique[:usage]
@@ -153,8 +153,14 @@ module Lich
         elsif target != ""
           usage_cmd += " #{target}"
         end
-        waitrt?
-        waitcastrt?
+
+        if forcert_count > 0
+          usage_cmd += " forcert"
+        else # if we're using forcert, we don't want to wait for rt, but we need to otherwise
+          waitrt?
+          waitcastrt?
+        end
+
         usage_result = dothistimeout usage_cmd, 5, results_regex
         if usage_result == "You don't seem to be able to move to do that."
           100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }

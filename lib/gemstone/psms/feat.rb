@@ -259,16 +259,16 @@ module Lich
         Feat[name] >= min_rank
       end
 
-      def Feat.affordable?(name)
-        return PSMS.assess(name, 'Feat', true)
+      def Feat.affordable?(name, forcert_count: 0)
+        return PSMS.assess(name, 'Feat', true, forcert_count: forcert_count)
       end
 
-      def Feat.available?(name, min_rank: 1)
-        Feat.known?(name, min_rank: min_rank) and Feat.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+      def Feat.available?(name, min_rank: 1, forcert_count: 0)
+        Feat.known?(name, min_rank: min_rank) and Feat.affordable?(name, forcert_count: forcert_count) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
       end
 
-      def Feat.use(name, target = "", results_of_interest: nil)
-        return unless Feat.available?(name)
+      def Feat.use(name, target = "", results_of_interest: nil, forcert_count: 0)
+        return unless Feat.available?(name, forcert_count: forcert_count)
         name_normalized = PSMS.name_normal(name)
         technique = @@feats.fetch(name_normalized)
         usage = technique[:usage]
@@ -296,8 +296,14 @@ module Lich
         elsif target != ""
           usage_cmd += " #{target}"
         end
-        waitrt?
-        waitcastrt?
+
+        if forcert_count > 0
+          usage_cmd += " forcert"
+        else # if we're using forcert, we don't want to wait for rt, but we need to otherwise
+          waitrt?
+          waitcastrt?
+        end
+
         usage_result = dothistimeout usage_cmd, 5, results_regex
         if usage_result == "You don't seem to be able to move to do that."
           100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }

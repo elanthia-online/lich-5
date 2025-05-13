@@ -675,20 +675,20 @@ module Lich
         CMan[name] >= min_rank
       end
 
-      def CMan.affordable?(name)
-        return PSMS.assess(name, 'CMan', true)
+      def CMan.affordable?(name, forcert_count: 0)
+        return PSMS.assess(name, 'CMan', true, forcert_count: forcert_count)
       end
 
-      def CMan.available?(name, ignore_cooldown: false, min_rank: 1)
+      def CMan.available?(name, ignore_cooldown: false, min_rank: 1, forcert_count: 0)
         return false unless CMan.known?(name, min_rank: min_rank)
-        return false unless CMan.affordable?(name)
+        return false unless CMan.affordable?(name, forcert_count: forcert_count)
         return false if Lich::Util.normalize_lookup('Cooldowns', name) unless ignore_cooldown && @@combat_mans.fetch(PSMS.name_normal(name))[:ignorable_cooldown] # check that the request to ignore_cooldown is on something that can have the cooldown ignored as well
         return false if Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
         return true
       end
 
-      def CMan.use(name, target = "", ignore_cooldown: false, results_of_interest: nil)
-        return unless CMan.available?(name, ignore_cooldown: ignore_cooldown)
+      def CMan.use(name, target = "", ignore_cooldown: false, results_of_interest: nil, forcert_count: 0)
+        return unless CMan.available?(name, ignore_cooldown: ignore_cooldown, forcert_count: forcert_count)
         name_normalized = PSMS.name_normal(name)
         technique = @@combat_mans.fetch(name_normalized)
         usage = technique[:usage]
@@ -716,8 +716,14 @@ module Lich
         elsif target != ""
           usage_cmd += " #{target}"
         end
-        waitrt?
-        waitcastrt?
+
+        if forcert_count > 0
+          usage_cmd += " forcert"
+        else # if we're using forcert, we don't want to wait for rt, but we need to otherwise
+          waitrt?
+          waitcastrt?
+        end
+
         usage_result = dothistimeout usage_cmd, 5, results_regex
         if usage_result == "You don't seem to be able to move to do that."
           100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }

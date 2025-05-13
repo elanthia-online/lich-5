@@ -64,12 +64,12 @@ module Lich
         Warcry[name] >= min_rank
       end
 
-      def Warcry.affordable?(name)
-        return PSMS.assess(name, 'Warcry', true)
+      def Warcry.affordable?(name, forcert_count: 0)
+        return PSMS.assess(name, 'Warcry', true, forcert_count: forcert_count)
       end
 
-      def Warcry.available?(name, min_rank: 1)
-        Warcry.known?(name, min_rank: min_rank) and Warcry.affordable?(name) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+      def Warcry.available?(name, min_rank: 1, forcert_count: 0)
+        Warcry.known?(name, min_rank: min_rank) and Warcry.affordable?(name, forcert_count: forcert_count) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
       end
 
       def Warcry.buffActive?(name)
@@ -78,8 +78,8 @@ module Lich
         Lich::Util.normalize_lookup('Buffs', buff)
       end
 
-      def Warcry.use(name, target = "", results_of_interest: nil)
-        return unless Warcry.available?(name)
+      def Warcry.use(name, target = "", results_of_interest: nil, forcert_count: 0)
+        return unless Warcry.available?(name, forcert_count: forcert_count)
         return if Warcry.buffActive?(name)
         name_normalized = PSMS.name_normal(name)
         technique = @@warcries.fetch(name_normalized)
@@ -108,8 +108,14 @@ module Lich
         elsif target != ""
           usage_cmd += " #{target}"
         end
-        waitrt?
-        waitcastrt?
+
+        if forcert_count > 0
+          usage_cmd += " forcert"
+        else # if we're using forcert, we don't want to wait for rt, but we need to otherwise
+          waitrt?
+          waitcastrt?
+        end
+
         usage_result = dothistimeout(usage_cmd, 5, results_regex)
         if usage_result == "You don't seem to be able to move to do that."
           100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
