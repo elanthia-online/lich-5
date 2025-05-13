@@ -52,7 +52,7 @@ module Lich
           :type       => nil,
           :cost       => 20,
           :regex      => Regexp.union(/You assume the Disarming Presence Stance, adjusting your footing and grip to allow for the proper pivot and thrust technique to disarm attacking foes\./,
-                                       /You re\-settle into the Disarming Presence Stance, re-ensuring your footing and grip are properly positioned\./),
+                                      /You re\-settle into the Disarming Presence Stance, re-ensuring your footing and grip are properly positioned\./),
           :usage      => "dpresence"
         },
         "guard_mastery"         => {
@@ -144,7 +144,7 @@ module Lich
           :type       => nil,
           :cost       => 20,
           :regex      => Regexp.union(/You assume the Shield Riposte Stance, preparing yourself to lash out at a moment's notice\./,
-                                       /You re\-settle into the Shield Riposte Stance, preparing yourself to lash out at a moment's notice\./),
+                                      /You re\-settle into the Shield Riposte Stance, preparing yourself to lash out at a moment's notice\./),
           :usage      => "riposte"
         },
         "shield_spike_mastery"  => {
@@ -222,7 +222,7 @@ module Lich
           :type       => nil,
           :cost       => 30,
           :regex      => Regexp.union(/You focus your mind in a steely resolve to block all attacks against you\./,
-                                       /You are still mentally fatigued from your last invocation of your Steely Resolve\./),
+                                      /You are still mentally fatigued from your last invocation of your Steely Resolve\./),
           :usage      => "resolve"
         },
         "tortoise_stance"       => {
@@ -230,7 +230,7 @@ module Lich
           :type       => nil,
           :cost       => 20,
           :regex      => Regexp.union(/You assume the Stance of the Tortoise, holding back some of your offensive power in order to maximize your defense\./,
-                                       /You re\-settle into the Stance of the Tortoise, holding back your offensive power in order to maximize your defense\./),
+                                      /You re\-settle into the Stance of the Tortoise, holding back your offensive power in order to maximize your defense\./),
           :usage      => "tortoise"
         },
         "tower_shield_focus"    => {

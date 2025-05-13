@@ -10,7 +10,7 @@ module Lich
           :type       => nil,
           :cost       => 0,
           :regex      => Regexp.union(/You open yourself to the ravenous void at the core of your being, allowing it to surface\.  Muted veins of metallic grey ripple just beneath your skin\./,
-                                       /You strain, but the void within remains stubbornly out of reach\.  You need more time\./),
+                                      /You strain, but the void within remains stubbornly out of reach\.  You need more time\./),
           :usage      => "absorbmagic"
         },
         "chain_armor_proficiency"   => {
@@ -32,7 +32,7 @@ module Lich
           :type       => nil,
           :cost       => 0,
           :regex      => Regexp.union(/You roll your shoulders and subtly test the flexion of your joints, staying limber for ready escapes\./,
-                                       /You were unable to find any targets that meet Covert Art\: Escape Artist's reaction requirements\./),
+                                      /You were unable to find any targets that meet Covert Art\: Escape Artist's reaction requirements\./),
           :usage      => "escapeartist"
         },
         "covert_art_keen_eye"       => {
@@ -68,8 +68,8 @@ module Lich
           :type       => nil,
           :cost       => 15,
           :regex      => Regexp.union(/What did the .+ ever do to you\?/,
-                                       /You pop the cork on .+ and, with a nimble flick of the wrist, fling a portion of its contents in a wide arc\!/,
-                                       /Covert Art\: Throw Poison what\?/),
+                                      /You pop the cork on .+ and, with a nimble flick of the wrist, fling a portion of its contents in a wide arc\!/,
+                                      /Covert Art\: Throw Poison what\?/),
           :usage      => "throwpoison"
         },
         "covert_arts"               => {
@@ -91,7 +91,7 @@ module Lich
           :type       => nil,
           :cost       => 30,
           :regex      => Regexp.union(/You reach for the emptiness within, but there are no spells afflicting you to dispel\./,
-                                       /You reach for the emptiness within\.  A single, hollow note reverberates through your core, resonating outward and scouring away the energies that cling to you\./),
+                                      /You reach for the emptiness within\.  A single, hollow note reverberates through your core, resonating outward and scouring away the energies that cling to you\./),
           :usage      => "dispelmagic"
         },
         "dragonscale_skin"          => {
@@ -106,11 +106,11 @@ module Lich
           :type       => nil,
           :cost       => 0,
           :regex      => Regexp.union(/Guard what\?/,
-                                       /You move over to .+ and prepare to guard [a-z]+ from attack\./,
-                                       /You stop guarding .+, move over to .+, and prepare to guard [a-z]+ from attack\./,
-                                       /You stop protecting .+, move over to .+, and prepare to guard [a-z]+ from attack\./,
-                                       /You stop protecting .+ and prepare to guard [a-z]+ instead\./,
-                                       /You are already guarding .+\./),
+                                      /You move over to .+ and prepare to guard [a-z]+ from attack\./,
+                                      /You stop guarding .+, move over to .+, and prepare to guard [a-z]+ from attack\./,
+                                      /You stop protecting .+, move over to .+, and prepare to guard [a-z]+ from attack\./,
+                                      /You stop protecting .+ and prepare to guard [a-z]+ instead\./,
+                                      /You are already guarding .+\./),
           :usage      => "guard"
         },
         "kroderine_soul"            => {
@@ -181,11 +181,11 @@ module Lich
           :type       => nil,
           :cost       => 0,
           :regex      => Regexp.union(/Protect what\?/,
-                                       /You move over to .+ and prepare to protect [a-z]+ from attack\./,
-                                       /You stop protecting .+, move over to .+, and prepare to protect [a-z]+ from attack\./,
-                                       /You stop guarding .+, move over to .+, and prepare to protect [a-z]+ from attack\./,
-                                       /You stop guarding .+ and prepare to protect [a-z]+ instead\./,
-                                       /You are already protecting .+\./),
+                                      /You move over to .+ and prepare to protect [a-z]+ from attack\./,
+                                      /You stop protecting .+, move over to .+, and prepare to protect [a-z]+ from attack\./,
+                                      /You stop guarding .+, move over to .+, and prepare to protect [a-z]+ from attack\./,
+                                      /You stop guarding .+ and prepare to protect [a-z]+ instead\./,
+                                      /You are already protecting .+\./),
           :usage      => "protect"
         },
         "scale_armor_proficiency"   => {
@@ -207,7 +207,7 @@ module Lich
           :type       => nil,
           :cost       => 20,
           :regex      => Regexp.union(/Silent Strike can not be used with fire as the attack type\./,
-                                       /You quickly leap from hiding to attack\!/),
+                                      /You quickly leap from hiding to attack\!/),
           :usage      => "silentstrike"
         },
         "vanish"                    => {
