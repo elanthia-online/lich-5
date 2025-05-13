@@ -62,4 +62,3 @@ module Lich
     end
   end
 end
-

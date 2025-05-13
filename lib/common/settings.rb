@@ -3,7 +3,9 @@
 module Lich
   module Common
     require 'sequel'
+    # rubocop:disable Lint/RedundantRequireStatement
     require 'set' # Ensure Set is required for Ruby < 3.2, may be removed in future versions
+    # rubocop:enable Lint/RedundantRequireStatement
 
     # settings_proxy.rb is now loaded after Settings module is defined, to allow it to call Settings._log
     # require_relative 'settings/settings_proxy'
