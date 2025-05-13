@@ -46,10 +46,10 @@ module Lich
       }
 
       def self.warcry_lookups
-        @@warcries.map do |psm|
+        @@warcries.map do |short_name, psm|
           {
             long_name: psm[:long_name],
-            short_name: psm[:short_name],
+            short_name: short_name,
             cost: psm[:cost]
           }
         end
