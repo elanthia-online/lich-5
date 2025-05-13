@@ -39,7 +39,13 @@ module Lich
         @target.to_s
       end
 
+      # Updated inspect method to show the target's inspect string
       def inspect
+        @target.inspect
+      end
+
+      # New method to show the proxy's internal details
+      def proxy_details
         "<SettingsProxy scope=#{@scope.inspect} path=#{@path.inspect} target_class=#{@target.class} target_object_id=#{@target.object_id}>"
       end
 
@@ -138,7 +144,7 @@ module Lich
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   target_after_set: #{@target.inspect}" })
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   calling save_proxy_changes on settings module" })
         @settings_module.save_proxy_changes(self)
-        # value
+        value
       end
 
       def method_missing(method, *args, &block)
@@ -193,3 +199,4 @@ module Lich
     end
   end
 end
+
