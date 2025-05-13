@@ -33,7 +33,7 @@ module Lich
         when true
           base_cost = seek_psm[:cost]
           if forcert_count > 0
-            return (base_cost + (base_cost * (25 + (10 * forcert_count) / 100)).truncate) < XMLData.stamina
+            return (base_cost + (base_cost * (25 + (10.0 * forcert_count) / 100)).truncate) < XMLData.stamina
           else
             return base_cost < XMLData.stamina
           end
