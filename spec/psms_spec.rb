@@ -154,10 +154,10 @@ end
 describe Lich::Gemstone::PSMS, ".can_forcert?(times)" do
   context "<psm>, times should determine if forced roundtime (forcert) rounds can be performed" do
     it "checks to see if the character can perform the given number of forcert rounds" do
-      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat ", 10)
+      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 10)
       expect(Lich::Gemstone::PSMS.can_forcert?(1)).to be(true)
       expect(Lich::Gemstone::PSMS.can_forcert?(4)).to be(false)
-      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat ", 200)
+      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 200)
       expect(Lich::Gemstone::PSMS.can_forcert?(4)).to be(true)
     end
   end
@@ -166,9 +166,9 @@ end
 describe Lich::Gemstone::PSMS, ".max_forcert_count" do
   context "<psm>, times should determine the maximum number of forced roundtime (forcert) rounds" do
     it "checks to see if the character can perform the given number of forcert rounds" do
-      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat ", 10)
+      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 10)
       expect(Lich::Gemstone::PSMS.max_forcert_count).to eq(1)
-      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat ", 20)
+      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 20)
       expect(Lich::Gemstone::PSMS.max_forcert_count).to eq(4)
     end
   end
