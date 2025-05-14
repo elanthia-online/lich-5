@@ -47,6 +47,12 @@ module Char
   end
 end
 
+module Skills
+  def self.multi_opponent_combat
+    return 10
+  end
+end
+
 module XMLData
   def self.game
     "rspec"
@@ -146,6 +152,36 @@ describe Lich::Gemstone::PSMS, ".affordable?(name)" do
     end
     it "or returns erroneous requests as above" do
       expect { Lich::Gemstone::Feat.affordable?("Touch this!") }.to raise_error(StandardError, "Aborting script - The referenced Feat skill touch_this! is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of touch_this!.")
+    end
+  end
+end
+
+
+describe Lich::Gemstone::PSMS, ".available?(name)" do
+  context "<psm>, name should determine available (known and affordable)" do
+    it "checks to see if the PSM is known and affordable" do
+      expect(Lich::Gemstone::Armor.available?(:support)).to be(true)
+      expect(Lich::Gemstone::CMan.available?("rolling_krynch_stance")).to be(false)
+    end
+    it "or returns erroneous requests as above" do
+      expect { Lich::Gemstone::Feat.available?("Touch this!") }.to raise_error(StandardError, "Aborting script - The referenced Feat skill touch_this! is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of touch_this!.")
+    end
+  end
+end
+
+describe Lich::Gemstone::PSMS, ".can_forcert?(times)" do
+  context "<psm>, times should determine if forced roundtime (forcert) rounds can be performed" do
+    it "checks to see if the character can perform the given number of forcert rounds" do
+      expect(Lich::Gemstone::PSMS.can_forcert?(1)).to be(true)
+      expect(Lich::Gemstone::PSMS.can_forcert?(4)).to be(false)
+    end
+  end
+end
+
+describe Lich::Gemstone::PSMS, ".max_forcert_count" do
+  context "<psm>, times should determine the maximum number of forced roundtime (forcert) rounds" do
+    it "checks to see if the character can perform the given number of forcert rounds" do
+      expect(Lich::Gemstone::PSMS.max_forcert_count).to eq(1)
     end
   end
 end
