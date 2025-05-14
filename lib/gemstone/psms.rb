@@ -150,7 +150,7 @@ module Lich
       #   PSMS.max_forcert_count
       #   # => 3  (for a character with 100 MOC ranks)
       def self.max_forcert_count
-        case Skills.multi_opponent_combat
+        case Gemstone::Skills.multi_opponent_combat
         when 0..9
           0
         when 10..34
