@@ -64,7 +64,7 @@ module Lich
       #
       # @example
       #   PSMS.find_name("feint", "CMan")
-      #   # => { long_name: "combat_feint", short_name: "feint", cost: 10, ... }
+      #   # => { long_name: "combat_feint", short_name: "feint", cost: 10 }
       def self.find_name(name, type)
         Object.const_get("Lich::Gemstone::#{type}").method("#{type.downcase}_lookups").call
               .find { |h| h[:long_name].eql?(name) || h[:short_name].eql?(name) }
@@ -169,7 +169,9 @@ module Lich
       # This constant combines several game-generated failure messages into a single `Regexp` using `Regexp.union`,
       # allowing centralized pattern matching for detecting failed actions.
       #
-      # Useful for interpreting command results and handling expected failure states in scripting logic.
+      # Useful for interpreting command results and handling expected failure states in scripting logic.  Note that
+      # in most cases, the match on a failure message here is not considered an error, but rather that the command
+      # succeeded, but the action itself failed for some reason.
       #
       # @return [Regexp] A union of common failure message patterns.
       #
