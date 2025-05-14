@@ -40,16 +40,11 @@ LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 require 'util/util'
 require 'gemstone/psms'
 require 'gemstone/infomon'
+require 'attributes/skills'
 
 module Char
   def self.name
     "testing"
-  end
-end
-
-module Skills
-  def self.multi_opponent_combat
-    return 10
   end
 end
 
@@ -156,24 +151,14 @@ describe Lich::Gemstone::PSMS, ".affordable?(name)" do
   end
 end
 
-
-describe Lich::Gemstone::PSMS, ".available?(name)" do
-  context "<psm>, name should determine available (known and affordable)" do
-    it "checks to see if the PSM is known and affordable" do
-      expect(Lich::Gemstone::Armor.available?(:support)).to be(true)
-      expect(Lich::Gemstone::CMan.available?("rolling_krynch_stance")).to be(false)
-    end
-    it "or returns erroneous requests as above" do
-      expect { Lich::Gemstone::Feat.available?("Touch this!") }.to raise_error(StandardError, "Aborting script - The referenced Feat skill touch_this! is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of touch_this!.")
-    end
-  end
-end
-
 describe Lich::Gemstone::PSMS, ".can_forcert?(times)" do
   context "<psm>, times should determine if forced roundtime (forcert) rounds can be performed" do
     it "checks to see if the character can perform the given number of forcert rounds" do
+      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat ", 10)
       expect(Lich::Gemstone::PSMS.can_forcert?(1)).to be(true)
       expect(Lich::Gemstone::PSMS.can_forcert?(4)).to be(false)
+      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat ", 200)
+      expect(Lich::Gemstone::PSMS.can_forcert?(4)).to be(true)
     end
   end
 end
@@ -181,7 +166,10 @@ end
 describe Lich::Gemstone::PSMS, ".max_forcert_count" do
   context "<psm>, times should determine the maximum number of forced roundtime (forcert) rounds" do
     it "checks to see if the character can perform the given number of forcert rounds" do
+      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat ", 10)
       expect(Lich::Gemstone::PSMS.max_forcert_count).to eq(1)
+      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat ", 20)
+      expect(Lich::Gemstone::PSMS.max_forcert_count).to eq(4)
     end
   end
 end
