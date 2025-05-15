@@ -143,9 +143,7 @@ module Lich
       def Warcry.buffActive?(name)
         ### DEPRECATED ###
         Lich.deprecated("Warcry.buffActive?", "Warcry.buff_active?", caller[0], fe_log: false)
-        buff = @@warcries.fetch(PSMS.name_normal(name))[:buff]
-        return false if buff.nil?
-        Lich::Util.normalize_lookup('Buffs', buff)
+        buff_active?(name)
       end
 
       # Checks whether the warcry's buff is currently active.
