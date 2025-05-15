@@ -201,7 +201,7 @@ module Lich
       # Attempts to use an armor technique, optionally on a target.
       #
       # @param name [String] The name of the armor technique
-      # @param target [String, Integer, GameObj] The target of the technique (optional).  If unspecified, the technique will be used on the character.
+      # @param target [String, Integer, GameObj] The target of the technique (optional). If unspecified, the technique will be used on the character, i.e. the user.
       # then assume the target is the user.
       # @param results_of_interest [Regexp, nil] Additional regex to capture from result (optional)
       # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
