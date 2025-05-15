@@ -1,8 +1,24 @@
-## breakout for CMan released with PSM3
-## updated for Ruby 3.2.1 and new Infomon module
+# The root module for Lich scripting.
 module Lich
+  # Namespace for GemStone IV-specific systems.
   module Gemstone
+    # Handles combat maneuver logic (CMAN) for player characters in GemStone IV.
+    #
+    # This module provides access to all known combat maneuvers (CMANs), including their
+    # usage types, costs, regex patterns for result matching, and runtime availability.
+    #
+    # It allows querying known maneuvers, whether they are affordable and usable, and provides
+    # execution methods with built-in cooldown and FORCERT logic. Dynamic shortcut methods for
+    # each maneuver are created for both long and short names.
     module CMan
+      # Internal mapping of CMAN maneuvers with metadata:
+      # - short name
+      # - type (passive, attack, setup, etc.)
+      # - cost
+      # - regex for expected output
+      # - usage name
+      #
+      # @return [Hash<String, Hash>] The full maneuver definition table
       @@combat_mans = {
         "acrobats_leap"          => {
           :short_name => "acrobatsleap",
@@ -656,6 +672,9 @@ module Lich
         }
       }
 
+      # Returns a simplified lookup of all CMANs with their long name, short name, and cost.
+      #
+      # @return [Array<Hash>] An array of CMAN metadata hashes
       def self.cman_lookups
         @@combat_mans.map do |long_name, psm|
           {
@@ -666,29 +685,92 @@ module Lich
         end
       end
 
+      # Looks up the rank known of a combat maneuver.
+      #
+      # @param name [String] The name of the combat maneuver
+      # @return [Integer] The rank of the maneuver, or 0 if unknown
+      # @example
+      #   CMan["tackle"] => 2
+      #   CMan["tackle"] => 0 # if not known
       def CMan.[](name)
         return PSMS.assess(name, 'CMan')
       end
 
+      # Determines if the character knows a combat maneuver at all, and
+      # optionally if the character knows it at the specified rank.
+      #
+      # @param name [String] The name of the combat maneuver
+      # @param min_rank [Integer] Optionally, the minimum rank to test against (default: 1, so known)
+      # @return [Boolean] True if the maneuver is known at or above the given rank
+      # @example
+      #   CMan.known?("tackle") => true # if any number of ranks is known
+      #   CMan.known?("tackle", min_rank: 2) => false # if only rank 1 is known
       def CMan.known?(name, min_rank: 1)
         min_rank = 1 unless min_rank >= 1 # in case a 0 or below is passed
         CMan[name] >= min_rank
       end
 
+      # Determines if an combat maneuver is affordable, and optionally tests
+      # affordability with a given number of FORCERTs having been used (including the current one).
+      #
+      # @param name [String] The name of the combat maneuver
+      # @param forcert_count [Integer] Optionally, the count of FORCERTs being used, including for this exectuion (default: 0)
+      # @return [Boolean] True if the maneuver can be used with available FORCERTs
+      # @example
+      #   CMan.affordable?("tackle") => true # if enough skill and stamina
+      #   CMan.affordable?("tackle", forcert_count: 1) => false  # if not enough skill or stamina
       def CMan.affordable?(name, forcert_count: 0)
         return PSMS.assess(name, 'CMan', true, forcert_count: forcert_count)
       end
 
+      # Checks whether the maneuver's buff is currently active.
+      #
+      # @param name [String] The maneuver's name
+      # @return [Boolean] True if buff is already active
+      def CMan.buff_active?(name)
+        name = PSMS.name_normal(name)
+        return unless @@combat_mans.fetch(name).key?(:buff)
+        Effects::Buffs.active?(@@combat_mans.fetch(name)[:buff])
+      end
+
+      # Determines if an combat maneuver is available to use right now by testing:
+      # - if the maneuver is known
+      # - if the maneuver is affordable
+      # - if the maneuver is not on cooldown
+      # - if the character is not overexerted
+      # - if the character is capable of performing the number of FORCERTs specified
+      #
+      # @param name [String] The name of the combat maneuver
+      # @param min_rank [Integer] Optionally, the minimum rank to check (default: 1)
+      # @param forcert_count [Integer] Opytionally, the count of FORCERTs being used (default: 0)
+      # @return [Boolean] True if the maneuver is known, affordable, and not on cooldown or
+      # blocked by overexertion
+      # @example
+      #   CMan.available?("tackle") => true # if known, affordable, not on cooldown, and not overexerted
       def CMan.available?(name, ignore_cooldown: false, min_rank: 1, forcert_count: 0)
         return false unless CMan.known?(name, min_rank: min_rank)
         return false unless CMan.affordable?(name, forcert_count: forcert_count)
-        return false if Lich::Util.normalize_lookup('Cooldowns', name) unless ignore_cooldown && @@combat_mans.fetch(PSMS.name_normal(name))[:ignorable_cooldown] # check that the request to ignore_cooldown is on something that can have the cooldown ignored as well
-        return false if Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
-        return true
+        if @@combat_mans.fetch(PSMS.name_normal(name))[:ignorable_cooldown] && ignore_cooldown
+          return PSMS.available?(name, ignore_cooldown)
+        else
+          return PSMS.available?(name)
+        end
       end
 
+      # Attempts to use an combat maneuver, optionally on a target.
+      #
+      # @param name [String] The name of the combat maneuver
+      # @param target [String, Integer, GameObj] The target of the maneuver (optional)  If unspecified, the maneuver will be used on the character.
+      # then assume the target is the user.
+      # @param results_of_interest [Regexp, nil] Additional regex to capture from result (optional)
+      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
+      # @return [String, nil] The result of the regex match, or nil if unavailable
+      # @example
+      #   CMan.use("tackle") # attempt to use armor blessing on self
+      #   CMan.use("tackle", "Dissonance") # attempt to use armor blessing on Dissonance
       def CMan.use(name, target = "", ignore_cooldown: false, results_of_interest: nil, forcert_count: 0)
         return unless CMan.available?(name, ignore_cooldown: ignore_cooldown, forcert_count: forcert_count)
+
         name_normalized = PSMS.name_normal(name)
         technique = @@combat_mans.fetch(name_normalized)
         usage = technique[:usage]
@@ -704,9 +786,7 @@ module Lich
           /^Roundtime: [0-9]+ sec\.$/,
         )
 
-        if results_of_interest.is_a?(Regexp)
-          results_regex = Regexp.union(results_regex, results_of_interest)
-        end
+        results_regex = Regexp.union(results_regex, results_of_interest) if results_of_interest.is_a?(Regexp)
 
         usage_cmd = "cman #{usage}"
         if target.is_a?(GameObj)
@@ -729,13 +809,29 @@ module Lich
           100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
           usage_result = dothistimeout usage_cmd, 5, results_regex
         end
+
         usage_result
       end
 
+      # Returns the "success" regex associated with a given combat maneuver name.
+      # This regex is used to match the expected output when the maneuver is successfully *attempted*.
+      # It does not necessarily indicate that the maneuver was successful in its effect, or even
+      # that the maneuver was executed at all.
+      #
+      # @param name [String] The maneuver name
+      # @return [Regexp] The regex used to match maneuver success or effects
+      # @example
+      #   CMan.regexp("tackle") => /You hurl yourself at .+!/
       def CMan.regexp(name)
         @@combat_mans.fetch(PSMS.name_normal(name))[:regex]
       end
 
+      # Defines dynamic getter methods for both long and short names of each combat maneuver.
+      #
+      # @note This block dynamically defines methods like `CMan.blessing` and `CMan.tackle`
+      # @example
+      #   CMan.tackle # returns the rank of tackle based on the short name
+      #   CMan.tackle # returns the rank of tackle based on the long name
       CMan.cman_lookups.each { |cman|
         self.define_singleton_method(cman[:short_name]) do
           CMan[cman[:short_name]]

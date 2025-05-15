@@ -1,9 +1,23 @@
-## breakout for Shield released with PSM3
-## new code for 5.0.16
-## includes new functions .known? and .affordable?
+# The root namespace for all Lich scripting components.
 module Lich
+  # Namespace for GemStone IV-specific modules.
   module Gemstone
+    # Provides logic for shield-based PSM techniques in GemStone IV.
+    #
+    # This module defines metadata for each known shield technique, including passive and active skills,
+    # usage commands, costs, and expected success message regexes. It offers methods for checking whether
+    # a technique is known, affordable, or currently available, and for attempting to use a technique.
+    #
+    # Dynamic shortcut methods are also defined for each shield technique using both long and short names.
     module Shield
+      # Internal registry of all shield techniques and their metadata.
+      #
+      # @return [Hash<String, Hash>] Each key is a long name and maps to:
+      #   - `:short_name` [String] shorthand reference
+      #   - `:type` [String, nil] type of skill (e.g., passive, stance)
+      #   - `:cost` [Integer] stamina cost
+      #   - `:regex` [Regexp] expected in-game output
+      #   - `:usage` [String, nil] usage string if applicable
       @@shield_techniques = {
         "adamantine_bulwark"    => {
           :short_name => "bulwark",
@@ -242,6 +256,9 @@ module Lich
         }
       }
 
+      # Returns an array of simplified technique metadata.
+      #
+      # @return [Array<Hash>] Each contains :long_name, :short_name, and :cost
       def self.shield_lookups
         @@shield_techniques.map do |long_name, psm|
           {
@@ -252,25 +269,88 @@ module Lich
         end
       end
 
+      # Looks up the rank known of a shield technique.
+      #
+      # @param name [String] The name of the shield technique
+      # @return [Integer] The rank of the technique, or 0 if unknown
+      # @example
+      #   Feat["shield_trample"] => 2
+      #   Feat["shield_trample"] => 0 # if not known
       def Shield.[](name)
         return PSMS.assess(name, 'Shield')
       end
 
+      # Determines if the character knows a shield technique at all, and
+      # optionally if the character knows it at the specified rank.
+      #
+      # @param name [String] The name of the shield technique
+      # @param min_rank [Integer] Optionally, the minimum rank to test against (default: 1, so known)
+      # @return [Boolean] True if the technique is known at or above the given rank
+      # @example
+      #   Shield.known?("shield_trample") => true # if any number of ranks is known
+      #   Shield.known?("shield_trample", min_rank: 2) => false # if only rank 1 is known
       def Shield.known?(name, min_rank: 1)
         min_rank = 1 unless min_rank >= 1 # in case a 0 or below is passed
         Shield[name] >= min_rank
       end
 
+      # Determines if an Shield technique is affordable, and optionally tests
+      # affordability with a given number of FORCERTs having been used (including the current one).
+      #
+      # @param name [String] The name of the Shield technique
+      # @param forcert_count [Integer] Optionally, the count of FORCERTs being used, including for this execution (default: 0)
+      # @return [Boolean] True if the technique can be used with available FORCERTs
+      # @example
+      #   Shield.affordable?("shield_trample") => true # if enough skill and stamina
+      #   Shield.affordable?("shield_trample", forcert_count: 1) => false  # if not enough skill or stamina
       def Shield.affordable?(name, forcert_count: 0)
         return PSMS.assess(name, 'Shield', true, forcert_count: forcert_count)
       end
 
+      # Determines if an Shield technique is available to use right now by testing:
+      # - if the technique is known
+      # - if the technique is affordable
+      # - if the technique is not on cooldown
+      # - if the character is not overexerted
+      # - if the character is capable of performing the number of FORCERTs specified
+      #
+      # @param name [String] The name of the Shield technique
+      # @param min_rank [Integer] Optionally, the minimum rank to check (default: 1)
+      # @param forcert_count [Integer] Optionally, the count of FORCERTs being used (default: 0)
+      # @return [Boolean] True if the technique is known, affordable, and not on cooldown or
+      # blocked by overexertion
+      # @example
+      #   Shield.available?("shield_trample") => true # if known, affordable, not on cooldown, and not overexerted
       def Shield.available?(name, min_rank: 1, forcert_count: 0)
-        Shield.known?(name, min_rank: min_rank) and Shield.affordable?(name, forcert_count: forcert_count) and !Lich::Util.normalize_lookup('Cooldowns', name) and !Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+        Shield.known?(name, min_rank: min_rank) &&
+          Shield.affordable?(name, forcert_count: forcert_count) &&
+          PSMS.available?(name)
       end
 
+      # Checks whether the technique's buff is currently active.
+      #
+      # @param name [String] The technique's name
+      # @return [Boolean] True if buff is already active
+      def Shield.buff_active?(name)
+        name = PSMS.name_normal(name)
+        return unless @@shield_techniques.fetch(name).key?(:buff)
+        Effects::Buffs.active?(@@shield_techniques.fetch(name)[:buff])
+      end
+
+      # Attempts to use an Shield technique, optionally on a target.
+      #
+      # @param name [String] The name of the Shield technique
+      # @param target [String, Integer, GameObj] The target of the technique (optional)  If unspecified, the technique will be used on the character.
+      # then assume the target is the user.
+      # @param results_of_interest [Regexp, nil] Additional regex to capture from result (optional)
+      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
+      # @return [String, nil] The result of the regex match, or nil if unavailable
+      # @example
+      #   Shield.use("shield_trample") # attempt to use Shield blessing on self
+      #   Shield.use("shield_trample", "Dissonance") # attempt to use Shield blessing on Dissonance
       def Shield.use(name, target = "", results_of_interest: nil, forcert_count: 0)
         return unless Shield.available?(name, forcert_count: forcert_count)
+
         name_normalized = PSMS.name_normal(name)
         technique = @@shield_techniques.fetch(name_normalized)
         usage = technique[:usage]
@@ -286,9 +366,7 @@ module Lich
           /^Roundtime: [0-9]+ sec\.$/,
         )
 
-        if results_of_interest.is_a?(Regexp)
-          results_regex = Regexp.union(results_regex, results_of_interest)
-        end
+        results_regex = Regexp.union(results_regex, results_of_interest) if results_of_interest.is_a?(Regexp)
 
         usage_cmd = "shield #{usage}"
         if target.is_a?(GameObj)
@@ -315,10 +393,25 @@ module Lich
         usage_result
       end
 
+      # Returns the "success" regex associated with a given Shield technique name.
+      # This regex is used to match the expected output when the technique is successfully *attempted*.
+      # It does not necessarily indicate that the technique was successful in its effect, or even
+      # that the technique was executed at all.
+      #
+      # @param name [String] The technique name
+      # @return [Regexp] The regex used to match technique success or effects
+      # @example
+      #   Shield.regexp("shield_trample") => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i
       def Shield.regexp(name)
         @@shield_techniques.fetch(PSMS.name_normal(name))[:regex]
       end
 
+      # Defines dynamic getter methods for both long and short names of each Shield technique.
+      #
+      # @note This block dynamically defines methods like `Shield.blessing` and `Shield.shield_trample`
+      # @example
+      #   Shield.blessing # returns the rank of shield_trample based on the short name
+      #   Shield.shield_trample # returns the rank of shield_trample based on the long name
       Shield.shield_lookups.each { |shield|
         self.define_singleton_method(shield[:short_name]) do
           Shield[shield[:short_name]]

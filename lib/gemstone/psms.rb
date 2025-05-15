@@ -119,6 +119,27 @@ module Lich
         end
       end
 
+      # Determines if a given PSM skill is available for use (not in cooldown, and not overexerted).
+      #
+      # This method checks if the skill is not listed in the cooldowns or debuffs (specifically "Overexerted").
+      # It uses the `Lich::Util.normalize_lookup` method to check for the skill's presence in these lists.
+      #
+      # @param name [String] The name of the PSM skill to check.
+      # @return [Boolean] True if the skill is available (not in cooldown or overexerted), false otherwise.
+      #
+      # @example Check if a combat maneuver is available
+      #   PSMS.available?("bullrush")
+      #   # => true (if not in cooldown or overexerted)
+      #
+      # @example Check if a shield technique is available
+      #   PSMS.available?("bulwark")
+      #   # => false (if in cooldown or overexerted)
+      def self.available?(name, ignore_cooldown = false)
+        return false if Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
+        return false if Lich::Util.normalize_lookup('Cooldowns', name) unless ignore_cooldown
+        return true
+      end
+
       # Determines whether the character is eligible to perform the given number of forced roundtime (forcert) rounds.
       #
       # This method checks if the character's Multi-Opponent Combat (MOC) training allows at least
