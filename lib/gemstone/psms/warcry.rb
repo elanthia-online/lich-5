@@ -135,17 +135,23 @@ module Lich
           PSMS.available?(name)
       end
 
+      # DEPRECATED: Use {#buff_active?} instead.
       # Checks whether the warcry's buff is currently active.
       #
       # @param name [String] Warcry name
       # @return [Boolean] True if buff is already active
       def Warcry.buffActive?(name)
         ### DEPRECATED ###
+        Lich.deprecated("Warcry.buffActive?", "Warcry.buff_active?", caller[0], fe_log: false)
         buff = @@warcries.fetch(PSMS.name_normal(name))[:buff]
         return false if buff.nil?
         Lich::Util.normalize_lookup('Buffs', buff)
       end
 
+      # Checks whether the warcry's buff is currently active.
+      #
+      # @param name [String] Warcry name
+      # @return [Boolean] True if buff is already active
       def Warcry.buff_active?(name)
         buff = @@warcries.fetch(PSMS.name_normal(name))[:buff]
         return false if buff.nil?

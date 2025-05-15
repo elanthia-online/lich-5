@@ -232,13 +232,14 @@ module Lich
           PSMS.available?(name)
       end
 
+      # DEPRECATED: Use {#buff_active?} instead.
       # Checks whether a technique's buff is currently active.
       #
       # @param name [String] Technique name
       # @return [Boolean] True if the buff is active
       def Weapon.active?(name)
         ## DEPRECATED ##
-        # Renamed to `buff_active?` for consistency with other modules.
+        Lich.deprecated("Weapon.active?", "Weapon.buff_active?", caller[0], fe_log: false)
         name = PSMS.name_normal(name)
         return unless @@weapon_techniques.fetch(name).key?(:buff)
         Effects::Buffs.active?(@@weapon_techniques.fetch(name)[:buff])
