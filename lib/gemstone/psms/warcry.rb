@@ -161,7 +161,7 @@ module Lich
       # Attempts to use a warcry, optionally on a target.
       #
       # @param name [String] The name of the warcry
-      # @param target [String, Integer, GameObj] The target of the technique (optional)  If unspecified, the technique will be used on the character.
+      # @param target [String, Integer, GameObj] The target of the technique (optional).  If unspecified, the technique will be used on the character.
       # then assume the target is the user.
       # @param results_of_interest [Regexp, nil] Additional regex to capture from result (optional)
       # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
