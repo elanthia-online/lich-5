@@ -220,7 +220,7 @@ module Lich
       # @param name [String] The technique name
       # @return [Regexp] The regex used to match technique success or effects
       # @example
-      #   Armor.regexp("armor_blessing") => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i
+      #   Warcry.regexp("holler") => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i
       def Warcry.regexp(name)
         @@warcries.fetch(PSMS.name_normal(name))[:regex]
       end
@@ -229,8 +229,7 @@ module Lich
       #
       # @note This block dynamically defines methods like `Armor.blessing` and `Armor.armor_blessing`
       # @example
-      #   Armor.blessing # returns the rank of armor_blessing based on the short name
-      #   Armor.armor_blessing # returns the rank of armor_blessing based on the long name
+      #   Warcry.holler # returns the rank of holler based on the short name
       Warcry.warcry_lookups.each { |warcry|
         self.define_singleton_method(warcry[:short_name]) do
           Warcry[warcry[:short_name]]
