@@ -176,7 +176,7 @@ module Lich
 
       # Looks up the rank known of a weapon technique.
       #
-      # @param name [String] The name of the waweapon technique
+      # @param name [String] The name of the weapon technique
       # @return [Integer] The rank of the technique, or 0 if unknown
       # @example
       #   Weapon["volley"] => 2
