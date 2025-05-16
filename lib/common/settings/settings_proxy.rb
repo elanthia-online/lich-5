@@ -1,53 +1,30 @@
 module Lich
   module Common
-    # This module provides a proxy class for settings objects, allowing them to be accessed
-    # in a Ruby-compatible way. It handles both scalar and container types, and
-    # provides methods for comparison, conversion, and enumeration.
-    #
-    # The proxy is designed to work with settings objects that are either Hashes or Arrays.
-    # It allows for nested access to settings, while also providing a way to save changes
-    # made to the settings.
-
-    # The proxy also provides a way to handle non-destructive methods, which return a new
-    # object instead of modifying the original. This is done by creating a duplicate of the
-    # target object before calling the method, and then returning a new proxy for the result
-    # if it is a container type.
-
-    # The proxy also handles method delegation, allowing methods to be called directly on
-    # the target object. It uses method_missing to catch calls to methods that are not
-    # defined on the proxy itself, and delegates them to the target object.
-
-    # The proxy also provides a way to handle results of non-destructive methods, which
-    # return a new object instead of modifying the original. This is done by creating a
-    # duplicate of the target object before calling the method, and then returning a new
-    # proxy for the result if it is a container type.
-
+    # SettingsProxy is defined here but relies on Settings module being fully defined first,
+    # especially Settings._log. The actual require_relative for settings_proxy.rb
+    # is now at the end of settings.rb.
     class SettingsProxy
-      def initialize(settings, path, target)
-        @settings = settings
+      LOG_PREFIX = "[SettingsProxy]".freeze
+
+      def initialize(settings_module, scope, path, target)
+        @settings_module = settings_module # This should be the Settings module itself
+        @scope = scope
         @path = path.dup
         @target = target
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}" })
       end
 
-      # Allow access to the target for debugging
-      attr_reader :target, :path
-
-      #
-      # Standard Ruby methods
-      #
+      attr_reader :target, :path, :scope
 
       def nil?
         @target.nil?
       end
 
-      # Helper method for binary operators to reduce repetition
       def binary_op(operator, other)
         other_value = other.is_a?(SettingsProxy) ? other.target : other
         @target.send(operator, other_value)
       end
 
-      # Define comparison operators using metaprogramming to reduce repetition
-      # NB: not all operators apply to all objects (e.g. <, >, <=, >= on Arrays)
       [:==, :!=, :eql?, :equal?, :<=>, :<, :<=, :>, :>=, :|, :&].each do |op|
         define_method(op) do |other|
           binary_op(op, other)
@@ -62,17 +39,19 @@ module Lich
         @target.to_s
       end
 
+      # Updated inspect method to show the target's inspect string
       def inspect
         @target.inspect
+      end
+
+      # New method to show the proxy's internal details
+      def proxy_details
+        "<SettingsProxy scope=#{@scope.inspect} path=#{@path.inspect} target_class=#{@target.class} target_object_id=#{@target.object_id}>"
       end
 
       def pretty_print(pp)
         pp.pp(@target)
       end
-
-      #
-      # Type checking methods
-      #
 
       def is_a?(klass)
         @target.is_a?(klass)
@@ -90,13 +69,8 @@ module Lich
         super || @target.respond_to?(method, include_private)
       end
 
-      #
-      # Conversion methods
-      #
-
       def to_hash
         return nil unless @target.is_a?(Hash)
-
         @target.dup
       end
 
@@ -106,7 +80,6 @@ module Lich
 
       def to_ary
         return nil unless @target.is_a?(Array)
-
         @target.dup
       end
 
@@ -114,88 +87,86 @@ module Lich
         to_ary
       end
 
-      # Define conversion methods using metaprogramming to reduce repetition
       [:to_int, :to_i, :to_str, :to_sym, :to_proc].each do |method|
         define_method(method) do
           @target.send(method) if @target.respond_to?(method)
         end
       end
 
-      #
-      # Enumerable support
-      #
-
       def each(&_block)
         return enum_for(:each) unless block_given?
-
         if @target.respond_to?(:each)
           @target.each do |item|
-            if Settings.container?(item)
-              yield SettingsProxy.new(@settings, [], item)
+            if @settings_module.container?(item)
+              yield SettingsProxy.new(@settings_module, @scope, [], item)
             else
               yield item
             end
           end
         end
-
         self
       end
 
-      # Non-destructive enumerable methods that should not save changes
       NON_DESTRUCTIVE_METHODS = [
-        :select, :map, :filter, :reject, :collect, :find, :detect,
-        :find_all, :grep, :grep_v, :group_by, :partition, :min, :max,
-        :minmax, :min_by, :max_by, :minmax_by, :sort, :sort_by,
-        :flat_map, :collect_concat, :reduce, :inject, :sum, :count,
-        :cycle, :drop, :drop_while, :take, :take_while, :first, :all?,
-        :any?, :none?, :one?, :find_index, :values_at, :zip, :reverse,
-        :entries, :to_a, :to_h, :include?, :member?, :each_with_index,
-        :each_with_object, :each_entry, :each_slice, :each_cons, :chunk,
-        :slice_before, :slice_after, :slice_when, :chunk_while, :lazy
+        :+, :-, :&, :|, :*,
+        :all?, :any?, :assoc, :at, :bsearch, :bsearch_index, :chunk, :chunk_while,
+        :collect, :collect_concat, :combination, :compact, :compare_by_identity?, :count, :cycle,
+        :default, :default_proc, :detect, :dig, :drop, :drop_while,
+        :each_cons, :each_entry, :each_slice, :each_with_index, :each_with_object, :empty?,
+        :entries, :except, :fetch, :fetch_values, :filter, :find, :find_all, :find_index,
+        :first, :flat_map, :flatten, :frozen?, :grep, :grep_v, :group_by, :has_value?,
+        :include?, :inject, :invert, :join, :key, :keys, :last, :lazy, :length,
+        :map, :max, :max_by, :member?, :merge, :min, :min_by, :minmax, :minmax_by,
+        :none?, :one?, :pack, :partition, :permutation, :product, :rassoc, :reduce,
+        :reject, :reverse, :rotate, :sample, :select, :shuffle, :size, :slice,
+        :slice_after, :slice_before, :slice_when, :sort, :sort_by, :sum,
+        :take, :take_while, :to_a, :to_h, :to_proc, :transform_keys, :transform_values,
+        :uniq, :values, :values_at, :zip
       ].freeze
 
-      #
-      # Container access
-      #
-
       def [](key)
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "GET scope: #{@scope.inspect}, path: #{@path.inspect}, key: #{key.inspect}, target_object_id: #{@target.object_id}" })
         value = @target[key]
-
-        if Settings.container?(value)
-          # For container types, return a new proxy with updated path
+        if @settings_module.container?(value)
           new_path = @path.dup
           new_path << key
-          SettingsProxy.new(@settings, new_path, value)
+          SettingsProxy.new(@settings_module, @scope, new_path, value)
         else
-          # For scalar values, return the value directly
           value
         end
       end
 
       def []=(key, value)
-        @target[key] = value
-        @settings.save_proxy_changes(self)
-        # value
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET scope: #{@scope.inspect}, path: #{@path.inspect}, key: #{key.inspect}, value: #{value.inspect}, target_object_id: #{@target.object_id}" })
+        actual_value = value.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(value) : value # Corrected to use @settings_module
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   target_before_set: #{@target.inspect}" })
+        @target[key] = actual_value
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   target_after_set: #{@target.inspect}" })
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   calling save_proxy_changes on settings module" })
+        @settings_module.save_proxy_changes(self)
+        # rubocop:disable Lint/Void
+        # This is Ruby expected behavior to return the value.
+        value
+        # rubocop:enable Lint/Void
       end
 
-      #
-      # Method delegation
-      #
-
       def method_missing(method, *args, &block)
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL scope: #{@scope.inspect}, path: #{@path.inspect}, method: #{method}, args: #{args.inspect}, target_object_id: #{@target.object_id}" })
         if @target.respond_to?(method)
-          # For non-destructive methods, operate on a duplicate to avoid modifying original
           if NON_DESTRUCTIVE_METHODS.include?(method)
-            # Create a duplicate of the target for non-destructive operations
+            @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   non-destructive method: #{method}" })
             target_dup = @target.dup
-            result = target_dup.send(method, *args, &block)
-
-            # Return the result without saving changes
+            unwrapped_args = args.map { |arg| arg.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(arg) : arg } # Corrected
+            result = target_dup.send(method, *unwrapped_args, &block)
             return handle_non_destructive_result(result)
           else
-            # For destructive methods, operate on the original and save changes
-            result = @target.send(method, *args, &block)
-            @settings.save_proxy_changes(self)
+            @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   destructive method: #{method}" })
+            unwrapped_args = args.map { |arg| arg.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(arg) : arg } # Corrected
+            @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_before_op: #{@target.inspect}" })
+            result = @target.send(method, *unwrapped_args, &block)
+            @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_after_op: #{@target.inspect}" })
+            @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   calling save_proxy_changes on settings module" })
+            @settings_module.save_proxy_changes(self)
             return handle_method_result(result)
           end
         else
@@ -203,30 +174,24 @@ module Lich
         end
       end
 
-      # Helper method to handle results of non-destructive methods
       def handle_non_destructive_result(result)
-        # No need to capture path since we're using empty path
-        @settings.reset_path_and_return(
-          if Settings.container?(result)
-            # For container results, wrap in a new proxy with empty path
-            SettingsProxy.new(@settings, [], result)
+        @settings_module.reset_path_and_return(
+          if @settings_module.container?(result)
+            SettingsProxy.new(@settings_module, @scope, [], result)
           else
-            # For scalar results, return directly
             result
           end
         )
       end
 
-      # Helper method to handle results of destructive methods
       def handle_method_result(result)
         if result.equal?(@target)
-          # If result is the original target, return self
-          self
-        elsif Settings.container?(result)
-          # For container results, wrap in a new proxy with current path
-          SettingsProxy.new(@settings, @path, result)
+          self # Return self if the method modified the target in-place and returned it
+        elsif @settings_module.container?(result)
+          # If a new container is returned (e.g. some destructive methods might return a new object)
+          # Wrap it in a new proxy, maintaining the current path and scope.
+          SettingsProxy.new(@settings_module, @scope, @path, result)
         else
-          # For scalar results, return directly
           result
         end
       end
