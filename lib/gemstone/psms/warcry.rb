@@ -128,7 +128,7 @@ module Lich
       # @return [Boolean] True if the technique is known, affordable, and not on cooldown or
       # blocked by overexertion
       # @example
-      #   Armor.available?("armor_blessing") => true # if known, affordable, not on cooldown, and not overexerted
+      #   Warcry.available?("holler") => true # if known, affordable, not on cooldown, and not overexerted
       def Warcry.available?(name, min_rank: 1, forcert_count: 0)
         Warcry.known?(name, min_rank: min_rank) &&
           Warcry.affordable?(name, forcert_count: forcert_count) &&
@@ -169,7 +169,7 @@ module Lich
       #   Warcry.use("holler", "Dissonance") # attempt to use holler on Dissonance
       def Warcry.use(name, target = "", results_of_interest: nil, forcert_count: 0)
         return unless Warcry.available?(name, forcert_count: forcert_count)
-        return if Warcry.buffActive?(name)
+        return if Warcry.buff_active?(name)
 
         name_normalized = PSMS.name_normal(name)
         technique = @@warcries.fetch(name_normalized)
