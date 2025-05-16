@@ -121,7 +121,7 @@ module Lich
         # @param script_dir [String] the script directory
         # @param data_dir [String] the data directory
         # @param game_type [String] the game type (gs or dr)
-        def update_core_data_and_scripts(script_dir, data_dir, game_type)
+        def update_core_data_and_scripts(script_dir, data_dir, game_type = 'gs')
           unless ['gs', 'dr'].include?(game_type.downcase)
             @logger.error("Invalid game type, unsure what scripts to update")
             return false

@@ -140,7 +140,7 @@ module Lich
         # @raise [NetworkError] if the request fails
         def fetch_from_url(url)
           begin
-            response = URI.parse(url).open.read
+            response = URI.parse(url).open(read_timeout: 10, open_timeout: 5).read
             JSON.parse(response)
           rescue => e
             raise NetworkError, "Failed to fetch data from #{url}: #{e.message}"

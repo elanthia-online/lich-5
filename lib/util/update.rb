@@ -123,4 +123,4 @@ module Lich
 end
 
 # Run the updater if this file is executed directly
-Lich::Updater.run if __FILE__ == $PROGRAM_NAME
+Lich::Util::Update.run if __FILE__ == $PROGRAM_NAME
