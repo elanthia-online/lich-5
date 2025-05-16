@@ -757,7 +757,7 @@ module Lich
         end
       end
 
-      # Attempts to use an combat maneuver, optionally on a target.
+      # Attempts to use a combat maneuver, optionally on a target.
       #
       # @param name [String] The name of the combat maneuver
       # @param target [String, Integer, GameObj] The target of the maneuver (optional).  If unspecified, the maneuver will be used on the character.
