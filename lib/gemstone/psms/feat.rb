@@ -347,7 +347,7 @@ module Lich
       # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
       # @return [String, nil] The result of the regex match, or nil if unavailable
       # @example
-      #   Feat.use("covert_art_escape_artist") # attempt to use Feat blessing on self
+      #   Feat.use("covert_art_escape_artist") # attempt to use the feat on self
       #   Feat.use("covert_art_escape_artist", "Dissonance") # attempt to use Feat blessing on Dissonance
       def Feat.use(name, target = "", results_of_interest: nil, forcert_count: 0)
         return unless Feat.available?(name, forcert_count: forcert_count)
