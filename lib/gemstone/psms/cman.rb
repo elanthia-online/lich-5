@@ -760,8 +760,7 @@ module Lich
       # Attempts to use a combat maneuver, optionally on a target.
       #
       # @param name [String] The name of the combat maneuver
-      # @param target [String, Integer, GameObj] The target of the maneuver (optional).  If unspecified, the maneuver will be used on the character.
-      # then assume the target is the user.
+      # @param target [String, Integer, GameObj] The target of the maneuver (optional).  If unspecified, the technique will be used on the character.
       # @param results_of_interest [Regexp, nil] Additional regex to capture from result (optional)
       # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
       # @return [String, nil] The result of the regex match, or nil if unavailable
