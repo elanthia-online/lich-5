@@ -307,7 +307,7 @@ module Lich
         return PSMS.assess(name, 'Shield', true, forcert_count: forcert_count)
       end
 
-      # Determines if an Shield technique is available to use right now by testing:
+      # Determines if a Shield technique is available to use right now by testing:
       # - if the technique is known
       # - if the technique is affordable
       # - if the technique is not on cooldown
