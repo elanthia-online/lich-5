@@ -253,7 +253,7 @@ module Lich
         Effects::Buffs.active?(@@weapon_techniques.fetch(name)[:buff])
       end
 
-      # Attempts to use an Weapon technique, optionally on a target.
+      # Attempts to use a Weapon technique, optionally on a target.
       #
       # @param name [String] The name of the Weapon technique
       # @param target [String, Integer, GameObj] The target of the technique (optional).  If unspecified, the technique will be used on the character.
