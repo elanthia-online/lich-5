@@ -742,7 +742,7 @@ module Lich
       #
       # @param name [String] The name of the combat maneuver
       # @param min_rank [Integer] Optionally, the minimum rank to check (default: 1)
-      # @param forcert_count [Integer] Opytionally, the count of FORCERTs being used (default: 0)
+      # @param forcert_count [Integer] Optionally, the count of FORCERTs being used (default: 0)
       # @return [Boolean] True if the maneuver is known, affordable, and not on cooldown or
       # blocked by overexertion
       # @example
