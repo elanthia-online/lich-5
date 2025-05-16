@@ -227,7 +227,7 @@ module Lich
 
       # Defines dynamic getter methods for both long and short names of each warcry.
       #
-      # @note This block dynamically defines methods like `Armor.blessing` and `Armor.armor_blessing`
+      # @note This block dynamically defines methods like `Warcry.holler` and `Warcry.bertrandts_bellow`
       # @example
       #   Warcry.holler # returns the rank of holler based on the short name
       Warcry.warcry_lookups.each { |warcry|
