@@ -203,7 +203,7 @@ module Lich
       # affordability with a given number of FORCERTs having been used (including the current one).
       #
       # @param name [String] The name of the Weapon technique
-      # @param forcert_count [Integer] Optionally, the count of FORCERTs being used, including for this exectuion (default: 0)
+      # @param forcert_count [Integer] Optionally, the count of FORCERTs being used, including for this execution (default: 0)
       # @return [Boolean] True if the technique can be used with available FORCERTs
       # @example
       #   Weapon.affordable?("Weapon_blessing") => true # if enough skill and stamina
