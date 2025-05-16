@@ -8,6 +8,8 @@ module Lich
     module Update
       # Version management for Lich Update
       class Version
+        include Comparable
+
         attr_reader :version_string
 
         # Initialize a new Version object
@@ -36,46 +38,12 @@ module Lich
         end
 
         # Compare this version with another version
+        # Required method for Comparable mixin
         # @param other [String, Version] the version to compare with
         # @return [Integer] -1, 0, or 1 if this version is less than, equal to, or greater than other
         def <=>(other)
           other_version = other.is_a?(Version) ? other.version_string : normalize_version(other)
           Gem::Version.new(@version_string) <=> Gem::Version.new(other_version)
-        end
-
-        # Check if this version is greater than another version
-        # @param other [String, Version] the version to compare with
-        # @return [Boolean] true if this version is greater than other
-        def >(other)
-          (self <=> other) > 0
-        end
-
-        # Check if this version is less than another version
-        # @param other [String, Version] the version to compare with
-        # @return [Boolean] true if this version is less than other
-        def <(other)
-          (self <=> other) < 0
-        end
-
-        # Check if this version is equal to another version
-        # @param other [String, Version] the version to compare with
-        # @return [Boolean] true if this version is equal to other
-        def ==(other)
-          (self <=> other) == 0
-        end
-
-        # Check if this version is greater than or equal to another version
-        # @param other [String, Version] the version to compare with
-        # @return [Boolean] true if this version is greater than or equal to other
-        def >=(other)
-          (self <=> other) >= 0
-        end
-
-        # Check if this version is less than or equal to another version
-        # @param other [String, Version] the version to compare with
-        # @return [Boolean] true if this version is less than or equal to other
-        def <=(other)
-          (self <=> other) <= 0
         end
 
         # Convert this version to a string
