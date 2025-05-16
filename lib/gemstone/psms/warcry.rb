@@ -160,7 +160,6 @@ module Lich
       #
       # @param name [String] The name of the warcry
       # @param target [String, Integer, GameObj] The target of the technique (optional). If unspecified, the target is assumed to be the user.
-      # then assume the target is the user.
       # @param results_of_interest [Regexp, nil] Additional regex to capture from result (optional)
       # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
       # @return [String, nil] The result of the regex match, or nil if unavailable
