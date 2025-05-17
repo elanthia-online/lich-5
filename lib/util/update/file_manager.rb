@@ -74,21 +74,31 @@ module Lich
 
         # Clean up old lib instance of update.rb
         # @param lib_dir [String] the lib directory
+        # @return [Boolean] true if cleanup was successful
         def cleanup_old_update_rb(lib_dir)
-          old_update_path = File.join(lib_dir, 'util', 'update.rb')
+          old_update_path = File.join(lib_dir, 'update.rb')
+
           if File.exist?(old_update_path)
-            # Check if Update module was loaded from this path
             begin
-              # This is a simplified check - in a real implementation, we would need
-              # to check if the module was actually loaded from this path
-              if defined?(Lich::Util::Update)
-                @logger.info("Removing old update.rb from #{old_update_path}")
+              if Cleaner.module_loaded_from_path?(old_update_path)
+                @logger.info("Found old update.rb at #{old_update_path}")
+                @logger.info("Removing old update.rb...")
+
                 FileUtils.rm(old_update_path)
+
                 @logger.success("Old update.rb removed successfully")
+                return true
+              else
+                @logger.info("Old update.rb found at #{old_update_path}, but Lich::Util::Update module is not loaded")
+                return false
               end
             rescue => e
               @logger.error("Failed to remove old update.rb: #{e.message}")
+              return false
             end
+          else
+            @logger.info("No old update.rb found at #{old_update_path}")
+            return true
           end
         end
 

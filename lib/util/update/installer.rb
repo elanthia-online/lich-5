@@ -204,7 +204,7 @@ module Lich
           @logger.info("Do you want to continue? (Y/N)")
 
           # Get user input
-          sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_
+          sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_ || STDIN
           line = sync_thread.gets until line.strip =~ /^(?:<c>)?(?:[\;\,]send|[\;\,]s) /i
 
           if line =~ /send Y|s Y/i
