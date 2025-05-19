@@ -24,7 +24,6 @@ module Lich
 
         Config::CURRENT_VERSION ||= defined?(LICH_VERSION) ? LICH_VERSION : '5.12.0'
 
-
         # GitHub repository for Lich5
         GITHUB_REPO = 'elanthia-online/lich-5'
 

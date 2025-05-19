@@ -51,17 +51,17 @@ module Lich
 
           # Initialize components using the Main module
           components = Main.initialize_components
-          
+
           # Set current version if available
           if defined?(LICH_VERSION)
             components[:installer].current_version = LICH_VERSION
           else
             components[:installer].current_version = Config::CURRENT_VERSION
           end
-          
+
           # Parse the parameter into options
           options = parse_parameter(parameter, components[:cli], components[:logger])
-          
+
           # Process the request with the parsed options
           process_request(options, components)
         end
@@ -69,13 +69,13 @@ module Lich
         # Get user input for confirmation
         # @param logger [Logger] The logger instance for displaying prompts
         # @return [Boolean] true if user confirms, false otherwise
-        def get_user_confirmation(logger)
+        def get_user_confirmation(_logger)
           # Use $_CLIENT_ as primary input stream if available, otherwise fall back to $stdin
           input_stream = defined?($_CLIENT_) ? $_CLIENT_ : $stdin
-          
+
           # Read a line from the input stream
           line = input_stream.gets
-          
+
           # Return true only if the user entered 'y' or 'Y', false for any other input
           return false if line.nil?
           return line.strip.downcase == 'y'
@@ -137,9 +137,9 @@ module Lich
         # @return [Hash] the parsed options
         def parse_string_parameter(parameter, cli, logger)
           puts "DEBUG: parse_string_parameter received: #{parameter.inspect}" if $DEBUG
-          
+
           options = Config::DEFAULT_OPTIONS.dup
-          
+
           # First check for exact matches without prefixes
           case parameter.to_s.downcase
           when 'help'
@@ -180,7 +180,7 @@ module Lich
             options[:prompt_alpha] = true
             return options
           end
-          
+
           # Handle CLI-style arguments with prefixes
           if parameter =~ /--alpha/
             # Special case for --alpha to ensure it's parsed correctly
@@ -189,7 +189,7 @@ module Lich
             options[:prompt_alpha] = true
             return options
           end
-          
+
           # Handle other CLI-style arguments with prefixes
           case parameter
           when /--announce|-a/
@@ -230,7 +230,7 @@ module Lich
             # Try to parse as CLI arguments
             args = parameter.split(/\s+/)
             parsed_options = cli.parse(args)
-            
+
             if parsed_options
               return parsed_options
             else
@@ -238,28 +238,28 @@ module Lich
               options[:action] = 'help'
             end
           end
-          
+
           options
         end
-        
+
         # Parse a symbol parameter into options
         # @param parameter [Symbol] the symbol parameter
         # @param logger [Logger] The logger instance for error reporting
         # @return [Hash] the parsed options
         def parse_symbol_parameter(parameter, logger)
           puts "DEBUG: parse_symbol_parameter received: #{parameter.inspect}" if $DEBUG
-          
+
           options = Config::DEFAULT_OPTIONS.dup
-          
+
           # Convert symbol to string and check if it's a valid action
           param_str = parameter.to_s.downcase
-          
+
           # Check for valid actions
           if ['help', 'announce', 'update', 'revert', 'snapshot', 'cleanup'].include?(param_str)
             options[:action] = param_str
             return options
           end
-          
+
           # Check for special cases
           case param_str
           when 'beta', 'test'
@@ -281,26 +281,26 @@ module Lich
             logger.error("Symbol '#{parameter}' not recognized.")
             options[:action] = 'help'
           end
-          
+
           options
         end
-        
+
         # Parse a hash parameter into options
         # @param parameter [Hash] the hash parameter
         # @return [Hash] the parsed options
         def parse_hash_parameter(parameter)
           puts "DEBUG: parse_hash_parameter received: #{parameter.inspect}" if $DEBUG
-          
+
           options = Config::DEFAULT_OPTIONS.dup
-          
+
           # Merge with default options, ensuring string keys are converted to symbols
           parameter.each do |key, value|
             options[key.to_sym] = value
           end
-          
+
           # Convert action to string if it's a symbol
           options[:action] = options[:action].to_s if options[:action].is_a?(Symbol)
-          
+
           # Set prompt flags based on tag
           case options[:tag]
           when 'beta'
@@ -310,10 +310,10 @@ module Lich
           when 'dev'
             options[:prompt_dev] = true unless options.key?(:prompt_dev)
           end
-          
+
           options
         end
-        
+
         # Normalize a file type
         # @param type [String, Symbol] The file type to normalize
         # @return [String] The normalized file type
@@ -329,29 +329,29 @@ module Lich
             type.to_s
           end
         end
-        
+
         # Process the request based on options
         # @param options [Hash] The options hash
         # @param components [Hash] The component instances
         # @return [Hash] Result of the operation
         def process_request(options, components)
           puts "DEBUG: process_request received options: #{options.inspect}" if $DEBUG
-          
+
           logger = components[:logger]
           release_manager = components[:release_manager]
           installer = components[:installer]
           cleaner = components[:cleaner]
           file_manager = components[:file_manager]
           cli = components[:cli]
-          github = components[:github]
-          
+          components[:github]
+
           result = {
             success: true,
             action: options[:action],
             message: "",
             data: {}
           }
-          
+
           case options[:action]
           when 'help'
             cli.display_help
@@ -359,8 +359,8 @@ module Lich
           when 'announce'
             success = release_manager.announce_update(installer.current_version, options[:tag])
             result[:success] = success
-            result[:message] = success ? 
-              "Update announcement displayed" : 
+            result[:message] = success ?
+              "Update announcement displayed" :
               "No updates available or announcement failed"
           when 'update'
             # Handle prompts for different development streams if needed
@@ -368,7 +368,7 @@ module Lich
               logger.info("You are about to join the beta program for Lich5.")
               logger.info("Beta versions may contain experimental features and bugs.")
               logger.info("Do you want to proceed? (y/n)")
-              
+
               # Get user confirmation
               if !get_user_confirmation(logger)
                 result[:success] = false
@@ -382,7 +382,7 @@ module Lich
               logger.info("Alpha versions have a higher risk of changes and instability.")
               logger.info("Features may change significantly between releases.")
               logger.info("Do you want to proceed? (y/n)")
-              
+
               # Get user confirmation
               if !get_user_confirmation(logger)
                 result[:success] = false
@@ -391,14 +391,14 @@ module Lich
                 logger.info("Update cancelled: Alpha update will not proceed.")
                 return result
               end
-              
+
               # No fallback for alpha - respect user's explicit choice
             elsif options[:prompt_dev] && options[:tag] == 'dev'
               logger.info("You are about to join the development program for Lich5.")
               logger.info("Development versions are unstable and may break at any time.")
               logger.info("Features may be incomplete or change without notice.")
               logger.info("Do you want to proceed? (y/n)")
-              
+
               # Get user confirmation
               if !get_user_confirmation(logger)
                 result[:success] = false
@@ -407,10 +407,10 @@ module Lich
                 logger.info("Update cancelled: Development update will not proceed.")
                 return result
               end
-              
+
               # No fallback for dev - respect user's explicit choice
             end
-            
+
             # Create a snapshot before updating
             snapshot_path = file_manager.create_snapshot(
               Config::DIRECTORIES[:lich],
@@ -419,7 +419,7 @@ module Lich
               Config::DIRECTORIES[:lib],
               Config::CORE_SCRIPTS
             )
-            
+
             # Perform the update with all required arguments
             success = installer.install(
               options[:tag],
@@ -431,7 +431,7 @@ module Lich
               Config::DIRECTORIES[:temp],
               { confirm: options[:confirm], create_snapshot: false } # We already created a snapshot
             )
-            
+
             if success
               result[:success] = true
               result[:message] = "Update to #{options[:tag]} completed successfully"
@@ -445,9 +445,9 @@ module Lich
             # Update a specific file
             file_type = options[:file_type]
             file = options[:file]
-            
+
             success = installer.update_file(file_type, file, options[:tag])
-            
+
             if success
               result[:success] = true
               result[:message] = "File #{file} updated successfully"
@@ -473,7 +473,7 @@ module Lich
               Config::DIRECTORIES[:lib],
               Config::CORE_SCRIPTS
             )
-            
+
             if snapshot_path
               result[:success] = true
               result[:message] = "Snapshot created successfully"
@@ -489,7 +489,7 @@ module Lich
               Config::DIRECTORIES[:temp],
               Config::DIRECTORIES[:backup]
             )
-            
+
             if success
               result[:success] = true
               result[:message] = "Cleanup completed successfully"
@@ -501,7 +501,7 @@ module Lich
             result[:success] = false
             result[:message] = "Unknown action: #{options[:action]}"
           end
-          
+
           result
         end
       end

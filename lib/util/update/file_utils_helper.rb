@@ -103,7 +103,7 @@ module Lich
                 # Remove temporary archive if it exists
                 temp_archive = "#{temp_path}.tar.gz"
                 FileUtils.rm(temp_archive) if File.exist?(temp_archive)
-                
+
                 logger&.info("Cleaned up temporary files for #{filename}")
                 return true
               else
