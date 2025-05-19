@@ -662,18 +662,25 @@ module Lich
             spell = nil
             duration = nil
             case text_string
-            when /(?<spell>[^<>]+?)\s+\((?:\D*)(?<duration>\d+)\s*(?:%|roisae?n)\)/i
+            when /(?<spell>^[^\(]+)\((?<duration>\d+|Indefinite|OM|Fading)\s*(?:%|roisae?n)?\)/i
               # Spell with known duration remaining
-              spell = Regexp.last_match[:spell]
-              duration = Regexp.last_match[:duration].to_i
-            when /(?<spell>[^<>]+?)\s+\(fading\)/i
-              # Spell fading away
-              spell = Regexp.last_match[:spell]
-              duration = 0
-            when /(?<spell>[^<>]+?)\s+\((?<duration>indefinite|om)\)/i
-              # Cyclic spell or Osrel Meraud cyclic spell
-              spell = Regexp.last_match[:spell]
-              duration = 1000
+              # XML looks like:
+              # Hydra Hex  (Indefinite)
+              # Persistence of Mana  (OM)
+              # Cure Disease  (Fading)
+              # Osrel Meraud  (94%)
+              # Landslide (4 roisaen)
+              # Khri Sagacity  (1 roisan)
+              spell = Regexp.last_match[:spell].strip
+              duration = Regexp.last_match[:duration]
+
+              if duration.match?(/Indefinite|OM/)
+                duration = 1000
+              elsif duration.match?(/Fading/)
+                duration = 0
+              else
+                duration = duration.to_i
+              end
             when /(?<spell>Stellar Collector)\s+\((?<percentage>\d+)%,\s*(?<duration>\d+)?\s*(?<unit>(?:roisae?n|anlaen|fading))/
               # Stellar collector special case
               # XML looks like:
@@ -684,10 +691,10 @@ module Lich
               @dr_active_spells_stellar_percentage = Regexp.last_match[:percentage].to_i
               unit = Regexp.last_match[:unit]
               duration = unit == 'anlaen' ? duration * 30 : duration
-            when /(?<spell>[^<>]+?)\s+\(.+\)/i
+            when /(?<spell>^[^\(]+)\(.+\)/i
               # Spells with inexact duration verbiage, such as with
               # Barbarians without knowledge of Power Monger mastery
-              spell = Regexp.last_match[:spell]
+              spell = Regexp.last_match[:spell].strip
               duration = 1000
             when /.*orbiting sliver.*/i
               # Moon Mage slivers
