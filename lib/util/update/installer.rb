@@ -231,7 +231,8 @@ module Lich
         def extract_archive(archive_path, destination)
           begin
             FileUtils.mkdir_p(destination)
-            Gem::Package.new("").extract_tar_gz(File.open(archive_path, "rb"), destination)
+            File.open(archive_path, "rb") { |f| Gem::Package.new("").extract_tar_gz(f, destination) }
+            # Gem::Package.new("").extract_tar_gz(File.open(archive_path, "rb"), destination)
             true
           rescue => e
             @logger.error("Failed to extract archive #{archive_path}: #{e.message}")

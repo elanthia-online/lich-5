@@ -364,19 +364,35 @@ module Lich
               "No updates available or announcement failed"
           when 'update'
             # Handle prompts for different development streams if needed
-            if options[:prompt_beta] && options[:tag] == 'beta'
-              logger.info("You are about to join the beta program for Lich5.")
-              logger.info("Beta versions may contain experimental features and bugs.")
+
+            if options[:prompt_beta] && options[:tag] == 'beta' ||
+               options[:prompt_alpha] && options[:tag] == 'alpha' ||
+               options[:prompt_dev] && options[:tag] == 'dev'
+              # do not shorten development to 'dev' in prompts
+              logger.info("You are about to join the #{options[:tag]} program for Lich5.") unless options[:tag] == 'dev'
+              logger.info("You are about to join the development program for Lich5.") if options[:tag] == 'dev'
+              # Prompt for beta
+              logger.info("#{options[:tag].capitalize} versions may contain experimental features and bugs.") if options[:tag] == 'beta'
+              # Prompt for alpha
+              logger.info("#{options[:tag].capitalize} versions have a higher risk of changes and instability.") if options[:tag] == 'alpha'
+              logger.info("Features may change significantly between releases.") if options[:tag] == 'alpha'
+              # Prompt for development
+              logger.info("#{options[:tag].capitalize} versions are unstable and may break at any time.") if options[:tag] == 'dev'
+              logger.info("Features may be incomplete or change without notice.") if options[:tag] == 'dev'
               logger.info("Do you want to proceed? (y/n)")
 
               # Get user confirmation
               if !get_user_confirmation(logger)
                 result[:success] = false
-                result[:message] = "Beta update cancelled by user"
+                # do not shorten development to 'dev' in results / info
+                result[:message] = "#{options[:tag].capitalize} update cancelled by user" unless options[:tag] == 'dev'
+                result[:message] = "Development update cancelled by user" if options[:tag] == 'dev'
                 # Display cancellation message to user
-                logger.info("Update cancelled: Beta update will not proceed.")
+                logger.info("Update cancelled: #{options[:tag].capitalize} update will not proceed.") unless options[:tag] == 'dev'
+                logger.info("Update cancelled: Development update will not proceed.") if options[:tag] == 'dev'
                 return result
               end
+=begin
             elsif options[:prompt_alpha] && options[:tag] == 'alpha'
               logger.info("You are about to join the alpha program for Lich5.")
               logger.info("Alpha versions have a higher risk of changes and instability.")
@@ -385,11 +401,12 @@ module Lich
 
               # Get user confirmation
               if !get_user_confirmation(logger)
-                result[:success] = false
-                result[:message] = "Alpha update cancelled by user"
+                bail_out(:alpha)
+                # result[:success] = false
+                # result[:message] = "Alpha update cancelled by user"
                 # Display cancellation message to user
-                logger.info("Update cancelled: Alpha update will not proceed.")
-                return result
+                # logger.info("Update cancelled: Alpha update will not proceed.")
+                # return result
               end
 
               # No fallback for alpha - respect user's explicit choice
@@ -401,14 +418,16 @@ module Lich
 
               # Get user confirmation
               if !get_user_confirmation(logger)
-                result[:success] = false
-                result[:message] = "Development update cancelled by user"
+                bail_out(:dev)
+                # result[:success] = false
+                # result[:message] = "Development update cancelled by user"
                 # Display cancellation message to user
-                logger.info("Update cancelled: Development update will not proceed.")
-                return result
+                # logger.info("Update cancelled: Development update will not proceed.")
+                # return result
               end
 
               # No fallback for dev - respect user's explicit choice
+=end
             end
 
             # Create a snapshot before updating
