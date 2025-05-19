@@ -88,7 +88,7 @@ require File.join(LIB_DIR, 'init.rb')
 require File.join(LIB_DIR, 'common', 'front-end.rb')
 require File.join(LIB_DIR, 'util', 'update.rb')
 
-# TODO: Need to split out initiatilzation functions to move require to top of file
+# TODO: Need to split out initialization functions to move require to top of file
 require File.join(LIB_DIR, 'common', 'gtk.rb')
 # require File.join(LIB_DIR, 'common','gui-login.rb')
 require File.join(LIB_DIR, 'common', 'db_store.rb')
