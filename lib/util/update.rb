@@ -392,42 +392,6 @@ module Lich
                 logger.info("Update cancelled: Development update will not proceed.") if options[:tag] == 'dev'
                 return result
               end
-=begin
-            elsif options[:prompt_alpha] && options[:tag] == 'alpha'
-              logger.info("You are about to join the alpha program for Lich5.")
-              logger.info("Alpha versions have a higher risk of changes and instability.")
-              logger.info("Features may change significantly between releases.")
-              logger.info("Do you want to proceed? (y/n)")
-
-              # Get user confirmation
-              if !get_user_confirmation(logger)
-                bail_out(:alpha)
-                # result[:success] = false
-                # result[:message] = "Alpha update cancelled by user"
-                # Display cancellation message to user
-                # logger.info("Update cancelled: Alpha update will not proceed.")
-                # return result
-              end
-
-              # No fallback for alpha - respect user's explicit choice
-            elsif options[:prompt_dev] && options[:tag] == 'dev'
-              logger.info("You are about to join the development program for Lich5.")
-              logger.info("Development versions are unstable and may break at any time.")
-              logger.info("Features may be incomplete or change without notice.")
-              logger.info("Do you want to proceed? (y/n)")
-
-              # Get user confirmation
-              if !get_user_confirmation(logger)
-                bail_out(:dev)
-                # result[:success] = false
-                # result[:message] = "Development update cancelled by user"
-                # Display cancellation message to user
-                # logger.info("Update cancelled: Development update will not proceed.")
-                # return result
-              end
-
-              # No fallback for dev - respect user's explicit choice
-=end
             end
 
             # Create a snapshot before updating
