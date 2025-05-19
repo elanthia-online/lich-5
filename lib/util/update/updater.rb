@@ -22,8 +22,11 @@ module Lich
           # Initialize all components
           # @param stdout [IO] the output stream
           # @return [Hash] the initialized components
-          def initialize_components(stdout = STDOUT)
-            logger = Logger.new(stdout)
+          def initialize_components(stdout = nil)
+            # Use $_CLIENT_ as default if available, otherwise fall back to STDOUT
+            output = stdout || $_CLIENT_ || STDOUT
+
+            logger = Logger.new(output)
             file_manager = FileManager.new(logger)
             github = GitHub.new(logger)
             tag_support = TagSupport.new(logger)

@@ -3,7 +3,6 @@
 require_relative 'error'
 require_relative 'config'
 require_relative 'version'
-require_relative 'github'
 
 module Lich
   module Util

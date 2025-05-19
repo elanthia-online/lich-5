@@ -33,8 +33,15 @@ module Lich
         end
 
         # Display help information
+        # @return [void]
         def display_help
           @logger.info(create_option_parser.help)
+        end
+
+        # Get help text as a string
+        # @return [String] the help text
+        def help_text
+          create_option_parser.help
         end
 
         private
@@ -103,6 +110,10 @@ module Lich
               @options[:action] = 'snapshot'
             end
 
+            opts.on("--revert", "-r", "Revert to previous snapshot") do
+              @options[:action] = 'revert'
+            end
+
             opts.on("--cleanup", "Clean up old installations") do
               @options[:action] = 'cleanup'
             end
@@ -125,6 +136,7 @@ module Lich
             opts.separator "  ruby update.rb --announce                # Check for available updates"
             opts.separator "  ruby update.rb --snapshot                # Create a snapshot of the current installation"
             opts.separator "  ruby update.rb --cleanup                 # Clean up old installations"
+            opts.separator "  ruby update.rb --revert                  # Revert to previous snapshot"
           end
         end
       end

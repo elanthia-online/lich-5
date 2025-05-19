@@ -12,6 +12,19 @@ module Lich
         # Minimum supported version for backrev
         MINIMUM_SUPPORTED_VERSION = '5.11.0'
 
+        # Ensure Config constants are defined
+        Config::DIRECTORIES ||= {
+          lich: defined?(LICH_DIR) ? LICH_DIR : Dir.pwd,
+          backup: defined?(BACKUP_DIR) ? BACKUP_DIR : File.join(Dir.pwd, 'backup'),
+          script: defined?(SCRIPT_DIR) ? SCRIPT_DIR : File.join(Dir.pwd, 'scripts'),
+          lib: defined?(LIB_DIR) ? LIB_DIR : File.join(Dir.pwd, 'lib'),
+          data: defined?(DATA_DIR) ? DATA_DIR : File.join(Dir.pwd, 'data'),
+          temp: defined?(TEMP_DIR) ? TEMP_DIR : File.join(Dir.pwd, 'temp')
+        }
+
+        Config::CURRENT_VERSION ||= defined?(LICH_VERSION) ? LICH_VERSION : '5.12.0'
+
+
         # GitHub repository for Lich5
         GITHUB_REPO = 'elanthia-online/lich-5'
 
@@ -67,7 +80,8 @@ module Lich
         DEFAULT_OPTIONS = {
           confirm: true,
           tag: 'latest',
-          verbose: false
+          verbose: false,
+          action: 'help'
         }
       end
     end

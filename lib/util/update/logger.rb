@@ -6,9 +6,9 @@ module Lich
       # Logger for Lich Update
       class Logger
         # Initialize a new Logger
-        # @param output [IO] the output stream (defaults to STDOUT)
-        def initialize(output = STDOUT)
-          @output = output
+        # @param output [IO] the output stream (defaults to $_CLIENT_)
+        def initialize(output = nil)
+          @output = output || $_CLIENT_ || STDOUT
         end
 
         # Log an informational message
@@ -38,9 +38,12 @@ module Lich
         # Log a formatted message with bold styling
         # @param message [String] the message to log
         def bold(message)
-          # In the original code, this would use Lich::Messaging.monsterbold
-          # For now, we'll just return the message
-          write(message)
+          # Use monsterbold if available, otherwise just output the message
+          if defined?(monsterbold_start) && defined?(monsterbold_end)
+            write(monsterbold_start + message + monsterbold_end)
+          else
+            write(message)
+          end
         end
 
         # Log a blank line
@@ -53,9 +56,12 @@ module Lich
         # Write a message to the output stream
         # @param message [String] the message to write
         def write(message)
-          # In the original code, this would use _respond or Lich::Messaging.mono
-          # For now, we'll just write to the output stream
-          @output.puts(message)
+          # Use _respond if available, otherwise just write to the output stream
+          if defined?(_respond)
+            _respond(message)
+          else
+            @output.puts(message)
+          end
         end
       end
     end

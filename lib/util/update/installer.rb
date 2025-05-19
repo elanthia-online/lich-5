@@ -15,6 +15,9 @@ module Lich
     module Update
       # Installer for Lich Update
       class Installer
+        # @return [Version] the current version
+        attr_reader :current_version
+
         # Initialize a new Installer
         # @param logger [Logger] the logger to use
         # @param file_manager [FileManager] the file manager to use
@@ -203,17 +206,7 @@ module Lich
           @logger.info("You are about to update Lich5. This will create a snapshot of your current installation.")
           @logger.info("Do you want to continue? (Y/N)")
 
-          # Get user input
-          sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_ || STDIN
-          line = sync_thread.gets until line.strip =~ /^(?:<c>)?(?:[\;\,]send|[\;\,]s) /i
-
-          if line =~ /send Y|s Y/i
-            @logger.info("Update confirmed. Proceeding with installation...")
-            return true
-          else
-            @logger.info("Update cancelled by user.")
-            return false
-          end
+          return Lich::Util::Update.get_user_confirmation(@logger)
         end
 
         # Download a file from a URL
