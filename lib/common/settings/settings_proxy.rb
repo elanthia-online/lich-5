@@ -35,8 +35,97 @@ module Lich
         @target.hash
       end
 
+      # Helper method for delegating conversion methods with appropriate return types
+      private def delegate_conversion(method, options = {})
+        if @target.respond_to?(method)
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "#{method}: delegating" })
+          @target.send(method)
+        else
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "#{method}: not supported" })
+          
+          if options[:strict]
+            # For strict methods, raise NoMethodError
+            raise NoMethodError.new("undefined method `#{method}' for #{@target.inspect}:#{@target.class}")
+          else
+            # For permissive methods, return the default value
+            options[:default]
+          end
+        end
+      end
+
+      # String conversions
       def to_s
-        @target.to_s
+        delegate_conversion(:to_s, default: '')
+      end
+
+      def to_str
+        delegate_conversion(:to_str, strict: true)
+      end
+
+      def to_sym
+        delegate_conversion(:to_sym, strict: true)
+      end
+
+      # Numeric conversions
+      def to_i
+        delegate_conversion(:to_i, default: 0)
+      end
+
+      def to_int
+        delegate_conversion(:to_int, strict: true)
+      end
+
+      def to_f
+        delegate_conversion(:to_f, default: 0.0)
+      end
+
+      def to_r
+        delegate_conversion(:to_r, strict: true)
+      end
+
+      def to_c
+        delegate_conversion(:to_c, default: Complex(0,0))
+      end
+
+      # Collection conversions
+      def to_a
+        delegate_conversion(:to_a, default: [])
+      end
+
+      def to_ary
+        delegate_conversion(:to_ary, strict: true)
+      end
+
+      def to_h
+        delegate_conversion(:to_h, default: {})
+      end
+
+      def to_hash
+        delegate_conversion(:to_hash, strict: true)
+      end
+
+      # Other common conversions
+      def to_proc
+        delegate_conversion(:to_proc, strict: true)
+      end
+
+      def to_io
+        delegate_conversion(:to_io, strict: true)
+      end
+
+      def to_path
+        delegate_conversion(:to_path, strict: true)
+      end
+
+      # Special case for to_enum
+      def to_enum(*args, &block)
+        if @target.respond_to?(:to_enum)
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "to_enum: delegating" })
+          @target.to_enum(*args, &block)
+        else
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "to_enum: using default enum_for" })
+          self.enum_for(*args, &block)
+        end
       end
 
       # Updated inspect method to show the target's inspect string
@@ -67,43 +156,6 @@ module Lich
 
       def respond_to?(method, include_private = false)
         super || @target.respond_to?(method, include_private)
-      end
-
-      # Updated to_hash method to work with any object that responds to to_hash
-      def to_hash
-        if @target.respond_to?(:to_hash)
-          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "to_hash: target responds to to_hash, delegating" })
-          @target.to_hash
-        else
-          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "to_hash: target does not respond to to_hash, returning nil" })
-          nil
-        end
-      end
-
-      # Updated to_h method to work with any object that responds to to_h
-      def to_h
-        if @target.respond_to?(:to_h)
-          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "to_h: target responds to to_h, delegating" })
-          @target.to_h
-        else
-          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "to_h: target does not respond to to_h, returning nil" })
-          nil
-        end
-      end
-
-      def to_ary
-        return nil unless @target.is_a?(Array)
-        @target.dup
-      end
-
-      def to_a
-        to_ary
-      end
-
-      [:to_int, :to_i, :to_str, :to_sym, :to_proc].each do |method|
-        define_method(method) do
-          @target.send(method) if @target.respond_to?(method)
-        end
       end
 
       def each(&_block)
@@ -157,10 +209,7 @@ module Lich
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   target_after_set: #{@target.inspect}" })
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   calling save_proxy_changes on settings module" })
         @settings_module.save_proxy_changes(self)
-        # rubocop:disable Lint/Void
-        # This is Ruby expected behavior to return the value.
         value
-        # rubocop:enable Lint/Void
       end
 
       def method_missing(method, *args, &block)
