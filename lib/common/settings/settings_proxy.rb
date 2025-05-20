@@ -42,7 +42,7 @@ module Lich
           @target.send(method)
         else
           @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "#{method}: not supported" })
-          
+
           if options[:strict]
             # For strict methods, raise NoMethodError
             raise NoMethodError.new("undefined method `#{method}' for #{@target.inspect}:#{@target.class}")
@@ -209,7 +209,10 @@ module Lich
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   target_after_set: #{@target.inspect}" })
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   calling save_proxy_changes on settings module" })
         @settings_module.save_proxy_changes(self)
+        # rubocop:disable Lint/Void
+        # This is Ruby expected behavior to return the value.
         value
+        # rubocop:enable Lint/Void
       end
 
       def method_missing(method, *args, &block)
