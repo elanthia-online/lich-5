@@ -84,7 +84,7 @@ module Lich
       end
 
       def to_c
-        delegate_conversion(:to_c, default: Complex(0,0))
+        delegate_conversion(:to_c, default: Complex(0, 0))
       end
 
       # Collection conversions
