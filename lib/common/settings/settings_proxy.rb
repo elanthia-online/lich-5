@@ -157,7 +157,10 @@ module Lich
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   target_after_set: #{@target.inspect}" })
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   calling save_proxy_changes on settings module" })
         @settings_module.save_proxy_changes(self)
+        # rubocop:disable Lint/Void
+        # This is Ruby expected behavior to return the value.
         value
+        # rubocop:enable Lint/Void
       end
 
       def method_missing(method, *args, &block)
