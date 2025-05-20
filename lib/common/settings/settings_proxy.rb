@@ -69,13 +69,26 @@ module Lich
         super || @target.respond_to?(method, include_private)
       end
 
+      # Updated to_hash method to work with any object that responds to to_hash
       def to_hash
-        return nil unless @target.is_a?(Hash)
-        @target.dup
+        if @target.respond_to?(:to_hash)
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "to_hash: target responds to to_hash, delegating" })
+          @target.to_hash
+        else
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "to_hash: target does not respond to to_hash, returning nil" })
+          nil
+        end
       end
 
+      # Updated to_h method to work with any object that responds to to_h
       def to_h
-        to_hash
+        if @target.respond_to?(:to_h)
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "to_h: target responds to to_h, delegating" })
+          @target.to_h
+        else
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "to_h: target does not respond to to_h, returning nil" })
+          nil
+        end
       end
 
       def to_ary
@@ -144,10 +157,7 @@ module Lich
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   target_after_set: #{@target.inspect}" })
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "SET   calling save_proxy_changes on settings module" })
         @settings_module.save_proxy_changes(self)
-        # rubocop:disable Lint/Void
-        # This is Ruby expected behavior to return the value.
         value
-        # rubocop:enable Lint/Void
       end
 
       def method_missing(method, *args, &block)
