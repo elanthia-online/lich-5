@@ -85,7 +85,7 @@ module Lich
           beta_release = releases.find { |r| r['prerelease'] == true }
 
           if beta_release.nil?
-            # If no pre-release is found, fall back to the latest release
+            # If no pre-release is found, inform user and remain on current install (noop)
             @logger.warn("No beta release found.")
           else
             beta_release
@@ -102,7 +102,7 @@ module Lich
           dev_release = releases.find { |r| r['draft'] == true }
 
           if dev_release.nil?
-            # If no draft release is found, fall back to the beta release
+            # If no draft release is found, inform user and remain on current install (noop)
             @logger.warn("No dev/alpha release found.")
           else
             dev_release
