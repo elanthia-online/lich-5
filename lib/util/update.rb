@@ -82,7 +82,7 @@ module Lich
 
           # Return true only if the user entered 'y' or 'Y', false for any other input
           return false if line.nil?
-          return line.strip.downcase =~ /^y(?:es)?/i
+          return !!(line.strip.downcase =~ /^y(?:es)?/i)
         end
 
         private
