@@ -24,7 +24,7 @@ module Lich
           def in_lich_environment?
             # Check if running within Lich by looking for Lich-specific globals
             # $_CLIENT_ is a Lich-specific global variable
-            defined?($_CLIENT_) && !$_CLIENT_.nil? || defined?($_DETACHABLE_CLIENT_) && !$_DETACHABLE_CLIENT_.nil?
+            (defined?($_CLIENT_) && !$_CLIENT_.nil?) || (defined?($_DETACHABLE_CLIENT_) && !$_DETACHABLE_CLIENT_.nil?)
           end
 
           # Initialize all components
