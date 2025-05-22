@@ -150,7 +150,7 @@ module Lich
           # Create snapshot if required
           if options[:create_snapshot]
             @logger.info("Processing update. First we will create a snapshot of your Lich files before the update.")
-            @file_manager.create_snapshot(lich_dir, backup_dir, script_dir, lib_dir, Config::CORE_SCRIPTS)
+            @file_manager.create_snapshot(lich_dir, backup_dir, script_dir, lib_dir, data_dir, Config::CORE_SCRIPTS, Config::USER_DATA_FILES)
           end
 
           # Download and extract the release
