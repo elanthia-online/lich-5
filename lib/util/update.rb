@@ -76,7 +76,7 @@ module Lich
           line = nil
           loop do
             line = sync_thread.gets
-            break if line.is_a?(String) && line.strip =~ /[A-z]/ # this may require refining regex
+            break if line.is_a?(String) && line.strip =~ /[A-Za-z]/ # this may require refining regex
             break if Time.now > timeout
           end
 
