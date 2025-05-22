@@ -41,8 +41,8 @@ module Lich
         # Core script files that should be updated
         CORE_SCRIPTS = [
           "alias.lic", "autostart.lic", "dependency.lic",
-          "ewaggle.lic", "foreach.lic", "go2.lic", "infomon.lic",
-          "jinx.lic", "lnet.lic", "log.lic", "logxml.lic", "map.lic",
+          "go2.lic", "infomon.lic", "jinx.lic", "lnet.lic",
+          "log.lic", "logxml.lic", "map.lic",
           "repository.lic", "vars.lic", "version.lic"
         ]
 
@@ -56,7 +56,7 @@ module Lich
         USER_DATA_FILES = ["lich.db3", "alias.db3", "infomon.db", "entry.dat"]
 
         # Data files that should be updated with caution
-        SENSITIVE_DATA_FILES = ["effect-list.xml", "gameobj-data.xml", "spell-list.xml"]
+        SENSITIVE_DATA_FILES = ["effect-list.xml"]
 
         # Remote repositories for different file types
         REMOTE_REPOS = {

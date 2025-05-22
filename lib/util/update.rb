@@ -85,6 +85,26 @@ module Lich
           return !!(line.strip.downcase =~ /^y(?:es)?/i)
         end
 
+        # Update core data and scripts - Backward compatibility method
+        # @param script_dir [String, nil] the script directory (defaults to Config::DIRECTORIES[:script] if nil)
+        # @param data_dir [String, nil] the data directory (defaults to Config::DIRECTORIES[:data] if nil)
+        # @param game_type [String] the game type (gs or dr)
+        # @return [Boolean] true if the update was successful
+        def update_core_data_and_scripts(script_dir = nil, data_dir = nil, game_type = 'gs')
+          puts "DEBUG: update_core_data_and_scripts called with script_dir=#{script_dir}, data_dir=#{data_dir}, game_type=#{game_type}" if $DEBUG
+
+          # Use config values if parameters are nil
+          script_dir ||= Config::DIRECTORIES[:script]
+          data_dir ||= Config::DIRECTORIES[:data]
+
+          # Initialize components
+          components = Main.initialize_components
+          installer = components[:installer]
+
+          # Call the instance method
+          installer.update_core_data_and_scripts(script_dir, data_dir, game_type)
+        end
+
         private
 
         # Parse the parameter into options
