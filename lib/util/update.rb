@@ -108,7 +108,7 @@ module Lich
           # Update Lich.db with the version of Lich
           Lich.core_updated_with_lich_version = version
         end
-        
+
         private
 
         # Parse the parameter into options
