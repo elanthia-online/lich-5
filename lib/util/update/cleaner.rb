@@ -94,6 +94,37 @@ module Lich
             false
           end
         end
+
+        # Perform cleanup operations
+        # @return [Array<Boolean, String>] A tuple containing success status and message
+        # @note This method is used by the contract API in update.rb
+        def cleanup
+          begin
+            # Use default directories from Config
+            lib_dir = Config::DIRECTORIES[:lib]
+            temp_dir = Config::DIRECTORIES[:temp]
+            backup_dir = Config::DIRECTORIES[:backup]
+
+            @logger.info("Starting cleanup process...")
+
+            # Call the full cleanup method with default directories
+            success = cleanup_all(lib_dir, temp_dir, backup_dir)
+
+            if success
+              message = "Cleanup completed successfully"
+              @logger.success(message)
+              [true, message]
+            else
+              message = "Cleanup completed with some issues"
+              @logger.warn(message)
+              [false, message]
+            end
+          rescue => e
+            message = "Cleanup failed: #{e.message}"
+            @logger.error(message)
+            [false, message]
+          end
+        end
       end
     end
   end

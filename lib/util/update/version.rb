@@ -30,10 +30,12 @@ module Lich
         # Validate that the version is supported
         # @raise [VersionError] if the version is not supported
         def validate_version
-          if Gem::Version.new(@version_string) < Gem::Version.new(Config::MINIMUM_SUPPORTED_VERSION)
-            raise VersionError,
-                  "Version #{@version_string} is not supported. " \
-                  "Minimum supported version is #{Config::MINIMUM_SUPPORTED_VERSION}"
+          unless @version_string.empty?
+            if Gem::Version.new(@version_string) < Gem::Version.new(Config::MINIMUM_SUPPORTED_VERSION)
+              raise VersionError,
+                    "Version #{@version_string} is not supported. " \
+                    "Minimum supported version is #{Config::MINIMUM_SUPPORTED_VERSION}"
+            end
           end
         end
 

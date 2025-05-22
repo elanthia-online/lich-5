@@ -71,14 +71,18 @@ module Lich
         # @return [Boolean] true if user confirms, false otherwise
         def get_user_confirmation(_logger)
           # Use $_CLIENT_ as primary input stream if available, otherwise fall back to $stdin
-          input_stream = defined?($_CLIENT_) ? $_CLIENT_ : $stdin
-
-          # Read a line from the input stream
-          line = input_stream.gets
+          sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_ || $stdin
+          timeout = Time.now + 10
+          line = nil
+          loop do
+            line = sync_thread.gets
+            break if line.is_a?(String) && line.strip =~ /[A-z]/ # this may require refining regex
+            break if Time.now > timeout
+          end
 
           # Return true only if the user entered 'y' or 'Y', false for any other input
           return false if line.nil?
-          return line.strip.downcase == 'y'
+          return line.strip.downcase =~ /^y(?:es)?/i
         end
 
         private
@@ -364,7 +368,6 @@ module Lich
               "No updates available or announcement failed"
           when 'update'
             # Handle prompts for different development streams if needed
-
             if options[:prompt_beta] && options[:tag] == 'beta' ||
                options[:prompt_alpha] && options[:tag] == 'alpha' ||
                options[:prompt_dev] && options[:tag] == 'dev'
@@ -394,59 +397,63 @@ module Lich
               end
             end
 
-            # Create a snapshot before updating
+            # First check if an update is available before creating a snapshot
+            update_available, update_message = installer.check_update_available(options[:tag])
+
+            if !update_available
+              result[:success] = false
+              result[:message] = update_message || "No updates available for tag: #{options[:tag]}"
+              logger.info(result[:message])
+              return result
+            end
+
+            # Only create a snapshot if an update is available
+            logger.info("Update available. Creating snapshot before proceeding...")
             snapshot_path = file_manager.create_snapshot(
               Config::DIRECTORIES[:lich],
               Config::DIRECTORIES[:backup],
               Config::DIRECTORIES[:script],
               Config::DIRECTORIES[:lib],
-              Config::CORE_SCRIPTS
-            )
-
-            # Perform the update with all required arguments
-            success = installer.install(
-              options[:tag],
-              Config::DIRECTORIES[:lich],
-              Config::DIRECTORIES[:backup],
-              Config::DIRECTORIES[:script],
-              Config::DIRECTORIES[:lib],
               Config::DIRECTORIES[:data],
-              Config::DIRECTORIES[:temp],
-              { confirm: options[:confirm], create_snapshot: false } # We already created a snapshot
+              Config::CORE_SCRIPTS,
+              Config::USER_DATA_FILES || []
             )
 
-            if success
-              result[:success] = true
-              result[:message] = "Update to #{options[:tag]} completed successfully"
-              result[:data][:snapshot_path] = snapshot_path
-            else
-              result[:success] = false
-              result[:message] = "Update to #{options[:tag]} failed"
-              result[:data][:snapshot_path] = snapshot_path
-            end
+            # Perform the update
+            success, message = installer.update(options[:tag])
+            result[:success] = success
+            result[:message] = message
+            result[:data][:snapshot_path] = snapshot_path if snapshot_path
           when 'update_file'
-            # Update a specific file
-            file_type = options[:file_type]
-            file = options[:file]
+            # Check if file update is available before proceeding
+            file_update_available, file_update_message = installer.check_file_update_available(
+              options[:file_type],
+              options[:file],
+              options[:tag]
+            )
 
-            success = installer.update_file(file_type, file, options[:tag])
-
-            if success
-              result[:success] = true
-              result[:message] = "File #{file} updated successfully"
-              result[:data][:file] = file
-              result[:data][:file_type] = file_type
-            else
+            if !file_update_available
               result[:success] = false
-              result[:message] = "Failed to update file #{file}"
-              result[:data][:file] = file
-              result[:data][:file_type] = file_type
+              result[:message] = file_update_message || "No updates available for file: #{options[:file]}"
+              logger.info(result[:message])
+              return result
             end
+
+            # Perform the file update
+            success = installer.update_file(
+              options[:file_type],
+              options[:file],
+              options[:tag]
+            )
+            result[:success] = success
+            result[:message] = success ?
+              "File #{options[:file]} updated successfully" :
+              "Failed to update file #{options[:file]}"
           when 'revert'
-            # Revert functionality is not implemented in the current version
-            # This is a placeholder for future implementation
-            result[:success] = false
-            result[:message] = "Revert functionality is not implemented in this version"
+            # Revert to previous snapshot
+            success, message = installer.revert
+            result[:success] = success
+            result[:message] = message
           when 'snapshot'
             # Create a snapshot
             snapshot_path = file_manager.create_snapshot(
@@ -454,32 +461,20 @@ module Lich
               Config::DIRECTORIES[:backup],
               Config::DIRECTORIES[:script],
               Config::DIRECTORIES[:lib],
-              Config::CORE_SCRIPTS
+              Config::DIRECTORIES[:data],
+              Config::CORE_SCRIPTS,
+              Config::USER_DATA_FILES || []
             )
-
-            if snapshot_path
-              result[:success] = true
-              result[:message] = "Snapshot created successfully"
-              result[:data][:snapshot_path] = snapshot_path
-            else
-              result[:success] = false
-              result[:message] = "Failed to create snapshot"
-            end
+            result[:success] = !snapshot_path.nil?
+            result[:message] = snapshot_path ?
+              "Snapshot created at #{snapshot_path}" :
+              "Failed to create snapshot"
+            result[:data][:snapshot_path] = snapshot_path if snapshot_path
           when 'cleanup'
-            # Clean up temporary files
-            success = cleaner.cleanup_all(
-              Config::DIRECTORIES[:lib],
-              Config::DIRECTORIES[:temp],
-              Config::DIRECTORIES[:backup]
-            )
-
-            if success
-              result[:success] = true
-              result[:message] = "Cleanup completed successfully"
-            else
-              result[:success] = false
-              result[:message] = "Cleanup failed"
-            end
+            # Clean up old installations
+            success, message = cleaner.cleanup
+            result[:success] = success
+            result[:message] = message
           else
             result[:success] = false
             result[:message] = "Unknown action: #{options[:action]}"
@@ -489,5 +484,28 @@ module Lich
         end
       end
     end
+  end
+end
+
+# CLI entrypoint - only execute when run directly as a script
+if $PROGRAM_NAME == __FILE__
+  # Detect if running in Lich environment using Main.in_lich_environment? if available
+  in_lich_environment = if defined?(Lich::Util::Update::Main.in_lich_environment?)
+                          Lich::Util::Update::Main.in_lich_environment?
+                        else
+                          # Fallback detection if method not available
+                          defined?($_CLIENT_) && !$_CLIENT_.nil?
+                        end
+
+  # If not in Lich environment, process as CLI
+  if !in_lich_environment
+    # Pass ARGV to the request method
+    result = Lich::Util::Update.request(ARGV)
+
+    # Set exit code based on success
+    exit(result[:success] ? 0 : 1)
+  else
+    # If in Lich environment but run directly, show help
+    Lich::Util::Update.request('help')
   end
 end

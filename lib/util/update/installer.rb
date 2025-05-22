@@ -37,6 +37,82 @@ module Lich
           @current_version = Version.new(version)
         end
 
+        # Check if an update is available without performing the update
+        # @param tag [String] the release tag to check (latest, beta, dev, alpha, or specific version)
+        # @return [Array<Boolean, String>] [true, message] if update is available, [false, error_message] otherwise
+        def check_update_available(tag)
+          begin
+            # Fetch release information
+            release = @github.fetch_release_info(tag)
+            update_to_version = Version.new(@github.get_version(release))
+
+            # Check if update is necessary
+            if @current_version && update_to_version <= @current_version && !@back_rev
+              return [false, "Lich version #{@current_version} is already up to date."]
+            end
+
+            # Update is available
+            return [true, "Update available: #{update_to_version}"]
+          rescue => e
+            @logger.error("Failed to check for update: #{e.message}")
+            return [false, "Failed to check for update: #{e.message}"]
+          end
+        end
+
+        # Check if a file update is available without performing the update
+        # @param type [String] the file type (script, lib, data)
+        # @param file [String] the file to check
+        # @param tag [String] the version to check (latest, beta, or specific version)
+        # @return [Array<Boolean, String>] [true, message] if update is available, [false, error_message] otherwise
+        def check_file_update_available(type, file, tag = 'production')
+          begin
+            type_sym = type.to_sym
+
+            # Determine the remote repository URL
+            remote_repo = case type_sym
+                          when :script
+                            if file.downcase == 'dependency.lic'
+                              Config::REMOTE_REPOS[:script][:dependency]
+                            else
+                              Config::REMOTE_REPOS[:script][:default]
+                            end
+                          when :data
+                            Config::REMOTE_REPOS[:data]
+                          when :lib
+                            case tag
+                            when 'production'
+                              Config::REMOTE_REPOS[:lib][:production]
+                            when 'beta'
+                              Config::REMOTE_REPOS[:lib][:beta]
+                            else
+                              # For specific versions, construct the URL
+                              version_str = Version.new(tag).to_s
+                              "https://raw.githubusercontent.com/#{Config::GITHUB_REPO}/refs/tags/v#{version_str}/lib"
+                            end
+                          else
+                            return [false, "Invalid file type: #{type}"]
+                          end
+
+            # Check if the file exists remotely
+            file_url = "#{remote_repo}/#{file}"
+
+            # Try to access the file URL to verify it exists
+            URI.parse(file_url).open.read
+
+            # If we get here, the file exists remotely
+            return [true, "Update available for #{file}"]
+          rescue OpenURI::HTTPError => e
+            if e.message.include?('404')
+              return [false, "File not found: #{file}"]
+            else
+              return [false, "Error checking file: #{e.message}"]
+            end
+          rescue => e
+            @logger.error("Failed to check file update: #{e.message}")
+            return [false, "Failed to check file update: #{e.message}"]
+          end
+        end
+
         # Install a specific version of Lich
         # @param tag [String] the release tag to install (latest, beta, dev, alpha, or specific version)
         # @param lich_dir [String] the Lich directory
@@ -196,6 +272,65 @@ module Lich
 
           # Update the file
           @file_manager.update_file(type_sym, file, location, remote_repo)
+        end
+
+        # Update to a specific version
+        # @param tag [String] the release tag to update to (latest, beta, dev, alpha, or specific version)
+        # @return [Array<Boolean, String>] [success, message] tuple
+        def update(tag)
+          begin
+            # Fetch release information
+            release = @github.fetch_release_info(tag)
+            @update_to_version = Version.new(@github.get_version(release))
+
+            # Check if update is necessary
+            if @current_version && @update_to_version <= @current_version && !@back_rev
+              return [false, "Lich version #{@current_version} is already up to date."]
+            end
+
+            # Perform the update
+            success = install(
+              tag,
+              Config::DIRECTORIES[:lich],
+              Config::DIRECTORIES[:backup],
+              Config::DIRECTORIES[:script],
+              Config::DIRECTORIES[:lib],
+              Config::DIRECTORIES[:data],
+              Config::DIRECTORIES[:temp]
+            )
+
+            if success
+              return [true, "Successfully updated to version #{@update_to_version}"]
+            else
+              return [false, "Failed to update to version #{@update_to_version}"]
+            end
+          rescue => e
+            @logger.error("Update failed: #{e.message}")
+            return [false, "Update failed: #{e.message}"]
+          end
+        end
+
+        # Revert to a previous snapshot
+        # @return [Array<Boolean, String>] [success, message] tuple
+        def revert
+          begin
+            success = @file_manager.revert_to_snapshot(
+              Config::DIRECTORIES[:lich],
+              Config::DIRECTORIES[:backup],
+              Config::DIRECTORIES[:script],
+              Config::DIRECTORIES[:lib],
+              Config::DIRECTORIES[:data]
+            )
+
+            if success
+              return [true, "Successfully reverted to previous snapshot"]
+            else
+              return [false, "Failed to revert to previous snapshot"]
+            end
+          rescue => e
+            @logger.error("Revert failed: #{e.message}")
+            return [false, "Revert failed: #{e.message}"]
+          end
         end
 
         private

@@ -19,12 +19,28 @@ module Lich
       # Main module that ties all components together
       module Main
         class << self
+          # Detect if running in Lich environment
+          # @return [Boolean] true if running in Lich environment, false otherwise
+          def in_lich_environment?
+            # Check if running within Lich by looking for Lich-specific globals
+            # $_CLIENT_ is a Lich-specific global variable
+            defined?($_CLIENT_) && !$_CLIENT_.nil? || defined?($_DETACHABLE_CLIENT_) && !$_DETACHABLE_CLIENT_.nil?
+          end
+
           # Initialize all components
           # @param stdout [IO] the output stream
+          # @param force_environment [Symbol, nil] force a specific environment (:lich or :cli)
           # @return [Hash] the initialized components
-          def initialize_components(stdout = nil)
+          def initialize_components(stdout = nil, force_environment = nil)
             # Use $_CLIENT_ as default if available, otherwise fall back to STDOUT
             output = stdout || $_CLIENT_ || STDOUT
+
+            # Determine environment based on context or forced value
+            lich_environment = if force_environment
+                                 force_environment == :lich
+                               else
+                                 in_lich_environment?
+                               end
 
             logger = Logger.new(output)
             file_manager = FileManager.new(logger)
@@ -34,7 +50,7 @@ module Lich
             release_manager = ReleaseManager.new(logger, github, tag_support, validator)
             installer = Installer.new(logger, file_manager, github)
             cleaner = Cleaner.new(logger)
-            cli = CLI.new(logger)
+            cli = CLI.new(logger, lich_environment: lich_environment)
 
             {
               logger: logger,

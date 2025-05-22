@@ -26,8 +26,8 @@ module Lich
         # @param lib_dir [String] the lib directory
         # @param core_scripts [Array<String>] the core script files to backup
         # @return [String] the path to the created snapshot directory
-        def create_snapshot(lich_dir, backup_dir, script_dir, lib_dir, core_scripts)
-          @logger.info('Creating a snapshot of current Lich core files ONLY.')
+        def create_snapshot(lich_dir, backup_dir, script_dir, lib_dir, data_dir, core_scripts, user_data)
+          @logger.info('Creating a snapshot of current Lich core files and select data files ONLY.')
           @logger.blank_line
           @logger.info('You may also wish to copy your entire Lich5 folder to')
           @logger.info('another location for additional safety, after any')
@@ -54,11 +54,107 @@ module Lich
             end
           end
 
+          # Backup specific user data files
+          FileUtils.mkdir_p(File.join(snapshot_subdir, 'data'))
+          user_data.each do |file|
+            source_file = File.join(data_dir, file)
+            if File.exist?(source_file)
+              FileUtils.cp(source_file, File.join(snapshot_subdir, 'data', file))
+            end
+          end
+
           @logger.blank_line
           @logger.info('Current Lich ecosystem files (only) backed up to:')
           @logger.info("    #{snapshot_subdir}")
 
           snapshot_subdir
+        end
+
+        # Revert to a previous snapshot of the Lich installation
+        # @param lich_dir [String] the Lich directory
+        # @param backup_dir [String] the backup directory
+        # @param script_dir [String] the script directory
+        # @param lib_dir [String] the lib directory
+        # @param data_dir [String] the data directory
+        # @param snapshot_dir [String, nil] specific snapshot directory to revert to (optional)
+        # @return [Boolean] true if reversion was successful, false otherwise
+        def revert_to_snapshot(lich_dir, backup_dir, script_dir, lib_dir, data_dir, snapshot_dir = nil)
+          # Find the most recent snapshot if not specified
+          unless snapshot_dir
+            snapshots = Dir.glob(File.join(backup_dir, "L5-snapshot-*")).sort_by { |f| File.mtime(f) }
+            if snapshots.empty?
+              @logger.error("No snapshots found in #{backup_dir}")
+              return false
+            end
+            snapshot_dir = snapshots.last
+          end
+
+          unless File.directory?(snapshot_dir)
+            @logger.error("Snapshot directory not found: #{snapshot_dir}")
+            return false
+          end
+
+          @logger.info("Reverting to snapshot: #{File.basename(snapshot_dir)}")
+          @logger.blank_line
+
+          begin
+            # Restore main Lich file
+            program_name = File.basename($PROGRAM_NAME || 'lich.rbw')
+            snapshot_lich_file = File.join(snapshot_dir, program_name)
+            if File.exist?(snapshot_lich_file)
+              @logger.info("Restoring main Lich file: #{program_name}")
+              FileUtils.cp(snapshot_lich_file, File.join(lich_dir, program_name))
+            else
+              @logger.info("Main Lich file not found in snapshot, skipping")
+            end
+
+            # Restore lib directory
+            snapshot_lib_dir = File.join(snapshot_dir, 'lib')
+            if File.directory?(snapshot_lib_dir)
+              @logger.info("Restoring lib directory")
+              # Clear existing lib directory
+              FileUtils.rm_rf(Dir.glob(File.join(lib_dir, "*")))
+              # Copy from snapshot
+              FileUtils.cp_r(File.join(snapshot_lib_dir, '.'), lib_dir)
+            else
+              @logger.info("Lib directory not found in snapshot, skipping")
+            end
+
+            # Restore core scripts
+            snapshot_scripts_dir = File.join(snapshot_dir, 'scripts')
+            if File.directory?(snapshot_scripts_dir)
+              @logger.info("Restoring core scripts")
+              Dir.glob(File.join(snapshot_scripts_dir, "*")).each do |script_file|
+                script_name = File.basename(script_file)
+                @logger.info("  - #{script_name}")
+                FileUtils.cp(script_file, File.join(script_dir, script_name))
+              end
+            else
+              @logger.info("Scripts directory not found in snapshot, skipping")
+            end
+
+            # Restore data files
+            snapshot_data_dir = File.join(snapshot_dir, 'data')
+            if File.directory?(snapshot_data_dir)
+              @logger.info("Restoring data files")
+              Dir.glob(File.join(snapshot_data_dir, "*")).each do |data_file|
+                data_name = File.basename(data_file)
+                @logger.info("  - #{data_name}")
+                FileUtils.cp(data_file, File.join(data_dir, data_name))
+              end
+            else
+              @logger.info("Data directory not found in snapshot, skipping")
+            end
+
+            @logger.blank_line
+            @logger.success("Successfully reverted to snapshot: #{File.basename(snapshot_dir)}")
+            @logger.info("You should restart Lich to apply the changes.")
+            true
+          rescue => e
+            @logger.error("Failed to revert to snapshot: #{e.message}")
+            @logger.error(e.backtrace.join("\n")) if $DEBUG
+            false
+          end
         end
 
         # Clean up temporary files

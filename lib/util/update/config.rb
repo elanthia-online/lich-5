@@ -52,6 +52,9 @@ module Lich
           "dr" => ["dependency.lic"]
         }
 
+        # Select user data files that can be difficult to recreate manually
+        USER_DATA_FILES = ["lich.db3", "alias.db3", "infomon.db", "entry.dat"]
+
         # Data files that should be updated with caution
         SENSITIVE_DATA_FILES = ["effect-list.xml", "gameobj-data.xml", "spell-list.xml"]
 

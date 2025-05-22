@@ -9,11 +9,17 @@ module Lich
     module Update
       # CLI interface for Lich Update
       class CLI
+        # Command prefixes for different environments
+        CLI_PREFIX = "ruby update.rb"
+        LICH_PREFIX = ";lich5-update"
+
         # Initialize a new CLI
         # @param logger [Logger] the logger to use
-        def initialize(logger)
+        # @param lich_environment [Boolean] whether running in Lich environment (default: false)
+        def initialize(logger, lich_environment: true)
           @logger = logger
           @options = Config::DEFAULT_OPTIONS.dup
+          @lich_environment = lich_environment
         end
 
         # Parse command line arguments
@@ -46,11 +52,26 @@ module Lich
 
         private
 
+        # Get the command prefix based on the current environment
+        # @return [String] the command prefix to use in examples
+        def command_prefix
+          @lich_environment ? LICH_PREFIX : CLI_PREFIX
+        end
+
+        # Format an example command with the appropriate prefix
+        # @param options [String] the command options
+        # @param description [String] the description of the command
+        # @return [String] the formatted example line
+        def format_example(options, description)
+          "  #{command_prefix} #{options}".ljust(45) + "# #{description}"
+        end
+
         # Create the option parser
         # @return [OptionParser] the option parser
         def create_option_parser
           OptionParser.new do |opts|
-            opts.banner = "Usage: ruby update.rb [options]"
+            # Set the appropriate banner based on environment
+            opts.banner = "Usage: #{command_prefix} [options]"
 
             opts.separator ""
             opts.separator "Specific options:"
@@ -129,14 +150,14 @@ module Lich
 
             opts.separator ""
             opts.separator "Examples:"
-            opts.separator "  ruby update.rb --latest                  # Update to the latest stable release"
-            opts.separator "  ruby update.rb --beta --no-confirm       # Update to the latest beta release w/o confirming"
-            opts.separator "  ruby update.rb --version=5.11.0          # Update to version 5.11.0"
-            opts.separator "  ruby update.rb --script=dependency.lic   # Update the dependency.lic script"
-            opts.separator "  ruby update.rb --announce                # Check for available updates"
-            opts.separator "  ruby update.rb --snapshot                # Create a snapshot of the current installation"
-            opts.separator "  ruby update.rb --cleanup                 # Clean up old installations"
-            opts.separator "  ruby update.rb --revert                  # Revert to previous snapshot"
+            opts.separator format_example("--latest", "Update to the latest stable release")
+            opts.separator format_example("--beta --no-confirm", "Update to the latest beta release w/o confirming")
+            opts.separator format_example("--version=5.11.0", "Update to version 5.11.0")
+            opts.separator format_example("--script=dependency.lic", "Update the dependency.lic script")
+            opts.separator format_example("--announce", "Check for available updates")
+            opts.separator format_example("--snapshot", "Create a snapshot of the current installation")
+            opts.separator format_example("--cleanup", "Clean up old installations")
+            opts.separator format_example("--revert", "Revert to previous snapshot")
           end
         end
       end

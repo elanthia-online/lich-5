@@ -86,8 +86,7 @@ module Lich
 
           if beta_release.nil?
             # If no pre-release is found, fall back to the latest release
-            @logger.warn("No beta release found, using latest release instead")
-            fetch_latest_release
+            @logger.warn("No beta release found.")
           else
             beta_release
           end
@@ -104,8 +103,7 @@ module Lich
 
           if dev_release.nil?
             # If no draft release is found, fall back to the beta release
-            @logger.warn("No dev/alpha release found, using beta release instead")
-            fetch_beta_release
+            @logger.warn("No dev/alpha release found.")
           else
             dev_release
           end
