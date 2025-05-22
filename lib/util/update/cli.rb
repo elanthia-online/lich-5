@@ -15,7 +15,7 @@ module Lich
 
         # Initialize a new CLI
         # @param logger [Logger] the logger to use
-        # @param lich_environment [Boolean] whether running in Lich environment (default: false)
+        # @param lich_environment [Boolean] whether running in Lich environment (default: true)
         def initialize(logger, lich_environment: true)
           @logger = logger
           @options = Config::DEFAULT_OPTIONS.dup
