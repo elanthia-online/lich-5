@@ -56,8 +56,10 @@ module Lich
         # Write a message to the output stream
         # @param message [String] the message to write
         def write(message)
-          # Use _respond if available, otherwise just write to the output stream
-          if defined?(_respond)
+          # Favor Lich::Messaging.mono, then _respond if available, otherwise just write to the output stream
+          if defined?(Lich::Messaging)
+            Lich::Messaging.mono(message)
+          elsif defined?(_respond)
             _respond(message)
           else
             @output.puts(message)
