@@ -69,20 +69,22 @@ module Lich
         # Get user input for confirmation
         # @param logger [Logger] The logger instance for displaying prompts
         # @return [Boolean] true if user confirms, false otherwise
-        def get_user_confirmation(_logger)
+        def get_user_confirmation(logger)
           # Use $_CLIENT_ as primary input stream if available, otherwise fall back to $stdin
           sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_ || $stdin
-          timeout = Time.now + 10
           line = nil
-          loop do
-            line = sync_thread.gets
-            break if line.is_a?(String) && line.strip =~ /^(y(?:es)?|n(?:o)?)$/i # refined regex for valid confirmation input
-            break if Time.now > timeout
+          begin
+            Timeout.timeout(10) do
+              line = sync_thread.gets
+              break if line.is_a?(String) && line.strip =~ /^(?:<c>)?(?:y(?:es)?|no?)?$/i
+            end
+            # Return true only if the user entered 'y' or 'Y', false for any other input
+            return false if line.nil?
+            return !!(line.strip.downcase =~ /^(?:<c>)?y(?:es)?$/i)
+          rescue Timeout::Error
+            logger.info("DEBUG: Ten (10) seconds have elapsed.  Means 'no' in this context.") if $DEBUG
+            return false
           end
-
-          # Return true only if the user entered 'y' or 'Y', false for any other input
-          return false if line.nil?
-          return !!(line.strip.downcase =~ /^y(?:es)?/i)
         end
 
         # Update core data and scripts - Backward compatibility method
@@ -90,7 +92,7 @@ module Lich
         # @param data_dir [String, nil] the data directory (defaults to Config::DIRECTORIES[:data] if nil)
         # @param game_type [String] the game type (gs or dr)
         # @return [Boolean] true if the update was successful
-        def update_core_data_and_scripts(script_dir = nil, data_dir = nil, game_type = 'gs')
+        def update_core_data_and_scripts(script_dir = nil, data_dir = nil, game_type = 'gs', version = LICH_VERSION)
           puts "DEBUG: update_core_data_and_scripts called with script_dir=#{script_dir}, data_dir=#{data_dir}, game_type=#{game_type}" if $DEBUG
 
           # Use config values if parameters are nil
@@ -103,8 +105,10 @@ module Lich
 
           # Call the instance method
           installer.update_core_data_and_scripts(script_dir, data_dir, game_type)
+          # Update Lich.db with the version of Lich
+          Lich.core_updated_with_lich_version = version
         end
-
+        
         private
 
         # Parse the parameter into options
