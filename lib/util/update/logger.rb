@@ -8,7 +8,7 @@ module Lich
         # Initialize a new Logger
         # @param output [IO] the output stream (defaults to $_CLIENT_)
         def initialize(output = nil)
-          @output = output || $_CLIENT_ || STDOUT
+          @output = output || $_CLIENT_ || $_DETACHABLE_CLIENT_ || STDOUT
         end
 
         # Log an informational message
