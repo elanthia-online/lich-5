@@ -44,7 +44,8 @@ module Lich
           begin
             # Fetch release information
             release = @github.fetch_release_info(tag)
-            update_to_version = Version.new(@github.get_version(release))
+            update_to_version = Version.new(@github.get_version(release)) unless release.nil?
+            return [false, "Remaining on current #{@current_version} Lich installation."] if release.nil?
 
             # Check if update is necessary
             if @current_version && update_to_version <= @current_version && !@back_rev
