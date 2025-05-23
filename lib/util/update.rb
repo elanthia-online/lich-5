@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-require 'zlib'
 require 'fileutils'
+require 'timeout'
+require 'zlib'
 
 # Load supporting files - ensure error.rb is loaded first to avoid superclass mismatch
 require_relative 'update/error'
@@ -371,7 +372,6 @@ module Lich
           cleaner = components[:cleaner]
           file_manager = components[:file_manager]
           cli = components[:cli]
-          components[:github]
 
           result = {
             success: true,
