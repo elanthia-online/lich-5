@@ -197,7 +197,7 @@ module Lich
           end
 
           # Delete existing file if it exists
-          local_path = File.join(location, file)
+          local_path = File.join(location, File.basename(file))
           FileUtils.rm(local_path) if File.exist?(local_path)
 
           # Download and save the file using shared method
