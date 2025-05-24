@@ -23,41 +23,53 @@ module Lich
         "bellow" => {
           :long_name  => "bertrandts_bellow",
           :short_name => "bellow",
+          :type       => :setup
           :cost       => 20, # @todo only 10 for single
           :regex      => /You glare at .+ and let out a nerve-shattering bellow!/,
+          :usage      => nil,
         },
         "yowlp"  => {
           :long_name  => "yerties_yowlp",
           :short_name => "yowlp",
+          :type       => :buff,
           :cost       => 20,
           :regex      => /You throw back your shoulders and let out a resounding yowlp!/,
           :buff       => "Yertie's Yowlp",
+          :usage      => nil,
         },
         "growl"  => {
           :long_name  => "gerrelles_growl",
           :short_name => "growl",
+          :type       => :setup,
           :cost       => 14, # @todo only 7 for single
           :regex      => /Your face contorts as you unleash a guttural, deep-throated growl at .+!/,
+          :usage      => nil,
         },
         "shout"  => {
           :long_name  => "seanettes_shout",
           :short_name => "shout",
+          :type       => :buff,
           :cost       => 20,
           :regex      => /You let loose an echoing shout!/,
           :buff       => 'Empowered (+20)',
+          :usage      => nil,
         },
         "cry"    => {
           :long_name  => "carns_cry",
           :short_name => "cry",
+          :type       => :setup,
           :cost       => 20,
           :regex      => /You stare down .+ and let out an eerie, modulating cry!/,
+          :usage      => nil,
         },
         "holler" => {
           :long_name  => "horlands_holler",
           :short_name => "holler",
+          :type       => :buff,
           :cost       => 20,
           :regex      => /You throw back your head and let out a thundering holler!/,
           :buff       => 'Enh. Health (+20)',
+          :usage      => nil,
         },
       }
 
