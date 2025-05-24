@@ -728,9 +728,8 @@ module Lich
       # @param name [String] The maneuver's name
       # @return [Boolean] True if buff is already active
       def CMan.buff_active?(name)
-        name = PSMS.name_normal(name)
-        return unless @@combat_mans.fetch(name).key?(:buff)
-        Effects::Buffs.active?(@@combat_mans.fetch(name)[:buff])
+        return unless @@combat_mans.fetch(PSMS.find_name(PSMS.name_normal(name), "CMan")[:long_name]).key?(:buff)
+        Effects::Buffs.active?(@@combat_mans.fetch(PSMS.find_name(PSMS.name_normal(name), "CMan")[:long_name])[:buff])
       end
 
       # Determines if an combat maneuver is available to use right now by testing:
@@ -750,7 +749,7 @@ module Lich
       def CMan.available?(name, ignore_cooldown: false, min_rank: 1, forcert_count: 0)
         return false unless CMan.known?(name, min_rank: min_rank)
         return false unless CMan.affordable?(name, forcert_count: forcert_count)
-        if @@combat_mans.fetch(PSMS.name_normal(name))[:ignorable_cooldown] && ignore_cooldown
+        if @@combat_mans.fetch(PSMS.find_name(PSMS.name_normal(name), "CMan")[:long_name])[:ignorable_cooldown] && ignore_cooldown
           return PSMS.available?(name, ignore_cooldown)
         else
           return PSMS.available?(name)
@@ -771,7 +770,7 @@ module Lich
         return unless CMan.available?(name, ignore_cooldown: ignore_cooldown, forcert_count: forcert_count)
 
         name_normalized = PSMS.name_normal(name)
-        technique = @@combat_mans.fetch(name_normalized)
+        technique = @@combat_mans.fetch(PSMS.find_name(name_normalized, "CMan")[:long_name])
         usage = technique[:usage]
         return if usage.nil?
 
@@ -822,7 +821,7 @@ module Lich
       # @example
       #   CMan.regexp("tackle") => /You hurl yourself at .+!/
       def CMan.regexp(name)
-        @@combat_mans.fetch(PSMS.name_normal(name))[:regex]
+        @@combat_mans.fetch(PSMS.find_name(PSMS.name_normal(name), "CMan")[:long_name])[:regex]
       end
 
       # Defines dynamic getter methods for both long and short names of each combat maneuver.
