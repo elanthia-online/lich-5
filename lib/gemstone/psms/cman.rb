@@ -143,7 +143,7 @@ module Lich
           :regex      => /After a quick assessment of your surroundings, you haul back with one foot and let it fly!/,
           :usage      => "dirtkick"
         },
-        "disarm_weapon"          => {
+        "disarm"                => {
           :short_name => "disarm",
           :type       => "setup",
           :cost       => 7,
