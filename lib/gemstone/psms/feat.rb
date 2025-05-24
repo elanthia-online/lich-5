@@ -333,9 +333,8 @@ module Lich
       # @param name [String] The feat's name
       # @return [Boolean] True if buff is already active
       def Feat.buff_active?(name)
-        name = PSMS.name_normal(name)
-        return unless @@feats.fetch(name).key?(:buff)
-        Effects::Buffs.active?(@@feats.fetch(name)[:buff])
+        return unless @@feats.fetch(PSMS.find_name(PSMS.name_normal(name), "Feat")[:long_name]).key?(:buff)
+        Effects::Buffs.active?(@@feats.fetch(PSMS.find_name(PSMS.name_normal(name), "Feat")[:long_name])[:buff])
       end
 
       # Attempts to use an Feat, optionally on a target.
@@ -350,8 +349,9 @@ module Lich
       #   Feat.use("covert_art_escape_artist", "Dissonance") # attempt to use Feat blessing on Dissonance
       def Feat.use(name, target = "", results_of_interest: nil, forcert_count: 0)
         return unless Feat.available?(name, forcert_count: forcert_count)
+
         name_normalized = PSMS.name_normal(name)
-        technique = @@feats.fetch(name_normalized)
+        technique = @@feats.fetch(PSMS.find_name(name_normalized, "Feat")[:long_name])
         usage = technique[:usage]
         return if usage.nil?
 
@@ -401,7 +401,7 @@ module Lich
       # @example
       #   Feat.regexp("covert_art_escape_artist") => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i
       def Feat.regexp(name)
-        @@feats.fetch(PSMS.name_normal(name))[:regex]
+        @@feats.fetch(PSMS.find_name(PSMS.name_normal(name), "Feat")[:long_name])[:regex]
       end
 
       # Defines dynamic getter methods for both long and short names of each Feat technique.
