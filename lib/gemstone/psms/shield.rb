@@ -332,8 +332,8 @@ module Lich
       # @param name [String] The technique's name
       # @return [Boolean] True if buff is already active
       def Shield.buff_active?(name)
-        return unless @@shield_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Shield")[:long_name]).key?(:buff)
-        Effects::Buffs.active?(@@shield_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Shield")[:long_name])[:buff])
+        return unless @@shield_techniques.fetch(PSMS.find_name(name, "Shield")[:long_name]).key?(:buff)
+        Effects::Buffs.active?(@@shield_techniques.fetch(PSMS.find_name(name, "Shield")[:long_name])[:buff])
       end
 
       # Attempts to use an Shield technique, optionally on a target.
@@ -401,7 +401,7 @@ module Lich
       # @example
       #   Shield.regexp("shield_trample") => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i
       def Shield.regexp(name)
-        @@shield_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Shield")[:long_name])[:regex]
+        @@shield_techniques.fetch(PSMS.find_name(name, "Shield")[:long_name])[:regex]
       end
 
       # Defines dynamic getter methods for both long and short names of each Shield technique.
