@@ -151,7 +151,7 @@ module Lich
       # @param name [String] Warcry name
       # @return [Boolean] True if buff is already active
       def Warcry.buff_active?(name)
-        buff = @@warcries.fetch(PSMS.name_normal(name))[:buff]
+        buff = @@warcries.fetch(PSMS.find_name(PSMS.name_normal(name), "Warcry")[:long_name])[:buff]
         return false if buff.nil?
         Lich::Util.normalize_lookup('Buffs', buff)
       end
@@ -171,7 +171,7 @@ module Lich
         return if Warcry.buff_active?(name)
 
         name_normalized = PSMS.name_normal(name)
-        technique = @@warcries.fetch(name_normalized)
+        technique = @@warcries.fetch(PSMS.find_name(name_normalized, "Warcry")[:long_name])
         usage = name_normalized
         return if usage.nil?
 
@@ -221,7 +221,7 @@ module Lich
       # @example
       #   Warcry.regexp("holler") => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i
       def Warcry.regexp(name)
-        @@warcries.fetch(PSMS.name_normal(name))[:regex]
+        @@warcries.fetch(PSMS.find_name(PSMS.name_normal(name), "Warcry")[:long_name])[:regex]
       end
 
       # Defines dynamic getter methods for both long and short names of each warcry.
