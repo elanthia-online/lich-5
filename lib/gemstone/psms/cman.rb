@@ -22,14 +22,14 @@ module Lich
       @@combat_mans = {
         "acrobats_leap"          => {
           :short_name => "acrobatsleap",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Acrobat\'s Leap combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "bearhug"                => {
           :short_name => "bearhug",
-          :type       => "concentration",
+          :type       => :concentration,
           :cost       => 10,
           :regex      => Regexp.union(/You charge towards .+ and attempt to grasp .+ in a ferocious bearhug!/,
                                       /.+ manages to fend off your grasp!/),
@@ -37,28 +37,28 @@ module Lich
         },
         "berserk"                => {
           :short_name => "berserk",
-          :type       => "attack",
+          :type       => :attack,
           :cost       => 20,
           :regex      => /Everything around you turns red as you work yourself into a berserker's rage!/,
           :usage      => "berserk"
         },
         "block_specialization"   => {
           :short_name => "blockspec",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Block Specialization combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "bull_rush"              => {
           :short_name => "bullrush",
-          :type       => "area of effect",
+          :type       => :area_of_effect,
           :cost       => 14,
           :regex      => /You dip your shoulder and rush towards an .+!/,
           :usage      => "bullrush"
         },
         "burst_of_swiftness"     => {
           :short_name          => "burst",
-          :type                => "buff",
+          :type                => :buff,
           :cost                => Lich::Util.normalize_lookup('Cooldowns', 'burst_of_swiftness') ? 60 : 30,
           :regex               => Regexp.union(/You prepare yourself to move swiftly at a moment's notice\./,
                                                /You prepare yourself to move swiftly at a moment's notice, overcoming the fatigue from your previous exertion\./),
@@ -67,42 +67,42 @@ module Lich
         },
         "cheapshots"             => {
           :short_name => "cheapshots",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => /You should activate Footstomp, Nosetweak, Templeshot, Kneebash, Eyepoke, Throatchop or Swiftkick instead\./,
           :usage      => nil
         },
         "combat_focus"           => {
           :short_name => "focus",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Combat Focus combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "combat_mobility"        => {
           :short_name => "mobility",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Combat Mobility maneuver works automatically when you are attacked\./,
           :usage      => nil
         },
         "combat_movement"        => {
           :short_name => "cmovement",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Combat Movement combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "combat_toughness"       => {
           :short_name => "toughness",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Combat Toughness combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "coup_de_grace"          => {
           :short_name => "coupdegrace",
-          :type       => "attack",
+          :type       => :attack,
           :cost       => 20,
           :regex      => Regexp.union(/You lunge towards .+, intending to finish [a-z]+ off!/,
                                       /You move towards .+ to finish [a-z]+ off, but [a-z]+ isn't injured enough to be susceptible to a Coup de Grace\./,
@@ -114,21 +114,21 @@ module Lich
         },
         "crowd_press"            => {
           :short_name => "cpress",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 9,
           :regex      => /You approach .+\./,
           :usage      => "cpress"
         },
         "cunning_defense"        => {
           :short_name => "cdefense",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Cunning Defense combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "cutthroat"              => {
           :short_name => "cutthroat",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 14,
           :regex      => Regexp.union(/You spring from hiding and attempt to slit .+ throat with your .+!/,
                                       /For this to work, you'll need to take your target by surprise. Try hiding first\./,
@@ -138,14 +138,14 @@ module Lich
         },
         "dirtkick"               => {
           :short_name => "dirtkick",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => /After a quick assessment of your surroundings, you haul back with one foot and let it fly!/,
           :usage      => "dirtkick"
         },
         "disarm_weapon"          => {
           :short_name => "disarm",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/You swing your .+ at .+!/,
                                       /Choosing your opening, you attempt to disarm .+ with your empty hand!/,
@@ -154,7 +154,7 @@ module Lich
         },
         "dislodge"               => {
           :short_name => "dislodge",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/.+ does not currently have any suitable weapons lodged in .+\./,
                                       /You rush toward .+ with an open hand, attempting to dislodge .+ from .+!/),
@@ -162,7 +162,7 @@ module Lich
         },
         "divert"                 => {
           :short_name => "divert",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/You throw your voice behind .+ and .+ attention is diverted by the noise!/,
                                       /Maybe you should try to divert .+ in a different fashion\./,
@@ -172,7 +172,7 @@ module Lich
         },
         "duck_and_weave"         => {
           :short_name => "duckandweave",
-          :type       => "martial stance",
+          :type       => :martial_stance,
           :cost       => 20,
           :regex      => Regexp.union(/You balance your posture and narrow your eyes, preparing to misdirect your foes' attacks\./,
                                       /You check that your posture remains well-balanced and continue to focus on the misdirection of your foes' attacks\./),
@@ -180,21 +180,21 @@ module Lich
         },
         "dust_shroud"            => {
           :short_name => "shroud",
-          :type       => "buff",
+          :type       => :buff,
           :cost       => 10,
           :regex      => /You quickly begin kicking up as much dirt as you can!/,
           :usage      => "shroud"
         },
         "evade_specialization"   => {
           :short_name => "evadespec",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Evade Specialization combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "eviscerate"             => {
           :short_name => "eviscerate",
-          :type       => "area of effect",
+          :type       => :area_of_effect,
           :cost       => 14,
           :regex      => Regexp.union(/The .+ abdomen is out of reach!/,
                                       /You uncoil from the shadows, your .+ poised to eviscerate .+!/,
@@ -203,7 +203,7 @@ module Lich
         },
         "executioners_stance"    => {
           :short_name => "executioner",
-          :type       => "martial stance",
+          :type       => :martial_stance,
           :cost       => 20,
           :regex      => Regexp.union(/You assume the Executioner's Stance, altering your grip and posture to minimize the loss of momentum when striking down a foe\./,
                                       /You re-settle into the Executioner's Stance, re-altering your grip and posture to minimize the loss of momentum when striking down a foe\./),
@@ -211,14 +211,14 @@ module Lich
         },
         "exsanguinate"           => {
           :short_name => "exsanguinate",
-          :type       => "attack",
+          :type       => :attack,
           :cost       => 15,
           :regex      => /You lunge at .+, your .+ a blur of .+ in your eagerness to spill [a-z]+ blood!/,
           :usage      => "exsanguinate"
         },
         "eyepoke"                => {
           :short_name => "eyepoke",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/The .+ (?:right|left) eye is out of reach!/,
                                       /You jab a finger at the eye of .+!/),
@@ -226,14 +226,14 @@ module Lich
         },
         "feint"                  => {
           :short_name => "feint",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 9,
           :regex      => /You feint .+\./,
           :usage      => "feint"
         },
         "flurry_of_blows"        => {
           :short_name => "flurry",
-          :type       => "martial stance",
+          :type       => :martial_stance,
           :cost       => 20,
           :regex      => Regexp.union(/You assume a stance suitable to unleash a flurry of blows\./,
                                       /You re-settle into a stance suitable to unleash a flurry of blows\./),
@@ -241,14 +241,14 @@ module Lich
         },
         "footstomp"              => {
           :short_name => "footstomp",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => /You raise your heel high, attempting to footstomp .+!/,
           :usage      => "footstomp"
         },
         "garrote"                => {
           :short_name => "garrote",
-          :type       => "concentration",
+          :type       => :concentration,
           :cost       => 10,
           :regex      => Regexp.union(/You fling your garrote around .+? neck and snap it taut\.  Success!/,
                                       /You need to have your other hand clear to garrote something\./,
@@ -258,14 +258,14 @@ module Lich
         },
         "grapple_specialization" => {
           :short_name => "grapplespec",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Grapple Specialization combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "griffins_voice"         => {
           :short_name => "griffin",
-          :type       => "martial stance",
+          :type       => :martial_stance,
           :cost       => 20,
           :regex      => Regexp.union(/You assume the Griffin's Voice stance, altering your breathing patterns to maximize the efficiency of your warcries\./,
                                       /You re-settle into the Griffin's Voice stance, re-altering your breathing patterns to maximize the efficiency of your warcries\./),
@@ -273,7 +273,7 @@ module Lich
         },
         "groin_kick"             => {
           :short_name => "gkick",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/You attempt to deliver a kick to .+ groin!/,
                                       /Leaning close to .+, you quickly raise your knee in an attempt to make debilitating contact with [a-z]+ groin!/,
@@ -284,7 +284,7 @@ module Lich
         },
         "hamstring"              => {
           :short_name => "hamstring",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 9,
           :regex      => Regexp.union(/You lunge forward and try to hamstring .+ with your .+!/,
                                       /The .+ is too unwieldy for that\./,
@@ -293,7 +293,7 @@ module Lich
         },
         "haymaker"               => {
           :short_name => "haymaker",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 9,
           :regex      => Regexp.union(/You clench your right fist and bring your arm back for a roundhouse punch aimed at .+!/,
                                       /You can't use haymaker with .+!/),
@@ -301,7 +301,7 @@ module Lich
         },
         "headbutt"               => {
           :short_name => "headbutt",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 9,
           :regex      => Regexp.union(/You charge towards .+ and attempt to headbutt .+!/,
                                       /Coiling your trapezius muscles, you feel your neck tense before springing into action and slamming your head down toward .+!/,
@@ -312,7 +312,7 @@ module Lich
         },
         "inner_harmony"          => {
           :short_name => "iharmony",
-          :type       => "martial stance",
+          :type       => :martial_stance,
           :cost       => 20,
           :regex      => Regexp.union(/You center your mind, body and soul and enter a state of inner harmony\./,
                                       /You continue in your state of inner harmony\./),
@@ -320,14 +320,14 @@ module Lich
         },
         "internal_power"         => {
           :short_name => "ipower",
-          :type       => "buff",
+          :type       => :buff,
           :cost       => 20,
           :regex      => /You concentrate on restoring your internal well\-being\./,
           :usage      => "ipower"
         },
         "ki_focus"               => {
           :short_name => "kifocus",
-          :type       => "buff",
+          :type       => :buff,
           :cost       => 20,
           :regex      => Regexp.union(/You summon your inner ki and focus it to enhance your next attack\./,
                                       /You have already summoned your inner ki and are ready for a devastating attack\./),
@@ -335,14 +335,14 @@ module Lich
         },
         "kick_specialization"    => {
           :short_name => "kickspec",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Kick Specialization combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "kneebash"               => {
           :short_name => "kneebash",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/You reverse your weapon and swing the blunt end down at the knee of .+!/,
                                       /You clench your fist tightly and snap it down at the knee of .+!/,
@@ -351,7 +351,7 @@ module Lich
         },
         "leap_attack"            => {
           :short_name => "leapattack",
-          :type       => "attack",
+          :type       => :attack,
           :cost       => 15,
           :regex      => Regexp.union(/.+ isn't flying\.  Maybe you should just attack it\?/,
                                       /You sprint toward .+ and leap into the air!/,
@@ -360,7 +360,7 @@ module Lich
         },
         "mighty_blow"            => {
           :short_name => "mblow",
-          :type       => "attack",
+          :type       => :attack,
           :cost       => 15,
           :regex      => Regexp.union(/You need to be holding a weapon in your right hand to use this maneuver\./,
                                       /Tightening your grip on your .+, you strike out at .+ with all of your might!/),
@@ -368,14 +368,14 @@ module Lich
         },
         "mug"                    => {
           :short_name => "mug",
-          :type       => "attack",
+          :type       => :attack,
           :cost       => 15,
           :regex      => /You boldly accost .+, your attack masking your larcenous intent!/,
           :usage      => "mug"
         },
         "nosetweak"              => {
           :short_name => "nosetweak",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/The .+ head is out of reach!/,
                                       /You reach out and grab at .+ nose!/),
@@ -383,21 +383,21 @@ module Lich
         },
         "parry_specialization"   => {
           :short_name => "parryspec",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Parry Specialization combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "precision"              => {
           :short_name => "precision",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /Usage: CMAN PRECIS <damage type>/,
           :usage      => nil
         },
         "predators_eye"          => {
           :short_name => "predator",
-          :type       => "martial stance",
+          :type       => :martial_stance,
           :cost       => 20,
           :regex      => Regexp.union(/You begin to survey your surroundings with a Predator's Eye\./,
                                       /You continue to survey your surroundings with a Predator's Eye\./),
@@ -405,21 +405,21 @@ module Lich
         },
         "punch_specialization"   => {
           :short_name => "punchspec",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Punch Specialization combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "retreat"                => {
           :short_name => "retreat",
-          :type       => "buff",
+          :type       => :buff,
           :cost       => 30,
           :regex      => /You withdraw, disengaging from .+\./,
           :usage      => "retreat"
         },
         "rolling_krynch_stance"  => {
           :short_name => "krynch",
-          :type       => "martial stance",
+          :type       => :martial_stance,
           :cost       => 20,
           :regex      => Regexp.union(/You assume the Rolling Krynch Stance\./,
                                       /You re-settle into the Rolling Krynch Stance\./),
@@ -427,28 +427,28 @@ module Lich
         },
         "shield_bash"            => {
           :short_name => "sbash",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 9,
           :regex      => /You lunge forward at .* with your .* and attempt a shield bash!/,
           :usage      => "sbash"
         },
         "side_by_side"           => {
           :short_name => "sidebyside",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /Side by Side is automatically active whenever you are grouped with other characters\./,
           :usage      => nil
         },
         "slippery_mind"          => {
           :short_name => "slipperymind",
-          :type       => "martial stance",
+          :type       => :martial_stance,
           :cost       => 0,
           :regex      => /You focus inward and prepare to blank your mind at a moment's notice\./,
           :usage      => "slipperymind"
         },
         "spell_cleave"           => {
           :short_name => "scleave",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/You hang back for a moment and concentrate on the magical wards surrounding .+?, before unleashing your attack upon them!/,
                                       /You hang back for a moment and attempt to concentrate on the magical wards surrounding .+?, but are unable to discern the presence of any at all\./,
@@ -458,14 +458,14 @@ module Lich
         },
         "spell_parry"            => {
           :short_name => "sparry",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Spell Parry combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "spell_thieve"           => {
           :short_name => "sthieve",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/You might have more success with anti-magical equipment\./,
                                       /You can't use spell thieve with empty hands!/,
@@ -475,14 +475,14 @@ module Lich
         },
         "spike_focus"            => {
           :short_name => "spikefocus",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Armor Spike Focus combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "spin_attack"            => {
           :short_name => "sattack",
-          :type       => "attack",
+          :type       => :attack,
           :cost       => 0,
           :regex      => Regexp.union(/You let out a shrill yell and leap, spinning through the air and into the fracas!/,
                                       /You spin on your toes, deliberate in your motion as you lunge at .+!/,
@@ -493,7 +493,7 @@ module Lich
         },
         "staggering_blow"        => {
           :short_name => "sblow",
-          :type       => "attack",
+          :type       => :attack,
           :cost       => 15,
           :regex      => Regexp.union(/Winding back with your .+, you launch yourself at .+ with staggering might!/,
                                       /You need to be holding an appropriate weapon before attempting this maneuver\./),
@@ -501,14 +501,14 @@ module Lich
         },
         "stance_perfection"      => {
           :short_name => "stance",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /You are currently using .+ of your combat skill to defend yourself\./,
           :usage      => nil
         },
         "stance_of_the_mongoose" => {
           :short_name => "mongoose",
-          :type       => "martial stance",
+          :type       => :martial_stance,
           :cost       => 20,
           :regex      => Regexp.union(/You assume the Stance of the Mongoose, ready to retaliate instantly against your foes\./,
                                       /You re-settle into the Stance of the Mongoose, ready to retaliate instantly against your foes\./),
@@ -516,7 +516,7 @@ module Lich
         },
         "striking_asp"           => {
           :short_name => "asp",
-          :type       => "martial stance",
+          :type       => :martial_stance,
           :cost       => 20,
           :regex      => Regexp.union(/You assume the Striking Asp Stance, ready to find the right position for a quick strike\./,
                                       /You re-settle Striking Asp Stance, ready to find the right position for a quick strike\./),
@@ -524,7 +524,7 @@ module Lich
         },
         "stun_maneuvers"         => {
           :short_name => "stunman",
-          :type       => "buff",
+          :type       => :buff,
           :cost       => 10,
           :regex      => Regexp.union(/Usage: CMAN STUNMAN \[option\]/,
                                       /You're not stunned\./,
@@ -542,7 +542,7 @@ module Lich
         },
         "subdue"                 => {
           :short_name => "subdue",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 9,
           :regex      => Regexp.union(/You haven't learned how to subdue without a weapon!/,
                                       /You spring from hiding and aim a blow at .+ head!/,
@@ -552,7 +552,7 @@ module Lich
         },
         "sucker_punch"           => {
           :short_name => "spunch",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/The .+ back is out of reach!/,
                                       /You punch .+ in the lower back!/,
@@ -562,7 +562,7 @@ module Lich
         },
         "sunder_shield"          => {
           :short_name => "sunder",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/You can't use sunder shield with empty hands!/,
                                       /You drive your .+ directly at .+ in an attempt to split it asunder!/),
@@ -570,7 +570,7 @@ module Lich
         },
         "surge_of_strength"      => {
           :short_name          => "surge",
-          :type                => "buff",
+          :type                => :buff,
           :cost                => Lich::Util.normalize_lookup('Cooldowns', 'surge_of_strength') ? 60 : 30,
           :regex               => /You focus deep within yourself, searching for untapped sources of strength\./,
           :usage               => "surge",
@@ -578,7 +578,7 @@ module Lich
         },
         "sweep"                  => {
           :short_name => "sweep",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/You crouch and sweep a leg at .+!/,
                                       /You cannot sweep .+./),
@@ -586,7 +586,7 @@ module Lich
         },
         "swiftkick"              => {
           :short_name          => "swiftkick",
-          :type                => "setup",
+          :type                => :setup,
           :cost                => 7,
           :regex               => /You spin around behind .+, attempting a swiftkick!/,
           :usage               => "swiftkick",
@@ -594,21 +594,21 @@ module Lich
         },
         "tackle"                 => {
           :short_name => "tackle",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => /You hurl yourself at .+!/,
           :usage      => "tackle"
         },
         "tainted_bond"           => {
           :short_name => "tainted",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Tainted Bond combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "templeshot"             => {
           :short_name => "templeshot",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/The .+ head is out of reach!/,
                                       /You reverse your .+ and swing the blunt end at the head of .+!/,
@@ -618,7 +618,7 @@ module Lich
         },
         "throatchop"             => {
           :short_name => "throatchop",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/The .+ neck is out of reach!/,
                                       /You swing your rigid hand at the throat of .+!/,
@@ -628,7 +628,7 @@ module Lich
         },
         "trip"                   => {
           :short_name => "trip",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 7,
           :regex      => Regexp.union(/You can't reach far enough to trip anything with .+\./,
                                       /With a fluid whirl, you plant .+ firmly into the ground near .+ and jerk the weapon sharply sideways\./),
@@ -636,35 +636,35 @@ module Lich
         },
         "true_strike"            => {
           :short_name => "truestrike",
-          :type       => "attack",
+          :type       => :attack,
           :cost       => 15,
           :regex      => /Determined, you resolve that your next attack will strike true\./,
           :usage      => "truestrike"
         },
         "unarmed_specialist"     => {
           :short_name => "unarmedspec",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /The Unarmed Specialist combat maneuver is always active once you have learned it\./,
           :usage      => nil
         },
         "vault_kick"             => {
           :short_name => "vaultkick",
-          :type       => "setup",
+          :type       => :setup,
           :cost       => 30,
           :regex      => /You can't use vault kick with .+!/,
           :usage      => "vaultkick"
         },
         "weapon_specialization"  => {
           :short_name => "wspec",
-          :type       => "passive",
+          :type       => :passive,
           :cost       => 0,
           :regex      => /You are currently specialized in .+ with .+ in Weapon Specialization\./,
           :usage      => nil
         },
         "whirling_dervish"       => {
           :short_name => "dervish",
-          :type       => "martial stance",
+          :type       => :martial_stance,
           :cost       => 20,
           :regex      => Regexp.union(/You assume the Whirling Dervish stance, ready to switch targets at a moment's notice\./,
                                       /You re-settle into the Whirling Dervish stance, ready to switch targets at a moment's notice\./),
