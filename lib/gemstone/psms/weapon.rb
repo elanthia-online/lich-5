@@ -248,9 +248,9 @@ module Lich
       # @param name [String] The technique's name
       # @return [Boolean] True if buff is already active
       def Weapon.buff_active?(name)
-        buff = @@weapon_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Weapon")[:long_name])[:buff]
+        buff = @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:buff]
         return false if buff.nil?
-        Effects::Buffs.active?(@@weapon_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Weapon")[:long_name])[:buff])
+        Effects::Buffs.active?(@@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:buff])
       end
 
       # Attempts to use a Weapon technique, optionally on a target.
@@ -336,7 +336,7 @@ module Lich
       # @example
       #   Weapon.regexp("Weapon_blessing") => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i
       def Weapon.regexp(name)
-        @@weapon_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Weapon")[:long_name])[:regex]
+        @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:regex]
       end
 
       # Defines dynamic getter methods for both long and short names of each Weapon technique.
