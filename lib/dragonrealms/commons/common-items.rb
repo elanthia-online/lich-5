@@ -65,6 +65,7 @@ module Lich
         /^You pick/,
         /^You pluck/,
         /^You slip/,
+        /^You scoop/,
         /^You deftly remove/,
         /^You are already holding/,
         /^You fade in for a moment as you/,
