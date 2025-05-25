@@ -75,6 +75,7 @@ module Lich
 
       GET_ITEM_FAILURE_PATTERNS = [
         /^A magical force keeps you from grasping/,
+        /^You'll need both hands free/,
         /^You need a free hand/,
         /^You can't pick that up with your hand that damaged/,
         /^Your (left|right) hand is too injured/,
@@ -187,6 +188,7 @@ module Lich
       ]
 
       REMOVE_ITEM_FAILURE_PATTERNS = [
+        /^You'll need both hands free/,
         /^You need a free hand/,
         /^You aren't wearing/,
         /^You don't seem to be able to move/,
