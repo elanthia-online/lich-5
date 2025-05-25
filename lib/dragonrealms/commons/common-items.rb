@@ -145,6 +145,7 @@ module Lich
         /^There's no more free ties/,
         /^You must be holding/,
         /doesn't seem to fit/,
+        /close the fan/,
         /^You are a little too busy/,
         /^Your wounds hinder your ability to do that/,
         /^Tie what/
@@ -197,6 +198,7 @@ module Lich
       PUT_AWAY_ITEM_SUCCESS_PATTERNS = [
         /^You put your .* in/,
         /^You hold out/,
+        /^You stuff/,
         /^You tuck/,
         /^You open your pouch and put/,
         /^You guide your/i, # puppy storage
