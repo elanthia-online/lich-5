@@ -764,7 +764,7 @@ module Lich
         else
           arg_options = "cast"
         end
-        cast(target, results_of_interest, arg_options, force_stance: nil)
+        cast(target, results_of_interest, arg_options, force_stance: force_stance)
       end
 
       def force_channel(target = nil, arg_options = nil, results_of_interest = nil, force_stance: nil)
@@ -773,7 +773,7 @@ module Lich
         else
           arg_options = "channel"
         end
-        cast(target, results_of_interest, arg_options, force_stance: nil)
+        cast(target, results_of_interest, arg_options, force_stance: force_stance)
       end
 
       def force_evoke(target = nil, arg_options = nil, results_of_interest = nil, force_stance: nil)
@@ -782,7 +782,7 @@ module Lich
         else
           arg_options = "evoke"
         end
-        cast(target, results_of_interest, arg_options, force_stance: nil)
+        cast(target, results_of_interest, arg_options, force_stance: force_stance)
       end
 
       def force_incant(arg_options = nil, results_of_interest = nil, force_stance: nil)
@@ -791,7 +791,7 @@ module Lich
         else
           arg_options = "incant"
         end
-        cast(nil, results_of_interest, arg_options, force_stance: nil)
+        cast(nil, results_of_interest, arg_options, force_stance: force_stance)
       end
 
       def _bonus
