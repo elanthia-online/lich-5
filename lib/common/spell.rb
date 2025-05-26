@@ -565,7 +565,7 @@ module Lich
         @@cast_lock.delete(Script.current)
       end
 
-      def cast(target = nil, results_of_interest = nil, arg_options = nil)
+      def cast(target = nil, results_of_interest = nil, arg_options = nil, force_stance: nil)
         # fixme: find multicast in target and check mana for it
         check_energy = proc {
           if Feat.known?(:mental_acuity)
@@ -700,7 +700,7 @@ module Lich
                 end
               end
               waitcastrt?
-              if @stance and Char.stance != 'offensive'
+              if ((@stance && force_stance != false) || force_stance == true) && Char.stance != 'offensive'
                 put 'stance offensive'
                 # dothistimeout 'stance offensive', 5, /^You (?:are now in|move into) an? offensive stance|^You are unable to change your stance\.$/
               end
@@ -724,7 +724,7 @@ module Lich
                 sleep(Regexp.last_match(1).to_i + 0.5)
                 cast_result = dothistimeout cast_cmd, 5, merged_results_regex
               end
-              if @stance
+              if ((@stance && force_stance != false) || force_stance == true)
                 if @@after_stance
                   if Char.stance !~ /#{@@after_stance}/
                     waitrt?
@@ -758,7 +758,7 @@ module Lich
         end
       end
 
-      def force_cast(target = nil, arg_options = nil, results_of_interest = nil)
+      def force_cast(target = nil, arg_options = nil, results_of_interest = nil, force_stance: nil)
         unless arg_options.nil? || arg_options.empty?
           arg_options = "cast #{arg_options}"
         else
@@ -767,7 +767,7 @@ module Lich
         cast(target, results_of_interest, arg_options)
       end
 
-      def force_channel(target = nil, arg_options = nil, results_of_interest = nil)
+      def force_channel(target = nil, arg_options = nil, results_of_interest = nil, force_stance: nil)
         unless arg_options.nil? || arg_options.empty?
           arg_options = "channel #{arg_options}"
         else
@@ -776,7 +776,7 @@ module Lich
         cast(target, results_of_interest, arg_options)
       end
 
-      def force_evoke(target = nil, arg_options = nil, results_of_interest = nil)
+      def force_evoke(target = nil, arg_options = nil, results_of_interest = nil, force_stance: nil)
         unless arg_options.nil? || arg_options.empty?
           arg_options = "evoke #{arg_options}"
         else
@@ -785,7 +785,7 @@ module Lich
         cast(target, results_of_interest, arg_options)
       end
 
-      def force_incant(arg_options = nil, results_of_interest = nil)
+      def force_incant(arg_options = nil, results_of_interest = nil, force_stance: nil)
         unless arg_options.nil? || arg_options.empty?
           arg_options = "incant #{arg_options}"
         else
