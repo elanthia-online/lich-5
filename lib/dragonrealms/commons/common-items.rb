@@ -75,6 +75,7 @@ module Lich
 
       GET_ITEM_FAILURE_PATTERNS = [
         /^A magical force keeps you from grasping/,
+        /^You'll need both hands free/,
         /^You need a free hand/,
         /^You can't pick that up with your hand that damaged/,
         /^Your (left|right) hand is too injured/,
@@ -145,6 +146,7 @@ module Lich
         /^There's no more free ties/,
         /^You must be holding/,
         /doesn't seem to fit/,
+        /close the fan/,
         /^You are a little too busy/,
         /^Your wounds hinder your ability to do that/,
         /^Tie what/
@@ -186,6 +188,7 @@ module Lich
       ]
 
       REMOVE_ITEM_FAILURE_PATTERNS = [
+        /^You'll need both hands free/,
         /^You need a free hand/,
         /^You aren't wearing/,
         /^You don't seem to be able to move/,
@@ -197,6 +200,7 @@ module Lich
       PUT_AWAY_ITEM_SUCCESS_PATTERNS = [
         /^You put your .* in/,
         /^You hold out/,
+        /^You stuff/,
         /^You tuck/,
         /^You open your pouch and put/,
         /^You guide your/i, # puppy storage
