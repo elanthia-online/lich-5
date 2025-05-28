@@ -48,8 +48,6 @@ module Lich
         # @example Update a specific script
         #   Lich::Util::Update.request({action: :update_file, file_type: :script, file: 'dependency.lic'})
         def request(parameter = nil)
-          puts "DEBUG: Parameter type: #{parameter.class}, value: #{parameter.inspect}" if $DEBUG
-
           # Initialize components using the Main module
           components = Main.initialize_components
 
@@ -94,8 +92,6 @@ module Lich
         # @param game_type [String] the game type (gs or dr)
         # @return [Boolean] true if the update was successful
         def update_core_data_and_scripts(script_dir = nil, data_dir = nil, game_type = 'gs', version = LICH_VERSION)
-          puts "DEBUG: update_core_data_and_scripts called with script_dir=#{script_dir}, data_dir=#{data_dir}, game_type=#{game_type}" if $DEBUG
-
           # Use config values if parameters are nil
           script_dir ||= Config::DIRECTORIES[:script]
           data_dir ||= Config::DIRECTORIES[:data]
@@ -118,8 +114,6 @@ module Lich
         # @param logger [Logger] The logger instance for error reporting
         # @return [Hash] the parsed options
         def parse_parameter(parameter, cli, logger)
-          puts "DEBUG: parse_parameter received: #{parameter.inspect}" if $DEBUG
-
           case parameter
           when String
             parse_string_parameter(parameter, cli, logger)
@@ -165,8 +159,6 @@ module Lich
         # @param logger [Logger] The logger instance for error reporting
         # @return [Hash] the parsed options
         def parse_string_parameter(parameter, cli, logger)
-          puts "DEBUG: parse_string_parameter received: #{parameter.inspect}" if $DEBUG
-
           options = Config::DEFAULT_OPTIONS.dup
 
           # First check for exact matches without prefixes
@@ -276,8 +268,6 @@ module Lich
         # @param logger [Logger] The logger instance for error reporting
         # @return [Hash] the parsed options
         def parse_symbol_parameter(parameter, logger)
-          puts "DEBUG: parse_symbol_parameter received: #{parameter.inspect}" if $DEBUG
-
           options = Config::DEFAULT_OPTIONS.dup
 
           # Convert symbol to string and check if it's a valid action
@@ -318,8 +308,6 @@ module Lich
         # @param parameter [Hash] the hash parameter
         # @return [Hash] the parsed options
         def parse_hash_parameter(parameter)
-          puts "DEBUG: parse_hash_parameter received: #{parameter.inspect}" if $DEBUG
-
           options = Config::DEFAULT_OPTIONS.dup
 
           # Merge with default options, ensuring string keys are converted to symbols
@@ -364,8 +352,6 @@ module Lich
         # @param components [Hash] The component instances
         # @return [Hash] Result of the operation
         def process_request(options, components)
-          puts "DEBUG: process_request received options: #{options.inspect}" if $DEBUG
-
           logger = components[:logger]
           release_manager = components[:release_manager]
           installer = components[:installer]
