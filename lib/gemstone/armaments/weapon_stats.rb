@@ -1,6 +1,6 @@
 require_relative "weapon_stats_brawling.rb"
 require_relative "weapon_stats_hybrid.rb"
-require_relative "weapon_stats_missile.rb"
+require_relative "weapon_stats_ranged.rb"
 require_relative "weapon_stats_blunt.rb"
 require_relative "weapon_stats_edged.rb"
 require_relative "weapon_stats_polearm.rb"
@@ -34,7 +34,7 @@ module Lich
         @@weapon_stats = {
           brawling: @@weapon_stats_brawling,
           hybrid: @@weapon_stats_hybrid,
-          missile: @@weapon_stats_missile,
+          missile: @@weapon_stats_ranged,
           blunt: @@weapon_stats_blunt,
           edged: @@weapon_stats_edged,
           polearm: @@weapon_stats_polearm,
@@ -53,7 +53,7 @@ module Lich
           return weapon_info
         end
 
-        # Finds the weapon's category by one of its alternative names.
+        # Finds the weapon's stats hash by one of its alternative names.
         #
         # @param name [String] The name or alias of the weapon.
         # @return [Symbol, nil] The weapon's category if found, otherwise nil.
