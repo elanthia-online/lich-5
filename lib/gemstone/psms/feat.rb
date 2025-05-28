@@ -332,7 +332,7 @@ module Lich
       def Feat.available?(name, min_rank: 1, forcert_count: 0)
         Feat.known?(name, min_rank: min_rank) &&
           Feat.affordable?(name, forcert_count: forcert_count) &&
-          PSMS.affordable?(name)
+          PSMS.available?(name)
       end
 
       # Checks whether the feat's buff is currently active.
