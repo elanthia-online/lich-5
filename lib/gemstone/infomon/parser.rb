@@ -61,7 +61,7 @@ module Lich
           WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
           WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
           AccountName = /^Account Name:     (?<name>[\w\d\-\_]+)$/.freeze
-          AccountSubscription = /^Account Type:     (?<subscription>F2P|Standard|Premium|Platinum)(?: with Shattered| \(Promo\))?$/.freeze
+          AccountSubscription = /^Account Type:     (?<subscription>F2P|Standard|Premium|Platinum)(?: with Shattered)?(?: \(Promo\))?$/.freeze
           ProfileStart = /^PERSONAL INFORMATION$/.freeze
           ProfileName = /^Name: (?<name>[\w\s]+)$/.freeze
           ProfileHouseCHE = /^[A-Za-z\- ]+? (?:of House of the |of House of |of House |of )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?$|^(?<none>No House affiliation)$/.freeze
