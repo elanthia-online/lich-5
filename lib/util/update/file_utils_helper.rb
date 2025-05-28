@@ -168,7 +168,7 @@ module Lich
             begin
               FileUtils.mkdir_p(File.dirname(destination))
               File.open(destination, 'wb') do |file|
-                file.write URI.parse(url).open.read
+                file.write URI.parse(url).open(ssl_verify_mode: OpenSSL::SSL::VERIFY_PEER).read
               end
             rescue => e
               error_msg = "Failed to download file from #{url}: #{e.message}"
