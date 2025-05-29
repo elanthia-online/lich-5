@@ -23,16 +23,27 @@ end
 require 'rexml/document'
 require 'rexml/streamlistener'
 require 'open-uri'
-require "attributes/spellsong"
 require "common/spell"
 require 'tmpdir'
+
+module Lich
+  module Common
+    class Spell
+      class Spellsong
+        def self.timeleft
+          return 0.0
+        end
+      end
+    end
+  end
+end
 
 Dir.mktmpdir do |dir|
   local_filename = File.join(dir, "effect-list.xml")
   print "Downloading effect-list.xml..."
   download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml').read
   File.write(local_filename, download)
-  Spell.load(local_filename)
+  Lich::Common::Spell.load(local_filename)
   puts " Done!"
 end
 
