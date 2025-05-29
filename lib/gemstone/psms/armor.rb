@@ -193,9 +193,8 @@ module Lich
       # @param name [String] The technique's name
       # @return [Boolean] True if buff is already active
       def Armor.buff_active?(name)
-        name = PSMS.name_normal(name)
-        return unless @@armor_techniques.fetch(name).key?(:buff)
-        Effects::Buffs.active?(@@armor_techniques.fetch(name)[:buff])
+        return unless @@armor_techniques.fetch(PSMS.find_name(name, "Armor")[:long_name]).key?(:buff)
+        Effects::Buffs.active?(@@armor_techniques.fetch(PSMS.find_name(name, "Armor")[:long_name])[:buff])
       end
 
       # Attempts to use an armor technique, optionally on a target.
@@ -210,8 +209,9 @@ module Lich
       #   Armor.use("armor_blessing", "Dissonance") # attempt to use armor blessing on Dissonance
       def Armor.use(name, target = "", results_of_interest: nil, forcert_count: 0)
         return unless Armor.available?(name, forcert_count: forcert_count)
+
         name_normalized = PSMS.name_normal(name)
-        technique = @@armor_techniques.fetch(name_normalized)
+        technique = @@armor_techniques.fetch(PSMS.find_name(name_normalized, "Armor")[:long_name])
         usage = technique[:usage]
         return if usage.nil?
 
@@ -262,7 +262,7 @@ module Lich
       # @example
       #   Armor.regexp("armor_blessing") => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i
       def Armor.regexp(name)
-        @@armor_techniques.fetch(PSMS.name_normal(name))[:regex]
+        @@armor_techniques.fetch(PSMS.find_name(name, "Armor")[:long_name])[:regex]
       end
 
       # Defines dynamic getter methods for both long and short names of each armor technique.

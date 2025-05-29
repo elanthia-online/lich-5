@@ -24,7 +24,20 @@ require 'rexml/document'
 require 'rexml/streamlistener'
 require 'open-uri'
 require "common/spell"
+require "attributes/skills"
 require 'tmpdir'
+
+module Lich
+  module Common
+    class Spell
+      class Spellsong
+        def self.timeleft
+          return 0.0
+        end
+      end
+    end
+  end
+end
 
 Dir.mktmpdir do |dir|
   local_filename = File.join(dir, "effect-list.xml")
@@ -121,6 +134,29 @@ end
 # fake GameObj to allow for passing.
 module Lich
   module Common
+    class GameObj
+      @@npcs = Array.new
+      def initialize(id, noun, name, before = nil, after = nil)
+        @id = id
+        @noun = noun
+        @name = name
+        @before_name = before
+        @after_name = after
+      end
+
+      def GameObj.npcs
+        if @@npcs.empty?
+          nil
+        else
+          @@npcs.dup
+        end
+      end
+    end
+  end
+end
+
+module Lich
+  module Gemstone
     class GameObj
       @@npcs = Array.new
       def initialize(id, noun, name, before = nil, after = nil)
