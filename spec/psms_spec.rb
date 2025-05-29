@@ -54,44 +54,44 @@ end
 
 # stub in Effects module for testing - not suitable for testing Effects itself
 module Lich
-module Util
-module Effects
-  class Registry
-    include Enumerable
+  module Util
+    module Effects
+      class Registry
+        include Enumerable
 
-    def initialize(dialog)
-      @dialog = dialog
-    end
+        def initialize(dialog)
+          @dialog = dialog
+        end
 
-    def to_h
-      XMLData.dialogs.fetch(@dialog, {})
-    end
+        def to_h
+          XMLData.dialogs.fetch(@dialog, {})
+        end
 
-    def each()
-      to_h.each { |k, v| yield(k, v) }
-    end
+        def each()
+          to_h.each { |k, v| yield(k, v) }
+        end
 
-    def active?(effect)
-      expiry = to_h.fetch(effect, 0)
-      expiry.to_f > Time.now.to_f
-    end
+        def active?(effect)
+          expiry = to_h.fetch(effect, 0)
+          expiry.to_f > Time.now.to_f
+        end
 
-    def time_left(effect)
-      expiry = to_h.fetch(effect, 0)
-      if to_h.fetch(effect, 0) != 0
-        ((expiry - Time.now) / 60.to_f)
-      else
-        expiry
+        def time_left(effect)
+          expiry = to_h.fetch(effect, 0)
+          if to_h.fetch(effect, 0) != 0
+            ((expiry - Time.now) / 60.to_f)
+          else
+            expiry
+          end
+        end
       end
+
+      Spells    = Registry.new("Active Spells")
+      Buffs     = Registry.new("Buffs")
+      Debuffs   = Registry.new("Debuffs")
+      Cooldowns = Registry.new("Cooldowns")
     end
   end
-
-  Spells    = Registry.new("Active Spells")
-  Buffs     = Registry.new("Buffs")
-  Debuffs   = Registry.new("Debuffs")
-  Cooldowns = Registry.new("Cooldowns")
-end
-end
 end
 
 module Char
