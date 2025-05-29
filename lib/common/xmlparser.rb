@@ -106,6 +106,7 @@ module Lich
         @society_task = String.new
 
         @dr_active_spells = Hash.new
+        @dr_active_spell_clear = false
         @dr_active_spell_tracking = false
         @dr_active_spells_stellar_percentage = 0
         @dr_active_spells_slivers = false
@@ -279,11 +280,14 @@ module Lich
           end
 
           if (name == 'clearStream' && attributes['id'] == 'percWindow')
-            @dr_active_spells = {}
-            @dr_active_spells_slivers = false
+            @dr_active_spells_clear = true
           end
 
           if (name == 'pushStream' && attributes['id'] == 'percWindow')
+            if @dr_active_spells_clear
+              @dr_active_spells = {}
+              @dr_active_spells_clear = false
+            end
             @dr_active_spell_tracking = true
           end
 
@@ -671,7 +675,7 @@ module Lich
               # Osrel Meraud  (94%)
               # Landslide (4 roisaen)
               # Khri Sagacity  (1 roisan)
-              spell = Regexp.last_match[:spell].strip
+              spell = Regexp.last_match[:spell]
               duration = Regexp.last_match[:duration]
 
               if duration.match?(/Indefinite|OM/)
@@ -694,7 +698,7 @@ module Lich
             when /(?<spell>^[^\(]+)\(.+\)/i
               # Spells with inexact duration verbiage, such as with
               # Barbarians without knowledge of Power Monger mastery
-              spell = Regexp.last_match[:spell].strip
+              spell = Regexp.last_match[:spell]
               duration = 1000
             when /.*orbiting sliver.*/i
               # Moon Mage slivers
@@ -890,8 +894,9 @@ module Lich
             end
           end
 
-          if (name == 'popStream')
-            @dr_active_spell_tracking = false if @dr_active_spell_tracking
+          if (name == 'popStream') && @dr_active_spell_tracking
+            @dr_active_spell_tracking = false
+            @dr_active_spells_slivers = false
           end
 
           if name == 'inv'
