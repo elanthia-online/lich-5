@@ -97,6 +97,7 @@ module Lich
           data_dir ||= Config::DIRECTORIES[:data]
 
           # Initialize components
+          return unless @components
           installer = @components[:installer]
 
           # Call the instance method
