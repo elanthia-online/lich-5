@@ -665,7 +665,6 @@ module Lich
           if @dr_active_spell_tracking
             spell = nil
             duration = nil
-            Lich.log "DR Active Spell tracking: #{text_string.inspect}"
             case text_string
             when /(?<spell>^[^\(]+)\((?<duration>\d+|Indefinite|OM|Fading)\s*(?:%|roisae?n)?\)/i
               # Spell with known duration remaining
@@ -699,7 +698,7 @@ module Lich
             when /(?<spell>^[^\(]+)\(.+\)/i
               # Spells with inexact duration verbiage, such as with
               # Barbarians without knowledge of Power Monger mastery
-              spell = Regexp.last_match[:spell].strip
+              spell = Regexp.last_match[:spell]
               duration = 1000
             when /.*orbiting sliver.*/i
               # Moon Mage slivers
