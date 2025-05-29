@@ -27,8 +27,6 @@ require "attributes/spellsong"
 require "common/spell"
 require 'tmpdir'
 
-m
-
 Dir.mktmpdir do |dir|
   local_filename = File.join(dir, "effect-list.xml")
   print "Downloading effect-list.xml..."
