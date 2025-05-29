@@ -96,8 +96,11 @@ module Lich
           script_dir ||= Config::DIRECTORIES[:script]
           data_dir ||= Config::DIRECTORIES[:data]
 
-          # Initialize components
-          return unless @components
+          # Initialize installer
+          unless @components
+            logger.error("Unsupported: @components cannot be nil")
+            return false
+          end
           installer = @components[:installer]
 
           # Call the instance method
