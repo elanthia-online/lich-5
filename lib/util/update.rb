@@ -98,7 +98,6 @@ module Lich
 
           # Initialize installer
           unless @components
-            @components[:logger].error("Unsupported: @components cannot be nil")
             return false
           end
           installer = @components[:installer]
