@@ -154,6 +154,29 @@ module Lich
   end
 end
 
+module Lich
+  module Gemstone
+    class GameObj
+      @@npcs = Array.new
+      def initialize(id, noun, name, before = nil, after = nil)
+        @id = id
+        @noun = noun
+        @name = name
+        @before_name = before
+        @after_name = after
+      end
+
+      def GameObj.npcs
+        if @@npcs.empty?
+          nil
+        else
+          @@npcs.dup
+        end
+      end
+    end
+  end
+end
+
 require "common/sharedbuffer"
 require "common/buffer"
 require "games"
