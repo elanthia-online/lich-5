@@ -352,7 +352,7 @@ module Lich
           begin
             FileUtils.mkdir_p(File.dirname(destination))
             File.open(destination, 'wb') do |file|
-              file.write URI.parse(url).open.read
+              IO.copy_stream(URI.parse(url).open, file)
             end
             true
           rescue => e
