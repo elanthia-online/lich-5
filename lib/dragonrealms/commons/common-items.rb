@@ -27,7 +27,7 @@ module Lich
         /^Perhaps you should be holding that first/,
         /^You're kidding, right/,
         /^You can't do that/,
-        /^No littering/,
+        /No littering/, # A guard steps over to you and says, "No littering in the bank."
         /^Where do you want to put that/,
         /^You really shouldn't be loitering/,
         /^You don't seem to be able to move/,
@@ -76,6 +76,7 @@ module Lich
       GET_ITEM_FAILURE_PATTERNS = [
         /^A magical force keeps you from grasping/,
         /^You'll need both hands free/,
+        /^You need both hands free/,
         /^You need a free hand/,
         /^You can't pick that up with your hand that damaged/,
         /^Your (left|right) hand is too injured/,
