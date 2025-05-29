@@ -49,20 +49,20 @@ module Lich
         #   Lich::Util::Update.request({action: :update_file, file_type: :script, file: 'dependency.lic'})
         def request(parameter = nil)
           # Initialize components using the Main module
-          components = Main.initialize_components
+          @components = Main.initialize_components
 
           # Set current version if available
           if defined?(LICH_VERSION)
-            components[:installer].current_version = LICH_VERSION
+            @components[:installer].current_version = LICH_VERSION
           else
-            components[:installer].current_version = Config::CURRENT_VERSION
+            @components[:installer].current_version = Config::CURRENT_VERSION
           end
 
           # Parse the parameter into options
-          options = parse_parameter(parameter, components[:cli], components[:logger])
+          options = parse_parameter(parameter, @components[:cli], @components[:logger])
 
           # Process the request with the parsed options
-          process_request(options, components)
+          process_request(options, @components)
         end
 
         # Get user input for confirmation
@@ -97,8 +97,7 @@ module Lich
           data_dir ||= Config::DIRECTORIES[:data]
 
           # Initialize components
-          components = Main.initialize_components
-          installer = components[:installer]
+          installer = @components[:installer]
 
           # Call the instance method
           installer.update_core_data_and_scripts(script_dir, data_dir, game_type)
