@@ -70,7 +70,8 @@ module Lich
         /^You are already holding/,
         /^You fade in for a moment as you/,
         /^You carefully lift/,
-        /^You carefully remove .* from the bundle/
+        /^You carefully remove .* from the bundle/,
+        /^With a flick of your wrist, you stealthily unsheath/
       ]
 
       GET_ITEM_FAILURE_PATTERNS = [
@@ -123,7 +124,8 @@ module Lich
         /^A brisk chill rushes through you as you wear/, # some hiro bearskin gloves interlaced with strips of ice-veined leather
         /^You drape/,
         /You lean over and slip your feet into the boots./, # a pair of weathered barkcloth boots lined in flannel,
-        /^You reach down and step into/ # pair of enaada boots clasped by asharsh'dai
+        /^You reach down and step into/, # pair of enaada boots clasped by asharsh'dai
+        /Gritting your teeth/ # Gritting your teeth, you grip each of your heavy combat boots in turn by the straps, and drive your feet into them for a secure fit.
       ]
 
       WEAR_ITEM_FAILURE_PATTERNS = [
@@ -194,6 +196,7 @@ module Lich
         /^You don't seem to be able to move/,
         /^Remove what/,
         /^I could not/,
+        /^Grunting with momentary exertion/, # Grunting with momentary exertion, you grip each of your heavy combat boots in turn by the heel, and pull them off.
         /^What were you/
       ]
 
@@ -222,6 +225,8 @@ module Lich
         /^You slip/,
         /^You easily strap/,
         /^You gently set/,
+        /^With a flick of your wrist, you stealthily sheath/,
+        /^You strap your .* to your harness/,
         /^You toss .* into/ # You toss the alcohol into the bowl and mix it in thoroughly
       ]
 
