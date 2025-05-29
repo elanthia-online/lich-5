@@ -24,7 +24,7 @@ module Lich
             response = make_http_request(parsed_url)
 
             # Check final response code
-            if response.code.start_with?('2')
+            if response && response.code.start_with?('2')
               true
             else
               @logger.error("URL #{url} returned status code #{response.code}")
