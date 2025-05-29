@@ -28,7 +28,7 @@ module Lich
       end
 
       def self.type
-        if XMLData.game =~ /^GS/
+        if XMLData.game.is_a?(String) && XMLData.game =~ /^GS/
           Infomon.get("account.type")
         end
       end
