@@ -97,7 +97,7 @@ module Lich
           data_dir ||= Config::DIRECTORIES[:data]
 
           # Initialize installer
-          unless @components
+          unless @components  # @components may be nil in some legacy contexts; silent return is intentional.
             return false
           end
           installer = @components[:installer]
