@@ -24,6 +24,7 @@ require 'rexml/document'
 require 'rexml/streamlistener'
 require 'open-uri'
 require "common/spell"
+require "attributes/spellsong"
 require 'tmpdir'
 
 Dir.mktmpdir do |dir|
