@@ -69,7 +69,7 @@ module Lich
 
           # Handle redirects
           if ['301', '302', '303', '307', '308'].include?(response.code) && redirect_limit > 0
-            redirect_url = URI(response['location'])
+            redirect_url = URI.join(url, response['location'])
             return make_http_request(redirect_url, redirect_limit - 1)
           end
 
