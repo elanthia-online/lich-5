@@ -20,6 +20,86 @@ class NilClass
   end
 end
 
+module XMLData
+  @dialogs = {}
+  def self.game
+    "rspec"
+  end
+
+  def self.name
+    "testing"
+  end
+
+  def self.indicator
+    # shimming together a hash to test 'muckled?' results
+    { 'IconSTUNNED' => 'n',
+      'IconDEAD'    => 'n',
+      'IconWEBBED'  => false }
+  end
+
+  def self.save_dialogs(kind, attributes)
+    # shimming together response for testing status checks
+    @dialogs[kind] ||= {}
+    return @dialogs[kind] = attributes
+  end
+
+  def self.dialogs
+    @dialogs ||= {}
+  end
+
+  def self.stamina
+    return 20 # some PSM require 30, so we should have negative testing ability
+  end
+end
+
+# stub in Effects module for testing - not suitable for testing Effects itself
+module Lich
+module Util
+module Effects
+  class Registry
+    include Enumerable
+
+    def initialize(dialog)
+      @dialog = dialog
+    end
+
+    def to_h
+      XMLData.dialogs.fetch(@dialog, {})
+    end
+
+    def each()
+      to_h.each { |k, v| yield(k, v) }
+    end
+
+    def active?(effect)
+      expiry = to_h.fetch(effect, 0)
+      expiry.to_f > Time.now.to_f
+    end
+
+    def time_left(effect)
+      expiry = to_h.fetch(effect, 0)
+      if to_h.fetch(effect, 0) != 0
+        ((expiry - Time.now) / 60.to_f)
+      else
+        expiry
+      end
+    end
+  end
+
+  Spells    = Registry.new("Active Spells")
+  Buffs     = Registry.new("Buffs")
+  Debuffs   = Registry.new("Debuffs")
+  Cooldowns = Registry.new("Cooldowns")
+end
+end
+end
+
+module Char
+  def self.name
+    "testing"
+  end
+end
+
 require 'rexml/document'
 require 'rexml/streamlistener'
 require 'open-uri'
@@ -42,22 +122,6 @@ require 'util/util'
 require 'gemstone/psms'
 require 'gemstone/infomon'
 require 'attributes/skills'
-
-module Char
-  def self.name
-    "testing"
-  end
-end
-
-module XMLData
-  def self.game
-    "rspec"
-  end
-
-  def self.stamina
-    return 20 # some PSM require 30, so we should have negative testing ability
-  end
-end
 
 # we need to set up some test data, stealing from infomon_spec.rb
 describe Lich::Gemstone::Infomon, ".setup!" do

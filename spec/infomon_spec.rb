@@ -24,6 +24,7 @@ require 'rexml/document'
 require 'rexml/streamlistener'
 require 'open-uri'
 require "common/spell"
+require "attributes/skills"
 require 'tmpdir'
 
 module Lich
