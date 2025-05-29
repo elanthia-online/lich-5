@@ -15,24 +15,74 @@ module Lich
           @logger = logger
         end
 
-        # Validate a URL
+        # Validate a URL with proper SSL validation for HTTPS sites
         # @param url [String] the URL to validate
         # @return [Boolean] true if the URL is valid and accessible
         def validate_url(url)
           begin
             parsed_url = URI(url)
-            response = Net::HTTP.get_response(parsed_url)
+            response = make_http_request(parsed_url)
 
-            if response.code[0, 1] == "2" || response.code[0, 1] == "3"
+            # Check final response code
+            if response.code.start_with?('2')
               true
             else
               @logger.error("URL #{url} returned status code #{response.code}")
               false
             end
+          rescue OpenSSL::SSL::SSLError => e
+            @logger.error("SSL validation failed for URL #{url}: #{e.message}")
+            false
+          rescue Net::OpenTimeout, Net::ReadTimeout => e
+            @logger.error("Timeout occurred while validating URL #{url}: #{e.message}")
+            false
+          rescue URI::InvalidURIError => e
+            @logger.error("Invalid URL format for #{url}: #{e.message}")
+            false
           rescue => e
             @logger.error("Failed to validate URL #{url}: #{e.message}")
             false
           end
+        end
+
+        # Make an HTTP request with proper SSL validation and redirect handling
+        # @param url [URI] the parsed URL to request
+        # @param redirect_limit [Integer] the number of redirects to follow
+        # @return [Net::HTTPResponse] the HTTP response
+        def make_http_request(url, redirect_limit = 5)
+          return nil if redirect_limit <= 0
+
+          http = Net::HTTP.new(url.host, url.port)
+
+          # Configure SSL for HTTPS URLs
+          if url.scheme == 'https'
+            configure_ssl(http)
+          end
+
+          # Set reasonable timeouts
+          http.open_timeout = 10 # seconds
+          http.read_timeout = 10 # seconds
+
+          # Make the request
+          request = Net::HTTP::Get.new(url.request_uri)
+          response = http.request(request)
+
+          # Handle redirects
+          if ['301', '302', '303', '307', '308'].include?(response.code) && redirect_limit > 0
+            redirect_url = URI(response['location'])
+            return make_http_request(redirect_url, redirect_limit - 1)
+          end
+
+          response
+        end
+
+        # Configure SSL settings for an HTTP connection
+        # @param http [Net::HTTP] the HTTP connection to configure
+        def configure_ssl(http)
+          http.use_ssl = true
+          http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+          http.cert_store = OpenSSL::X509::Store.new
+          http.cert_store.set_default_paths # Use system's certificate store
         end
 
         # Validate a file type
