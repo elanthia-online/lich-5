@@ -37,7 +37,7 @@ module Lich
             :min_rt        => 4,
           },
 =end
-        @@weapon_stats_natural = [
+        @@weapon_stats_natural = {
           :bite       => {
             :category      => :natural,
             :base_name     => "bite",
