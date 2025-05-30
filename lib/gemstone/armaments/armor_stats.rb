@@ -138,7 +138,7 @@ module Lich
               :magical_cva     => 5,
               #                    0    1  2  3  4  5  6  7  8    9  10 11 12 13 14   15   16 17   18   19
               :hindrance       => [nil, 3, 4, 4, 4, 6, 3, 5, nil, 6, 3, 4, 4, 6, nil, nil, 2, nil, nil, nil],
-              :hindrancea_max  => 16,
+              :hindrance_max   => 16,
               #                    AP  1   2   3   4   5   6   7   8    9   10  11  12  13  14  15   16 17   18   19
               :training_reqs   => [10, 10, 15, 15, 15, 27, 10, 20, nil, 27, 10, 15, 15, 27, 27, nil, 6, nil, nil, nil],
             },
