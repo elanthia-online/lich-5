@@ -8,7 +8,7 @@ module Lich
         # Static array of shield stats indexed by shield identifiers. Each shield
         # entry contains metadata such as category, alternative names, size and
         # evade modifiers, and base weight.
-        @@shield_stats = [
+        @@shield_stats = {
           :small_shield  => {
             :category       => :small_shield,
             :base_name      => "small shield",
