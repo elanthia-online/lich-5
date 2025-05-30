@@ -37,7 +37,7 @@ module Lich
             :min_rt        => 4,
           },
 =end
-        @@weapon_stats_polearm = [
+        @@weapon_stats_polearm = {
           :awl_pike      => {
             :category      => :polearm,
             :base_name     => "awl-pike",
