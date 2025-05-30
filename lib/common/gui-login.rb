@@ -5,6 +5,8 @@ require_relative 'gui/utilities'
 require_relative 'gui/authentication'
 require_relative 'gui/components'
 require_relative 'gui/state'
+require_relative 'gui/saved_login_tab'
+require_relative 'gui/manual_login_tab'
 
 module Lich
   module Common
@@ -52,9 +54,8 @@ module Lich
         # Create message dialog utility
         @msgbox = GUI::Utilities.create_message_dialog(parent: @window, icon: @default_icon)
 
-        # Load tab implementations
-        require_relative 'gui-saved-login'
-        require_relative 'gui-manual-login'
+        # Create tab instances
+        create_tab_instances
 
         # Set up notebook with tabs
         setup_notebook
@@ -67,13 +68,116 @@ module Lich
       }
     end
 
+    # Creates tab instances
+    #
+    # @return [void]
+    def create_tab_instances
+      # Create callbacks for saved login tab
+      saved_login_callbacks = {
+        on_play: ->(launch_data) {
+          @launch_data = launch_data
+          # Wrap window destruction in Gtk.queue to ensure it runs on the GTK main thread
+          Gtk.queue {
+            @window.destroy
+            @done = true
+          }
+        },
+        on_remove: ->(login_info) {
+          @entry_data.delete(login_info)
+          @save_entry_data = true
+        },
+        on_add_character: ->(character:, instance:, frontend:) {
+          # Handle adding a character
+        },
+        on_theme_change: ->(state) {
+          # Update theme state for all components
+          @theme_state = state
+          @manual_login_tab.update_theme_state(state)
+
+          # Apply theme to notebook and window
+          if state
+            @notebook.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)"))
+            @window.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)"))
+          else
+            lightgrey = Gdk::RGBA::parse("#d3d3d3")
+            @notebook.override_background_color(:normal, lightgrey)
+            @window.override_background_color(:normal, lightgrey)
+          end
+        },
+        on_layout_change: ->(state) {
+          # Handle layout change
+        },
+        on_sort_change: ->(state) {
+          # Handle sort change
+        }
+      }
+
+      # Create callbacks for manual login tab
+      manual_login_callbacks = {
+        on_play: ->(launch_data) {
+          @launch_data = launch_data
+          # Wrap window destruction in Gtk.queue to ensure it runs on the GTK main thread
+          Gtk.queue {
+            @window.destroy
+            @done = true
+          }
+        },
+        on_save_entry: ->(entry_data) {
+          @entry_data.push(entry_data)
+          @save_entry_data = true
+        },
+        on_error: ->(message) {
+          @msgbox.call(message)
+        }
+      }
+
+      # Create tab instances
+      @saved_login_tab = GUI::SavedLoginTab.new(
+        @window,
+        @entry_data,
+        @theme_state,
+        @tab_layout_state,
+        @autosort_state,
+        @default_icon,
+        saved_login_callbacks
+      )
+
+      @manual_login_tab = GUI::ManualLoginTab.new(
+        @window,
+        @entry_data,
+        @theme_state,
+        @default_icon,
+        manual_login_callbacks
+      )
+
+      # Get UI elements from tabs
+      @saved_login_ui = @saved_login_tab.ui_elements
+      @manual_login_ui = @manual_login_tab.ui_elements
+
+      # Set references to UI elements
+      @quick_game_entry_tab = @saved_login_tab.tab_widget
+      @game_entry_tab = @manual_login_tab.tab_widget
+      @custom_launch_entry = @manual_login_ui[:custom_launch_entry]
+      @custom_launch_dir = @manual_login_ui[:custom_launch_dir]
+      @bonded_pair_char = @saved_login_ui[:bonded_pair_char]
+      @bonded_pair_inst = @saved_login_ui[:bonded_pair_inst]
+      @slider_box = @saved_login_ui[:slider_box]
+    end
+
     # Sets up the notebook with tabs
     #
     # @return [void]
     def setup_notebook
-      lightgrey = Gdk::RGBA::parse("#d3d3d3")
       @notebook = Gtk::Notebook.new
-      @notebook.override_background_color(:normal, lightgrey) unless @theme_state == true
+
+      # Apply initial theme
+      if @theme_state
+        @notebook.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)"))
+      else
+        lightgrey = Gdk::RGBA::parse("#d3d3d3")
+        @notebook.override_background_color(:normal, lightgrey)
+      end
+
       @notebook.append_page(@quick_game_entry_tab, Gtk::Label.new('Saved Entry'))
       @notebook.append_page(@game_entry_tab, Gtk::Label.new('Manual Entry'))
 
@@ -96,6 +200,15 @@ module Lich
       @window.signal_connect('delete_event') { @window.destroy; @done = true }
       @window.default_width = 590
       @window.default_height = 550
+
+      # Apply initial theme to window
+      if @theme_state
+        @window.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)"))
+      else
+        lightgrey = Gdk::RGBA::parse("#d3d3d3")
+        @window.override_background_color(:normal, lightgrey)
+      end
+
       @window.show_all
     end
 
@@ -126,7 +239,7 @@ module Lich
     #
     # @return [Array, nil] Launch data if available
     def return_launch_data_or_exit
-      if @launch_data.nil?
+      unless !@launch_data.nil?
         Gtk.queue { Gtk.main_quit }
         Lich.log "info: exited without selection"
         exit

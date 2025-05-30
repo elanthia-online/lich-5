@@ -1,0 +1,500 @@
+# frozen_string_literal: true
+
+module Lich
+  module Common
+    module GUI
+      # Handles the "Manual Entry" tab functionality for the Lich GUI login system
+      # Provides a class-based implementation for the manual login tab
+      class ManualLoginTab
+        # Initializes a new ManualLoginTab instance
+        #
+        # @param parent [Object] Parent window or container
+        # @param entry_data [Array] Array of saved login entries
+        # @param theme_state [Boolean] Whether dark theme is enabled
+        # @param default_icon [Gdk::Pixbuf] Default icon for dialogs
+        # @param callbacks [Hash] Callback handlers for various events
+        def initialize(parent, entry_data, theme_state, default_icon, callbacks = {})
+          @parent = parent
+          @entry_data = entry_data
+          @theme_state = theme_state
+          @default_icon = default_icon
+          @callbacks = callbacks
+
+          # Initialize variables
+          @launch_data = nil
+
+          # Create the tab content
+          create_tab_content
+        end
+
+        # Returns the tab widget for adding to a notebook
+        #
+        # @return [Gtk::Widget] The tab widget
+        def tab_widget
+          @game_entry_tab
+        end
+
+        # Returns references to UI elements that need to be accessed externally
+        #
+        # @return [Hash] Hash of UI element references
+        def ui_elements
+          {
+            custom_launch_entry: @custom_launch_entry,
+            custom_launch_dir: @custom_launch_dir
+          }
+        end
+
+        # Updates the theme state and refreshes UI elements accordingly
+        #
+        # @param theme_state [Boolean] New theme state
+        # @return [void]
+        def update_theme_state(theme_state)
+          @theme_state = theme_state
+          apply_theme_to_ui_elements
+        end
+
+        private
+
+        # Applies the current theme state to all UI elements
+        #
+        # @return [void]
+        def apply_theme_to_ui_elements
+          if @theme_state
+            # Enable dark theme
+            Gtk::Settings.default.gtk_application_prefer_dark_theme = true
+            # Remove styling providers that might conflict with dark theme
+            if defined?(@button_provider)
+              @treeview_buttons&.each do |button|
+                button.style_context.remove_provider(@button_provider) if button
+              end
+            end
+            # Reset background colors to transparent for dark theme
+            @game_entry_tab.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)")) if @game_entry_tab
+            @treeview&.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)"))
+          else
+            # Disable dark theme
+            Gtk::Settings.default.gtk_application_prefer_dark_theme = false
+            # Set light grey background for light theme
+            lightgrey = Gdk::RGBA::parse("#d3d3d3")
+            @game_entry_tab.override_background_color(:normal, lightgrey) if @game_entry_tab
+            @treeview&.override_background_color(:normal, lightgrey)
+            # Re-apply styling providers for light theme
+            if defined?(@button_provider)
+              @treeview_buttons&.each do |button|
+                button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER) if button
+              end
+            end
+          end
+        end
+
+        # Creates the tab content
+        #
+        # @return [void]
+        def create_tab_content
+          # Initialize button collection for theme updates
+          @treeview_buttons = []
+
+          # Create user ID and password entry fields
+          user_id_entry, pass_entry, login_table = create_login_fields
+
+          # Create connect and disconnect buttons
+          connect_button, disconnect_button, login_button_box = create_login_buttons
+          @treeview_buttons << connect_button << disconnect_button
+
+          # Create character list
+          liststore, @treeview, sw = create_character_list
+
+          # Create frontend selection
+          frontend_box, stormfront_option, wizard_option, avalon_option, suks_option = create_frontend_selection
+
+          # Create custom launch options
+          custom_launch_option = create_custom_launch_options
+
+          # Create quick entry save option
+          @make_quick_option = Gtk::CheckButton.new('Save this info for quick game entry')
+
+          # Create play button
+          play_button, play_button_box = create_play_button
+          @treeview_buttons << play_button
+
+          # Create main tab container
+          @game_entry_tab = Gtk::Box.new(:vertical)
+          @game_entry_tab.border_width = 5
+          @game_entry_tab.pack_start(login_table, expand: false, fill: false, padding: 0)
+          @game_entry_tab.pack_start(login_button_box, expand: false, fill: false, padding: 0)
+          @game_entry_tab.pack_start(sw, expand: true, fill: true, padding: 3)
+          @game_entry_tab.pack_start(frontend_box, expand: false, fill: false, padding: 3)
+          @game_entry_tab.pack_start(custom_launch_option, expand: false, fill: false, padding: 3)
+          @game_entry_tab.pack_start(@custom_launch_entry, expand: false, fill: false, padding: 3)
+          @game_entry_tab.pack_start(@custom_launch_dir, expand: false, fill: false, padding: 3)
+          @game_entry_tab.pack_start(@make_quick_option, expand: false, fill: false, padding: 3)
+          @game_entry_tab.pack_start(play_button_box, expand: false, fill: false, padding: 3)
+
+          # Apply initial theme
+          unless @theme_state
+            lightgrey = Gdk::RGBA::parse("#d3d3d3")
+            @game_entry_tab.override_background_color(:normal, lightgrey)
+            @treeview.override_background_color(:normal, lightgrey)
+          end
+
+          # Set up event handlers
+          setup_custom_launch_handler(custom_launch_option)
+          setup_avalon_option_handler(avalon_option, custom_launch_option)
+          setup_connect_button_handler(connect_button, disconnect_button, user_id_entry, pass_entry, liststore)
+          setup_treeview_handler(@treeview, play_button)
+          setup_disconnect_button_handler(disconnect_button, play_button, connect_button, user_id_entry, pass_entry, liststore)
+          setup_play_button_handler(play_button, @treeview, user_id_entry, pass_entry, stormfront_option, wizard_option, avalon_option, suks_option, custom_launch_option)
+          setup_entry_key_handlers(user_id_entry, pass_entry, connect_button)
+        end
+
+        # Creates login fields (user ID and password)
+        #
+        # @return [Array] Array containing user_id_entry, pass_entry, and login_table
+        def create_login_fields
+          user_id_entry = Gtk::Entry.new
+
+          pass_entry = Gtk::Entry.new
+          pass_entry.visibility = false
+
+          login_table = Gtk::Table.new(2, 2, false)
+          login_table.attach(Gtk::Label.new('User ID:'), 0, 1, 0, 1, Gtk::AttachOptions::EXPAND | Gtk::AttachOptions::FILL, Gtk::AttachOptions::EXPAND | Gtk::AttachOptions::FILL, 5, 5)
+          login_table.attach(user_id_entry, 1, 2, 0, 1, Gtk::AttachOptions::EXPAND | Gtk::AttachOptions::FILL, Gtk::AttachOptions::EXPAND | Gtk::AttachOptions::FILL, 5, 5)
+          login_table.attach(Gtk::Label.new('Password:'), 0, 1, 1, 2, Gtk::AttachOptions::EXPAND | Gtk::AttachOptions::FILL, Gtk::AttachOptions::EXPAND | Gtk::AttachOptions::FILL, 5, 5)
+          login_table.attach(pass_entry, 1, 2, 1, 2, Gtk::AttachOptions::EXPAND | Gtk::AttachOptions::FILL, Gtk::AttachOptions::EXPAND | Gtk::AttachOptions::FILL, 5, 5)
+
+          [user_id_entry, pass_entry, login_table]
+        end
+
+        # Creates login buttons (connect and disconnect)
+        #
+        # @return [Array] Array containing connect_button, disconnect_button, and login_button_box
+        def create_login_buttons
+          disconnect_button = Components.create_button(label: ' Disconnect ')
+          disconnect_button.sensitive = false
+
+          connect_button = Components.create_button(label: ' Connect ')
+
+          # Apply button styling
+          @button_provider = Utilities.create_button_css_provider
+          disconnect_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER) unless @theme_state
+          connect_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER) unless @theme_state
+
+          login_button_box = Components.create_button_box(
+            [connect_button, disconnect_button],
+            expand: false,
+            fill: false,
+            padding: 5
+          )
+
+          [connect_button, disconnect_button, login_button_box]
+        end
+
+        # Creates character list components
+        #
+        # @return [Array] Array containing liststore, treeview, and sw
+        def create_character_list
+          liststore = Gtk::ListStore.new(String, String, String, String)
+          liststore.set_sort_column_id(1, :ascending)
+
+          renderer = Gtk::CellRendererText.new
+
+          treeview = Gtk::TreeView.new(liststore)
+          treeview.height_request = 160
+
+          # Add game column
+          col = Gtk::TreeViewColumn.new("Game", renderer, text: 1)
+          col.resizable = true
+          treeview.append_column(col)
+
+          # Add character column
+          col = Gtk::TreeViewColumn.new("Character", renderer, text: 3)
+          col.resizable = true
+          treeview.append_column(col)
+
+          # Create scrolled window for tree view
+          sw = Gtk::ScrolledWindow.new
+          sw.set_policy(:automatic, :automatic)
+          sw.add(treeview)
+
+          [liststore, treeview, sw]
+        end
+
+        # Creates frontend selection components
+        #
+        # @return [Array] Array containing frontend_box and radio buttons
+        def create_frontend_selection
+          stormfront_option = Gtk::RadioButton.new(label: 'Wrayth')
+          wizard_option = Gtk::RadioButton.new(label: 'Wizard', member: stormfront_option)
+          avalon_option = Gtk::RadioButton.new(label: 'Avalon', member: stormfront_option)
+          suks_option = Gtk::RadioButton.new(label: 'suks', member: stormfront_option)
+
+          frontend_box = Gtk::Box.new(:horizontal, 10)
+          frontend_box.pack_start(stormfront_option, expand: false, fill: false, padding: 0)
+          frontend_box.pack_start(wizard_option, expand: false, fill: false, padding: 0)
+          if RUBY_PLATFORM =~ /darwin/i
+            frontend_box.pack_start(avalon_option, expand: false, fill: false, padding: 0)
+          end
+          # frontend_box.pack_start(suks_option, false, false, 0)
+
+          [frontend_box, stormfront_option, wizard_option, avalon_option, suks_option]
+        end
+
+        # Creates custom launch options
+        #
+        # @return [Gtk::CheckButton] Custom launch option checkbox
+        def create_custom_launch_options
+          custom_launch_option = Gtk::CheckButton.new('Custom launch command')
+
+          @custom_launch_entry = Gtk::ComboBoxText.new(entry: true)
+          @custom_launch_entry.child.set_placeholder_text("(enter custom launch command)")
+          @custom_launch_entry.append_text("Wizard.Exe /GGS /H127.0.0.1 /P%port% /K%key%")
+          @custom_launch_entry.append_text("Stormfront.exe /GGS/Hlocalhost/P%port%/K%key%")
+
+          @custom_launch_dir = Gtk::ComboBoxText.new(entry: true)
+          @custom_launch_dir.child.set_placeholder_text("(enter working directory for command)")
+          @custom_launch_dir.append_text("../wizard")
+          @custom_launch_dir.append_text("../StormFront")
+
+          custom_launch_option
+        end
+
+        # Creates play button components
+        #
+        # @return [Array] Array containing play_button and play_button_box
+        def create_play_button
+          play_button = Components.create_button(label: ' Play ')
+          play_button.sensitive = false
+
+          # Apply button styling
+          play_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER) unless @theme_state
+
+          play_button_box = Components.create_button_box(
+            [play_button],
+            expand: false,
+            fill: false,
+            padding: 5
+          )
+
+          [play_button, play_button_box]
+        end
+
+        # Sets up custom launch option toggle handler
+        #
+        # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
+        # @return [void]
+        def setup_custom_launch_handler(custom_launch_option)
+          custom_launch_option.signal_connect('toggled') {
+            @custom_launch_entry.visible = custom_launch_option.active?
+            @custom_launch_dir.visible = custom_launch_option.active?
+          }
+        end
+
+        # Sets up avalon option toggle handler
+        #
+        # @param avalon_option [Gtk::RadioButton] Avalon radio button
+        # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
+        # @return [void]
+        def setup_avalon_option_handler(avalon_option, custom_launch_option)
+          avalon_option.signal_connect('toggled') {
+            if avalon_option.active?
+              custom_launch_option.active = false
+              custom_launch_option.sensitive = false
+            else
+              custom_launch_option.sensitive = true
+            end
+          }
+        end
+
+        # Sets up connect button click handler
+        #
+        # @param connect_button [Gtk::Button] Connect button
+        # @param disconnect_button [Gtk::Button] Disconnect button
+        # @param user_id_entry [Gtk::Entry] User ID entry field
+        # @param pass_entry [Gtk::Entry] Password entry field
+        # @param liststore [Gtk::ListStore] List store for character list
+        # @return [void]
+        def setup_connect_button_handler(connect_button, disconnect_button, user_id_entry, pass_entry, liststore)
+          connect_button.signal_connect('clicked') {
+            connect_button.sensitive = false
+            user_id_entry.sensitive = false
+            pass_entry.sensitive = false
+            iter = liststore.append
+            iter[1] = 'working...'
+            Gtk.queue {
+              begin
+                # Authenticate with legacy mode
+                login_info = Authentication.authenticate(
+                  account: user_id_entry.text || argv.account,
+                  password: pass_entry.text || argv.password,
+                  legacy: true
+                )
+              end
+              if login_info.to_s =~ /error/i
+                # Call the error callback if provided
+                if @callbacks[:on_error]
+                  @callbacks[:on_error].call("\nSomething went wrong... probably invalid \nuser id and / or password.\n\nserver response: #{login_info}")
+                end
+                connect_button.sensitive = true
+                disconnect_button.sensitive = false
+                user_id_entry.sensitive = true
+                pass_entry.sensitive = true
+              else
+                # Populate character list
+                liststore.clear
+                login_info.each do |row|
+                  iter = liststore.append
+                  iter[0] = row[:game_code]
+                  iter[1] = row[:game_name]
+                  iter[2] = row[:char_code]
+                  iter[3] = row[:char_name]
+                end
+                disconnect_button.sensitive = true
+              end
+              true
+            }
+          }
+        end
+
+        # Sets up tree view selection handler
+        #
+        # @param treeview [Gtk::TreeView] Tree view for character list
+        # @param play_button [Gtk::Button] Play button
+        # @return [void]
+        def setup_treeview_handler(treeview, play_button)
+          treeview.signal_connect('cursor-changed') {
+            play_button.sensitive = true
+          }
+        end
+
+        # Sets up disconnect button click handler
+        #
+        # @param disconnect_button [Gtk::Button] Disconnect button
+        # @param play_button [Gtk::Button] Play button
+        # @param connect_button [Gtk::Button] Connect button
+        # @param user_id_entry [Gtk::Entry] User ID entry field
+        # @param pass_entry [Gtk::Entry] Password entry field
+        # @param liststore [Gtk::ListStore] List store for character list
+        # @return [void]
+        def setup_disconnect_button_handler(disconnect_button, play_button, connect_button, user_id_entry, pass_entry, liststore)
+          disconnect_button.signal_connect('clicked') {
+            disconnect_button.sensitive = false
+            play_button.sensitive = false
+            liststore.clear
+            connect_button.sensitive = true
+            user_id_entry.sensitive = true
+            pass_entry.sensitive = true
+          }
+        end
+
+        # Sets up play button click handler
+        #
+        # @param play_button [Gtk::Button] Play button
+        # @param treeview [Gtk::TreeView] Tree view for character list
+        # @param user_id_entry [Gtk::Entry] User ID entry field
+        # @param pass_entry [Gtk::Entry] Password entry field
+        # @param stormfront_option [Gtk::RadioButton] Stormfront radio button
+        # @param wizard_option [Gtk::RadioButton] Wizard radio button
+        # @param avalon_option [Gtk::RadioButton] Avalon radio button
+        # @param suks_option [Gtk::RadioButton] Suks radio button
+        # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
+        # @return [void]
+        def setup_play_button_handler(play_button, treeview, user_id_entry, pass_entry, stormfront_option, wizard_option, avalon_option, suks_option, custom_launch_option)
+          # Changed from 'clicked' to 'button-release-event' to match saved login tab's signal handling
+          play_button.signal_connect('button-release-event') { |_owner, ev|
+            if (ev.event_type == Gdk::EventType::BUTTON_RELEASE) && (ev.button == 1)
+              play_button.sensitive = false
+
+              # Wrap all UI operations in Gtk.queue to ensure they run on the GTK main thread
+              Gtk.queue {
+                game_code = treeview.selection.selected[0]
+                char_name = treeview.selection.selected[3]
+
+                # Authenticate and get launch data
+                launch_data_hash = Authentication.authenticate(
+                  account: user_id_entry.text,
+                  password: pass_entry.text,
+                  character: char_name,
+                  game_code: game_code
+                )
+
+                # Determine frontend type - properly using stormfront_option parameter
+                frontend = if wizard_option.active?
+                             'wizard'
+                           elsif avalon_option.active?
+                             'avalon'
+                           elsif suks_option.active?
+                             'suks'
+                           elsif stormfront_option.active?
+                             'stormfront'
+                           else
+                             'stormfront' # Default fallback
+                           end
+
+                # Get custom launch settings
+                custom_launch = custom_launch_option.active? ? @custom_launch_entry.child.text : nil
+                custom_launch_dir = (custom_launch_option.active? && !@custom_launch_dir.child.text.empty?) ? @custom_launch_dir.child.text : nil
+
+                # Prepare launch data
+                launch_data = Authentication.prepare_launch_data(
+                  launch_data_hash,
+                  frontend,
+                  custom_launch,
+                  custom_launch_dir
+                )
+
+                # Save entry data if requested
+                if @make_quick_option.active?
+                  entry_data = Authentication.create_entry_data(
+                    char_name: treeview.selection.selected[3],
+                    game_code: treeview.selection.selected[0],
+                    game_name: treeview.selection.selected[1],
+                    user_id: user_id_entry.text,
+                    password: pass_entry.text,
+                    frontend: frontend,
+                    custom_launch: custom_launch,
+                    custom_launch_dir: custom_launch_dir
+                  )
+
+                  # Call the save entry callback if provided
+                  if @callbacks[:on_save_entry]
+                    @callbacks[:on_save_entry].call(entry_data)
+                  end
+                end
+
+                # Call the play callback if provided
+                if launch_data && @callbacks[:on_play]
+                  @callbacks[:on_play].call(launch_data)
+                  user_id_entry.text = String.new
+                  pass_entry.text = String.new
+                else
+                  play_button.sensitive = false
+                  connect_button.sensitive = true
+                  user_id_entry.sensitive = true
+                  pass_entry.sensitive = true
+                end
+              }
+            end
+          }
+        end
+
+        # Sets up entry key handlers
+        #
+        # @param user_id_entry [Gtk::Entry] User ID entry field
+        # @param pass_entry [Gtk::Entry] Password entry field
+        # @param connect_button [Gtk::Button] Connect button
+        # @return [void]
+        def setup_entry_key_handlers(user_id_entry, pass_entry, connect_button)
+          # User ID entry key handler
+          user_id_entry.signal_connect('activate') {
+            pass_entry.grab_focus
+          }
+
+          # Password entry key handler
+          pass_entry.signal_connect('activate') {
+            connect_button.clicked
+          }
+        end
+      end
+    end
+  end
+end
