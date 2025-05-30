@@ -29,7 +29,7 @@ module Lich
             :category      => :unarmed,
             :base_name     => "Name",
             :all_names     => ["Name", "Alt", "Alt", "Alt"],
-            :damage_types  => [slash: 50.0, crush: 16.7, puncture: 33.3, special: [:none]],
+            :damage_types  => [slash: 50.0, crush: 16.7, puncture: 33.3, special: []],
             :damage_factor => [nil, 0.310, 0.225, 0.240, 0.125, 0.150],
             #                       /Cloth            / Leather       / Scale         / Chain         / Plate
             :avd_by_asg    => [nil, 38, 38, nil, nil, 38, 37, 36, 35, 34, 32, 30, 28, 38, 34, 30, 26, 34, 28, 22, 16],
@@ -44,7 +44,7 @@ module Lich
             :hybrid_skills => [:OHE, :BRAWL],
             :base_name     => "katar",
             :all_names     => ["katar", "gauntlet-sword", "kunai", "manople", "paiscush", "pata", "slasher", "tvekre"],
-            :damage_types  => [slash: 33.3, crush: 0.0, puncture: 66.7, special: [:none]],
+            :damage_types  => [slash: 33.3, crush: 0.0, puncture: 66.7, special: []],
             :damage_factor => [nil, 0.325, 0.250, 0.225, 0.200, 0.175],
             #                       /Cloth             / Leather       / Scale      / Chain       / Plate
             :avd_by_asg    => [nil, 30, nil, nil, nil, 32, 31, 30, 29, 40, 38, 36, 34, 45, 41, 37, 33, 40, 34, 28, 22],

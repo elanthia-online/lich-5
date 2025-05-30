@@ -29,7 +29,7 @@ module Lich
             :category      => :unarmed,
             :base_name     => "Name",
             :all_names     => ["Name", "Alt", "Alt", "Alt"],
-            :damage_types  => [slash: 50.0, crush: 16.7, puncture: 33.3, special: [:none]],
+            :damage_types  => [slash: 50.0, crush: 16.7, puncture: 33.3, special: []],
             :damage_factor => [nil, 0.310, 0.225, 0.240, 0.125, 0.150],
             #                       /Cloth            / Leather       / Scale         / Chain         / Plate
             :avd_by_asg    => [nil, 38, 38, nil, nil, 38, 37, 36, 35, 34, 32, 30, 28, 38, 34, 30, 26, 34, 28, 22, 16],
@@ -42,7 +42,7 @@ module Lich
             :category      => :runestave,
             :base_name     => "runestave",
             :all_names     => ["runestave", "asaya", "crook", "crosier", "pastoral staff", "rune staff", "runestaff", "scepter", "scepter-of-Lumnis", "staff", "staff-of-lumnis", "walking stick"],
-            :damage_types  => [slash: 0.0, crush: 100.0, puncture: 0.0, special: [:none]],
+            :damage_types  => [slash: 0.0, crush: 100.0, puncture: 0.0, special: []],
             :damage_factor => [nil, 0.250, 0.200, 0.150, 0.150, 0.075],
             #                       /Cloth            / Leather       / Scale      / Chain       / Plate
             :avd_by_asg    => [nil, 10, 10, nil, nil, 15, 14, 13, 12, 10, 8, 6, 4, 15, 11, 7, 3, 10, 4, -2, -8],

@@ -29,7 +29,7 @@ module Lich
             :category      => :unarmed,
             :base_name     => "Name",
             :all_names     => ["Name", "Alt", "Alt", "Alt"],
-            :damage_types  => [slash: 50.0, crush: 16.7, puncture: 33.3, special: [:none]],
+            :damage_types  => [slash: 50.0, crush: 16.7, puncture: 33.3, special: []],
             :damage_factor => [nil, 0.310, 0.225, 0.240, 0.125, 0.150],
             #                       /Cloth            / Leather       / Scale         / Chain         / Plate
             :avd_by_asg    => [nil, 38, 38, nil, nil, 38, 37, 36, 35, 34, 32, 30, 28, 38, 34, 30, 26, 34, 28, 22, 16],
@@ -42,7 +42,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "closed fist",
             :all_names     => ["closed fist"],
-            :damage_types  => [slash: 0.0, crush: 100.0, puncture: 0.0, special: [:none]],
+            :damage_types  => [slash: 0.0, crush: 100.0, puncture: 0.0, special: []],
             :damage_factor => [nil, 0.100, 0.075, 0.040, 0.036, 0.032],
             #                       /Cloth            / Leather       / Scale      / Chain       / Plate
             :avd_by_asg    => [nil, 25, 25, nil, nil, 20, 19, 18, 17, 10, 8, 6, 4, 5, 1, -3, -7, -5, -11, -17, -23],
@@ -53,7 +53,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "blackjack",
             :all_names     => ["blackjack", "bludgeon", "sap"],
-            :damage_types  => [slash: 0.0, crush: 100.0, puncture: 0.0, special: [:none]],
+            :damage_types  => [slash: 0.0, crush: 100.0, puncture: 0.0, special: []],
             :damage_factor => [nil, 0.250, 0.140, 0.090, 0.110, 0.075],
             #                       /Cloth            / Leather       / Scale         / Chain       / Plate
             :avd_by_asg    => [nil, 40, 40, nil, nil, 35, 34, 33, 32, 25, 23, 21, 19, 15, 11, 7, 3, 0, -6, -12, -18],
@@ -64,7 +64,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "cestus",
             :all_names     => ["cestus"],
-            :damage_types  => [slash: 0.0, crush: 100.0, puncture: 0.0, special: [:none]],
+            :damage_types  => [slash: 0.0, crush: 100.0, puncture: 0.0, special: []],
             :damage_factor => [nil, 0.250, 0.175, 0.150, 0.075, 0.035],
             #                       /Cloth            / Leather       / Scale         / Chain       / Plate
             :avd_by_asg    => [nil, 40, 40, nil, nil, 30, 29, 28, 27, 20, 18, 16, 14, 10, 6, 2, -2, -25, -31, -37, -43],
@@ -75,7 +75,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "fist-scythe",
             :all_names     => ["fist-scythe", "hand-hook", "hook", "hook-claw", "kama", "sickle"],
-            :damage_types  => [slash: 66.7, crush: 16.7, puncture: 16.6, special: [:none]],
+            :damage_types  => [slash: 66.7, crush: 16.7, puncture: 16.6, special: []],
             :damage_factor => [nil, 0.350, 0.225, 0.200, 0.175, 0.125],
             #                       /Cloth            / Leather       / Scale         / Chain         / Plate
             :avd_by_asg    => [nil, 45, 45, nil, nil, 40, 39, 38, 37, 30, 28, 26, 24, 37, 33, 29, 25, 20, 14, 8, 2],
@@ -86,7 +86,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "hook-knife",
             :all_names     => ["hook-knife", "pit-knife", "sabiet"],
-            :damage_types  => [slash: nil, crush: 0.0, puncture: nil, special: [:none]], # Missing Data on Wiki
+            :damage_types  => [slash: nil, crush: 0.0, puncture: nil, special: []], # Missing Data on Wiki
             :damage_factor => [nil, 0.250, 0.175, 0.125, 0.070, 0.035],
             #                       /Cloth            / Leather       / Scale         / Chain         / Plate
             :avd_by_asg    => [nil, 40, 40, nil, nil, 30, 29, 28, 27, 18, 16, 13, 12, 10, 6, 2, -2, -15, -21, -27, -33],
@@ -97,7 +97,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "jackblade",
             :all_names     => ["jackblade", "slash-jack"],
-            :damage_types  => [slash: nil, crush: nil, puncture: 0.0, special: [:none]], # Missing Data on Wiki
+            :damage_types  => [slash: nil, crush: nil, puncture: 0.0, special: []], # Missing Data on Wiki
             :damage_factor => [nil, 0.250, 0.175, 0.150, 0.150, 0.110],
             #                       /Cloth            / Leather       / Scale         / Chain        / Plate
             :avd_by_asg    => [nil, 45, 45, nil, nil, 35, 34, 33, 32, 25, 23, 21, 19, 20, 16, 12, 8, 10, 4, -2, -8],
@@ -108,7 +108,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "paingrip",
             :all_names     => ["paingrip", "grab-stabber"],
-            :damage_types  => [slash: nil, crush: nil, puncture: nil, special: [:none]], # Missing Data on Wiki
+            :damage_types  => [slash: nil, crush: nil, puncture: nil, special: []], # Missing Data on Wiki
             :damage_factor => [nil, 0.225, 0.200, 0.125, 0.075, 0.030],
             #                       /Cloth            / Leather       / Scale        / Chain       / Plate
             :avd_by_asg    => [nil, 40, 40, nil, nil, 20, 19, 18, 17, 15, 13, 11, 9, 15, 11, 7, 3, -25, -31, -37, -43],
@@ -119,7 +119,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "sai",
             :all_names     => ["sai", "jitte"],
-            :damage_types  => [slash: 0.0, crush: 0.0, puncture: 100.0, special: [:none]],
+            :damage_types  => [slash: 0.0, crush: 0.0, puncture: 100.0, special: []],
             :damage_factor => [nil, 0.250, 0.200, 0.110, 0.150, 0.040],
             #                       /Cloth            / Leather       / Scale         / Chain         / Plate
             :avd_by_asg    => [nil, 30, 30, nil, nil, 31, 30, 29, 28, 25, 23, 21, 19, 33, 29, 25, 21, 6, 0, -6, -12],
@@ -130,7 +130,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "knuckle-blade",
             :all_names     => ["knuckle-blade", "slash-fist"],
-            :damage_types  => [slash: 66.7, crush: 33.3, puncture: 0.0, special: [:none]],
+            :damage_types  => [slash: 66.7, crush: 33.3, puncture: 0.0, special: []],
             :damage_factor => [nil, 0.250, 0.150, 0.100, 0.075, 0.075],
             #                       /Cloth            / Leather       / Scale         / Chain         / Plate
             :avd_by_asg    => [nil, 45, 45, nil, nil, 40, 39, 38, 37, 25, 23, 21, 19, 25, 21, 17, 13, 0, -6, -12, -18],
@@ -141,7 +141,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "knuckle-duster",
             :all_names     => ["knuckle-duster", "knuckle-guard", "knuckles"],
-            :damage_types  => [slash: 0.0, crush: 100.0, puncture: 0.0, special: [:none]],
+            :damage_types  => [slash: 0.0, crush: 100.0, puncture: 0.0, special: []],
             :damage_factor => [nil, 0.250, 0.175, 0.125, 0.100, 0.040],
             #                       /Cloth            / Leather       / Scale         / Chain         / Plate
             :avd_by_asg    => [nil, 35, 35, nil, nil, 32, 31, 30, 29, 25, 23, 21, 19, 18, 14, 10, 6, 0, -6, -12, -18],
@@ -152,7 +152,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "razorpaw",
             :all_names     => ["razorpaw", "slap-slasher"],
-            :damage_types  => [slash: 100.0, crush: 0.0, puncture: 0.0, special: [:none]],
+            :damage_types  => [slash: 100.0, crush: 0.0, puncture: 0.0, special: []],
             :damage_factor => [nil, 0.275, 0.200, 0.125, 0.050, 0.030],
             #                       /Cloth            / Leather       / Scale      / Chain         / Plate
             :avd_by_asg    => [nil, 35, 35, nil, nil, 20, 19, 18, 17, 10, 8, 6, 4, 0, -4, -8, -12, -25, -31, -37, -43],
@@ -163,7 +163,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "tiger-claw",
             :all_names     => ["tiger-claw", "thrak-bite", "barbed claw"],
-            :damage_types  => [slash: nil, crush: nil, puncture: 0.0, special: [:none]], # Missing Data on Wiki
+            :damage_types  => [slash: nil, crush: nil, puncture: 0.0, special: []], # Missing Data on Wiki
             :damage_factor => [nil, 0.275, 0.200, 0.150, 0.100, 0.035],
             #                       /Cloth            / Leather       / Scale        / Chain       / Plate
             :avd_by_asg    => [nil, 40, 40, nil, nil, 25, 24, 23, 22, 15, 13, 11, 9, 5, 1, -3, -7, -25, -31, -37, -43],
@@ -174,7 +174,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "troll-claw",
             :all_names     => ["troll-claw", "bladed claw", "kumade", "wight-claw"],
-            :damage_types  => [slash: nil, crush: nil, puncture: 0.0, special: [:none]], # Missing Data on Wiki
+            :damage_types  => [slash: nil, crush: nil, puncture: 0.0, special: []], # Missing Data on Wiki
             :damage_factor => [nil, 0.325, 0.175, 0.140, 0.120, 0.090],
             #                       /Cloth            / Leather       / Scale         / Chain         / Plate
             :avd_by_asg    => [nil, 46, 46, nil, nil, 35, 34, 33, 32, 25, 23, 21, 19, 25, 21, 17, 13, 15, 9, 3, -3],
@@ -185,7 +185,7 @@ module Lich
             :category      => :brawling,
             :base_name     => "yierka-spur",
             :all_names     => ["yierka-spur", "spike-fist"],
-            :damage_types  => [slash: nil, crush: nil, puncture: nil, special: [:none]], # Missing Data on Wiki
+            :damage_types  => [slash: nil, crush: nil, puncture: nil, special: []], # Missing Data on Wiki
             :damage_factor => [nil, 0.250, 0.150, 0.125, 0.125, 0.075],
             #                       /Cloth            / Leather       / Scale         / Chain         / Plate
             :avd_by_asg    => [nil, 40, 40, nil, nil, 35, 34, 33, 32, 25, 23, 21, 19, 30, 26, 22, 18, 0, -6, -12, -18],
