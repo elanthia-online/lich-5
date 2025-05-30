@@ -165,6 +165,68 @@ module Lich
             min_rt: [w1[:min_rt], w2[:min_rt]]
           }
         end
+
+        ##
+        # Searches the weapon stats using optional filters.
+        #
+        # @param filters [Hash] Filter options to apply (all must match)
+        # @option filters [Symbol] :category          The weapon category (e.g., :edged, :polearm)
+        # @option filters [Symbol] :damage_type       The damage type (:slash, :crush, :puncture, or :special)
+        # @option filters [Integer] :max_base_rt      Maximum allowed base roundtime
+        # @option filters [Hash]   :min_avd_by_asg    AVD requirement for a given ASG, e.g., { asg: 14, min: 25 }
+        # @option filters [Hash]   :min_df_by_ag      DF requirement for a given armor group, e.g., { ag: 3, min: 0.200 }
+        # @return [Array<Hash>] List of matching weapon stat hashes
+        def self.search(filters = {})
+          results = []
+
+          @@weapon_stats.each do |category, weapons|
+            next if filters[:category] && filters[:category] != category
+
+            weapons.each_value do |weapon|
+              # Filter by damage type (including special)
+              if filters[:damage_type]
+                damage_types = weapon[:damage_types]
+                next unless damage_types
+
+                if filters[:damage_type] == :special
+                  specials = damage_types[:special]
+                  next if !specials || specials.empty? || specials.include?(:none)
+                else
+                  value = damage_types[filters[:damage_type]] || 0.0
+                  next if value <= 0.0
+                end
+              end
+
+              # Filter by base roundtime
+              if filters[:max_base_rt]
+                base_rt = weapon[:base_rt]
+                next if base_rt.nil? || base_rt > filters[:max_base_rt]
+              end
+
+              # Filter by AVD value at a specific ASG
+              if filters[:min_avd_by_asg]
+                asg = filters[:min_avd_by_asg][:asg]
+                min = filters[:min_avd_by_asg][:min]
+                avd = weapon[:avd_by_asg]
+                next unless avd && asg.between?(1, 20)
+                next if avd[asg].nil? || avd[asg] < min
+              end
+
+              # Filter by DF against a given armor group
+              if filters[:min_df_by_ag]
+                ag = filters[:min_df_by_ag][:ag]
+                min = filters[:min_df_by_ag][:min]
+                df = weapon[:damage_factor]
+                next unless df && ag.between?(1, 5)
+                next if df[ag].nil? || df[ag] < min
+              end
+
+              results << weapon
+            end
+          end
+
+          results
+        end
       end
     end
   end
