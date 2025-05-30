@@ -114,7 +114,7 @@ module Lich
             if forcert_count > 0
               return false unless (cost_amount + (cost_amount * ((25 + (10.0 * forcert_count)) / 100))).truncate < XMLData.public_send(cost_type)
             else
-              return false unless base_cost < XMLData.public_send(cost_type)
+              return false unless cost_amount < XMLData.public_send(cost_type)
             end
           end
           return true
