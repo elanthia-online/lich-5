@@ -37,7 +37,7 @@ module Lich
             :min_rt        => 4,
           },
 =end
-        @@weapon_stats_brawling = [
+        @@weapon_stats_brawling = {
           :closed_fist    => {
             :category      => :brawling,
             :base_name     => "closed fist",
