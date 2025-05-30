@@ -1,33 +1,52 @@
 # Carveout for Infomon rewrite
 module Lich
   module Gemstone
+    ##
+    # The Society class provides accessors for a character's society membership, rank, and task data.
+    #
+    # All methods rely on Infomon or XMLData, and a future rewrite might shift responsibility to
+    # character-specific data models or direct game scraping.
     class Society
-      # Determines character's society membership
+      ##
+      # Retrieves the character's society membership status.
       #
-      # @return [String] The name of the society: "Order of Voln", "Council of Light", "Guardians of Sunfist", or None
+      # @return [String, nil] The name of the society:
+      #   - "Order of Voln"
+      #   - "Council of Light"
+      #   - "Guardians of Sunfist"
+      #   - or `nil`/"None" if not a member
       def self.member_of
         Infomon.get("society.status")
       end
 
-      # Determines what rank (if any) the character is in their society
+      ##
+      # Retrieves the character's current rank within their society.
       #
-      # @return [Integer] The rank number or 0 if not a member
+      # @return [Integer] The rank number, or 0 if not a member
       def self.rank
         Infomon.get("society.rank")
       end
 
-      # Determines the character's society task assignment, if any
+      ##
+      # Retrieves the current task assigned by the society, if any.
       #
-      # @return [String] The current society task, or "You are not currently in a society." if not a member, or
+      # The current society task, or "You are not currently in a society." if not a member, or
       # "It is your eternal duty to release undead creatures from their suffering in the name of the Great Spirit Voln." if
       # a voln master.
+      #
+      # @return [String] The current society task message.
+      #   Examples:
+      #   - A task description
+      #   - "You are not currently in a society."
+      #   - "It is your eternal duty to release undead creatures..." (Voln masters)
       def self.task
         XMLData.society_task
       end
 
-      # Serializes the current society status and rank.
+      ##
+      # Bundles the current society status and rank into a simple structure.
       #
-      # @return [Array<(String, Integer)>] An array containing the society status and rank
+      # @return [Array<(String, Integer)>] An array in the format `[status, rank]`
       def self.serialize
         [self.member_of, self.rank]
       end
@@ -36,6 +55,7 @@ module Lich
       ## DEPRECATED METHODS ##
       ########################
 
+      ##
       # @deprecated Use {#member_of} instead.
       #
       # @return [String] The name of the society: "Order of Voln", "Council of Light", "Guardians of Sunfist", or None
@@ -44,6 +64,7 @@ module Lich
         Infomon.get("society.status")
       end
 
+      ##
       # @deprecated Use {#member_of} instead.
       #
       # @return [String] The current society membership
@@ -52,6 +73,7 @@ module Lich
         self.status.dup
       end
 
+      ##
       # @deprecated Use {#membership} instead.
       #
       # @return [String] The current society membership
@@ -60,6 +82,7 @@ module Lich
         Infomon.get("society.status")
       end
 
+      ##
       # @deprecated Use {#rank} instead.
       #
       # @return [Integer] The current society rank
@@ -68,6 +91,7 @@ module Lich
         self.rank
       end
 
+      ##
       # @deprecated Use {Voln.favor} instead.
       #
       # @return [Integer] The amount of Voln favor
