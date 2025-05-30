@@ -37,7 +37,7 @@ module Lich
             :min_rt        => 4,
           },
 =end
-        @@weapon_stats_ranged = [
+        @@weapon_stats_ranged = {
           :composite_bow  => {
             :category      => :ranged,
             :base_name     => "composite bow",
