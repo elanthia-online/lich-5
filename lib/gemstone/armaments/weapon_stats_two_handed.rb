@@ -132,7 +132,7 @@ module Lich
             :base_rt       => 7,
             :min_rt        => 4,
           },
-          :quarterstaff      => {
+          :quarterstaff     => {
             :category      => :two_handed,
             :base_name     => "quarterstaff",
             :all_names     => ["quarterstaff", "bo stick", "staff", "toyak", "walking staff", "warstaff", "yoribo"],
