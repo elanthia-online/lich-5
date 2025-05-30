@@ -71,7 +71,7 @@ module Lich
             :base_rt       => 5,
             :min_rt        => 2,
           },
-          :javelin => {
+          :javelin      => {
             :category      => :thrown,
             :base_name     => "javelin",
             :all_names     => ["javelin", "contus", "jaculum", "knopkierie", "lancea", "nage-yari", "pelta", "shail", "spiculum"],

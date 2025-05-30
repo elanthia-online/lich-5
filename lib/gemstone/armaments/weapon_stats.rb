@@ -52,27 +52,118 @@ module Lich
           unarmed: @@weapon_stats_unarmed,
         }
 
+        ##
         # Finds the weapon's stats hash by one of its names.
         #
         # @param name [String] The name or alias of the weapon.
         # @param category [Symbol, nil] (optional) The weapon category to narrow the search.
         # @return [Hash, nil] The stats hash of the matching weapon, or nil if not found.
         def self.find_weapon(name, category = nil)
+          normalized = Lich::Util.normalize_name(name)
+
           unless category.nil?
             weapons = @@weapon_stats[category]
             return nil unless weapons
 
             weapons.each_value do |weapon_info|
-              return weapon_info if weapon_info[:all_names]&.include?(name)
+              return weapon_info if weapon_info[:all_names]&.include?(normalized)
             end
           else
             @@weapon_stats.each_value do |weapons|
               weapons.each_value do |weapon_info|
-                return weapon_info if weapon_info[:all_names]&.include?(name)
+                return weapon_info if weapon_info[:all_names]&.include?(normalized)
               end
             end
           end
           nil
+        end
+
+        ##
+        # Lists all weapon base names, optionally filtered by weapon category.
+        #
+        # @param category [Symbol, nil] the weapon category to limit the results (e.g., :edged, :polearm)
+        # @return [Array<String>] an array of base weapon names
+        def self.list_weapons(category = nil)
+          result = []
+          if category
+            @@weapon_stats[category]&.each_value do |weapon_info|
+              result << weapon_info[:base_name]
+            end
+          else
+            @@weapon_stats.each_value do |weapons|
+              weapons.each_value { |weapon_info| result << weapon_info[:base_name] }
+            end
+          end
+          result.uniq
+        end
+
+        ##
+        # Returns a list of all defined weapon categories.
+        #
+        # @return [Array<Symbol>] an array of weapon category symbols
+        def self.categories
+          @@weapon_stats.keys
+        end
+
+        ##
+        # Returns a simplified hash of a weapon’s damage type breakdown.
+        #
+        # @param name [String] a weapon name or alias
+        # @param category [Symbol, nil] optional category to narrow the search
+        # @return [Hash, nil] damage type summary or nil if not found
+        def self.damage_summary(name, category = nil)
+          normalized = Lich::Util.normalize_name(name)
+
+          weapon = find_weapon(normalized, category)
+          return nil unless weapon
+
+          {
+            base_name: weapon[:base_name],
+            slash: weapon[:damage_types][:slash],
+            crush: weapon[:damage_types][:crush],
+            puncture: weapon[:damage_types][:puncture],
+            special: weapon[:damage_types][:special]
+          }
+        end
+
+        ##
+        # Returns all recognized names for a given weapon.
+        #
+        # @param name [String] the base name or any alias of the weapon
+        # @param category [Symbol, nil] optional category to limit the search
+        # @return [Array<String>] an array of all recognized names for the weapon
+        def self.aliases_for(name, category = nil)
+          normalized = Lich::Util.normalize_name(name)
+
+          weapon = find_weapon(normalized, category)
+          weapon ? weapon[:all_names] : []
+        end
+
+        ##
+        # Compares two weapons and returns key stat differences.
+        #
+        # @param name1 [String] first weapon name or alias
+        # @param name2 [String] second weapon name or alias
+        # @param category1 [Symbol, nil] optional category for first weapon
+        # @param category2 [Symbol, nil] optional category for second weapon
+        # @return [Hash, nil] comparison data or nil if either weapon not found
+        def self.compare_weapons(name1, name2, category1 = nil, category2 = nil)
+          normalized1 = Lich::Util.normalize_name(name1)
+          normalized2 = Lich::Util.normalize_name(name2)
+
+          w1 = find_weapon(normalized1, category1)
+          w2 = find_weapon(normalized2, category2)
+          return nil unless w1 && w2
+
+          {
+            name1: w1[:base_name],
+            name2: w2[:base_name],
+            damage_types: [w1[:damage_types], w2[:damage_types]],
+            damage_factors: [w1[:damage_factor], w2[:damage_factor]],
+            avd_by_asg: [w1[:avd_by_asg], w2[:avd_by_asg]],
+            base_rt: [w1[:base_rt], w2[:base_rt]],
+            min_rt: [w1[:min_rt], w2[:min_rt]]
+          }
         end
       end
     end

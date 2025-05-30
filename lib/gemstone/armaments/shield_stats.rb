@@ -43,22 +43,47 @@ module Lich
           },
         ]
 
-        # Finds the shield's stats hash by one of its alternative names.
+        ##
+        # Finds the shield stats hash by category symbol.
         #
-        # @param name [String] the name or alias of the shield to search for.
-        # @return [Hash, nil] the stats hash of the matching shield, or nil if not found.
-        def self.find_type_by_name(name)
-          _, shield_info = @@shield_stats.find { |_, stats| stats[:all_names].include?(name) }
-          return shield_info
+        # @param category [Symbol] The shield category (e.g., :small_shield, :tower_shield).
+        # @return [Hash, nil] The stats hash of the matching shield, or nil if not found.
+        def self.find_shield_by_category(category)
+          _, shield_info = @@shield_stats.find { |_, stats| stats[:category] == category }
+          shield_info
         end
 
-        # Finds the shield's stats hash by either base name or an alternative name.
+        ##
+        # Returns a list of all recognized shield names across all shield categories.
         #
-        # @param type [String] the base name or alias of the shield.
-        # @return [Hash, nil] the stats hash of the matching shield, or nil if not found.
-        def self.find_category_info(category)
-          _, shield_info = @@shield_stats.find { |_, stats| stats[:category] == category }
-          return shield_info
+        # @return [Array<String>] All valid shield names.
+        def self.all_shield_names
+          @@shield_stats.map { |_, s| s[:all_names] }.flatten.uniq
+        end
+
+        ##
+        # Returns the shield stats hash matching a given name (either base or alias).
+        # WARNING: Matching by name may not return correct information due to historical name use
+        #
+        # @param name [String] The name or alias of the shield.
+        # @return [Hash, nil] The full stats hash for the matching shield, or nil if not found.
+        def self.find_shield(name)
+          normalized = Lich::Util.normalize_name(name)
+
+          _, shield_info = @@shield_stats.find { |_, stats| stats[:all_names].include?(normalized) }
+          shield_info
+        end
+
+        ##
+        # Lists all shields with an evade modifier between a given range.
+        #
+        # @param min [Float] Minimum evade modifier (inclusive).
+        # @param max [Float] Maximum evade modifier (inclusive).
+        # @return [Array<Hash>] Array of shield stat hashes matching the criteria.
+        def self.list_shields_by_evade_modifier(min:, max:)
+          @@shield_stats.map(&:last).select do |shield|
+            shield[:evade_modifier].between?(min, max)
+          end
         end
       end
     end

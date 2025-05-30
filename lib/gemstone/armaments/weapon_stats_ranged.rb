@@ -56,7 +56,7 @@ module Lich
             :all_names     => ["hand crossbow"],
             :damage_types  => [slash: 66.6, crush: 0.0, puncture: 33.7, special: [:none]],
             :damage_factor => [nil, 0.275, 0.225, 0.250, 0.190, 0.135],
-            :avd_by_asg    => [nil, 20, 20, nil, nil, 26, 25, 24, 23, 20, 18, 16, 14, 34, 30, 26, 22, 27, 21, 15 , 9],
+            :avd_by_asg    => [nil, 20, 20, nil, nil, 26, 25, 24, 23, 20, 18, 16, 14, 34, 30, 26, 22, 27, 21, 15, 9],
             :base_rt       => 4,
             :min_rt        => 4,
             :weapon_class  => :crossbow

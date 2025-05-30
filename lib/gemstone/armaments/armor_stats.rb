@@ -1,10 +1,15 @@
 module Lich
   module Gemstone
     module Armaments
-      # ArmorStats module contains metadata definitions for individual armor types,
-      # ...
+      # ArmorStats module provides utility methods for handling armor data,
+      # including retrieving armor information based on alternative names and
+      # categories.
       module ArmorStats
-        # Hinderances Array:
+        # Static array of armor stats indexed by armor identifiers. Each armor
+        # entry contains metadata such as category, alternative names, size and
+        # evade modifiers, and base weight.
+        #
+        # Hinderances/Training Requirements Array:
         # [0] - nil (Act Pen)     [1] - Minor Spiritual         [2] - Major Spiritual        [3] - Cleric Base
         # [4] - Minor Elemental   [5] - Major Elemental         [6] - Ranger Base            [7] - Sorceror Base
         # [8] - Old Empath Base   [9] - Wizard Base             [10] - Bard Base             [11] - Empath Base
@@ -331,6 +336,17 @@ module Lich
           },
         ]
 
+        ##
+        # Returns the critical divisor used for determining damage reduction based on armor type,
+        # armor group (AG), or armor subgroup (ASG).
+        #
+        # Priority is: `type` > `ag` > `asg`.
+        #
+        # @param type [Symbol, nil] The armor type (:cloth, :leather, :scale, :chain, :plate).
+        # @param ag [Integer, nil] The armor group number (1 to 5).
+        # @param asg [Integer, nil] The armor subgroup number (1 to 20).
+        # @return [Integer] The critical divisor value for the given input.
+        # @raise [ArgumentError] If none of `type`, `ag`, or `asg` are provided.
         def self.find_crit_divisor(type: nil, ag: nil, asg: nil)
           return { cloth: 5, leather: 6, scale: 7, chain: 9, plate: 11 }[type] unless type.nil?
           return { 1 => 5, 2 => 6, 3 => 7, 4 => 9, 5 => 11 }[ag] unless ag.nil?
@@ -338,6 +354,17 @@ module Lich
           raise ArgumentError, "Must provide either type, ag, or asg to find_crit_divisor"
         end
 
+        ##
+        # Returns the body coverage classification for a given armor subgroup number (ASG).
+        #
+        # Classifications include:
+        #   - :torso
+        #   - :torso_and_arms
+        #   - :torso_arms_and_legs
+        #   - :torso_arms_legs_and_head
+        #
+        # @param asg [Integer] The armor subgroup number (1 to 20).
+        # @return [Symbol, nil] The body coverage classification, or nil if ASG is not found.
         def self.find_coverage(asg)
           coverage = {
             torso: [1, 2, 5, 9, 13, 17],
@@ -352,13 +379,12 @@ module Lich
           nil
         end
 
-        # WARNING: Names are not strict, it could match multiple types of armor
-        def self.find_type_by_name(name)
-          _, armor_info = @@armor_stats.find { |_, stats| stats[:all_names].include?(name) }
-          return armor_info
-        end
-
-        def self.find_asg_data(asg_number)
+        ##
+        # Finds the armor stats hash by ASG (Armor Sub Group) number.
+        #
+        # @param asg_number [Integer] The armor sub group number (ASG) to search for.
+        # @return [Hash, nil] The stats hash of the matching armor, or nil if not found.
+        def self.find_armor_by_asg(asg_number)
           @@armor_stats.each_value do |subgroups|
             subgroups.each do |_, asg_data|
               next unless asg_data.is_a?(Hash)
@@ -366,6 +392,45 @@ module Lich
             end
           end
           nil
+        end
+
+        ##
+        # Returns a list of all recognized alternative and base armor names across all ASGs.
+        #
+        # @return [Array<String>] All valid armor names.
+        def self.all_armor_names
+          @@armor_stats.flat_map do |_, subgroups|
+            subgroups.values.compact.map { |asg| asg[:all_names] }
+          end.flatten.compact.uniq
+        end
+
+        ##
+        # Returns the armor stats hash matching the given name from any armor group.
+        # WARNING: Names are not strict, it could match multiple types of armor
+        #
+        # @param name [String] The name or alias of the armor.
+        # @return [Hash, nil] The full stats hash for the matching armor, or nil if not found.
+        def self.find_armor(name)
+          normalized = Lich::Util.normalize_name(name)
+
+          @@armor_stats.each_value do |subgroups|
+            subgroups.each_value do |asg_data|
+              next unless asg_data.is_a?(Hash)
+              return asg_data if asg_data[:all_names].include?(normalized)
+            end
+          end
+          nil
+        end
+
+        ##
+        # Lists all armor stat blocks matching a specific armor type.
+        #
+        # @param type [Symbol] The armor type to filter by (e.g., :cloth, :leather, :chain).
+        # @return [Array<Hash>] Array of armor stat hashes matching the given type.
+        def self.list_armor_by_type(type)
+          @@armor_stats.flat_map do |_, subgroups|
+            subgroups.values.compact.select { |asg| asg[:type] == type }
+          end
         end
       end
     end
