@@ -37,7 +37,7 @@ module Lich
             :min_rt        => 4,
           },
 =end
-        @@weapon_stats_thrown = [
+        @@weapon_stats_thrown = {
           :bola         => {
             :category      => :thrown,
             :base_name     => "bola",
