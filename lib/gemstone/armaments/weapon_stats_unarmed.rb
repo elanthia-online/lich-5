@@ -20,7 +20,7 @@ module Lich
             :min_rt        => 4,
           },
 =end
-        @@weapon_stats_unarmed = [
+        @@weapon_stats_unarmed = {
           :cestus         => {
             :category                => :unarmed,
             :base_name               => "cestus",
