@@ -40,7 +40,7 @@ module Lich
         @@weapon_stats_hybrid = {
           # Hybrid Weapons
           "katar" => {
-            :category      => :HYBRID,
+            :category      => :hybrid,
             :hybrid_skills => [:OHE, :BRAWL],
             :base_name     => "katar",
             :all_names     => ["katar", "gauntlet-sword", "kunai", "manople", "paiscush", "pata", "slasher", "tvekre"],
