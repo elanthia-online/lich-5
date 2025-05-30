@@ -37,7 +37,7 @@ module Lich
             :min_rt        => 4,
           },
 =end
-        @@weapon_stats_two_handed = [
+        @@weapon_stats_two_handed = {
           :bastard_sword    => {
             :category      => :two_handed,
             :base_name     => "bastard sword",
