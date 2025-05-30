@@ -126,7 +126,7 @@ module Lich
     #
     # @return [Array, nil] Launch data if available
     def return_launch_data_or_exit
-      unless !@launch_data.nil?
+      if @launch_data.nil?
         Gtk.queue { Gtk.main_quit }
         Lich.log "info: exited without selection"
         exit
