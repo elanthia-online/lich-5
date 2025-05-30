@@ -350,7 +350,7 @@ module Lich
         def self.find_crit_divisor(type: nil, ag: nil, asg: nil)
           return { cloth: 5, leather: 6, scale: 7, chain: 9, plate: 11 }[type] unless type.nil?
           return { 1 => 5, 2 => 6, 3 => 7, 4 => 9, 5 => 11 }[ag] unless ag.nil?
-          return { 1..4 => 5, 5..8 => 6, 9..12 => 7, 13..16 => 9, 17..20 => 11 }[asg] unless asg.nil?
+          return ({ 1..4 => 5, 5..8 => 6, 9..12 => 7, 13..16 => 9, 17..20 => 11 }.find { |range, _| range.include?(asg) }&.last) unless asg.nil?
           raise ArgumentError, "Must provide either type, ag, or asg to find_crit_divisor"
         end
 
