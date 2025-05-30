@@ -37,7 +37,7 @@ module Lich
             :min_rt        => 4,
           },
 =end
-        @@weapon_stats_hybrid = [
+        @@weapon_stats_hybrid = {
           # Hybrid Weapons
           "katar" => {
             :category      => :HYBRID,
