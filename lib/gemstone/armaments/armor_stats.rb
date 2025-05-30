@@ -334,7 +334,7 @@ module Lich
               :training_reqs   => [130, 290, 850, 850, 330, 890, 490, 850, nil, 890, 890, 790, 890, 890, 890, nil, 150, nil, nil, nil],
             },
           },
-        ]
+        }
 
         ##
         # Returns the critical divisor used for determining damage reduction based on armor type,

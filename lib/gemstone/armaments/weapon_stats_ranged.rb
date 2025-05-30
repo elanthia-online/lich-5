@@ -157,7 +157,7 @@ module Lich
             :min_rt        => 0, # for ammunition, this is a modifier, not a minimum RT
             :weapon_class  => :ammunition
           },
-        ]
+        }
       end
     end
   end

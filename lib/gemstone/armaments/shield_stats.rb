@@ -41,7 +41,7 @@ module Lich
             :evade_modifier => -0.50,
             :base_weight    => 12,
           },
-        ]
+        }
 
         ##
         # Finds the shield stats hash by category symbol.

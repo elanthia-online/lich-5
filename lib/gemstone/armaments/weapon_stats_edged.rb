@@ -37,7 +37,7 @@ module Lich
             :min_rt        => 4,
           },
 =end
-        @@weapon_stats_edged = [
+        @@weapon_stats_edged = {
           :arrow         => { # when swung, not when fired
             :category      => :edged,
             :base_name     => "arrow",
@@ -207,7 +207,7 @@ module Lich
             :base_rt       => 2,
             :min_rt        => 3,
           },
-        ]
+        }
       end
     end
   end

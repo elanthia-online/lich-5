@@ -152,7 +152,7 @@ module Lich
             :min_rt        => 4,
             :gripable?     => true,
           },
-        ]
+        }
       end
     end
   end

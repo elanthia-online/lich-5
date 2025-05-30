@@ -111,7 +111,7 @@ module Lich
             :both_hands_modifier     => 2, # multiplies the modifiers by 2
             :held_or_worn            => :held,
           },
-        ]
+        }
       end
     end
   end

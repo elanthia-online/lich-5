@@ -159,7 +159,7 @@ module Lich
             :base_rt       => 5,
             :min_rt        => 5,
           },
-        ]
+        }
       end
     end
   end

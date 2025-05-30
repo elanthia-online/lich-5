@@ -37,7 +37,7 @@ module Lich
             :min_rt        => 4,
           },
 =end
-        @@weapon_stats_runestave = [
+        @@weapon_stats_runestave = {
           :runestave => {
             :category      => :runestave,
             :base_name     => "runestave",
@@ -49,7 +49,7 @@ module Lich
             :base_rt       => 6,
             :min_rt        => 4,
           },
-        ]
+        }
       end
     end
   end
