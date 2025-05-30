@@ -15,7 +15,7 @@ module Lich
         # [8] - Old Empath Base   [9] - Wizard Base             [10] - Bard Base             [11] - Empath Base
         # [12] - Minor Mental     [13] - Major Mental           [14] - Savant Base           [15] - nil
         # [16] - Paladin Base     [17] - Arcane Spells          [18] - nil                   [19] - Lost Arts
-        @@armor_stats = [
+        @@armor_stats = {
           :ag_1 => {
             :asg_1 => { # Cloth
               :type            => :cloth,
