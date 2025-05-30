@@ -37,7 +37,7 @@ module Lich
             :min_rt        => 4,
           },
 =end
-        @@weapon_stats_blunt = [
+        @@weapon_stats_blunt = {
           :ball_and_chain => {
             :category      => :blunt,
             :base_name     => "ball and chain",
