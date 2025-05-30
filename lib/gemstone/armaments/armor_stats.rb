@@ -137,7 +137,7 @@ module Lich
               :normal_cva      => 11,
               :magical_cva     => 5,
               #                    0    1  2  3  4  5  6  7  8    9  10 11 12 13 14   15   16 17   18   19
-              :hindrance       => [nil, 3, 4, 4, 4, 6, 3, 5, nil, 6, 3, 4, 4, 6, nil, nil, 2, nil, nil, nil],
+              :hindrances      => [nil, 3, 4, 4, 4, 6, 3, 5, nil, 6, 3, 4, 4, 6, nil, nil, 2, nil, nil, nil],
               :hindrance_max   => 16,
               #                    AP  1   2   3   4   5   6   7   8    9   10  11  12  13  14  15   16 17   18   19
               :training_reqs   => [10, 10, 15, 15, 15, 27, 10, 20, nil, 27, 10, 15, 15, 27, 27, nil, 6, nil, nil, nil],
@@ -154,7 +154,7 @@ module Lich
               :normal_cva      => 10,
               :magical_cva     => 4,
               #                    0    1  2  3  4  5  6  7  8    9  10 11 12 13 14   15   16 17   18   19
-              :hindrance       => [nil, 4, 5, 5, 5, 7, 4, 6, nil, 7, 3, 5, 5, 7, nil, nil, 3, nil, nil, nil],
+              :hindrances      => [nil, 4, 5, 5, 5, 7, 4, 6, nil, 7, 3, 5, 5, 7, nil, nil, 3, nil, nil, nil],
               :hindrance_max   => 20,
               #                    AP  1   2   3   4   5   6   7   8    9   10  11  12  13  14  15   16  17   18   19
               :training_reqs   => [15, 15, 20, 20, 20, 35, 15, 27, nil, 35, 10, 20, 20, 35, 35, nil, 10, nil, nil, nil],
@@ -171,7 +171,7 @@ module Lich
               :normal_cva      => 9,
               :magical_cva     => 3,
               #                    0    1  2  3  4  5  6  7  8    9  10 11 12 13 14   15   16 17   18   19
-              :hindrance       => [nil, 5, 6, 6, 6, 9, 5, 8, nil, 9, 3, 6, 6, 9, nil, nil, 4, nil, nil, nil],
+              :hindrances      => [nil, 5, 6, 6, 6, 9, 5, 8, nil, 9, 3, 6, 6, 9, nil, nil, 4, nil, nil, nil],
               :hindrance_max   => 24,
               #                    AP  1   2   3   4   5   6   7   8    9   10  11  12  13  14  15   16  17   18   19
               :training_reqs   => [20, 20, 27, 27, 27, 70, 20, 50, nil, 70, 10, 27, 27, 70, 70, nil, 15, nil, nil, nil],
