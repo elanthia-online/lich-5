@@ -345,7 +345,7 @@ module Lich
         def setup_remove_button_handler(button, login_info, char_box)
           button.signal_connect('button-release-event') { |_owner, ev|
             if (ev.event_type == Gdk::EventType::BUTTON_RELEASE) and (ev.button == 1)
-              if (ev.state.inspect =~ /shift-mask/)
+              if (ev.state & Gdk::ModifierType::SHIFT_MASK) != 0
                 # Call the remove callback if provided
                 if @callbacks[:on_remove]
                   @callbacks[:on_remove].call(login_info)
@@ -379,25 +379,31 @@ module Lich
         #
         # @return [void]
         def create_character_management_components
+          # Create custom launch entry and directory
+          create_custom_launch_entry
+          create_custom_launch_dir
+
           # Character management components
           add_character_pane = Gtk::Paned.new(:horizontal)
           add_instance_pane = Gtk::Paned.new(:horizontal)
 
-          # Character input
+          # Character entry
+          add_char_entry = Gtk::Entry.new
           add_char_label = Gtk::Label.new("Character")
           add_char_label.set_width_chars(15)
-          add_char_entry = Gtk::Entry.new
-          add_char_entry.set_width_chars(15)
+
           add_character_pane.add1(add_char_label)
-          add_character_pane.pack2(add_char_entry)
+          add_character_pane.add2(add_char_entry)
 
           # Instance selection
           add_inst_select = Gtk::ComboBoxText.new(entry: true)
-          add_inst_select.child.text = "Prime"
-          add_inst_select.append_text("Prime")
-          add_inst_select.append_text("Platinum")
-          add_inst_select.append_text("Shattered")
-          add_inst_select.append_text("Test")
+          add_inst_select.append_text("GemStone IV")
+          add_inst_select.append_text("GemStone IV Platinum")
+          add_inst_select.append_text("GemStone IV Shattered")
+          add_inst_select.append_text("GemStone IV Prime Test")
+          add_inst_select.append_text("DragonRealms")
+          add_inst_select.append_text("DragonRealms The Fallen")
+          add_inst_select.append_text("DragonRealms Prime Test")
           add_inst_label = Gtk::Label.new("Instance")
           add_inst_label.set_width_chars(15)
 
@@ -558,7 +564,7 @@ module Lich
           @custom_launch_entry = Gtk::ComboBoxText.new(entry: true)
           @custom_launch_entry.child.set_placeholder_text("(enter custom launch command)")
           @custom_launch_entry.append_text("Wizard.Exe /GGS /H127.0.0.1 /P%port% /K%key%")
-          @custom_launch_entry.append_text("Stormfront.exe /GGS/Hlocalhost/P%port%/K%key%")
+          @custom_launch_entry.append_text("Stormfront.exe /GGS /Hlocalhost /P%port% /K%key%")
           @custom_launch_entry
         end
 
