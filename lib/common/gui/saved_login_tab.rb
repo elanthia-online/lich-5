@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+require_relative 'parameter_objects'
+require_relative 'login_tab_utils'
+require_relative 'theme_utils'
+
 module Lich
   module Common
     module GUI
@@ -14,18 +18,29 @@ module Lich
         # @param tab_layout_state [Boolean] Whether tab layout is enabled
         # @param autosort_state [Boolean] Whether auto-sorting is enabled
         # @param default_icon [Gdk::Pixbuf] Default icon for dialogs
-        # @param callbacks [Hash] Callback handlers for various events
+        # @param callbacks [Hash, CallbackParams] Callback handlers for various events
+        # @return [SavedLoginTab] New instance
         def initialize(parent, entry_data, theme_state, tab_layout_state, autosort_state, default_icon, callbacks = {})
           @parent = parent
           @entry_data = entry_data
-          @theme_state = theme_state
-          @tab_layout_state = tab_layout_state
-          @autosort_state = autosort_state
           @default_icon = default_icon
-          @callbacks = callbacks
+
+          # Convert UI configuration to UIConfig object
+          @ui_config = UIConfig.new(
+            theme_state: theme_state,
+            tab_layout_state: tab_layout_state,
+            autosort_state: autosort_state
+          )
+
+          # Convert callbacks hash to CallbackParams if needed
+          @callbacks = if callbacks.is_a?(CallbackParams)
+                         callbacks
+                       else
+                         CallbackParams.new(callbacks)
+                       end
 
           # Apply theme settings
-          State.apply_theme_settings(@theme_state)
+          ThemeUtils.apply_theme_settings(@ui_config.theme_state)
 
           # Create the tab content
           create_tab_content
@@ -58,43 +73,33 @@ module Lich
         # @param theme_state [Boolean] New theme state
         # @return [void]
         def update_theme_state(theme_state)
-          @theme_state = theme_state
+          @ui_config.theme_state = theme_state
           apply_theme_to_ui_elements
         end
 
         private
 
         # Applies the current theme state to all UI elements
+        # Updates the appearance of UI elements based on dark/light theme setting
         #
         # @return [void]
         def apply_theme_to_ui_elements
-          if @theme_state
-            # Enable dark theme
-            Gtk::Settings.default.gtk_application_prefer_dark_theme = true
-            # Remove styling providers that might conflict with dark theme
-            @play_button.style_context.remove_provider(@button_provider) if defined?(@button_provider) && @play_button
-            @account_book.style_context.remove_provider(@tab_provider) if defined?(@tab_provider) && @account_book
-            # Reset background colors to transparent for dark theme
-            @account_book.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)")) if defined?(@account_book) && @account_book
-            @notebook.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)")) if defined?(@notebook) && @notebook
-          else
-            # Disable dark theme
-            Gtk::Settings.default.gtk_application_prefer_dark_theme = false
-            # Set light grey background for light theme
-            lightgrey = Gdk::RGBA::parse("#d3d3d3")
-            @account_book.override_background_color(:normal, lightgrey) if defined?(@account_book) && @account_book
-            @notebook.override_background_color(:normal, lightgrey) if defined?(@notebook) && @notebook
-            # Re-apply styling providers for light theme
-            if defined?(@button_provider) && @play_button
-              @play_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
-            end
-            if defined?(@tab_provider) && @account_book
-              @account_book.style_context.add_provider(@tab_provider, Gtk::StyleProvider::PRIORITY_USER)
-            end
-          end
+          ui_elements = {
+            play_button: @play_button,
+            account_book: @account_book,
+            notebook: @notebook
+          }
+
+          providers = {
+            button: @button_provider,
+            tab: @tab_provider
+          }
+
+          LoginTabUtils.apply_theme_to_ui_elements(@ui_config.theme_state, ui_elements, providers)
         end
 
         # Creates the tab content
+        # Builds the main UI elements for the saved login tab
         #
         # @return [void]
         def create_tab_content
@@ -106,6 +111,7 @@ module Lich
         end
 
         # Creates an empty tab when no saved entries exist
+        # Displays a simple message when no saved entries are available
         #
         # @return [void]
         def create_empty_tab
@@ -117,20 +123,21 @@ module Lich
         end
 
         # Creates a populated tab with saved login entries
+        # Builds a tab with all saved login entries organized by account
         #
         # @return [void]
         def create_populated_tab
           last_user_id = nil
 
           # Create the appropriate layout based on settings
-          quick_sw = if @tab_layout_state == true
+          quick_sw = if @ui_config.tab_layout_state
                        create_tabbed_layout
                      else
                        create_list_layout(last_user_id)
                      end
 
           # Create toggle button styling
-          @togglebutton_provider = Utilities.create_button_css_provider
+          @togglebutton_provider = LoginTabUtils.create_toggle_button_css_provider
 
           # Create character management components
           create_character_management_components
@@ -145,6 +152,7 @@ module Lich
         end
 
         # Creates a tabbed layout for accounts
+        # Organizes saved entries by account in a tabbed interface
         #
         # @return [Gtk::ScrolledWindow] Scrolled window containing the account book
         def create_tabbed_layout
@@ -153,10 +161,8 @@ module Lich
           @account_book.show_border = true
 
           # Apply theme styling
-          unless @theme_state == true
-            lightgrey = Gdk::RGBA::parse("#d3d3d3")
-            @account_book.override_background_color(:normal, lightgrey)
-
+          unless @ui_config.theme_state
+            @account_book.override_background_color(:normal, ThemeUtils.light_theme_background)
             @tab_provider = Utilities.create_tab_css_provider
           end
 
@@ -195,6 +201,7 @@ module Lich
         end
 
         # Creates a list layout for accounts (non-tabbed)
+        # Organizes saved entries in a flat list grouped by account
         #
         # @param last_user_id [String] Last processed user ID
         # @return [Gtk::ScrolledWindow] Scrolled window containing the account list
@@ -203,19 +210,25 @@ module Lich
 
           # Process each login entry
           @entry_data.each { |login_info|
+            # Convert to LoginParams object for consistency
+            login_params = LoginParams.new(login_info)
+
             # Add account header if this is a new account
-            if login_info[:user_id].downcase != last_user_id
-              last_user_id = login_info[:user_id].downcase
+            if login_params.user_id.downcase != last_user_id
+              last_user_id = login_params.user_id.downcase
               quick_box.pack_start(Gtk::Label.new("Account: " + last_user_id), expand: false, fill: false, padding: 6)
             end
 
             # Create character entry with play and remove buttons
-            label = Gtk::Label.new("#{login_info[:char_name]} (#{login_info[:game_name]}, #{login_info[:frontend].capitalize == 'Stormfront' ? 'Wrayth' : login_info[:frontend].capitalize}#{login_info[:custom_launch] ? ' custom' : ''})")
+            frontend_display = login_params.frontend.capitalize == 'Stormfront' ? 'Wrayth' : login_params.frontend.capitalize
+            custom_indicator = login_params.custom_launch ? ' custom' : ''
+
+            label = Gtk::Label.new("#{login_params.char_name} (#{login_params.game_name}, #{frontend_display}#{custom_indicator})")
             play_button = Components.create_button(label: 'Play')
             remove_button = Components.create_button(label: 'X')
 
             # Apply button styling
-            @button_provider = Utilities.create_button_css_provider
+            @button_provider = LoginTabUtils.create_button_css_provider
             remove_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
             play_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
 
@@ -227,8 +240,8 @@ module Lich
             quick_box.pack_start(char_box, expand: false, fill: false, padding: 0)
 
             # Set up button handlers
-            setup_play_button_handler(play_button, login_info)
-            setup_remove_button_handler(remove_button, login_info, char_box)
+            LoginTabUtils.setup_play_button_handler(play_button, login_params.to_h, @callbacks.on_play)
+            LoginTabUtils.setup_remove_button_handler(remove_button, login_params.to_h, char_box, @default_icon, @callbacks.on_remove)
           }
 
           # Create scrolled viewport for character list
@@ -244,22 +257,30 @@ module Lich
         end
 
         # Creates a character entry in the tabbed layout
+        # Builds a UI element for a single character entry
         #
         # @param account_box [Gtk::Box] Box to add the character entry to
         # @param login_info [Hash] Login information for the character
         # @return [void]
         def create_character_entry(account_box, login_info)
+          # Convert to LoginParams object for consistency
+          login_params = LoginParams.new(login_info)
+
           # Get realm name from game code
-          realm = Utilities.game_code_to_realm(login_info[:game_code])
+          realm = Utilities.game_code_to_realm(login_params.game_code)
 
           # Create button styling
-          @button_provider = Utilities.create_button_css_provider(font_size: 14)
+          @button_provider = LoginTabUtils.create_button_css_provider(font_size: 14)
 
           # Create play button with character info
           @play_button = Gtk::Button.new()
-          char_label = Gtk::Label.new(login_info[:char_name])
+          char_label = Gtk::Label.new(login_params.char_name)
           char_label.set_width_chars(15)
-          fe_label = Gtk::Label.new("(#{login_info[:frontend].capitalize == 'Stormfront' ? 'Wrayth' : login_info[:frontend].capitalize})#{login_info[:custom_launch] ? ' custom' : ''}")
+
+          frontend_display = login_params.frontend.capitalize == 'Stormfront' ? 'Wrayth' : login_params.frontend.capitalize
+          custom_indicator = login_params.custom_launch ? ' custom' : ''
+
+          fe_label = Gtk::Label.new("(#{frontend_display})#{custom_indicator}")
           fe_label.set_width_chars(15)
           instance_label = Gtk::Label.new(realm)
           instance_label.set_width_chars(10)
@@ -286,7 +307,7 @@ module Lich
           # Apply styling
           @remove_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
           @play_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
-          @account_book.style_context.add_provider(@tab_provider, Gtk::StyleProvider::PRIORITY_USER) unless @theme_state == true
+          @account_book.style_context.add_provider(@tab_provider, Gtk::StyleProvider::PRIORITY_USER) unless @ui_config.theme_state
 
           # Create character box with play and remove buttons
           char_box = Gtk::Box.new(:horizontal)
@@ -295,99 +316,17 @@ module Lich
           account_box.pack_start(char_box, expand: false, fill: false, padding: 0)
 
           # Set up button handlers
-          setup_play_button_handler(@play_button, login_info)
-          setup_remove_button_handler(@remove_button, login_info, char_box)
-        end
-
-        # Sets up the play button handler
-        #
-        # @param button [Gtk::Button] The play button
-        # @param login_info [Hash] Login information for the character
-        # @return [void]
-        def setup_play_button_handler(button, login_info)
-          button.signal_connect('button-release-event') { |_owner, ev|
-            if (ev.event_type == Gdk::EventType::BUTTON_RELEASE)
-              if (ev.button == 1)
-                button.sensitive = false
-
-                # Authenticate and prepare launch data
-                launch_data_hash = Authentication.authenticate(
-                  account: login_info[:user_id],
-                  password: login_info[:password],
-                  character: login_info[:char_name],
-                  game_code: login_info[:game_code]
-                )
-
-                launch_data = Authentication.prepare_launch_data(
-                  launch_data_hash,
-                  login_info[:frontend],
-                  login_info[:custom_launch],
-                  login_info[:custom_launch_dir]
-                )
-
-                # Call the play callback if provided
-                if @callbacks[:on_play]
-                  @callbacks[:on_play].call(launch_data)
-                end
-              elsif (ev.button == 3)
-                pp "I would be adding to a team tab"
-              end
-            end
-          }
-        end
-
-        # Sets up the remove button handler
-        #
-        # @param button [Gtk::Button] The remove button
-        # @param login_info [Hash] Login information for the character
-        # @param char_box [Gtk::Box] The character box containing the button
-        # @return [void]
-        def setup_remove_button_handler(button, login_info, char_box)
-          button.signal_connect('button-release-event') { |_owner, ev|
-            if (ev.event_type == Gdk::EventType::BUTTON_RELEASE) and (ev.button == 1)
-              if (ev.state & Gdk::ModifierType::SHIFT_MASK) != 0
-                # Call the remove callback if provided
-                if @callbacks[:on_remove]
-                  @callbacks[:on_remove].call(login_info)
-                end
-                char_box.visible = false
-              else
-                dialog = Gtk::MessageDialog.new(
-                  parent: nil,
-                  flags: :modal,
-                  type: :question,
-                  buttons: :yes_no,
-                  message: "Delete record?"
-                )
-                dialog.title = "Confirm"
-                dialog.set_icon(@default_icon)
-                response = dialog.run
-                dialog.destroy
-                if response == Gtk::ResponseType::YES
-                  # Call the remove callback if provided
-                  if @callbacks[:on_remove]
-                    @callbacks[:on_remove].call(login_info)
-                  end
-                  char_box.visible = false
-                end
-              end
-            end
-          }
+          LoginTabUtils.setup_play_button_handler(@play_button, login_params.to_h, @callbacks.on_play)
+          LoginTabUtils.setup_remove_button_handler(@remove_button, login_params.to_h, char_box, @default_icon, @callbacks.on_remove)
         end
 
         # Creates character management components
+        # Builds UI elements for adding new characters to accounts
         #
         # @return [void]
         def create_character_management_components
-          # Create custom launch entry and directory
-          create_custom_launch_entry
-          create_custom_launch_dir
-
-          # Character management components
-          add_character_pane = Gtk::Paned.new(:horizontal)
-          add_instance_pane = Gtk::Paned.new(:horizontal)
-
           # Character entry
+          add_character_pane = Gtk::Paned.new(:horizontal)
           add_char_entry = Gtk::Entry.new
           add_char_label = Gtk::Label.new("Character")
           add_char_label.set_width_chars(15)
@@ -396,6 +335,7 @@ module Lich
           add_character_pane.add2(add_char_entry)
 
           # Instance selection
+          add_instance_pane = Gtk::Paned.new(:horizontal)
           add_inst_select = Gtk::ComboBoxText.new(entry: true)
           add_inst_select.append_text("GemStone IV")
           add_inst_select.append_text("GemStone IV Platinum")
@@ -439,18 +379,34 @@ module Lich
           @bonded_pair_inst.add2(add_char_button)
 
           # Set up add character button handler
+          setup_add_character_handler(add_char_button, add_char_entry, add_inst_select, q_stormfront_option, q_wizard_option, q_avalon_option)
+        end
+
+        # Sets up the add character button handler
+        # Configures the click event for adding a new character
+        #
+        # @param add_char_button [Gtk::Button] Add character button
+        # @param add_char_entry [Gtk::Entry] Character name entry
+        # @param add_inst_select [Gtk::ComboBoxText] Instance selection
+        # @param q_stormfront_option [Gtk::RadioButton] Stormfront radio button
+        # @param q_wizard_option [Gtk::RadioButton] Wizard radio button
+        # @param q_avalon_option [Gtk::RadioButton] Avalon radio button
+        # @return [void]
+        def setup_add_character_handler(add_char_button, add_char_entry, add_inst_select, q_stormfront_option, q_wizard_option, q_avalon_option)
           add_char_button.signal_connect('clicked') {
             # Handle adding a character
-            if @callbacks[:on_add_character]
+            if @callbacks.on_add_character
               frontend = if q_wizard_option.active?
                            'wizard'
                          elsif q_avalon_option.active?
                            'avalon'
-                         else
+                         elsif q_stormfront_option.active?
+                           'stormfront'
+                         else # default to
                            'stormfront'
                          end
 
-              @callbacks[:on_add_character].call(
+              @callbacks.on_add_character.call(
                 character: add_char_entry.text,
                 instance: add_inst_select.child.text,
                 frontend: frontend
@@ -460,123 +416,41 @@ module Lich
         end
 
         # Creates global settings components
+        # Builds UI elements for global application settings
         #
         # @return [void]
         def create_global_settings_components
-          # Global settings components
-          @slider_box = Gtk::Box.new(:horizontal, 5)
-          theme_select = Gtk::Switch.new
-          tab_select = Gtk::Switch.new
-          sort_select = Gtk::Switch.new
-          theme_select_label = Gtk::Label.new('Dark Theme')
-          tab_select_label = Gtk::Label.new('Tab Layout')
-          sort_select_label = Gtk::Label.new(' AutoSort   ')
-          theme_select.set_active(true) if @theme_state == true
-          tab_select.set_active(true) if @tab_layout_state == true
-          sort_select.set_active(true) if @autosort_state == true
+          # Use shared utility method to create settings components
+          settings = LoginTabUtils.create_global_settings_components(
+            @quick_game_entry_tab,
+            @ui_config.theme_state,
+            @ui_config.tab_layout_state,
+            @ui_config.autosort_state,
+            {
+              on_theme_change: @callbacks.on_theme_change,
+              on_layout_change: @callbacks.on_layout_change,
+              on_sort_change: @callbacks.on_sort_change
+            }
+          )
 
-          # Add switches to slider box
-          @slider_box.pack_start(theme_select, expand: true, fill: false, padding: 0)
-          @slider_box.pack_start(theme_select_label, expand: true, fill: false, padding: 0)
-          @slider_box.pack_start(tab_select, expand: true, fill: false, padding: 0)
-          @slider_box.pack_start(tab_select_label, expand: true, fill: false, padding: 0)
-          @slider_box.pack_start(sort_select, expand: true, fill: false, padding: 0)
-          @slider_box.pack_start(sort_select_label, expand: true, fill: false, padding: 0)
-
-          # Settings toggle button
-          @settings_option = Gtk::ToggleButton.new(label: 'Change global GUI settings')
-          @settings_option.style_context.add_provider(@togglebutton_provider, Gtk::StyleProvider::PRIORITY_USER)
-          @quick_game_entry_tab.pack_start(@settings_option, expand: false, fill: false, padding: 5)
-          @quick_game_entry_tab.pack_start(@slider_box, expand: false, fill: false, padding: 5)
-
-          # Settings toggle handler
-          @settings_option.signal_connect('toggled') {
-            @slider_box.visible = @settings_option.active?
-          }
-
-          # Theme switch handler - restored full functionality while maintaining proper variable naming
-          theme_select.signal_connect('notify::active') { |_s|
-            if theme_select.active?
-              # Enable dark theme
-              Gtk::Settings.default.gtk_application_prefer_dark_theme = true
-              # Remove styling providers that might conflict with dark theme
-              @play_button.style_context.remove_provider(@button_provider) if defined?(@button_provider) && @play_button
-              @account_book.style_context.remove_provider(@tab_provider) if defined?(@tab_provider) && @account_book
-              # Reset background colors to transparent for dark theme
-              @account_book.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)")) if defined?(@account_book) && @account_book
-              @notebook.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)")) if defined?(@notebook) && @notebook
-              # Update state tracking variable
-              Lich.track_dark_mode = true
-
-              # Call the theme change callback if provided
-              if @callbacks[:on_theme_change]
-                @callbacks[:on_theme_change].call(true)
-              end
-            else
-              # Disable dark theme
-              Gtk::Settings.default.gtk_application_prefer_dark_theme = false
-              # Set light grey background for light theme
-              lightgrey = Gdk::RGBA::parse("#d3d3d3")
-              @account_book.override_background_color(:normal, lightgrey) if defined?(@account_book) && @account_book
-              @notebook.override_background_color(:normal, lightgrey) if defined?(@notebook) && @notebook
-              # Update state tracking variable
-              Lich.track_dark_mode = false
-
-              # Call the theme change callback if provided
-              if @callbacks[:on_theme_change]
-                @callbacks[:on_theme_change].call(false)
-              end
-            end
-          }
-
-          # Tab layout switch handler - using proper track_XXX_state= convention
-          tab_select.signal_connect('state-set') { |_widget, state|
-            Lich.track_layout_state = state
-
-            # Call the layout change callback if provided
-            if @callbacks[:on_layout_change]
-              @callbacks[:on_layout_change].call(state)
-            end
-
-            false
-          }
-
-          # Auto sort switch handler - using proper track_XXX_state= convention
-          sort_select.signal_connect('state-set') { |_widget, state|
-            Lich.track_autosort_state = state
-
-            # Call the sort change callback if provided
-            if @callbacks[:on_sort_change]
-              @callbacks[:on_sort_change].call(state)
-            end
-
-            false
-          }
-
-          # Initially hide the slider box
-          @slider_box.visible = false
+          # Store slider box reference for external access
+          @slider_box = settings[:slider_box]
         end
 
         # Creates a custom launch entry
+        # Builds a combo box for custom launch commands
         #
         # @return [Gtk::ComboBoxText] The custom launch entry widget
         def create_custom_launch_entry
-          @custom_launch_entry = Gtk::ComboBoxText.new(entry: true)
-          @custom_launch_entry.child.set_placeholder_text("(enter custom launch command)")
-          @custom_launch_entry.append_text("Wizard.Exe /GGS /H127.0.0.1 /P%port% /K%key%")
-          @custom_launch_entry.append_text("Stormfront.exe /GGS /Hlocalhost /P%port% /K%key%")
-          @custom_launch_entry
+          @custom_launch_entry = LoginTabUtils.create_custom_launch_entry
         end
 
         # Creates a custom launch directory entry
+        # Builds a combo box for custom launch directories
         #
         # @return [Gtk::ComboBoxText] The custom launch directory widget
         def create_custom_launch_dir
-          @custom_launch_dir = Gtk::ComboBoxText.new(entry: true)
-          @custom_launch_dir.child.set_placeholder_text("(enter working directory for command)")
-          @custom_launch_dir.append_text("../wizard")
-          @custom_launch_dir.append_text("../StormFront")
-          @custom_launch_dir
+          @custom_launch_dir = LoginTabUtils.create_custom_launch_dir
         end
       end
     end

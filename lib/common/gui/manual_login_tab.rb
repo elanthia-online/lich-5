@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+require_relative 'parameter_objects'
+require_relative 'login_tab_utils'
+require_relative 'theme_utils'
+
 module Lich
   module Common
     module GUI
@@ -12,13 +16,20 @@ module Lich
         # @param entry_data [Array] Array of saved login entries
         # @param theme_state [Boolean] Whether dark theme is enabled
         # @param default_icon [Gdk::Pixbuf] Default icon for dialogs
-        # @param callbacks [Hash] Callback handlers for various events
+        # @param callbacks [Hash, CallbackParams] Callback handlers for various events
+        # @return [ManualLoginTab] New instance
         def initialize(parent, entry_data, theme_state, default_icon, callbacks = {})
           @parent = parent
           @entry_data = entry_data
           @theme_state = theme_state
           @default_icon = default_icon
-          @callbacks = callbacks
+
+          # Convert callbacks hash to CallbackParams if needed
+          @callbacks = if callbacks.is_a?(CallbackParams)
+                         callbacks
+                       else
+                         CallbackParams.new(callbacks)
+                       end
 
           # Initialize variables
           @launch_data = nil
@@ -59,6 +70,10 @@ module Lich
         #
         # @return [void]
         def apply_theme_to_ui_elements
+          # Removed useless assignment to ui_elements
+
+          # Removed useless assignment to providers
+
           if @theme_state
             # Enable dark theme
             Gtk::Settings.default.gtk_application_prefer_dark_theme = true
@@ -69,15 +84,14 @@ module Lich
               end
             end
             # Reset background colors to transparent for dark theme
-            @game_entry_tab.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)")) if @game_entry_tab
-            @treeview&.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)"))
+            @game_entry_tab.override_background_color(:normal, ThemeUtils.transparent_background) if @game_entry_tab
+            @treeview&.override_background_color(:normal, ThemeUtils.transparent_background)
           else
             # Disable dark theme
             Gtk::Settings.default.gtk_application_prefer_dark_theme = false
             # Set light grey background for light theme
-            lightgrey = Gdk::RGBA::parse("#d3d3d3")
-            @game_entry_tab.override_background_color(:normal, lightgrey) if @game_entry_tab
-            @treeview&.override_background_color(:normal, lightgrey)
+            @game_entry_tab.override_background_color(:normal, ThemeUtils.light_theme_background) if @game_entry_tab
+            @treeview&.override_background_color(:normal, ThemeUtils.light_theme_background)
             # Re-apply styling providers for light theme
             if defined?(@button_provider)
               @treeview_buttons&.each do |button|
@@ -105,7 +119,7 @@ module Lich
           liststore, @treeview, sw = create_character_list
 
           # Create frontend selection
-          frontend_box, stormfront_option, wizard_option, avalon_option, suks_option = create_frontend_selection
+          frontend_box, _stormfront_option, wizard_option, avalon_option, suks_option = create_frontend_selection
 
           # Create custom launch options
           custom_launch_option = create_custom_launch_options
@@ -132,9 +146,8 @@ module Lich
 
           # Apply initial theme
           unless @theme_state
-            lightgrey = Gdk::RGBA::parse("#d3d3d3")
-            @game_entry_tab.override_background_color(:normal, lightgrey)
-            @treeview.override_background_color(:normal, lightgrey)
+            @game_entry_tab.override_background_color(:normal, ThemeUtils.light_theme_background)
+            @treeview.override_background_color(:normal, ThemeUtils.light_theme_background)
           end
 
           # Set up event handlers
@@ -143,7 +156,7 @@ module Lich
           setup_connect_button_handler(connect_button, disconnect_button, user_id_entry, pass_entry, liststore)
           setup_treeview_handler(@treeview, play_button)
           setup_disconnect_button_handler(disconnect_button, play_button, connect_button, user_id_entry, pass_entry, liststore)
-          setup_play_button_handler(play_button, @treeview, user_id_entry, pass_entry, stormfront_option, wizard_option, avalon_option, suks_option, custom_launch_option)
+          setup_play_button_handler(play_button, @treeview, user_id_entry, pass_entry, wizard_option, avalon_option, suks_option, custom_launch_option)
           setup_entry_key_handlers(user_id_entry, pass_entry, connect_button)
         end
 
@@ -175,7 +188,7 @@ module Lich
           connect_button = Components.create_button(label: ' Connect ')
 
           # Apply button styling
-          @button_provider = Utilities.create_button_css_provider
+          @button_provider = LoginTabUtils.create_button_css_provider
           disconnect_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER) unless @theme_state
           connect_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER) unless @theme_state
 
@@ -245,15 +258,13 @@ module Lich
         def create_custom_launch_options
           custom_launch_option = Gtk::CheckButton.new('Custom launch command')
 
-          @custom_launch_entry = Gtk::ComboBoxText.new(entry: true)
-          @custom_launch_entry.child.set_placeholder_text("(enter custom launch command)")
-          @custom_launch_entry.append_text("Wizard.Exe /GGS /H127.0.0.1 /P%port% /K%key%")
-          @custom_launch_entry.append_text("Stormfront.exe /GGS/Hlocalhost/P%port%/K%key%")
+          # Use shared utility methods for creating custom launch entries
+          @custom_launch_entry = LoginTabUtils.create_custom_launch_entry
+          @custom_launch_dir = LoginTabUtils.create_custom_launch_dir
 
-          @custom_launch_dir = Gtk::ComboBoxText.new(entry: true)
-          @custom_launch_dir.child.set_placeholder_text("(enter working directory for command)")
-          @custom_launch_dir.append_text("../wizard")
-          @custom_launch_dir.append_text("../StormFront")
+          # Initially hide custom launch options
+          @custom_launch_entry.visible = false
+          @custom_launch_dir.visible = false
 
           custom_launch_option
         end
@@ -324,15 +335,15 @@ module Lich
               begin
                 # Authenticate with legacy mode
                 login_info = Authentication.authenticate(
-                  account: user_id_entry.text || argv.account,
-                  password: pass_entry.text || argv.password,
+                  account: user_id_entry.text,
+                  password: pass_entry.text,
                   legacy: true
                 )
               end
               if login_info.to_s =~ /error/i
                 # Call the error callback if provided
-                if @callbacks[:on_error]
-                  @callbacks[:on_error].call("\nSomething went wrong... probably invalid \nuser id and / or password.\n\nserver response: #{login_info}")
+                if @callbacks.on_error
+                  @callbacks.on_error.call("\nSomething went wrong... probably invalid user ID or password.\n\nserver response: #{login_info}")
                 end
                 connect_button.sensitive = true
                 disconnect_button.sensitive = false
@@ -362,7 +373,8 @@ module Lich
         # @return [void]
         def setup_treeview_handler(treeview, play_button)
           treeview.signal_connect('cursor-changed') {
-            play_button.sensitive = true
+            selection = treeview.selection
+            play_button.sensitive = !selection.selected.nil?
           }
         end
 
@@ -379,10 +391,10 @@ module Lich
           disconnect_button.signal_connect('clicked') {
             disconnect_button.sensitive = false
             play_button.sensitive = false
-            liststore.clear
             connect_button.sensitive = true
             user_id_entry.sensitive = true
             pass_entry.sensitive = true
+            liststore.clear
           }
         end
 
@@ -392,106 +404,90 @@ module Lich
         # @param treeview [Gtk::TreeView] Tree view for character list
         # @param user_id_entry [Gtk::Entry] User ID entry field
         # @param pass_entry [Gtk::Entry] Password entry field
-        # @param stormfront_option [Gtk::RadioButton] Stormfront radio button
         # @param wizard_option [Gtk::RadioButton] Wizard radio button
         # @param avalon_option [Gtk::RadioButton] Avalon radio button
         # @param suks_option [Gtk::RadioButton] Suks radio button
         # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
         # @return [void]
-        def setup_play_button_handler(play_button, treeview, user_id_entry, pass_entry, stormfront_option, wizard_option, avalon_option, suks_option, custom_launch_option)
-          # Changed from 'clicked' to 'button-release-event' to match saved login tab's signal handling
-          play_button.signal_connect('button-release-event') { |_owner, ev|
-            if (ev.event_type == Gdk::EventType::BUTTON_RELEASE) && (ev.button == 1)
-              play_button.sensitive = false
+        def setup_play_button_handler(play_button, treeview, user_id_entry, pass_entry, wizard_option, avalon_option, suks_option, custom_launch_option)
+          play_button.signal_connect('clicked') {
+            play_button.sensitive = false
 
-              # Wrap all UI operations in Gtk.queue to ensure they run on the GTK main thread
-              Gtk.queue {
-                game_code = treeview.selection.selected[0]
-                char_name = treeview.selection.selected[3]
+            # Get selected character
+            selection = treeview.selection
+            # Fixed assignment in condition
+            selected_iter = selection.selected
+            if selected_iter
+              # Determine frontend
+              if wizard_option.active?
+                frontend = 'wizard'
+              elsif avalon_option.active?
+                frontend = 'avalon'
+              elsif suks_option.active?
+                frontend = 'suks'
+              else
+                frontend = 'stormfront'
+              end
 
-                # Authenticate and get launch data
-                launch_data_hash = Authentication.authenticate(
-                  account: user_id_entry.text,
-                  password: pass_entry.text,
-                  character: char_name,
-                  game_code: game_code
-                )
+              # Determine custom launch settings
+              custom_launch = custom_launch_option.active? ? @custom_launch_entry.child.text : nil
+              custom_launch_dir = custom_launch_option.active? ? @custom_launch_dir.child.text : nil
 
-                # Determine frontend type - properly using stormfront_option parameter
-                frontend = if wizard_option.active?
-                             'wizard'
-                           elsif avalon_option.active?
-                             'avalon'
-                           elsif suks_option.active?
-                             'suks'
-                           elsif stormfront_option.active?
-                             'stormfront'
-                           else
-                             'stormfront' # Default fallback
-                           end
+              # Create login parameters object
+              login_params = LoginParams.new(
+                user_id: user_id_entry.text,
+                password: pass_entry.text,
+                char_name: selected_iter[3],
+                game_code: selected_iter[0],
+                game_name: selected_iter[1],
+                frontend: frontend,
+                custom_launch: custom_launch,
+                custom_launch_dir: custom_launch_dir
+              )
 
-                # Get custom launch settings
-                custom_launch = custom_launch_option.active? ? @custom_launch_entry.child.text : nil
-                custom_launch_dir = (custom_launch_option.active? && !@custom_launch_dir.child.text.empty?) ? @custom_launch_dir.child.text : nil
+              # Save login data
+              @launch_data = login_params
 
-                # Prepare launch data
-                launch_data = Authentication.prepare_launch_data(
-                  launch_data_hash,
-                  frontend,
-                  custom_launch,
-                  custom_launch_dir
-                )
+              # Call the play callback if provided
+              if @callbacks.on_play
+                @callbacks.on_play.call(login_params)
+              end
 
-                # Save entry data if requested
-                if @make_quick_option.active?
-                  entry_data = Authentication.create_entry_data(
-                    char_name: treeview.selection.selected[3],
-                    game_code: treeview.selection.selected[0],
-                    game_name: treeview.selection.selected[1],
-                    user_id: user_id_entry.text,
-                    password: pass_entry.text,
-                    frontend: frontend,
-                    custom_launch: custom_launch,
-                    custom_launch_dir: custom_launch_dir
-                  )
-
-                  # Call the save entry callback if provided
-                  if @callbacks[:on_save_entry]
-                    @callbacks[:on_save_entry].call(entry_data)
-                  end
+              # Save quick entry if selected
+              if @make_quick_option.active?
+                if @callbacks.on_save_quick_entry
+                  @callbacks.on_save_quick_entry.call(login_params)
                 end
-
-                # Call the play callback if provided
-                if launch_data && @callbacks[:on_play]
-                  @callbacks[:on_play].call(launch_data)
-                  user_id_entry.text = String.new
-                  pass_entry.text = String.new
-                else
-                  play_button.sensitive = false
-                  connect_button.sensitive = true
-                  user_id_entry.sensitive = true
-                  pass_entry.sensitive = true
-                end
-              }
+              end
             end
           }
         end
 
-        # Sets up entry key handlers
+        # Sets up key press handlers for entry fields
         #
         # @param user_id_entry [Gtk::Entry] User ID entry field
         # @param pass_entry [Gtk::Entry] Password entry field
         # @param connect_button [Gtk::Button] Connect button
         # @return [void]
         def setup_entry_key_handlers(user_id_entry, pass_entry, connect_button)
-          # User ID entry key handler
-          user_id_entry.signal_connect('activate') {
-            pass_entry.grab_focus
+          # Trigger connect button on Enter key in user ID field
+          user_id_entry.signal_connect('key-press-event') { |_widget, event|
+            if event.keyval == Gdk::Keyval::KEY_Return
+              connect_button.clicked
+              true
+            else
+              false
+            end
           }
 
-          # Password entry key handler
-          pass_entry.signal_connect('activate') {
-            connect_button.clicked
+          # Trigger connect button on Enter key in password field
+          pass_entry.signal_connect('key-press-event') { |_widget, event|
+            if event.keyval == Gdk::Keyval::KEY_Return
+              connect_button.clicked
+              true
+            else
+              false
+            end
           }
         end
       end

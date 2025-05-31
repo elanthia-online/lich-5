@@ -4,6 +4,7 @@ module Lich
   module Common
     module GUI
       # Handles UI component creation and styling for the Lich GUI
+      # Provides reusable methods for creating common UI components with consistent styling
       module Components
         # Creates a standard button with consistent styling
         #
@@ -17,6 +18,7 @@ module Lich
         end
 
         # Creates a horizontal box with buttons
+        # Arranges buttons in a horizontal layout with consistent spacing
         #
         # @param buttons [Array<Gtk::Button>] Buttons to include
         # @param expand [Boolean] Whether buttons should expand
@@ -34,6 +36,7 @@ module Lich
         end
 
         # Creates a labeled entry field
+        # Combines a label and entry field in a paned container
         #
         # @param label_text [String] Label text
         # @param entry_width [Integer] Width of entry field in characters
@@ -54,6 +57,7 @@ module Lich
         end
 
         # Creates a notebook with tabs
+        # Configures a notebook widget with the specified pages and styling
         #
         # @param pages [Array<Hash>] Array of hashes with :widget and :label keys
         # @param tab_position [Symbol] Position of tabs (:left, :right, :top, :bottom)

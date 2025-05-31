@@ -1,12 +1,22 @@
 # frozen_string_literal: true
 
-# Lich5 Carve out - GTK3 lich-login code stuff
-require_relative 'gui/utilities'
+require_relative 'gui/accessibility'
+require_relative 'gui/account_manager'
+require_relative 'gui/account_manager_ui'
 require_relative 'gui/authentication'
 require_relative 'gui/components'
-require_relative 'gui/state'
-require_relative 'gui/saved_login_tab'
+require_relative 'gui/conversion_ui'
+require_relative 'gui/game_selection'
+require_relative 'gui/login_tab_utils'
 require_relative 'gui/manual_login_tab'
+require_relative 'gui/parameter_objects'
+require_relative 'gui/password_change'
+require_relative 'gui/saved_login_tab'
+require_relative 'gui/state'
+require_relative 'gui/theme_utils'
+require_relative 'gui/utilities'
+require_relative 'gui/yaml_state'
+require_relative 'gui/yaml_validator'
 
 module Lich
   module Common
@@ -14,6 +24,7 @@ module Lich
     #
     # This module contains the main entry point for the GUI login system
     # and coordinates the interaction between saved and manual login tabs.
+    # It also provides account management functionality.
     def gui_login
       initialize_login_state
       setup_gui_window
@@ -29,16 +40,26 @@ module Lich
 
     # Initializes the login state variables
     #
+    # Sets up all necessary state tracking variables and loads saved entries
+    # from the YAML state file.
+    #
     # @return [void]
     def initialize_login_state
       @autosort_state = Lich.track_autosort_state
       @tab_layout_state = Lich.track_layout_state
       @theme_state = Lich.track_dark_mode
 
-      @entry_data = GUI::State.load_saved_entries(DATA_DIR, @autosort_state)
+      # Initialize accessibility support
+      Lich::Common::GUI::Accessibility.initialize_accessibility if defined?(Lich::Common::GUI::Accessibility)
+
+      # Use YamlState instead of State for loading saved entries
+      @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(DATA_DIR, @autosort_state)
       @launch_data = nil
       @save_entry_data = false
       @done = false
+
+      # Initialize account manager UI
+      @account_manager_ui = Lich::Common::GUI::AccountManagerUI.new(DATA_DIR)
 
       # Initialize install_tab_loaded as an instance variable to ensure proper scope
       @install_tab_loaded = false
@@ -46,16 +67,21 @@ module Lich
 
     # Sets up the main GUI window and tabs
     #
+    # Creates the main window, initializes all tabs, and configures
+    # the notebook and window properties.
+    #
     # @return [void]
     def setup_gui_window
       Gtk.queue {
         @window = nil
 
         # Create message dialog utility
-        @msgbox = GUI::Utilities.create_message_dialog(parent: @window, icon: @default_icon)
+        @msgbox = Lich::Common::GUI::Utilities.create_message_dialog(parent: @window, icon: @default_icon)
 
         # Create tab instances
         create_tab_instances
+        # @account_maanager_ui.create_management_window(DATA_DIR)
+        # @account_manager_ui.show_management_window
 
         # Set up notebook with tabs
         setup_notebook
@@ -68,7 +94,10 @@ module Lich
       }
     end
 
-    # Creates tab instances
+    # Creates tab instances for the notebook
+    #
+    # Initializes the saved login tab, manual login tab, and account management tab
+    # with appropriate callbacks and UI elements.
     #
     # @return [void]
     def create_tab_instances
@@ -101,7 +130,8 @@ module Lich
           else
             lightgrey = Gdk::RGBA::parse("#d3d3d3")
             @notebook.override_background_color(:normal, lightgrey)
-            @window.override_background_color(:normal, lightgrey)
+            # Apply button style for light mode
+            apply_button_style_for_light_mode
           end
         },
         on_layout_change: ->(state) {
@@ -122,7 +152,7 @@ module Lich
             @done = true
           }
         },
-        on_save_entry: ->(entry_data) {
+        on_save: ->(entry_data) {
           @entry_data.push(entry_data)
           @save_entry_data = true
         },
@@ -132,7 +162,7 @@ module Lich
       }
 
       # Create tab instances
-      @saved_login_tab = GUI::SavedLoginTab.new(
+      @saved_login_tab = Lich::Common::GUI::SavedLoginTab.new(
         @window,
         @entry_data,
         @theme_state,
@@ -142,7 +172,7 @@ module Lich
         saved_login_callbacks
       )
 
-      @manual_login_tab = GUI::ManualLoginTab.new(
+      @manual_login_tab = Lich::Common::GUI::ManualLoginTab.new(
         @window,
         @entry_data,
         @theme_state,
@@ -166,6 +196,8 @@ module Lich
 
     # Sets up the notebook with tabs
     #
+    # Creates the notebook widget and adds all tabs to it.
+    #
     # @return [void]
     def setup_notebook
       @notebook = Gtk::Notebook.new
@@ -176,23 +208,46 @@ module Lich
       else
         lightgrey = Gdk::RGBA::parse("#d3d3d3")
         @notebook.override_background_color(:normal, lightgrey)
+        # Apply button style for light mode
+        apply_button_style_for_light_mode
       end
 
+      # Add the saved entry and manual entry tabs
       @notebook.append_page(@quick_game_entry_tab, Gtk::Label.new('Saved Entry'))
       @notebook.append_page(@game_entry_tab, Gtk::Label.new('Manual Entry'))
 
-      @notebook.signal_connect('switch-page') { |_who, _page, page_num|
-        if (page_num == 2) and not @install_tab_loaded
-          refresh_button.clicked
-        end
-      }
+      # Create account management tab using AccountManagerUI
+      account_notebook = Gtk::Notebook.new
+      @account_mgmt_tab = Gtk::Box.new(:vertical, 10)
+      @account_mgmt_tab.border_width = 10
+
+      # Delegate account management tab creation to AccountManagerUI
+      @account_manager_ui.create_accounts_tab(account_notebook)
+      @account_manager_ui.create_add_character_tab(account_notebook)
+      @account_manager_ui.create_add_account_tab(account_notebook)
+
+      # Add the notebook to the box
+      @account_mgmt_tab.pack_start(account_notebook, expand: true, fill: true, padding: 0)
+
+      # Add the account management tab to the main notebook
+      @notebook.append_page(@account_mgmt_tab, Gtk::Label.new('Account Management'))
+
+      # Set tab position
+      @notebook.set_tab_pos(:top)
+
+      # Add keyboard navigation support for accessibility
+      if defined?(Lich::Common::GUI::Accessibility)
+        Lich::Common::GUI::Accessibility.add_keyboard_navigation(@notebook)
+      end
     end
 
     # Configures the main window properties
     #
+    # Sets up the window title, size, and other properties.
+    #
     # @return [void]
     def configure_window
-      @window = Gtk::Window.new
+      @window = Gtk::Window.new(:toplevel)
       @window.set_icon(@default_icon)
       @window.title = "Lich v#{LICH_VERSION}"
       @window.border_width = 5
@@ -207,12 +262,67 @@ module Lich
       else
         lightgrey = Gdk::RGBA::parse("#d3d3d3")
         @window.override_background_color(:normal, lightgrey)
+        # Apply button style for light mode
+        apply_button_style_for_light_mode
       end
 
-      @window.show_all
+      # Add accessibility support for the window
+      if defined?(Lich::Common::GUI::Accessibility)
+        Lich::Common::GUI::Accessibility.make_window_accessible(
+          @window,
+          "Lich Login",
+          "Login window for Lich"
+        )
+      end
+
+      unless Lich::Common::GUI::ConversionUI.conversion_needed?(DATA_DIR)
+        @window.show_all
+      else
+        # no YAML file, conversion required
+        # Show conversion dialog first
+        Lich::Common::GUI::ConversionUI.show_conversion_dialog(@window, DATA_DIR, -> {
+          # After conversion, create the account management tab
+          initialize_login_state
+          setup_gui_window
+          @window.show_all
+        })
+      end
+
+      # @window.show_all
+    end
+
+    # Applies button style for light mode
+    #
+    # Sets a lighter background color for buttons when in light mode.
+    #
+    # @return [void]
+    def apply_button_style_for_light_mode
+      # Use a slightly whiter shade for buttons in light mode
+      whitergrey = Gdk::RGBA::parse("#f0f0f0")
+
+      # Apply to all buttons in saved login tab
+      apply_style_to_buttons(@saved_login_ui, whitergrey)
+
+      # Apply to all buttons in manual login tab
+      apply_style_to_buttons(@manual_login_ui, whitergrey)
+    end
+
+    # Applies style to buttons in a UI element collection
+    #
+    # @param ui_elements [Hash] Hash of UI elements
+    # @param color [Gdk::RGBA] Color to apply to buttons
+    # @return [void]
+    def apply_style_to_buttons(ui_elements, color)
+      ui_elements.each do |_key, element|
+        if element.is_a?(Gtk::Button)
+          element.override_background_color(:normal, color)
+        end
+      end
     end
 
     # Hides optional UI elements
+    #
+    # Hides UI elements that are not needed initially.
     #
     # @return [void]
     def hide_optional_elements
@@ -227,21 +337,25 @@ module Lich
 
     # Saves entry data if needed
     #
+    # Saves the entry data to the YAML state file if changes were made.
+    #
     # @return [void]
     def save_entry_data_if_needed
       if @save_entry_data
-        GUI::State.save_entries(DATA_DIR, @entry_data)
+        # Use YamlState instead of State for saving entries
+        Lich::Common::GUI::YamlState.save_entries(DATA_DIR, @entry_data)
       end
       @entry_data = nil
     end
 
     # Returns launch data or exits
     #
+    # Returns the launch data if available, otherwise exits the application.
+    #
     # @return [Array, nil] Launch data if available
     def return_launch_data_or_exit
       if @launch_data.nil?
         Gtk.queue { Gtk.main_quit }
-        Lich.log "info: exited without selection"
         exit
       end
 

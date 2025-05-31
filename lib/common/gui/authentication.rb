@@ -4,6 +4,7 @@ module Lich
   module Common
     module GUI
       # Handles authentication and launch data preparation for the Lich GUI
+      # Provides methods for user authentication and preparing launch data for different frontends
       module Authentication
         # Authenticates a user with the game server
         #
@@ -12,7 +13,7 @@ module Lich
         # @param character [String, nil] Character name (optional)
         # @param game_code [String, nil] Game code (optional)
         # @param legacy [Boolean] Whether to use legacy authentication
-        # @return [Hash, Array] Authentication data
+        # @return [Hash, Array] Authentication data containing connection information
         def self.authenticate(account:, password:, character: nil, game_code: nil, legacy: false)
           if character && game_code
             EAccess.auth(
@@ -36,12 +37,13 @@ module Lich
         end
 
         # Prepares launch data from authentication result
+        # Formats the authentication data for use with different frontends
         #
-        # @param auth_data [Hash] Authentication data
+        # @param auth_data [Hash] Authentication data from the authenticate method
         # @param frontend [String] Frontend type ('wizard', 'stormfront', 'avalon', 'suks')
-        # @param custom_launch [String, nil] Custom launch command
-        # @param custom_launch_dir [String, nil] Custom launch directory
-        # @return [Array<String>] Launch data strings
+        # @param custom_launch [String, nil] Custom launch command (optional)
+        # @param custom_launch_dir [String, nil] Custom launch directory (optional)
+        # @return [Array<String>] Launch data strings formatted for the selected frontend
         def self.prepare_launch_data(auth_data, frontend, custom_launch = nil, custom_launch_dir = nil)
           launch_data = auth_data.map { |k, v| "#{k.upcase}=#{v}" }
 
@@ -72,6 +74,7 @@ module Lich
         end
 
         # Creates a hash entry for saved login data
+        # This standardizes the format of saved login entries
         #
         # @param char_name [String] Character name
         # @param game_code [String] Game code
@@ -79,9 +82,9 @@ module Lich
         # @param user_id [String] User ID
         # @param password [String] Password
         # @param frontend [String] Frontend type
-        # @param custom_launch [String, nil] Custom launch command
-        # @param custom_launch_dir [String, nil] Custom launch directory
-        # @return [Hash] Entry data hash
+        # @param custom_launch [String, nil] Custom launch command (optional)
+        # @param custom_launch_dir [String, nil] Custom launch directory (optional)
+        # @return [Hash] Entry data hash ready for storage
         def self.create_entry_data(char_name:, game_code:, game_name:, user_id:, password:, frontend:, custom_launch: nil, custom_launch_dir: nil)
           {
             char_name: char_name,

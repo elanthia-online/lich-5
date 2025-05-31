@@ -4,8 +4,10 @@ module Lich
   module Common
     module GUI
       # Handles state management for the Lich GUI login system
+      # Provides methods for loading and saving entry data and applying theme settings
       module State
         # Loads saved entry data from file
+        # Reads and deserializes entry data from the entry.dat file
         #
         # @param data_dir [String] Directory containing entry data
         # @param autosort_state [Boolean] Whether to use auto-sorting
@@ -30,11 +32,13 @@ module Lich
               end
             }
           else
+            Lich.log "Info: No entry.dat file detected, probable new installation."
             Array.new
           end
         end
 
         # Saves entry data to file
+        # Serializes and writes entry data to the entry.dat file
         #
         # @param data_dir [String] Directory to save entry data
         # @param entry_data [Array] Array of entry data to save
@@ -49,6 +53,7 @@ module Lich
         end
 
         # Applies theme settings to GTK
+        # Sets the GTK dark theme preference based on the provided state
         #
         # @param theme_state [Boolean] Whether dark theme is enabled
         # @return [void]
