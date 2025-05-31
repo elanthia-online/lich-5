@@ -153,7 +153,7 @@ module Lich
           sort_select = Gtk::Switch.new
           theme_select_label = Gtk::Label.new('Dark Theme')
           tab_select_label = Gtk::Label.new('Tab Layout')
-          sort_select_label = Gtk::Label.new(' AutoSort   ')
+          sort_select_label = Gtk::Label.new('AutoSort')
           theme_select.set_active(true) if theme_state == true
           tab_select.set_active(true) if tab_layout_state == true
           sort_select.set_active(true) if autosort_state == true
