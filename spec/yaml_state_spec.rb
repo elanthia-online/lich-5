@@ -195,11 +195,18 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
     context "when file operations fail" do
       it "handles file write errors" do
-        # Mock file write error
-        allow(File).to receive(:open).and_raise(StandardError.new("Write error"))
+        # First reset any previous stubs to ensure clean state
+        allow(File).to receive(:open).and_call_original
+
+        # Use a custom matcher that only affects the specific yaml file
+        yaml_file = File.join(data_dir, "entry.yml")
+        allow(File).to receive(:open).with(yaml_file, 'w').and_raise(StandardError.new("Write error"))
 
         # Should return false on write error
         expect(described_class.save_entries(data_dir, entry_data)).to be false
+
+        # Reset the stub to avoid affecting other tests
+        allow(File).to receive(:open).and_call_original
       end
     end
   end

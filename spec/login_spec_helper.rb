@@ -16,16 +16,20 @@ require 'common/gui/authentication'
 # Configure RSpec
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
-  config.example_status_persistence_file_path = ".rspec_status"
+  config.example_status_persistence_file_path = "spec/.rspec_status"
 
   # Disable RSpec exposing methods globally on `Module` and `main`
-  config.disable_monkey_patching!
+  # This is a desirable configuration, but requires updating prior specs
+  # to operate correctly since our early efforts basically did exactly this
+  # config.disable_monkey_patching!
 
   # Use the specified formatter
   config.formatter = :documentation
 
   # Run specs in random order to surface order dependencies
-  config.order = :random
+  # This is a desirable configuration, but requires updating prior specs
+  # to operate correctly since order dependencies do exist in some tests
+  # config.order = :random
 
   # Seed global randomization in this process using the `--seed` CLI option
   Kernel.srand config.seed
