@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require 'yaml'
-require 'gtk3'
-
 module Lich
   module Common
     module GUI
