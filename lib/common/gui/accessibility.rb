@@ -14,7 +14,7 @@ module Lich
           # Ensure ATK is loaded by referencing a GAIL widget type
           begin
             GLib::Object.type_from_name('GailWidget')
-          rescue GLib::NoMethodError => e
+          rescue NoMethodError => e
             Lich.log "Warning: Could not initialize accessibility: #{e.message}"
           end
         end
