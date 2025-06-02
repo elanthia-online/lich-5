@@ -11,6 +11,7 @@ module Lich
         #
         # @param data_dir [String] Directory containing entry data
         # @return [Hash] Validation results with status and messages
+        #
         def self.validate_yaml_file(data_dir)
           yaml_file = File.join(data_dir, "entry.yml")
 
@@ -19,7 +20,6 @@ module Lich
             messages: []
           }
 
-          # Check if file exists
           unless File.exist?(yaml_file)
             results[:status] = false
             results[:messages] << "YAML file does not exist: #{yaml_file}"
@@ -27,69 +27,94 @@ module Lich
           end
 
           begin
-            # Load YAML data
             yaml_data = YAML.load_file(yaml_file)
 
-            # Validate structure
-            unless yaml_data.is_a?(Hash)
-              results[:status] = false
-              results[:messages] << "Invalid YAML structure: Root element is not a Hash"
+            unless validate_yaml_structure(yaml_data, results)
               return results
             end
 
-            unless yaml_data.key?('accounts')
-              results[:status] = false
-              results[:messages] << "Invalid YAML structure: Missing 'accounts' key"
-              return results
-            end
-
-            unless yaml_data['accounts'].is_a?(Hash)
-              results[:status] = false
-              results[:messages] << "Invalid YAML structure: 'accounts' is not a Hash"
-              return results
-            end
-
-            # Validate accounts
             yaml_data['accounts'].each do |username, account_data|
-              unless account_data.is_a?(Hash)
+              validate_account_structure(username, account_data, results)
+            end
+
+            results[:messages] << "YAML file structure is valid" if results[:status]
+          rescue StandardError => e
+            results[:status] = false
+            results[:messages] << "Error validating YAML file: #{e.message}"
+          end
+
+          results
+        end
+
+        # Validates the top-level structure of the YAML data.
+        #
+        # @param yaml_data [Object] The loaded YAML data.
+        # @param results [Hash] The results hash to append errors to.
+        # @return [Boolean] True if structure is valid, false otherwise.
+        def self.validate_yaml_structure(yaml_data, results)
+          unless yaml_data.is_a?(Hash)
+            results[:status] = false
+            results[:messages] << "Invalid YAML structure: Root element is not a Hash"
+            return false
+          end
+
+          unless yaml_data.key?('accounts')
+            results[:status] = false
+            results[:messages] << "Invalid YAML structure: Missing 'accounts' key"
+            return false
+          end
+
+          unless yaml_data['accounts'].is_a?(Hash)
+            results[:status] = false
+            results[:messages] << "Invalid YAML structure: 'accounts' is not a Hash"
+            return false
+          end
+
+          true
+        end
+
+        # Validates the structure of an account entry in the YAML file.
+        #
+        # @param username [String] The username of the account.
+        # @param account_data [Hash] The account data to validate.
+        # @param results [Hash] The results hash to append errors to.
+        # @return [void]
+        def self.validate_account_structure(username, account_data, results)
+          unless account_data.is_a?(Hash)
+            results[:status] = false
+            results[:messages] << "Invalid account structure for '#{username}': Not a Hash"
+            return
+          end
+
+          unless account_data.key?('password')
+            results[:status] = false
+            results[:messages] << "Invalid account structure for '#{username}': Missing 'password'"
+          end
+
+          unless account_data.key?('characters')
+            results[:status] = false
+            results[:messages] << "Invalid account structure for '#{username}': Missing 'characters'"
+            return
+          end
+
+          unless account_data['characters'].is_a?(Array)
+            results[:status] = false
+            results[:messages] << "Invalid account structure for '#{username}': 'characters' is not an Array"
+            return
+          end
+
+          account_data['characters'].each_with_index do |character, index|
+            unless character.is_a?(Hash)
+              results[:status] = false
+              results[:messages] << "Invalid character structure for '#{username}' at index #{index}: Not a Hash"
+              next
+            end
+
+            required_fields = ['char_name', 'game_code', 'game_name', 'frontend']
+            required_fields.each do |field|
+              unless character.key?(field)
                 results[:status] = false
-                results[:messages] << "Invalid account structure for '#{username}': Not a Hash"
-                next
-              end
-
-              unless account_data.key?('password')
-                results[:status] = false
-                results[:messages] << "Invalid account structure for '#{username}': Missing 'password'"
-              end
-
-              unless account_data.key?('characters')
-                results[:status] = false
-                results[:messages] << "Invalid account structure for '#{username}': Missing 'characters'"
-                next
-              end
-
-              unless account_data['characters'].is_a?(Array)
-                results[:status] = false
-                results[:messages] << "Invalid account structure for '#{username}': 'characters' is not an Array"
-                next
-              end
-
-              # Validate characters
-              account_data['characters'].each_with_index do |character, index|
-                unless character.is_a?(Hash)
-                  results[:status] = false
-                  results[:messages] << "Invalid character structure for '#{username}' at index #{index}: Not a Hash"
-                  next
-                end
-
-                # Check required fields
-                required_fields = ['char_name', 'game_code', 'game_name', 'frontend']
-                required_fields.each do |field|
-                  unless character.key?(field)
-                    results[:status] = false
-                    results[:messages] << "Invalid character structure for '#{username}' at index #{index}: Missing '#{field}'"
-                  end
-                end
+                results[:messages] << "Invalid character structure for '#{username}' at index #{index}: Missing '#{field}'"
               end
             end
 
@@ -97,7 +122,7 @@ module Lich
             if results[:status]
               results[:messages] << "YAML file structure is valid"
             end
-          rescue => e
+          rescue StandardError => e
             results[:status] = false
             results[:messages] << "Error validating YAML file: #{e.message}"
           end
@@ -165,7 +190,7 @@ module Lich
             if results[:status]
               results[:messages] << "Format conversion test passed: All entries converted correctly"
             end
-          rescue => e
+          rescue StandardError => e
             results[:status] = false
             results[:messages] << "Error testing format conversion: #{e.message}"
           end
@@ -269,7 +294,7 @@ module Lich
             if results[:status]
               results[:messages] << "Account management tests passed: All operations completed successfully"
             end
-          rescue => e
+          rescue StandardError => e
             results[:status] = false
             results[:messages] << "Error testing account management: #{e.message}"
           end

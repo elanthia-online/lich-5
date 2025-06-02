@@ -27,7 +27,7 @@ module Lich
 
               # Apply sorting if needed
               sort_entries(entries, autosort_state)
-            rescue => e
+            rescue StandardError => e
               Lich.log "Error loading YAML entry file: #{e.message}"
               []
             end
@@ -69,7 +69,7 @@ module Lich
             end
 
             true
-          rescue => e
+          rescue StandardError => e
             Lich.log "Error saving YAML entry file: #{e.message}"
             false
           end
@@ -93,7 +93,7 @@ module Lich
 
           # Save as YAML
           save_entries(data_dir, legacy_entries)
-        rescue => e
+        rescue StandardError => e
           Lich.log "Error migrating to YAML format: #{e.message}"
           false
         end

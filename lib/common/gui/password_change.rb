@@ -213,7 +213,7 @@ module Lich
 
               # Verify password
               yaml_data['accounts'][username]['password'] == password
-            rescue => e
+            rescue StandardError => e
               Lich.log "Error verifying password: #{e.message}"
               false
             end

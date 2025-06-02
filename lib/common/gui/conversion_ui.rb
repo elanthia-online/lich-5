@@ -163,7 +163,7 @@ module Lich
                       dialog.set_response_sensitive(Gtk::ResponseType::APPLY, true)
                     end
                   end
-                rescue => e
+                rescue StandardError => e
                   # Handle any exceptions
                   Gtk.queue do
                     progress_bar.fraction = 0.0

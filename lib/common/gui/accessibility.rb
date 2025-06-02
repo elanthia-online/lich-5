@@ -44,7 +44,7 @@ module Lich
               role_value = get_atk_role(role)
               accessible.set_role(role_value) if role_value
             end
-          rescue => e
+          rescue StandardError => e
             Lich.log "Warning: Could not make widget accessible: #{e.message}"
           end
         end
@@ -65,7 +65,7 @@ module Lich
             elsif !button.label.nil? && button.label.empty?
               button.label = label
             end
-          rescue => e
+          rescue StandardError => e
             Lich.log "Warning: Could not set button label: #{e.message}"
           end
         end
@@ -107,7 +107,7 @@ module Lich
 
             # Also make the page itself accessible
             make_accessible(page, tab_label, description, :panel)
-          rescue => e
+          rescue StandardError => e
             Lich.log "Warning: Could not make tab accessible: #{e.message}"
           end
         end
@@ -124,7 +124,7 @@ module Lich
           # Ensure window has a title for screen readers
           begin
             window.title = title if window.title.nil? || window.title.empty?
-          rescue => e
+          rescue StandardError => e
             Lich.log "Warning: Could not set window title: #{e.message}"
           end
         end
@@ -143,7 +143,7 @@ module Lich
             if tab_order && widget.class.property?('tab-position')
               widget.set_property('tab-position', tab_order)
             end
-          rescue => e
+          rescue StandardError => e
             Lich.log "Warning: Could not set keyboard navigation: #{e.message}"
           end
         end
@@ -191,7 +191,7 @@ module Lich
                 Gtk::AccelFlags::VISIBLE
               )
             end
-          rescue => e
+          rescue StandardError => e
             Lich.log "Warning: Could not add keyboard shortcut: #{e.message}"
           end
         end
@@ -230,7 +230,7 @@ module Lich
                 end
               end
             end
-          rescue => e
+          rescue StandardError => e
             Lich.log "Warning: Could not announce message: #{e.message}"
           end
         end
@@ -332,7 +332,7 @@ module Lich
             when :tree_item then Atk::Role::TREE_ITEM
             else nil
             end
-          rescue => e
+          rescue StandardError => e
             Lich.log "Warning: Could not get ATK role: #{e.message}"
             nil
           end

@@ -126,7 +126,7 @@ module Lich
             FileUtils.cp(file_path, backup_file)
             true
           end
-        rescue => e
+        rescue StandardError => e
           Lich.log "Error in file operation (#{operation}): #{e.message}"
           operation == :read ? "" : false
         end
