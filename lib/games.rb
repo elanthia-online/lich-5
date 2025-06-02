@@ -622,7 +622,7 @@ module Lich
           room_exits = []
           Map.current.wayto.each do |key, value|
             # Don't include cardinals / up/down/out (usually just climb/go)
-            if value.class == Proc
+            if value.is_a?(StringProc)
               if Map.current.timeto[key].is_a?(Numeric) || (Map.current.timeto[key].is_a?(StringProc) && Map.current.timeto[key].call.is_a?(Numeric))
                 room_exits << "<d cmd=';go2 #{key}'>#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? ('(' + Map[key].id.to_s + ')') : ''}</d>"
               end
@@ -636,7 +636,7 @@ module Lich
           Map.current.wayto.each do |_key, value|
             # Don't include cardinals / up/down/out (usually just climb/go)
             next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
-            if value.class != Proc
+            unless value.is_a?(StringProc)
               room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
             end
           end
@@ -758,7 +758,7 @@ module Lich
           room_exits = []
           Map.current.wayto.each do |key, value|
             # Don't include cardinals / up/down/out (usually just climb/go)
-            if value.class == Proc
+            if value.is_a?(StringProc)
               if Map.current.timeto[key].is_a?(Numeric) || (Map.current.timeto[key].is_a?(StringProc) && Map.current.timeto[key].call.is_a?(Numeric))
                 room_exits << "<d cmd=';go2 #{key}'>#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? ('(' + Map[key].id.to_s + ')') : ''}</d>"
               end
@@ -772,7 +772,7 @@ module Lich
           Map.current.wayto.each do |_key, value|
             # Don't include cardinals / up/down/out (usually just climb/go)
             next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
-            if value.class != Proc
+            unless value.is_a?(StringProc)
               room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
             end
           end
