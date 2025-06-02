@@ -1,47 +1,25 @@
 =begin
 messaging.rb: Core lich file for collection of various messaging Lich capabilities.
 Entries added here should always be accessible from Lich::Messaging.feature namespace.
-
-    Maintainer: Elanthia-Online
-    Original Author: LostRanger, Ondreian, various others
-    game: Gemstone
-    tags: CORE, util, utilities
-    required: Lich > 5.4.0
-    version: 1.2.1
-
-  changelog:
-    v1.2.1 (2024-04-26
-      Bugfix for Wizard closing tag
-    v1.2.0 (2023-08-02)
-      Add Lich::Messaging.mono(msg) to send msg as mono spaced text
-      Robocop code cleanup
-    v1.1.0 (2022-10-28)
-      Add loot window as an option
-    v1.0.2 (2022-11-19)
-      Bugfix for Wizard monsterbold new line
-    v1.0.1 (2022-05-05)
-      Bugfix for Wizard character encoding
-    v1.0.0 (2022-03-15)
-      Initial release
-      Supports Lich::Messaging.stream_window(msg, window) SENDS msg to stream window
-      Supports Lich::Messaging.msg(type, text) SENDS msg in colors, supports debug output
-      Supports Lich::Messaging.msg_format(type, text) RETURNS msg in colors
-      Supports Lich::Messaging.monsterbold(msg)  RETURNS msg in monsterbold
-      Supports Lich::Messaging.xml_encode(msg)  RETURNS xml encoded text
-
 =end
 
 module Lich
   module Messaging
     def self.xml_encode(msg)
-      msg.encode(:xml => :text)
+      if $frontend =~ /^(wizard|avalon)$/i
+        sf_to_wiz(msg.encode(:xml => :text))
+      else
+        msg.encode(:xml => :text)
+      end
     end
 
-    def self.monsterbold(msg)
-      return monsterbold_start + self.xml_encode(msg) + monsterbold_end
+    def self.monsterbold(msg, encode: true)
+      # return monsterbold_start + self.xml_encode(msg) + monsterbold_end
+      return msg_format("monster", msg, encode: encode)
     end
 
-    def self.stream_window(msg, window = "familiar")
+    def self.stream_window(msg, window = "familiar", encode: true)
+      msg = xml_encode(msg) if encode
       if XMLData.game =~ /^GS/
         allowed_streams = ["familiar", "speech", "thoughts", "loot", "voln"]
       elsif XMLData.game =~ /^DR/
@@ -66,10 +44,11 @@ module Lich
         end
       end
 
-      _respond stream_window_before_txt + self.xml_encode(msg) + stream_window_after_txt
+      _respond stream_window_before_txt + msg + stream_window_after_txt
     end
 
-    def self.msg_format(type = "info", msg = "")
+    def self.msg_format(type = "info", msg = "", cmd_link: nil, encode: true)
+      msg = xml_encode(msg) if encode
       preset_color_before = ""
       preset_color_after = ""
 
@@ -77,7 +56,7 @@ module Lich
         "dark red" => 133, "purple" => 134, "gold" => 135, "light grey" => 136, "blue" => 137,
         "bright green" => 138, "teal" => 139, "red" => 140, "pink" => 141, "yellow" => 142 }
 
-      if $frontend =~ /^(?:stormfront|frostbite|profanity)$/
+      if $frontend =~ /^(?:stormfront|frostbite|profanity|wrayth)$/
         case type
         when "error", "yellow", "bold", "monster", "creature"
           preset_color_before = monsterbold_start
@@ -94,6 +73,9 @@ module Lich
         when "link", "command", "selectedLink", "watching", "roomName"
           preset_color_before = ""
           preset_color_after = ""
+        when "cmd"
+          preset_color_before = "<d cmd='#{xml_encode(cmd_link)}'>"
+          preset_color_after = "</d>"
         end
       elsif $frontend =~ /^(?:wizard|avalon)$/
         case type
@@ -110,6 +92,9 @@ module Lich
           preset_color_before = wizard_color["bright green"].chr.force_encoding(Encoding::ASCII_8BIT)
           preset_color_after = "\240".force_encoding(Encoding::ASCII_8BIT)
         when "link", "command", "selectedLink", "watching", "roomName"
+          preset_color_before = ""
+          preset_color_after = ""
+        when "cmd" # these browsers can't handle links
           preset_color_before = ""
           preset_color_after = ""
         end
@@ -130,19 +115,29 @@ module Lich
         when "link", "command", "selectedLink", "watching", "roomName"
           preset_color_before = ""
           preset_color_after = ""
+        when "cmd" # these browsers can't handle links
+          preset_color_before = ""
+          preset_color_after = ""
         end
       end
 
-      return (preset_color_before + xml_encode(msg) + preset_color_after)
+      return (preset_color_before + msg + preset_color_after)
     end
 
-    def self.msg(type = "info", msg = "")
-      return if type == "debug" && (Lich.debug_messaging.nil? || Lich.debug_messaging == "false")
-      _respond msg_format(type, msg)
+    def self.msg(type = "info", msg = "", encode: true)
+      return if type == "debug" && (Lich.debug_messaging.nil? || Lich.debug_messaging == "false" || Lich.debug_messaging == false)
+      _respond msg_format(type, msg, encode: encode)
     end
 
-    def self.mono(msg)
-      return raise StandardError.new 'Lich::Messaging.mono only works with String paremeters!' unless msg.is_a?(String)
+    def self.make_cmd_link(link_text, link_action, encode: true)
+      return msg_format("cmd", link_text, cmd_link: link_action, encode: encode)
+    end
+
+    # defaulting encoding here to false instead of true like other methods due to backwards compatibility that it never encoded before
+    # whereas all the other methods were already encoding and therefor should default to allow for them.
+    def self.mono(msg, encode: false)
+      return raise StandardError.new 'Lich::Messaging.mono only works with String parameters!' unless msg.is_a?(String)
+      msg = xml_encode(msg) if encode
       if $frontend =~ /^(?:stormfront|wrayth|genie)$/i
         _respond "<output class=\"mono\"/>\n" + msg + "\n<output class=\"\"/>"
       else

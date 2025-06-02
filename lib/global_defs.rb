@@ -1530,8 +1530,8 @@ def fput(message, *waitingfor)
   put(message)
 
   while (string = get)
-    if string =~ /(?:\.\.\.wait |Wait )[0-9]+/
-      hold_up = string.slice(/[0-9]+/).to_i
+    if string =~ /(?:\.\.\.wait |Wait )(?<wait_time>[0-9]+)/
+      hold_up = Regexp.last_match[:wait_time].to_i
       sleep(hold_up) unless hold_up.nil?
       clear
       put(message)
@@ -1794,7 +1794,7 @@ def unnoded_pulse
   end
 end
 
-require './lib/stash.rb'
+require_relative File.join(LIB_DIR, "stash.rb")
 
 def empty_hands
   waitrt?
@@ -2268,8 +2268,18 @@ def do_client(client_string)
       did_something = false
       nil
     elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
-      require "lib/common/hmr"
-      HMR.reload %r{#{Regexp.last_match[:pattern]}}
+      begin
+        HMR.reload %r{#{Regexp.last_match[:pattern]}}
+      rescue ArgumentError
+        if $!.to_s == 'invalid Unicode escape'
+          respond "--- Lich: error: invalid Unicode escape"
+          respond "--- Lich:   cmd: #{cmd}"
+          respond "--- Lich: \\u is unicode escape, did you mean to use a / instead?"
+        else
+          respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
+          Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+        end
+      end
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
       ExecScript.start("Infomon.sync", { :quiet => true })
     elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon (?:reset|redo)!?/i
@@ -2293,6 +2303,16 @@ def do_client(client_string)
       Infomon.set('infomon.show_durations', new_value)
     elsif XMLData.game =~ /^GS/ && cmd =~ /^sk\b(?: (add|rm|list|help)(?: ([\d\s]+))?)?/i
       SK.main(Regexp.last_match(1), Regexp.last_match(2))
+    elsif XMLData.game =~ /^DR/ && cmd =~ /^display flaguid(?: (true|false))?/i
+      new_value = !(Lich.hide_uid_flag)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich to NOT display Room Title RealIDs while FLAG ShowRoomID ON to #{new_value}"
+      Lich.hide_uid_flag = new_value
     elsif cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
       case Regexp.last_match(1)
@@ -2301,7 +2321,7 @@ def do_client(client_string)
       when 'false'
         new_value = false
       end
-      respond "Changing Lich's Room title display for Lich ID#s to #{new_value}"
+      respond "Changing Lich to display Lich ID#s to #{new_value}"
       Lich.display_lichid = new_value
     elsif cmd =~ /^display uid(?: (true|false))?/i
       new_value = !(Lich.display_uid)
@@ -2311,7 +2331,7 @@ def do_client(client_string)
       when 'false'
         new_value = false
       end
-      respond "Changing Lich's Room title display for RealID#s to #{new_value}"
+      respond "Changing Lich to display RealID#s to #{new_value}"
       Lich.display_uid = new_value
     elsif cmd =~ /^display exits?(?: (true|false))?/i
       new_value = !(Lich.display_exits)
@@ -2392,6 +2412,7 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
       respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
       respond "                              see #{$clean_lich_char}lich5-update --help"
+      respond "   #{$clean_lich_char}hmr <regex filepath>      Hot module reload a Ruby or Lich5 file without relogging, uses Regular Expression matching"
       if XMLData.game =~ /^GS/
         respond
         respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon (fixskill)"
@@ -2399,6 +2420,8 @@ def do_client(client_string)
         respond "   #{$clean_lich_char}infomon effects           toggle display of effect durations"
         respond "   #{$clean_lich_char}infomon show              shows all current Infomon values for character"
         respond "   #{$clean_lich_char}sk help                   show information on modifying self-knowledge spells to be known"
+      elsif XMLData.game =~ /^DR/
+        respond "   #{$clean_lich_char}display flaguid           toggle display of RealID in Room Title with FLAG ShowRoomID (required for Lich5 to be ON)"
       end
       respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# when displaying room information"
       respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"

@@ -83,6 +83,14 @@ module Lich
       @checked_sheaths = true
     end
 
+    def self.missing_primary_sheath? # check entry against actual inventory to catch inventory updatees
+      @sheath.has_key?(:sheath) && !GameObj.inv.any? { |item| item.id == @sheath[:sheath].id }
+    end
+
+    def self.missing_secondary_sheath? # check entry against actual inventory to catch inventory updates
+      @sheath.has_key?(:secondary_sheath) && !GameObj.inv.any? { |item| item.id == @sheath[:secondary_sheath].id }
+    end
+
     def self.stash_hands(right: false, left: false, both: false)
       $fill_hands_actions ||= Array.new
       $fill_left_hand_actions ||= Array.new
@@ -93,7 +101,9 @@ module Lich
       left_hand = GameObj.left_hand
 
       # extending to use sheath / 2sheath wherever possible
-      Stash.sheath_bags unless @checked_sheaths
+      if !@checked_sheaths || missing_primary_sheath? || missing_secondary_sheath?
+        Stash.sheath_bags # @checked_sheaths is set true when this method executes
+      end
       if @sheath.has_key?(:sheath)
         unless @sheath.has_key?(:secondary_sheath)
           sheath = second_sheath = @sheath.fetch(:sheath)

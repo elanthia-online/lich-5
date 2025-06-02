@@ -90,15 +90,28 @@ module Lich
       end
 
       def GameObj.[](val)
-        if val.class == String
-          if val =~ /^\-?[0-9]+$/
-            @@inv.find { |o| o.id == val } || @@loot.find { |o| o.id == val } || @@npcs.find { |o| o.id == val } || @@pcs.find { |o| o.id == val } || [@@right_hand, @@left_hand].find { |o| o.id == val } || @@room_desc.find { |o| o.id == val }
-          elsif val.split(' ').length == 1
-            @@inv.find { |o| o.noun == val } || @@loot.find { |o| o.noun == val } || @@npcs.find { |o| o.noun == val } || @@pcs.find { |o| o.noun == val } || [@@right_hand, @@left_hand].find { |o| o.noun == val } || @@room_desc.find { |o| o.noun == val }
+        unless val.is_a?(String) || val.is_a?(Regexp)
+          respond "--- Lich: error: GameObj[] passed with #{val.class} #{val} via caller: #{caller[0]}"
+          respond "--- Lich: error: GameObj[] supports String or Regexp only"
+          Lich.log "--- Lich: error: GameObj[] passed with #{val.class} #{val} via caller: #{caller[0]}\n\t"
+          Lich.log "--- Lich: error: GameObj[] supports String or Regexp only\n\t"
+          if val.is_a?(Integer)
+            respond "--- Lich: error: GameObj[] converted Integer #{val} to String to continue"
+            val = val.to_s
           else
+            return
+          end
+        end
+        if val.is_a?(String)
+          if val =~ /^\-?[0-9]+$/ # ID lookup
+            # excludes @@room_desc ID lookup due to minimal use case, but could be added in future if desired
+            @@inv.find { |o| o.id == val } || @@loot.find { |o| o.id == val } || @@npcs.find { |o| o.id == val } || @@pcs.find { |o| o.id == val } || [@@right_hand, @@left_hand].find { |o| o.id == val } || @@room_desc.find { |o| o.id == val } || @@contents.values.flatten.find { |o| o.id == val }
+          elsif val.split(' ').length == 1 # noun lookup
+            @@inv.find { |o| o.noun == val } || @@loot.find { |o| o.noun == val } || @@npcs.find { |o| o.noun == val } || @@pcs.find { |o| o.noun == val } || [@@right_hand, @@left_hand].find { |o| o.noun == val } || @@room_desc.find { |o| o.noun == val }
+          else # name lookup
             @@inv.find { |o| o.name == val } || @@loot.find { |o| o.name == val } || @@npcs.find { |o| o.name == val } || @@pcs.find { |o| o.name == val } || [@@right_hand, @@left_hand].find { |o| o.name == val } || @@room_desc.find { |o| o.name == val } || @@inv.find { |o| o.name =~ /\b#{Regexp.escape(val.strip)}$/i } || @@loot.find { |o| o.name =~ /\b#{Regexp.escape(val.strip)}$/i } || @@npcs.find { |o| o.name =~ /\b#{Regexp.escape(val.strip)}$/i } || @@pcs.find { |o| o.name =~ /\b#{Regexp.escape(val.strip)}$/i } || [@@right_hand, @@left_hand].find { |o| o.name =~ /\b#{Regexp.escape(val.strip)}$/i } || @@room_desc.find { |o| o.name =~ /\b#{Regexp.escape(val.strip)}$/i } || @@inv.find { |o| o.name =~ /\b#{Regexp.escape(val).sub(' ', ' .*')}$/i } || @@loot.find { |o| o.name =~ /\b#{Regexp.escape(val).sub(' ', ' .*')}$/i } || @@npcs.find { |o| o.name =~ /\b#{Regexp.escape(val).sub(' ', ' .*')}$/i } || @@pcs.find { |o| o.name =~ /\b#{Regexp.escape(val).sub(' ', ' .*')}$/i } || [@@right_hand, @@left_hand].find { |o| o.name =~ /\b#{Regexp.escape(val).sub(' ', ' .*')}$/i } || @@room_desc.find { |o| o.name =~ /\b#{Regexp.escape(val).sub(' ', ' .*')}$/i }
           end
-        elsif val.class == Regexp
+        elsif val.is_a?(Regexp) # name only lookup when passed a Regexp
           @@inv.find { |o| o.name =~ val } || @@loot.find { |o| o.name =~ val } || @@npcs.find { |o| o.name =~ val } || @@pcs.find { |o| o.name =~ val } || [@@right_hand, @@left_hand].find { |o| o.name =~ val } || @@room_desc.find { |o| o.name =~ val }
         end
       end
@@ -350,16 +363,13 @@ module Lich
         GameObj.load_data(filename)
       end
 
+      def GameObj.merge_data(data, newData)
+        return newData unless data.is_a?(Regexp)
+        return Regexp.union(data, newData)
+      end
+
       def GameObj.load_data(filename = nil)
-        if filename.nil?
-          if File.exist?("#{DATA_DIR}/gameobj-data.xml")
-            filename = "#{DATA_DIR}/gameobj-data.xml"
-          elsif File.exist?("#{SCRIPT_DIR}/gameobj-data.xml") # deprecated
-            filename = "#{SCRIPT_DIR}/gameobj-data.xml"
-          else
-            filename = "#{DATA_DIR}/gameobj-data.xml"
-          end
-        end
+        filename = File.join(DATA_DIR, 'gameobj-data.xml') if filename.nil?
         if File.exist?(filename)
           begin
             @@type_data = Hash.new
@@ -384,20 +394,48 @@ module Lich
                 end
               }
             }
-            true
           rescue
             @@type_data = nil
             @@sellable_data = nil
             echo "error: GameObj.load_data: #{$!}"
             respond $!.backtrace[0..1]
-            false
+            return false
           end
         else
           @@type_data = nil
           @@sellable_data = nil
           echo "error: GameObj.load_data: file does not exist: #{filename}"
-          false
+          return false
         end
+        filename = File.join(DATA_DIR, 'gameobj-custom', 'gameobj-data.xml')
+        if (File.exist?(filename))
+          begin
+            File.open(filename) { |file|
+              doc = REXML::Document.new(file.read)
+              doc.elements.each('data/type') { |e|
+                if (type = e.attributes['name'])
+                  @@type_data[type] ||= Hash.new
+                  @@type_data[type][:name]	  = GameObj.merge_data(@@type_data[type][:name], Regexp.new(e.elements['name'].text)) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
+                  @@type_data[type][:noun]	  = GameObj.merge_data(@@type_data[type][:noun], Regexp.new(e.elements['noun'].text)) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
+                  @@type_data[type][:exclude] = GameObj.merge_data(@@type_data[type][:exclude], Regexp.new(e.elements['exclude'].text)) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
+                end
+              }
+              doc.elements.each('data/sellable') { |e|
+                if (sellable = e.attributes['name'])
+                  @@sellable_data[sellable] ||= Hash.new
+                  @@sellable_data[sellable][:name]	  = GameObj.merge_data(@@sellable_data[sellable][:name], Regexp.new(e.elements['name'].text)) unless e.elements['name'].text.nil? or e.elements['name'].text.empty?
+                  @@sellable_data[sellable][:noun]	  = GameObj.merge_data(@@sellable_data[sellable][:noun], Regexp.new(e.elements['noun'].text)) unless e.elements['noun'].text.nil? or e.elements['noun'].text.empty?
+                  @@sellable_data[sellable][:exclude] = GameObj.merge_data(@@sellable_data[sellable][:exclude], Regexp.new(e.elements['exclude'].text)) unless e.elements['exclude'].text.nil? or e.elements['exclude'].text.empty?
+                end
+              }
+            }
+          rescue
+            echo "error: Custom GameObj.load_data: #{$!}"
+            respond $!.backtrace[0..1]
+            return false
+          end
+        end
+        return true
       end
 
       def GameObj.type_data

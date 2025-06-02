@@ -23,7 +23,7 @@ module Lich
         when /--update|-u/
           self.download_update
         when /--refresh/
-          _respond; _respond "This command has been removed."
+          respond; respond "This command has been removed."
         when /--revert|-r/
           self.revert
         when /--(?:(script|library|data))=(.*)/
@@ -31,7 +31,7 @@ module Lich
         when /--snapshot|-s/ # this one needs to be after --script
           self.snapshot
         else
-          _respond; _respond "Command '#{type}' unknown, illegitimate and ignored.  Exiting . . ."; _respond
+          respond; respond "Command '#{type}' unknown, illegitimate and ignored.  Exiting . . ."; respond
         end
       end
 
@@ -40,24 +40,24 @@ module Lich
         if "#{LICH_VERSION}".chr == '5'
           if Gem::Version.new(@current) < Gem::Version.new(@update_to)
             if !@new_features.empty?
-              _respond ''; _respond monsterbold_start() + "*** NEW VERSION AVAILABLE ***" + monsterbold_end()
-              _respond ''; _respond ''
-              _respond ''; _respond @new_features
-              _respond ''
-              _respond ''; _respond "If you are interested in updating, run '#{$clean_lich_char}lich5-update --update' now."
-              _respond ''
+              respond ''; _respond monsterbold_start() + "*** NEW VERSION AVAILABLE ***" + monsterbold_end()
+              respond ''; respond ''
+              respond ''; respond @new_features
+              respond ''
+              respond ''; respond "If you are interested in updating, run '#{$clean_lich_char}lich5-update --update' now."
+              respond ''
             end
           else
-            _respond ''; _respond "Lich version #{LICH_VERSION} is good.  Enjoy!"; _respond ''
+            respond ''; respond "Lich version #{LICH_VERSION} is good.  Enjoy!"; respond ''
           end
         else
           # lich version 4 - just say 'no'
-          _respond "This script does not support Lich #{LICH_VERSION}."
+          respond "This script does not support Lich #{LICH_VERSION}."
         end
       end
 
       def self.help
-        _respond "
+        respond "
     --help                   Display this message
     --announce               Get summary of changes for next version
     --update                 Update all changes for next version
@@ -84,12 +84,12 @@ module Lich
       end
 
       def self.snapshot
-        _respond
-        _respond 'Creating a snapshot of current Lich core files ONLY.'
-        _respond
-        _respond 'You may also wish to copy your entire Lich5 folder to'
-        _respond 'another location for additional safety, after any'
-        _respond 'additional requested updates are completed.'
+        respond
+        respond 'Creating a snapshot of current Lich core files ONLY.'
+        respond
+        respond 'You may also wish to copy your entire Lich5 folder to'
+        respond 'another location for additional safety, after any'
+        respond 'additional requested updates are completed.'
 
         ## Let's make the snapshot folder
 
@@ -113,9 +113,9 @@ module Lich
           FileUtils.cp(File.join(SCRIPT_DIR, file), File.join(snapshot_subdir, "scripts", file)) if File.exist?(File.join(SCRIPT_DIR, file))
         }
 
-        _respond
-        _respond 'Current Lich ecosystem files (only) backed up to:'
-        _respond "    #{snapshot_subdir}"
+        respond
+        respond 'Current Lich ecosystem files (only) backed up to:'
+        respond "    #{snapshot_subdir}"
       end
 
       def self.prep_betatest(type = nil, requested_file = nil)
@@ -125,11 +125,18 @@ module Lich
           respond 'While we will do everything we can to ensure you have a smooth experience, '
           respond 'it is a test, and untoward things can result.  Please confirm your choice:'
           respond "Please confirm your participation:  #{$clean_lich_char}send Y or #{$clean_lich_char}send N"
+          respond "You have 10 seconds to confirm, otherwise will be cancelled."
           # we are only going to get the next client-input line, and if it does not confirm, we bail
           # we are doing this to prevent hanging the client with various other inputs by the user
           sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_
-          line = sync_thread.gets until line.strip =~ /^(?:<c>)?(?:;send|;s) /i
-          if line =~ /send Y|s Y/i
+          timeout = Time.now + 10
+          line = nil
+          loop do
+            line = sync_thread.gets
+            break if line.is_a?(String) && line.strip =~ /^(?:<c>)?(?:#{$clean_lich_char}send|#{$clean_lich_char}s) /i
+            break if Time.now > timeout
+          end
+          if line.is_a?(String) && line =~ /send Y|s Y/i
             @beta_response = 'accepted'
             respond 'Beta test installation accepted.  Thank you for considering!'
           else
@@ -185,15 +192,15 @@ module Lich
         ## This is the workhorse routine that does the file moves from an update
         self.prep_update if @update_to.nil? or @update_to.empty?
         if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}")
-          _respond ''; _respond "Lich version #{LICH_VERSION} is good.  Enjoy!"; _respond ''
+          respond ''; respond "Lich version #{LICH_VERSION} is good.  Enjoy!"; respond ''
         else
-          _respond; _respond 'Getting reaady to update.  First we will create a'
-          _respond 'snapshot in case there are problems with the update.'
+          respond; respond 'Getting reaady to update.  First we will create a'
+          respond 'snapshot in case there are problems with the update.'
 
           self.snapshot
 
           # download the requested update (can be prod release, or beta)
-          _respond; _respond "Downloading Lich5 version #{@update_to}"; _respond
+          respond; respond "Downloading Lich5 version #{@update_to}"; respond
           filename = "lich5-#{@update_to}"
           File.open(File.join(TEMP_DIR, "#{filename}.tar.gz"), "wb") do |file|
             file.write URI.parse(@zipfile).open.read
@@ -210,11 +217,11 @@ module Lich
           # delete all existing lib files to not leave old ones behind
           FileUtils.rm_rf(Dir.glob(File.join(LIB_DIR, "*")))
 
-          _respond; _respond 'Copying updated lich files to their locations.'
+          respond; respond 'Copying updated lich files to their locations.'
 
           ## We do not care about local edits from players in the Lich5 / lib location
           FileUtils.copy_entry(File.join(TEMP_DIR, filename, "lib"), File.join(LIB_DIR))
-          _respond; _respond "All Lich lib files have been updated."; _respond
+          respond; respond "All Lich lib files have been updated."; respond
 
           ## Use new method so can be reused to do a blanket update of core data & scripts
           self.update_core_data_and_scripts(@update_to)
@@ -230,9 +237,9 @@ module Lich
           FileUtils.remove_dir(File.join(TEMP_DIR, filename)) # we know these exist because
           FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) # we just processed them
 
-          _respond; _respond "Lich5 has been updated to Lich5 version #{@update_to}"
-          _respond "You should exit the game, then log back in.  This will start the game"
-          _respond "with your updated Lich.  Enjoy!"
+          respond; respond "Lich5 has been updated to Lich5 version #{@update_to}"
+          respond "You should exit the game, then log back in.  This will start the game"
+          respond "with your updated Lich.  Enjoy!"
         end
       end
 
@@ -241,11 +248,11 @@ module Lich
         ## without another snapshot and without worrying about saving files
         ## that can be reinstalled with the lich5-update --update command
 
-        _respond; _respond 'Reverting Lich5 to previously installed version.'
+        respond; respond 'Reverting Lich5 to previously installed version.'
         revert_array = Dir.glob(File.join(BACKUP_DIR, "*")).sort.reverse
         restore_snapshot = revert_array[0]
         if restore_snapshot.empty? or /L5-snapshot/ !~ restore_snapshot
-          _respond "No prior Lich5 version found. Seek assistance."
+          respond "No prior Lich5 version found. Seek assistance."
         else
           # delete all lib files
           FileUtils.rm_rf(Dir.glob(File.join(LIB_DIR, "*")))
@@ -274,10 +281,10 @@ module Lich
               targetversion = line.sub(/LICH_VERSION\s+?=\s+?/, '').sub('"', '')
             end
           end
-          _respond
-          _respond "Lich5 has been reverted to Lich5 version #{targetversion}"
-          _respond "You should exit the game, then log back in.  This will start the game"
-          _respond "with your previous version of Lich.  Enjoy!"
+          respond
+          respond "Lich5 has been reverted to Lich5 version #{targetversion}"
+          respond "You should exit the game, then log back in.  This will start the game"
+          respond "with your previous version of Lich.  Enjoy!"
         end
       end
 
@@ -312,27 +319,27 @@ module Lich
             File.open(File.join(location, requested_file), "wb") do |file|
               file.write URI.parse(File.join(remote_repo, requested_file)).open.read
             end
-            _respond
-            _respond "#{requested_file} has been updated."
+            respond
+            respond "#{requested_file} has been updated."
           rescue
             # we created a garbage file (zero bytes filename) so let's clean it up and inform.
             sleep 1
             File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))
-            _respond; _respond "The filename #{requested_file} is not available via lich5-update."
-            _respond "Check the spelling of your requested file, or use '#{$clean_lich_char}jinx' to"
-            _respond "to download #{requested_file} from another respository."
+            respond; respond "The filename #{requested_file} is not available via lich5-update."
+            respond "Check the spelling of your requested file, or use '#{$clean_lich_char}jinx' to"
+            respond "to download #{requested_file} from another respository."
           end
         else
-          _respond
-          _respond "The requested file #{requested_file} has an incorrect extension."
-          _respond "Valid extensions are '.lic' for scripts, '.rb' for library files,"
-          _respond "and '.xml' or '.ui' for data files. Please correct and try again."
+          respond
+          respond "The requested file #{requested_file} has an incorrect extension."
+          respond "Valid extensions are '.lic' for scripts, '.rb' for library files,"
+          respond "and '.xml' or '.ui' for data files. Please correct and try again."
         end
       end
 
       def self.update_core_data_and_scripts(version = LICH_VERSION)
         if XMLData.game !~ /^GS|^DR/
-          _respond "invalid game type, unsure what scripts to update via Update.update_core_scripts"
+          respond "invalid game type, unsure what scripts to update via Update.update_core_scripts"
           return
         end
 
@@ -350,7 +357,7 @@ module Lich
           newfilename = File.join(DATA_DIR, "#{transition_filename}-#{Time.now.to_i}.xml")
           if File.exist?(File.join(DATA_DIR, file))
             File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
-            _respond "The prior version of #{file} was renamed to #{newfilename}."
+            respond "The prior version of #{file} was renamed to #{newfilename}."
           end
           self.update_file('data', file)
         }

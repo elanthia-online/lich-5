@@ -24,9 +24,10 @@ module Lich
         /^What were you referring to/,
         /^I could not find/,
         /^But you aren't holding that/,
+        /^Perhaps you should be holding that first/,
         /^You're kidding, right/,
         /^You can't do that/,
-        /^No littering/,
+        /No littering/, # A guard steps over to you and says, "No littering in the bank."
         /^Where do you want to put that/,
         /^You really shouldn't be loitering/,
         /^You don't seem to be able to move/,
@@ -64,14 +65,19 @@ module Lich
         /^You pick/,
         /^You pluck/,
         /^You slip/,
+        /^You scoop/,
         /^You deftly remove/,
         /^You are already holding/,
         /^You fade in for a moment as you/,
         /^You carefully lift/,
-        /^You carefully remove .* from the bundle/
+        /^You carefully remove .* from the bundle/,
+        /^With a flick of your wrist, you stealthily unsheath/
       ]
 
       GET_ITEM_FAILURE_PATTERNS = [
+        /^A magical force keeps you from grasping/,
+        /^You'll need both hands free/,
+        /^You need both hands free/,
         /^You need a free hand/,
         /^You can't pick that up with your hand that damaged/,
         /^Your (left|right) hand is too injured/,
@@ -80,6 +86,7 @@ module Lich
         /^You can't reach that from here/, # on a mount like a flying carpet
         /^You don't seem to be able to move/,
         /^You should untie/,
+        /^You can't do that/,
         /^Get what/,
         /^I could not/,
         /^What were you/,
@@ -118,7 +125,8 @@ module Lich
         /^A brisk chill rushes through you as you wear/, # some hiro bearskin gloves interlaced with strips of ice-veined leather
         /^You drape/,
         /You lean over and slip your feet into the boots./, # a pair of weathered barkcloth boots lined in flannel,
-        /^You reach down and step into/ # pair of enaada boots clasped by asharsh'dai
+        /^You reach down and step into/, # pair of enaada boots clasped by asharsh'dai
+        /Gritting your teeth/ # Gritting your teeth, you grip each of your heavy combat boots in turn by the straps, and drive your feet into them for a secure fit.
       ]
 
       WEAR_ITEM_FAILURE_PATTERNS = [
@@ -133,8 +141,7 @@ module Lich
 
       TIE_ITEM_SUCCESS_PATTERNS = [
         /^You .* tie/,
-        /^You attach/,
-        /^You untie/
+        /^You attach/
       ]
 
       TIE_ITEM_FAILURE_PATTERNS = [
@@ -142,6 +149,7 @@ module Lich
         /^There's no more free ties/,
         /^You must be holding/,
         /doesn't seem to fit/,
+        /close the fan/,
         /^You are a little too busy/,
         /^Your wounds hinder your ability to do that/,
         /^Tie what/
@@ -183,17 +191,20 @@ module Lich
       ]
 
       REMOVE_ITEM_FAILURE_PATTERNS = [
+        /^You'll need both hands free/,
         /^You need a free hand/,
         /^You aren't wearing/,
         /^You don't seem to be able to move/,
         /^Remove what/,
         /^I could not/,
+        /^Grunting with momentary exertion/, # Grunting with momentary exertion, you grip each of your heavy combat boots in turn by the heel, and pull them off.
         /^What were you/
       ]
 
       PUT_AWAY_ITEM_SUCCESS_PATTERNS = [
         /^You put your .* in/,
         /^You hold out/,
+        /^You stuff/,
         /^You tuck/,
         /^You open your pouch and put/,
         /^You guide your/i, # puppy storage
@@ -215,11 +226,14 @@ module Lich
         /^You slip/,
         /^You easily strap/,
         /^You gently set/,
+        /^With a flick of your wrist, you stealthily sheath/,
+        /^You strap your .* to your harness/,
         /^You toss .* into/ # You toss the alcohol into the bowl and mix it in thoroughly
       ]
 
       PUT_AWAY_ITEM_FAILURE_PATTERNS = [
         /^Stow what/,
+        /^I can't find your container for stowing things in/,
         /^Please rephrase that command/,
         /^What were you referring to/,
         /^I could not find what you were referring to/,
@@ -236,11 +250,14 @@ module Lich
         /^Containers can't be placed in/,
         /^The .* is not designed to carry anything/,
         /^You can't put that.*there/,
+        /^Weirdly, you can't manage .* to fit/,
+        /^\[Containers can't be placed in/,
         /even after stuffing it/,
         /is too .* to (fit|hold)/,
         /no matter how you arrange it/,
         /close the fan/,
         /to fit in the/,
+        /doesn't seem to want to leave you/, # trying to put a pet in a home within a container
         # You may get the next message if you've been cursed and unable to let go of items.
         # Find a Cleric to uncurse you.
         /Oddly, when you attempt to stash it away safely/,
@@ -769,8 +786,9 @@ module Lich
       # TIE/UNTIE ITEM
       #########################################
 
-      def tie_item?(item, container)
-        case DRC.bput("tie my #{item} to my #{container}", TIE_ITEM_SUCCESS_PATTERNS, TIE_ITEM_FAILURE_PATTERNS)
+      def tie_item?(item, container = nil)
+        place = container ? "to my #{container}" : nil
+        case DRC.bput("tie my #{item} #{place}", TIE_ITEM_SUCCESS_PATTERNS, TIE_ITEM_FAILURE_PATTERNS)
         when *TIE_ITEM_SUCCESS_PATTERNS
           true
         else

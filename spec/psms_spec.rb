@@ -20,9 +20,90 @@ class NilClass
   end
 end
 
+module XMLData
+  @dialogs = {}
+  def self.game
+    "rspec"
+  end
+
+  def self.name
+    "testing"
+  end
+
+  def self.indicator
+    # shimming together a hash to test 'muckled?' results
+    { 'IconSTUNNED' => 'n',
+      'IconDEAD'    => 'n',
+      'IconWEBBED'  => false }
+  end
+
+  def self.save_dialogs(kind, attributes)
+    # shimming together response for testing status checks
+    @dialogs[kind] ||= {}
+    return @dialogs[kind] = attributes
+  end
+
+  def self.dialogs
+    @dialogs ||= {}
+  end
+
+  def self.stamina
+    return 20 # some PSM require 30, so we should have negative testing ability
+  end
+end
+
+# stub in Effects module for testing - not suitable for testing Effects itself
+module Lich
+  module Util
+    module Effects
+      class Registry
+        include Enumerable
+
+        def initialize(dialog)
+          @dialog = dialog
+        end
+
+        def to_h
+          XMLData.dialogs.fetch(@dialog, {})
+        end
+
+        def each()
+          to_h.each { |k, v| yield(k, v) }
+        end
+
+        def active?(effect)
+          expiry = to_h.fetch(effect, 0)
+          expiry.to_f > Time.now.to_f
+        end
+
+        def time_left(effect)
+          expiry = to_h.fetch(effect, 0)
+          if to_h.fetch(effect, 0) != 0
+            ((expiry - Time.now) / 60.to_f)
+          else
+            expiry
+          end
+        end
+      end
+
+      Spells    = Registry.new("Active Spells")
+      Buffs     = Registry.new("Buffs")
+      Debuffs   = Registry.new("Debuffs")
+      Cooldowns = Registry.new("Cooldowns")
+    end
+  end
+end
+
+module Char
+  def self.name
+    "testing"
+  end
+end
+
 require 'rexml/document'
 require 'rexml/streamlistener'
 require 'open-uri'
+require "attributes/spellsong"
 require "common/spell"
 require 'tmpdir'
 
@@ -37,24 +118,10 @@ end
 
 LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 
+require 'util/util'
 require 'gemstone/psms'
 require 'gemstone/infomon'
-
-module Char
-  def self.name
-    "testing"
-  end
-end
-
-module XMLData
-  def self.game
-    "rspec"
-  end
-
-  def self.stamina
-    return 20 # some PSM require 30, so we should have negative testing ability
-  end
-end
+require 'attributes/skills'
 
 # we need to set up some test data, stealing from infomon_spec.rb
 describe Lich::Gemstone::Infomon, ".setup!" do
@@ -145,6 +212,29 @@ describe Lich::Gemstone::PSMS, ".affordable?(name)" do
     end
     it "or returns erroneous requests as above" do
       expect { Lich::Gemstone::Feat.affordable?("Touch this!") }.to raise_error(StandardError, "Aborting script - The referenced Feat skill touch_this! is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of touch_this!.")
+    end
+  end
+end
+
+describe Lich::Gemstone::PSMS, ".can_forcert?(times)" do
+  context "<psm>, times should determine if forced roundtime (forcert) rounds can be performed" do
+    it "checks to see if the character can perform the given number of forcert rounds" do
+      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 10)
+      expect(Lich::Gemstone::PSMS.can_forcert?(1)).to be(true)
+      expect(Lich::Gemstone::PSMS.can_forcert?(4)).to be(false)
+      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 200)
+      expect(Lich::Gemstone::PSMS.can_forcert?(4)).to be(true)
+    end
+  end
+end
+
+describe Lich::Gemstone::PSMS, ".max_forcert_count" do
+  context "<psm>, times should determine the maximum number of forced roundtime (forcert) rounds" do
+    it "checks to see if the character can perform the given number of forcert rounds" do
+      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 10)
+      expect(Lich::Gemstone::PSMS.max_forcert_count).to eq(1)
+      Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 200)
+      expect(Lich::Gemstone::PSMS.max_forcert_count).to eq(4)
     end
   end
 end

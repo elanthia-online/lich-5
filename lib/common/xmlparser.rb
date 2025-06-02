@@ -106,6 +106,7 @@ module Lich
         @society_task = String.new
 
         @dr_active_spells = Hash.new
+        @dr_active_spell_clear = false
         @dr_active_spell_tracking = false
         @dr_active_spells_stellar_percentage = 0
         @dr_active_spells_slivers = false
@@ -245,6 +246,10 @@ module Lich
 
           if name == 'nav'
             Lich::Claim.lock if defined?(Lich::Claim)
+            GameObj.clear_loot
+            GameObj.clear_npcs
+            GameObj.clear_pcs
+            GameObj.clear_room_desc
             @check_obvious_hiding = true
             unless XMLData.game =~ /^DR/
               @previous_nav_rm = @room_id
@@ -252,7 +257,6 @@ module Lich
             end
             @arrival_pcs = []
             $nav_seen = true
-            Map.last_seen_objects = nil if Map.method_defined?(:last_seen_objects); # DR Only
           end
 
           if name == 'compass'
@@ -276,11 +280,14 @@ module Lich
           end
 
           if (name == 'clearStream' && attributes['id'] == 'percWindow')
-            @dr_active_spells = {}
-            @dr_active_spells_slivers = false
+            @dr_active_spells_clear = true
           end
 
           if (name == 'pushStream' && attributes['id'] == 'percWindow')
+            if @dr_active_spells_clear
+              @dr_active_spells = {}
+              @dr_active_spells_clear = false
+            end
             @dr_active_spell_tracking = true
           end
 
@@ -596,12 +603,11 @@ module Lich
               elsif (game == 'GSX') or (game == 'GS4X')
                 @game = 'GSPlat'
               else
-                @game = game
+                @game = game # covers DR, DRT, DRF, GST, GSF
               end
             end
           end
           if (name == 'app') and (@name = attributes['char'])
-            @game = attributes['game'] if @game =~ /^DR/
             if @game.nil? or @game.empty?
               @game = 'unknown'
             end
@@ -660,18 +666,25 @@ module Lich
             spell = nil
             duration = nil
             case text_string
-            when /(?<spell>[^<>]+?)\s+\((?:\D*)(?<duration>\d+)\s*(?:%|roisae?n)\)/i
+            when /(?<spell>^[^\(]+)\((?<duration>\d+|Indefinite|OM|Fading)\s*(?:%|roisae?n)?\)/i
               # Spell with known duration remaining
+              # XML looks like:
+              # Hydra Hex  (Indefinite)
+              # Persistence of Mana  (OM)
+              # Cure Disease  (Fading)
+              # Osrel Meraud  (94%)
+              # Landslide (4 roisaen)
+              # Khri Sagacity  (1 roisan)
               spell = Regexp.last_match[:spell]
-              duration = Regexp.last_match[:duration].to_i
-            when /(?<spell>[^<>]+?)\s+\(fading\)/i
-              # Spell fading away
-              spell = Regexp.last_match[:spell]
-              duration = 0
-            when /(?<spell>[^<>]+?)\s+\((?<duration>indefinite|om)\)/i
-              # Cyclic spell or Osrel Meraud cyclic spell
-              spell = Regexp.last_match[:spell]
-              duration = 1000
+              duration = Regexp.last_match[:duration]
+
+              if duration.match?(/Indefinite|OM/)
+                duration = 1000
+              elsif duration.match?(/Fading/)
+                duration = 0
+              else
+                duration = duration.to_i
+              end
             when /(?<spell>Stellar Collector)\s+\((?<percentage>\d+)%,\s*(?<duration>\d+)?\s*(?<unit>(?:roisae?n|anlaen|fading))/
               # Stellar collector special case
               # XML looks like:
@@ -682,7 +695,7 @@ module Lich
               @dr_active_spells_stellar_percentage = Regexp.last_match[:percentage].to_i
               unit = Regexp.last_match[:unit]
               duration = unit == 'anlaen' ? duration * 30 : duration
-            when /(?<spell>[^<>]+?)\s+\(.+\)/i
+            when /(?<spell>^[^\(]+)\(.+\)/i
               # Spells with inexact duration verbiage, such as with
               # Barbarians without knowledge of Power Monger mastery
               spell = Regexp.last_match[:spell]
@@ -881,8 +894,9 @@ module Lich
             end
           end
 
-          if (name == 'popStream')
-            @dr_active_spell_tracking = false if @dr_active_spell_tracking
+          if (name == 'popStream') && @dr_active_spell_tracking
+            @dr_active_spell_tracking = false
+            @dr_active_spells_slivers = false
           end
 
           if name == 'inv'

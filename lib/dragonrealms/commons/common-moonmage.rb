@@ -68,14 +68,15 @@ module Lich
       end
 
       def peer_telescope
-        DRC.bput('peer my telescope',
-                 'The pain is too much',
-                 'You see nothing regarding the future',
-                 "You believe you've learned all that you can about",
-                 get_data('constellations').observe_finished_messages,
-                 'open it',
-                 'Your vision is too fuzzy',
-                 'Roundtime')
+        telescope_regex_patterns = Regexp.union(
+          /The pain is too much/,
+          /You see nothing regarding the future/,
+          /You believe you've learned all that you can about/,
+          Regexp.union(get_data('constellations').observe_finished_messages),
+          /open it/,
+          /Your vision is too fuzzy/,
+        )
+        Lich::Util.issue_command("peer my telescope", telescope_regex_patterns, /Roundtime: /, usexml: false)
       end
 
       def center_telescope(target)
@@ -347,7 +348,7 @@ module Lich
       #  above the horizon and won't set for at least another ~4 minutes.
       def bright_celestial_object?
         check_moonwatch
-        (UserVars.sun['day'] && UserVars.sun['timer'] >= 4) || visible_moons.include?('xibar') || visible_moons.include?('yavash')
+        (UserVars.sun['day'] && UserVars.sun['timer'] >= 4) || moon_visible?('xibar') || moon_visible?('yavash')
       end
 
       # returns true if at least one moon (katamba, yavash, xibar) or the sun are
@@ -361,6 +362,11 @@ module Lich
       # is above the horizon and won't set for at least another ~4 minutes.
       def moons_visible?
         !visible_moons.empty?
+      end
+
+      # Returns true if the moon is above the horizon and won't set for at least another ~4 minutes.
+      def moon_visible?(moon_name)
+        visible_moons.include?(moon_name)
       end
 
       # Returns list of moon names (e.g. katamba, yavash, xibar)

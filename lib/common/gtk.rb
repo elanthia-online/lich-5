@@ -1,132 +1,55 @@
 module Lich
   module Common
     if defined?(Gtk)
-      Gdk.module_eval do
-        define_deprecated_singleton_method :screen_height, :warn => "Gdk::screen_height is deprecated; use monitor methods instead" do |_self|
-          99999
-        end
-
-        define_deprecated_singleton_method :screen_width, :warn => "Gdk::screen_width is deprecated; use monitor methods instead" do |_self|
-          99999
-        end
+      # Calling Gtk API in a thread other than the main thread may cause random segfaults
+      def Gtk.queue(&block)
+        GLib::Timeout.add(1) {
+          begin
+            block.call
+          rescue StandardError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue SyntaxError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue SystemExit
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            nil
+          rescue SecurityError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue ThreadError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue SystemStackError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue LoadError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue NoMemoryError
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          rescue
+            respond "error in Gtk.queue: #{$!}"
+            puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          end
+          false # don't repeat timeout
+        }
       end
+    end
 
-      Gtk::Drag.module_eval do
-        define_deprecated_const :TARGET_SAME_APP, "Gtk::TargetFlags::SAME_APP"
-        define_deprecated_const :DEST_DEFAULT_ALL, "Gtk::DestDefaults::ALL"
-      end
-
-      Gtk.module_eval do
-        # Deprecation updates to keep gtk3 mostly going in gtk2
-        define_deprecated_const(:ComboBoxEntry, nil)
-        define_deprecated_const(:Tooltips, nil)
-
-        Gtk::ComboBox.class_eval do
-          def append_text(_text)
-            respond "'Gtk::ComboBox#append_text' is deprecated; use 'Gtk::ComboBoxText#append_text' instead"
-          end
-        end
-
-        Gtk::Entry.class_eval do
-          def set_text(text)
-            if text.nil?
-              respond "'Gtk::Entry#set_text' no longer accepts nil values; fix me"
-              text = ""
-            end
-            parent.set_text(text)
-            return self
-          end
-        end
-
-        Gtk::HBox.class_eval do
-          define_deprecated_singleton_method :new, :warn => "Use 'Gtk::Box.new(:horizontal, spacing)'." do |_self, homogeneous, spacing|
-            respond "'Gtk::Hbox' is deprecated; use 'Gtk::Box.new(:horizontal, spacing)'."
-            box = Gtk::Box.new(:horizontal, spacing)
-            box.set_homogeneous(homogeneous ? true : false)
-            box
-          end
-        end
-
-        Gtk::Notebook.class_eval do
-          def set_tab_border(_border)
-            respond "'Gtk::Notebook:set_tab_border()' is deprecated; fix me"
-            # noop
-            return self
-          end
-        end
-
-        Gtk::ToggleButton.class_eval do
-          def set_active(active)
-            if active.nil?
-              respond "'Gtk::ToggleButton#set_active' no longer accepts nil values; fix me"
-              active = false
-            end
-            parent.set_active(active)
-            return self
-          end
-        end
-
-        Gtk::VBox.class_eval do
-          define_deprecated_singleton_method :new, :warn => "Use 'Gtk::Box.new(:vertical, spacing)'." do |_self, homogeneous, spacing|
-            respond "'Gtk::VBox' is deprecated; use 'Gtk::Box.new(:vertical, spacing)' instead"
-            box = Gtk::Box.new(:vertical, spacing)
-            box.set_homogeneous(homogeneous ? true : false)
-            box
-          end
-        end
-
-        # Calling Gtk API in a thread other than the main thread may cause random segfaults
-        def Gtk.queue(&block)
-          GLib::Timeout.add(1) {
-            begin
-              block.call
-            rescue StandardError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue SyntaxError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue SystemExit
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              nil
-            rescue SecurityError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue ThreadError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue SystemStackError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue LoadError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue NoMemoryError
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            rescue
-              respond "error in Gtk.queue: #{$!}"
-              puts "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Lich.log "error in Gtk.queue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            end
-            false # don't repeat timeout
-          }
-        end
-      end
-      #      def self.gtk_sleep_while_idle()
-      #        sleep 0.01
-      #      end
-
-      unless File.exist?('logo.png')
-        File.open('logo.png', 'wb') { |f|
-          f.write '
+    unless File.exist?('logo.png')
+      File.open('logo.png', 'wb') { |f|
+        f.write '
       iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAA
       CqaXHeAAAPrUlEQVR4Ae1bDVRT5xl+t7azXY/b2rOu7ep2zuaZm5unbqX7s7
       rjduywrVrrTuZW7arxZ7auorUVu0JN3awVa/3hyKp2sTYFNQrIb6EkBRQSJC
@@ -218,22 +141,20 @@ module Lich
       zXeXl5IolE0gJ+AjEIQuHU1NTMGGn1bQUI6gA1H330kb/Uhk0PoN+QiqMAg3
       N4e6w8W7ZsYevWrTMlJycPa+/QbYVCoCAC3gE8PxwvViCsOC0TJkxQx8XF7R
       MIBM/8L/yL9HabuC+mvP8B+EBfr/SZ7ZMAAAAASUVORK5CYII='.unpack('m')[0]
-        }
-      end
+      }
+    end
 
-      begin
-        Gtk.queue {
-          @default_icon = GdkPixbuf::Pixbuf.new(:file => 'logo.png')
-          # Add a function to call for when GTK is idle
-          GLib::Idle.add do
-            # gtk_sleep_while_idle
-            sleep 0.01
-          end
-        }
-      rescue
-        nil # fixme
-      end
-
+    begin
+      Gtk.queue {
+        @default_icon = GdkPixbuf::Pixbuf.new(:file => 'logo.png')
+        # Add a function to call for when GTK is idle
+        GLib::Idle.add do
+          sleep 0.01
+        end
+        @theme_state = Lich.track_dark_mode
+      }
+    rescue
+      nil # fixme
     end
   end
 end

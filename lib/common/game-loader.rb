@@ -7,6 +7,7 @@ module Lich
         require File.join(LIB_DIR, 'common', 'log.rb')
         require File.join(LIB_DIR, 'common', 'spell.rb')
         require File.join(LIB_DIR, 'util', 'util.rb')
+        require File.join(LIB_DIR, 'common', 'hmr.rb')
       end
 
       def self.gemstone
@@ -34,6 +35,12 @@ module Lich
         require File.join(LIB_DIR, 'gemstone', 'critranks')
         require File.join(LIB_DIR, 'gemstone', 'olib', 'exist.rb')
         Dir[File.join(LIB_DIR, "gemstone", "olib/**/*.rb")].each {|file| require(file) }
+        require File.join(LIB_DIR, 'gemstone', 'wounds.rb')
+        require File.join(LIB_DIR, 'gemstone', 'scars.rb')
+        require File.join(LIB_DIR, 'gemstone', 'gift.rb')
+        require File.join(LIB_DIR, 'gemstone', 'readylist.rb')
+        require File.join(LIB_DIR, 'gemstone', 'stowlist.rb')
+        ActiveSpell.watch!
         self.common_after
       end
 
@@ -43,11 +50,10 @@ module Lich
         require File.join(LIB_DIR, 'attributes', 'char.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'drinfomon.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'commons.rb')
-        # self.common_after
+        self.common_after
       end
 
       def self.common_after
-        ActiveSpell.watch!
         # nil
       end
 

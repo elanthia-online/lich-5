@@ -1,0 +1,31 @@
+name: "Lint PR"
+
+on:
+  pull_request:
+    branches:
+      - staging # todo: change this to main when we move to trunk based workflow
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  pull-requests: read
+
+jobs:
+  main:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        with:
+          scopes: |
+            all
+            dr
+            gs
+          requireScope: true
+          disallowScopes: |
+            [A-Z]+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

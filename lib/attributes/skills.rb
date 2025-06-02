@@ -30,7 +30,7 @@ module Lich
           end
           bonus
         when String, Symbol
-          Infomon.get("skill.%s.bonus" % ranks)
+          Infomon.get("skill.%s_bonus" % ranks)
         else
           echo "You're trying to move the cheese!"
         end
