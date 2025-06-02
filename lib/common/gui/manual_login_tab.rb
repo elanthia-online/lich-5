@@ -433,32 +433,37 @@ module Lich
               custom_launch = custom_launch_option.active? ? @custom_launch_entry.child.text : nil
               custom_launch_dir = custom_launch_option.active? ? @custom_launch_dir.child.text : nil
 
-              # Create login parameters object
-              login_params = LoginParams.new(
-                user_id: user_id_entry.text,
+              launch_data_hash = Authentication.authenticate(
+                account: user_id_entry.text,
                 password: pass_entry.text,
-                char_name: selected_iter[3],
-                game_code: selected_iter[0],
-                game_name: selected_iter[1],
-                frontend: frontend,
-                custom_launch: custom_launch,
-                custom_launch_dir: custom_launch_dir
+                character: selected_iter[3],
+                game_code: selected_iter[0]
               )
 
-              # Save login data
-              @launch_data = login_params
-
-              # Call the play callback if provided
-              if @callbacks.on_play
-                @callbacks.on_play.call(login_params)
-              end
+              launch_data = Authentication.prepare_launch_data(
+                launch_data_hash,
+                frontend,
+                custom_launch,
+                custom_launch_dir
+              )
+              # Prep login data
+              @launch_data = launch_data
 
               # Save quick entry if selected
               if @make_quick_option.active?
-                if @callbacks.on_save_quick_entry
-                  @callbacks.on_save_quick_entry.call(login_params)
-                end
+                entry_data = { :char_name => selected_iter[3], :game_code => selected_iter[0], :game_name => selected_iter[1], :user_id => user_id_entry.text, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir }
+                @entry_data.push entry_data
+                @save_entry_data = true
+
+                save_entry_data_if_needed
               end
+
+              # Call the play callback if provided
+              if @callbacks.on_play
+
+                @callbacks.on_play.call(launch_data) # (login_params)
+              end
+
             end
           }
         end

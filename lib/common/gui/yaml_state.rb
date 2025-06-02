@@ -60,17 +60,19 @@ module Lich
           end
 
           # Write YAML data to file
-          File.open(yaml_file, 'w') do |file|
-            file.puts "# Lich 5 Login Entries - YAML Format"
-            file.puts "# Generated: #{Time.now}"
-            file.puts "# WARNING: Passwords are stored in plain text"
-            file.write(YAML.dump(yaml_data))
-          end
+          begin
+            File.open(yaml_file, 'w') do |file|
+              file.puts "# Lich 5 Login Entries - YAML Format"
+              file.puts "# Generated: #{Time.now}"
+              file.puts "# WARNING: Passwords are stored in plain text"
+              file.write(YAML.dump(yaml_data))
+            end
 
-          true
-        rescue => e
-          Lich.log "Error saving YAML entry file: #{e.message}"
-          false
+            true
+          rescue => e
+            Lich.log "Error saving YAML entry file: #{e.message}"
+            false
+          end
         end
 
         # Migrates from legacy Marshal format to YAML format

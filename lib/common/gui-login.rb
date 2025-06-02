@@ -152,8 +152,9 @@ module Lich
             @done = true
           }
         },
-        on_save: ->(entry_data) {
-          @entry_data.push(entry_data)
+        # Audit this function for use in other modules / removal
+        on_save: ->(launch_data) {
+          @entry_data.push(launch_data)
           @save_entry_data = true
         },
         on_error: ->(message) {
