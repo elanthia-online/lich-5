@@ -1,11 +1,10 @@
 require "ostruct"
 
-
 # this is the structure for a base Object
 # wraps an instance of GameObj and adds the ability for tags, queries
 class Item < Exist
   def self.of(item, container = nil)
-    #return Scroll.new(item, container) if item.type.include?("scroll")
+    # return Scroll.new(item, container) if item.type.include?("scroll")
     return Item.new(item, container)
   end
 
@@ -14,6 +13,7 @@ class Item < Exist
   end
 
   attr_reader :container
+
   # When created, it should be passed an instance of GameObj
   #
   # Example:
@@ -33,7 +33,7 @@ class Item < Exist
 
   def take()
     return self if held?
-    fail Exception, "Error #{inspect}\nyour hands are full" if GameObj.right_hand.id && GameObj.left_hand.id
+    fail StandardError, "Error #{inspect}\nyour hands are full" if GameObj.right_hand.id && GameObj.left_hand.id
     Command.try_or_fail(command: "get ##{id}") do held? end
     return self
   end

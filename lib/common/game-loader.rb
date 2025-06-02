@@ -34,7 +34,7 @@ module Lich
         require File.join(LIB_DIR, 'gemstone', 'group.rb')
         require File.join(LIB_DIR, 'gemstone', 'critranks')
         require File.join(LIB_DIR, 'gemstone', 'olib', 'exist.rb')
-        Dir[File.join(LIB_DIR, "gemstone", "olib/**/*.rb")].each {|file| require(file) }
+        Dir[File.join(LIB_DIR, "gemstone", "olib/**/*.rb")].each { |file| require(file) }
         require File.join(LIB_DIR, 'gemstone', 'wounds.rb')
         require File.join(LIB_DIR, 'gemstone', 'scars.rb')
         require File.join(LIB_DIR, 'gemstone', 'gift.rb')

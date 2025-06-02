@@ -32,7 +32,6 @@ module Lich
       #   Rummage.new(self)
       # end
 
-
       def add(*items)
         items.flatten.each do |item|
           Command.try_or_fail(command: "_drag ##{item.id} ##{id}") do

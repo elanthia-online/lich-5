@@ -4,7 +4,7 @@ module Lich
       @@containers ||= {}
 
       def self.lookup!(pattern)
-        #raise ArgumentError.new("cannot lookup a container using #{pattern.class.name}") unless [String, Regexp, Integer].include?(pattern.class)
+        # raise ArgumentError.new("cannot lookup a container using #{pattern.class.name}") unless [String, Regexp, Integer].include?(pattern.class)
 
         candidates = GameObj.inv.select do |item|
           case pattern
@@ -21,16 +21,16 @@ module Lich
         when 1
           return Container.new(candidates.first)
         when 0
-          fail Exception, <<~ERROR
+          fail StandardError, <<~ERROR
             Source(GameObj.inv)
 
             reason: no matches for #{pattern} found in GameObj.inv
           ERROR
         else
-          fail Exception, <<~ERROR
+          fail StandardError, <<~ERROR
             Source(GameObj.inv)
 
-            reason: #{pattern.to_s} matches more than 1 container
+            reason: #{pattern} matches more than 1 container
             matches: #{candidates.map(&:name)}
           ERROR
         end
@@ -38,7 +38,7 @@ module Lich
 
       def self.define(name)
         # todo: maybe build clickable menu from GameObj.inv?
-        var = Vars[name.to_s] or fail Exception, "Var[#{name}] is not set\n\t;vars set #{name}=<whatever>"
+        var = Vars[name.to_s] or fail StandardError, "Var[#{name}] is not set\n\t;vars set #{name}=<whatever>"
         pattern = %r[#{var}]
         @@containers[name] = Containers.lookup!(pattern)
         @@containers[name]
@@ -61,7 +61,7 @@ module Lich
         @@containers
       end
 
-      def self.method_missing(name, *args)
+      def self.method_missing(name, *_args)
         @@containers[name] ||= self.define(name)
       end
 

@@ -1,4 +1,3 @@
-
 module Lich
   module Gemstone
     class Exist
@@ -6,10 +5,10 @@ module Lich
       PATTERN = %r(<a exist=(?:'|")(?<id>.*?)(?:'|") noun=(?:'|")(?<noun>.*?)(?:'|")>(?<name>.*?)</a>)
 
       def self.all
-        [ GameObj.inv, GameObj.containers.values,
-          GameObj.loot, GameObj.room_desc,
-          GameObj.pcs, GameObj.npcs,
-          GameObj.right_hand, GameObj.left_hand ].flatten
+        [GameObj.inv, GameObj.containers.values,
+         GameObj.loot, GameObj.room_desc,
+         GameObj.pcs, GameObj.npcs,
+         GameObj.right_hand, GameObj.left_hand].flatten
       end
 
       def self.fetch(id)
@@ -25,6 +24,7 @@ module Lich
       end
 
       attr_reader :id, :gameobj
+
       def initialize(obj)
         if obj.respond_to?(:id)
           @id = obj.id
@@ -32,14 +32,14 @@ module Lich
           @id = obj
         end
         self.fetch
-        fail Exception, "could not find #{obj.inspect}" if @gameobj.nil?
+        fail StandardError, "could not find #{obj.inspect}" if @gameobj.nil?
       end
 
       def fetch()
         @gameobj ||= Exist.fetch(id)
       end
 
-      def respond_to_missing?(method, *args)
+      def respond_to_missing?(method, *_args)
         fetch.respond_to?(method) and method.to_s.match(GETTER)
       end
 
@@ -70,7 +70,7 @@ module Lich
       end
 
       def to_h()
-        {id: id, name: name, noun: noun}
+        { id: id, name: name, noun: noun }
       end
 
       def ==(other)

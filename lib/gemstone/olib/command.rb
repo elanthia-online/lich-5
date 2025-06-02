@@ -1,7 +1,7 @@
 module Lich
   module Gemstone
     class Command
-      class Error < Exception;end;
+      class Error < StandardError; end;
       # this is a shared lock across all scripts, preventing the common problems of race conditions with fput
       LOCK = Mutex.new
 
