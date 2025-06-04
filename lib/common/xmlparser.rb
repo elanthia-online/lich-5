@@ -107,7 +107,6 @@ module Lich
 
         @dr_active_spells = Hash.new
         @dr_active_spells_tmp = Hash.new
-        @dr_active_spell_clear = false
         @dr_active_spell_tracking = false
         @dr_active_spells_stellar_percentage = 0
         @dr_active_spells_slivers = false
