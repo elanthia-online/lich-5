@@ -388,7 +388,7 @@ module Lich
           normalized_name = Lich::Utils.normalize_name(symbol_name)
 
           if self.available?(normalized_name)
-            if @@voln_symbols[normalized_name][:use]
+            if @@voln_symbols[normalized_name][:usage]
               fput "#{@@voln_symbols[normalized_name][:usage]} #{target}".strip
             else
               fput "symbol of #{@@voln_symbols[normalized_name][:short_name]} #{target}".strip
