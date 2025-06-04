@@ -830,7 +830,9 @@ module Lich
         return if training_spells.empty?
         return if DRStats.mana <= settings.waggle_spells_mana_threshold
 
-        if !XMLData.prepared_spell.eql?('None') && checkcastrt == 0
+        if checkcastrt > 0
+          return
+        elsif !XMLData.prepared_spell.eql?('None') && checkcastrt == 0
           spell = XMLData.prepared_spell
           data = training_spells.find { |_skill, info| info['name'] == spell }.last
           crafting_cast_spell(data, settings)
