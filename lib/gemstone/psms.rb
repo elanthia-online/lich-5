@@ -66,6 +66,7 @@ module Lich
       #   PSMS.find_name("feint", "CMan")
       #   # => { long_name: "combat_feint", short_name: "feint", cost: 10 }
       def self.find_name(name, type)
+        name = self.name_normal(name)
         Object.const_get("Lich::Gemstone::#{type}").method("#{type.downcase}_lookups").call
               .find { |h| h[:long_name].eql?(name) || h[:short_name].eql?(name) }
       end
@@ -103,7 +104,7 @@ module Lich
         # this logs then raises an exception to stop (kill) the offending script
         if seek_psm.nil?
           Lich.log("error: PSMS request: #{$!}\n\t")
-          raise StandardError.new "Aborting script - The referenced #{type} skill #{name} is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of #{name}."
+          raise ArgumentError, "Aborting script - The referenced #{type} skill #{name} is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of #{name}.", (caller.find { |call| call =~ /^#{Script.current.name}/ })
         end
         # otherwise process request
         case costcheck

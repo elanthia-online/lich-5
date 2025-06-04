@@ -47,7 +47,7 @@ module Lich
         /^The web of shadows twitches one last time and then goes inert/, # Shadow Web (SHW)
         /^You release your mental hold on the lunar energy that sustains your moongate/, # Moongate (MG)
         /^The refractive field surrounding you fades away/, # Steps of Vuan (SOV)
-        /^A \w+ brilliant \w+ sphere suddenly flares with a cold light and vaporizes/, # Starlight Sphere (SLS)
+        /^A .* sphere suddenly flares with a cold light and vaporizes/, # Starlight Sphere (SLS)
         # Trader spells
         /^Your calligraphy of light assailing/, # Arbiter's Stylus (ARS)
         /^The .* moonsmoke blows away from your face/, # Mask of the Moons (MOM)
@@ -830,7 +830,9 @@ module Lich
         return if training_spells.empty?
         return if DRStats.mana <= settings.waggle_spells_mana_threshold
 
-        if !XMLData.prepared_spell.eql?('None') && checkcastrt == 0
+        if checkcastrt > 0
+          return
+        elsif !XMLData.prepared_spell.eql?('None') && checkcastrt == 0
           spell = XMLData.prepared_spell
           data = training_spells.find { |_skill, info| info['name'] == spell }.last
           crafting_cast_spell(data, settings)

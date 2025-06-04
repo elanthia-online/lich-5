@@ -279,8 +279,8 @@ module Lich
             end
           end
 
-          if (name == 'pushStream' && attributes['id'] == 'percWindow')
-            @dr_active_spell_tracking = true
+          if (name == 'clearStream' && attributes['id'] == 'percWindow')
+            @dr_active_spells_clear = true
           end
 
           if (name == 'compDef') or (name == 'component')

@@ -24,6 +24,7 @@ module Lich
       @@weapon_techniques = {
         "barrage"          => {
           :short_name => "barrage",
+          :type       => :assault,
           :cost       => 15,
           :regex      => /Drawing several (?:arrows|bolts) from your .+, you grip them loosely between your fingers in preparation for a rapid barrage\./,
           :assault_rx => /Your satisfying display of dexterity bolsters you and inspires those around you\!/,
@@ -31,37 +32,44 @@ module Lich
         },
         "charge"           => {
           :short_name => "charge",
+          :type       => :setup,
           :cost       => 14,
           :regex      => /You rush forward at .+ with your .+ and attempt a charge\!/
         },
         "clash"            => {
           :short_name => "clash",
+          :type       => :area_of_effect,
           :cost       => 20,
           :regex      => /Steeling yourself for a brawl, you plunge into the fray\!/
         },
         "clobber"          => {
           :short_name => "clobber",
+          :type       => :reaction,
           :cost       => 0,
           :regex      => /You redirect the momentum of your parry, hauling your .+ around to clobber .+\!/
         },
         "cripple"          => {
           :short_name => "cripple",
+          :type       => :setup,
           :cost       => 7,
           :regex      => /You reverse your grip on your .+ and dart toward .+ at an angle\!/
         },
         "cyclone"          => {
           :short_name => "cyclone",
+          :type       => :area_of_effect,
           :cost       => 20,
           :regex      => /You weave your .+ in an under arm spin, swiftly picking up speed until it becomes a blurred cyclone of .+\!/
         },
         "dizzying_swing"   => {
           :short_name => "dizzyingswing",
+          :type       => :setup,
           :cost       => 7,
           :regex      => /You heft your .+ and, looping it once to build momentum, lash out in a strike at .+ head\!/,
           :usage      => "dizzyingswing"
         },
         "flurry"           => {
           :short_name => "flurry",
+          :type       => :assault,
           :cost       => 15,
           :regex      => /You rotate your wrist, your .+ executing a casual spin to establish your flow as you advance upon .+\!/,
           :assault_rx => /The mesmerizing sway of body and blade glides to its inevitable end with one final twirl of your .+\!/,
@@ -69,6 +77,7 @@ module Lich
         },
         "fury"             => {
           :short_name => "fury",
+          :type       => :assault,
           :cost       => 15,
           :regex      => /With a percussive snap, you shake out your arms in quick succession and bear down on .+ in a fury\!/,
           :assault_rx => /Your furious assault bolsters you and inspires those around you\!/,
@@ -76,28 +85,33 @@ module Lich
         },
         "guardant_thrusts" => {
           :short_name => "gthrusts",
+          :type       => :assault,
           :cost       => 15,
           :regex      => /Retaining a defensive profile, you raise your .+ in a hanging guard and prepare to unleash a barrage of guardant thrusts upon .+\!/,
           :usage      => "gthrusts"
         },
         "overpower"        => {
           :short_name => "overpower",
+          :type       => :reaction,
           :cost       => 0,
           :regex      => /On the heels of .+ parry, you erupt into motion, determined to overpower .+ defenses\!/
         },
         "pin_down"         => {
           :short_name => "pindown",
+          :type       => :area_of_effect,
           :cost       => 14,
           :regex      => /You take quick assessment and raise your .+, several (?:arrows|bolts) nocked to your string in parallel\./,
           :usage      => "pindown"
         },
         "pulverize"        => {
           :short_name => "pulverize",
+          :type       => :area_of_effect,
           :cost       => 20,
           :regex      => /You wheel your .+ overhead before slamming it around in a wide arc to pulverize your foes\!/
         },
         "pummel"           => {
           :short_name => "pummel",
+          :type       => :assault,
           :cost       => 15,
           :regex      => /You take a menacing step toward .+, sweeping your .+ out low to your side in your advance\./,
           :assault_rx => /With a final snap of your wrist, you sweep your .+ back to the ready, your assault complete\./,
@@ -105,57 +119,67 @@ module Lich
         },
         "radial_sweep"     => {
           :short_name => "radialsweep",
+          :type       => :reaction,
           :cost       => 0,
           :regex      => /Crouching low, you sweep your .+ in a broad arc\!/,
           :usage      => "radialsweep"
         },
         "reactive_shot"    => {
           :short_name => "reactiveshot",
+          :type       => :reaction,
           :cost       => 0,
           :regex      => /You fire off a quick shot at the .+, then make a hasty retreat\!/,
           :usage      => "reactiveshot"
         },
         "reverse_strike"   => {
           :short_name => "reversestrike",
+          :type       => :reaction,
           :cost       => 0,
           :regex      => /Spotting an opening in .+ defenses, you quickly reverse the direction of your .+ and strike from a different angle\!/,
           :usage      => "reversestrike"
         },
         "riposte"          => {
           :short_name => "riposte",
+          :type       => :reaction,
           :cost       => 0,
           :regex      => /Before .+ can recover, you smoothly segue from parry to riposte\!/
         },
         "spin_kick"        => {
           :short_name => "spinkick",
+          :type       => :reaction,
           :cost       => 0,
           :regex      => /Stepping with deliberation, you wheel into a leaping spin\!/,
           :usage      => "spinkick"
         },
         "thrash"           => {
           :short_name => "thrash",
+          :type       => :assault,
           :cost       => 15,
           :regex      => /You rush .+, raising your .+ high to deliver a sound thrashing\!/
         },
         "twin_hammerfists" => {
           :short_name => "twinhammer",
+          :type       => :setup,
           :cost       => 7,
           :regex      => /You raise your hands high, lace them together and bring them crashing down towards the .+\!/,
           :usage      => "twinhammer"
         },
         "volley"           => {
           :short_name => "volley",
+          :type       => :area_of_effect,
           :cost       => 20,
           :regex      => /Raising your .+ high, you loose (?:arrow|bolt) after (?:arrow|bolt) as fast as you can, filling the sky with a volley of deadly projectiles\!/
         },
         "whirling_blade"   => {
           :short_name => "wblade",
+          :type       => :area_of_effect,
           :cost       => 20,
           :regex      => /With a broad flourish, you sweep your .+ into a whirling display of keen-edged menace\!/,
           :usage      => "wblade"
         },
         "whirlwind"        => {
           :short_name => "whirlwind",
+          :type       => :area_of_effect,
           :cost       => 20,
           :regex      => /Twisting and spinning among your foes, you lash out again and again with the force of a reaping whirlwind\!/
         }
@@ -248,9 +272,9 @@ module Lich
       # @param name [String] The technique's name
       # @return [Boolean] True if buff is already active
       def Weapon.buff_active?(name)
-        buff = @@weapon_techniques.fetch(PSMS.name_normal(name))[:buff]
+        buff = @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:buff]
         return false if buff.nil?
-        Effects::Buffs.active?(@@weapon_techniques.fetch(name)[:buff])
+        Effects::Buffs.active?(@@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:buff])
       end
 
       # Attempts to use a Weapon technique, optionally on a target.
@@ -267,7 +291,7 @@ module Lich
         return unless Weapon.available?(name, forcert_count: forcert_count)
 
         name_normalized = PSMS.name_normal(name)
-        technique = @@weapon_techniques.fetch(name_normalized)
+        technique = @@weapon_techniques.fetch(PSMS.find_name(name_normalized, "Weapon")[:long_name])
         usage = technique.key?(:usage) ? technique[:usage] : name_normalized
         return if usage.nil?
 
@@ -336,7 +360,7 @@ module Lich
       # @example
       #   Weapon.regexp("Weapon_blessing") => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i
       def Weapon.regexp(name)
-        @@weapon_techniques.fetch(PSMS.name_normal(name))[:regex]
+        @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:regex]
       end
 
       # Defines dynamic getter methods for both long and short names of each Weapon technique.
