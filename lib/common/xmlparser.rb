@@ -280,15 +280,7 @@ module Lich
             end
           end
 
-          # if (name == 'clearStream' && attributes['id'] == 'percWindow')
-          #   @dr_active_spells_clear = true
-          # end
-
           if (name == 'pushStream' && attributes['id'] == 'percWindow')
-            # if @dr_active_spells_clear
-            #   @dr_active_spells = {}
-            #   @dr_active_spells_clear = false
-            # end
             @dr_active_spell_tracking = true
           end
 
@@ -712,10 +704,6 @@ module Lich
             when /.*orbiting sliver.*/i
               # Moon Mage slivers
               @dr_active_spells_slivers = true
-            # when /^(.*)$/
-            #   # No idea what we received, just a general catch all
-            #   spell = Regexp.last_match(1)
-            #   duration = 1000
             end
             spell.strip!
             if spell
@@ -902,13 +890,6 @@ module Lich
               $room_count += 1
             end
           end
-
-          # if (name == 'popStream') && @dr_active_spell_tracking
-            # @dr_active_spell_tracking = false
-            # @dr_active_spells_slivers = false
-            # @dr_active_spells = @dr_active_spells_tmp
-            # @dr_active_spells_tmp = {}
-          # end
 
           if name == 'inv'
             if @obj_exist == @obj_location
