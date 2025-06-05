@@ -385,7 +385,7 @@ module Lich
             notebook.set_page(0)
           end
 
-          # Set up add button handler
+          # Set up add button handler with automatic account information collection
           add_button.signal_connect('clicked') do
             username = username_entry.text
             password = password_entry.text
@@ -400,23 +400,236 @@ module Lich
               next
             end
 
-            # Add account
-            if AccountManager.add_or_update_account(@data_dir, username, password)
-              @msgbox.call("Account added successfully.")
-              username_entry.text = ""
-              password_entry.text = ""
-
-              # Return to accounts tab and refresh
-              notebook.set_page(0)
-              # Find the accounts store in the first tab and refresh it
-              accounts_tab = notebook.get_nth_page(0)
-              accounts_view = find_treeview_in_container(accounts_tab)
-              if accounts_view
-                populate_accounts_view(accounts_view.model)
-              end
-            else
-              @msgbox.call("Failed to add account.")
+            # Step 1: Check if account already exists in YAML structure
+            if account_already_exists?(username)
+              @msgbox.call("Account '#{username}' already exists. Use 'Change Password' to update the password.")
+              next
             end
+
+            # Step 2: Perform authentication like manual login to collect account information
+            begin
+              # Authenticate with legacy mode to get character list (returns array of character hashes)
+              auth_data = Authentication.authenticate(
+                account: username,
+                password: password,
+                legacy: true
+              )
+
+              # Step 3: Collect all account information and convert to YAML format
+              if auth_data && auth_data.is_a?(Array) && !auth_data.empty?
+                # Show frontend selection dialog
+                selected_frontend = show_frontend_selection_dialog
+                return if selected_frontend.nil? # User cancelled
+
+                # Convert character data to the format expected by YAML storage
+                character_list = convert_auth_data_to_characters(auth_data, selected_frontend)
+
+                # Step 4: Save account and characters to entry.yml file
+                if save_account_with_characters(username, password, character_list)
+                  @msgbox.call("Account '#{username}' added successfully with #{character_list.length} character(s).")
+                  username_entry.text = ""
+                  password_entry.text = ""
+
+                  # Step 5: Reset window interface to display results
+                  # TODO: Automatically refresh Saved Entry tab information
+                  notebook.set_page(0)
+                  # Find the accounts store in the first tab and refresh it
+                  accounts_tab = notebook.get_nth_page(0)
+                  accounts_view = find_treeview_in_container(accounts_tab)
+                  if accounts_view
+                    populate_accounts_view(accounts_view.model)
+                  end
+                else
+                  @msgbox.call("Failed to save account information.")
+                end
+              elsif auth_data && auth_data.is_a?(Array) && auth_data.empty?
+                @msgbox.call("No characters found for account '#{username}'. Account will be added without characters.")
+                # Save account without characters
+                if save_account_with_characters(username, password, [])
+                  username_entry.text = ""
+                  password_entry.text = ""
+                  notebook.set_page(0)
+                  accounts_tab = notebook.get_nth_page(0)
+                  accounts_view = find_treeview_in_container(accounts_tab)
+                  if accounts_view
+                    populate_accounts_view(accounts_view.model)
+                  end
+                else
+                  @msgbox.call("Failed to save account information.")
+                end
+              else
+                @msgbox.call("Authentication failed or returned unexpected data format.")
+              end
+            rescue StandardError => e
+              @msgbox.call("Authentication failed: #{e.message}")
+            end
+          end
+        end
+
+        # Checks if an account already exists in the YAML structure
+        #
+        # @param username [String] Account username to check
+        # @return [Boolean] True if account exists
+        def account_already_exists?(username)
+          yaml_file = File.join(@data_dir, "entry.yml")
+          return false unless File.exist?(yaml_file)
+
+          begin
+            yaml_data = YAML.load_file(yaml_file)
+            return false unless yaml_data && yaml_data['accounts']
+
+            yaml_data['accounts'].key?(username)
+          rescue StandardError => e
+            Lich.log "Error checking if account exists: #{e.message}"
+            false
+          end
+        end
+
+        # Converts authentication data to character format for YAML storage
+        #
+        # @param auth_data [Array] Array of character hashes from authentication
+        # @param frontend [String] Selected frontend for all characters
+        # @return [Array] Array of character data hashes formatted for YAML storage
+        def convert_auth_data_to_characters(auth_data, frontend = 'stormfront')
+          characters = []
+          return characters unless auth_data.is_a?(Array)
+
+          auth_data.each do |char_data|
+            # Ensure we have the required fields with symbol keys (as returned by authentication)
+            next unless char_data.is_a?(Hash) &&
+                        char_data.key?(:char_name) &&
+                        char_data.key?(:game_name) &&
+                        char_data.key?(:game_code)
+
+            characters << {
+              char_name: char_data[:char_name],
+              game_code: char_data[:game_code],
+              game_name: char_data[:game_name],
+              frontend: frontend
+            }
+          end
+
+          characters
+        end
+
+        # Shows a frontend selection dialog similar to manual login
+        #
+        # @return [String, nil] Selected frontend or nil if cancelled
+        def show_frontend_selection_dialog
+          # Create dialog
+          dialog = Gtk::Dialog.new(
+            title: "Select Frontend",
+            parent: @window,
+            flags: :modal,
+            buttons: [
+              [Gtk::Stock::CANCEL, Gtk::ResponseType::CANCEL],
+              [Gtk::Stock::OK, Gtk::ResponseType::OK]
+            ]
+          )
+
+          # Create content area
+          content_area = dialog.content_area
+          content_area.border_width = 10
+
+          # Add instruction label
+          label = Gtk::Label.new("Select the frontend to use for all characters:")
+          content_area.pack_start(label, expand: false, fill: false, padding: 10)
+
+          # Create frontend selection radio buttons (similar to manual login)
+          stormfront_option = Gtk::RadioButton.new(label: 'Wrayth')
+          wizard_option = Gtk::RadioButton.new(label: 'Wizard', member: stormfront_option)
+          avalon_option = Gtk::RadioButton.new(label: 'Avalon', member: stormfront_option)
+          profanity_option = Gtk::RadioButton.new(label: 'Profanity', member: stormfront_option)
+
+          # Set Wrayth (stormfront) as default
+          stormfront_option.active = true
+
+          # Create radio button container
+          frontend_box = Gtk::Box.new(:vertical, 5)
+          frontend_box.pack_start(stormfront_option, expand: false, fill: false, padding: 0)
+          frontend_box.pack_start(wizard_option, expand: false, fill: false, padding: 0)
+          frontend_box.pack_start(profanity_option, expand: false, fill: false, padding: 0)
+
+          # Only show Avalon on macOS (consistent with manual login)
+          if RUBY_PLATFORM =~ /darwin/i
+            frontend_box.pack_start(avalon_option, expand: false, fill: false, padding: 0)
+          end
+
+          content_area.pack_start(frontend_box, expand: false, fill: false, padding: 10)
+
+          # Show dialog and get response
+          dialog.show_all
+          response = dialog.run
+
+          # Determine selected frontend
+          selected_frontend = nil
+          if response == Gtk::ResponseType::OK
+            if wizard_option.active?
+              selected_frontend = 'wizard'
+            elsif avalon_option.active?
+              selected_frontend = 'avalon'
+            elsif profanity_option.active?
+              selected_frontend = 'profanity'
+            else
+              selected_frontend = 'stormfront' # Default/Wrayth
+            end
+          end
+
+          dialog.destroy
+          selected_frontend
+        end
+
+        # Saves account with characters to the YAML file
+        #
+        # @param username [String] Account username
+        # @param password [String] Account password
+        # @param characters [Array] Array of character data hashes
+        # @return [Boolean] True if save was successful
+        def save_account_with_characters(username, password, characters)
+          yaml_file = File.join(@data_dir, "entry.yml")
+
+          # Load existing data or create new structure
+          yaml_data = if File.exist?(yaml_file)
+                        begin
+                          YAML.load_file(yaml_file)
+                        rescue StandardError => e
+                          Lich.log "Error loading YAML entry file: #{e.message}"
+                          { 'accounts' => {} }
+                        end
+                      else
+                        { 'accounts' => {} }
+                      end
+
+          # Initialize accounts hash if not present
+          yaml_data['accounts'] ||= {}
+
+          # Create account entry with characters
+          yaml_data['accounts'][username] = {
+            'password'   => password,
+            'characters' => characters.map do |char|
+              {
+                'char_name'         => char[:char_name],
+                'game_code'         => char[:game_code],
+                'game_name'         => char[:game_name],
+                'frontend'          => char[:frontend],
+                'custom_launch'     => char[:custom_launch],
+                'custom_launch_dir' => char[:custom_launch_dir]
+              }
+            end
+          }
+
+          # Save updated data
+          begin
+            File.open(yaml_file, 'w') do |file|
+              file.puts "# Lich 5 Login Entries - YAML Format"
+              file.puts "# Generated: #{Time.now}"
+              file.puts "# WARNING: Passwords are stored in plain text"
+              file.write(YAML.dump(yaml_data))
+            end
+            true
+          rescue StandardError => e
+            Lich.log "Error saving YAML entry file: #{e.message}"
+            false
           end
         end
 

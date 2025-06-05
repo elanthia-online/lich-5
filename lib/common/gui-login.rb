@@ -60,9 +60,6 @@ module Lich
 
       # Initialize account manager UI
       @account_manager_ui = Lich::Common::GUI::AccountManagerUI.new(DATA_DIR)
-
-      # Initialize install_tab_loaded as an instance variable to ensure proper scope
-      @install_tab_loaded = false
     end
 
     # Sets up the main GUI window and tabs
@@ -80,8 +77,6 @@ module Lich
 
         # Create tab instances
         create_tab_instances
-        # @account_maanager_ui.create_management_window(DATA_DIR)
-        # @account_manager_ui.show_management_window
 
         # Set up notebook with tabs
         setup_notebook
@@ -288,8 +283,6 @@ module Lich
           @window.show_all
         })
       end
-
-      # @window.show_all
     end
 
     # Applies button style for light mode
