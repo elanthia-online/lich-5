@@ -106,7 +106,7 @@ module Lich
         @society_task = String.new
 
         @dr_active_spells = Hash.new
-        @dr_active_spell_clear = false
+        @dr_active_spells_tmp = Hash.new
         @dr_active_spell_tracking = false
         @dr_active_spells_stellar_percentage = 0
         @dr_active_spells_slivers = false
@@ -283,14 +283,6 @@ module Lich
             @dr_active_spells_clear = true
           end
 
-          if (name == 'pushStream' && attributes['id'] == 'percWindow')
-            if @dr_active_spells_clear
-              @dr_active_spells = {}
-              @dr_active_spells_clear = false
-            end
-            @dr_active_spell_tracking = true
-          end
-
           if (name == 'compDef') or (name == 'component')
             if attributes['id'] == 'room objs'
               GameObj.clear_loot
@@ -384,6 +376,14 @@ module Lich
             @server_time_offset = (Time.now.to_i - @server_time)
             $_CLIENT_.puts "\034GSq#{sprintf('%010d', @server_time)}\r\n" if @send_fake_tags
           end
+
+          if name == 'prompt' && @dr_active_spell_tracking
+            @dr_active_spell_tracking = false
+            @dr_active_spells_slivers = false
+            @dr_active_spells = @dr_active_spells_tmp
+            @dr_active_spells_tmp = {}
+          end
+
           if name == 'clearContainer'
             if attributes['id'] == 'stow'
               GameObj.clear_container(@stow_container_id)
@@ -703,14 +703,10 @@ module Lich
             when /.*orbiting sliver.*/i
               # Moon Mage slivers
               @dr_active_spells_slivers = true
-            when /^(.*)$/
-              # No idea what we received, just a general catch all
-              spell = Regexp.last_match(1)
-              duration = 1000
             end
             spell.strip!
             if spell
-              @dr_active_spells[spell] = duration
+              @dr_active_spells_tmp[spell] = duration
             end
           end
 
@@ -892,11 +888,6 @@ module Lich
               @room_count += 1
               $room_count += 1
             end
-          end
-
-          if (name == 'popStream') && @dr_active_spell_tracking
-            @dr_active_spell_tracking = false
-            @dr_active_spells_slivers = false
           end
 
           if name == 'inv'
