@@ -106,7 +106,7 @@ module Lich
         @society_task = String.new
 
         @dr_active_spells = Hash.new
-        @dr_active_spell_clear = false
+        @dr_active_spells_tmp = Hash.new
         @dr_active_spell_tracking = false
         @dr_active_spells_stellar_percentage = 0
         @dr_active_spells_slivers = false
@@ -710,14 +710,10 @@ module Lich
             when /.*orbiting sliver.*/i
               # Moon Mage slivers
               @dr_active_spells_slivers = true
-            when /^(.*)$/
-              # No idea what we received, just a general catch all
-              spell = Regexp.last_match(1)
-              duration = 1000
             end
             spell.strip!
             if spell
-              @dr_active_spells[spell] = duration
+              @dr_active_spells_tmp[spell] = duration
             end
           end
 
@@ -899,11 +895,6 @@ module Lich
               @room_count += 1
               $room_count += 1
             end
-          end
-
-          if (name == 'popStream') && @dr_active_spell_tracking
-            @dr_active_spell_tracking = false
-            @dr_active_spells_slivers = false
           end
 
           if name == 'inv'
