@@ -106,6 +106,7 @@ module Lich
         @society_task = String.new
 
         @dr_active_spells = Hash.new
+        @dr_active_spells_clear = false
         @dr_active_spells_tmp = Hash.new
         @dr_active_spell_tracking = false
         @dr_active_spells_stellar_percentage = 0
@@ -279,10 +280,6 @@ module Lich
             end
           end
 
-          if (name == 'clearStream' && attributes['id'] == 'percWindow')
-            @dr_active_spells_clear = true
-          end
-
           if (name == 'compDef') or (name == 'component')
             if attributes['id'] == 'room objs'
               GameObj.clear_loot
@@ -371,17 +368,28 @@ module Lich
           if name == 'style'
             @current_style = attributes['id']
           end
+          if (name == 'clearStream' && attributes['id'] == 'percWindow')
+            @dr_active_spells_clear = true
+          end
+
+          if (name == 'pushStream' && attributes['id'] == 'percWindow')
+            @dr_active_spell_tracking = true
+            @dr_active_spells_clear = false
+          end
+
           if name == 'prompt'
             @server_time = attributes['time'].to_i
             @server_time_offset = (Time.now.to_i - @server_time)
             $_CLIENT_.puts "\034GSq#{sprintf('%010d', @server_time)}\r\n" if @send_fake_tags
-          end
 
-          if name == 'prompt' && @dr_active_spell_tracking
-            @dr_active_spell_tracking = false
-            @dr_active_spells_slivers = false
-            @dr_active_spells = @dr_active_spells_tmp
-            @dr_active_spells_tmp = {}
+            if @dr_active_spell_tracking
+              @dr_active_spell_tracking = false
+              @dr_active_spells_slivers = false
+              @dr_active_spells = @dr_active_spells_tmp
+              @dr_active_spells_tmp = {}
+            elsif @dr_active_spells_clear
+              @dr_active_spells = {}
+            end
           end
 
           if name == 'clearContainer'
