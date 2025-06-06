@@ -106,6 +106,7 @@ module Lich
         @society_task = String.new
 
         @dr_active_spells = Hash.new
+        @dr_active_spells_clear = false
         @dr_active_spells_tmp = Hash.new
         @dr_active_spell_tracking = false
         @dr_active_spells_stellar_percentage = 0
