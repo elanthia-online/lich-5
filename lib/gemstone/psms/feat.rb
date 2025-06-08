@@ -125,7 +125,7 @@ module Lich
           :regex      => /The Dragonscale Skin\s{1,2}feat is always active once you have learned it\./,
           :usage      => nil
         },
-        "excoriate"          => {
+        "excoriate"                 => {
           :short_name => "excoriate",
           :type       => :attack,
           :cost       => { mana: 10 },
