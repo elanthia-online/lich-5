@@ -15,7 +15,7 @@ module Lich
       #   - "Council of Light"
       #   - "Guardians of Sunfist"
       #   - or `nil`/"None" if not a member
-      def self.member_of
+      def self.membership
         Infomon.get("society.status")
       end
 
@@ -48,42 +48,26 @@ module Lich
       #
       # @return [Array<(String, Integer)>] An array in the format `[status, rank]`
       def self.serialize
-        [self.member_of, self.rank]
+        [self.membership, self.rank]
       end
+
+      alias status membership
 
       ########################
       ## DEPRECATED METHODS ##
       ########################
 
       ##
-      # @deprecated Use {#member_of} instead.
-      #
-      # @return [String] The name of the society: "Order of Voln", "Council of Light", "Guardians of Sunfist", or None
-      def self.membership
-        Lich.deprecated("Society.membership", "Society.member_of", caller[0], fe_log: false)
-        Infomon.get("society.status")
-      end
-
-      ##
-      # @deprecated Use {#member_of} instead.
+      # @deprecated Use {#member_of} instead.  Deprecated 6/2025
       #
       # @return [String] The current society membership
       def self.member
-        Lich.deprecated("Society.member", "Society.member_of", caller[0], fe_log: false)
-        self.status.dup
+        Lich.deprecated("Society.member", "Society.membership", caller[0], fe_log: false)
+        self.membership
       end
 
       ##
-      # @deprecated Use {#membership} instead.
-      #
-      # @return [String] The current society membership
-      def self.status
-        Lich.deprecated("Society.status", "Society.membership", caller[0], fe_log: false)
-        Infomon.get("society.status")
-      end
-
-      ##
-      # @deprecated Use {#rank} instead.
+      # @deprecated Use {#rank} instead.  Deprecated 6/2025
       #
       # @return [Integer] The current society rank
       def self.step
@@ -92,12 +76,13 @@ module Lich
       end
 
       ##
-      # @deprecated Use {Voln.favor} instead.
+      # @deprecated Use {Voln.favor} instead.  Deprecated 6/2025
       #
       # @return [Integer] The amount of Voln favor
       def self.favor
         Lich.deprecated("Society.favor", "Society::Voln.favor", caller[0], fe_log: false)
-        Infomon.get('resources.voln_favor')
+        # Infomon.get('resources.voln_favor')
+        Society::Voln.favor
       end
     end
   end

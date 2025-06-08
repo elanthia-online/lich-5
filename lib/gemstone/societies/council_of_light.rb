@@ -219,7 +219,7 @@ module Lich
             cost: { spirit: 6, mana: 0 },
             cost_type: :invoked,
             duration: nil,
-            summary: "Teleports the user to a \"safe point\" or to the nearest Council chapter (whichever is closer).	",
+            summary: "Teleports the user to a \"safe point\" or to the nearest Council chapter (whichever is closer).",
             spell_number: 9919,
           },
           "sign_of_hopelessness" => {

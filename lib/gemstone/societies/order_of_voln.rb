@@ -35,7 +35,7 @@ module Lich
             :alt_cost_modifier => 0.20, # TODO: Is this really a good solution?  Probably not.
             :alt_cost_reason   => "magical",
             :duration          => Society.rank * 2,
-            :summary           => "Bless weapons and other combat gear, upto 2x rank (+#{(Society.rank * 2)}) for Level + 2x Rank (#{Char.level + (Society.rank * 2)}) swings.",
+            :summary           => "Bless weapons and other combat gear, up to 2x rank (+#{(Society.rank * 2)}) for Level + 2x Rank (#{Char.level + (Society.rank * 2)}) swings.",
             :spell_number      => 9802,
           },
           "symbol_of_thought"       => {
@@ -43,9 +43,9 @@ module Lich
             :short_name    => "thought",
             :long_name     => "Symbol of Thought",
             :type          => :utility,
-            :cost_modifier => nil,
+            :cost_modifier => nil, ## TODO: should add the ability to calculate this based on message length
             :duration      => nil,
-            :summary       => "Transmit thought message to all members within the same realm.  Cost = ceiling((messsage length - 1) / 3)",
+            :summary       => "Transmit thought message to all members within the same realm.  Cost = ceiling((message length - 1) / 3)",
             :spell_number  => 9803,
           },
           "symbol_of_diminishment"  => {
@@ -55,7 +55,7 @@ module Lich
             :type          => :attack,
             :cost_modifier => 0.30,
             :duration      => Society.rank * 2,
-            :summary       => "Successful SSR check will temporarily reduces target undead creature's DS, TD, and CMAN -1 per rank (#{Society.rank * 2}) for rank x 2 (#{Society.rank * 2}) seconds.",
+            :summary       => "Successful SSR check will temporarily reduce target undead creature's DS, TD, and CMAN -1 per rank (#{Society.rank * 2}) for rank x 2 (#{Society.rank * 2}) seconds.",
             :spell_number  => 9804,
           },
           "symbol_of_courage"       => {
@@ -115,7 +115,7 @@ module Lich
             :type          => :utility,
             :cost_modifier => 0.40,
             :duration      => nil,
-            :summary       => "Restores spells after death.  Must be invoked while dead.  No effect for volunary departs.",
+            :summary       => "Restores spells after death.  Must be invoked while dead.  No effect for voluntary departs.",
             :spell_number  => 9810,
           },
           "symbol_of_sleep"         => {
@@ -176,7 +176,7 @@ module Lich
             :type          => :offense,
             :cost_modifier => 0.50,
             :duration      => Society.rank * 10,
-            :summary       => "Bonus of +1 per 2 ranks (+#{(Society.ranks / 2).floor}) to AS/CS, CMAN, UAF against undead. for (#{Society.rank * 10}) seconds.",
+            :summary       => "Bonus of +1 per 2 ranks (+#{(Society.rank / 2).floor}) to AS/CS, CMAN, UAF against undead. for (#{Society.rank * 10}) seconds.",
             :spell_number  => 9816,
           },
           "symbol_of_restoration"   => {
@@ -258,7 +258,7 @@ module Lich
             :type          => :utility,
             :cost_modifier => 0.60,
             :duration      => nil, ## TODO: try to figure this out?
-            :summary       => "Dream state - increass recovery of health, mana, spirit and reduced stats from Death's Sting.",
+            :summary       => "Dream state - increases recovery of health, mana, spirit and reduced stats from Death's Sting.",
             :spell_number  => 9824,
           },
           "symbol_of_return"        => {
@@ -300,27 +300,27 @@ module Lich
         ]
 
         ##
-        # Retrieves a symbol definition by its short name.
+        # Retrieves a symbol definition by its long or short name.
         #
-        # @param short_name [String] The short name of the symbol
+        # @param name [String] Long or short name of the symbol
         # @return [Hash, nil] The symbol metadata, or nil if not found
-        #
-        def self.[](short_name)
-          normalized_name = Lich::Utils.normalize_name(short_name)
-          @@voln_symbols.values.find { |s| s[:short_name] == normalized_name }
+        def self.[](name)
+          normalized = Lich::Utils.normalize_name(name)
+          match = symbol_lookups.find do |symbol|
+            [symbol[:short_name], symbol[:long_name]].compact.map { |n| Lich::Utils.normalize_name(n) }.include?(normalized)
+          end
+          match ? @@voln_symbols[match[:short_name]] : nil
         end
 
         ##
         # Calculates the favor cost of a symbol based on the character's level.
         #
-        # @param _symbol_name [String] The short name of the symbol
+        # @param symbol_name [String] Long or short name of the symbol
         # @return [Integer] The rounded-up favor cost
         #
         def self.calculate_cost(symbol_name)
-          normalized_name = Lich::Utils.normalize_name(symbol_name)
-
-          symbol = @@voln_symbols[normalized_name]
-          return 0 unless symbol
+          symbol = self[symbol_name]
+          return 0 unless symbol && symbol[:cost_modifier]
 
           base_cost = BASE_FAVOR_COST_BY_LEVEL[Char.level]
           (base_cost * symbol[:cost_modifier].to_f).ceil
@@ -345,57 +345,55 @@ module Lich
         ##
         # Determines if the character knows a given symbol based on their rank.
         #
-        # @param symbol_name [String] The long name of the symbol
+        # @param symbol_name [String] Long or short name of the symbol
         # @return [Boolean] True if the symbol is known (rank unlocked)
         #
         def self.known?(symbol_name)
-          normalized_name = Lich::Utils.normalize_name(symbol_name)
+          symbol = self[symbol_name]
+          return false unless symbol
 
-          @@voln_symbols[normalized_name][:rank] <= Society.rank
+          symbol[:rank] <= self.rank
         end
 
         ##
         # Attempts to use a symbol by issuing the `symbol of <name>` command.
         #
-        # @param symbol_name [String] The symbol to invoke
+        # @param symbol_name [String] Long or short name of the symbol
+        # @param target [String, nil] Optional target to append
         # @raise [RuntimeError] If the symbol is not available
         #
         def self.use(symbol_name, target = nil)
-          normalized_name = Lich::Utils.normalize_name(symbol_name)
+          symbol = self[symbol_name]
+          raise "Unknown symbol: #{symbol_name}" unless symbol
 
-          if self.available?(normalized_name)
-            if @@voln_symbols[normalized_name][:usage]
-              fput "#{@@voln_symbols[normalized_name][:usage]} #{target}".strip
-            else
-              fput "symbol of #{@@voln_symbols[normalized_name][:short_name]} #{target}".strip
-            end
+          if self.available?(symbol_name)
+            command = symbol[:usage] || "symbol of #{symbol[:short_name]}"
+            fput "#{command} #{target}".strip
           else
-            raise "You cannot use the #{symbol_name} symbol right now." ## Temp
+            raise "You cannot use the #{symbol_name} symbol right now." ## TODO: do we really want to raise an error here?
           end
         end
 
         ##
         # Checks if the character has enough favor to use a given symbol.
         #
-        # @param symbol_name [String] The symbol's long name
+        # @param symbol_name [String] Long or short name of the symbol
         # @return [Boolean] True if the character has enough favor
         #
         def self.affordable?(symbol_name)
-          normalized_name = Lich::Utils.normalize_name(symbol_name)
-
-          favor >= calculate_cost(normalized_name)
+          symbol = self[symbol_name]
+          return false unless symbol
+          favor >= calculate_cost(symbol_name)
         end
 
         ##
         # Determines if a symbol is both known and affordable (but not currently on cooldown).
         #
-        # @param symbol_name [String] The symbol's long name
+        # @param symbol_name [String] Long or short name of the symbol
         # @return [Boolean] True if the symbol is usable
         #
         def self.available?(symbol_name)
-          normalized_name = Lich::Utils.normalize_name(symbol_name)
-
-          self.known?(normalized_name) && self.affordable?(normalized_name) # and check for cooldowns
+          self.known?(symbol_name) && self.affordable?(symbol_name)
         end
 
         ##

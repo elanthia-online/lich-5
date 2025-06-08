@@ -67,7 +67,7 @@ module Lich
             spell_number: 9706,
             cost: { stamina: 10, mana: 0 },
             duration: 300,
-            summary: "Allows you to performe actions with bandaged wounds that would normally break them for 5 minutes."
+            summary: "Allows you to perform actions with bandaged wounds that would normally break them for 5 minutes."
           },
           "sigil_of_defense"          => {
             rank: 7,
@@ -267,7 +267,7 @@ module Lich
           sigil = @@sunfist_sigils[normalized_name]
           return false unless sigil
 
-          Char.stamina >= sigil[:stamina_cost] && Char.mana >= sigil[:mana_cost]
+          Char.stamina >= sigil[:cost][:stamina] && Char.mana >= sigil[:cost][:mana]
         end
 
         ##
