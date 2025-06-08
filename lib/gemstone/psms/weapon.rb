@@ -251,9 +251,16 @@ module Lich
       # @example
       #   Weapon.available?("Weapon_blessing") => true # if known, affordable, not on cooldown, and not overexerted
       def Weapon.available?(name, min_rank: 1, forcert_count: 0)
-        Weapon.known?(name, min_rank: min_rank) &&
-          Weapon.affordable?(name, forcert_count: forcert_count) &&
-          PSMS.available?(name)
+        return false unless Weapon.known?(name, min_rank: min_rank)
+        return false unless Weapon.affordable?(name, forcert_count: forcert_count)
+        if @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:type] == :area_of_effect && Effects::Buffs.active?("Glorious Momentum")
+          return false unless PSMS.available?(name, true)
+        elsif @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:type] == :assault && Effects::Buffs.active?("Ardor of the Scourge")
+          return false unless PSMS.available?(name, true)
+        else
+          return false unless PSMS.available?(name)
+        end
+        return true
       end
 
       # DEPRECATED: Use {#buff_active?} instead.
