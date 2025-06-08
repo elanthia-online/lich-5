@@ -322,9 +322,14 @@ module Lich
       # @example
       #   Shield.available?("shield_trample") => true # if known, affordable, not on cooldown, and not overexerted
       def Shield.available?(name, min_rank: 1, forcert_count: 0)
-        Shield.known?(name, min_rank: min_rank) &&
-          Shield.affordable?(name, forcert_count: forcert_count) &&
-          PSMS.available?(name)
+        return false unless Shield.known?(name, min_rank: min_rank)
+        return false unless Shield.affordable?(name, forcert_count: forcert_count)
+        if @@shield_techniques.fetch(PSMS.find_name(name, "Shield")[:long_name])[:type] == :area_of_effect && Effects::Buffs.active?("Glorious Momentum")
+          return false unless PSMS.available?(name, true)
+        else
+          return false unless PSMS.available?(name)
+        end
+        return true
       end
 
       # Checks whether the technique's buff is currently active.
