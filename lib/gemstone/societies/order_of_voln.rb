@@ -220,7 +220,7 @@ module Lich
             :summary       => "Group defense penalizing (AS/DS, CS/TD, UDF, CMAN) noncorporeal undead that are struck. Duration: #{Society.rank * 10} seconds stackable.",
             :spell_number  => 9820,
           },
-          "kai's smite"             => {
+          "kai_s_smite"             => {
             :rank          => 21,
             :short_name    => "smite",
             :long_name     => "Kai's Smite",
@@ -310,6 +310,14 @@ module Lich
             [symbol[:short_name], symbol[:long_name]].compact.map { |n| Lich::Utils.normalize_name(n) }.include?(normalized)
           end
           match ? @@voln_symbols[match[:short_name]] : nil
+        end
+
+        ##
+        # Returns all known sign metadata.
+        #
+        # @return [Array<Hash>]
+        def self.all
+          @@voln_symbols.values
         end
 
         ##
@@ -428,16 +436,24 @@ module Lich
           rank.nil? || Society.rank == rank
         end
 
-        # Dynamically define accessors for each symbol using its long and short names
-        OrderOfVoln.symbol_lookups.each { |symbol|
-          self.define_singleton_method(symbol[:short_name]) do
-            OrderOfVoln[symbol[:short_name]]
-          end
+        ##
+        # Dynamically defines singleton methods for each Order of Voln symbol.
+        #
+        # Each method allows accessing the symbol's metadata by calling either its
+        # short name or long name as a method. For example:
+        #
+        #   OrderOfVoln.defense  #=> metadata hash for "Symbol of Defense"
+        #   OrderOfVoln["Symbol of Defense"] #=> same result
+        #
+        # This supports both `symbol[:short_name]` and `symbol[:long_name]`.
+        #
+        OrderOfVoln.symbol_lookups.each do |symbol|
+          short = symbol[:short_name]
+          long  = Lich::Utils.normalize_name(symbol[:long_name])
 
-          self.define_singleton_method(symbol[:long_name]) do
-            OrderOfVoln[symbol[:short_name]]
-          end
-        }
+          define_singleton_method(short) { OrderOfVoln[short] }
+          define_singleton_method(long)  { OrderOfVoln[short] }
+        end
       end
     end
   end

@@ -198,93 +198,131 @@ module Lich
         }
 
         ##
-        # Retrieves a sigil definition by its short name.
+        # Retrieves a sigil definition by short or long name.
         #
-        # @param short_name [String] The short name of the sigil
+        # Normalizes the provided name and attempts to match against both short and long names
+        # of all Guardians of Sunfist sigils. Returns the corresponding sigil metadata if found.
+        #
+        # @param name [String] The short or long name of the sigil
         # @return [Hash, nil] The sigil metadata, or nil if not found
         #
-        def self.[](short_name)
-          normalized_name = Lich::Utils.normalize_name(short_name)
-          @@sunfist_sigils.values.find { |sigil| sigil[:short_name] == normalized_name }
+        def self.[](name)
+          normalized = Lich::Utils.normalize_name(name)
+          match = sigil_lookups.find do |sigil|
+            [sigil[:short_name], sigil[:long_name]].compact.map { |n| Lich::Utils.normalize_name(n) }.include?(normalized)
+          end
+          match ? @@sunfist_sigils[match[:short_name]] : nil
         end
 
         ##
-        # Returns a summary of sigil lookups including rank and costs.
+        # Returns a simplified list of all sigils with key attributes used for lookup and UI.
         #
-        # @return [Array<Hash>] An array of sigil metadata with costs
+        # Used internally to normalize and match against sigil names.
+        #
+        # @return [Array<Hash>] Each hash contains:
+        #   - :short_name [String]
+        #   - :long_name [String]
+        #   - :rank [Integer]
+        #   - :cost [Hash]
         #
         def self.sigil_lookups
-          @@sunfist_sigils.map do |_, sigil|
+          @@sunfist_sigils.values.map do |sigil|
             {
-              long_name: sigil[:long_name],
               short_name: sigil[:short_name],
+              long_name: sigil[:long_name],
               rank: sigil[:rank],
-              cost: sigil[:cost],
+              cost: sigil[:cost]
             }
           end
         end
 
         ##
-        # Determines if the character knows a given sigil based on their rank.
+        # Determines if the character knows a given Sunfist sigil, based on society rank.
         #
-        # @param sigil_name [String] The long name of the sigil
-        # @return [Boolean] True if the sigil is known (rank unlocked)
+        # Uses the unified `[]` method for normalized lookup by short or long name.
+        #
+        # @param sigil_name [String] The short or long name of the sigil
+        # @return [Boolean] True if the character's rank is sufficient to use the sigil
         #
         def self.known?(sigil_name)
-          normalized_name = Lich::Utils.normalize_name(sigil_name)
-          sigil = @@sunfist_sigils[normalized_name]
+          sigil = self[sigil_name]
           return false unless sigil
 
           sigil[:rank] <= self.rank
         end
 
         ##
-        # Attempts to use a sigil by issuing the `sigil of <name>` command.
+        # Attempts to use a Guardians of Sunfist sigil by issuing the appropriate command.
         #
-        # @param sigil_name [String] The sigil to invoke
-        # @raise [RuntimeError] If the sigil is not available
+        # If the sigil has a defined `:usage` string, it is used directly.
+        # Otherwise, defaults to `sigil of <short_name>`. Will raise if the sigil is unknown
+        # or currently unavailable due to rank, cost, or status.
+        #
+        # @param sigil_name [String] The short or long name of the sigil to invoke
+        # @param target [String, nil] Optional target for the sigil (appended to command)
+        # @raise [RuntimeError] If the sigil is not known or cannot be used at this time
+        # @return [void]
         #
         def self.use(sigil_name, target = nil)
-          normalized_name = Lich::Utils.normalize_name(sigil_name)
-          sigil = @@sunfist_sigils[normalized_name]
-          raise "Sigil not found: #{sigil_name}" unless sigil
+          sigil = self[sigil_name]
+          raise "Unknown sigil: #{sigil_name}" unless sigil
 
-          if self.available?(normalized_name)
-            fput "sigil of #{sigil[:short_name]} #{target}".strip
+          if available?(sigil_name)
+            command = sigil[:usage] || "sigil of #{sigil[:short_name]}"
+            fput "#{command} #{target}".strip
           else
-            raise "You cannot use the #{sigil_name} sigil right now."
+            raise "You cannot use the #{sigil_name} sigil right now." ## TODO: do we really want to raise an error or just return false?
           end
         end
 
         ##
-        # Checks if the character has enough resources to use a given sigil.
+        # Checks if the character can currently afford to use a given Guardians of Sunfist sigil,
+        # based on available stamina and mana.
         #
-        # @param sigil_name [String] The sigil's long name
-        # @return [Boolean] True if the character has enough resources
+        # @param sigil_name [String] Long or short name of the sigil
+        # @return [Boolean] True if the sigil can be afforded now
         #
         def self.affordable?(sigil_name)
-          normalized_name = Lich::Utils.normalize_name(sigil_name)
-          sigil = @@sunfist_sigils[normalized_name]
+          sigil = self[sigil_name]
           return false unless sigil
 
-          Char.stamina >= sigil[:cost][:stamina] && Char.mana >= sigil[:cost][:mana]
+          cost = sigil[:cost] || {}
+          stamina_cost = cost[:stamina].to_i
+          mana_cost = cost[:mana].to_i
+
+          Char.stamina >= stamina_cost && Char.mana >= mana_cost
         end
 
         ##
-        # Determines if a sigil is both known and affordable.
+        # Determines whether the specified Guardians of Sunfist sigil is currently available for use.
         #
-        # @param sigil_name [String] The sigil's long name
-        # @return [Boolean] True if the sigil is usable
+        # A sigil is considered available if:
+        # - The character knows the sigil (based on rank)
+        # - The character can afford the sigil (based on stamina and mana)
+        #
+        # @param sigil_name [String] Long or short name of the sigil
+        # @return [Boolean] True if the sigil can be used right now
         #
         def self.available?(sigil_name)
-          normalized_name = Lich::Utils.normalize_name(sigil_name)
-          self.known?(normalized_name) && self.affordable?(normalized_name)
+          known?(sigil_name) && affordable?(sigil_name)
         end
 
         ##
-        # Checks if the character is a member of Sunfist and optionally at a given rank.
+        # Returns all Guardians of Sunfist sigil metadata entries.
         #
-        # @param rank [Integer, nil] Optionally check if the character is at this rank
+        # Useful for iterating over the complete list of sigils or for display purposes.
+        #
+        # @return [Array<Hash>] An array of sigil metadata hashes
+        #
+        def self.all
+          @@sunfist_sigils.values
+        end
+
+        ##
+        # Checks if the character is a member of the Guardians of Sunfist,
+        # and optionally at a specific rank.
+        #
+        # @param rank [Integer, nil] Optional specific rank to check against
         # @return [Boolean] True if the character is a Sunfist member (and at the specified rank, if given)
         #
         def self.member?(rank = nil)
@@ -292,15 +330,27 @@ module Lich
           rank.nil? || Society.rank == rank
         end
 
-        # Dynamically define accessors for each sigil using its long and short names
-        GuardiansOfSunfist.sigil_lookups.each do |sigil|
-          define_singleton_method(sigil[:short_name]) do
-            GuardiansOfSunfist[sigil[:short_name]]
-          end
+        ##
+        # Checks if the character is a Sunfist master (rank 20).
+        #
+        # @return [Boolean] True if the character has achieved master rank in the Guardians of Sunfist
+        #
+        def self.master?
+          Society.rank == 20
+        end
 
-          define_singleton_method(sigil[:long_name]) do
-            GuardiansOfSunfist[sigil[:short_name]]
-          end
+        ##
+        # Dynamically defines singleton methods for each Guardians of Sunfist sigil.
+        #
+        # Each method allows accessing the sigil's metadata by calling either its
+        # short name or long name as a method. For example:
+        #
+        #   GuardiansOfSunfist.resolve        #=> metadata for Sigil of Resolve
+        #   GuardiansOfSunfist["Sigil of Resolve"] #=> same result
+        #
+        sigil_lookups.each do |sigil|
+          define_singleton_method(sigil[:short_name]) { self[sigil[:short_name]] }
+          define_singleton_method(sigil[:long_name])  { self[sigil[:short_name]] }
         end
       end
     end

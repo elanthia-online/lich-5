@@ -236,69 +236,104 @@ module Lich
         }
 
         ##
-        # Retrieves a sign definition by short name.
+        # Retrieves a sign definition by short or long name.
         #
-        # @param short_name [String]
-        # @return [Hash, nil]
+        # Normalizes the provided name and attempts to match against both short and long names
+        # of all Council of Light signs. Returns the corresponding sign metadata if found.
         #
-        def self.[](short_name)
-          normalized = Lich::Utils.normalize_name(short_name)
-          @@col_signs.values.find { |sigil| sigil[:short_name] == normalized }
+        # @param name [String] The short or long name of the sign
+        # @return [Hash, nil] The sign metadata, or nil if not found
+        #
+        def self.[](name)
+          normalized = Lich::Utils.normalize_name(name)
+          match = sign_lookups.find do |sign|
+            [sign[:short_name], sign[:long_name]].compact.map { |n| Lich::Utils.normalize_name(n) }.include?(normalized)
+          end
+          match ? @@col_signs[match[:short_name]] : nil
         end
 
         ##
-        # Returns true if the character knows the sign (based on Society.rank)
+        # Returns an array of sign metadata, including cost and rank.
         #
-        # @param sign_name [String]
-        # @return [Boolean]
+        # This is used for display, iteration, and generating dynamic method accessors.
         #
-        def self.known?(sign_name)
-          normalized = Lich::Utils.normalize_name(sign_name)
-          @@col_signs[normalized][:rank] <= self.rank
-        end
-
-        ##
-        # Attempts to use a Council of Light sign by issuing the appropriate game command.
+        # @return [Array<Hash>] Each hash contains keys:
+        #   - :long_name [String]
+        #   - :short_name [String]
+        #   - :rank [Integer]
+        #   - :cost [Hash]
         #
-        # If a custom `:usage` value is defined for the sign, it is used as the command;
-        # otherwise, defaults to `sign of <short_name>`. If the sign is not available
-        # (i.e., not known or not affordable), an error is raised.
-        #
-        # @param sign_name [String] The name (long or short) of the sign to invoke.
-        # @param target [String, nil] Optional target to append to the command.
-        # @raise [RuntimeError] If the sign is not known or cannot be used at this time.
-        # @return [void]
-        #
-        def self.use(sign_name, target = nil)
-          normalized_name = Lich::Utils.normalize_name(sign_name)
-          if self.available?(normalized_name)
-            if @@col_signs[normalized_name][:usage]
-              fput "#{@@col_signs[normalized_name][:usage]} #{target}".strip
-            else
-              fput "sign of #{@@col_signs[normalized_name][:short_name]} #{target}".strip
-            end
-          else
-            raise "You cannot use the #{sign_name} sign right now."
+        def self.sign_lookups
+          @@col_signs.values.map do |sign|
+            {
+              long_name: sign[:long_name],
+              short_name: sign[:short_name],
+              rank: sign[:rank],
+              cost: sign[:cost],
+            }
           end
         end
 
         ##
-        # Determines if the character has enough spirit and mana to use a given sign.
+        # Determines if the character knows the given Council of Light sign,
+        # based on the society rank and the sign's required rank.
         #
-        # @param sign_name [String]
-        # @return [Boolean]
+        # @param sign_name [String] The short or long name of the sign
+        # @return [Boolean] True if the character's rank is sufficient to use the sign
+        #
+        def self.known?(sign_name)
+          sign = self[sign_name]
+          return false unless sign
+
+          sign[:rank] <= self.rank
+        end
+
+        ##
+        # Attempts to use a Council of Light sign by issuing the appropriate command.
+        #
+        # If the sign has a defined `:usage` string (e.g., "signal"), it is used directly.
+        # Otherwise, defaults to `sign of <short_name>`. Will raise if the sign is unknown
+        # or currently unavailable due to rank, cost, or status.
+        #
+        # @param sign_name [String] The long or short name of the sign to invoke
+        # @param target [String, nil] Optional target for the sign (appended to command)
+        # @raise [RuntimeError] If the sign is not known or cannot be used at this time
+        # @return [void]
+        #
+        def self.use(sign_name, target = nil)
+          sign = self[sign_name]
+          raise "Unknown sign: #{sign_name}" unless sign
+
+          if available?(sign_name)
+            command = sign[:usage] || "sign of #{sign[:short_name]}"
+            fput "#{command} #{target}".strip
+          else
+            raise "You cannot use the #{sign_name} sign right now." ## TODO: do we want to raise or return false?
+          end
+        end
+
+        ##
+        # Checks if the character can currently afford to use a given Council of Light sign,
+        # based on available spirit and mana.
+        #
+        # For signs that use the `:dissipates` cost type, pending spirit loss is added to the cost
+        # to prevent overcommitment.
+        #
+        # @param sign_name [String] Long or short name of the sign
+        # @return [Boolean] True if the sign can be afforded now
         #
         def self.affordable?(sign_name)
-          normalized = Lich::Utils.normalize_name(sign_name)
-          cost = @@col_signs[normalized][:cost]
-          return true unless cost
+          sign = self[sign_name]
+          return false unless sign
 
-          # Need to account for Swords/Shields/Dissipation/Madness costs that come at the END of their usage
-          # so we check the pending_spirit_loss and ensure that the total spirit cost
-          # does not exceed the character's current available spirit.
+          cost = sign[:cost] || {}
+          spirit_cost = cost[:spirit].to_i
+          mana_cost = cost[:mana].to_i
 
-          (cost[:spirit] || 0) + pending_spirit_loss < Char.spirit &&
-            (cost[:mana] || 0) <= Char.mana
+          total_spirit = spirit_cost
+          total_spirit += pending_spirit_loss if sign[:cost_type] == :dissipates
+
+          total_spirit < Char.spirit && mana_cost <= Char.mana
         end
 
         ##
@@ -318,20 +353,52 @@ module Lich
         end
 
         ##
-        # Determines if a sign is both known and affordable.
+        # Returns all known sign metadata.
         #
-        # Signs with a `:cost_type` of `:dissipates` will return `false` if they are currently active
-        # in `Effects::Buffs`, as their spirit cost is paid upon expiration, and re-use is not allowed.
+        # @return [Array<Hash>]
+        def self.all
+          @@col_signs.values
+        end
+
+        ##
+        # Checks if the character is a COL master (rank 20).
         #
-        # @param sign_name [String] The long or short name of the sign.
-        # @return [Boolean] True if the sign is usable right now.
+        # @return [Boolean] True if the character has achieved master rank
+        #
+        def self.master?
+          Society.rank == 20 # is the rank of a COL Master
+        end
+
+        ##
+        # Checks if the character is a member of COL and optionally at a given rank.
+        #
+        # @param rank [Integer, nil] Optionally check if the character is at this rank
+        # @return [Boolean] True if the character is a COL member (and at the specified rank, if given)
+        #
+        def self.member?(rank = nil)
+          unless Society.member_of == "Council of Light"
+            return false
+          end
+
+          rank.nil? || Society.rank == rank
+        end
+
+        ##
+        # Determines whether the specified Council of Light sign is currently available for use.
+        #
+        # A sign is considered available if:
+        # - The character knows the sign (based on rank)
+        # - The character can afford the sign's cost (spirit/mana)
+        # - If the sign's `:cost_type` is `:dissipates`, it is not currently active (as that would
+        #   delay the cost and prevent re-use until expiration)
+        #
+        # @param sign_name [String] Long or short name of the sign
+        # @return [Boolean] True if the sign can be used right now
         #
         def self.available?(sign_name)
-          normalized = Lich::Utils.normalize_name(sign_name)
-          sign = @@col_signs[normalized]
-
+          sign = self[sign_name]
           return false unless sign
-          return false unless self.known?(normalized) && self.affordable?(normalized)
+          return false unless known?(sign_name) && affordable?(sign_name)
 
           if sign[:cost_type] == :dissipates
             return false if Effects::Buffs.active?(sign[:long_name])
@@ -341,23 +408,19 @@ module Lich
         end
 
         ##
-        # Returns an array of all CoL sign data, including costs.
+        # Dynamically defines singleton methods for each Council of Light sign.
         #
-        def self.sign_lookups
-          @@col_signs.map do |_, sign|
-            {
-              long_name: sign[:long_name],
-              short_name: sign[:short_name],
-              rank: sign[:rank],
-              cost: sign[:cost]
-            }
-          end
-        end
-
-        # Dynamically define method accessors
-        CouncilOfLight.sign_lookups.each do |sign|
-          define_singleton_method(sign[:short_name]) { CouncilOfLight[sign[:short_name]] }
-          define_singleton_method(sign[:long_name])  { CouncilOfLight[sign[:short_name]] }
+        # Each method allows accessing the sign's metadata by calling either its
+        # short name or long name as a method. For example:
+        #
+        #   CouncilOfLight.striking  #=> metadata hash for "Sign of Striking"
+        #   CouncilOfLight["Sign of Striking"] #=> same result
+        #
+        # This supports both `sign[:short_name]` and `sign[:long_name]`.
+        #
+        sign_lookups.each do |sign|
+          define_singleton_method(sign[:short_name]) { self[sign[:short_name]] }
+          define_singleton_method(sign[:long_name])  { self[sign[:short_name]] }
         end
       end
     end
