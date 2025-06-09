@@ -123,13 +123,25 @@ module Lich
       end
 
       ##
-      # Defines singleton accessors for both short and long names
+      # Defines singleton accessors for both short and long names on a given target class.
       #
-      # @param data [Hash] The metadata hash to define methods for
-      def define_name_methods(data)
+      # Method names are normalized using {Lich::Utils.normalize_name}, which ensures
+      # compatibility with Ruby method naming (e.g., downcased, underscores instead of spaces, etc.).
+      #
+      # Example:
+      #   "Symbol of Recognition" => `symbol_of_recognition`
+      #   "Kai's Strike"          => `kais_strike`
+      #
+      # @param target_class [Class] The class to define singleton methods on (typically `self`)
+      # @param data [Hash<String, Hash>] The metadata hash (e.g., `@@voln_symbols`)
+      #
+      def self.define_name_methods(target_class, data)
         data.values.each do |entry|
-          define_singleton_method(entry[:short_name]) { self[entry[:short_name]] }
-          define_singleton_method(entry[:long_name])  { self[entry[:short_name]] }
+          short_method = Lich::Utils.normalize_name(entry[:short_name])
+          long_method  = Lich::Utils.normalize_name(entry[:long_name])
+
+          target_class.define_singleton_method(short_method) { target_class[entry[:short_name]] }
+          target_class.define_singleton_method(long_method)  { target_class[entry[:short_name]] }
         end
       end
     end

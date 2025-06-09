@@ -90,7 +90,7 @@ module Lich
             summary: "Successful SSR forces undead to offensive stance and to briefly kneel.",
             spell_number: 9807,
           },
-          "kai's strike"            => {
+          "kais_strike"             => {
             rank: 8,
             short_name: "strike",
             long_name: "Kai's Strike",
@@ -222,7 +222,7 @@ module Lich
             summary: -> { "Group defense penalizing (AS/DS, CS/TD, UDF, CMAN) noncorporeal undead that are struck. Duration: #{Society.rank * 10} seconds stackable." },
             spell_number: 9820,
           },
-          "kai_s_smite"             => {
+          "kais_smite"              => {
             rank: 21,
             short_name: "smite",
             long_name: "Kai's Smite",
