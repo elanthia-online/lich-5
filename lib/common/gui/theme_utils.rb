@@ -31,7 +31,7 @@ module Lich
         # Creates a consistent color for transparent backgrounds
         #
         # @return [Gdk::RGBA] Transparent color for backgrounds
-        def self.transparent_background
+        def self.darkmode_background
           Gdk::RGBA::parse("rgba(40,40,40,1)")
         end
 
@@ -42,7 +42,7 @@ module Lich
         # @return [void]
         def self.apply_theme_to_window(window, theme_state)
           if theme_state
-            window.override_background_color(:normal, transparent_background)
+            window.override_background_color(:normal, darkmode_background)
           else
             window.override_background_color(:normal, light_theme_background)
           end
@@ -55,7 +55,7 @@ module Lich
         # @return [void]
         def self.apply_theme_to_notebook(notebook, theme_state)
           if theme_state
-            notebook.override_background_color(:normal, transparent_background)
+            notebook.override_background_color(:normal, darkmode_background)
           else
             notebook.override_background_color(:normal, light_theme_background)
           end

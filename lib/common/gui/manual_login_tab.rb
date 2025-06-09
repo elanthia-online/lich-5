@@ -87,7 +87,7 @@ module Lich
             end
             # Reset background colors to transparent for dark theme
             # Do not reset the treeview features, they should remain default
-            @game_entry_tab.override_background_color(:normal, ThemeUtils.transparent_background) if @game_entry_tab
+            @game_entry_tab.override_background_color(:normal, ThemeUtils.darkmode_background) if @game_entry_tab
           else
             # Disable dark theme
             Gtk::Settings.default.gtk_application_prefer_dark_theme = false
