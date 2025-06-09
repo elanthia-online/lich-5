@@ -39,8 +39,8 @@ module Lich
             ui_elements[:play_button]&.style_context&.remove_provider(providers[:button]) if providers[:button] && ui_elements[:play_button]
             ui_elements[:account_book]&.style_context&.remove_provider(providers[:tab]) if providers[:tab] && ui_elements[:account_book]
             # Reset background colors to transparent for dark theme
-            ui_elements[:account_book]&.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,1)")) if ui_elements[:account_book]
-            ui_elements[:notebook]&.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,1)")) if ui_elements[:notebook]
+            ui_elements[:account_book]&.override_background_color(:normal, ThemeUtils.darkmode_background) if ui_elements[:account_book]
+            ui_elements[:notebook]&.override_background_color(:normal, ThemeUtils.darkmode_background) if ui_elements[:notebook]
           else
             # Disable dark theme
             Gtk::Settings.default.gtk_application_prefer_dark_theme = false

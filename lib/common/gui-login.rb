@@ -122,8 +122,8 @@ module Lich
 
           # Apply theme to notebook and window
           if state
-            @notebook.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)"))
-            @window.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)"))
+            @notebook.override_background_color(:normal, GUI::ThemeUtils.darkmode_background)
+            @window.override_background_color(:normal, GUI::ThemeUtils.darkmode_background)
           else
             lightgrey = Gdk::RGBA::parse("#d3d3d3")
             @notebook.override_background_color(:normal, lightgrey)
@@ -204,7 +204,7 @@ module Lich
 
       # Apply initial theme
       if @theme_state
-        @notebook.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)"))
+        @notebook.override_background_color(:normal, GUI::ThemeUtils.darkmode_background)
       else
         lightgrey = Gdk::RGBA::parse("#d3d3d3")
         @notebook.override_background_color(:normal, lightgrey)
@@ -256,7 +256,7 @@ module Lich
 
       # Apply initial theme to window
       if @theme_state
-        @window.override_background_color(:normal, Gdk::RGBA::parse("rgba(0,0,0,0)"))
+        @window.override_background_color(:normal, GUI::ThemeUtils.darkmode_background)
       else
         lightgrey = Gdk::RGBA::parse("#d3d3d3")
         @window.override_background_color(:normal, lightgrey)

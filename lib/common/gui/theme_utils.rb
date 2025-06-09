@@ -28,9 +28,9 @@ module Lich
           Gdk::RGBA::parse("#f0f0f0")
         end
 
-        # Creates a consistent color for transparent backgrounds
+        # Creates a consistent color for darkmode backgrounds
         #
-        # @return [Gdk::RGBA] Transparent color for backgrounds
+        # @return [Gdk::RGBA] darkmode color for backgrounds
         def self.darkmode_background
           Gdk::RGBA::parse("rgba(40,40,40,1)")
         end
