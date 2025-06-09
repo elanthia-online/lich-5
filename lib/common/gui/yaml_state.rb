@@ -322,11 +322,15 @@ module Lich
 
           entry_data.each do |entry|
             username = entry[:user_id]
-            yaml_data['accounts'][username] ||= { 'characters' => [] }
+
+            # Initialize account if not exists, with password at account level
+            yaml_data['accounts'][username] ||= {
+              'password'   => entry[:password],
+              'characters' => []
+            }
 
             character_data = {
               'char_name'         => entry[:char_name],
-              'password'          => entry[:password],
               'game_code'         => entry[:game_code],
               'game_name'         => entry[:game_name],
               'frontend'          => entry[:frontend],

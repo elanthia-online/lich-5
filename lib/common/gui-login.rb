@@ -85,7 +85,7 @@ module Lich
         # Enable favorites in saved login tab if YAML file now exists
         if @saved_login_tab
           # Force enable favorites since YAML file now exists
-          @saved_login_tab.instance_variable_set(:@favorites_enabled, true)
+          @saved_login_tab.favorites_enabled = true
           @saved_login_tab.refresh_data
         end
 

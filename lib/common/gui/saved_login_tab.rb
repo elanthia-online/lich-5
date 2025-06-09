@@ -12,6 +12,8 @@ module Lich
       # Enhanced with integrated favorites functionality for seamless user experience
       # Now includes data refresh capability for cross-tab synchronization
       class SavedLoginTab
+        attr_accessor :favorites_enabled
+
         # Initializes a new SavedLoginTab instance with favorites support
         #
         # @param parent [Object] Parent window or container
