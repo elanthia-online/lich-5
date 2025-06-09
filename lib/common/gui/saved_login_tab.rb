@@ -285,9 +285,9 @@ module Lich
             remove_button = Components.create_button(label: 'X')
 
             # Apply button styling
-            @button_provider = LoginTabUtils.create_button_css_provider
-            remove_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
-            play_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
+            button_provider = LoginTabUtils.create_button_css_provider
+            remove_button.style_context.add_provider(button_provider, Gtk::StyleProvider::PRIORITY_USER)
+            play_button.style_context.add_provider(button_provider, Gtk::StyleProvider::PRIORITY_USER)
 
             # Create character box with label and buttons
             char_box = Gtk::Box.new(:horizontal)
