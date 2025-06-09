@@ -10,6 +10,8 @@ module Lich
       class GuardiansOfSunfist < Society
         ##
         # Metadata for each Sigil from the Guardians of Sunfist, including rank, costs, duration, etc.
+        # Some fields (e.g., `:summary`, `:duration`) may be defined as lambdas for dynamic content.
+        # These are automatically resolved at access time via `Society.resolve`.
         #
         # @return [Hash<String, Hash>] Sigil name mapped to metadata
         #
@@ -49,7 +51,7 @@ module Lich
             spell_number: 9704,
             cost: { stamina: 5, mana: 0 },
             duration: 90,
-            summary: "Increases Climbing, Swimming, and Survival skills for 90 seconds equal to half current rank (#{(Society.rank / 2).floor} for 90 seconds)."
+            summary: -> { "Increases Climbing, Swimming, and Survival skills for 90 seconds equal to half current rank (#{(Society.rank / 2).floor} for 90 seconds)." }
           },
           "sigil_of_minor_bane"       => {
             rank: 5,
@@ -76,7 +78,7 @@ module Lich
             spell_number: 9707,
             cost: { stamina: 5, mana: 5 },
             duration: 300,
-            summary: "Increases +1 DS per rank (#{Society.rank}) for 5 minutes."
+            summary: -> { "Increases +1 DS per rank (#{Society.rank}) for 5 minutes." }
           },
           "sigil_of_offense"          => {
             rank: 8,
@@ -85,7 +87,7 @@ module Lich
             spell_number: 9708,
             cost: { stamina: 5, mana: 5 },
             duration: 300,
-            summary: "Increases +1 AS per rank (#{Society.rank}) for 5 minutes."
+            summary: -> { "Increases +1 AS per rank (#{Society.rank}) for 5 minutes." }
           },
           "sigil_of_distraction"      => {
             rank: 9,
@@ -112,7 +114,7 @@ module Lich
             spell_number: 9711,
             cost: { stamina: 5, mana: 5 },
             duration: 60,
-            summary: "Increases +1 TD per rank (#{Society.rank}) for 1 minute. Can be stacked up to 3 minutes."
+            summary: -> { "Increases +1 TD per rank (#{Society.rank}) for 1 minute. Can be stacked up to 3 minutes." }
           },
           "sigil_of_intimidation"     => {
             rank: 12,
@@ -166,7 +168,7 @@ module Lich
             spell_number: 9717,
             cost: { stamina: 20, mana: 10 },
             duration: nil,
-            summary: "Instantly recover 15 HP or half of your lost HP, whichever is greater (right now: #{[((Char.max_hp - Char.hp) / 2), 15].max})."
+            summary: -> { "Instantly recover 15 HP or half of your lost HP, whichever is greater (right now: #{[((Char.max_hp - Char.hp) / 2), 15].max})." }
           },
           "sigil_of_power"            => {
             rank: 18,
@@ -195,7 +197,7 @@ module Lich
             duration: nil,
             summary: "Teleports you to a safe location. The emergency version can be used while stunned, bound, in RT, etc., at higher cost."
           }
-        }
+        }.freeze
 
         ##
         # Retrieves a sigil definition by short or long name.
@@ -207,7 +209,10 @@ module Lich
         # @return [Hash, nil] The sigil metadata, or nil if not found
         #
         def self.[](name)
-          Society.lookup(name, @@sunfist_sigils, sigil_lookups)
+          raw = Society.lookup(name, @@sunfist_sigils, sigil_lookups)
+          return nil unless raw
+
+          raw.transform_values { |v| Society.resolve(v) }
         end
 
         ##
@@ -312,14 +317,12 @@ module Lich
         end
 
         ##
-        # Returns all Guardians of Sunfist sigil metadata entries.
+        # Returns all Guardians of Sunfist sigil metadata entries with evaluated fields.
         #
-        # Useful for iterating over the complete list of sigils or for display purposes.
-        #
-        # @return [Array<Hash>] An array of sigil metadata hashes
+        # @return [Array<Hash>] An array of sigil metadata hashes with lambdas resolved
         #
         def self.all
-          @@sunfist_sigils.values
+          @@sunfist_sigils.values.map { |entry| entry.transform_values { |v| Society.resolve(v) } }
         end
 
         ##
@@ -352,10 +355,7 @@ module Lich
         #   GuardiansOfSunfist.resolve        #=> metadata for Sigil of Resolve
         #   GuardiansOfSunfist["Sigil of Resolve"] #=> same result
         #
-        sigil_lookups.each do |sigil|
-          define_singleton_method(sigil[:short_name]) { self[sigil[:short_name]] }
-          define_singleton_method(sigil[:long_name])  { self[sigil[:short_name]] }
-        end
+        define_name_methods(self, @@sunfist_sigils)
       end
     end
   end

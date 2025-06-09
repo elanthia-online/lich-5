@@ -9,6 +9,8 @@ module Lich
       class CouncilOfLight < Society
         ##
         # Metadata for each Sign from the Council of Light, including rank, cost, duration, etc.
+        # Some fields (e.g., `:summary`, `:duration`) may be defined as lambdas for dynamic content.
+        # These are automatically resolved at access time via `Society.resolve`.
         #
         # @return [Hash<String, Hash>] Sign long name mapped to metadata
         @@col_signs = {
@@ -42,8 +44,8 @@ module Lich
             type: :defense,
             cost: { spirit: 0, mana: 1 },
             cost_type: :invoked,
-            duration: 10 * Char.level,
-            summary: "Increases Defensive Strength by +5 for 10 seconds/level (#{10 * Char.level}).",
+            duration: -> { 10 * Char.level },
+            summary: -> { "Increases Defensive Strength by +5 for 10 seconds/level (#{10 * Char.level})." },
             spell_number: 9903,
           },
           "sign_of_striking"     => {
@@ -53,8 +55,8 @@ module Lich
             type: :offense,
             cost: { spirit: 0, mana: 1 },
             cost_type: :invoked,
-            duration: 10 * Char.level,
-            summary: "Increases Attack Strength by +5 for 10 seconds/level (#{10 * Char.level}).",
+            duration: -> { 10 * Char.level },
+            summary: -> { "Increases Attack Strength by +5 for 10 seconds/level (#{10 * Char.level})." },
             spell_number: 9904,
           },
           "sign_of_clotting"     => {
@@ -64,8 +66,8 @@ module Lich
             type: :utility,
             cost: { spirit: 0, mana: 1 },
             cost_type: :invoked,
-            duration: 10 * Char.level,
-            summary: "Stops bleeding immediately for 10 seconds/level (#{10 * Char.level}).",
+            duration: -> { 10 * Char.level },
+            summary: -> { "Stops bleeding immediately for 10 seconds/level (#{10 * Char.level})." },
             spell_number: 9905,
           },
           "sign_of_thought"      => {
@@ -75,8 +77,8 @@ module Lich
             type: :utility,
             cost: { spirit: 0, mana: 1 },
             cost_type: :invoked,
-            duration: 600 + (6 * Char.level),
-            summary: "Gives the same effect as rubbing a crystal amulet for 10 minutes + 6 seconds/level (#{600 + (6 * Char.level)}).",
+            duration: -> { 600 + (6 * Char.level) },
+            summary: -> { "Gives the same effect as rubbing a crystal amulet for 10 minutes + 6 seconds/level (#{600 + (6 * Char.level)})." },
             spell_number: 9906,
           },
           "sign_of_defending"    => {
@@ -86,8 +88,8 @@ module Lich
             type: :defense,
             cost: { spirit: 0, mana: 2 },
             cost_type: :invoked,
-            duration: 10 * Char.level,
-            summary: "Increases Defensive Strength by +10 for 10 seconds/level (#{10 * Char.level}).",
+            duration: -> { 10 * Char.level },
+            summary: -> { "Increases Defensive Strength by +10 for 10 seconds/level (#{10 * Char.level})." },
             spell_number: 9907,
           },
           "sign_of_smiting"      => {
@@ -97,8 +99,8 @@ module Lich
             type: :offense,
             cost: { spirit: 0, mana: 2 },
             cost_type: :invoked,
-            duration: 10 * Char.level,
-            summary: "Increases Attack Strength by +10 for 10 seconds/level (#{10 * Char.level}).",
+            duration: -> { 10 * Char.level },
+            summary: -> { "Increases Attack Strength by +10 for 10 seconds/level (#{10 * Char.level})." },
             spell_number: 9908,
           },
           "sign_of_staunching"   => {
@@ -108,8 +110,8 @@ module Lich
             type: :utility,
             cost: { spirit: 0, mana: 1 },
             cost_type: :invoked,
-            duration: 20 * Char.level,
-            summary: "Stops all bleeding for 20 seconds/level (#{20 * Char.level}).",
+            duration: -> { 20 * Char.level },
+            summary: -> { "Stops all bleeding for 20 seconds/level (#{20 * Char.level})." },
             spell_number: 9909,
           },
           "sign_of_deflection"   => {
@@ -119,8 +121,8 @@ module Lich
             type: :defense,
             cost: { spirit: 0, mana: 3 },
             cost_type: :invoked,
-            duration: 10 * Char.level,
-            summary: "Increases Bolt DS by +20 for 10 seconds/level (#{10 * Char.level}).",
+            duration: -> { 10 * Char.level },
+            summary: -> { "Increases Bolt DS by +20 for 10 seconds/level (#{10 * Char.level})." },
             spell_number: 9910,
           },
           "sign_of_hypnosis"     => {
@@ -131,7 +133,7 @@ module Lich
             cost: { spirit: 1, mana: 0 },
             cost_type: :invoked,
             duration: nil,
-            summary: "Calms a random target with a hidden warding check for a variable duration.",
+            summary: -> { "Calms a random target with a hidden warding check for a variable duration." },
             spell_number: 9911,
           },
           "sign_of_swords"       => {
@@ -141,8 +143,8 @@ module Lich
             type: :offense,
             cost: { spirit: 1, mana: 0 },
             cost_type: :dissipates,
-            duration: 10 * Char.level,
-            summary: "Increases Attack Strength by +20 for 10 seconds/level (#{10 * Char.level}).",
+            duration: -> { 10 * Char.level },
+            summary: -> { "Increases Attack Strength by +20 for 10 seconds/level (#{10 * Char.level})." },
             spell_number: 9912,
           },
           "sign_of_shields"      => {
@@ -152,8 +154,8 @@ module Lich
             type: :defense,
             cost: { spirit: 1, mana: 0 },
             cost_type: :dissipates,
-            duration: 10 * Char.level,
-            summary: "Increases Defensive Strength by +20 for 10 seconds/level (#{10 * Char.level}).",
+            duration: -> { 10 * Char.level },
+            summary: -> { "Increases Defensive Strength by +20 for 10 seconds/level (#{10 * Char.level})." },
             spell_number: 9913,
           },
           "sign_of_dissipation"  => {
@@ -163,8 +165,8 @@ module Lich
             type: :defense,
             cost: { spirit: 1, mana: 0 },
             cost_type: :dissipates,
-            duration: 10 * Char.level,
-            summary: "Increases Target Defense by +15 for 10 seconds/level (#{10 * Char.level}).",
+            duration: -> { 10 * Char.level },
+            summary: -> { "Increases Target Defense by +15 for 10 seconds/level (#{10 * Char.level})." },
             spell_number: 9914,
           },
           "sign_of_healing"      => {
@@ -233,7 +235,7 @@ module Lich
             summary: "Causes you to decay while dead.",
             spell_number: 9920,
           },
-        }
+        }.freeze
 
         ##
         # Retrieves a sign definition by short or long name.
@@ -245,7 +247,10 @@ module Lich
         # @return [Hash, nil] The sign metadata, or nil if not found
         #
         def self.[](name)
-          Society.lookup(name, @@col_signs, sign_lookups)
+          raw = Society.lookup(name, @@col_signs, sign_lookups)
+          return nil unless raw
+
+          raw.transform_values { |v| Society.resolve(v) }
         end
 
         ##
@@ -357,11 +362,12 @@ module Lich
         end
 
         ##
-        # Returns all known sign metadata.
+        # Returns all known sign metadata, resolving any dynamic (lambda) fields.
         #
-        # @return [Array<Hash>]
+        # @return [Array<Hash>] Array of sign metadata hashes with evaluated fields
+        #
         def self.all
-          @@col_signs.values
+          @@col_signs.values.map { |entry| entry.transform_values { |v| Society.resolve(v) } }
         end
 
         ##

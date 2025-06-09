@@ -107,6 +107,22 @@ module Lich
       end
 
       ##
+      # Resolves a value that may be a static literal or a lambda/proc.
+      #
+      # If the value responds to `:call` (i.e., is a `Proc` or `lambda`), it is called and
+      # the result is returned. Otherwise, the value is returned as-is.
+      #
+      # This allows society metadata fields such as `:duration` or `:summary` to be defined
+      # as either static values or dynamically evaluated lambdas.
+      #
+      # @param value [Object, Proc] The value to resolve
+      # @return [Object] The resolved value, or the original value if not callable
+      #
+      def self.resolve(value)
+        value.respond_to?(:call) ? value.call : value
+      end
+
+      ##
       # Defines singleton accessors for both short and long names
       #
       # @param data [Hash] The metadata hash to define methods for
