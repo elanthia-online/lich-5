@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+require_relative 'account_manager'
+require_relative 'favorites_manager'
+require_relative 'theme_utils'
+
 module Lich
   module Common
     module GUI
@@ -36,8 +40,8 @@ module Lich
           accounts_box = Gtk::Box.new(:vertical, 10)
           accounts_box.border_width = 10
 
-          # Create accounts treeview
-          accounts_store = Gtk::TreeStore.new(String, String, String, String, String) # Added hidden column for game_code
+          # Create accounts treeview with favorites support
+          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String) # Added favorites column
           accounts_view = Gtk::TreeView.new(accounts_store)
 
           # Add columns
@@ -62,6 +66,15 @@ module Lich
           col = Gtk::TreeViewColumn.new("Frontend", renderer, text: 3)
           col.resizable = true
           accounts_view.append_column(col)
+
+          # Favorites column with clickable star
+          favorites_renderer = Gtk::CellRendererText.new
+          favorites_col = Gtk::TreeViewColumn.new("Favorite", favorites_renderer, text: 5)
+          favorites_col.resizable = true
+          accounts_view.append_column(favorites_col)
+
+          # Set up favorites column click handler
+          setup_favorites_column_handler(accounts_view, favorites_col, @data_dir)
 
           # Create scrolled window
           sw = Gtk::ScrolledWindow.new
@@ -675,6 +688,10 @@ module Lich
               char_iter[2] = character[:game_name]
               char_iter[3] = character[:frontend].capitalize == 'Stormfront' ? 'Wrayth' : character[:frontend].capitalize
               char_iter[4] = character[:game_code] # Store game_code in hidden column
+
+              # Add favorites information
+              is_favorite = FavoritesManager.is_favorite?(@data_dir, account, character[:char_name], character[:game_code])
+              char_iter[5] = is_favorite ? '★' : '☆'
             end
           end
         end
@@ -705,11 +722,13 @@ module Lich
         def show_message_dialog(message)
           dialog = Gtk::MessageDialog.new(
             parent: @window,
-            flags: :modal,
+            flags: [:modal, :destroy_with_parent],
             type: :info,
             buttons: :ok,
             message: message
           )
+          dialog.set_keep_above(true) # Force dialog to stay on top
+          dialog.present
           dialog.run
           dialog.destroy
         end
@@ -812,6 +831,51 @@ module Lich
             else
               @msgbox.call("Failed to add character.")
             end
+          end
+        end
+
+        # Sets up the favorites column click handler
+        # Configures the click event for toggling favorite status in the account management view
+        #
+        # @param accounts_view [Gtk::TreeView] The accounts tree view
+        # @param favorites_col [Gtk::TreeViewColumn] The favorites column
+        # @param data_dir [String] Data directory for favorites storage
+        # @return [void]
+        def setup_favorites_column_handler(accounts_view, favorites_col, data_dir)
+          accounts_view.signal_connect('button-release-event') do |widget, event|
+            if event.button == 1 # Left click
+              path, column, _cell_x, _cell_y = widget.get_path_at_pos(event.x, event.y)
+
+              if path && column == favorites_col
+                iter = widget.model.get_iter(path)
+
+                # Only handle character rows (not account rows)
+                if iter && iter[1] && !iter[1].empty? # Character name exists
+                  account = iter[0]
+                  char_name = iter[1]
+                  game_code = iter[4]
+
+                  begin
+                    # Toggle favorite status
+                    _current_status = FavoritesManager.is_favorite?(data_dir, account, char_name, game_code)
+                    new_status = FavoritesManager.toggle_favorite(data_dir, account, char_name, game_code)
+
+                    # Update the display
+                    iter[5] = new_status ? '★' : '☆'
+
+                    # Show feedback message
+                    action = new_status ? "added to" : "removed from"
+                    @msgbox.call("#{char_name} #{action} favorites.")
+                  rescue StandardError => e
+                    @msgbox.call("Error updating favorite status: #{e.message}")
+                  end
+                end
+
+                true # Consume the event
+              end
+            end
+
+            false # Don't consume other events
           end
         end
       end

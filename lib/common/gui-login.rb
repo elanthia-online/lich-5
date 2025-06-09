@@ -6,6 +6,7 @@ require_relative 'gui/account_manager_ui'
 require_relative 'gui/authentication'
 require_relative 'gui/components'
 require_relative 'gui/conversion_ui'
+require_relative 'gui/favorites_manager'
 require_relative 'gui/game_selection'
 require_relative 'gui/login_tab_utils'
 require_relative 'gui/manual_login_tab'
@@ -157,7 +158,7 @@ module Lich
         }
       }
 
-      # Create tab instances
+      # Create tab instances with favorites support
       @saved_login_tab = Lich::Common::GUI::SavedLoginTab.new(
         @window,
         @entry_data,
@@ -165,6 +166,7 @@ module Lich
         @tab_layout_state,
         @autosort_state,
         @default_icon,
+        DATA_DIR,
         saved_login_callbacks
       )
 
@@ -173,6 +175,7 @@ module Lich
         @entry_data,
         @theme_state,
         @default_icon,
+        DATA_DIR,
         manual_login_callbacks
       )
 
@@ -249,8 +252,6 @@ module Lich
       @window.border_width = 5
       @window.add(@notebook)
       @window.signal_connect('delete_event') { @window.destroy; @done = true }
-      @window.default_width = 590
-      @window.default_height = 550
 
       # Apply initial theme to window
       if @theme_state

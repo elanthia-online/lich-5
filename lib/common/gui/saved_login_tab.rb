@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative 'favorites_manager'
 require_relative 'parameter_objects'
 require_relative 'login_tab_utils'
 require_relative 'theme_utils'
@@ -8,9 +9,9 @@ module Lich
   module Common
     module GUI
       # Handles the "Saved Entry" tab functionality for the Lich GUI login system
-      # Provides a class-based implementation for the saved login tab
+      # Enhanced with integrated favorites functionality for seamless user experience
       class SavedLoginTab
-        # Initializes a new SavedLoginTab instance
+        # Initializes a new SavedLoginTab instance with favorites support
         #
         # @param parent [Object] Parent window or container
         # @param entry_data [Array] Array of saved login entries
@@ -18,12 +19,14 @@ module Lich
         # @param tab_layout_state [Boolean] Whether tab layout is enabled
         # @param autosort_state [Boolean] Whether auto-sorting is enabled
         # @param default_icon [Gdk::Pixbuf] Default icon for dialogs
+        # @param data_dir [String] Directory containing entry data for favorites management
         # @param callbacks [Hash, CallbackParams] Callback handlers for various events
         # @return [SavedLoginTab] New instance
-        def initialize(parent, entry_data, theme_state, tab_layout_state, autosort_state, default_icon, callbacks = {})
+        def initialize(parent, entry_data, theme_state, tab_layout_state, autosort_state, default_icon, data_dir, callbacks = {})
           @parent = parent
           @entry_data = entry_data
           @default_icon = default_icon
+          @data_dir = data_dir
 
           # Convert UI configuration to UIConfig object
           @ui_config = UIConfig.new(
@@ -38,6 +41,10 @@ module Lich
                        else
                          CallbackParams.new(callbacks)
                        end
+
+          # Initialize favorites functionality
+          @favorites_enabled = FavoritesManager.favorites_available?(@data_dir)
+          @show_favorites_first = true # Default to showing favorites first
 
           # Apply theme settings
           ThemeUtils.apply_theme_settings(@ui_config.theme_state)
@@ -151,10 +158,10 @@ module Lich
           create_global_settings_components
         end
 
-        # Creates a tabbed layout for accounts
-        # Organizes saved entries by account in a tabbed interface
+        # Creates a tabbed layout for accounts with favorites support
+        # Organizes saved entries in tabs by account, with a dedicated FAVORITES tab
         #
-        # @return [Gtk::ScrolledWindow] Scrolled window containing the account book
+        # @return [Gtk::ScrolledWindow] Scrolled window containing the account notebook
         def create_tabbed_layout
           @account_book = Gtk::Notebook.new
           @account_book.set_tab_pos(:left)
@@ -164,6 +171,11 @@ module Lich
           unless @ui_config.theme_state
             @account_book.override_background_color(:normal, ThemeUtils.light_theme_background)
             @tab_provider = Utilities.create_tab_css_provider
+          end
+
+          # Create FAVORITES tab if favorites are enabled and exist
+          if @favorites_enabled
+            create_favorites_tab
           end
 
           # Process each unique account
@@ -194,10 +206,55 @@ module Lich
 
           # Create scrolled window for account book
           quick_sw = Gtk::ScrolledWindow.new
-          quick_sw.set_policy(:automatic, :automatic)
+          quick_sw.set_policy(:never, :automatic)
           quick_sw.add(@account_book)
 
           quick_sw
+        end
+
+        # Creates a dedicated favorites tab showing all favorite characters
+        # @return [void]
+        def create_favorites_tab
+          favorites_box = Gtk::Box.new(:vertical, 0)
+
+          # Get all favorite characters
+          favorite_entries = @entry_data.select do |login_info|
+            FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code])
+          end
+
+          # Sort favorites by favorite_order if available, then by character name
+          favorite_entries.sort! do |a, b|
+            a_order = a[:favorite_order] || 999999
+            b_order = b[:favorite_order] || 999999
+
+            if a_order == b_order
+              a[:char_name] <=> b[:char_name]
+            else
+              a_order <=> b_order
+            end
+          end
+
+          # Add favorites to the tab
+          if favorite_entries.empty?
+            # Show message when no favorites exist
+            no_favorites_label = Gtk::Label.new("No favorite characters yet.\n\nMark characters as favorites using the ★ button\nin the account tabs or saved entries list.")
+            no_favorites_label.set_justify(:center)
+            no_favorites_label.set_margin_top(50)
+            no_favorites_label.set_margin_bottom(50)
+            favorites_box.pack_start(no_favorites_label, expand: true, fill: true, padding: 20)
+          else
+            # Add each favorite character directly without account grouping
+            favorite_entries.each do |login_info|
+              create_character_entry(favorites_box, login_info)
+            end
+          end
+
+          # Create scrolled window and add to notebook
+          scrolled_window = Gtk::ScrolledWindow.new
+          scrolled_window.set_policy(:never, :automatic)
+          scrolled_window.add(favorites_box)
+
+          @account_book.prepend_page(scrolled_window, Gtk::Label.new("★ FAVORITES"))
         end
 
         # Creates a list layout for accounts (non-tabbed)
@@ -250,7 +307,7 @@ module Lich
           quick_vp.add(quick_box)
 
           quick_sw = Gtk::ScrolledWindow.new
-          quick_sw.set_policy(:automatic, :automatic)
+          quick_sw.set_policy(:never, :automatic)
           quick_sw.add(quick_vp)
 
           quick_sw
@@ -261,10 +318,19 @@ module Lich
         #
         # @param account_box [Gtk::Box] Box to add the character entry to
         # @param login_info [Hash] Login information for the character
+        # Creates a character entry with favorites support
+        # Builds UI elements for a single character with play, remove, and favorites buttons
+        # Enhanced with favorites functionality and visual indicators
+        #
+        # @param account_box [Gtk::Box] Container for the character entry
+        # @param login_info [Hash] Character login information
         # @return [void]
         def create_character_entry(account_box, login_info)
           # Convert to LoginParams object for consistency
           login_params = LoginParams.new(login_info)
+
+          # Check if this character is a favorite
+          is_favorite = @favorites_enabled && FavoritesManager.is_favorite?(@data_dir, login_params.user_id, login_params.char_name, login_params.game_code)
 
           # Get realm name from game code
           realm = Utilities.game_code_to_realm(login_params.game_code)
@@ -274,7 +340,10 @@ module Lich
 
           # Create play button with character info
           @play_button = Gtk::Button.new()
-          char_label = Gtk::Label.new(login_params.char_name)
+
+          # Add favorite indicator to character name if it's a favorite
+          char_name_text = is_favorite ? "★ #{login_params.char_name}" : login_params.char_name
+          char_label = Gtk::Label.new(char_name_text)
           char_label.set_width_chars(15)
 
           frontend_display = login_params.frontend.capitalize == 'Stormfront' ? 'Wrayth' : login_params.frontend.capitalize
@@ -285,6 +354,11 @@ module Lich
           instance_label = Gtk::Label.new(realm)
           instance_label.set_width_chars(10)
           char_label.set_alignment(0, 0.5)
+
+          # Apply favorite styling to play button if character is a favorite
+          if is_favorite
+            @play_button.style_context.add_class('favorite-character')
+          end
 
           # Layout button contents
           button_row = Gtk::Paned.new(:horizontal)
@@ -304,20 +378,100 @@ module Lich
           remove_label.set_width_chars(10)
           @remove_button.add(remove_label)
 
+          # Create favorites button if favorites are enabled
+          @favorite_button = nil
+          if @favorites_enabled
+            @favorite_button = Gtk::Button.new()
+            favorite_text = is_favorite ? '★' : '☆'
+            favorite_label = Gtk::Label.new(favorite_text)
+            favorite_label.set_width_chars(3)
+            @favorite_button.add(favorite_label)
+            @favorite_button.tooltip_text = is_favorite ? 'Remove from favorites' : 'Add to favorites'
+          end
+
           # Apply styling
           @remove_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
           @play_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
+          if @favorite_button
+            @favorite_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
+          end
           @account_book.style_context.add_provider(@tab_provider, Gtk::StyleProvider::PRIORITY_USER) unless @ui_config.theme_state
 
-          # Create character box with play and remove buttons
+          # Create character box with play, favorites, and remove buttons
           char_box = Gtk::Box.new(:horizontal)
-          char_box.pack_end(@remove_button, expand: true, fill: false, padding: 0)
           char_box.pack_start(@play_button, expand: true, fill: true, padding: 0)
+          if @favorite_button
+            char_box.pack_end(@favorite_button, expand: false, fill: false, padding: 2)
+          end
+          char_box.pack_end(@remove_button, expand: false, fill: false, padding: 0)
           account_box.pack_start(char_box, expand: false, fill: false, padding: 0)
 
           # Set up button handlers
           LoginTabUtils.setup_play_button_handler(@play_button, login_params.to_h, @callbacks.on_play)
           LoginTabUtils.setup_remove_button_handler(@remove_button, login_params.to_h, char_box, @default_icon, @callbacks.on_remove)
+
+          # Set up favorites button handler
+          if @favorite_button
+            setup_favorite_button_handler(@favorite_button, login_params, char_box, char_label, favorite_label)
+          end
+        end
+
+        # Sets up the favorite button handler
+        # Configures the click event for toggling favorite status
+        #
+        # @param favorite_button [Gtk::Button] Favorite button
+        # @param login_params [LoginParams] Character login parameters
+        # @param char_box [Gtk::Box] Character container box
+        # @param char_label [Gtk::Label] Character name label
+        # @param favorite_label [Gtk::Label] Favorite button label
+        # @return [void]
+        def setup_favorite_button_handler(favorite_button, login_params, _char_box, char_label, favorite_label)
+          favorite_button.signal_connect('clicked') do
+            begin
+              # Toggle favorite status
+              new_status = FavoritesManager.toggle_favorite(@data_dir, login_params.user_id, login_params.char_name, login_params.game_code)
+
+              # Update button appearance
+              favorite_text = new_status ? '★' : '☆'
+              favorite_label.text = favorite_text
+              favorite_button.tooltip_text = new_status ? 'Remove from favorites' : 'Add to favorites'
+
+              # Update character name display
+              char_name_text = new_status ? "★ #{login_params.char_name}" : login_params.char_name
+              char_label.text = char_name_text
+
+              # Update play button styling
+              if new_status
+                @play_button.style_context.add_class('favorite-character')
+              else
+                @play_button.style_context.remove_class('favorite-character')
+              end
+
+              # Trigger refresh if callback is available
+              if @callbacks.on_favorites_change
+                @callbacks.on_favorites_change.call(
+                  username: login_params.user_id,
+                  char_name: login_params.char_name,
+                  game_code: login_params.game_code,
+                  is_favorite: new_status
+                )
+              end
+            rescue StandardError => e
+              Lich.log "Error toggling favorite status: #{e.message}"
+
+              # Show error dialog
+              dialog = Gtk::MessageDialog.new(
+                parent: @parent,
+                flags: :modal,
+                type: :error,
+                buttons: :ok,
+                message: "Failed to update favorite status: #{e.message}"
+              )
+              dialog.set_icon(@default_icon) if @default_icon
+              dialog.run
+              dialog.destroy
+            end
+          end
         end
 
         # Creates character management components

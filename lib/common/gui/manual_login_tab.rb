@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'favorites_manager'
 require_relative 'parameter_objects'
-require_relative 'login_tab_utils'
 require_relative 'theme_utils'
 
 module Lich
@@ -10,19 +10,21 @@ module Lich
       # Handles the "Manual Entry" tab functionality for the Lich GUI login system
       # Provides a class-based implementation for the manual login tab
       class ManualLoginTab
-        # Initializes a new ManualLoginTab instance
+        # Initializes a new ManualLoginTab instance with favorites support
         #
-        # @param parent [Object] Parent window or container
+        # @param parent [Gtk::Window] Parent window
         # @param entry_data [Array] Array of saved login entries
         # @param theme_state [Boolean] Whether dark theme is enabled
         # @param default_icon [Gdk::Pixbuf] Default icon for dialogs
+        # @param data_dir [String] Data directory for favorites storage
         # @param callbacks [Hash, CallbackParams] Callback handlers for various events
         # @return [ManualLoginTab] New instance
-        def initialize(parent, entry_data, theme_state, default_icon, callbacks = {})
+        def initialize(parent, entry_data, theme_state, default_icon, data_dir, callbacks = {})
           @parent = parent
           @entry_data = entry_data
           @theme_state = theme_state
           @default_icon = default_icon
+          @data_dir = data_dir
 
           # Convert callbacks hash to CallbackParams if needed
           @callbacks = if callbacks.is_a?(CallbackParams)
@@ -127,6 +129,10 @@ module Lich
           # Create quick entry save option
           @make_quick_option = Gtk::CheckButton.new('Save this info for quick game entry')
 
+          # Create favorites option
+          @make_favorite_option = Gtk::CheckButton.new('★ Mark as favorite')
+          @make_favorite_option.set_tooltip_text('Mark this character as a favorite for quick access')
+
           # Create play button
           play_button, play_button_box = create_play_button
           @treeview_buttons << play_button
@@ -142,6 +148,7 @@ module Lich
           @game_entry_tab.pack_start(@custom_launch_entry, expand: false, fill: false, padding: 3)
           @game_entry_tab.pack_start(@custom_launch_dir, expand: false, fill: false, padding: 3)
           @game_entry_tab.pack_start(@make_quick_option, expand: false, fill: false, padding: 3)
+          @game_entry_tab.pack_start(@make_favorite_option, expand: false, fill: false, padding: 3)
           @game_entry_tab.pack_start(play_button_box, expand: false, fill: false, padding: 3)
 
           # Apply initial theme
@@ -456,6 +463,38 @@ module Lich
                 @save_entry_data = true
 
                 save_entry_data_if_needed
+              end
+
+              # Handle favorites if selected
+              if @make_favorite_option.active?
+                begin
+                  # Add character to favorites
+                  FavoritesManager.add_favorite(@data_dir, user_id_entry.text, selected_iter[3], selected_iter[0])
+
+                  # Trigger favorites change callback if available
+                  if @callbacks.on_favorites_change
+                    @callbacks.on_favorites_change.call(
+                      username: user_id_entry.text,
+                      char_name: selected_iter[3],
+                      game_code: selected_iter[0],
+                      is_favorite: true
+                    )
+                  end
+                rescue StandardError => e
+                  Lich.log "Error adding character to favorites: #{e.message}"
+
+                  # Show error dialog
+                  dialog = Gtk::MessageDialog.new(
+                    parent: @parent,
+                    flags: :modal,
+                    type: :error,
+                    buttons: :ok,
+                    message: "Failed to add character to favorites: #{e.message}"
+                  )
+                  dialog.set_icon(@default_icon) if @default_icon
+                  dialog.run
+                  dialog.destroy
+                end
               end
 
               # Call the play callback if provided
