@@ -168,10 +168,10 @@ module Lich
           @account_book.show_border = true
 
           # Apply theme styling
-          # unless @ui_config.theme_state
-          #  @account_book.override_background_color(:normal, ThemeUtils.light_theme_background)
-          #  @tab_provider = Utilities.create_tab_css_provider
-          # end
+          unless @ui_config.theme_state
+            @account_book.override_background_color(:normal, ThemeUtils.light_theme_background)
+            @tab_provider = Utilities.create_tab_css_provider
+          end
 
           # Create FAVORITES tab if favorites are enabled and exist
           if @favorites_enabled

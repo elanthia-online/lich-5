@@ -119,6 +119,7 @@ module Lich
           # Update theme state for all components
           @theme_state = state
           @manual_login_tab.update_theme_state(state)
+          @saved_login_tab.update_theme_state(state)
 
           # Apply theme to notebook and window
           if state
@@ -126,6 +127,7 @@ module Lich
             @window.override_background_color(:normal, GUI::ThemeUtils.darkmode_background)
           else
             @notebook.override_background_color(:normal, GUI::ThemeUtils.light_theme_background)
+            @window.override_background_color(:normal, GUI::ThemeUtils.light_theme_background)
             # Apply button style for light mode
             apply_button_style_for_light_mode
           end
