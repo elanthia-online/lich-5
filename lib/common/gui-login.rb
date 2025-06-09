@@ -125,8 +125,7 @@ module Lich
             @notebook.override_background_color(:normal, GUI::ThemeUtils.darkmode_background)
             @window.override_background_color(:normal, GUI::ThemeUtils.darkmode_background)
           else
-            lightgrey = Gdk::RGBA::parse("#d3d3d3")
-            @notebook.override_background_color(:normal, lightgrey)
+            @notebook.override_background_color(:normal, GUI::ThemeUtils.light_theme_background)
             # Apply button style for light mode
             apply_button_style_for_light_mode
           end
@@ -206,8 +205,7 @@ module Lich
       if @theme_state
         @notebook.override_background_color(:normal, GUI::ThemeUtils.darkmode_background)
       else
-        lightgrey = Gdk::RGBA::parse("#d3d3d3")
-        @notebook.override_background_color(:normal, lightgrey)
+        @notebook.override_background_color(:normal, GUI::ThemeUtils.light_theme_background)
         # Apply button style for light mode
         apply_button_style_for_light_mode
       end
@@ -258,8 +256,7 @@ module Lich
       if @theme_state
         @window.override_background_color(:normal, GUI::ThemeUtils.darkmode_background)
       else
-        lightgrey = Gdk::RGBA::parse("#d3d3d3")
-        @window.override_background_color(:normal, lightgrey)
+        @window.override_background_color(:normal, GUI::ThemeUtils.light_theme_background)
         # Apply button style for light mode
         apply_button_style_for_light_mode
       end

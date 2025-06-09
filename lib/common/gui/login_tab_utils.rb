@@ -45,9 +45,8 @@ module Lich
             # Disable dark theme
             Gtk::Settings.default.gtk_application_prefer_dark_theme = false
             # Set light grey background for light theme
-            lightgrey = Gdk::RGBA::parse("#d3d3d3")
-            ui_elements[:account_book]&.override_background_color(:normal, lightgrey) if ui_elements[:account_book]
-            ui_elements[:notebook]&.override_background_color(:normal, lightgrey) if ui_elements[:notebook]
+            ui_elements[:account_book]&.override_background_color(:normal, ThemeUtils.light_theme_background) if ui_elements[:account_book]
+            ui_elements[:notebook]&.override_background_color(:normal, ThemeUtils.light_theme_background) if ui_elements[:notebook]
             # Re-apply styling providers for light theme
             if providers[:button] && ui_elements[:play_button]
               ui_elements[:play_button].style_context.add_provider(providers[:button], Gtk::StyleProvider::PRIORITY_USER)

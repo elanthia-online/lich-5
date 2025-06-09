@@ -151,10 +151,10 @@ module Lich
           @game_entry_tab.pack_start(play_button_box, expand: false, fill: false, padding: 3)
 
           # Apply initial theme
-          unless @theme_state
-            @game_entry_tab.override_background_color(:normal, ThemeUtils.light_theme_background)
-            @treeview.override_background_color(:normal, ThemeUtils.light_theme_background)
-          end
+          # unless @theme_state
+          #  @game_entry_tab.override_background_color(:normal, ThemeUtils.light_theme_background)
+          #  @treeview.override_background_color(:normal, ThemeUtils.light_theme_background)
+          # end
 
           # Set up event handlers
           setup_custom_launch_handler(custom_launch_option)
