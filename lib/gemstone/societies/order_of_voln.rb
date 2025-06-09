@@ -300,20 +300,20 @@ module Lich
         ]
 
         ##
-        # Retrieves a symbol definition by its long or short name.
+        # Retrieves a symbol definition by short or long name.
         #
-        # @param name [String] Long or short name of the symbol
+        # Normalizes the provided name and attempts to match against both short and long names
+        # of all Order of Voln symbols. Returns the corresponding symbol metadata if found.
+        #
+        # @param name [String] The short or long name of the symbol
         # @return [Hash, nil] The symbol metadata, or nil if not found
+        #
         def self.[](name)
-          normalized = Lich::Utils.normalize_name(name)
-          match = symbol_lookups.find do |symbol|
-            [symbol[:short_name], symbol[:long_name]].compact.map { |n| Lich::Utils.normalize_name(n) }.include?(normalized)
-          end
-          match ? @@voln_symbols[match[:short_name]] : nil
+          Society.lookup(name, @@voln_symbols, symbol_lookups)
         end
 
         ##
-        # Returns all known sign metadata.
+        # Returns all known symbol metadata.
         #
         # @return [Array<Hash>]
         def self.all

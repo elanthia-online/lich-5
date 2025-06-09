@@ -245,11 +245,7 @@ module Lich
         # @return [Hash, nil] The sign metadata, or nil if not found
         #
         def self.[](name)
-          normalized = Lich::Utils.normalize_name(name)
-          match = sign_lookups.find do |sign|
-            [sign[:short_name], sign[:long_name]].compact.map { |n| Lich::Utils.normalize_name(n) }.include?(normalized)
-          end
-          match ? @@col_signs[match[:short_name]] : nil
+          Society.lookup(name, @@col_signs, sign_lookups)
         end
 
         ##
@@ -418,10 +414,7 @@ module Lich
         #
         # This supports both `sign[:short_name]` and `sign[:long_name]`.
         #
-        sign_lookups.each do |sign|
-          define_singleton_method(sign[:short_name]) { self[sign[:short_name]] }
-          define_singleton_method(sign[:long_name])  { self[sign[:short_name]] }
-        end
+        define_name_methods(self, @@col_signs)
       end
     end
   end

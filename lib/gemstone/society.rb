@@ -84,6 +84,38 @@ module Lich
         # Infomon.get('resources.voln_favor')
         Society::Voln.favor
       end
+
+      ##
+      # Looks up an ability definition from a society hash using a normalized short or long name.
+      #
+      # @param name [String] The user-facing name (short or long) of the ability
+      # @param entries [Hash<String, Hash>] The base hash keyed by short_name
+      # @param lookups [Array<Hash>] An array of hashes containing at least `:short_name` and `:long_name`
+      # @return [Hash, nil] The matching entry from the base hash, or nil if not found
+      #
+      def self.lookup(name, entries, lookups)
+        normalized = Lich::Utils.normalize_name(name)
+
+        match = lookups.find do |entry|
+          [entry[:short_name], entry[:long_name]]
+            .compact
+            .map { |n| Lich::Utils.normalize_name(n) }
+            .include?(normalized)
+        end
+
+        match ? entries[match[:short_name]] : nil
+      end
+
+      ##
+      # Defines singleton accessors for both short and long names
+      #
+      # @param data [Hash] The metadata hash to define methods for
+      def define_name_methods(data)
+        data.values.each do |entry|
+          define_singleton_method(entry[:short_name]) { self[entry[:short_name]] }
+          define_singleton_method(entry[:long_name])  { self[entry[:short_name]] }
+        end
+      end
     end
   end
 end

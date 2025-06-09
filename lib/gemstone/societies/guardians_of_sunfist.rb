@@ -207,11 +207,7 @@ module Lich
         # @return [Hash, nil] The sigil metadata, or nil if not found
         #
         def self.[](name)
-          normalized = Lich::Utils.normalize_name(name)
-          match = sigil_lookups.find do |sigil|
-            [sigil[:short_name], sigil[:long_name]].compact.map { |n| Lich::Utils.normalize_name(n) }.include?(normalized)
-          end
-          match ? @@sunfist_sigils[match[:short_name]] : nil
+          Society.lookup(name, @@sunfist_sigils, sigil_lookups)
         end
 
         ##
