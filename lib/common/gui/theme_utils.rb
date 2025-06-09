@@ -32,7 +32,7 @@ module Lich
         #
         # @return [Gdk::RGBA] Transparent color for backgrounds
         def self.transparent_background
-          Gdk::RGBA::parse("rgba(0,0,0,0,1)")
+          Gdk::RGBA::parse("rgba(40,40,40,1)")
         end
 
         # Applies theme to a window and its components
