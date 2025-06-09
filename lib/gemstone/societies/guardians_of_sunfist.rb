@@ -286,7 +286,15 @@ module Lich
           stamina_cost = cost[:stamina].to_i
           mana_cost = cost[:mana].to_i
 
-          Char.stamina >= stamina_cost && Char.mana >= mana_cost
+          unless stamina_cost.zero?
+            return false unless Char.stamina >= stamina_cost
+          end
+
+          unless mana_cost.zero?
+            return false unless Char.mana >= mana_cost
+          end
+
+          return true
         end
 
         ##
@@ -322,7 +330,7 @@ module Lich
         # @return [Boolean] True if the character is a Sunfist member (and at the specified rank, if given)
         #
         def self.member?(rank = nil)
-          return false unless Society.member_of == "Guardians of Sunfist"
+          return false unless Society.membership == "Guardians of Sunfist"
           rank.nil? || Society.rank == rank
         end
 

@@ -326,10 +326,18 @@ module Lich
           spirit_cost = cost[:spirit].to_i
           mana_cost = cost[:mana].to_i
 
-          total_spirit = spirit_cost
-          total_spirit += pending_spirit_loss if sign[:cost_type] == :dissipates
+          unless spirit_cost.zero?
+            total_spirit = spirit_cost
+            total_spirit += pending_spirit_loss if sign[:cost_type] == :dissipates
 
-          total_spirit < Char.spirit && mana_cost <= Char.mana
+            return false unless total_spirit < Char.spirit
+          end
+
+          unless mana_cost.zero?
+            return false unless mana_cost <= Char.mana
+          end
+
+          return true
         end
 
         ##
@@ -372,7 +380,7 @@ module Lich
         # @return [Boolean] True if the character is a COL member (and at the specified rank, if given)
         #
         def self.member?(rank = nil)
-          unless Society.member_of == "Council of Light"
+          unless Society.membership == "Council of Light"
             return false
           end
 

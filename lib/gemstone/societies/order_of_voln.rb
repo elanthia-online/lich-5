@@ -429,7 +429,7 @@ module Lich
         # @return [Boolean] True if the character is a Voln member (and at the specified rank, if given)
         #
         def self.member?(rank = nil)
-          unless Society.member_of == "Order of Voln"
+          unless Society.membership == "Order of Voln"
             return false
           end
 
