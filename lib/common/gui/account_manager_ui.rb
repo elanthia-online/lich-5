@@ -271,7 +271,6 @@ module Lich
           stormfront_option = Gtk::RadioButton.new(label: 'Wrayth')
           wizard_option = Gtk::RadioButton.new(label: 'Wizard', member: stormfront_option)
           avalon_option = Gtk::RadioButton.new(label: 'Avalon', member: stormfront_option)
-          # profanity_option = Gtk::RadioButton.new(label: 'Profanity', member: stormfront_option)
 
           frontend_radio_box.pack_start(stormfront_option, expand: false, fill: false, padding: 0)
           frontend_radio_box.pack_start(wizard_option, expand: false, fill: false, padding: 0)
@@ -577,8 +576,6 @@ module Lich
               selected_frontend = 'wizard'
             elsif avalon_option.active?
               selected_frontend = 'avalon'
-            elsif profanity_option.active?
-              selected_frontend = 'profanity'
             else
               selected_frontend = 'stormfront' # Default/Wrayth
             end
@@ -739,7 +736,6 @@ module Lich
         # @param stormfront_option [Gtk::RadioButton] Stormfront radio button
         # @param wizard_option [Gtk::RadioButton] Wizard radio button
         # @param avalon_option [Gtk::RadioButton] Avalon radio button
-        # @param profanity_option [Gtk::RadioButton] Profanity radio button
         # @param custom_launch_entry [Gtk::Entry] Custom launch entry
         # @param custom_launch_dir_entry [Gtk::Entry] Custom launch directory entry
         # @param notebook [Gtk::Notebook] Notebook containing the tabs
@@ -785,8 +781,6 @@ module Lich
                          'wizard'
                        elsif avalon_option.active?
                          'avalon'
-                       elsif profanity_option.active?
-                         'profanity'
                        elsif stormfront_option.active?
                          'stormfront'
                        else
