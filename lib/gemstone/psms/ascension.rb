@@ -59,7 +59,7 @@ module Lich
          { long_name: 'magic_item_use',            short_name: 'magicitemuse',    cost: { stamina: 0 } },
          { long_name: 'mana_regeneration',         short_name: 'regenmana',       cost: { stamina: 0 } },
          { long_name: 'mental_lore_divination',    short_name: 'mldivination',    cost: { stamina: 0 } },
-         { long_name: 'menatl_lore_manipulation',  short_name: 'mlmanipulation',  cost: { stamina: 0 } },
+         { long_name: 'mental_lore_manipulation',  short_name: 'mlmanipulation',  cost: { stamina: 0 } },
          { long_name: 'mental_lore_telepathy',     short_name: 'mltelepathy',     cost: { stamina: 0 } },
          { long_name: 'mental_lore_transference',  short_name: 'mltransference',  cost: { stamina: 0 } },
          { long_name: 'mental_lore_transform',     short_name: 'mltransform',     cost: { stamina: 0 } },
