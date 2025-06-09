@@ -86,8 +86,8 @@ module Lich
               end
             end
             # Reset background colors to transparent for dark theme
-            @game_entry_tab.override_background_color(:normal, ThemeUtils.transparent_background) if @game_entry_tab
-            @treeview&.override_background_color(:normal, ThemeUtils.transparent_background)
+            # @game_entry_tab.override_background_color(:normal, ThemeUtils.transparent_background) if @game_entry_tab
+            # @treeview&.override_background_color(:normal, ThemeUtils.transparent_background)
           else
             # Disable dark theme
             Gtk::Settings.default.gtk_application_prefer_dark_theme = false
@@ -195,9 +195,9 @@ module Lich
           connect_button = Components.create_button(label: ' Connect ')
 
           # Apply button styling
-          button_provider = LoginTabUtils.create_button_css_provider
-          disconnect_button.style_context.add_provider(button_provider, Gtk::StyleProvider::PRIORITY_USER) unless @theme_state
-          connect_button.style_context.add_provider(button_provider, Gtk::StyleProvider::PRIORITY_USER) unless @theme_state
+          @button_provider = LoginTabUtils.create_button_css_provider
+          disconnect_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER) unless @theme_state
+          connect_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER) unless @theme_state
 
           login_button_box = Components.create_button_box(
             [connect_button, disconnect_button],
