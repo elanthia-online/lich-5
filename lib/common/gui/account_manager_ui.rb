@@ -271,12 +271,11 @@ module Lich
           stormfront_option = Gtk::RadioButton.new(label: 'Wrayth')
           wizard_option = Gtk::RadioButton.new(label: 'Wizard', member: stormfront_option)
           avalon_option = Gtk::RadioButton.new(label: 'Avalon', member: stormfront_option)
-          profanity_option = Gtk::RadioButton.new(label: 'Profanity', member: stormfront_option)
+          # profanity_option = Gtk::RadioButton.new(label: 'Profanity', member: stormfront_option)
 
           frontend_radio_box.pack_start(stormfront_option, expand: false, fill: false, padding: 0)
           frontend_radio_box.pack_start(wizard_option, expand: false, fill: false, padding: 0)
-          frontend_radio_box.pack_start(profanity_option, expand: false, fill: false, padding: 0)
-          frontend_radio_box.pack_start(avalon_option, expand: false, fill: false, padding: 0)
+          frontend_radio_box.pack_start(avalon_option, expand: false, fill: false, padding: 0) if RUBY_PLATFORM =~ /darwin/i
 
           frontend_box.pack_start(frontend_radio_box, expand: true, fill: true, padding: 0)
 
@@ -330,7 +329,6 @@ module Lich
             stormfront_option,
             wizard_option,
             avalon_option,
-            profanity_option,
             custom_launch_entry,
             custom_launch_dir_entry,
             notebook
@@ -552,7 +550,6 @@ module Lich
           stormfront_option = Gtk::RadioButton.new(label: 'Wrayth')
           wizard_option = Gtk::RadioButton.new(label: 'Wizard', member: stormfront_option)
           avalon_option = Gtk::RadioButton.new(label: 'Avalon', member: stormfront_option)
-          profanity_option = Gtk::RadioButton.new(label: 'Profanity', member: stormfront_option)
 
           # Set Wrayth (stormfront) as default
           stormfront_option.active = true
@@ -561,7 +558,6 @@ module Lich
           frontend_box = Gtk::Box.new(:vertical, 5)
           frontend_box.pack_start(stormfront_option, expand: false, fill: false, padding: 0)
           frontend_box.pack_start(wizard_option, expand: false, fill: false, padding: 0)
-          frontend_box.pack_start(profanity_option, expand: false, fill: false, padding: 0)
 
           # Only show Avalon on macOS (consistent with manual login)
           if RUBY_PLATFORM =~ /darwin/i
@@ -757,7 +753,6 @@ module Lich
           stormfront_option,
           wizard_option,
           avalon_option,
-          profanity_option,
           custom_launch_entry,
           custom_launch_dir_entry,
           notebook

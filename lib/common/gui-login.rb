@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'rbconfig'
 require_relative 'gui/accessibility'
 require_relative 'gui/account_manager'
 require_relative 'gui/account_manager_ui'
