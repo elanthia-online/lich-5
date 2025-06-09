@@ -51,7 +51,7 @@ module Lich
             spell_number: 9704,
             cost: { stamina: 5, mana: 0 },
             duration: 90,
-            summary: -> { "Increases Climbing, Swimming, and Survival skills for 90 seconds equal to half current rank (#{(Society.rank / 2).floor} for 90 seconds)." }
+            summary: -> { "Increases Climbing, Swimming, and Survival skills equal to half current rank (#{(Society.rank / 2).floor}) for 90 seconds." }
           },
           "sigil_of_minor_bane"       => {
             rank: 5,

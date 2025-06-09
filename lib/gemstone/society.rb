@@ -32,7 +32,7 @@ module Lich
       #
       # The current society task, or "You are not currently in a society." if not a member, or
       # "It is your eternal duty to release undead creatures from their suffering in the name of the Great Spirit Voln." if
-      # a voln master.
+      # a Voln Master.
       #
       # @return [String] The current society task message.
       #   Examples:

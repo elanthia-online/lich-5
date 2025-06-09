@@ -178,7 +178,7 @@ module Lich
             type: :offense,
             cost_modifier: 0.50,
             duration: -> { Society.rank * 10 },
-            summary: -> { "Bonus of +1 per 2 ranks (+#{(Society.rank / 2).floor}) to AS/CS, CMAN, UAF against undead. for (#{Society.rank * 10}) seconds." },
+            summary: -> { "Bonus of +1 per 2 ranks (+#{(Society.rank / 2).floor}) to AS/CS, CMAN, UAF against undead for (#{Society.rank * 10}) seconds." },
             spell_number: 9816,
           },
           "symbol_of_restoration"   => {
