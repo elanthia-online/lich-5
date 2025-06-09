@@ -19,7 +19,6 @@ require_relative 'gui/theme_utils'
 require_relative 'gui/utilities'
 require_relative 'gui/yaml_state'
 require_relative 'gui/tab_communicator'
-# require_relative 'gui/yaml_validator'
 
 module Lich
   module Common
@@ -28,7 +27,8 @@ module Lich
     # This module contains the main entry point for the GUI login system
     # and coordinates the interaction between saved and manual login tabs.
     # It also provides account management functionality.
-    # Enhanced with cross-tab communication for data synchronization.
+    # Enhanced with cross-tab communication for data synchronization and
+    # targeted refresh capability for post-conversion scenarios.
     def gui_login
       initialize_login_state
       setup_gui_window
@@ -67,6 +67,143 @@ module Lich
 
       # Initialize account manager UI
       @account_manager_ui = Lich::Common::GUI::AccountManagerUI.new(DATA_DIR)
+    end
+
+    # Refreshes the window after conversion without creating duplicate windows
+    #
+    # Reloads entry data and refreshes existing UI elements while preserving
+    # the current window structure. This prevents duplicate window creation
+    # that occurs with full reinitialization. Enhanced to properly enable
+    # favorites display and populate account management data.
+    #
+    # @return [void]
+    def refresh_window_after_conversion
+      begin
+        # Reload entry data from newly created YAML file
+        @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(DATA_DIR, @autosort_state)
+
+        # Enable favorites in saved login tab if YAML file now exists
+        if @saved_login_tab
+          # Force enable favorites since YAML file now exists
+          @saved_login_tab.instance_variable_set(:@favorites_enabled, true)
+          @saved_login_tab.refresh_data
+        end
+
+        # Refresh manual login tab if it needs entry data updates
+        if @manual_login_tab && @manual_login_tab.respond_to?(:refresh_data)
+          @manual_login_tab.refresh_data
+        end
+
+        # Update entry data reference for manual login tab
+        if @manual_login_tab && @manual_login_tab.respond_to?(:update_entry_data)
+          @manual_login_tab.update_entry_data(@entry_data)
+        end
+
+        # Trigger account management refresh by programmatically clicking refresh button
+        trigger_account_management_refresh
+
+        # Update UI elements visibility based on new data
+        update_ui_elements_after_conversion
+
+        # Ensure window is visible and properly displayed
+        if @window
+          @window.show_all
+          @window.present # Bring window to front
+        end
+
+        # Hide optional elements after show_all to ensure proper visibility state
+        hide_optional_elements
+
+        # Switch to saved entry tab if we now have data
+        if @notebook && !@entry_data.empty?
+          @notebook.set_page(0) # Switch to Saved Entry tab
+        end
+
+        # Notify via tab communicator that conversion refresh occurred
+        @tab_communicator.notify_data_changed(:conversion_complete, {
+          entries_count: @entry_data.length
+        })
+
+        Lich.log "info: Window refreshed after conversion with #{@entry_data.length} entries"
+      rescue StandardError => e
+        Lich.log "error: Error refreshing window after conversion: #{e.message}"
+
+        # Fallback to showing error message
+        if @msgbox
+          @msgbox.call("Conversion completed but failed to refresh window: #{e.message}")
+        end
+      end
+    end
+
+    # Triggers the account management refresh by finding and clicking the refresh button
+    #
+    # Locates the refresh button in the account management tab and programmatically
+    # triggers it to populate the accounts view with the new YAML data.
+    #
+    # @return [void]
+    def trigger_account_management_refresh
+      return unless @account_mgmt_tab
+
+      begin
+        # Find the refresh button in the account management tab
+        refresh_button = find_refresh_button_in_container(@account_mgmt_tab)
+
+        if refresh_button
+          # Programmatically click the refresh button
+          refresh_button.clicked
+          Lich.log "info: Account management refresh triggered successfully"
+        else
+          Lich.log "warning: Could not find refresh button in account management tab"
+        end
+      rescue StandardError => e
+        Lich.log "error: Error triggering account management refresh: #{e.message}"
+      end
+    end
+
+    # Recursively finds the refresh button in a container widget
+    #
+    # Searches through the widget hierarchy to locate the refresh button
+    # in the account management tab.
+    #
+    # @param container [Gtk::Container] Container to search
+    # @return [Gtk::Button, nil] Found refresh button or nil
+    def find_refresh_button_in_container(container)
+      return nil unless container.respond_to?(:each)
+
+      container.each do |child|
+        # Check if this child is a refresh button
+        if child.is_a?(Gtk::Button) && child.label == "Refresh"
+          return child
+        end
+
+        # Recursively search in child containers
+        if child.respond_to?(:each)
+          result = find_refresh_button_in_container(child)
+          return result if result
+        end
+      end
+
+      nil
+    end
+
+    # Updates UI element visibility after conversion
+    #
+    # Adjusts the visibility and state of UI elements based on the
+    # newly loaded entry data after conversion.
+    #
+    # @return [void]
+    def update_ui_elements_after_conversion
+      return unless @entry_data
+
+      # Show/hide optional elements based on data availability
+      if @entry_data.empty?
+        # No data - keep elements hidden and show manual entry tab
+        hide_optional_elements
+      else
+        # Data available - elements should still be hidden initially
+        # Optional elements visibility is managed by individual tabs
+        # but we ensure they start in the correct hidden state
+      end
     end
 
     # Sets up the main GUI window and tabs
@@ -276,6 +413,7 @@ module Lich
     # Configures the main window properties
     #
     # Sets up the window title, size, and other properties.
+    # Enhanced with targeted refresh for post-conversion scenarios.
     #
     # @return [void]
     def configure_window
@@ -312,13 +450,11 @@ module Lich
       unless Lich::Common::GUI::ConversionUI.conversion_needed?(DATA_DIR)
         @window.show_all
       else
-        # no YAML file, conversion required
-        # Show conversion dialog first
+        # YAML file conversion required
+        # Show conversion dialog with targeted refresh callback
         Lich::Common::GUI::ConversionUI.show_conversion_dialog(@window, DATA_DIR, -> {
-          # After conversion, create the account management tab
-          initialize_login_state
-          setup_gui_window
-          @window.show_all
+          # After conversion, refresh existing window instead of creating new one
+          refresh_window_after_conversion
         })
       end
     end
@@ -355,6 +491,7 @@ module Lich
     # Hides optional UI elements
     #
     # Hides UI elements that are not needed initially.
+    # Enhanced to ensure proper visibility state after window refresh.
     #
     # @return [void]
     def hide_optional_elements

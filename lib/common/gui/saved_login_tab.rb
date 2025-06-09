@@ -72,6 +72,9 @@ module Lich
           # Restore UI state after rebuild
           restore_ui_state(saved_state)
 
+          # Hide the global settings slider box to ensure proper visibility state
+          @slider_box.visible = false if @slider_box
+
           # Show brief refresh notification
           show_refresh_notification
         end
@@ -389,9 +392,9 @@ module Lich
         def create_favorites_tab
           favorites_box = Gtk::Box.new(:vertical, 0)
 
-          # Get all favorite characters
+          # Get all favorite characters with frontend precision
           favorite_entries = @entry_data.select do |login_info|
-            FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code])
+            FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend])
           end
 
           # Sort favorites by favorite_order if available, then by character name
@@ -449,10 +452,13 @@ module Lich
             end
 
             # Create character entry with play and remove buttons
-            frontend_display = login_params.frontend.capitalize == 'Stormfront' ? 'Wrayth' : login_params.frontend.capitalize
-            custom_indicator = login_params.custom_launch ? ' custom' : ''
+            if login_params.custom_launch && !login_params.custom_launch.empty?
+              frontend_display = 'Custom'
+            else
+              frontend_display = login_params.frontend.capitalize == 'Stormfront' ? 'Wrayth' : login_params.frontend.capitalize
+            end
 
-            label = Gtk::Label.new("#{login_params.char_name} (#{login_params.game_name}, #{frontend_display}#{custom_indicator})")
+            label = Gtk::Label.new("#{login_params.char_name} (#{login_params.game_name}, #{frontend_display})")
             play_button = Components.create_button(label: 'Play')
             remove_button = Components.create_button(label: 'X')
 
@@ -501,8 +507,9 @@ module Lich
           # Convert to LoginParams object for consistency
           login_params = LoginParams.new(login_info)
 
-          # Check if this character is a favorite
-          is_favorite = @favorites_enabled && FavoritesManager.is_favorite?(@data_dir, login_params.user_id, login_params.char_name, login_params.game_code)
+          # Check if this character is a favorite with frontend precision
+          is_favorite = @favorites_enabled &&
+                        FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend])
 
           # Get realm name from game code
           realm = Utilities.game_code_to_realm(login_params.game_code)
@@ -518,10 +525,13 @@ module Lich
           char_label = Gtk::Label.new(char_name_text)
           char_label.set_width_chars(15)
 
-          frontend_display = login_params.frontend.capitalize == 'Stormfront' ? 'Wrayth' : login_params.frontend.capitalize
-          custom_indicator = login_params.custom_launch ? ' custom' : ''
+          if login_params.custom_launch && !login_params.custom_launch.empty?
+            frontend_display = 'Custom'
+          else
+            frontend_display = login_params.frontend.capitalize == 'Stormfront' ? 'Wrayth' : login_params.frontend.capitalize
+          end
 
-          fe_label = Gtk::Label.new("(#{frontend_display})#{custom_indicator}")
+          fe_label = Gtk::Label.new("(#{frontend_display})")
           fe_label.set_width_chars(15)
           instance_label = Gtk::Label.new(realm)
           instance_label.set_width_chars(10)
@@ -600,8 +610,8 @@ module Lich
         def setup_favorite_button_handler(favorite_button, login_params, _char_box, char_label, favorite_label)
           favorite_button.signal_connect('clicked') do
             begin
-              # Toggle favorite status
-              new_status = FavoritesManager.toggle_favorite(@data_dir, login_params.user_id, login_params.char_name, login_params.game_code)
+              # Toggle favorite status with frontend precision
+              new_status = FavoritesManager.toggle_favorite(@data_dir, login_params.user_id, login_params.char_name, login_params.game_code, login_params.frontend)
 
               # Update button appearance
               favorite_text = new_status ? '★' : '☆'

@@ -638,9 +638,22 @@ module Lich
                   account = iter[0]
                   character = iter[1]
                   game_code = iter[4]
+                  frontend_display = iter[3]
 
-                  # Toggle favorite status
-                  new_status = FavoritesManager.toggle_favorite(data_dir, account, character, game_code)
+                  # Convert display name back to internal frontend format
+                  frontend = case frontend_display.downcase
+                             when 'wrayth', 'custom'
+                               'stormfront'
+                             when 'wizard'
+                               'wizard'
+                             when 'avalon'
+                               'avalon'
+                             else
+                               frontend_display.downcase
+                             end
+
+                  # Toggle favorite status with frontend precision
+                  new_status = FavoritesManager.toggle_favorite(data_dir, account, character, game_code, frontend)
                   iter[5] = new_status ? '★' : '☆'
 
                   # Notify other tabs of data change
@@ -860,11 +873,16 @@ module Lich
               char_iter[0] = account
               char_iter[1] = character[:char_name]
               char_iter[2] = character[:game_name]
-              char_iter[3] = character[:frontend].capitalize == 'Stormfront' ? 'Wrayth' : character[:frontend].capitalize
+              # Set frontend display with custom handling
+              if character[:custom_launch] && !character[:custom_launch].empty?
+                char_iter[3] = 'Custom'
+              else
+                char_iter[3] = character[:frontend].capitalize == 'Stormfront' ? 'Wrayth' : character[:frontend].capitalize
+              end
               char_iter[4] = character[:game_code] # Store game_code in hidden column
 
-              # Add favorites information
-              is_favorite = FavoritesManager.is_favorite?(@data_dir, account, character[:char_name], character[:game_code])
+              # Add favorites information with frontend precision
+              is_favorite = FavoritesManager.is_favorite?(@data_dir, account, character[:char_name], character[:game_code], character[:frontend])
               char_iter[5] = is_favorite ? '★' : '☆'
             end
           end

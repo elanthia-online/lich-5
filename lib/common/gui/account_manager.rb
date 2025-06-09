@@ -246,7 +246,9 @@ module Lich
                   char_name: char['char_name'],
                   game_code: char['game_code'],
                   game_name: char['game_name'],
-                  frontend: char['frontend']
+                  frontend: char['frontend'],
+                  custom_launch: char['custom_launch'],
+                  custom_launch_dir: char['custom_launch_dir']
                 }
               end || []
             end

@@ -15,7 +15,7 @@ module Lich
           begin
             GLib::Object.type_from_name('GailWidget')
           rescue NoMethodError => e
-            Lich.log "Warning: Could not initialize accessibility: #{e.message}"
+            Lich.log "warning: Could not initialize accessibility: #{e.message}"
           end
         end
 
@@ -45,7 +45,7 @@ module Lich
               accessible.set_role(role_value) if role_value
             end
           rescue StandardError => e
-            Lich.log "Warning: Could not make widget accessible: #{e.message}"
+            Lich.log "warning: Could not make widget accessible: #{e.message}"
           end
         end
 
@@ -66,7 +66,7 @@ module Lich
               button.label = label
             end
           rescue StandardError => e
-            Lich.log "Warning: Could not set button label: #{e.message}"
+            Lich.log "warning: Could not set button label: #{e.message}"
           end
         end
 
@@ -108,7 +108,7 @@ module Lich
             # Also make the page itself accessible
             make_accessible(page, tab_label, description, :panel)
           rescue StandardError => e
-            Lich.log "Warning: Could not make tab accessible: #{e.message}"
+            Lich.log "warning: Could not make tab accessible: #{e.message}"
           end
         end
 
@@ -125,7 +125,7 @@ module Lich
           begin
             window.title = title if window.title.nil? || window.title.empty?
           rescue StandardError => e
-            Lich.log "Warning: Could not set window title: #{e.message}"
+            Lich.log "warning: Could not set window title: #{e.message}"
           end
         end
 
@@ -144,7 +144,7 @@ module Lich
               widget.set_property('tab-position', tab_order)
             end
           rescue StandardError => e
-            Lich.log "Warning: Could not set keyboard navigation: #{e.message}"
+            Lich.log "warning: Could not set keyboard navigation: #{e.message}"
           end
         end
 
@@ -192,7 +192,7 @@ module Lich
               )
             end
           rescue StandardError => e
-            Lich.log "Warning: Could not add keyboard shortcut: #{e.message}"
+            Lich.log "warning: Could not add keyboard shortcut: #{e.message}"
           end
         end
 
@@ -231,7 +231,7 @@ module Lich
               end
             end
           rescue StandardError => e
-            Lich.log "Warning: Could not announce message: #{e.message}"
+            Lich.log "warning: Could not announce message: #{e.message}"
           end
         end
 
@@ -333,7 +333,7 @@ module Lich
             else nil
             end
           rescue StandardError => e
-            Lich.log "Warning: Could not get ATK role: #{e.message}"
+            Lich.log "warning: Could not get ATK role: #{e.message}"
             nil
           end
         end

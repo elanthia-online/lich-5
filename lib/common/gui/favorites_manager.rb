@@ -14,17 +14,20 @@ module Lich
         # @param username [String] Account username
         # @param char_name [String] Character name
         # @param game_code [String] Game code
+        # @param frontend [String] Frontend identifier (optional for backward compatibility)
         # @return [Boolean] True if operation was successful
-        def self.add_favorite(data_dir, username, char_name, game_code)
+        def self.add_favorite(data_dir, username, char_name, game_code, frontend = nil)
           return false if data_dir.nil? || username.nil? || char_name.nil? || game_code.nil?
 
           begin
-            result = YamlState.add_favorite(data_dir, username, char_name, game_code)
+            result = YamlState.add_favorite(data_dir, username, char_name, game_code, frontend)
 
             if result
-              Lich.log "info: Added character '#{char_name}' (#{game_code}) from account '#{username}' to favorites"
+              frontend_info = frontend ? " (#{frontend})" : ""
+              Lich.log "info: Added character '#{char_name}' (#{game_code})#{frontend_info} from account '#{username}' to favorites"
             else
-              Lich.log "warning: Failed to add character '#{char_name}' (#{game_code}) from account '#{username}' to favorites"
+              frontend_info = frontend ? " (#{frontend})" : ""
+              Lich.log "warning: Failed to add character '#{char_name}' (#{game_code})#{frontend_info} from account '#{username}' to favorites"
             end
 
             result
@@ -41,17 +44,20 @@ module Lich
         # @param username [String] Account username
         # @param char_name [String] Character name
         # @param game_code [String] Game code
+        # @param frontend [String] Frontend identifier (optional for backward compatibility)
         # @return [Boolean] True if operation was successful
-        def self.remove_favorite(data_dir, username, char_name, game_code)
+        def self.remove_favorite(data_dir, username, char_name, game_code, frontend = nil)
           return false if data_dir.nil? || username.nil? || char_name.nil? || game_code.nil?
 
           begin
-            result = YamlState.remove_favorite(data_dir, username, char_name, game_code)
+            result = YamlState.remove_favorite(data_dir, username, char_name, game_code, frontend)
 
             if result
-              Lich.log "info: Removed character '#{char_name}' (#{game_code}) from account '#{username}' from favorites"
+              frontend_info = frontend ? " (#{frontend})" : ""
+              Lich.log "info: Removed character '#{char_name}' (#{game_code})#{frontend_info} from account '#{username}' from favorites"
             else
-              Lich.log "warning: Failed to remove character '#{char_name}' (#{game_code}) from account '#{username}' from favorites"
+              frontend_info = frontend ? " (#{frontend})" : ""
+              Lich.log "warning: Failed to remove character '#{char_name}' (#{game_code})#{frontend_info} from account '#{username}' from favorites"
             end
 
             result
@@ -68,16 +74,17 @@ module Lich
         # @param username [String] Account username
         # @param char_name [String] Character name
         # @param game_code [String] Game code
+        # @param frontend [String] Frontend identifier (optional for backward compatibility)
         # @return [Boolean] True if character is now a favorite, false if not
-        def self.toggle_favorite(data_dir, username, char_name, game_code)
+        def self.toggle_favorite(data_dir, username, char_name, game_code, frontend = nil)
           return false if data_dir.nil? || username.nil? || char_name.nil? || game_code.nil?
 
           begin
-            if is_favorite?(data_dir, username, char_name, game_code)
-              remove_favorite(data_dir, username, char_name, game_code)
+            if is_favorite?(data_dir, username, char_name, game_code, frontend)
+              remove_favorite(data_dir, username, char_name, game_code, frontend)
               false
             else
-              add_favorite(data_dir, username, char_name, game_code)
+              add_favorite(data_dir, username, char_name, game_code, frontend)
               true
             end
           rescue StandardError => e
@@ -93,12 +100,13 @@ module Lich
         # @param username [String] Account username
         # @param char_name [String] Character name
         # @param game_code [String] Game code
+        # @param frontend [String] Frontend identifier (optional for backward compatibility)
         # @return [Boolean] True if character is a favorite
-        def self.is_favorite?(data_dir, username, char_name, game_code)
+        def self.is_favorite?(data_dir, username, char_name, game_code, frontend = nil)
           return false if data_dir.nil? || username.nil? || char_name.nil? || game_code.nil?
 
           begin
-            YamlState.is_favorite?(data_dir, username, char_name, game_code)
+            YamlState.is_favorite?(data_dir, username, char_name, game_code, frontend)
           rescue StandardError => e
             Lich.log "error: Error in FavoritesManager.is_favorite?: #{e.message}"
             false
@@ -219,16 +227,19 @@ module Lich
               character_exists = entry_data.any? do |entry|
                 entry[:user_id] == favorite[:user_id] &&
                   entry[:char_name] == favorite[:char_name] &&
-                  entry[:game_code] == favorite[:game_code]
+                  entry[:game_code] == favorite[:game_code] &&
+                  (favorite[:frontend].nil? || entry[:frontend] == favorite[:frontend])
               end
 
               unless character_exists
                 # Remove orphaned favorite
-                if remove_favorite(data_dir, favorite[:user_id], favorite[:char_name], favorite[:game_code])
+                if remove_favorite(data_dir, favorite[:user_id], favorite[:char_name], favorite[:game_code], favorite[:frontend])
                   cleaned_count += 1
-                  Lich.log "info: Removed orphaned favorite: #{favorite[:char_name]} (#{favorite[:game_code]}) from #{favorite[:user_id]}"
+                  frontend_info = favorite[:frontend] ? " (#{favorite[:frontend]})" : ""
+                  Lich.log "info: Removed orphaned favorite: #{favorite[:char_name]} (#{favorite[:game_code]})#{frontend_info} from #{favorite[:user_id]}"
                 else
-                  errors << "warning: Failed to remove orphaned favorite: #{favorite[:char_name]} (#{favorite[:game_code]}) from #{favorite[:user_id]}"
+                  frontend_info = favorite[:frontend] ? " (#{favorite[:frontend]})" : ""
+                  errors << "Failed to remove orphaned favorite: #{favorite[:char_name]} (#{favorite[:game_code]})#{frontend_info} from #{favorite[:user_id]}"
                 end
               end
             end
@@ -252,12 +263,14 @@ module Lich
         # @param username [String] Account username
         # @param char_name [String] Character name
         # @param game_code [String] Game code
+        # @param frontend [String] Frontend identifier (optional)
         # @return [Hash] Character identifier hash
-        def self.create_character_id(username, char_name, game_code)
+        def self.create_character_id(username, char_name, game_code, frontend = nil)
           {
             username: username,
             char_name: char_name,
-            game_code: game_code
+            game_code: game_code,
+            frontend: frontend
           }
         end
 
@@ -272,7 +285,8 @@ module Lich
           {
             username: entry_data[:user_id],
             char_name: entry_data[:char_name],
-            game_code: entry_data[:game_code]
+            game_code: entry_data[:game_code],
+            frontend: entry_data[:frontend]
           }
         end
 
