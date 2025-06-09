@@ -18,7 +18,7 @@ require_relative 'gui/state'
 require_relative 'gui/theme_utils'
 require_relative 'gui/utilities'
 require_relative 'gui/yaml_state'
-require_relative 'gui/yaml_validator'
+# require_relative 'gui/yaml_validator'
 
 module Lich
   module Common
