@@ -149,7 +149,7 @@ module Lich
           begin
             provider.load_from_data(css_data)
           rescue StandardError => e
-            Lich.log "Error loading favorites CSS: #{e.message}"
+            Lich.log "error: Error loading favorites CSS: #{e.message}"
           end
 
           provider

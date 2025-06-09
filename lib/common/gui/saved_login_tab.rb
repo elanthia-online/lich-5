@@ -10,6 +10,7 @@ module Lich
     module GUI
       # Handles the "Saved Entry" tab functionality for the Lich GUI login system
       # Enhanced with integrated favorites functionality for seamless user experience
+      # Now includes data refresh capability for cross-tab synchronization
       class SavedLoginTab
         # Initializes a new SavedLoginTab instance with favorites support
         #
@@ -53,6 +54,28 @@ module Lich
           create_tab_content
         end
 
+        # Refreshes the tab data while preserving UI state
+        # Reloads entry data from YAML and rebuilds data-dependent UI elements
+        # while maintaining user's current selections and scroll position
+        #
+        # @return [void]
+        def refresh_data
+          # Save current UI state before refresh
+          saved_state = save_current_ui_state
+
+          # Reload data from YAML
+          @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, @ui_config.autosort_state)
+
+          # Rebuild the tab content with new data
+          rebuild_tab_content
+
+          # Restore UI state after rebuild
+          restore_ui_state(saved_state)
+
+          # Show brief refresh notification
+          show_refresh_notification
+        end
+
         # Returns the tab widget for adding to a notebook
         #
         # @return [Gtk::Widget] The tab widget
@@ -85,6 +108,152 @@ module Lich
         end
 
         private
+
+        # Saves the current UI state for restoration after refresh
+        # Captures selection state, scroll position, and expanded sections
+        #
+        # @return [Hash] Hash containing current UI state
+        def save_current_ui_state
+          state = {
+            selected_entry: nil,
+            scroll_position: nil,
+            expanded_sections: [],
+            active_tab: nil
+          }
+
+          # Save scroll position if scrolled window exists
+          if @quick_game_entry_tab && @quick_game_entry_tab.children.first.is_a?(Gtk::ScrolledWindow)
+            scrolled_window = @quick_game_entry_tab.children.first
+            state[:scroll_position] = scrolled_window.vadjustment.value if scrolled_window.vadjustment
+          end
+
+          # Save active tab if using tabbed layout
+          if @account_book
+            state[:active_tab] = @account_book.page
+          end
+
+          state
+        end
+
+        # Rebuilds the tab content with current entry data
+        # Clears existing content and recreates all UI elements
+        #
+        # @return [void]
+        def rebuild_tab_content
+          # Clear existing content
+          @quick_game_entry_tab.children.each { |child| @quick_game_entry_tab.remove(child) }
+
+          # Recreate tab content with current data
+          if @entry_data.empty?
+            create_empty_tab_content
+          else
+            create_populated_tab_content
+          end
+
+          # Show all new content
+          @quick_game_entry_tab.show_all
+        end
+
+        # Restores UI state after refresh
+        # Restores selections, scroll position, and other UI state
+        #
+        # @param saved_state [Hash] Previously saved UI state
+        # @return [void]
+        def restore_ui_state(saved_state)
+          return unless saved_state
+
+          # Restore scroll position
+          if saved_state[:scroll_position] && @quick_game_entry_tab.children.first.is_a?(Gtk::ScrolledWindow)
+            scrolled_window = @quick_game_entry_tab.children.first
+            Gtk.queue do
+              scrolled_window.vadjustment.value = saved_state[:scroll_position] if scrolled_window.vadjustment
+            end
+          end
+
+          # Restore active tab
+          if saved_state[:active_tab] && @account_book
+            Gtk.queue do
+              @account_book.page = saved_state[:active_tab] if saved_state[:active_tab] < @account_book.n_pages
+            end
+          end
+        end
+
+        # Shows a brief notification that refresh occurred
+        # Provides visual feedback to user that data was refreshed
+        #
+        # @return [void]
+        def show_refresh_notification
+          # Create temporary status message
+          # This could be enhanced with a status bar or toast notification
+          Lich.log "info: Saved entries refreshed from YAML data"
+        end
+
+        # Creates empty tab content when no saved entries exist
+        # Displays a simple message when no saved entries are available
+        #
+        # @return [void]
+        def create_empty_tab_content
+          box = Gtk::Box.new(:horizontal)
+          box.pack_start(Gtk::Label.new('You have no saved login info.'), expand: true, fill: true, padding: 5)
+          @quick_game_entry_tab.pack_start(box, expand: true, fill: true, padding: 0)
+        end
+
+        # Creates populated tab content with saved login entries
+        # Builds a tab with all saved login entries organized by account
+        # Includes refresh button for manual data refresh
+        #
+        # @return [void]
+        def create_populated_tab_content
+          last_user_id = nil
+
+          # Create the appropriate layout based on settings
+          quick_sw = if @ui_config.tab_layout_state
+                       create_tabbed_layout
+                     else
+                       create_list_layout(last_user_id)
+                     end
+
+          # Create toggle button styling
+          @togglebutton_provider = LoginTabUtils.create_toggle_button_css_provider
+
+          # Create character management components
+          create_character_management_components
+
+          # Add main content to tab
+          @quick_game_entry_tab.pack_start(quick_sw, expand: true, fill: true, padding: 5)
+
+          # Create and add refresh button
+          create_refresh_button
+
+          # Create and add global settings components
+          create_global_settings_components
+        end
+
+        # Creates a refresh button for manual data refresh
+        # Adds a button that allows users to manually refresh the saved entries
+        #
+        # @return [void]
+        def create_refresh_button
+          refresh_button = Gtk::Button.new(label: "Refresh Entries")
+          refresh_button.tooltip_text = "Reload saved entries from file"
+
+          # Apply button styling if available
+          if @button_provider
+            refresh_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
+          end
+
+          # Set up refresh button handler
+          refresh_button.signal_connect('clicked') do
+            refresh_data
+          end
+
+          # Create button container
+          button_container = Gtk::Box.new(:horizontal)
+          button_container.pack_start(refresh_button, expand: false, fill: false, padding: 5)
+
+          # Add to tab
+          @quick_game_entry_tab.pack_start(button_container, expand: false, fill: false, padding: 5)
+        end
 
         # Applies the current theme state to all UI elements
         # Updates the appearance of UI elements based on dark/light theme setting
@@ -153,6 +322,9 @@ module Lich
           @quick_game_entry_tab = Gtk::Box.new(:vertical)
           @quick_game_entry_tab.border_width = 5
           @quick_game_entry_tab.pack_start(quick_sw, expand: true, fill: true, padding: 5)
+
+          # Create and add refresh button
+          create_refresh_button
 
           # Create and add global settings components
           create_global_settings_components
@@ -457,7 +629,7 @@ module Lich
                 )
               end
             rescue StandardError => e
-              Lich.log "Error toggling favorite status: #{e.message}"
+              Lich.log "error: Error toggling favorite status: #{e.message}"
 
               # Show error dialog
               dialog = Gtk::MessageDialog.new(

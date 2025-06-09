@@ -479,7 +479,7 @@ module Lich
                     )
                   end
                 rescue StandardError => e
-                  Lich.log "Error adding character to favorites: #{e.message}"
+                  Lich.log "error: Error adding character to favorites: #{e.message}"
 
                   # Show error dialog
                   dialog = Gtk::MessageDialog.new(

@@ -127,7 +127,7 @@ module Lich
             true
           end
         rescue StandardError => e
-          Lich.log "Error in file operation (#{operation}): #{e.message}"
+          Lich.log "error: Error in file operation (#{operation}): #{e.message}"
           operation == :read ? "" : false
         end
 

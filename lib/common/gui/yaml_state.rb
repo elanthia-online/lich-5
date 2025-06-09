@@ -33,7 +33,7 @@ module Lich
               # Apply sorting with favorites priority if enabled
               sort_entries_with_favorites(entries, autosort_state)
             rescue StandardError => e
-              Lich.log "Error loading YAML entry file: #{e.message}"
+              Lich.log "error: Error loading YAML entry file: #{e.message}"
               []
             end
           elsif File.exist?(dat_file)
@@ -75,7 +75,7 @@ module Lich
 
             true
           rescue StandardError => e
-            Lich.log "Error saving YAML entry file: #{e.message}"
+            Lich.log "error: Error saving YAML entry file: #{e.message}"
             false
           end
         end
@@ -99,7 +99,7 @@ module Lich
           # Save as YAML
           save_entries(data_dir, legacy_entries)
         rescue StandardError => e
-          Lich.log "Error migrating to YAML format: #{e.message}"
+          Lich.log "error: Error migrating to YAML format: #{e.message}"
           false
         end
 
@@ -171,7 +171,7 @@ module Lich
             # Save updated data
             save_yaml_data(yaml_file, yaml_data)
           rescue StandardError => e
-            Lich.log "Error adding favorite: #{e.message}"
+            Lich.log "error: Error adding favorite: #{e.message}"
             false
           end
         end
@@ -210,7 +210,7 @@ module Lich
             # Save updated data
             save_yaml_data(yaml_file, yaml_data)
           rescue StandardError => e
-            Lich.log "Error removing favorite: #{e.message}"
+            Lich.log "error: Error removing favorite: #{e.message}"
             false
           end
         end
@@ -240,7 +240,7 @@ module Lich
             # Save updated data
             save_yaml_data(yaml_file, yaml_data)
           rescue StandardError => e
-            Lich.log "Error reordering favorites: #{e.message}"
+            Lich.log "error: Error reordering favorites: #{e.message}"
             false
           end
         end
@@ -284,7 +284,7 @@ module Lich
             # Sort by favorite order
             favorites.sort_by { |fav| fav[:favorite_order] }
           rescue StandardError => e
-            Lich.log "Error getting favorites: #{e.message}"
+            Lich.log "error: Error getting favorites: #{e.message}"
             []
           end
         end
@@ -308,7 +308,7 @@ module Lich
             character = find_character(yaml_data, username, char_name, game_code)
             character && character['is_favorite'] == true
           rescue StandardError => e
-            Lich.log "Error checking favorite status: #{e.message}"
+            Lich.log "error: Error checking favorite status: #{e.message}"
             false
           end
         end

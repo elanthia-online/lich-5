@@ -18,6 +18,7 @@ require_relative 'gui/state'
 require_relative 'gui/theme_utils'
 require_relative 'gui/utilities'
 require_relative 'gui/yaml_state'
+require_relative 'gui/tab_communicator'
 # require_relative 'gui/yaml_validator'
 
 module Lich
@@ -27,6 +28,7 @@ module Lich
     # This module contains the main entry point for the GUI login system
     # and coordinates the interaction between saved and manual login tabs.
     # It also provides account management functionality.
+    # Enhanced with cross-tab communication for data synchronization.
     def gui_login
       initialize_login_state
       setup_gui_window
@@ -43,7 +45,7 @@ module Lich
     # Initializes the login state variables
     #
     # Sets up all necessary state tracking variables and loads saved entries
-    # from the YAML state file.
+    # from the YAML state file. Also initializes cross-tab communication.
     #
     # @return [void]
     def initialize_login_state
@@ -60,6 +62,9 @@ module Lich
       @save_entry_data = false
       @done = false
 
+      # Initialize cross-tab communication
+      @tab_communicator = Lich::Common::GUI::TabCommunicator.new
+
       # Initialize account manager UI
       @account_manager_ui = Lich::Common::GUI::AccountManagerUI.new(DATA_DIR)
     end
@@ -67,7 +72,7 @@ module Lich
     # Sets up the main GUI window and tabs
     #
     # Creates the main window, initializes all tabs, and configures
-    # the notebook and window properties.
+    # the notebook and window properties. Also sets up cross-tab communication.
     #
     # @return [void]
     def setup_gui_window
@@ -80,6 +85,9 @@ module Lich
         # Create tab instances
         create_tab_instances
 
+        # Set up cross-tab communication
+        setup_cross_tab_communication
+
         # Set up notebook with tabs
         setup_notebook
 
@@ -89,6 +97,26 @@ module Lich
         # Hide optional elements initially
         hide_optional_elements
       }
+    end
+
+    # Sets up cross-tab communication between tabs
+    #
+    # Configures the communication system that allows tabs to notify
+    # each other of data changes for real-time synchronization.
+    #
+    # @return [void]
+    def setup_cross_tab_communication
+      # Register saved login tab for data change notifications
+      @tab_communicator.register_data_change_callback(->(change_type, data) {
+        # Refresh saved login tab when data changes
+        @saved_login_tab.refresh_data if @saved_login_tab
+        Lich.log "info: Data change notification: #{change_type} - #{data}"
+      })
+
+      # Set up account manager to notify of data changes
+      @account_manager_ui.set_data_change_callback(->(change_type, data) {
+        @tab_communicator.notify_data_changed(change_type, data)
+      })
     end
 
     # Creates tab instances for the notebook
@@ -111,6 +139,8 @@ module Lich
         on_remove: ->(login_info) {
           @entry_data.delete(login_info)
           @save_entry_data = true
+          # Notify other tabs of data change
+          @tab_communicator.notify_data_changed(:entry_removed, { entry: login_info })
         },
         on_add_character: ->(character:, instance:, frontend:) {
           # Handle adding a character
@@ -154,6 +184,8 @@ module Lich
         on_save: ->(launch_data) {
           @entry_data.push(launch_data)
           @save_entry_data = true
+          # Notify other tabs of data change
+          @tab_communicator.notify_data_changed(:entry_added, { entry: launch_data })
         },
         on_error: ->(message) {
           @msgbox.call(message)
@@ -252,7 +284,12 @@ module Lich
       @window.title = "Lich v#{LICH_VERSION}"
       @window.border_width = 5
       @window.add(@notebook)
-      @window.signal_connect('delete_event') { @window.destroy; @done = true }
+      @window.signal_connect('delete_event') {
+        # Clean up cross-tab communication
+        @tab_communicator.clear_callbacks if @tab_communicator
+        @window.destroy
+        @done = true
+      }
 
       # Apply initial theme to window
       if @theme_state

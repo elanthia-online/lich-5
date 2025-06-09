@@ -9,6 +9,7 @@ module Lich
     module GUI
       # Provides a user interface for managing accounts and characters
       # Implements the account management feature for the Lich GUI login system
+      # Enhanced with data change notification capability for cross-tab synchronization
       class AccountManagerUI
         # Creates and displays the account management window
         #
@@ -29,6 +30,16 @@ module Lich
         def initialize(data_dir)
           @data_dir = data_dir
           @msgbox = ->(message) { show_message_dialog(message) }
+          @data_change_callback = nil
+        end
+
+        # Sets the data change callback for cross-tab communication
+        # Allows other tabs to be notified when data changes occur
+        #
+        # @param callback [Proc] Callback to execute when data changes
+        # @return [void]
+        def set_data_change_callback(callback)
+          @data_change_callback = callback
         end
 
         # Creates the accounts tab
@@ -171,6 +182,8 @@ module Lich
                   if AccountManager.remove_account(@data_dir, account)
                     @msgbox.call("Account removed successfully.")
                     populate_accounts_view(accounts_store)
+                    # Notify other tabs of data change
+                    notify_data_changed(:account_removed, { account: account })
                   else
                     @msgbox.call("Failed to remove account.")
                   end
@@ -193,6 +206,12 @@ module Lich
                   if AccountManager.remove_character(@data_dir, account, character, game_code)
                     @msgbox.call("Character removed successfully.")
                     populate_accounts_view(accounts_store)
+                    # Notify other tabs of data change
+                    notify_data_changed(:character_removed, {
+                      account: account,
+                      character: character,
+                      game_code: game_code
+                    })
                   else
                     @msgbox.call("Failed to remove character.")
                   end
@@ -441,7 +460,12 @@ module Lich
                   password_entry.text = ""
 
                   # Step 5: Reset window interface to display results
-                  # TODO: Automatically refresh Saved Entry tab information
+                  # Notify other tabs of data change
+                  notify_data_changed(:account_added, {
+                    account: username,
+                    characters: character_list
+                  })
+
                   notebook.set_page(0)
                   # Find the accounts store in the first tab and refresh it
                   accounts_tab = notebook.get_nth_page(0)
@@ -458,6 +482,12 @@ module Lich
                 if save_account_with_characters(username, password, [])
                   username_entry.text = ""
                   password_entry.text = ""
+                  # Notify other tabs of data change
+                  notify_data_changed(:account_added, {
+                    account: username,
+                    characters: []
+                  })
+
                   notebook.set_page(0)
                   accounts_tab = notebook.get_nth_page(0)
                   accounts_view = find_treeview_in_container(accounts_tab)
@@ -476,6 +506,157 @@ module Lich
           end
         end
 
+        private
+
+        # Notifies other tabs of data changes
+        # Triggers the data change callback if one is registered
+        #
+        # @param change_type [Symbol] Type of change that occurred
+        # @param data [Hash] Additional data about the change
+        # @return [void]
+        def notify_data_changed(change_type = :general, data = {})
+          if @data_change_callback
+            begin
+              @data_change_callback.call(change_type, data)
+            rescue StandardError => e
+              Lich.log "error: Error in data change callback: #{e.message}"
+            end
+          end
+        end
+
+        # Sets up the add character handlers with data change notification
+        # Configures event handlers for the add character functionality
+        #
+        # @param add_button [Gtk::Button] Add character button
+        # @param account_combo [Gtk::ComboBoxText] Account selection combo
+        # @param refresh_button [Gtk::Button] Refresh button
+        # @param char_name_entry [Gtk::Entry] Character name entry
+        # @param game_combo [Gtk::ComboBoxText] Game selection combo
+        # @param stormfront_option [Gtk::RadioButton] Stormfront radio button
+        # @param wizard_option [Gtk::RadioButton] Wizard radio button
+        # @param avalon_option [Gtk::RadioButton] Avalon radio button
+        # @param custom_launch_entry [Gtk::Entry] Custom launch entry
+        # @param custom_launch_dir_entry [Gtk::Entry] Custom launch directory entry
+        # @param notebook [Gtk::Notebook] Parent notebook
+        # @return [void]
+        def setup_add_character_handlers(add_button, account_combo, refresh_button, char_name_entry, game_combo, _stormfront_option, wizard_option, avalon_option, custom_launch_entry, custom_launch_dir_entry, notebook)
+          # Set up refresh button handler
+          refresh_button.signal_connect('clicked') do
+            populate_account_combo(account_combo)
+          end
+
+          # Set up add button handler
+          add_button.signal_connect('clicked') do
+            account = account_combo.active_text
+            character = char_name_entry.text
+            game_text = game_combo.active_text
+            custom_launch = custom_launch_entry.text
+            custom_launch_dir = custom_launch_dir_entry.text
+
+            if account.nil? || account.empty?
+              @msgbox.call("Please select an account.")
+              next
+            end
+
+            if character.empty?
+              @msgbox.call("Character name cannot be empty.")
+              next
+            end
+
+            if game_text.nil? || game_text.empty?
+              @msgbox.call("Please select a game.")
+              next
+            end
+
+            # Determine frontend
+            frontend = if wizard_option.active?
+                         'wizard'
+                       elsif avalon_option.active?
+                         'avalon'
+                       else
+                         'stormfront'
+                       end
+
+            # Get game code from game text
+            game_code = GameSelection.game_text_to_code(game_text)
+
+            # Create character data
+            character_data = {
+              char_name: character,
+              game_code: game_code,
+              game_name: game_text,
+              frontend: frontend,
+              custom_launch: custom_launch.empty? ? nil : custom_launch,
+              custom_launch_dir: custom_launch_dir.empty? ? nil : custom_launch_dir
+            }
+
+            # Add character to account
+            if AccountManager.add_character(@data_dir, account, character_data)
+              @msgbox.call("Character '#{character}' added to account '#{account}' successfully.")
+              char_name_entry.text = ""
+              custom_launch_entry.text = ""
+              custom_launch_dir_entry.text = ""
+
+              # Notify other tabs of data change
+              notify_data_changed(:character_added, {
+                account: account,
+                character: character,
+                game_code: game_code,
+                game_name: game_text,
+                frontend: frontend
+              })
+
+              # Switch back to accounts tab
+              notebook.set_page(0)
+
+              # Refresh accounts view
+              accounts_tab = notebook.get_nth_page(0)
+              accounts_view = find_treeview_in_container(accounts_tab)
+              if accounts_view
+                populate_accounts_view(accounts_view.model)
+              end
+            else
+              @msgbox.call("Failed to add character.")
+            end
+          end
+        end
+
+        # Sets up the favorites column click handler with data change notification
+        # Configures click handling for the favorites column in the accounts view
+        #
+        # @param accounts_view [Gtk::TreeView] Accounts tree view
+        # @param favorites_col [Gtk::TreeViewColumn] Favorites column
+        # @param data_dir [String] Data directory
+        # @return [void]
+        def setup_favorites_column_handler(accounts_view, favorites_col, data_dir)
+          accounts_view.signal_connect('button-press-event') do |_widget, event|
+            if event.button == 1 # Left click
+              path, column = accounts_view.get_path_at_pos(event.x, event.y)
+              if path && column == favorites_col
+                iter = accounts_view.model.get_iter(path)
+                if iter && !iter[1].nil? && !iter[1].empty? # Character row (has character name)
+                  account = iter[0]
+                  character = iter[1]
+                  game_code = iter[4]
+
+                  # Toggle favorite status
+                  new_status = FavoritesManager.toggle_favorite(data_dir, account, character, game_code)
+                  iter[5] = new_status ? '★' : '☆'
+
+                  # Notify other tabs of data change
+                  notify_data_changed(:favorite_toggled, {
+                    account: account,
+                    character: character,
+                    game_code: game_code,
+                    is_favorite: new_status
+                  })
+                end
+              end
+            end
+            false # Allow other handlers to process the event
+          end
+        end
+
         # Checks if an account already exists in the YAML structure
         #
         # @param username [String] Account username to check
@@ -490,7 +671,7 @@ module Lich
 
             yaml_data['accounts'].key?(username)
           rescue StandardError => e
-            Lich.log "Error checking if account exists: #{e.message}"
+            Lich.log "error: Error checking if account exists: #{e.message}"
             false
           end
         end
@@ -599,7 +780,7 @@ module Lich
                         begin
                           YAML.load_file(yaml_file)
                         rescue StandardError => e
-                          Lich.log "Error loading YAML entry file: #{e.message}"
+                          Lich.log "error: Error loading YAML entry file: #{e.message}"
                           { 'accounts' => {} }
                         end
                       else
@@ -634,7 +815,7 @@ module Lich
             end
             true
           rescue StandardError => e
-            Lich.log "Error saving YAML entry file: #{e.message}"
+            Lich.log "error: Error saving YAML entry file: #{e.message}"
             false
           end
         end
@@ -705,7 +886,7 @@ module Lich
           end
 
           # Select first account if available
-          combo.active = 0 if accounts_data.keys.any?
+          combo.active = 0 if accounts_data.any?
         end
 
         # Shows a message dialog
@@ -715,156 +896,39 @@ module Lich
         def show_message_dialog(message)
           dialog = Gtk::MessageDialog.new(
             parent: @window,
-            flags: [:modal, :destroy_with_parent],
+            flags: :modal,
             type: :info,
             buttons: :ok,
             message: message
           )
-          dialog.set_keep_above(true) # Force dialog to stay on top
-          dialog.present
           dialog.run
           dialog.destroy
         end
 
-        # Sets up event handlers for the add character tab
+        # Shows the management window
         #
-        # @param add_button [Gtk::Button] Add character button
-        # @param account_combo [Gtk::ComboBoxText] Account selection combo box
-        # @param refresh_button [Gtk::Button] Refresh button
-        # @param char_name_entry [Gtk::Entry] Character name entry
-        # @param game_combo [Gtk::ComboBoxText] Game selection combo box
-        # @param stormfront_option [Gtk::RadioButton] Stormfront radio button
-        # @param wizard_option [Gtk::RadioButton] Wizard radio button
-        # @param avalon_option [Gtk::RadioButton] Avalon radio button
-        # @param custom_launch_entry [Gtk::Entry] Custom launch entry
-        # @param custom_launch_dir_entry [Gtk::Entry] Custom launch directory entry
-        # @param notebook [Gtk::Notebook] Notebook containing the tabs
         # @return [void]
-        def setup_add_character_handlers(
-          add_button,
-          account_combo,
-          refresh_button,
-          char_name_entry,
-          game_combo,
-          stormfront_option,
-          wizard_option,
-          avalon_option,
-          custom_launch_entry,
-          custom_launch_dir_entry,
-          notebook
-        )
-          # Refresh button handler
-          refresh_button.signal_connect('clicked') do
-            populate_account_combo(account_combo)
-          end
+        def show_management_window
+          @window = Gtk::Window.new(:toplevel)
+          @window.title = "Account Management"
+          @window.set_default_size(800, 600)
+          @window.border_width = 10
 
-          # Add character button handler
-          add_button.signal_connect('clicked') do
-            username = account_combo.active_text
-            char_name = char_name_entry.text
-            game_name = game_combo.active_text
-            custom_launch = custom_launch_entry.text
-            custom_launch_dir = custom_launch_dir_entry.text
+          # Create notebook for tabs
+          notebook = Gtk::Notebook.new
 
-            if username.nil? || username.empty?
-              @msgbox.call("Please select an account.")
-              next
-            end
+          # Create tabs
+          create_accounts_tab(notebook)
+          create_add_character_tab(notebook)
+          create_add_account_tab(notebook)
 
-            if char_name.empty?
-              @msgbox.call("Character name cannot be empty.")
-              next
-            end
+          @window.add(notebook)
+          @window.show_all
 
-            # Determine frontend
-            frontend = if wizard_option.active?
-                         'wizard'
-                       elsif avalon_option.active?
-                         'avalon'
-                       elsif stormfront_option.active?
-                         'stormfront'
-                       else
-                         'stormfront' # Default fallback
-                       end
-
-            # Determine game code
-            game_code = Utilities.realm_to_game_code(game_name)
-
-            # Create character data
-            character_data = {
-              char_name: char_name,
-              game_code: game_code,
-              game_name: game_name,
-              frontend: frontend
-            }
-
-            # Only add custom_launch and custom_launch_dir if they're not empty
-            character_data[:custom_launch] = custom_launch unless custom_launch.empty?
-            character_data[:custom_launch_dir] = custom_launch_dir unless custom_launch_dir.empty?
-
-            # Add character
-            if AccountManager.add_character(@data_dir, username, character_data)
-              @msgbox.call("Character added successfully.")
-              char_name_entry.text = ""
-              custom_launch_entry.text = ""
-              custom_launch_dir_entry.text = ""
-
-              # Return to accounts tab and refresh
-              notebook.set_page(0)
-              # Find the accounts store in the first tab and refresh it
-              accounts_tab = notebook.get_nth_page(0)
-              accounts_view = find_treeview_in_container(accounts_tab)
-              if accounts_view
-                populate_accounts_view(accounts_view.model)
-              end
-            else
-              @msgbox.call("Failed to add character.")
-            end
-          end
-        end
-
-        # Sets up the favorites column click handler
-        # Configures the click event for toggling favorite status in the account management view
-        #
-        # @param accounts_view [Gtk::TreeView] The accounts tree view
-        # @param favorites_col [Gtk::TreeViewColumn] The favorites column
-        # @param data_dir [String] Data directory for favorites storage
-        # @return [void]
-        def setup_favorites_column_handler(accounts_view, favorites_col, data_dir)
-          accounts_view.signal_connect('button-release-event') do |widget, event|
-            if event.button == 1 # Left click
-              path, column, _cell_x, _cell_y = widget.get_path_at_pos(event.x, event.y)
-
-              if path && column == favorites_col
-                iter = widget.model.get_iter(path)
-
-                # Only handle character rows (not account rows)
-                if iter && iter[1] && !iter[1].empty? # Character name exists
-                  account = iter[0]
-                  char_name = iter[1]
-                  game_code = iter[4]
-
-                  begin
-                    # Toggle favorite status
-                    _current_status = FavoritesManager.is_favorite?(data_dir, account, char_name, game_code)
-                    new_status = FavoritesManager.toggle_favorite(data_dir, account, char_name, game_code)
-
-                    # Update the display
-                    iter[5] = new_status ? '★' : '☆'
-
-                    # Show feedback message
-                    action = new_status ? "added to" : "removed from"
-                    @msgbox.call("#{char_name} #{action} favorites.")
-                  rescue StandardError => e
-                    @msgbox.call("Error updating favorite status: #{e.message}")
-                  end
-                end
-
-                true # Consume the event
-              end
-            end
-
-            false # Don't consume other events
+          # Handle window close
+          @window.signal_connect('delete_event') do
+            @window.destroy
+            false
           end
         end
       end

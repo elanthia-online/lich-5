@@ -20,7 +20,7 @@ module Lich
                         begin
                           YAML.load_file(yaml_file)
                         rescue StandardError => e
-                          Lich.log "Error loading YAML entry file: #{e.message}"
+                          Lich.log "error: Error loading YAML entry file: #{e.message}"
                           { 'accounts' => {} }
                         end
                       else
@@ -69,7 +69,7 @@ module Lich
             # Save updated data
             Utilities.safe_file_operation(yaml_file, :write, YAML.dump(yaml_data))
           rescue StandardError => e
-            Lich.log "Error removing account: #{e.message}"
+            Lich.log "error: Error removing account: #{e.message}"
             false
           end
         end
@@ -118,7 +118,7 @@ module Lich
             # Save updated data
             Utilities.safe_file_operation(yaml_file, :write, YAML.dump(yaml_data))
           rescue StandardError => e
-            Lich.log "Error adding character: #{e.message}"
+            Lich.log "error: Error adding character: #{e.message}"
             false
           end
         end
@@ -158,7 +158,7 @@ module Lich
             # Save updated data
             Utilities.safe_file_operation(yaml_file, :write, YAML.dump(yaml_data))
           rescue StandardError => e
-            Lich.log "Error removing character: #{e.message}"
+            Lich.log "error: Error removing character: #{e.message}"
             false
           end
         end
@@ -199,7 +199,7 @@ module Lich
             # Save updated data
             Utilities.safe_file_operation(yaml_file, :write, YAML.dump(yaml_data))
           rescue StandardError => e
-            Lich.log "Error updating character: #{e.message}"
+            Lich.log "error: Error updating character: #{e.message}"
             false
           end
         end
@@ -218,7 +218,7 @@ module Lich
             yaml_data = YAML.load_file(yaml_file)
             yaml_data['accounts']&.keys || []
           rescue StandardError => e
-            Lich.log "Error getting accounts: #{e.message}"
+            Lich.log "error: Error getting accounts: #{e.message}"
             []
           end
         end
@@ -253,7 +253,7 @@ module Lich
 
             accounts
           rescue StandardError => e
-            Lich.log "Error getting all accounts: #{e.message}"
+            Lich.log "error: Error getting all accounts: #{e.message}"
             {}
           end
         end
@@ -282,7 +282,7 @@ module Lich
               char.transform_keys(&:to_sym)
             end
           rescue StandardError => e
-            Lich.log "Error getting characters: #{e.message}"
+            Lich.log "error: Error getting characters: #{e.message}"
             []
           end
         end
@@ -301,7 +301,7 @@ module Lich
             yaml_data = YAML.load_file(yaml_file)
             YamlState.convert_yaml_to_legacy_format(yaml_data)
           rescue StandardError => e
-            Lich.log "Error converting to legacy format: #{e.message}"
+            Lich.log "error: Error converting to legacy format: #{e.message}"
             []
           end
         end

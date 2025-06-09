@@ -29,7 +29,7 @@ module Lich
 
             result
           rescue StandardError => e
-            Lich.log "Error in FavoritesManager.add_favorite: #{e.message}"
+            Lich.log "error: Error in FavoritesManager.add_favorite: #{e.message}"
             false
           end
         end
@@ -56,7 +56,7 @@ module Lich
 
             result
           rescue StandardError => e
-            Lich.log "Error in FavoritesManager.remove_favorite: #{e.message}"
+            Lich.log "error: Error in FavoritesManager.remove_favorite: #{e.message}"
             false
           end
         end
@@ -81,7 +81,7 @@ module Lich
               true
             end
           rescue StandardError => e
-            Lich.log "Error in FavoritesManager.toggle_favorite: #{e.message}"
+            Lich.log "error: Error in FavoritesManager.toggle_favorite: #{e.message}"
             false
           end
         end
@@ -100,7 +100,7 @@ module Lich
           begin
             YamlState.is_favorite?(data_dir, username, char_name, game_code)
           rescue StandardError => e
-            Lich.log "Error in FavoritesManager.is_favorite?: #{e.message}"
+            Lich.log "error: Error in FavoritesManager.is_favorite?: #{e.message}"
             false
           end
         end
@@ -116,7 +116,7 @@ module Lich
           begin
             YamlState.get_favorites(data_dir)
           rescue StandardError => e
-            Lich.log "Error in FavoritesManager.get_all_favorites: #{e.message}"
+            Lich.log "error: Error in FavoritesManager.get_all_favorites: #{e.message}"
             []
           end
         end
@@ -141,7 +141,7 @@ module Lich
 
             result
           rescue StandardError => e
-            Lich.log "Error in FavoritesManager.reorder_favorites: #{e.message}"
+            Lich.log "error: Error in FavoritesManager.reorder_favorites: #{e.message}"
             false
           end
         end
@@ -157,7 +157,7 @@ module Lich
           begin
             get_all_favorites(data_dir).length
           rescue StandardError => e
-            Lich.log "Error in FavoritesManager.favorites_count: #{e.message}"
+            Lich.log "error: Error in FavoritesManager.favorites_count: #{e.message}"
             0
           end
         end
@@ -175,7 +175,7 @@ module Lich
             all_favorites = get_all_favorites(data_dir)
             all_favorites.select { |fav| fav[:user_id] == username }
           rescue StandardError => e
-            Lich.log "Error in FavoritesManager.get_account_favorites: #{e.message}"
+            Lich.log "error: Error in FavoritesManager.get_account_favorites: #{e.message}"
             []
           end
         end
@@ -193,7 +193,7 @@ module Lich
             all_favorites = get_all_favorites(data_dir)
             all_favorites.select { |fav| fav[:game_code] == game_code }
           rescue StandardError => e
-            Lich.log "Error in FavoritesManager.get_game_favorites: #{e.message}"
+            Lich.log "error: Error in FavoritesManager.get_game_favorites: #{e.message}"
             []
           end
         end
@@ -228,7 +228,7 @@ module Lich
                   cleaned_count += 1
                   Lich.log "info: Removed orphaned favorite: #{favorite[:char_name]} (#{favorite[:game_code]}) from #{favorite[:user_id]}"
                 else
-                  errors << "Failed to remove orphaned favorite: #{favorite[:char_name]} (#{favorite[:game_code]}) from #{favorite[:user_id]}"
+                  errors << "warning: Failed to remove orphaned favorite: #{favorite[:char_name]} (#{favorite[:game_code]}) from #{favorite[:user_id]}"
                 end
               end
             end
@@ -241,7 +241,7 @@ module Lich
               errors: errors
             }
           rescue StandardError => e
-            Lich.log "Error in FavoritesManager.validate_and_cleanup_favorites: #{e.message}"
+            Lich.log "error: Error in FavoritesManager.validate_and_cleanup_favorites: #{e.message}"
             { valid: false, cleaned: 0, errors: [e.message] }
           end
         end
