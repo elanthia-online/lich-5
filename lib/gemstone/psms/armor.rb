@@ -86,7 +86,7 @@ module Lich
           :type       => :passive,
           :cost       => { stamina: 0 },
           :regex      => Regexp.union(
-            /You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
+            /You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against crushing damage\./i,
             /You must specify an armor slot\./,
             /You don't seem to have the necessary armor fittings in hand\./
           ),
@@ -97,7 +97,7 @@ module Lich
           :type       => :passive,
           :cost       => { stamina: 0 },
           :regex      => Regexp.union(
-            /You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
+            /You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against puncturing damage\./i,
             /You must specify an armor slot\./,
             /You don't seem to have the necessary armor fittings in hand\./
           ),
@@ -108,7 +108,7 @@ module Lich
           :type       => :passive,
           :cost       => { stamina: 0 },
           :regex      => Regexp.union(
-            /You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
+            /You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against slashing damage\./i,
             /You must specify an armor slot\./,
             /You don't seem to have the necessary armor fittings in hand\./
           ),
