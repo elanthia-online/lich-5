@@ -195,9 +195,9 @@ module Lich
 
       def Spell.[](val)
         Spell.load unless @@loaded
-        if val.class == Spell
+        if val.is_a?(Spell)
           val
-        elsif (val.class == Integer) or (val.class == String and val =~ /^[0-9]+$/)
+        elsif (val.is_a?(Integer)) or (val.is_a?(String) and val =~ /^[0-9]+$/)
           @@list.find { |spell| spell.num == val.to_i }
         else
           val = Regexp.escape(val)
@@ -640,9 +640,9 @@ module Lich
               cast_cmd = "incant #{@num}"
             elsif (target.nil? or target.to_s.empty?) and (@type =~ /attack/i) and not [410, 435, 525, 912, 909, 609].include?(@num)
               cast_cmd += ' target'
-            elsif target.class == GameObj
+            elsif target.is_a?(GameObj)
               cast_cmd += " ##{target.id}"
-            elsif target.class == Integer
+            elsif target.is_a?(Integer)
               cast_cmd += " ##{target}"
             elsif cast_cmd !~ /^incant/
               cast_cmd += " #{target}"
@@ -704,7 +704,7 @@ module Lich
                 put 'stance offensive'
                 # dothistimeout 'stance offensive', 5, /^You (?:are now in|move into) an? offensive stance|^You are unable to change your stance\.$/
               end
-              if results_of_interest.class == Regexp
+              if results_of_interest.is_a?(Regexp)
                 merged_results_regex = Regexp.union(@@results_regex, results_of_interest)
               else
                 merged_results_regex = @@results_regex
