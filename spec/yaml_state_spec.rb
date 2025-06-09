@@ -432,7 +432,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
   describe ".add_favorite" do
     let(:yaml_file) { File.join(data_dir, "entry.yml") }
-    
+
     before do
       # Create test YAML file with character data
       yaml_data = {
@@ -472,7 +472,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
         # Verify character is marked as favorite
         expect(described_class.is_favorite?(data_dir, 'user1', 'Char1', 'GS', 'stormfront')).to be true
-        
+
         # Verify YAML structure
         yaml_data = YAML.load_file(yaml_file)
         character = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char1' }
@@ -484,14 +484,14 @@ RSpec.describe Lich::Common::GUI::YamlState do
       it "assigns correct favorite order" do
         # Add first favorite
         described_class.add_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
-        
+
         # Add second favorite
         described_class.add_favorite(data_dir, 'user1', 'Char2', 'DR', 'wizard')
 
         yaml_data = YAML.load_file(yaml_file)
         char1 = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char1' }
         char2 = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char2' }
-        
+
         expect(char1['favorite_order']).to eq(1)
         expect(char2['favorite_order']).to eq(2)
       end
@@ -499,7 +499,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
       it "returns true if character is already a favorite" do
         # Add favorite first time
         described_class.add_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
-        
+
         # Try to add again
         result = described_class.add_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
         expect(result).to be true
@@ -514,11 +514,11 @@ RSpec.describe Lich::Common::GUI::YamlState do
         # Add character with specific frontend
         result = described_class.add_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
         expect(result).to be true
-        
+
         # Verify it doesn't match with different frontend (should return false, not nil)
         result_wizard = described_class.is_favorite?(data_dir, 'user1', 'Char1', 'GS', 'wizard')
         expect(result_wizard).to be_falsy # Use be_falsy to handle both false and nil
-        
+
         # Verify it matches with correct frontend
         expect(described_class.is_favorite?(data_dir, 'user1', 'Char1', 'GS', 'stormfront')).to be true
         # Verify backward compatibility (no frontend specified)
@@ -540,7 +540,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
   describe ".remove_favorite" do
     let(:yaml_file) { File.join(data_dir, "entry.yml") }
-    
+
     before do
       # Create test YAML file with favorite character
       yaml_data = {
@@ -584,7 +584,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
         # Verify character is no longer a favorite
         expect(described_class.is_favorite?(data_dir, 'user1', 'Char1', 'GS', 'stormfront')).to be false
-        
+
         # Verify YAML structure
         yaml_data = YAML.load_file(yaml_file)
         character = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char1' }
@@ -599,7 +599,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
         yaml_data = YAML.load_file(yaml_file)
         char2 = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char2' }
-        
+
         # Char2 should now be order 1
         expect(char2['favorite_order']).to eq(1)
       end
@@ -607,7 +607,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
       it "returns true if character is not a favorite" do
         # First remove the favorite status
         described_class.remove_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
-        
+
         # Try to remove again
         result = described_class.remove_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
         expect(result).to be true
@@ -624,7 +624,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
   describe ".is_favorite?" do
     let(:yaml_file) { File.join(data_dir, "entry.yml") }
-    
+
     before do
       # Create test YAML file with mixed favorite/non-favorite characters
       yaml_data = {
@@ -683,7 +683,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
   describe ".get_favorites" do
     let(:yaml_file) { File.join(data_dir, "entry.yml") }
-    
+
     before do
       # Create test YAML file with multiple favorites across accounts
       yaml_data = {
@@ -736,11 +736,11 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
     it "returns all favorites sorted by order" do
       favorites = described_class.get_favorites(data_dir)
-      
+
       expect(favorites.size).to eq(2)
       expect(favorites[0][:char_name]).to eq('Char3') # order 1
       expect(favorites[1][:char_name]).to eq('Char1') # order 2
-      
+
       # Verify structure
       expect(favorites[0][:user_id]).to eq('user2')
       expect(favorites[0][:game_code]).to eq('GS')
@@ -753,7 +753,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
       yaml_data['accounts']['user1']['characters'][0]['is_favorite'] = false
       yaml_data['accounts']['user2']['characters'][0]['is_favorite'] = false
       File.write(yaml_file, YAML.dump(yaml_data))
-      
+
       favorites = described_class.get_favorites(data_dir)
       expect(favorites).to eq([])
     end
@@ -767,7 +767,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
   describe ".reorder_favorites" do
     let(:yaml_file) { File.join(data_dir, "entry.yml") }
-    
+
     before do
       # Create test YAML file with multiple favorites
       yaml_data = {
@@ -810,15 +810,15 @@ RSpec.describe Lich::Common::GUI::YamlState do
         { username: 'user1', char_name: 'Char2', game_code: 'DR', frontend: 'wizard' },
         { username: 'user1', char_name: 'Char1', game_code: 'GS', frontend: 'stormfront' }
       ]
-      
+
       result = described_class.reorder_favorites(data_dir, ordered_favorites)
       expect(result).to be true
-      
+
       # Verify new order
       yaml_data = YAML.load_file(yaml_file)
       char1 = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char1' }
       char2 = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char2' }
-      
+
       expect(char2['favorite_order']).to eq(1)
       expect(char1['favorite_order']).to eq(2)
     end
@@ -829,7 +829,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
         { 'username' => 'user1', 'char_name' => 'Char2', 'game_code' => 'DR', 'frontend' => 'wizard' },
         { 'username' => 'user1', 'char_name' => 'Char1', 'game_code' => 'GS', 'frontend' => 'stormfront' }
       ]
-      
+
       result = described_class.reorder_favorites(data_dir, ordered_favorites)
       expect(result).to be true
     end
