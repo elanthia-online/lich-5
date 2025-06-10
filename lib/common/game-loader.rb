@@ -22,7 +22,7 @@ module Lich
         require File.join(LIB_DIR, 'attributes', 'stats.rb')
         require File.join(LIB_DIR, 'attributes', 'spells.rb')
         require File.join(LIB_DIR, 'attributes', 'skills.rb')
-        require File.join(LIB_DIR, 'attributes', 'society.rb')
+        require File.join(LIB_DIR, 'gemstone', 'society.rb')
         require File.join(LIB_DIR, 'gemstone', 'infomon', 'status.rb')
         require File.join(LIB_DIR, 'gemstone', 'experience.rb')
         require File.join(LIB_DIR, 'attributes', 'spellsong.rb')
