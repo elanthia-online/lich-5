@@ -42,8 +42,8 @@ module Lich
             }
           end
 
-          # Save updated data
-          Utilities.safe_file_operation(yaml_file, :write, YAML.dump(yaml_data))
+          # Save updated data with verification
+          Utilities.verified_file_operation(yaml_file, :write, YAML.dump(yaml_data))
         end
 
         # Removes an account and all associated characters
@@ -66,8 +66,8 @@ module Lich
             # Remove account
             yaml_data['accounts'].delete(username)
 
-            # Save updated data
-            Utilities.safe_file_operation(yaml_file, :write, YAML.dump(yaml_data))
+            # Save updated data with verification
+            Utilities.verified_file_operation(yaml_file, :write, YAML.dump(yaml_data))
           rescue StandardError => e
             Lich.log "error: Error removing account: #{e.message}"
             false
@@ -115,8 +115,8 @@ module Lich
               'custom_launch_dir' => character_data[:custom_launch_dir]
             }
 
-            # Save updated data
-            Utilities.safe_file_operation(yaml_file, :write, YAML.dump(yaml_data))
+            # Save updated data with verification
+            Utilities.verified_file_operation(yaml_file, :write, YAML.dump(yaml_data))
           rescue StandardError => e
             Lich.log "error: Error adding character: #{e.message}"
             false
@@ -164,8 +164,8 @@ module Lich
             # Check if any characters were removed
             return false if characters.size == initial_count
 
-            # Save updated data
-            Utilities.safe_file_operation(yaml_file, :write, YAML.dump(yaml_data))
+            # Save updated data with verification
+            Utilities.verified_file_operation(yaml_file, :write, YAML.dump(yaml_data))
           rescue StandardError => e
             Lich.log "error: Error removing character: #{e.message}"
             false
@@ -205,8 +205,8 @@ module Lich
               character[key.to_s] = value
             end
 
-            # Save updated data
-            Utilities.safe_file_operation(yaml_file, :write, YAML.dump(yaml_data))
+            # Save updated data with verification
+            Utilities.verified_file_operation(yaml_file, :write, YAML.dump(yaml_data))
           rescue StandardError => e
             Lich.log "error: Error updating character: #{e.message}"
             false

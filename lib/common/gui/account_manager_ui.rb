@@ -42,6 +42,48 @@ module Lich
           @data_change_callback = callback
         end
 
+        # Registers with tab communicator to receive data change notifications
+        # Allows this UI to refresh when other tabs make changes
+        #
+        # @param tab_communicator [TabCommunicator] Tab communicator instance
+        # @return [void]
+        def register_for_notifications(tab_communicator)
+          @tab_communicator = tab_communicator
+          @accounts_store = nil # Will be set when accounts tab is created
+
+          # Register callback to handle incoming notifications
+          @tab_communicator.register_data_change_callback(->(change_type, data) {
+            case change_type
+            when :favorite_toggled
+              # Refresh accounts view to reflect favorite changes
+              refresh_accounts_display if @accounts_store
+              Lich.log "info: Account manager refreshed for favorite change: #{data}"
+            when :character_added, :character_removed, :account_added, :account_removed
+              # Refresh accounts view for structural changes
+              refresh_accounts_display if @accounts_store
+              Lich.log "info: Account manager refreshed for data change: #{change_type}"
+            end
+          })
+        end
+
+        # Refreshes the accounts display to reflect data changes
+        # Reloads and repopulates the accounts tree view
+        #
+        # @return [void]
+        def refresh_accounts_display
+          return unless @accounts_store
+
+          begin
+            # Clear existing data
+            @accounts_store.clear
+
+            # Repopulate with current data
+            populate_accounts_view(@accounts_store)
+          rescue StandardError => e
+            Lich.log "error: Error refreshing accounts display: #{e.message}"
+          end
+        end
+
         # Creates the accounts tab
         #
         # @param notebook [Gtk::Notebook] Notebook to add tab to
@@ -53,36 +95,53 @@ module Lich
 
           # Create accounts treeview with favorites support
           accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String) # Added favorites column
+          @accounts_store = accounts_store # Store reference for refresh operations
           accounts_view = Gtk::TreeView.new(accounts_store)
 
-          # Add columns
+          # Enable sortable columns
+          accounts_view.set_headers_clickable(true)
+          accounts_store.set_default_sort_func { |_model, _a, _b| 0 } # Default no-op sort
+
+          # Add columns with sorting
           renderer = Gtk::CellRendererText.new
 
-          # Account column
+          # Account column (not sortable - maintains account grouping)
           col = Gtk::TreeViewColumn.new("Account", renderer, text: 0)
           col.resizable = true
           accounts_view.append_column(col)
 
-          # Character column (was incorrectly labeled as Game column)
+          # Character column - sortable
           col = Gtk::TreeViewColumn.new("Character", renderer, text: 1)
           col.resizable = true
+          col.set_sort_column_id(1)
+          col.clickable = true
           accounts_view.append_column(col)
 
-          # Game column (was incorrectly labeled as Character column)
+          # Game column - sortable
           col = Gtk::TreeViewColumn.new("Game", renderer, text: 2)
           col.resizable = true
+          col.set_sort_column_id(2)
+          col.clickable = true
           accounts_view.append_column(col)
 
-          # Frontend column
+          # Frontend column - sortable
           col = Gtk::TreeViewColumn.new("Frontend", renderer, text: 3)
           col.resizable = true
+          col.set_sort_column_id(3)
+          col.clickable = true
           accounts_view.append_column(col)
 
-          # Favorites column with clickable star
+          # Favorites column with clickable star (not sortable)
           favorites_renderer = Gtk::CellRendererText.new
           favorites_col = Gtk::TreeViewColumn.new("Favorite", favorites_renderer, text: 5)
           favorites_col.resizable = true
           accounts_view.append_column(favorites_col)
+
+          # Set up custom sort functions that maintain account grouping
+          setup_account_aware_sorting(accounts_store)
+
+          # Set up sort state persistence
+          setup_sort_state_persistence(accounts_store)
 
           # Set up favorites column click handler
           setup_favorites_column_handler(accounts_view, favorites_col, @data_dir)
@@ -847,6 +906,128 @@ module Lich
             Lich.log "error: Error saving YAML entry file: #{e.message}"
             false
           end
+        end
+
+        # Sets up sort state persistence for the account management treeview
+        # Saves and restores user's sort column and direction preferences
+        #
+        # @param store [Gtk::TreeStore] Tree store to set up persistence for
+        # @return [void]
+        def setup_sort_state_persistence(store)
+          # Load saved sort state
+          sort_state = load_sort_state
+
+          if sort_state[:column] && sort_state[:order]
+            store.set_sort_column_id(sort_state[:column], sort_state[:order])
+          end
+
+          # Save sort state when it changes
+          store.signal_connect('sort-column-changed') do
+            column_id, order = store.sort_column_id
+            save_sort_state(column_id, order) if column_id && order
+          end
+        end
+
+        # Loads the saved sort state from user preferences
+        #
+        # @return [Hash] Hash containing :column and :order keys
+        def load_sort_state
+          begin
+            settings_file = File.join(@data_dir, 'account_manager_sort.yml')
+            if File.exist?(settings_file)
+              YAML.load_file(settings_file) || {}
+            else
+              {}
+            end
+          rescue StandardError => e
+            Lich.log "warning: Could not load sort state: #{e.message}"
+            {}
+          end
+        end
+
+        # Saves the current sort state to user preferences
+        #
+        # @param column_id [Integer] Sort column ID
+        # @param order [Gtk::SortType] Sort order (:ascending or :descending)
+        # @return [void]
+        def save_sort_state(column_id, order)
+          begin
+            settings_file = File.join(@data_dir, 'account_manager_sort.yml')
+            sort_state = {
+              column: column_id,
+              order: order
+            }
+
+            File.open(settings_file, 'w') do |file|
+              file.write(YAML.dump(sort_state))
+            end
+          rescue StandardError => e
+            Lich.log "warning: Could not save sort state: #{e.message}"
+          end
+        end
+
+        # Sets up account-aware sorting that maintains account grouping
+        # Characters are sorted within their account groups, but accounts remain grouped
+        #
+        # @param store [Gtk::TreeStore] Tree store to set up sorting for
+        # @return [void]
+        def setup_account_aware_sorting(store)
+          # Character column sorting (column 1)
+          store.set_sort_func(1) do |model, a, b|
+            account_aware_sort_compare(model, a, b, 1)
+          end
+
+          # Game column sorting (column 2)
+          store.set_sort_func(2) do |model, a, b|
+            account_aware_sort_compare(model, a, b, 2)
+          end
+
+          # Frontend column sorting (column 3)
+          store.set_sort_func(3) do |model, a, b|
+            account_aware_sort_compare(model, a, b, 3)
+          end
+        end
+
+        # Custom sort comparison that maintains account grouping
+        # Account nodes always sort before character nodes
+        # Character nodes sort within their account group by the specified column
+        #
+        # @param model [Gtk::TreeModel] Tree model
+        # @param a [Gtk::TreeIter] First iterator
+        # @param b [Gtk::TreeIter] Second iterator
+        # @param sort_column [Integer] Column to sort by
+        # @return [Integer] Sort comparison result (-1, 0, 1)
+        def account_aware_sort_compare(model, a, b, sort_column)
+          # Check if either is an account node (has no parent)
+          a_is_account = model.iter_parent(a).nil?
+          b_is_account = model.iter_parent(b).nil?
+
+          # Account nodes always come before character nodes
+          return -1 if a_is_account && !b_is_account
+          return 1 if !a_is_account && b_is_account
+
+          # Both are account nodes - sort by account name
+          if a_is_account && b_is_account
+            return model.get_value(a, 0) <=> model.get_value(b, 0)
+          end
+
+          # Both are character nodes - check if they're in the same account
+          a_parent = model.iter_parent(a)
+          b_parent = model.iter_parent(b)
+
+          a_account = model.get_value(a_parent, 0)
+          b_account = model.get_value(b_parent, 0)
+
+          # If different accounts, sort by account name first
+          account_comparison = a_account <=> b_account
+          return account_comparison unless account_comparison == 0
+
+          # Same account - sort by the specified column
+          a_value = model.get_value(a, sort_column) || ""
+          b_value = model.get_value(b, sort_column) || ""
+
+          # Case-insensitive comparison for better user experience
+          a_value.downcase <=> b_value.downcase
         end
 
         # Helper method to find a TreeView widget within a container

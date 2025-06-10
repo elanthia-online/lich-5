@@ -244,27 +244,21 @@ module Lich
     def setup_cross_tab_communication
       # Register saved login tab for data change notifications
       @tab_communicator.register_data_change_callback(->(change_type, data) {
-        # Only refresh for changes that require full reload
-        # Skip refresh for favorite_toggled to prevent unwanted reordering
-        case change_type
-        when :favorite_toggled
-          # Skip refresh - favorites are handled locally in saved_login_tab
-          Lich.log "info: Favorite toggled notification (no refresh): #{data}"
-        when :entry_removed, :entry_added, :character_removed, :character_added, :account_removed, :account_added
-          # These changes require full refresh
-          @saved_login_tab.refresh_data if @saved_login_tab
-          Lich.log "info: Data change notification (refreshed): #{change_type} - #{data}"
-        else
-          # Default: refresh for unknown change types
-          @saved_login_tab.refresh_data if @saved_login_tab
-          Lich.log "info: Data change notification (default refresh): #{change_type} - #{data}"
-        end
+        # Refresh main GUI entry data cache to prevent stale data issues
+        @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(DATA_DIR, @autosort_state)
+
+        # Refresh saved login tab for all data changes to ensure synchronization
+        @saved_login_tab.refresh_data if @saved_login_tab
+        Lich.log "info: Data change notification (cache and UI refreshed): #{change_type} - #{data}"
       })
 
       # Set up account manager to notify of data changes
       @account_manager_ui.set_data_change_callback(->(change_type, data) {
         @tab_communicator.notify_data_changed(change_type, data)
       })
+
+      # Register account manager to receive data change notifications
+      @account_manager_ui.register_for_notifications(@tab_communicator)
     end
 
     # Creates tab instances for the notebook
@@ -303,7 +297,7 @@ module Lich
             # Create sanitized entry for notification (without password)
             sanitized_entry = login_info.dup
             sanitized_entry.delete(:password)
-            @tab_communicator.notify_data_changed(:entry_removed, { entry: sanitized_entry })
+            @tab_communicator.notify_data_changed(:character_removed, { entry: sanitized_entry })
           else
             Lich.log "warning: Could not find entry to remove: #{login_info}"
           end
@@ -333,6 +327,15 @@ module Lich
         },
         on_sort_change: ->(state) {
           # Handle sort change
+        },
+        on_favorites_change: ->(username:, char_name:, game_code:, is_favorite:) {
+          # Handle favorite status change - notify other tabs
+          @tab_communicator.notify_data_changed(:favorite_toggled, {
+            account: username,
+            character: char_name,
+            game_code: game_code,
+            is_favorite: is_favorite
+          })
         }
       }
 

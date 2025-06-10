@@ -355,8 +355,10 @@ module Lich
             create_favorites_tab
           end
 
-          # Process each unique account
-          account_array = @entry_data.map { |x| x[:user_id] }.uniq
+          # Process each unique account in original order (not affected by favorites sorting)
+          # Load unsorted data to get original account order
+          unsorted_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, false)
+          account_array = unsorted_data.map { |x| x[:user_id] }.uniq
           account_array.each { |account|
             last_game_name = nil
             account_box = Gtk::Box.new(:vertical, 0)

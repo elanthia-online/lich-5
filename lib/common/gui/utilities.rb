@@ -131,6 +131,46 @@ module Lich
           operation == :read ? "" : false
         end
 
+        # Handles file operations with verification to ensure data persistence
+        # Provides verified file operations that confirm successful completion before returning
+        # Uses flush and fsync to ensure data is written to disk before verification
+        #
+        # @param file_path [String] Path to the file
+        # @param operation [Symbol] Operation to perform (:read, :write, :backup)
+        # @param content [String] Content to write (for :write operation)
+        # @return [String, Boolean] File content for :read, success status for others
+        def self.verified_file_operation(file_path, operation, content = nil)
+          case operation
+          when :read
+            File.read(file_path)
+          when :write
+            # Create backup if file exists
+            safe_file_operation(file_path, :backup) if File.exist?(file_path)
+
+            # Write content with forced synchronization
+            File.open(file_path, 'w') do |file|
+              file.write(content)
+              file.flush    # Force write to OS buffer
+              file.fsync    # Force OS to write to disk
+            end
+
+            # Verify write completed by reading back and comparing
+            written_content = File.read(file_path)
+            return written_content == content
+          when :backup
+            return false unless File.exist?(file_path)
+
+            backup_file = "#{file_path}.bak"
+            FileUtils.cp(file_path, backup_file)
+
+            # Verify backup was created successfully
+            File.exist?(backup_file) && File.size(backup_file) == File.size(file_path)
+          end
+        rescue StandardError => e
+          Lich.log "error: Error in verified file operation (#{operation}): #{e.message}"
+          operation == :read ? "" : false
+        end
+
         # Sorts entries based on autosort setting
         # Provides consistent sorting of entry data based on user preference
         #

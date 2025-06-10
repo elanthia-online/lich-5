@@ -9,10 +9,10 @@ module Lich
         # Game code to display name mapping
         # Maps internal game codes to user-friendly display names
         GAME_MAPPING = {
-          'GS3' => 'Gemstone IV',
-          'GSX' => 'Gemstone IV Platinum',
-          'GST' => 'Gemstone IV Prime Test',
-          'GSF' => 'Gemstone IV Shattered',
+          'GS3' => 'GemStone IV',
+          'GSX' => 'GemStone IV Platinum',
+          'GST' => 'GemStone IV Prime Test',
+          'GSF' => 'GemStone IV Shattered',
           'DR'  => 'DragonRealms',
           'DRX' => 'DragonRealms Platinum',
           'DRT' => 'DragonRealms Prime Test',

@@ -370,9 +370,9 @@ module Lich
           # Sort favorites by favorite_order
           favorites.sort_by! { |entry| entry[:favorite_order] || 999 }
 
-          # Sort non-favorites by game name, account name, and character name
+          # Sort non-favorites by account name (upcase), game name, and character name
           sorted_non_favorites = non_favorites.sort do |a, b|
-            [a[:user_id], a[:game_name], a[:char_name]] <=> [b[:user_id], b[:game_name], b[:char_name]]
+            [a[:user_id].upcase, a[:game_name], a[:char_name]] <=> [b[:user_id].upcase, b[:game_name], b[:char_name]]
           end
 
           # Return favorites first, then non-favorites
