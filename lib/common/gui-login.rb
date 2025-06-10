@@ -245,9 +245,21 @@ module Lich
     def setup_cross_tab_communication
       # Register saved login tab for data change notifications
       @tab_communicator.register_data_change_callback(->(change_type, data) {
-        # Refresh saved login tab when data changes
-        @saved_login_tab.refresh_data if @saved_login_tab
-        Lich.log "info: Data change notification: #{change_type} - #{data}"
+        # Only refresh for changes that require full reload
+        # Skip refresh for favorite_toggled to prevent unwanted reordering
+        case change_type
+        when :favorite_toggled
+          # Skip refresh - favorites are handled locally in saved_login_tab
+          Lich.log "info: Favorite toggled notification (no refresh): #{data}"
+        when :entry_removed, :entry_added, :character_removed, :character_added, :account_removed, :account_added
+          # These changes require full refresh
+          @saved_login_tab.refresh_data if @saved_login_tab
+          Lich.log "info: Data change notification (refreshed): #{change_type} - #{data}"
+        else
+          # Default: refresh for unknown change types
+          @saved_login_tab.refresh_data if @saved_login_tab
+          Lich.log "info: Data change notification (default refresh): #{change_type} - #{data}"
+        end
       })
 
       # Set up account manager to notify of data changes
@@ -266,6 +278,7 @@ module Lich
       # Create callbacks for saved login tab
       saved_login_callbacks = {
         on_play: ->(launch_data) {
+          p launch_data
           @launch_data = launch_data
           # Wrap window destruction in Gtk.queue to ensure it runs on the GTK main thread
           Gtk.queue {
@@ -274,10 +287,28 @@ module Lich
           }
         },
         on_remove: ->(login_info) {
-          @entry_data.delete(login_info)
-          @save_entry_data = true
-          # Notify other tabs of data change
-          @tab_communicator.notify_data_changed(:entry_removed, { entry: login_info })
+          # Find entry by key identifying fields instead of exact hash equality
+          entry_to_remove = GUI::YamlState.find_entry_in_legacy_format(
+            @entry_data,
+            login_info[:user_id],
+            login_info[:char_name],
+            login_info[:game_code],
+            login_info[:frontend]
+          )
+
+          if entry_to_remove
+            @entry_data.delete(entry_to_remove)
+
+            # IMMEDIATELY save to YAML before notifying to ensure refresh_data sees updated file
+            Lich::Common::GUI::YamlState.save_entries(DATA_DIR, @entry_data)
+
+            # Create sanitized entry for notification (without password)
+            sanitized_entry = login_info.dup
+            sanitized_entry.delete(:password)
+            @tab_communicator.notify_data_changed(:entry_removed, { entry: sanitized_entry })
+          else
+            Lich.log "warning: Could not find entry to remove: #{login_info}"
+          end
         },
         on_add_character: ->(character:, instance:, frontend:) {
           # Handle adding a character

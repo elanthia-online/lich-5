@@ -351,13 +351,18 @@ module Lich
           yaml_data
         end
 
-        # Sorts entries with favorites priority
-        # Applies sorting logic that prioritizes favorites while maintaining order
+        # Sorts entries with favorites priority based on autosort setting
+        # When autosort is enabled, favorites are placed first and all entries are sorted
+        # When autosort is disabled, original order is preserved without reordering
         #
         # @param entries [Array] Array of entry data
         # @param autosort_state [Boolean] Whether to use auto-sorting
-        # @return [Array] Sorted array of entries
+        # @return [Array] Sorted array of entries (if autosort enabled) or original order (if disabled)
         def self.sort_entries_with_favorites(entries, autosort_state)
+          # If autosort is disabled, preserve original order without any reordering
+          return entries unless autosort_state
+
+          # Autosort enabled: apply favorites-first sorting
           # Separate favorites and non-favorites
           favorites = entries.select { |entry| entry[:is_favorite] }
           non_favorites = entries.reject { |entry| entry[:is_favorite] }
@@ -365,15 +370,10 @@ module Lich
           # Sort favorites by favorite_order
           favorites.sort_by! { |entry| entry[:favorite_order] || 999 }
 
-          # Sort non-favorites using existing logic
-          sorted_non_favorites = if autosort_state
-                                   # Sort by game name, account name, and character name
-                                   non_favorites.sort do |a, b|
-                                     [a[:user_id], a[:game_name], a[:char_name]] <=> [b[:user_id], b[:game_name], b[:char_name]]
-                                   end
-                                 else
-                                   non_favorites
-                                 end
+          # Sort non-favorites by game name, account name, and character name
+          sorted_non_favorites = non_favorites.sort do |a, b|
+            [a[:user_id], a[:game_name], a[:char_name]] <=> [b[:user_id], b[:game_name], b[:char_name]]
+          end
 
           # Return favorites first, then non-favorites
           favorites + sorted_non_favorites
@@ -447,6 +447,34 @@ module Lich
           end
 
           max_order + 1
+        end
+
+        # Finds an entry in legacy format array using the same matching logic as find_character
+        # Searches for an entry based on key identifying fields rather than exact hash equality
+        # This method reuses the proven matching logic from find_character for consistency
+        #
+        # @param entry_data [Array] Array of entry data in legacy format
+        # @param username [String] Account username
+        # @param char_name [String] Character name
+        # @param game_code [String] Game code
+        # @param frontend [String] Frontend identifier (optional for backward compatibility)
+        # @return [Hash, nil] Entry hash if found, nil otherwise
+        def self.find_entry_in_legacy_format(entry_data, username, char_name, game_code, frontend = nil)
+          entry_data.find do |entry|
+            # Match on username first
+            next unless entry[:user_id] == username
+            
+            # Apply same matching logic as find_character
+            matches_basic = entry[:char_name] == char_name && entry[:game_code] == game_code
+
+            if frontend.nil?
+              # Backward compatibility: if no frontend specified, match any frontend
+              matches_basic
+            else
+              # Frontend precision: must match exact frontend
+              matches_basic && entry[:frontend] == frontend
+            end
+          end
         end
 
         # Reorders all favorites to have consecutive order numbers

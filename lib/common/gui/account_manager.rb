@@ -123,14 +123,15 @@ module Lich
           end
         end
 
-        # Removes a character from an account
+        # Removes a character from an account with frontend precision
         #
         # @param data_dir [String] Directory containing entry data
         # @param username [String] Account username
         # @param char_name [String] Character name
         # @param game_code [String] Game code
+        # @param frontend [String] Frontend identifier (optional for backward compatibility)
         # @return [Boolean] True if operation was successful
-        def self.remove_character(data_dir, username, char_name, game_code)
+        def self.remove_character(data_dir, username, char_name, game_code, frontend = nil)
           yaml_file = File.join(data_dir, "entry.yml")
 
           # Load existing data
@@ -144,12 +145,20 @@ module Lich
                                 yaml_data['accounts'][username] &&
                                 yaml_data['accounts'][username]['characters']
 
-            # Find and remove character
+            # Find and remove character with frontend precision
             characters = yaml_data['accounts'][username]['characters']
             initial_count = characters.size
 
             characters.reject! do |char|
-              char['char_name'] == char_name && char['game_code'] == game_code
+              matches_basic = char['char_name'] == char_name && char['game_code'] == game_code
+
+              if frontend.nil?
+                # Backward compatibility: if no frontend specified, match any frontend
+                matches_basic
+              else
+                # Frontend precision: must match exact frontend
+                matches_basic && char['frontend'] == frontend
+              end
             end
 
             # Check if any characters were removed

@@ -162,6 +162,7 @@ module Lich
               account = iter[0]
               character = iter[1] # Character is in column 1, not 2
               _game_name = iter[2] # Game name is in column 2, not character
+              frontend_display = iter[3] # Frontend display name
               game_code = iter[4] # Game code is in hidden column 4
 
               if character.nil? || character.empty?
@@ -202,15 +203,30 @@ module Lich
                 dialog.destroy
 
                 if response == Gtk::ResponseType::YES
-                  # Remove character
-                  if AccountManager.remove_character(@data_dir, account, character, game_code)
+                  # Convert display name back to internal frontend format for precise removal
+                  frontend = case frontend_display.downcase
+                             when 'custom'
+                               'stormfront' # Custom launches use stormfront as base
+                             when 'wrayth'
+                               'stormfront' # Wrayth is display name for stormfront
+                             when 'wizard'
+                               'wizard'
+                             when 'avalon'
+                               'avalon'
+                             else
+                               frontend_display.downcase
+                             end
+
+                  # Remove character with frontend precision
+                  if AccountManager.remove_character(@data_dir, account, character, game_code, frontend)
                     @msgbox.call("Character removed successfully.")
                     populate_accounts_view(accounts_store)
                     # Notify other tabs of data change
                     notify_data_changed(:character_removed, {
                       account: account,
                       character: character,
-                      game_code: game_code
+                      game_code: game_code,
+                      frontend: frontend
                     })
                   else
                     @msgbox.call("Failed to remove character.")
@@ -578,7 +594,7 @@ module Lich
                        end
 
             # Get game code from game text
-            game_code = GameSelection.game_text_to_code(game_text)
+            game_code = GameSelection.get_selected_game_code(game_combo)
 
             # Create character data
             character_data = {

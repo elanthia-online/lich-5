@@ -9,14 +9,14 @@ module Lich
         # Game code to display name mapping
         # Maps internal game codes to user-friendly display names
         GAME_MAPPING = {
-          'GS3' => 'GS Prime',
-          'GSX' => 'GS Platinum',
-          'GST' => 'GS Test',
-          'GSF' => 'GS Shattered',
-          'DR'  => 'DR Prime',
-          'DRX' => 'DR Platinum',
-          'DRT' => 'DR Test',
-          'DRF' => 'DR Fallen'
+          'GS3' => 'Gemstone IV',
+          'GSX' => 'Gemstone IV Platinum',
+          'GST' => 'Gemstone IV Prime Test',
+          'GSF' => 'Gemstone IV Shattered',
+          'DR'  => 'DragonRealms',
+          'DRX' => 'DragonRealms Platinum',
+          'DRT' => 'DragonRealms Prime Test',
+          'DRF' => 'DragonRealms Fallen'
         }.freeze
 
         # Display name to game code mapping (reverse of GAME_MAPPING)
