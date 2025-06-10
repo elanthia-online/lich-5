@@ -75,7 +75,7 @@ module Lich
     #
     # @param command [String] The command to send.
     # @param start_pattern [Regexp] Pattern marking the start of output capture.
-    # @param end_pattern [Regexp] Pattern marking the end of output capture. Defaults to /<prompt/.
+    # @param end_pattern [Regexp, Symbol] Pattern marking the end of output capture. Defaults to /<prompt/. Use :ignore for single-line capture.
     # @param include_end [Boolean] Whether to include the end line in the result. Defaults to true.
     # @param timeout [Integer] Timeout in seconds for the command. Defaults to 5.
     # @param silent [Boolean, nil] Whether to silence script output. Defaults to nil (no change).
