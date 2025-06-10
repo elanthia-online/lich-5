@@ -1,13 +1,13 @@
 module Lich
   module Gemstone
-    module Society
+    module Societies
       ##
       # Represents the Guardians of Sunfist society.
       #
       # Provides access to Guardians of Sunfist sigil data, cost calculation, usability checks,
       # and dynamic method access for individual sigils.
       #
-      class GuardiansOfSunfist < Society
+      class GuardiansOfSunfist < Gemstone::Society
         ##
         # Metadata for each Sigil from the Guardians of Sunfist, including rank, costs, duration, etc.
         # Some fields (e.g., `:summary`, `:duration`) may be defined as lambdas for dynamic content.

@@ -1,12 +1,12 @@
 module Lich
   module Gemstone
-    module Society
+    module Societies
       ##
       # Represents the Council of Light society.
       #
       # Provides access to CoL sign data, cost handling, usability checks, and sign commands.
       #
-      class CouncilOfLight < Society
+      class CouncilOfLight < Gemstone::Society
         ##
         # Metadata for each Sign from the Council of Light, including rank, cost, duration, etc.
         # Some fields (e.g., `:summary`, `:duration`) may be defined as lambdas for dynamic content.

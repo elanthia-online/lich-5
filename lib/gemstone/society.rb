@@ -1,4 +1,5 @@
-# Carveout for Infomon rewrite
+require_relative '../util/util.rb' # needed to ensure it loads before Society tries to load
+
 module Lich
   module Gemstone
     ##
@@ -147,8 +148,8 @@ module Lich
       #
       def self.define_name_methods(target_class, data)
         data.values.each do |entry|
-          short_method = Lich::Utils.normalize_name(entry[:short_name])
-          long_method  = Lich::Utils.normalize_name(entry[:long_name])
+          short_method = Lich::Util.normalize_name(entry[:short_name])
+          long_method  = Lich::Util.normalize_name(entry[:long_name])
 
           target_class.define_singleton_method(short_method) { target_class[entry[:short_name]] }
           target_class.define_singleton_method(long_method)  { target_class[entry[:short_name]] }
@@ -157,3 +158,8 @@ module Lich
     end
   end
 end
+
+# these are at the bottom because Society has to be loaded first
+require_relative 'societies/council_of_light.rb'
+require_relative 'societies/guardians_of_sunfist.rb'
+require_relative 'societies/order_of_voln.rb'

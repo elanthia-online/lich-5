@@ -1,13 +1,13 @@
 module Lich
   module Gemstone
-    module Society
+    module Societies
       ##
       # Represents the Order of Voln society.
       #
       # Provides access to Order of Voln symbol data, favor cost calculation, usability checks,
       # and dynamic method access for individual symbols.
       #
-      class OrderOfVoln < Society
+      class OrderOfVoln < Gemstone::Society
         # Calculate Cost of Symbol using data from here # https://gswiki.play.net/Favor#Symbol_Use_Favor_Cost
 
         ##
