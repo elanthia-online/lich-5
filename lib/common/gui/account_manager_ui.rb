@@ -579,6 +579,24 @@ module Lich
               @msgbox.call("Authentication failed: #{e.message}")
             end
           end
+          # Set up ENTER key handlers for username and password fields
+          username_entry.signal_connect('key-press-event') { |_widget, event|
+            if event.keyval == Gdk::Keyval::KEY_Return
+              add_button.clicked
+              true
+            else
+              false
+            end
+          }
+
+          password_entry.signal_connect('key-press-event') { |_widget, event|
+            if event.keyval == Gdk::Keyval::KEY_Return
+              add_button.clicked
+              true
+            else
+              false
+            end
+          }
         end
 
         private
