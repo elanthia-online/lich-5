@@ -463,7 +463,7 @@ module Lich
           entry_data.find do |entry|
             # Match on username first
             next unless entry[:user_id] == username
-            
+
             # Apply same matching logic as find_character
             matches_basic = entry[:char_name] == char_name && entry[:game_code] == game_code
 
