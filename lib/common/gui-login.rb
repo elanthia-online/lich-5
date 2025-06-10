@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'rbconfig'
 require_relative 'gui/accessibility'
 require_relative 'gui/account_manager'
 require_relative 'gui/account_manager_ui'
@@ -278,7 +277,6 @@ module Lich
       # Create callbacks for saved login tab
       saved_login_callbacks = {
         on_play: ->(launch_data) {
-          p launch_data
           @launch_data = launch_data
           # Wrap window destruction in Gtk.queue to ensure it runs on the GTK main thread
           Gtk.queue {
