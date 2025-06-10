@@ -1,94 +1,559 @@
-# Carve out from lich.rbw
-# module Games on 2024-06-13
+# frozen_string_literal: true
+
+# Modernized version of games.rb with separated DR and GS functionality
+# Original module carve out from lich.rbw
+# Refactored on 2025-04-01
 
 module Lich
+  # Base module for game-specific functionality
+  # Unknown game type module
   module Unknown
     module Game
+      # Placeholder for unknown game types
     end
   end
 
+  # Common module for shared functionality
   module Common
-    # module Game
-    # end
+    # Placeholder for common game functionality
   end
 
+  module GameBase
+    # Factory for creating game-specific objects
+    module GameInstanceFactory
+      def self.create(game_type)
+        case game_type
+        when /^GS/
+          Gemstone::GameInstance.new
+        when /^DR/
+          DragonRealms::GameInstance.new
+        else
+          # Default to a basic implementation if game type is unknown
+          GameInstance::Base.new
+        end
+      end
+    end
+
+    # Game instance interface for game-specific behaviors
+    module GameInstance
+      # Base instance class that defines the interface
+      class Base
+        def initialize
+          @atmospherics = false
+          @combat_count = 0
+          @end_combat_tags = ["<prompt", "<clearStream", "<component", "<pushStream id=\"percWindow"]
+        end
+
+        def clean_serverstring(server_string)
+          raise NotImplementedError, "#{self.class} must implement #clean_serverstring"
+        end
+
+        def handle_combat_tags(server_string)
+          raise NotImplementedError, "#{self.class} must implement #handle_combat_tags"
+        end
+
+        def handle_atmospherics(server_string)
+          raise NotImplementedError, "#{self.class} must implement #handle_atmospherics"
+        end
+
+        def get_documentation_url
+          raise NotImplementedError, "#{self.class} must implement #get_documentation_url"
+        end
+
+        def process_game_specific_data(server_string)
+          raise NotImplementedError, "#{self.class} must implement #process_game_specific_data"
+        end
+
+        def modify_room_display(alt_string, uid_from_string, lichid_from_uid_string)
+          raise NotImplementedError, "#{self.class} must implement #modify_room_display"
+        end
+
+        def process_room_display(alt_string)
+          raise NotImplementedError, "#{self.class} must implement #process_room_display"
+        end
+
+        def combat_count
+          @combat_count
+        end
+
+        def atmospherics
+          @atmospherics
+        end
+
+        def atmospherics=(value)
+          @atmospherics = value
+        end
+
+        protected
+
+        def increment_combat_count(server_string)
+          @combat_count += server_string.scan("<pushStream id=\"combat\" />").length
+          @combat_count -= server_string.scan("<popStream id=\"combat\" />").length
+          @combat_count = 0 if @combat_count < 0
+        end
+      end
+    end
+
+    # XML string cleaner module
+    module XMLCleaner
+      class << self
+        def clean_nested_quotes(server_string)
+          # Fix nested single quotes
+          unless (matches = server_string.scan(/'([^=>]*'[^=>]*)'/)).empty?
+            Lich.log "Invalid nested single quotes XML tags detected: #{server_string.inspect}"
+            matches.flatten.each do |match|
+              server_string.gsub!(match, match.gsub(/'/, '&apos;'))
+            end
+            Lich.log "Invalid nested single quotes XML tags fixed to: #{server_string.inspect}"
+          end
+
+          # Fix nested double quotes
+          unless (matches = server_string.scan(/"([^=]*"[^=]*)"/)).empty?
+            Lich.log "Invalid nested double quotes XML tags detected: #{server_string.inspect}"
+            matches.flatten.each do |match|
+              server_string.gsub!(match, match.gsub(/"/, '&quot;'))
+            end
+            Lich.log "Invalid nested double quotes XML tags fixed to: #{server_string.inspect}"
+          end
+
+          server_string
+        end
+
+        def fix_invalid_characters(server_string)
+          # Fix ampersands
+          if server_string.include?('&') && !server_string.include?('&amp;') && !server_string.include?('&gt;') && !server_string.include?('&lt;') && !server_string.include?('&apos;') && !server_string.include?('&quot;')
+            Lich.log "Invalid & detected: #{server_string.inspect}"
+            server_string.gsub!('&', '&amp;')
+            Lich.log "Invalid & fixed to: #{server_string.inspect}"
+          end
+
+          # Fix bell character
+          if server_string.include?("\a")
+            Lich.log "Invalid \\a detected: #{server_string.inspect}"
+            server_string.gsub!("\a", '')
+            Lich.log "Invalid \\a stripped out: #{server_string.inspect}"
+          end
+
+          # Fix poorly encoded apostrophes
+          if server_string =~ /\\x92/
+            Lich.log "Detected poorly encoded apostrophe: #{server_string.inspect}"
+            server_string.gsub!("\x92", "'")
+            Lich.log "Changed poorly encoded apostrophe to: #{server_string.inspect}"
+          end
+
+          server_string
+        end
+
+        def fix_xml_tags(server_string)
+          # Fix open-ended XML tags
+          if /^<(?<xmltag>dynaStream|component) id='.*'>[^<]*(?!<\/\k<xmltag>>)\r\n$/ =~ server_string
+            Lich.log "Open-ended #{xmltag} tag: #{server_string.inspect}"
+            server_string.gsub!("\r\n", "</#{xmltag}>")
+            Lich.log "Open-ended #{xmltag} tag fixed to: #{server_string.inspect}"
+          end
+
+          # Remove dangling closing tags
+          if server_string =~ /^(?:(\"|<compass><\/compass>))?<\/(dynaStream|component)>\r\n/
+            Lich.log "Extraneous closing tag detected and deleted: #{server_string.inspect}"
+            server_string = ""
+          end
+
+          # Remove unclosed tag in long strings from empath appraisals
+          if server_string =~ / and <d cmd=\"transfer .+? nerves\">a/
+            Lich.log "Unclosed wound (nerves) tag detected and deleted: #{server_string.inspect}"
+            server_string.sub!(/ and <d cmd=\"transfer .+? nerves\">a.+?$/, " and more.")
+          end
+
+          server_string
+        end
+      end
+    end
+
+    # Base Game class with common functionality
+    class Game
+      class << self
+        attr_reader :thread, :buffer, :_buffer, :game_instance
+
+        def initialize_buffers
+          @socket = nil
+          @mutex = Mutex.new
+          @last_recv = nil
+          @thread = nil
+          @buffer = Lich::Common::SharedBuffer.new
+          @_buffer = Lich::Common::SharedBuffer.new
+          @_buffer.max_size = 1000
+          @autostarted = false
+          @cli_scripts = false
+          @infomon_loaded = false
+          @room_number_after_ready = false
+          @last_id_shown_room_window = 0
+          @game_instance = nil
+        end
+
+        def set_game_instance(game_type)
+          @game_instance = GameInstanceFactory.create(game_type)
+        end
+
+        def open(host, port)
+          @socket = TCPSocket.open(host, port)
+          begin
+            @socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, true)
+          rescue StandardError => e
+            log_error("Socket option error", e)
+          end
+          @socket.sync = true
+
+          start_wrap_thread
+          start_main_thread
+
+          @socket
+        end
+
+        def start_wrap_thread
+          @wrap_thread = Thread.new do
+            @last_recv = Time.now
+            until @autostarted || (Time.now - @last_recv >= 6)
+              break if @autostarted
+              sleep 0.2
+            end
+
+            puts 'look' unless @autostarted
+          end
+        end
+
+        def closed?
+          @socket.nil? || @socket.closed?
+        end
+
+        def close
+          if @socket
+            @socket.close rescue nil
+            @thread.kill rescue nil
+          end
+        end
+
+        def _puts(str)
+          @mutex.synchronize do
+            @socket.puts(str)
+          end
+        end
+
+        def puts(str)
+          script_name = Script.current&.name || '(unknown script)'
+          $_CLIENTBUFFER_.push "[#{script_name}]#{$SEND_CHARACTER}#{$cmd_prefix}#{str}\r\n"
+
+          unless Script.current&.silent
+            respond "[#{script_name}]#{$SEND_CHARACTER}#{str}\r\n"
+          end
+
+          _puts "#{$cmd_prefix}#{str}"
+          $_LASTUPSTREAM_ = "[#{script_name}]#{$SEND_CHARACTER}#{str}"
+        end
+
+        def gets
+          @buffer.gets
+        end
+
+        def _gets
+          @_buffer.gets
+        end
+
+        def start_main_thread
+          @thread = Thread.new do
+            begin
+              while (server_string = @socket.gets)
+                @last_recv = Time.now
+                @_buffer.update(server_string) if defined?(TESTING) && TESTING
+
+                begin
+                  process_server_string(server_string)
+                rescue StandardError => e
+                  log_error("Error processing server string", e)
+                end
+              end
+            rescue StandardError => e
+              handle_thread_error(e)
+            end
+          end
+          @thread.priority = 4
+        end
+
+        def process_server_string(server_string)
+          $cmd_prefix = String.new if server_string =~ /^\034GSw/
+
+          # Load game-specific modules if needed
+          unless (XMLData.game.nil? || XMLData.game.empty?)
+            unless Module.const_defined?(:GameLoader)
+              require_relative 'common/game-loader'
+              GameLoader.load!
+            end
+          end
+
+          # Set instance if not already set
+          if @game_instance.nil? && !XMLData.game.nil? && !XMLData.game.empty?
+            set_game_instance(XMLData.game)
+          end
+
+          # Clean server string based on game type
+          if @game_instance
+            server_string = @game_instance.clean_serverstring(server_string)
+          end
+
+          # Debug output if needed
+          pp server_string if defined?($deep_debug) && $deep_debug
+
+          # Push to server buffer
+          $_SERVERBUFFER_.push(server_string)
+
+          # Handle autostart
+          handle_autostart if !@autostarted && server_string =~ /<app char/
+
+          # Handle infomon loading
+          if !@infomon_loaded && (defined?(Infomon) || !$DRINFOMON_VERSION.nil?) && !XMLData.name.nil? && !XMLData.name.empty? && !XMLData.dialogs.empty?
+            ExecScript.start("Infomon.redo!", { quiet: true, name: "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
+            @infomon_loaded = true
+          end
+
+          # Handle CLI scripts
+          if !@cli_scripts && @autostarted && !XMLData.name.nil? && !XMLData.name.empty?
+            start_cli_scripts
+          end
+
+          # Process XML data
+          process_xml_data(server_string) unless server_string =~ /^<settings /
+
+          # Run downstream hooks
+          process_downstream_hooks(server_string)
+        end
+
+        def handle_autostart
+          if defined?(LICH_VERSION) && defined?(Lich.core_updated_with_lich_version) &&
+             Gem::Version.new(LICH_VERSION) > Gem::Version.new(Lich.core_updated_with_lich_version)
+            Lich::Messaging.mono(Lich::Messaging.monsterbold("New installation or updated version of Lich5 detected!"))
+            Lich::Messaging.mono(Lich::Messaging.monsterbold("Installing newest core scripts available to ensure you're up-to-date!"))
+            Lich::Messaging.mono("")
+            Lich::Util::Update.update_core_data_and_scripts
+          end
+
+          Script.start('autostart') if defined?(Script) && Script.respond_to?(:exists?) && Script.exists?('autostart')
+          @autostarted = true
+
+          display_ruby_warning if defined?(RECOMMENDED_RUBY) && Gem::Version.new(RUBY_VERSION) < Gem::Version.new(RECOMMENDED_RUBY)
+        end
+
+        def display_ruby_warning
+          ruby_warning = Terminal::Table.new
+          ruby_warning.title = "Ruby Recommended Version Warning"
+          ruby_warning.add_row(["Please update your Ruby installation."])
+          ruby_warning.add_row(["You're currently running Ruby v#{Gem::Version.new(RUBY_VERSION)}!"])
+          ruby_warning.add_row(["It's recommended to run Ruby v#{Gem::Version.new(RECOMMENDED_RUBY)} or higher!"])
+          ruby_warning.add_row(["Future Lich5 releases will soon require this newer version."])
+          ruby_warning.add_row([" "])
+          ruby_warning.add_row(["Visit the following link for info on updating:"])
+
+          # Use instance to get the appropriate documentation URL
+          if @game_instance
+            ruby_warning.add_row([@game_instance.get_documentation_url])
+          else
+            ruby_warning.add_row(["Unknown game type detected."])
+            ruby_warning.add_row(["Unsure of proper documentation, please seek assistance via discord!"])
+          end
+
+          ruby_warning.to_s.split("\n").each do |row|
+            Lich::Messaging.mono(Lich::Messaging.monsterbold(row))
+          end
+        end
+
+        def start_cli_scripts
+          if (arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ })
+            arg.sub('--start-scripts=', '').split(',').each do |script_name|
+              Script.start(script_name)
+            end
+          end
+          @cli_scripts = true
+          Lich.log("info: logged in as #{XMLData.game}:#{XMLData.name}")
+        end
+
+        def process_xml_data(server_string)
+          begin
+            # Check for valid XML
+            REXML::Document.parse_stream("<root>#{server_string}</root>", XMLData)
+          rescue => e
+            case e.to_s
+            # Missing attribute equal: <s> - in dynamic dialogs with a single apostrophe for possessive 'Tsetem's Items'
+            when /nested single quotes|nested double quotes|Missing attribute equal: <s>/
+              server_string = XMLCleaner.clean_nested_quotes(server_string)
+              retry
+            when /invalid characters/
+              server_string = XMLCleaner.fix_invalid_characters(server_string)
+              retry
+            when /Missing end tag for 'd'/
+              server_string = XMLCleaner.fix_xml_tags(server_string)
+              retry
+            else
+              handle_xml_error(server_string, e)
+              XMLData.reset
+              return
+            end
+          end
+
+          # Process game-specific data using instance
+          if @game_instance && Module.const_defined?(:GameLoader)
+            @game_instance.process_game_specific_data(server_string)
+          end
+
+          # Process downstream XML
+          Script.new_downstream_xml(server_string) if defined?(Script)
+
+          # Process stripped server string
+          stripped_server = strip_xml(server_string, type: 'main')
+          stripped_server.split("\r\n").each do |line|
+            @buffer.update(line) if defined?(TESTING) && TESTING
+            Script.new_downstream(line) if defined?(Script) && !line.empty?
+          end
+        end
+
+        def handle_xml_error(server_string, error)
+          # Ignoring certain XML errors
+          unless error.to_s =~ /invalid byte sequence/
+            # Handle specific XML errors
+            if server_string =~ /<settingsInfo .*?space not found /
+              Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
+              server_string.sub!('space not found', '')
+              Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
+              return process_xml_data(server_string) # Return to retry with fixed string
+            end
+
+            $stdout.puts "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
+            Lich.log "Invalid XML detected - please report this: #{server_string.inspect}"
+            Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
+          end
+        end
+
+        def process_downstream_hooks(server_string)
+          if (alt_string = DownstreamHook.run(server_string))
+            process_room_information(alt_string)
+
+            # Handle frontend-specific modifications
+            if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+              alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+            end
+
+            # Handle room number display
+            if @room_number_after_ready && alt_string =~ /<prompt /
+              alt_string = @game_instance ? @game_instance.process_room_display(alt_string) : alt_string
+              @room_number_after_ready = false
+            end
+
+            # Handle frontend-specific conversions
+            if $frontend =~ /^(?:wizard|avalon)$/
+              alt_string = sf_to_wiz(alt_string)
+            end
+
+            # Send to client
+            send_to_client(alt_string)
+          end
+        end
+
+        def process_room_information(alt_string)
+          if alt_string =~ /^(<pushStream id="familiar" ifClosedStyle="watching"\/>)?(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
+            if (Lich.display_lichid == true || Lich.display_uid == true || Lich.hide_uid_flag == true)
+              @game_instance ? @game_instance.modify_room_display(alt_string) : alt_string
+            end
+            @room_number_after_ready = true
+            alt_string
+          end
+        end
+
+        def send_to_client(alt_string)
+          if $_DETACHABLE_CLIENT_
+            begin
+              $_DETACHABLE_CLIENT_.write(alt_string)
+            rescue
+              $_DETACHABLE_CLIENT_.close rescue nil
+              $_DETACHABLE_CLIENT_ = nil
+              respond "--- Lich: error: client_thread: #{$!}"
+              respond $!.backtrace.first
+              Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            end
+          else
+            $_CLIENT_.write(alt_string)
+          end
+        end
+
+        def handle_thread_error(error)
+          Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
+          $stdout.puts "error: server_thread: #{error}\n\t#{error.backtrace.slice(0..10).join("\n\t")}"
+          sleep 0.2
+          # Cannot use retry here as it's not in a rescue block
+          # Instead, we'll return a boolean indicating whether to retry
+          return !($_CLIENT_.closed? || @socket.closed? || (error.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i))
+        end
+
+        protected
+
+        def log_error(message, error)
+          Lich.log "#{message}: #{error}\n\t#{error.backtrace.join("\n\t")}"
+        end
+      end
+    end
+  end
+
+  # Gemstone game module
   module Gemstone
     include Lich
-    module Game
-      @@socket    = nil
-      @@mutex     = Mutex.new
-      @@last_recv = nil
-      @@thread    = nil
-      @@buffer    = Lich::Common::SharedBuffer.new
-      @@_buffer   = Lich::Common::SharedBuffer.new
-      @@_buffer.max_size = 1000
-      @@autostarted = false
-      @@cli_scripts = false
-      @@infomon_loaded = false
-      @@room_number_after_ready = false
-      @@last_id_shown_room_window = 0
 
-      def self.clean_gs_serverstring(server_string)
+    # Base class for character status tracking
+    class CharacterStatus
+      class << self
+        def fix_injury_mode(mode = 'both') # Default mode 'both' handles wounds (precedence) then scars
+          case mode
+          when 'scar', 'scars'
+            unless XMLData.injury_mode == 1
+              Game._puts '_injury 1'
+              150.times { sleep 0.05; break if XMLData.injury_mode == 1 }
+            end
+          when 'wound', 'wounds' # future proof leaving in place, but this will likely not be used
+            unless XMLData.injury_mode == 0
+              Game._puts '_injury 0'
+              150.times { sleep 0.05; break if XMLData.injury_mode == 0 }
+            end
+          when 'both'
+            unless XMLData.injury_mode == 2
+              Game._puts '_injury 2'
+              150.times { sleep 0.05; break if XMLData.injury_mode == 2 }
+            end
+          else
+            raise ArgumentError, "Invalid mode: #{mode}. Use 'scar', 'wound', or 'both'."
+          end
+        end
+
+        def method_missing(_method_name = nil)
+          result = Lich::Messaging.mono(Lich::Messaging.msg_format("bold", "#{self.name.split('::').last}: Invalid area, try one of these: arms, limbs, torso, #{XMLData.injuries.keys.join(', ')}"))
+          # the _respond method used in Lich::Messaging returns nil upon success
+          return result
+        end
+      end
+    end
+
+    # Gemstone-specific game instance
+    class GameInstance < GameBase::GameInstance::Base
+      def clean_serverstring(server_string)
         # The Rift, Scatter is broken...
         if server_string =~ /<compDef id='room text'><\/compDef>/
           server_string.sub!(/(.*)\s\s<compDef id='room text'><\/compDef>/) { "<compDef id='room desc'>#{$1}</compDef>" }
         end
-        return server_string
+
+        # Handle combat and atmospherics
+        server_string = handle_combat_tags(server_string)
+        server_string = handle_atmospherics(server_string)
+
+        server_string
       end
 
-      @atmospherics = false
-      @combat_count = 0
-      @end_combat_tags = ["<prompt", "<clearStream", "<component", "<pushStream id=\"percWindow"]
-
-      def self.clean_dr_serverstring(server_string)
-        ## Clear out superfluous tags
-        server_string = server_string.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />", "")
-        server_string = server_string.gsub("<popStream id=\"combat\" /><pushStream id=\"combat\" />", "")
-
-        # DR occasionally has poor encoding in text, which causes parsing errors.
-        # One example of this is in the discern text for the spell Membrach's Greed
-        # which gets sent as Membrach\x92s Greed. This fixes the bad encoding until
-        # Simu fixes it.
-        if server_string =~ /\\x92/
-          Lich.log "Detected poorly encoded apostrophe: #{server_string.inspect}"
-          server_string.gsub!("\x92", "'")
-          Lich.log "Changed poorly encoded apostrophe to: #{server_string.inspect}"
-        end
-
-        ## Fix combat wrapping components - Why, DR, Why?
-        server_string = server_string.gsub("<pushStream id=\"combat\" /><component id=", "<component id=")
-
-        # Fixes xml with \r\n in the middle of it like:
-        # We close the first line and in the next segment, we remove the trailing bits
-        # <component id='room objs'>  You also see a granite altar with several candles and a water jug on it, and a granite font.\r\n
-        # <component id='room extra'>Placed around the interior, you see: some furniture and other bits of interest.\r\n
-        # <component id='room exits'>Obvious paths: clockwise, widdershins.\r\n
-
-        # Followed by in a closing line such as one of these:
-        # </component>\r\n
-        # <compass></compass></component>\r\n
-
-        # If the pattern is on the left of the =~ the named capture gets assigned as a variable
-        if /^<(?<xmltag>dynaStream|component) id='.*'>[^<]*(?!<\/\k<xmltag>>)\r\n$/ =~ server_string
-          Lich.log "Open-ended #{xmltag} tag: #{server_string.inspect}"
-          server_string.gsub!("\r\n", "</#{xmltag}>")
-          Lich.log "Open-ended #{xmltag} tag tag fixed to: #{server_string.inspect}"
-        end
-
-        # Remove the now dangling closing tag
-        if server_string =~ /^(?:(\"|<compass><\/compass>))?<\/(dynaStream|component)>\r\n/
-          Lich.log "Extraneous closing tag detected and deleted: #{server_string.inspect}"
-          server_string = ""
-        end
-
-        ## Fix duplicate pushStrings
-        while server_string.include?("<pushStream id=\"combat\" /><pushStream id=\"combat\" />")
-          server_string = server_string.gsub("<pushStream id=\"combat\" /><pushStream id=\"combat\" />", "<pushStream id=\"combat\" />")
-        end
-
+      def handle_combat_tags(server_string)
         if @combat_count > 0
           @end_combat_tags.each do |tag|
-            # server_string = "<!-- looking for tag: #{tag}" + server_string
             if server_string.include?(tag)
               server_string = server_string.gsub(tag, "<popStream id=\"combat\" />" + tag) unless server_string.include?("<popStream id=\"combat\" />")
               @combat_count -= 1
@@ -99,14 +564,16 @@ module Lich
           end
         end
 
-        @combat_count += server_string.scan("<pushStream id=\"combat\" />").length
-        @combat_count -= server_string.scan("<popStream id=\"combat\" />").length
-        @combat_count = 0 if @combat_count < 0
+        increment_combat_count(server_string)
+        server_string
+      end
 
+      def handle_atmospherics(server_string)
         if @atmospherics
           @atmospherics = false
           server_string.prepend('<popStream id="atmospherics" />') unless server_string =~ /<popStream id="atmospherics" \/>/
         end
+
         if server_string =~ /<pushStream id="familiar" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # Cry For Help spell is broken...
           server_string.sub!('<pushStream id="familiar" />', '')
         elsif server_string =~ /<pushStream id="atmospherics" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # pet pigs in DragonRealms are broken...
@@ -115,613 +582,127 @@ module Lich
           @atmospherics = true
         end
 
-        return server_string
+        server_string
       end
 
-      def Game.open(host, port)
-        @@socket = TCPSocket.open(host, port)
-        begin
-          @@socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, true)
-        rescue
-          Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-        rescue StandardError
-          Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      def get_documentation_url
+        "https://gswiki.play.net/Lich:Software/Installation"
+      end
+
+      def process_game_specific_data(server_string)
+        infomon_serverstring = server_string.dup
+        Infomon::XMLParser.parse(infomon_serverstring)
+        stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
+        stripped_infomon_serverstring.split("\r\n").each do |line|
+          Infomon::Parser.parse(line) unless line.empty?
         end
-        @@socket.sync = true
+      end
 
-        # Add check to determine if the game server hung at initial response
+      def modify_room_display(alt_string)
+        uid_from_string = alt_string.match(/] \((?<uid>\d+)\)/)
+        if uid_from_string.nil?
+          lichid_from_uid_string = Room.current.id
+        else
+          lichid_from_uid_string = Room["u#{uid_from_string[:uid]}"].id.to_i
+        end
+        if Lich.display_lichid == true
+          alt_string.sub!(']') { " - #{lichid_from_uid_string}]" }
+        end
 
-        @@wrap_thread = Thread.new {
-          @last_recv = Time.now
-          while !@@autostarted && (Time.now - @last_recv < 6)
-            break if @@autostarted
-            sleep 0.2
-          end
+        if Lich.display_uid == true
+          alt_string.sub!(/] \(\d+\)/) { "]" }
+          alt_string.sub!(']') { "] (#{(uid_from_string.nil? || XMLData.room_id == uid_from_string[:uid].to_i) ? ((XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "unknown" : "u#{XMLData.room_id}") : uid_from_string[:uid].to_i})" }
+        end
 
-          puts 'look' if !@@autostarted
-        }
+        alt_string
+      end
 
-        @@thread = Thread.new {
-          begin
-            while ($_SERVERSTRING_ = @@socket.gets)
-              @@last_recv = Time.now
-              @@_buffer.update($_SERVERSTRING_) if TESTING
-              begin
-                $cmd_prefix = String.new if $_SERVERSTRING_ =~ /^\034GSw/
-
-                unless (XMLData.game.nil? or XMLData.game.empty?)
-                  unless Module.const_defined?(:GameLoader)
-                    require_relative 'common/game-loader'
-                    GameLoader.load!
-                  end
-                end
-
-                if XMLData.game =~ /^GS/
-                  $_SERVERSTRING_ = self.clean_gs_serverstring($_SERVERSTRING_)
-                else
-                  $_SERVERSTRING_ = self.clean_dr_serverstring($_SERVERSTRING_)
-                end
-
-                pp $_SERVERSTRING_ if $deep_debug # retain for deep troubleshooting
-
-                $_SERVERBUFFER_.push($_SERVERSTRING_)
-
-                if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
-                  if Gem::Version.new(LICH_VERSION) > Gem::Version.new(Lich.core_updated_with_lich_version)
-                    Lich::Messaging.mono(Lich::Messaging.monsterbold("New installation or updated version of Lich5 detected!"))
-                    Lich::Messaging.mono(Lich::Messaging.monsterbold("Installing newest core scripts available to ensure you're up-to-date!"))
-                    Lich::Messaging.mono("")
-                    Lich::Util::Update.update_core_data_and_scripts
-                  end
-                  Script.start('autostart') if Script.exists?('autostart')
-                  @@autostarted = true
-                  if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(RECOMMENDED_RUBY)
-                    ruby_warning = Terminal::Table.new
-                    ruby_warning.title = "Ruby Recommended Version Warning"
-                    ruby_warning.add_row(["Please update your Ruby installation."])
-                    ruby_warning.add_row(["You're currently running Ruby v#{Gem::Version.new(RUBY_VERSION)}!"])
-                    ruby_warning.add_row(["It's recommended to run Ruby v#{Gem::Version.new(RECOMMENDED_RUBY)} or higher!"])
-                    ruby_warning.add_row(["Future Lich5 releases will soon require this newer version."])
-                    ruby_warning.add_row([" "])
-                    ruby_warning.add_row(["Visit the following link for info on updating:"])
-                    if XMLData.game =~ /^GS/
-                      ruby_warning.add_row(["https://gswiki.play.net/Lich:Software/Installation"])
-                    elsif XMLData.game =~ /^DR/
-                      ruby_warning.add_row(["https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich"])
-                    else
-                      ruby_warning.add_row(["Unknown game type #{XMLData.game} detected."])
-                      ruby_warning.add_row(["Unsure of proper documentation, please seek assistance via discord!"])
-                    end
-                    ruby_warning.to_s.split("\n").each { |row|
-                      Lich::Messaging.mono(Lich::Messaging.monsterbold(row))
-                    }
-                  end
-                end
-
-                if !@@infomon_loaded && (defined?(Infomon) || !$DRINFOMON_VERSION.nil?) && !XMLData.name.nil? && !XMLData.name.empty? && !XMLData.dialogs.empty?
-                  ExecScript.start("Infomon.redo!", { :quiet => true, :name => "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
-                  @@infomon_loaded = true
-                end
-
-                if !@@cli_scripts && @@autostarted && !XMLData.name.nil? && !XMLData.name.empty?
-                  if (arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ })
-                    for script_name in arg.sub('--start-scripts=', '').split(',')
-                      Script.start(script_name)
-                    end
-                  end
-                  @@cli_scripts = true
-                  Lich.log("info: logged in as #{XMLData.game}:#{XMLData.name}")
-                end
-                unless $_SERVERSTRING_ =~ /^<settings /
-                  begin
-                    # Check for valid XML prior to sending to client, corrects double and single nested quotes
-                    REXML::Document.parse_stream("<root>#{$_SERVERSTRING_}</root>", XMLData)
-                  rescue
-                    unless $!.to_s =~ /invalid byte sequence/
-                      # Fixed invalid xml such as:
-                      # <mode id="GAME"/><settingsInfo  space not found crc='0' instance='DR'/>
-                      # <settingsInfo  space not found crc='0' instance='DR'/>
-                      if $_SERVERSTRING_ =~ /<settingsInfo .*?space not found /
-                        Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.sub!('space not found', '')
-                        Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      # Illegal character "&" in raw string "  You also see a large bin labeled \"Lost & Found\", a hastily scrawled notice, a brightly painted sign, a silver bell, the Registrar's Office and "
-                      if $_SERVERSTRING_ =~ /\&/
-                        Lich.log "Invalid \& detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!("&", '&amp;')
-                        Lich.log "Invalid \& stripped out: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      # Illegal character "\a" in raw string "\aYOU HAVE BEEN IDLE TOO LONG. PLEASE RESPOND.\a\n"
-                      if $_SERVERSTRING_ =~ /\a/
-                        Lich.log "Invalid \a detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!("\a", '')
-                        Lich.log "Invalid \a stripped out: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      # Fixes invalid XML with nested single quotes in it such as:
-                      # From DR intro tips
-                      # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
-                      # From GS
-                      # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
-                      unless (matches = $_SERVERSTRING_.scan(/'([^=>]*'[^=>]*)'/)).empty?
-                        Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        matches.flatten.each do |match|
-                          $_SERVERSTRING_.gsub!(match, match.gsub(/'/, '&apos;'))
-                        end
-                        Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      # Fixes invalid XML with nested double quotes in it such as:
-                      # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
-                      unless (matches = $_SERVERSTRING_.scan(/"([^=]*"[^=]*)"/)).empty?
-                        Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        matches.flatten.each do |match|
-                          $_SERVERSTRING_.gsub!(match, match.gsub(/"/, '&quot;'))
-                        end
-                        Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                      Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
-                      Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    end
-                    XMLData.reset
-                  end
-                  if Module.const_defined?(:GameLoader)
-                    infomon_serverstring = $_SERVERSTRING_.dup
-                    if XMLData.game =~ /^GS/
-                      Infomon::XMLParser.parse(infomon_serverstring)
-                      stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
-                      stripped_infomon_serverstring.split("\r\n").each { |line|
-                        unless line.empty?
-                          Infomon::Parser.parse(line)
-                        end
-                      }
-                    elsif XMLData.game =~ /^DR/
-                      DRParser.parse(infomon_serverstring)
-                    end
-                  end
-                  Script.new_downstream_xml($_SERVERSTRING_)
-                  stripped_server = strip_xml($_SERVERSTRING_, type: 'main')
-                  stripped_server.split("\r\n").each { |line|
-                    @@buffer.update(line) if TESTING
-                    Script.new_downstream(line) if !line.empty?
-                  }
-                end
-                if (alt_string = DownstreamHook.run($_SERVERSTRING_))
-                  #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
-                    if (Lich.display_lichid == true || Lich.display_uid == true)
-                      if XMLData.game =~ /^GS/
-                        if (Lich.display_lichid == true && Lich.display_uid == true)
-                          alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                        elsif Lich.display_lichid == true
-                          alt_string.sub!(']') { " - #{Map.current.id}]" }
-                        elsif Lich.display_uid == true
-                          alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                        end
-                      elsif XMLData.game =~ /^DR/
-                        if Lich.display_uid == true
-                          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-                        elsif Lich.hide_uid_flag == true
-                          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-                        end
-                      end
-                    end
-                    @@room_number_after_ready = true
-                  end
-                  if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
-                    alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-                  end
-                  if @@room_number_after_ready && alt_string =~ /<prompt /
-                    if Lich.display_stringprocs == true
-                      room_exits = []
-                      Map.current.wayto.each do |key, value|
-                        # Don't include cardinals / up/down/out (usually just climb/go)
-                        if value.class == Proc
-                          if Map.current.timeto[key].is_a?(Numeric) || (Map.current.timeto[key].is_a?(StringProc) && Map.current.timeto[key].call.is_a?(Numeric))
-                            room_exits << "<d cmd=';go2 #{key}'>#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? ('(' + Map[key].id.to_s + ')') : ''}</d>"
-                          end
-                        end
-                      end
-                      alt_string = "StringProcs: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
-                    end
-                    if Lich.display_exits == true
-                      room_exits = []
-                      Map.current.wayto.each do |_key, value|
-                        # Don't include cardinals / up/down/out (usually just climb/go)
-                        next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
-                        if value.class != Proc
-                          room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
-                        end
-                      end
-                      unless room_exits.empty?
-                        alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}"
-                        if XMLData.game =~ /^GS/ && ['wrayth', 'stormfront'].include?($frontend) && Map.current.id != @@last_id_shown_room_window
-                          alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{room_exits.join(', ')}\r\n<popStream/>\r\n"
-                          @@last_id_shown_room_window = Map.current.id
-                        end
-                      end
-                    end
-                    if XMLData.game =~ /^DR/
-                      room_number = ""
-                      room_number += "#{Map.current.id}" if Lich.display_lichid
-                      room_number += " - " if Lich.display_lichid && Lich.display_uid
-                      room_number += "(#{XMLData.room_id == 0 ? "**" : "u#{XMLData.room_id}"})" if Lich.display_uid
-                      unless room_number.empty?
-                        alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
-                        if ['wrayth', 'stormfront'].include?($frontend)
-                          alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
-                          alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
-                        end
-                      end
-                    end
-                    @@room_number_after_ready = false
-                  end
-                  if $frontend =~ /^(?:wizard|avalon)$/
-                    alt_string = sf_to_wiz(alt_string)
-                  end
-                  if $_DETACHABLE_CLIENT_
-                    begin
-                      $_DETACHABLE_CLIENT_.write(alt_string)
-                    rescue
-                      $_DETACHABLE_CLIENT_.close rescue nil
-                      $_DETACHABLE_CLIENT_ = nil
-                      respond "--- Lich: error: client_thread: #{$!}"
-                      respond $!.backtrace.first
-                      Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    end
-                  else
-                    $_CLIENT_.write(alt_string)
-                  end
-                end
-              rescue
-                $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      def process_room_display(alt_string)
+        if Lich.display_stringprocs == true
+          room_exits = []
+          Map.current.wayto.each do |key, value|
+            # Don't include cardinals / up/down/out (usually just climb/go)
+            if value.is_a?(StringProc)
+              if Map.current.timeto[key].is_a?(Numeric) || (Map.current.timeto[key].is_a?(StringProc) && Map.current.timeto[key].call.is_a?(Numeric))
+                room_exits << "<d cmd=';go2 #{key}'>#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? ('(' + Map[key].id.to_s + ')') : ''}</d>"
               end
             end
-          rescue StandardError
-            Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.slice(0..10).join("\n\t")}"
-            sleep 0.2
-            retry unless $_CLIENT_.closed? or @@socket.closed? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i)
-          rescue
-            Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace..slice(0..10).join("\n\t")}"
-            sleep 0.2
-            retry unless $_CLIENT_.closed? or @@socket.closed? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i)
           end
-        }
-        @@thread.priority = 4
-        $_SERVER_ = @@socket # deprecated
-      end
-
-      def Game.thread
-        @@thread
-      end
-
-      def Game.closed?
-        if @@socket.nil?
-          true
-        else
-          @@socket.closed?
+          alt_string = "StringProcs: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
         end
-      end
 
-      def Game.close
-        if @@socket
-          @@socket.close rescue nil
-          @@thread.kill rescue nil
+        if Lich.display_exits == true
+          room_exits = []
+          Map.current.wayto.each do |_key, value|
+            # Don't include cardinals / up/down/out (usually just climb/go)
+            next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
+            unless value.is_a?(StringProc)
+              room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
+            end
+          end
+
+          unless room_exits.empty?
+            alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}"
+            if ['wrayth', 'stormfront'].include?($frontend) && Map.current.id != Game.instance_variable_get(:@last_id_shown_room_window)
+              alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{room_exits.join(', ')}\r\n<popStream/>\r\n"
+              Game.instance_variable_set(:@last_id_shown_room_window, Map.current.id)
+            end
+          end
         end
-      end
 
-      def Game._puts(str)
-        @@mutex.synchronize {
-          @@socket.puts(str)
-        }
-      end
-
-      def Game.puts(str)
-        $_SCRIPTIDLETIMESTAMP_ = Time.now
-        if (script = Script.current)
-          script_name = script.name
-        else
-          script_name = '(unknown script)'
-        end
-        $_CLIENTBUFFER_.push "[#{script_name}]#{$SEND_CHARACTER}#{$cmd_prefix}#{str}\r\n"
-        if script.nil? or not script.silent
-          respond "[#{script_name}]#{$SEND_CHARACTER}#{str}\r\n"
-        end
-        Game._puts "#{$cmd_prefix}#{str}"
-        $_LASTUPSTREAM_ = "[#{script_name}]#{$SEND_CHARACTER}#{str}"
-      end
-
-      def Game.gets
-        @@buffer.gets
-      end
-
-      def Game.buffer
-        @@buffer
-      end
-
-      def Game._gets
-        @@_buffer.gets
-      end
-
-      def Game._buffer
-        @@_buffer
+        alt_string
       end
     end
 
-    class Gift
-      @@gift_start ||= Time.now
-      @@pulse_count ||= 0
-      def Gift.started
-        @@gift_start = Time.now
-        @@pulse_count = 0
+    # Game class for Gemstone
+    class Game < GameBase::Game
+      class << self
+        def initialize
+          initialize_buffers
+          set_game_instance('GS')
+        end
       end
 
-      def Gift.pulse
-        @@pulse_count += 1
-      end
-
-      def Gift.remaining
-        ([360 - @@pulse_count, 0].max * 60).to_f
-      end
-
-      def Gift.restarts_on
-        @@gift_start + 594000
-      end
-
-      def Gift.serialize
-        [@@gift_start, @@pulse_count]
-      end
-
-      def Gift.load_serialized=(array)
-        @@gift_start = array[0]
-        @@pulse_count = array[1].to_i
-      end
-
-      def Gift.ended
-        @@pulse_count = 360
-      end
-
-      def Gift.stopwatch
-        nil
-      end
-    end
-
-    class Wounds
-      def Wounds.leftEye;   fix_injury_mode; XMLData.injuries['leftEye']['wound'];   end
-
-      def Wounds.leye;      fix_injury_mode; XMLData.injuries['leftEye']['wound'];   end
-
-      def Wounds.rightEye;  fix_injury_mode; XMLData.injuries['rightEye']['wound'];  end
-
-      def Wounds.reye;      fix_injury_mode; XMLData.injuries['rightEye']['wound'];  end
-
-      def Wounds.head;      fix_injury_mode; XMLData.injuries['head']['wound'];      end
-
-      def Wounds.neck;      fix_injury_mode; XMLData.injuries['neck']['wound'];      end
-
-      def Wounds.back;      fix_injury_mode; XMLData.injuries['back']['wound'];      end
-
-      def Wounds.chest;     fix_injury_mode; XMLData.injuries['chest']['wound'];     end
-
-      def Wounds.abdomen;   fix_injury_mode; XMLData.injuries['abdomen']['wound'];   end
-
-      def Wounds.abs;       fix_injury_mode; XMLData.injuries['abdomen']['wound'];   end
-
-      def Wounds.leftArm;   fix_injury_mode; XMLData.injuries['leftArm']['wound'];   end
-
-      def Wounds.larm;      fix_injury_mode; XMLData.injuries['leftArm']['wound'];   end
-
-      def Wounds.rightArm;  fix_injury_mode; XMLData.injuries['rightArm']['wound'];  end
-
-      def Wounds.rarm;      fix_injury_mode; XMLData.injuries['rightArm']['wound'];  end
-
-      def Wounds.rightHand; fix_injury_mode; XMLData.injuries['rightHand']['wound']; end
-
-      def Wounds.rhand;     fix_injury_mode; XMLData.injuries['rightHand']['wound']; end
-
-      def Wounds.leftHand;  fix_injury_mode; XMLData.injuries['leftHand']['wound'];  end
-
-      def Wounds.lhand;     fix_injury_mode; XMLData.injuries['leftHand']['wound'];  end
-
-      def Wounds.leftLeg;   fix_injury_mode; XMLData.injuries['leftLeg']['wound'];   end
-
-      def Wounds.lleg;      fix_injury_mode; XMLData.injuries['leftLeg']['wound'];   end
-
-      def Wounds.rightLeg;  fix_injury_mode; XMLData.injuries['rightLeg']['wound'];  end
-
-      def Wounds.rleg;      fix_injury_mode; XMLData.injuries['rightLeg']['wound'];  end
-
-      def Wounds.leftFoot;  fix_injury_mode; XMLData.injuries['leftFoot']['wound'];  end
-
-      def Wounds.rightFoot; fix_injury_mode; XMLData.injuries['rightFoot']['wound']; end
-
-      def Wounds.nsys;      fix_injury_mode; XMLData.injuries['nsys']['wound'];      end
-
-      def Wounds.nerves;    fix_injury_mode; XMLData.injuries['nsys']['wound'];      end
-
-      def Wounds.arms
-        fix_injury_mode
-        [XMLData.injuries['leftArm']['wound'], XMLData.injuries['rightArm']['wound'], XMLData.injuries['leftHand']['wound'], XMLData.injuries['rightHand']['wound']].max
-      end
-
-      def Wounds.limbs
-        fix_injury_mode
-        [XMLData.injuries['leftArm']['wound'], XMLData.injuries['rightArm']['wound'], XMLData.injuries['leftHand']['wound'], XMLData.injuries['rightHand']['wound'], XMLData.injuries['leftLeg']['wound'], XMLData.injuries['rightLeg']['wound']].max
-      end
-
-      def Wounds.torso
-        fix_injury_mode
-        [XMLData.injuries['rightEye']['wound'], XMLData.injuries['leftEye']['wound'], XMLData.injuries['chest']['wound'], XMLData.injuries['abdomen']['wound'], XMLData.injuries['back']['wound']].max
-      end
-
-      def Wounds.method_missing(_arg = nil)
-        echo "Wounds: Invalid area, try one of these: arms, limbs, torso, #{XMLData.injuries.keys.join(', ')}"
-        nil
-      end
-    end
-
-    class Scars
-      def Scars.leftEye;   fix_injury_mode; XMLData.injuries['leftEye']['scar'];   end
-
-      def Scars.leye;      fix_injury_mode; XMLData.injuries['leftEye']['scar'];   end
-
-      def Scars.rightEye;  fix_injury_mode; XMLData.injuries['rightEye']['scar'];  end
-
-      def Scars.reye;      fix_injury_mode; XMLData.injuries['rightEye']['scar'];  end
-
-      def Scars.head;      fix_injury_mode; XMLData.injuries['head']['scar'];      end
-
-      def Scars.neck;      fix_injury_mode; XMLData.injuries['neck']['scar'];      end
-
-      def Scars.back;      fix_injury_mode; XMLData.injuries['back']['scar'];      end
-
-      def Scars.chest;     fix_injury_mode; XMLData.injuries['chest']['scar'];     end
-
-      def Scars.abdomen;   fix_injury_mode; XMLData.injuries['abdomen']['scar'];   end
-
-      def Scars.abs;       fix_injury_mode; XMLData.injuries['abdomen']['scar'];   end
-
-      def Scars.leftArm;   fix_injury_mode; XMLData.injuries['leftArm']['scar'];   end
-
-      def Scars.larm;      fix_injury_mode; XMLData.injuries['leftArm']['scar'];   end
-
-      def Scars.rightArm;  fix_injury_mode; XMLData.injuries['rightArm']['scar'];  end
-
-      def Scars.rarm;      fix_injury_mode; XMLData.injuries['rightArm']['scar'];  end
-
-      def Scars.rightHand; fix_injury_mode; XMLData.injuries['rightHand']['scar']; end
-
-      def Scars.rhand;     fix_injury_mode; XMLData.injuries['rightHand']['scar']; end
-
-      def Scars.leftHand;  fix_injury_mode; XMLData.injuries['leftHand']['scar'];  end
-
-      def Scars.lhand;     fix_injury_mode; XMLData.injuries['leftHand']['scar'];  end
-
-      def Scars.leftLeg;   fix_injury_mode; XMLData.injuries['leftLeg']['scar'];   end
-
-      def Scars.lleg;      fix_injury_mode; XMLData.injuries['leftLeg']['scar'];   end
-
-      def Scars.rightLeg;  fix_injury_mode; XMLData.injuries['rightLeg']['scar'];  end
-
-      def Scars.rleg;      fix_injury_mode; XMLData.injuries['rightLeg']['scar'];  end
-
-      def Scars.leftFoot;  fix_injury_mode; XMLData.injuries['leftFoot']['scar'];  end
-
-      def Scars.rightFoot; fix_injury_mode; XMLData.injuries['rightFoot']['scar']; end
-
-      def Scars.nsys;      fix_injury_mode; XMLData.injuries['nsys']['scar'];      end
-
-      def Scars.nerves;    fix_injury_mode; XMLData.injuries['nsys']['scar'];      end
-
-      def Scars.arms
-        fix_injury_mode
-        [XMLData.injuries['leftArm']['scar'], XMLData.injuries['rightArm']['scar'], XMLData.injuries['leftHand']['scar'], XMLData.injuries['rightHand']['scar']].max
-      end
-
-      def Scars.limbs
-        fix_injury_mode
-        [XMLData.injuries['leftArm']['scar'], XMLData.injuries['rightArm']['scar'], XMLData.injuries['leftHand']['scar'], XMLData.injuries['rightHand']['scar'], XMLData.injuries['leftLeg']['scar'], XMLData.injuries['rightLeg']['scar']].max
-      end
-
-      def Scars.torso
-        fix_injury_mode
-        [XMLData.injuries['rightEye']['scar'], XMLData.injuries['leftEye']['scar'], XMLData.injuries['chest']['scar'], XMLData.injuries['abdomen']['scar'], XMLData.injuries['back']['scar']].max
-      end
-
-      def Scars.method_missing(_arg = nil)
-        echo "Scars: Invalid area, try one of these: arms, limbs, torso, #{XMLData.injuries.keys.join(', ')}"
-        nil
-      end
+      # Initialize the class
+      initialize
     end
   end
 
+  # DragonRealms game module
   module DragonRealms
     include Lich
-    module Game
-      @@socket    = nil
-      @@mutex     = Mutex.new
-      @@last_recv = nil
-      @@thread    = nil
-      @@buffer    = Lich::Common::SharedBuffer.new
-      @@_buffer   = Lich::Common::SharedBuffer.new
-      @@_buffer.max_size = 1000
-      @@autostarted = false
-      @@cli_scripts = false
-      @@infomon_loaded = false
-      @@room_number_after_ready = false
-      @@last_id_shown_room_window = 0
 
-      def self.clean_gs_serverstring(server_string)
-        # The Rift, Scatter is broken...
-        if server_string =~ /<compDef id='room text'><\/compDef>/
-          server_string.sub!(/(.*)\s\s<compDef id='room text'><\/compDef>/) { "<compDef id='room desc'>#{$1}</compDef>" }
-        end
-        return server_string
-      end
-
-      @atmospherics = false
-      @combat_count = 0
-      @end_combat_tags = ["<prompt", "<clearStream", "<component", "<pushStream id=\"percWindow"]
-
-      def self.clean_dr_serverstring(server_string)
-        ## Clear out superfluous tags
+    # DragonRealms-specific game instance
+    class GameInstance < GameBase::GameInstance::Base
+      def clean_serverstring(server_string)
+        # Clear out superfluous tags
         server_string = server_string.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />", "")
         server_string = server_string.gsub("<popStream id=\"combat\" /><pushStream id=\"combat\" />", "")
 
-        # DR occasionally has poor encoding in text, which causes parsing errors.
-        # One example of this is in the discern text for the spell Membrach's Greed
-        # which gets sent as Membrach\x92s Greed. This fixes the bad encoding until
-        # Simu fixes it.
-        if server_string =~ /\\x92/
-          Lich.log "Detected poorly encoded apostrophe: #{server_string.inspect}"
-          server_string.gsub!("\x92", "'")
-          Lich.log "Changed poorly encoded apostrophe to: #{server_string.inspect}"
-        end
+        # Fix encoding issues
+        server_string = GameBase::XMLCleaner.fix_invalid_characters(server_string)
 
-        ## Fix combat wrapping components - Why, DR, Why?
+        # Fix combat wrapping components
         server_string = server_string.gsub("<pushStream id=\"combat\" /><component id=", "<component id=")
 
-        # Fixes xml with \r\n in the middle of it like:
-        # We close the first line and in the next segment, we remove the trailing bits
-        # <component id='room objs'>  You also see a granite altar with several candles and a water jug on it, and a granite font.\r\n
-        # <component id='room extra'>Placed around the interior, you see: some furniture and other bits of interest.\r\n
-        # <component id='room exits'>Obvious paths: clockwise, widdershins.\r\n
+        # Fix XML tags
+        server_string = GameBase::XMLCleaner.fix_xml_tags(server_string)
 
-        # Followed by in a closing line such as one of these:
-        # </component>\r\n
-        # <compass></compass></component>\r\n
-
-        # If the pattern is on the left of the =~ the named capture gets assigned as a variable
-        if /^<(?<xmltag>dynaStream|component) id='.*'>[^<]*(?!<\/\k<xmltag>>)\r\n$/ =~ server_string
-          Lich.log "Open-ended #{xmltag} tag: #{server_string.inspect}"
-          server_string.gsub!("\r\n", "</#{xmltag}>")
-          Lich.log "Open-ended #{xmltag} tag tag fixed to: #{server_string.inspect}"
-        end
-
-        # Remove the now dangling closing tag
-        if server_string =~ /^(?:(\"|<compass><\/compass>))?<\/(dynaStream|component)>\r\n/
-          Lich.log "Extraneous closing tag detected and deleted: #{server_string.inspect}"
-          server_string = ""
-        end
-
-        ## Fix duplicate pushStrings
+        # Fix duplicate pushStrings
         while server_string.include?("<pushStream id=\"combat\" /><pushStream id=\"combat\" />")
           server_string = server_string.gsub("<pushStream id=\"combat\" /><pushStream id=\"combat\" />", "<pushStream id=\"combat\" />")
         end
 
+        # Handle combat and atmospherics
+        server_string = handle_combat_tags(server_string)
+        server_string = handle_atmospherics(server_string)
+
+        server_string
+      end
+
+      def handle_combat_tags(server_string)
         if @combat_count > 0
           @end_combat_tags.each do |tag|
-            # server_string = "<!-- looking for tag: #{tag}" + server_string
             if server_string.include?(tag)
               server_string = server_string.gsub(tag, "<popStream id=\"combat\" />" + tag) unless server_string.include?("<popStream id=\"combat\" />")
               @combat_count -= 1
@@ -732,14 +713,16 @@ module Lich
           end
         end
 
-        @combat_count += server_string.scan("<pushStream id=\"combat\" />").length
-        @combat_count -= server_string.scan("<popStream id=\"combat\" />").length
-        @combat_count = 0 if @combat_count < 0
+        increment_combat_count(server_string)
+        server_string
+      end
 
+      def handle_atmospherics(server_string)
         if @atmospherics
           @atmospherics = false
           server_string.prepend('<popStream id="atmospherics" />') unless server_string =~ /<popStream id="atmospherics" \/>/
         end
+
         if server_string =~ /<pushStream id="familiar" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # Cry For Help spell is broken...
           server_string.sub!('<pushStream id="familiar" />', '')
         elsif server_string =~ /<pushStream id="atmospherics" \/><prompt time="[0-9]+">&gt;<\/prompt>/ # pet pigs in DragonRealms are broken...
@@ -748,345 +731,86 @@ module Lich
           @atmospherics = true
         end
 
-        return server_string
+        server_string
       end
 
-      def Game.open(host, port)
-        @@socket = TCPSocket.open(host, port)
-        begin
-          @@socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, true)
-        rescue
-          Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-        rescue StandardError
-          Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      def get_documentation_url
+        "https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich"
+      end
+
+      def process_game_specific_data(server_string)
+        infomon_serverstring = server_string.dup
+        DRParser.parse(infomon_serverstring)
+      end
+
+      def modify_room_display(alt_string)
+        if Lich.display_uid == true
+          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+        elsif Lich.hide_uid_flag == true
+          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
         end
-        @@socket.sync = true
 
-        # Add check to determine if the game server hung at initial response
+        alt_string
+      end
 
-        @@wrap_thread = Thread.new {
-          @last_recv = Time.now
-          while !@@autostarted && (Time.now - @last_recv < 6)
-            break if @@autostarted
-            sleep 0.2
-          end
-
-          puts 'look' if !@@autostarted
-        }
-
-        @@thread = Thread.new {
-          begin
-            while ($_SERVERSTRING_ = @@socket.gets)
-              @@last_recv = Time.now
-              @@_buffer.update($_SERVERSTRING_) if TESTING
-              begin
-                $cmd_prefix = String.new if $_SERVERSTRING_ =~ /^\034GSw/
-
-                unless (XMLData.game.nil? or XMLData.game.empty?)
-                  unless Module.const_defined?(:GameLoader)
-                    require_relative 'common/game-loader'
-                    GameLoader.load!
-                  end
-                end
-
-                if XMLData.game =~ /^GS/
-                  $_SERVERSTRING_ = self.clean_gs_serverstring($_SERVERSTRING_)
-                else
-                  $_SERVERSTRING_ = self.clean_dr_serverstring($_SERVERSTRING_)
-                end
-
-                $_SERVERBUFFER_.push($_SERVERSTRING_)
-
-                if !@@autostarted and $_SERVERSTRING_ =~ /<app char/
-                  if Gem::Version.new(LICH_VERSION) > Gem::Version.new(Lich.core_updated_with_lich_version)
-                    Lich::Messaging.mono(Lich::Messaging.monsterbold("New installation or updated version of Lich5 detected!"))
-                    Lich::Messaging.mono(Lich::Messaging.monsterbold("Installing newest core scripts available to ensure you're up-to-date!"))
-                    Lich::Messaging.mono("")
-                    Lich::Util::Update.update_core_data_and_scripts
-                  end
-                  Script.start('autostart') if Script.exists?('autostart')
-                  @@autostarted = true
-                  if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(RECOMMENDED_RUBY)
-                    ruby_warning = Terminal::Table.new
-                    ruby_warning.title = "Ruby Recommended Version Warning"
-                    ruby_warning.add_row(["Please update your Ruby installation."])
-                    ruby_warning.add_row(["You're currently running Ruby v#{Gem::Version.new(RUBY_VERSION)}!"])
-                    ruby_warning.add_row(["It's recommended to run Ruby v#{Gem::Version.new(RECOMMENDED_RUBY)} or higher!"])
-                    ruby_warning.add_row(["Future Lich5 releases will soon require this newer version."])
-                    ruby_warning.add_row([" "])
-                    ruby_warning.add_row(["Visit the following link for info on updating:"])
-                    if XMLData.game =~ /^GS/
-                      ruby_warning.add_row(["https://gswiki.play.net/Lich:Software/Installation"])
-                    elsif XMLData.game =~ /^DR/
-                      ruby_warning.add_row(["https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich"])
-                    else
-                      ruby_warning.add_row(["Unknown game type #{XMLData.game} detected."])
-                      ruby_warning.add_row(["Unsure of proper documentation, please seek assistance via discord!"])
-                    end
-                    ruby_warning.to_s.split("\n").each { |row|
-                      Lich::Messaging.mono(Lich::Messaging.monsterbold(row))
-                    }
-                  end
-                end
-
-                if !@@infomon_loaded && (defined?(Infomon) || !$DRINFOMON_VERSION.nil?) && !XMLData.name.nil? && !XMLData.name.empty? && !XMLData.dialogs.empty?
-                  ExecScript.start("Infomon.redo!", { :quiet => true, :name => "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
-                  @@infomon_loaded = true
-                end
-
-                if !@@cli_scripts && @@autostarted && !XMLData.name.nil? && !XMLData.name.empty?
-                  if (arg = ARGV.find { |a| a =~ /^\-\-start\-scripts=/ })
-                    for script_name in arg.sub('--start-scripts=', '').split(',')
-                      Script.start(script_name)
-                    end
-                  end
-                  @@cli_scripts = true
-                  Lich.log("info: logged in as #{XMLData.game}:#{XMLData.name}")
-                end
-                unless $_SERVERSTRING_ =~ /^<settings /
-                  begin
-                    # Check for valid XML prior to sending to client, corrects double and single nested quotes
-                    REXML::Document.parse_stream("<root>#{$_SERVERSTRING_}</root>", XMLData)
-                  rescue
-                    unless $!.to_s =~ /invalid byte sequence/
-                      # Fixed invalid xml such as:
-                      # <mode id="GAME"/><settingsInfo  space not found crc='0' instance='DR'/>
-                      # <settingsInfo  space not found crc='0' instance='DR'/>
-                      if $_SERVERSTRING_ =~ /<settingsInfo .*?space not found /
-                        Lich.log "Invalid settingsInfo XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.sub!('space not found', '')
-                        Lich.log "Invalid settingsInfo XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      # Illegal character "&" in raw string "  You also see a large bin labeled \"Lost & Found\", a hastily scrawled notice, a brightly painted sign, a silver bell, the Registrar's Office and "
-                      if $_SERVERSTRING_ =~ /\&/
-                        Lich.log "Invalid \& detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!("&", '&amp;')
-                        Lich.log "Invalid \& stripped out: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      # Illegal character "\a" in raw string "\aYOU HAVE BEEN IDLE TOO LONG. PLEASE RESPOND.\a\n"
-                      if $_SERVERSTRING_ =~ /\a/
-                        Lich.log "Invalid \a detected: #{$_SERVERSTRING_.inspect}"
-                        $_SERVERSTRING_.gsub!("\a", '')
-                        Lich.log "Invalid \a stripped out: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      # Fixes invalid XML with nested single quotes in it such as:
-                      # From DR intro tips
-                      # <link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />
-                      # From GS
-                      # <d cmd='forage Imaera's Lace'>Imaera's Lace</d>, <d cmd='forage stalk burdock'>stalk of burdock</d>
-                      unless (matches = $_SERVERSTRING_.scan(/'([^=>]*'[^=>]*)'/)).empty?
-                        Lich.log "Invalid nested single quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        matches.flatten.each do |match|
-                          $_SERVERSTRING_.gsub!(match, match.gsub(/'/, '&apos;'))
-                        end
-                        Lich.log "Invalid nested single quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      # Fixes invalid XML with nested double quotes in it such as:
-                      # <subtitle=" - [Avlea's Bows, "The Straight and Arrow"]">
-                      unless (matches = $_SERVERSTRING_.scan(/"([^=]*"[^=]*)"/)).empty?
-                        Lich.log "Invalid nested double quotes XML tags detected: #{$_SERVERSTRING_.inspect}"
-                        matches.flatten.each do |match|
-                          $_SERVERSTRING_.gsub!(match, match.gsub(/"/, '&quot;'))
-                        end
-                        Lich.log "Invalid nested double quotes XML tags fixed to: #{$_SERVERSTRING_.inspect}"
-                        retry
-                      end
-                      $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                      Lich.log "Invalid XML detected - please report this: #{$_SERVERSTRING_.inspect}"
-                      Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    end
-                    XMLData.reset
-                  end
-                  if Module.const_defined?(:GameLoader)
-                    infomon_serverstring = $_SERVERSTRING_.dup
-                    if XMLData.game =~ /^GS/
-                      Infomon::XMLParser.parse(infomon_serverstring)
-                      stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
-                      stripped_infomon_serverstring.split("\r\n").each { |line|
-                        unless line.empty?
-                          Infomon::Parser.parse(line)
-                        end
-                      }
-                    elsif XMLData.game =~ /^DR/
-                      DRParser.parse(infomon_serverstring)
-                    end
-                  end
-                  Script.new_downstream_xml($_SERVERSTRING_)
-                  stripped_server = strip_xml($_SERVERSTRING_, type: 'main')
-                  stripped_server.split("\r\n").each { |line|
-                    @@buffer.update(line) if TESTING
-                    Script.new_downstream(line) if !line.empty?
-                  }
-                end
-                if (alt_string = DownstreamHook.run($_SERVERSTRING_))
-                  #                           Buffer.update(alt_string, Buffer::DOWNSTREAM_MOD)
-                  if alt_string =~ /^(?:<resource picture="\d+"\/>|<popBold\/>)?<style id="roomName"\s+\/>/
-                    if (Lich.display_lichid == true || Lich.display_uid == true)
-                      if XMLData.game =~ /^GS/
-                        if (Lich.display_lichid == true && Lich.display_uid == true)
-                          alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { " - #{Map.current.id}] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                        elsif Lich.display_lichid == true
-                          alt_string.sub!(']') { " - #{Map.current.id}]" }
-                        elsif Lich.display_uid == true
-                          alt_string.sub!(/] \(\d+\)/) { "]" }
-                          alt_string.sub!(']') { "] (u#{(XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "nknown" : XMLData.room_id})" }
-                        end
-                      elsif XMLData.game =~ /^DR/
-                        if Lich.display_uid == true
-                          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-                        elsif Lich.hide_uid_flag == true
-                          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-                        end
-                      end
-                    end
-                    @@room_number_after_ready = true
-                  end
-                  if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
-                    alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-                  end
-                  if @@room_number_after_ready && alt_string =~ /<prompt /
-                    if Lich.display_stringprocs == true
-                      room_exits = []
-                      Map.current.wayto.each do |key, value|
-                        # Don't include cardinals / up/down/out (usually just climb/go)
-                        if value.class == Proc
-                          if Map.current.timeto[key].is_a?(Numeric) || (Map.current.timeto[key].is_a?(StringProc) && Map.current.timeto[key].call.is_a?(Numeric))
-                            room_exits << "<d cmd=';go2 #{key}'>#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? ('(' + Map[key].id.to_s + ')') : ''}</d>"
-                          end
-                        end
-                      end
-                      alt_string = "StringProcs: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
-                    end
-                    if Lich.display_exits == true
-                      room_exits = []
-                      Map.current.wayto.each do |_key, value|
-                        # Don't include cardinals / up/down/out (usually just climb/go)
-                        next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
-                        if value.class != Proc
-                          room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
-                        end
-                      end
-                      unless room_exits.empty?
-                        alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}"
-                        if XMLData.game =~ /^GS/ && ['wrayth', 'stormfront'].include?($frontend) && Map.current.id != @@last_id_shown_room_window
-                          alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{room_exits.join(', ')}\r\n<popStream/>\r\n"
-                          @@last_id_shown_room_window = Map.current.id
-                        end
-                      end
-                    end
-                    if XMLData.game =~ /^DR/
-                      room_number = ""
-                      room_number += "#{Map.current.id}" if Lich.display_lichid
-                      room_number += " - " if Lich.display_lichid && Lich.display_uid
-                      room_number += "(#{XMLData.room_id == 0 ? "**" : "u#{XMLData.room_id}"})" if Lich.display_uid
-                      unless room_number.empty?
-                        alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
-                        if ['wrayth', 'stormfront'].include?($frontend)
-                          alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
-                          alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
-                        end
-                      end
-                    end
-                    @@room_number_after_ready = false
-                  end
-                  if $frontend =~ /^(?:wizard|avalon)$/
-                    alt_string = sf_to_wiz(alt_string)
-                  end
-                  if $_DETACHABLE_CLIENT_
-                    begin
-                      $_DETACHABLE_CLIENT_.write(alt_string)
-                    rescue
-                      $_DETACHABLE_CLIENT_.close rescue nil
-                      $_DETACHABLE_CLIENT_ = nil
-                      respond "--- Lich: error: client_thread: #{$!}"
-                      respond $!.backtrace.first
-                      Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    end
-                  else
-                    $_CLIENT_.write(alt_string)
-                  end
-                end
-              rescue
-                $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      def process_room_display(alt_string)
+        if Lich.display_stringprocs == true
+          room_exits = []
+          Map.current.wayto.each do |key, value|
+            # Don't include cardinals / up/down/out (usually just climb/go)
+            if value.is_a?(StringProc)
+              if Map.current.timeto[key].is_a?(Numeric) || (Map.current.timeto[key].is_a?(StringProc) && Map.current.timeto[key].call.is_a?(Numeric))
+                room_exits << "<d cmd=';go2 #{key}'>#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? ('(' + Map[key].id.to_s + ')') : ''}</d>"
               end
             end
-          rescue StandardError
-            Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace.slice(0..10).join("\n\t")}"
-            sleep 0.2
-            retry unless $_CLIENT_.closed? or @@socket.closed? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i)
-          rescue
-            Lich.log "error: server_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            $stdout.puts "error: server_thread: #{$!}\n\t#{$!.backtrace..slice(0..10).join("\n\t")}"
-            sleep 0.2
-            retry unless $_CLIENT_.closed? or @@socket.closed? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i)
           end
-        }
-        @@thread.priority = 4
-        $_SERVER_ = @@socket # deprecated
-      end
+          alt_string = "StringProcs: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
+        end
 
-      def Game.thread
-        @@thread
-      end
+        if Lich.display_exits == true
+          room_exits = []
+          Map.current.wayto.each do |_key, value|
+            # Don't include cardinals / up/down/out (usually just climb/go)
+            next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
+            unless value.is_a?(StringProc)
+              room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
+            end
+          end
 
-      def Game.closed?
-        if @@socket.nil?
-          true
-        else
-          @@socket.closed?
+          unless room_exits.empty?
+            alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}"
+          end
+        end
+
+        # DR-specific room number display
+        room_number = ""
+        room_number += "#{Map.current.id}" if Lich.display_lichid
+        room_number += " - " if Lich.display_lichid && Lich.display_uid
+        room_number += "(#{XMLData.room_id == 0 ? "**" : "u#{XMLData.room_id}"})" if Lich.display_uid
+
+        unless room_number.empty?
+          alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
+          if ['wrayth', 'stormfront'].include?($frontend)
+            alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
+            alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
+          end
+        end
+
+        alt_string
+      end
+    end
+
+    # Game class for DragonRealms
+    class Game < GameBase::Game
+      class << self
+        def initialize
+          initialize_buffers
+          set_game_instance('DR')
         end
       end
 
-      def Game.close
-        if @@socket
-          @@socket.close rescue nil
-          @@thread.kill rescue nil
-        end
-      end
-
-      def Game._puts(str)
-        @@mutex.synchronize {
-          @@socket.puts(str)
-        }
-      end
-
-      def Game.puts(str)
-        $_SCRIPTIDLETIMESTAMP_ = Time.now
-        if (script = Script.current)
-          script_name = script.name
-        else
-          script_name = '(unknown script)'
-        end
-        $_CLIENTBUFFER_.push "[#{script_name}]#{$SEND_CHARACTER}#{$cmd_prefix}#{str}\r\n"
-        if script.nil? or not script.silent
-          respond "[#{script_name}]#{$SEND_CHARACTER}#{str}\r\n"
-        end
-        Game._puts "#{$cmd_prefix}#{str}"
-        $_LASTUPSTREAM_ = "[#{script_name}]#{$SEND_CHARACTER}#{str}"
-      end
-
-      def Game.gets
-        @@buffer.gets
-      end
-
-      def Game.buffer
-        @@buffer
-      end
-
-      def Game._gets
-        @@_buffer.gets
-      end
-
-      def Game._buffer
-        @@_buffer
-      end
+      # Initialize the class
+      initialize
     end
   end
 end
