@@ -129,7 +129,7 @@ module Lich
           :short_name => "excoriate",
           :type       => :attack,
           :cost       => { mana: 10 },
-          :regex      => /You level your .+? at .+? and call down the excoriating power of the divine to smite it!/,
+          :regex      => /You level your .+? at .+? and call down the excoriating power of .+? to smite (?:him|her|it)!/,
           :usage      => "excoriate"
         },
         "guard"                     => {
