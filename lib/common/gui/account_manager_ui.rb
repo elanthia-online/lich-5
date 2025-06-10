@@ -918,13 +918,49 @@ module Lich
           sort_state = load_sort_state
 
           if sort_state[:column] && sort_state[:order]
-            store.set_sort_column_id(sort_state[:column], sort_state[:order])
+            # Convert symbol to GTK constant
+            gtk_order = symbol_to_gtk_sort_type(sort_state[:order])
+            store.set_sort_column_id(sort_state[:column], gtk_order) if gtk_order
           end
 
           # Save sort state when it changes
           store.signal_connect('sort-column-changed') do
             column_id, order = store.sort_column_id
-            save_sort_state(column_id, order) if column_id && order
+            if column_id && order
+              # Convert GTK constant to symbol for storage
+              symbol_order = gtk_sort_type_to_symbol(order)
+              save_sort_state(column_id, symbol_order) if symbol_order
+            end
+          end
+        end
+
+        # Converts a symbol to GTK sort type constant
+        #
+        # @param symbol [Symbol] Sort order symbol (:ascending or :descending)
+        # @return [Gtk::SortType, nil] GTK sort type constant or nil if invalid
+        def symbol_to_gtk_sort_type(symbol)
+          case symbol
+          when :ascending
+            Gtk::SortType::ASCENDING
+          when :descending
+            Gtk::SortType::DESCENDING
+          else
+            nil
+          end
+        end
+
+        # Converts a GTK sort type constant to symbol
+        #
+        # @param gtk_type [Gtk::SortType] GTK sort type constant
+        # @return [Symbol, nil] Sort order symbol or nil if invalid
+        def gtk_sort_type_to_symbol(gtk_type)
+          case gtk_type
+          when Gtk::SortType::ASCENDING
+            :ascending
+          when Gtk::SortType::DESCENDING
+            :descending
+          else
+            nil
           end
         end
 
@@ -948,7 +984,7 @@ module Lich
         # Saves the current sort state to user preferences
         #
         # @param column_id [Integer] Sort column ID
-        # @param order [Gtk::SortType] Sort order (:ascending or :descending)
+        # @param order [Symbol] Sort order symbol (:ascending or :descending)
         # @return [void]
         def save_sort_state(column_id, order)
           begin
