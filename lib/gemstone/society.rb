@@ -20,6 +20,18 @@ module Lich
       end
 
       ##
+      # Retrieves the character's society membership status.
+      #
+      # @return [String, nil] The name of the society:
+      #   - "Order of Voln"
+      #   - "Council of Light"
+      #   - "Guardians of Sunfist"
+      #   - or `nil`/"None" if not a member
+      def self.status
+        self.membership
+      end
+
+      ##
       # Retrieves the character's current rank within their society.
       #
       # @return [Integer] The rank number, or 0 if not a member
@@ -50,8 +62,6 @@ module Lich
       def self.serialize
         [self.membership, self.rank]
       end
-
-      alias status membership
 
       ########################
       ## DEPRECATED METHODS ##
