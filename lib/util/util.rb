@@ -80,10 +80,10 @@ module Lich
         Timeout::timeout(timeout, Interrupt) {
           DownstreamHook.add(name, proc { |line|
             if filter
-              if line =~ end_pattern
+              if end_pattern.eql?(:ignore) || line =~ end_pattern
                 DownstreamHook.remove(name)
                 filter = false
-                if quiet
+                if quiet && !end_pattern.eql?(:ignore)
                   next(nil)
                 else
                   line
@@ -112,10 +112,10 @@ module Lich
           result << line.rstrip
           until (line = get) =~ end_pattern
             result << line.rstrip
-          end
+          end unless end_pattern.eql?(:ignore)
           if include_end
             result << line.rstrip
-          end
+          end unless end_pattern.eql?(:ignore)
         }
       rescue Interrupt
         nil
