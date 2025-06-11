@@ -46,84 +46,86 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'eaccess.rb')
 
   if ARGV.include?('--login')
-    if File.exist?(File.join(DATA_DIR, "entry.dat"))
-      entry_data = File.open(File.join(DATA_DIR, "entry.dat"), 'r') { |blob|
-        begin
-          Marshal.load(blob.read.unpack('m').first)
-        rescue
-          Array.new
-        end
-      }
+    requested_character = ARGV[ARGV.index('--login') + 1].capitalize
+    if File.exist?(File.join(DATA_DIR, "entry.yml"))
+      # entry_data = Hash.new
+      data_to_convert = YAML.load_file(File.join(DATA_DIR, "entry.yml"))
+      entry_data = Lich::Util.symbolize_keys(data_to_convert)
     else
-      entry_data = Array.new
+      char_data = Array.new
     end
-    char_name = ARGV[ARGV.index('--login') + 1].capitalize
+
     if ARGV.include?('--gemstone')
       if ARGV.include?('--platinum')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSX') }
+        requested_instance = 'GSX'
       elsif ARGV.include?('--shattered')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
+        requested_instance = 'GSF'
       elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
-        data[:game_code] = 'GST'
+        requested_instance = 'GST'
       else
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
+        requested_instance = 'GS3'
       end
     elsif ARGV.include?('--shattered')
-      data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
+      requested_instance = 'GSF'
     elsif ARGV.include?('--dragonrealms')
       if ARGV.include?('--platinum')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRX') }
+        requested_instance = 'DRX'
       elsif ARGV.include?('--fallen')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
+        requested_instance = 'DRF'
       elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
-        data[:game_code] = 'DRT'
+        requested_instance = 'DRT'
       else
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
+        requested_instance = 'DR'
       end
     elsif ARGV.include?('--fallen')
-      data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
+      requested_instance = 'DRF'
     else
-      data = entry_data.find { |d| (d[:char_name] == char_name) }
+      ARGV.each { |arg|
+        if arg =~ (/--(?<instance>GS.?)/i)
+          requested_instance = Regexp.last_match[:instance].sub('4', '3') # too many folks will just try --GS4
+        elsif arg =~ (/--(?<instance>DR.?)/i)
+          requested_instance = Regexp.last_match[:instance]
+        end
+      }
     end
-    if data
-      Lich.log "info: using quick game entry settings for #{char_name}"
+    unless requested_instance
+      char_data = Lich::Util.find_character_by_name(entry_data, requested_character)
+    else
+      char_data = Lich::Util.find_character_by_name_and_game(entry_data, requested_character, requested_instance)
+    end
 
-      if ARGV.include?('--gst')
-        data[:game_code] = 'GST'
-      elsif ARGV.include?('--drt')
-        data[:game_code] = 'DRT'
-      end
+    unless char_data.empty?
+      Lich.log "info: using quick game entry settings for #{char_data[:char_name]}"
 
       launch_data_hash = EAccess.auth(
-        account: data[:user_id],
-        password: data[:password],
-        character: data[:char_name],
-        game_code: data[:game_code]
+        account: char_data[:username],
+        password: char_data[:password],
+        character: char_data[:char_name],
+        game_code: char_data[:game_code]
       )
 
       @launch_data = launch_data_hash.map { |k, v| "#{k.upcase}=#{v}" }
-      if data[:frontend] == 'wizard'
+      if char_data[:frontend] == 'wizard'
         @launch_data.collect! { |line| line.sub(/GAMEFILE=.+/, 'GAMEFILE=WIZARD.EXE').sub(/GAME=.+/, 'GAME=WIZ').sub(/FULLGAMENAME=.+/, 'FULLGAMENAME=Wizard Front End') }
-      elsif data[:frontend] == 'avalon'
-        @launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') }
+      elsif char_data[:frontend] == 'avalon'
+        @launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') } # TODO: Rationalize @launch_data for consistency (GAMEFILE=WRAYTH.EXE)
       end
-      if data[:custom_launch]
-        @launch_data.push "CUSTOMLAUNCH=#{data[:custom_launch]}"
-        if data[:custom_launch_dir]
-          @launch_data.push "CUSTOMLAUNCHDIR=#{data[:custom_launch_dir]}"
+      if char_data[:custom_launch]
+        @launch_data.push "CUSTOMLAUNCH=#{char_data[:custom_launch]}"
+        if char_data[:custom_launch_dir]
+          @launch_data.push "CUSTOMLAUNCHDIR=#{char_data[:custom_launch_dir]}"
         end
       end
     else
-      $stdout.puts "error: failed to find login data for #{char_name}"
-      Lich.log "error: failed to find login data for #{char_name}"
+      $stdout.puts "error: failed to find login data for #{requested_character}"
+      Lich.log "error: failed to find login data for #{requested_character}"
     end
 
   ## GUI starts here
 
   elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
-    require File.join(LIB_DIR, 'common', 'gui-login.rb')
+    require File.join(LIB_DIR, 'common', 'gui-login.rb') if File.exist?(File.join(LIB_DIR, 'common', 'gui-login.rb'))
+    require File.join(LIB_DIR, 'common', 'gui_login.rb') if File.exist?(File.join(LIB_DIR, 'common', 'gui_login.rb'))
     gui_login
   end
 
