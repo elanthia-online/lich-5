@@ -26,9 +26,9 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         expect(File.exist?(yaml_file)).to be true
 
         yaml_data = YAML.load_file(yaml_file)
-        expect(yaml_data['accounts']).to have_key(username)
-        expect(yaml_data['accounts'][username]['password']).to eq(password)
-        expect(yaml_data['accounts'][username]['characters']).to eq([])
+        expect(yaml_data['accounts']).to have_key(username.upcase)
+        expect(yaml_data['accounts'][username.upcase]['password']).to eq(password)
+        expect(yaml_data['accounts'][username.upcase]['characters']).to eq([])
       end
     end
 
@@ -45,14 +45,14 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         # Verify password is updated
         yaml_file = File.join(data_dir, "entry.yml")
         yaml_data = YAML.load_file(yaml_file)
-        expect(yaml_data['accounts'][username]['password']).to eq(password)
+        expect(yaml_data['accounts'][username.upcase]['password']).to eq(password)
       end
 
       it "preserves existing characters" do
         # Add a character first
         yaml_file = File.join(data_dir, "entry.yml")
         yaml_data = YAML.load_file(yaml_file)
-        yaml_data['accounts'][username]['characters'] = [{ 'char_name' => 'TestChar', 'game_code' => 'GS', 'game_name' => 'GemStone', 'frontend' => 'stormfront' }]
+        yaml_data['accounts'][username.upcase]['characters'] = [{ 'char_name' => 'TestChar', 'game_code' => 'GS', 'game_name' => 'GemStone', 'frontend' => 'stormfront' }]
         File.write(yaml_file, YAML.dump(yaml_data))
 
         # Update password
@@ -60,8 +60,8 @@ RSpec.describe Lich::Common::GUI::AccountManager do
 
         # Verify characters are preserved
         yaml_data = YAML.load_file(yaml_file)
-        expect(yaml_data['accounts'][username]['characters'].size).to eq(1)
-        expect(yaml_data['accounts'][username]['characters'][0]['char_name']).to eq('TestChar')
+        expect(yaml_data['accounts'][username.upcase]['characters'].size).to eq(1)
+        expect(yaml_data['accounts'][username.upcase]['characters'][0]['char_name']).to eq('TestChar')
       end
     end
 
@@ -76,7 +76,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
 
         # Verify new structure was created
         yaml_data = YAML.load_file(yaml_file)
-        expect(yaml_data['accounts']).to have_key(username)
+        expect(yaml_data['accounts']).to have_key(username.upcase)
       end
 
       it "handles file write errors" do
@@ -129,9 +129,9 @@ RSpec.describe Lich::Common::GUI::AccountManager do
   end
 
   describe ".change_password" do
-    it "delegates to add_or_update_account" do
-      # Test that change_password delegates to add_or_update_account
-      expect(described_class).to receive(:add_or_update_account).with(data_dir, username, password)
+    it "delegates to add_or_update_account with normalized username" do
+      # Test that change_password delegates to add_or_update_account with UPCASE username
+      expect(described_class).to receive(:add_or_update_account).with(data_dir, username.upcase, password)
       described_class.change_password(data_dir, username, password)
     end
   end
@@ -156,14 +156,15 @@ RSpec.describe Lich::Common::GUI::AccountManager do
     context "when account exists" do
       it "adds a character to the account" do
         # Test that the character is added
-        expect(described_class.add_character(data_dir, username, character_data)).to be true
+        result = described_class.add_character(data_dir, username, character_data)
+        expect(result[:success]).to be true
 
         # Verify character is added
         yaml_file = File.join(data_dir, "entry.yml")
         yaml_data = YAML.load_file(yaml_file)
-        expect(yaml_data['accounts'][username]['characters'].size).to eq(1)
-        expect(yaml_data['accounts'][username]['characters'][0]['char_name']).to eq(character_data[:char_name])
-        expect(yaml_data['accounts'][username]['characters'][0]['game_code']).to eq(character_data[:game_code])
+        expect(yaml_data['accounts'][username.upcase]['characters'].size).to eq(1)
+        expect(yaml_data['accounts'][username.upcase]['characters'][0]['char_name']).to eq(character_data[:char_name].capitalize)
+        expect(yaml_data['accounts'][username.upcase]['characters'][0]['game_code']).to eq(character_data[:game_code])
       end
 
       it "adds multiple characters to the account" do
@@ -172,20 +173,22 @@ RSpec.describe Lich::Common::GUI::AccountManager do
 
         # Add second character
         second_character = character_data.merge(char_name: "SecondChar")
-        expect(described_class.add_character(data_dir, username, second_character)).to be true
+        result = described_class.add_character(data_dir, username, second_character)
+        expect(result[:success]).to be true
 
         # Verify both characters are present
         yaml_file = File.join(data_dir, "entry.yml")
         yaml_data = YAML.load_file(yaml_file)
-        expect(yaml_data['accounts'][username]['characters'].size).to eq(2)
-        expect(yaml_data['accounts'][username]['characters'][1]['char_name']).to eq("SecondChar")
+        expect(yaml_data['accounts'][username.upcase]['characters'].size).to eq(2)
+        expect(yaml_data['accounts'][username.upcase]['characters'][1]['char_name']).to eq("Secondchar")
       end
     end
 
     context "when account doesn't exist" do
       it "returns false" do
         # Test that false is returned when account doesn't exist
-        expect(described_class.add_character(data_dir, "nonexistent", character_data)).to be false
+        result = described_class.add_character(data_dir, "nonexistent", character_data)
+        expect(result[:success]).to be false
       end
     end
   end
@@ -199,9 +202,9 @@ RSpec.describe Lich::Common::GUI::AccountManager do
       described_class.add_or_update_account(data_dir, username, "password")
       yaml_file = File.join(data_dir, "entry.yml")
       yaml_data = YAML.load_file(yaml_file)
-      yaml_data['accounts'][username]['characters'] = [
+      yaml_data['accounts'][username.upcase]['characters'] = [
         {
-          'char_name' => char_name,
+          'char_name' => char_name.capitalize,
           'game_code' => game_code,
           'game_name' => 'GemStone',
           'frontend'  => 'stormfront'
@@ -218,7 +221,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         # Verify character is removed
         yaml_file = File.join(data_dir, "entry.yml")
         yaml_data = YAML.load_file(yaml_file)
-        expect(yaml_data['accounts'][username]['characters'].size).to eq(0)
+        expect(yaml_data['accounts'][username.upcase]['characters'].size).to eq(0)
       end
     end
 
@@ -262,11 +265,11 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         # Test that all accounts and characters are returned
         accounts = described_class.get_all_accounts(data_dir)
 
-        expect(accounts.keys).to contain_exactly("user1", "user2")
-        expect(accounts["user1"].size).to eq(1)
-        expect(accounts["user1"][0][:char_name]).to eq("Char1")
-        expect(accounts["user2"].size).to eq(1)
-        expect(accounts["user2"][0][:char_name]).to eq("Char2")
+        expect(accounts.keys).to contain_exactly("USER1", "USER2")
+        expect(accounts["USER1"].size).to eq(1)
+        expect(accounts["USER1"][0][:char_name]).to eq("Char1")
+        expect(accounts["USER2"].size).to eq(1)
+        expect(accounts["USER2"][0][:char_name]).to eq("Char2")
       end
     end
 
@@ -303,7 +306,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         # Test that array of account usernames is returned
         accounts = described_class.get_accounts(data_dir)
 
-        expect(accounts).to contain_exactly("user1", "user2")
+        expect(accounts).to contain_exactly("USER1", "USER2")
       end
     end
 
@@ -333,18 +336,21 @@ RSpec.describe Lich::Common::GUI::AccountManager do
       before do
         # Create account with characters
         described_class.add_or_update_account(data_dir, username, "password")
-        described_class.add_character(data_dir, username, {
+        result1 = described_class.add_character(data_dir, username, {
           char_name: "Char1",
           game_code: "GS",
           game_name: "GemStone",
           frontend: "stormfront"
         })
-        described_class.add_character(data_dir, username, {
+        result2 = described_class.add_character(data_dir, username, {
           char_name: "Char2",
           game_code: "DR",
           game_name: "DragonRealms",
           frontend: "wizard"
         })
+        # Ensure both characters were added successfully
+        expect(result1[:success]).to be true
+        expect(result2[:success]).to be true
       end
 
       it "returns array of character data hashes" do

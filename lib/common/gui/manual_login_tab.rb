@@ -338,9 +338,9 @@ module Lich
             iter[1] = 'working...'
             Gtk.queue {
               begin
-                # Authenticate with legacy mode
+                # Authenticate with legacy mode - normalize account name to UPCASE
                 login_info = Authentication.authenticate(
-                  account: user_id_entry.text,
+                  account: user_id_entry.text.upcase,
                   password: pass_entry.text,
                   legacy: true
                 )
@@ -449,10 +449,14 @@ module Lich
               custom_launch = custom_launch_option.active? ? @custom_launch_entry.child.text : nil
               custom_launch_dir = custom_launch_option.active? ? @custom_launch_dir.child.text : nil
 
+              # Normalize account name to UPCASE and character name to Title case
+              normalized_account = user_id_entry.text.upcase
+              normalized_character = selected_iter[3].capitalize
+
               launch_data_hash = Authentication.authenticate(
-                account: user_id_entry.text,
+                account: normalized_account,
                 password: pass_entry.text,
-                character: selected_iter[3],
+                character: normalized_character,
                 game_code: selected_iter[0]
               )
 
@@ -470,13 +474,13 @@ module Lich
 
               # Save quick entry if selected
               if @make_quick_option.active?
-                entry_data = { :char_name => selected_iter[3], :game_code => selected_iter[0], :game_name => selected_iter[1], :user_id => user_id_entry.text, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir }
+                entry_data = { :char_name => normalized_character, :game_code => selected_iter[0], :game_name => selected_iter[1], :user_id => normalized_account, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir }
 
-                # Check for duplicate entries using unique key: char_name + game_code + user_id + frontend
+                # Check for duplicate entries using normalized comparison for consistent matching
                 existing_entry = @entry_data.find do |entry|
-                  entry[:char_name] == entry_data[:char_name] &&
+                  entry[:char_name].to_s.capitalize == entry_data[:char_name] &&
                     entry[:game_code] == entry_data[:game_code] &&
-                    entry[:user_id] == entry_data[:user_id] &&
+                    entry[:user_id].to_s.upcase == entry_data[:user_id] &&
                     entry[:frontend] == entry_data[:frontend]
                 end
 
@@ -510,38 +514,44 @@ module Lich
                 if save_success
                   # Reset save flag to prevent duplicate save on window destruction
                   @save_entry_data = false
+                  # Refresh local cache with normalized data after successful save
+                  @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, @autosort_state)
                   # Trigger main GUI cache refresh only once after successful save
                   @callbacks.on_save.call(entry_data) if @callbacks.on_save
                 else
                   # Log save failure for debugging
-                  Lich.log "error: Failed to save entry data for character '#{selected_iter[3]}' (#{selected_iter[0]})"
+                  Lich.log "error: Failed to save entry data for character '#{normalized_character}' (#{selected_iter[0]})"
                 end
               end
 
               # Handle favorites if selected - only proceed if save was successful or not required
               if @make_favorite_option.active? && save_success
                 begin
-                  # Add character to favorites with precise frontend matching
-                  favorite_success = FavoritesManager.add_favorite(@data_dir, user_id_entry.text, selected_iter[3], selected_iter[0], frontend)
+                  # Add character to favorites with precise frontend matching - use normalized values
+                  favorite_success = FavoritesManager.add_favorite(@data_dir, normalized_account, normalized_character, selected_iter[0], frontend)
 
                   if favorite_success
                     # Single optimized cache refresh after favorite marking
                     # This replaces multiple redundant refresh operations
                     @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, @autosort_state)
 
+                    # Critical: Trigger on_save callback again to refresh main GUI cache with favorite data
+                    # This ensures the main GUI cache contains the updated favorite information
+                    @callbacks.on_save.call(entry_data) if @callbacks.on_save
+
                     # Notify main GUI of the change without triggering additional cache refresh
                     # The main GUI will use the notification to update UI without reloading from disk
                     if @callbacks.on_favorites_change
                       @callbacks.on_favorites_change.call(
-                        username: user_id_entry.text,
-                        char_name: selected_iter[3],
+                        username: normalized_account,
+                        char_name: normalized_character,
                         game_code: selected_iter[0],
                         is_favorite: true
                       )
                     end
                   else
                     # Log favorite marking failure for debugging
-                    Lich.log "warning: Failed to mark character '#{selected_iter[3]}' (#{selected_iter[0]}) as favorite"
+                    Lich.log "warning: Failed to mark character '#{normalized_character}' (#{selected_iter[0]}) as favorite"
                   end
                 rescue StandardError => e
                   Lich.log "error: Error adding character to favorites: #{e.message}"

@@ -20,7 +20,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
         yaml_file = File.join(data_dir, "entry.yml")
         yaml_data = {
           'accounts' => {
-            'user1' => {
+            'USER1' => {
               'password'   => 'pass1',
               'characters' => [
                 {
@@ -45,7 +45,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
         expect(entries.size).to eq(1)
         expect(entries[0][:char_name]).to eq('Char1')
-        expect(entries[0][:user_id]).to eq('user1')
+        expect(entries[0][:user_id]).to eq('USER1')
         expect(entries[0][:password]).to eq('pass1') # Password comes from account level
         expect(entries[0][:custom_launch]).to be_nil
         expect(entries[0][:custom_launch_dir]).to be_nil
@@ -56,7 +56,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
         # Add another character and make one a favorite to test sorting
         yaml_file = File.join(data_dir, "entry.yml")
         yaml_data = YAML.load_file(yaml_file)
-        yaml_data['accounts']['user1']['characters'] << {
+        yaml_data['accounts']['USER1']['characters'] << {
           'char_name'         => 'AChar', # Should come first alphabetically but not if Char1 is favorite
           'game_code'         => 'GS',
           'game_name'         => 'GemStone',
@@ -66,8 +66,8 @@ RSpec.describe Lich::Common::GUI::YamlState do
           'is_favorite'       => false
         }
         # Make Char1 a favorite
-        yaml_data['accounts']['user1']['characters'][0]['is_favorite'] = true
-        yaml_data['accounts']['user1']['characters'][0]['favorite_order'] = 1
+        yaml_data['accounts']['USER1']['characters'][0]['is_favorite'] = true
+        yaml_data['accounts']['USER1']['characters'][0]['favorite_order'] = 1
         File.write(yaml_file, YAML.dump(yaml_data))
 
         # Test with autosort false - favorites should come first
@@ -87,7 +87,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
         # Add another character to test sorting of non-favorites
         yaml_file = File.join(data_dir, "entry.yml")
         yaml_data = YAML.load_file(yaml_file)
-        yaml_data['accounts']['user1']['characters'] << {
+        yaml_data['accounts']['USER1']['characters'] << {
           'char_name'         => 'AChar', # Should come first alphabetically
           'game_code'         => 'GS',
           'game_name'         => 'GemStone',
@@ -118,7 +118,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
                                                                                        char_name: 'Char1',
                                                                                        game_code: 'GS',
                                                                                        game_name: 'GemStone',
-                                                                                       user_id: 'user1',
+                                                                                       user_id: 'USER1',
                                                                                        password: 'pass1',
                                                                                        frontend: 'stormfront',
                                                                                        custom_launch: nil,
@@ -163,7 +163,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
           char_name: 'Char1',
           game_code: 'GS',
           game_name: 'GemStone',
-          user_id: 'user1',
+          user_id: 'USER1',
           password: 'pass1',
           frontend: 'stormfront',
           custom_launch: nil,
@@ -183,12 +183,12 @@ RSpec.describe Lich::Common::GUI::YamlState do
         expect(File.exist?(yaml_file)).to be true
 
         yaml_data = YAML.load_file(yaml_file)
-        expect(yaml_data['accounts']).to have_key('user1')
-        expect(yaml_data['accounts']['user1']['password']).to eq('pass1')
-        expect(yaml_data['accounts']['user1']['characters'].size).to eq(1)
-        expect(yaml_data['accounts']['user1']['characters'][0]['char_name']).to eq('Char1')
-        expect(yaml_data['accounts']['user1']['characters'][0]['custom_launch']).to be_nil
-        expect(yaml_data['accounts']['user1']['characters'][0]['is_favorite']).to be false
+        expect(yaml_data['accounts']).to have_key('USER1')
+        expect(yaml_data['accounts']['USER1']['password']).to eq('pass1')
+        expect(yaml_data['accounts']['USER1']['characters'].size).to eq(1)
+        expect(yaml_data['accounts']['USER1']['characters'][0]['char_name']).to eq('Char1')
+        expect(yaml_data['accounts']['USER1']['characters'][0]['custom_launch']).to be_nil
+        expect(yaml_data['accounts']['USER1']['characters'][0]['is_favorite']).to be false
       end
     end
 
@@ -205,7 +205,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
             char_name: 'Char2',
             game_code: 'DR',
             game_name: 'DragonRealms',
-            user_id: 'user1',
+            user_id: 'USER1',
             password: 'pass1',
             frontend: 'wizard',
             custom_launch: nil,
@@ -228,7 +228,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
             char_name: 'Char2',
             game_code: 'DR',
             game_name: 'DragonRealms',
-            user_id: 'user1',
+            user_id: 'USER1',
             password: 'pass1',
             frontend: 'wizard',
             custom_launch: nil,
@@ -242,12 +242,12 @@ RSpec.describe Lich::Common::GUI::YamlState do
         # Verify YAML file is updated
         yaml_file = File.join(data_dir, "entry.yml")
         yaml_data = YAML.load_file(yaml_file)
-        expect(yaml_data['accounts']['user1']['characters'].size).to eq(2)
-        expect(yaml_data['accounts']['user1']['characters'][1]['char_name']).to eq('Char2')
+        expect(yaml_data['accounts']['USER1']['characters'].size).to eq(2)
+        expect(yaml_data['accounts']['USER1']['characters'][1]['char_name']).to eq('Char2')
         # Verify password is at account level, not character level
-        expect(yaml_data['accounts']['user1']['password']).to eq('pass1')
-        expect(yaml_data['accounts']['user1']['characters'][0].key?('password')).to be false
-        expect(yaml_data['accounts']['user1']['characters'][1].key?('password')).to be false
+        expect(yaml_data['accounts']['USER1']['password']).to eq('pass1')
+        expect(yaml_data['accounts']['USER1']['characters'][0].key?('password')).to be false
+        expect(yaml_data['accounts']['USER1']['characters'][1].key?('password')).to be false
       end
     end
 
@@ -279,7 +279,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
                                                                                        char_name: 'Char1',
                                                                                        game_code: 'GS',
                                                                                        game_name: 'GemStone',
-                                                                                       user_id: 'user1',
+                                                                                       user_id: 'USER1',
                                                                                        password: 'pass1',
                                                                                        frontend: 'stormfront',
                                                                                        custom_launch: nil,
@@ -324,112 +324,6 @@ RSpec.describe Lich::Common::GUI::YamlState do
     end
   end
 
-  # Note: validate_yaml_structure method doesn't exist in implementation
-  # Removing these tests as the method is not implemented
-  # describe ".validate_yaml_structure" do
-  #   context "with valid YAML structure" do
-  #     let(:valid_yaml) do
-  #       {
-  #         'accounts' => {
-  #           'user1' => {
-  #             'password'   => 'pass1',
-  #             'characters' => [
-  #               {
-  #                 'char_name'         => 'Char1',
-  #                 'game_code'         => 'GS',
-  #                 'game_name'         => 'GemStone',
-  #                 'frontend'          => 'stormfront',
-  #                 'custom_launch'     => nil,
-  #                 'custom_launch_dir' => nil,
-  #                 'is_favorite'       => false
-  #               }
-  #             ]
-  #           }
-  #         }
-  #       }
-  #     end
-  #
-  #     it "returns true" do
-  #       # Test that true is returned for valid structure
-  #       expect(described_class.validate_yaml_structure(valid_yaml)).to be true
-  #     end
-  #   end
-  #
-  #   context "with invalid YAML structure" do
-  #     it "returns false when not a hash" do
-  #       # Test that false is returned when not a hash
-  #       expect(described_class.validate_yaml_structure([])).to be false
-  #     end
-  #
-  #     it "returns false when missing accounts key" do
-  #       # Test that false is returned when missing accounts key
-  #       expect(described_class.validate_yaml_structure({ 'users' => {} })).to be false
-  #     end
-  #
-  #     it "returns false when accounts is not a hash" do
-  #       # Test that false is returned when accounts is not a hash
-  #       expect(described_class.validate_yaml_structure({ 'accounts' => [] })).to be false
-  #     end
-  #
-  #     it "returns false when account data is not a hash" do
-  #       # Test that false is returned when account data is not a hash
-  #       expect(described_class.validate_yaml_structure({ 'accounts' => { 'user1' => [] } })).to be false
-  #     end
-  #
-  #     it "returns false when missing password key" do
-  #       # Test that false is returned when missing password key
-  #       expect(described_class.validate_yaml_structure({
-  #         'accounts' => {
-  #           'user1' => {
-  #             'characters' => []
-  #           }
-  #         }
-  #       })).to be false
-  #     end
-  #
-  #     it "returns false when missing characters key" do
-  #       # Test that false is returned when missing characters key
-  #       expect(described_class.validate_yaml_structure({
-  #         'accounts' => {
-  #           'user1' => {
-  #             'password' => 'pass1'
-  #           }
-  #         }
-  #       })).to be false
-  #     end
-  #
-  #     it "returns false when characters is not an array" do
-  #       # Test that false is returned when characters is not an array
-  #       expect(described_class.validate_yaml_structure({
-  #         'accounts' => {
-  #           'user1' => {
-  #             'password'   => 'pass1',
-  #             'characters' => {}
-  #           }
-  #         }
-  #       })).to be false
-  #     end
-  #
-  #     it "returns false when character data is missing required keys" do
-  #       # Test that false is returned when character data is missing required keys
-  #       expect(described_class.validate_yaml_structure({
-  #         'accounts' => {
-  #           'user1' => {
-  #             'password'   => 'pass1',
-  #             'characters' => [
-  #               {
-  #                 'char_name' => 'Char1',
-  #                 'game_code' => 'GS'
-  #                 # Missing game_name and frontend
-  #               }
-  #             ]
-  #           }
-  #         }
-  #       })).to be false
-  #     end
-  #   end
-  # end
-
   describe ".add_favorite" do
     let(:yaml_file) { File.join(data_dir, "entry.yml") }
 
@@ -437,7 +331,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
       # Create test YAML file with character data
       yaml_data = {
         'accounts' => {
-          'user1' => {
+          'USER1' => {
             'password'   => 'pass1',
             'characters' => [
               {
@@ -467,15 +361,15 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
     context "when YAML file exists" do
       it "adds character to favorites" do
-        result = described_class.add_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
+        result = described_class.add_favorite(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')
         expect(result).to be true
 
         # Verify character is marked as favorite
-        expect(described_class.is_favorite?(data_dir, 'user1', 'Char1', 'GS', 'stormfront')).to be true
+        expect(described_class.is_favorite?(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')).to be true
 
         # Verify YAML structure
         yaml_data = YAML.load_file(yaml_file)
-        character = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char1' }
+        character = yaml_data['accounts']['USER1']['characters'].find { |c| c['char_name'] == 'Char1' }
         expect(character['is_favorite']).to be true
         expect(character['favorite_order']).to eq(1)
         expect(character['favorite_added']).to be_a(String)
@@ -483,14 +377,14 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
       it "assigns correct favorite order" do
         # Add first favorite
-        described_class.add_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
+        described_class.add_favorite(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')
 
         # Add second favorite
-        described_class.add_favorite(data_dir, 'user1', 'Char2', 'DR', 'wizard')
+        described_class.add_favorite(data_dir, 'USER1', 'Char2', 'DR', 'wizard')
 
         yaml_data = YAML.load_file(yaml_file)
-        char1 = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char1' }
-        char2 = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char2' }
+        char1 = yaml_data['accounts']['USER1']['characters'].find { |c| c['char_name'] == 'Char1' }
+        char2 = yaml_data['accounts']['USER1']['characters'].find { |c| c['char_name'] == 'Char2' }
 
         expect(char1['favorite_order']).to eq(1)
         expect(char2['favorite_order']).to eq(2)
@@ -498,31 +392,31 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
       it "returns true if character is already a favorite" do
         # Add favorite first time
-        described_class.add_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
+        described_class.add_favorite(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')
 
         # Try to add again
-        result = described_class.add_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
+        result = described_class.add_favorite(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')
         expect(result).to be true
       end
 
       it "returns false if character not found" do
-        result = described_class.add_favorite(data_dir, 'user1', 'NonExistent', 'GS', 'stormfront')
+        result = described_class.add_favorite(data_dir, 'USER1', 'NonExistent', 'GS', 'stormfront')
         expect(result).to be false
       end
 
       it "works with frontend precision" do
         # Add character with specific frontend
-        result = described_class.add_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
+        result = described_class.add_favorite(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')
         expect(result).to be true
 
         # Verify it doesn't match with different frontend (should return false, not nil)
-        result_wizard = described_class.is_favorite?(data_dir, 'user1', 'Char1', 'GS', 'wizard')
+        result_wizard = described_class.is_favorite?(data_dir, 'USER1', 'Char1', 'GS', 'wizard')
         expect(result_wizard).to be_falsy # Use be_falsy to handle both false and nil
 
         # Verify it matches with correct frontend
-        expect(described_class.is_favorite?(data_dir, 'user1', 'Char1', 'GS', 'stormfront')).to be true
+        expect(described_class.is_favorite?(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')).to be true
         # Verify backward compatibility (no frontend specified)
-        expect(described_class.is_favorite?(data_dir, 'user1', 'Char1', 'GS')).to be true
+        expect(described_class.is_favorite?(data_dir, 'USER1', 'Char1', 'GS')).to be true
       end
     end
 
@@ -532,7 +426,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
       end
 
       it "returns false" do
-        result = described_class.add_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
+        result = described_class.add_favorite(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')
         expect(result).to be false
       end
     end
@@ -545,7 +439,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
       # Create test YAML file with favorite character
       yaml_data = {
         'accounts' => {
-          'user1' => {
+          'USER1' => {
             'password'   => 'pass1',
             'characters' => [
               {
@@ -579,15 +473,15 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
     context "when character is a favorite" do
       it "removes character from favorites" do
-        result = described_class.remove_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
+        result = described_class.remove_favorite(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')
         expect(result).to be true
 
         # Verify character is no longer a favorite
-        expect(described_class.is_favorite?(data_dir, 'user1', 'Char1', 'GS', 'stormfront')).to be false
+        expect(described_class.is_favorite?(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')).to be false
 
         # Verify YAML structure
         yaml_data = YAML.load_file(yaml_file)
-        character = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char1' }
+        character = yaml_data['accounts']['USER1']['characters'].find { |c| c['char_name'] == 'Char1' }
         expect(character['is_favorite']).to be false
         expect(character.key?('favorite_order')).to be false
         expect(character.key?('favorite_added')).to be false
@@ -595,10 +489,10 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
       it "reorders remaining favorites" do
         # Remove first favorite
-        described_class.remove_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
+        described_class.remove_favorite(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')
 
         yaml_data = YAML.load_file(yaml_file)
-        char2 = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char2' }
+        char2 = yaml_data['accounts']['USER1']['characters'].find { |c| c['char_name'] == 'Char2' }
 
         # Char2 should now be order 1
         expect(char2['favorite_order']).to eq(1)
@@ -606,17 +500,17 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
       it "returns true if character is not a favorite" do
         # First remove the favorite status
-        described_class.remove_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
+        described_class.remove_favorite(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')
 
         # Try to remove again
-        result = described_class.remove_favorite(data_dir, 'user1', 'Char1', 'GS', 'stormfront')
+        result = described_class.remove_favorite(data_dir, 'USER1', 'Char1', 'GS', 'stormfront')
         expect(result).to be true
       end
     end
 
     context "when character not found" do
       it "returns false" do
-        result = described_class.remove_favorite(data_dir, 'user1', 'NonExistent', 'GS', 'stormfront')
+        result = described_class.remove_favorite(data_dir, 'USER1', 'NonExistent', 'GS', 'stormfront')
         expect(result).to be false
       end
     end
@@ -629,7 +523,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
       # Create test YAML file with mixed favorite/non-favorite characters
       yaml_data = {
         'accounts' => {
-          'user1' => {
+          'USER1' => {
             'password'   => 'pass1',
             'characters' => [
               {
@@ -660,23 +554,23 @@ RSpec.describe Lich::Common::GUI::YamlState do
     end
 
     it "returns true for favorite characters" do
-      result = described_class.is_favorite?(data_dir, 'user1', 'FavoriteChar', 'GS', 'stormfront')
+      result = described_class.is_favorite?(data_dir, 'USER1', 'FavoriteChar', 'GS', 'stormfront')
       expect(result).to be true
     end
 
     it "returns false for non-favorite characters" do
-      result = described_class.is_favorite?(data_dir, 'user1', 'RegularChar', 'DR', 'wizard')
+      result = described_class.is_favorite?(data_dir, 'USER1', 'RegularChar', 'DR', 'wizard')
       expect(result).to be false
     end
 
     it "returns false for non-existent characters" do
-      result = described_class.is_favorite?(data_dir, 'user1', 'NonExistent', 'GS', 'stormfront')
+      result = described_class.is_favorite?(data_dir, 'USER1', 'NonExistent', 'GS', 'stormfront')
       expect(result).to be_falsy # Use be_falsy to handle both false and nil
     end
 
     it "returns false when YAML file doesn't exist" do
       File.delete(yaml_file)
-      result = described_class.is_favorite?(data_dir, 'user1', 'FavoriteChar', 'GS', 'stormfront')
+      result = described_class.is_favorite?(data_dir, 'USER1', 'FavoriteChar', 'GS', 'stormfront')
       expect(result).to be false
     end
   end
@@ -688,7 +582,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
       # Create test YAML file with multiple favorites across accounts
       yaml_data = {
         'accounts' => {
-          'user1' => {
+          'USER1' => {
             'password'   => 'pass1',
             'characters' => [
               {
@@ -713,7 +607,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
               }
             ]
           },
-          'user2' => {
+          'USER2' => {
             'password'   => 'pass2',
             'characters' => [
               {
@@ -742,7 +636,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
       expect(favorites[1][:char_name]).to eq('Char1') # order 2
 
       # Verify structure
-      expect(favorites[0][:user_id]).to eq('user2')
+      expect(favorites[0][:user_id]).to eq('USER2')
       expect(favorites[0][:game_code]).to eq('GS')
       expect(favorites[0][:favorite_order]).to eq(1)
     end
@@ -750,8 +644,8 @@ RSpec.describe Lich::Common::GUI::YamlState do
     it "returns empty array when no favorites exist" do
       # Remove favorites
       yaml_data = YAML.load_file(yaml_file)
-      yaml_data['accounts']['user1']['characters'][0]['is_favorite'] = false
-      yaml_data['accounts']['user2']['characters'][0]['is_favorite'] = false
+      yaml_data['accounts']['USER1']['characters'][0]['is_favorite'] = false
+      yaml_data['accounts']['USER2']['characters'][0]['is_favorite'] = false
       File.write(yaml_file, YAML.dump(yaml_data))
 
       favorites = described_class.get_favorites(data_dir)
@@ -772,7 +666,7 @@ RSpec.describe Lich::Common::GUI::YamlState do
       # Create test YAML file with multiple favorites
       yaml_data = {
         'accounts' => {
-          'user1' => {
+          'USER1' => {
             'password'   => 'pass1',
             'characters' => [
               {
@@ -807,8 +701,8 @@ RSpec.describe Lich::Common::GUI::YamlState do
     it "reorders favorites based on provided list" do
       # Reverse the order
       ordered_favorites = [
-        { username: 'user1', char_name: 'Char2', game_code: 'DR', frontend: 'wizard' },
-        { username: 'user1', char_name: 'Char1', game_code: 'GS', frontend: 'stormfront' }
+        { username: 'USER1', char_name: 'Char2', game_code: 'DR', frontend: 'wizard' },
+        { username: 'USER1', char_name: 'Char1', game_code: 'GS', frontend: 'stormfront' }
       ]
 
       result = described_class.reorder_favorites(data_dir, ordered_favorites)
@@ -816,8 +710,8 @@ RSpec.describe Lich::Common::GUI::YamlState do
 
       # Verify new order
       yaml_data = YAML.load_file(yaml_file)
-      char1 = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char1' }
-      char2 = yaml_data['accounts']['user1']['characters'].find { |c| c['char_name'] == 'Char2' }
+      char1 = yaml_data['accounts']['USER1']['characters'].find { |c| c['char_name'] == 'Char1' }
+      char2 = yaml_data['accounts']['USER1']['characters'].find { |c| c['char_name'] == 'Char2' }
 
       expect(char2['favorite_order']).to eq(1)
       expect(char1['favorite_order']).to eq(2)
@@ -826,8 +720,8 @@ RSpec.describe Lich::Common::GUI::YamlState do
     it "works with string keys" do
       # Test with string keys instead of symbol keys
       ordered_favorites = [
-        { 'username' => 'user1', 'char_name' => 'Char2', 'game_code' => 'DR', 'frontend' => 'wizard' },
-        { 'username' => 'user1', 'char_name' => 'Char1', 'game_code' => 'GS', 'frontend' => 'stormfront' }
+        { 'username' => 'USER1', 'char_name' => 'Char2', 'game_code' => 'DR', 'frontend' => 'wizard' },
+        { 'username' => 'USER1', 'char_name' => 'Char1', 'game_code' => 'GS', 'frontend' => 'stormfront' }
       ]
 
       result = described_class.reorder_favorites(data_dir, ordered_favorites)
@@ -838,6 +732,85 @@ RSpec.describe Lich::Common::GUI::YamlState do
       File.delete(yaml_file)
       result = described_class.reorder_favorites(data_dir, [])
       expect(result).to be false
+    end
+  end
+
+  describe ".convert_legacy_to_yaml_format" do
+    context "with case normalization" do
+      let(:mixed_case_entry_data) do
+        [
+          {
+            char_name: 'char1',
+            game_code: 'GS',
+            game_name: 'GemStone',
+            user_id: 'user1',
+            password: 'pass1',
+            frontend: 'stormfront',
+            custom_launch: nil,
+            custom_launch_dir: nil,
+            is_favorite: false
+          },
+          {
+            char_name: 'CHAR2',
+            game_code: 'DR',
+            game_name: 'DragonRealms',
+            user_id: 'USER1',
+            password: 'pass1',
+            frontend: 'wizard',
+            custom_launch: nil,
+            custom_launch_dir: nil,
+            is_favorite: false
+          }
+        ]
+      end
+
+      it "normalizes account names to UPCASE" do
+        yaml_data = described_class.convert_legacy_to_yaml_format(mixed_case_entry_data)
+
+        expect(yaml_data['accounts']).to have_key('USER1')
+        expect(yaml_data['accounts']).not_to have_key('user1')
+      end
+
+      it "normalizes character names to Title case" do
+        yaml_data = described_class.convert_legacy_to_yaml_format(mixed_case_entry_data)
+
+        characters = yaml_data['accounts']['USER1']['characters']
+        expect(characters[0]['char_name']).to eq('Char1')
+        expect(characters[1]['char_name']).to eq('Char2')
+      end
+
+      it "prevents duplicate characters with precision matching" do
+        duplicate_entry_data = [
+          {
+            char_name: 'char1',
+            game_code: 'GS',
+            game_name: 'GemStone',
+            user_id: 'user1',
+            password: 'pass1',
+            frontend: 'stormfront',
+            custom_launch: nil,
+            custom_launch_dir: nil,
+            is_favorite: false
+          },
+          {
+            char_name: 'Char1',
+            game_code: 'GS',
+            game_name: 'GemStone',
+            user_id: 'USER1',
+            password: 'pass1',
+            frontend: 'stormfront',
+            custom_launch: nil,
+            custom_launch_dir: nil,
+            is_favorite: false
+          }
+        ]
+
+        yaml_data = described_class.convert_legacy_to_yaml_format(duplicate_entry_data)
+
+        # Should only have one character after normalization and duplicate detection
+        expect(yaml_data['accounts']['USER1']['characters'].size).to eq(1)
+        expect(yaml_data['accounts']['USER1']['characters'][0]['char_name']).to eq('Char1')
+      end
     end
   end
 end

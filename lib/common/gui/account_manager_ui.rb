@@ -311,7 +311,6 @@ module Lich
             iter = selection.selected
             if iter
               account = iter[0]
-              require_relative 'gui/password_change'
               PasswordChange.show_password_change_dialog(@window, @data_dir, account)
             end
           end
@@ -529,7 +528,7 @@ module Lich
                 character_list = convert_auth_data_to_characters(auth_data, selected_frontend)
 
                 # Step 4: Save account and characters to entry.yml file
-                if save_account_with_characters(username, password, character_list)
+                if AccountManager.add_or_update_account(@data_dir, username, password, character_list)
                   @msgbox.call("Account '#{username}' added successfully with #{character_list.length} character(s).")
                   username_entry.text = ""
                   password_entry.text = ""
@@ -554,7 +553,7 @@ module Lich
               elsif auth_data && auth_data.is_a?(Array) && auth_data.empty?
                 @msgbox.call("No characters found for account '#{username}'. Account will be added without characters.")
                 # Save account without characters
-                if save_account_with_characters(username, password, [])
+                if AccountManager.add_or_update_account(@data_dir, username, password, [])
                   username_entry.text = ""
                   password_entry.text = ""
                   # Notify other tabs of data change
@@ -684,8 +683,10 @@ module Lich
             }
 
             # Add character to account
-            if AccountManager.add_character(@data_dir, account, character_data)
-              @msgbox.call("Character '#{character}' added to account '#{account}' successfully.")
+            result = AccountManager.add_character(@data_dir, account, character_data)
+
+            if result[:success]
+              @msgbox.call(result[:message])
               char_name_entry.text = ""
               custom_launch_entry.text = ""
               custom_launch_dir_entry.text = ""
@@ -699,17 +700,15 @@ module Lich
                 frontend: frontend
               })
 
-              # Switch back to accounts tab
+              # Refresh the accounts view to show the new character
               notebook.set_page(0)
-
-              # Refresh accounts view
               accounts_tab = notebook.get_nth_page(0)
               accounts_view = find_treeview_in_container(accounts_tab)
               if accounts_view
                 populate_accounts_view(accounts_view.model)
               end
             else
-              @msgbox.call("Failed to add character.")
+              @msgbox.call(result[:message])
             end
           end
         end
@@ -870,60 +869,6 @@ module Lich
 
           dialog.destroy
           selected_frontend
-        end
-
-        # Saves account with characters to the YAML file
-        #
-        # @param username [String] Account username
-        # @param password [String] Account password
-        # @param characters [Array] Array of character data hashes
-        # @return [Boolean] True if save was successful
-        def save_account_with_characters(username, password, characters)
-          yaml_file = File.join(@data_dir, "entry.yml")
-
-          # Load existing data or create new structure
-          yaml_data = if File.exist?(yaml_file)
-                        begin
-                          YAML.load_file(yaml_file)
-                        rescue StandardError => e
-                          Lich.log "error: Error loading YAML entry file: #{e.message}"
-                          { 'accounts' => {} }
-                        end
-                      else
-                        { 'accounts' => {} }
-                      end
-
-          # Initialize accounts hash if not present
-          yaml_data['accounts'] ||= {}
-
-          # Create account entry with characters
-          yaml_data['accounts'][username] = {
-            'password'   => password,
-            'characters' => characters.map do |char|
-              {
-                'char_name'         => char[:char_name],
-                'game_code'         => char[:game_code],
-                'game_name'         => char[:game_name],
-                'frontend'          => char[:frontend],
-                'custom_launch'     => char[:custom_launch],
-                'custom_launch_dir' => char[:custom_launch_dir]
-              }
-            end
-          }
-
-          # Save updated data
-          begin
-            File.open(yaml_file, 'w') do |file|
-              file.puts "# Lich 5 Login Entries - YAML Format"
-              file.puts "# Generated: #{Time.now}"
-              file.puts "# WARNING: Passwords are stored in plain text"
-              file.write(YAML.dump(yaml_data))
-            end
-            true
-          rescue StandardError => e
-            Lich.log "error: Error saving YAML entry file: #{e.message}"
-            false
-          end
         end
 
         # Sets up sort state persistence for the account management treeview

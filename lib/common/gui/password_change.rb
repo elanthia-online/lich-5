@@ -193,6 +193,7 @@ module Lich
 
           # Verifies the current password for an account
           # Checks if the provided password matches the stored password
+          # Uses normalized account name for consistent lookup
           #
           # @param data_dir [String] Directory containing account data
           # @param username [String] Username of the account
@@ -208,11 +209,14 @@ module Lich
               # Load YAML data
               yaml_data = YAML.load_file(yaml_file)
 
+              # Normalize username to UPCASE for consistent lookup
+              normalized_username = username.to_s.upcase
+
               # Check if account exists
-              return false unless yaml_data['accounts'] && yaml_data['accounts'][username]
+              return false unless yaml_data['accounts'] && yaml_data['accounts'][normalized_username]
 
               # Verify password
-              yaml_data['accounts'][username]['password'] == password
+              yaml_data['accounts'][normalized_username]['password'] == password
             rescue StandardError => e
               Lich.log "error: Error verifying password: #{e.message}"
               false
@@ -221,14 +225,17 @@ module Lich
 
           # Changes the password for an account
           # Updates the password in the YAML file
+          # Uses normalized account name for consistent operation
           #
           # @param data_dir [String] Directory containing account data
           # @param username [String] Username of the account
           # @param new_password [String] New password
           # @return [Boolean] True if password was changed successfully
           def change_password(data_dir, username, new_password)
+            # Normalize username before passing to AccountManager
+            normalized_username = username.to_s.upcase
             # Use the existing AccountManager method to change password
-            AccountManager.change_password(data_dir, username, new_password)
+            AccountManager.change_password(data_dir, normalized_username, new_password)
           end
         end
       end

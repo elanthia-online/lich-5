@@ -286,6 +286,7 @@ module Lich
 
         # Converts YAML data structure to legacy format
         # Transforms the YAML structure into the format expected by existing code
+        # Maintains normalized case formatting from YAML storage
         #
         # @param yaml_data [Hash] YAML data structure
         # @return [Array] Array of entry data in legacy format
@@ -299,9 +300,9 @@ module Lich
 
             account_data['characters'].each do |character|
               entry = {
-                user_id: username,
+                user_id: username, # Already normalized to UPCASE in YAML
                 password: account_data['password'], # Password is at account level
-                char_name: character['char_name'],
+                char_name: character['char_name'], # Already normalized to Title case in YAML
                 game_code: character['game_code'],
                 game_name: character['game_name'],
                 frontend: character['frontend'],
@@ -320,6 +321,7 @@ module Lich
 
         # Converts legacy format to YAML data structure
         # Transforms legacy entry data into the YAML structure for storage
+        # Enhanced with case normalization to prevent duplicate accounts and ensure consistent formatting
         #
         # @param entry_data [Array] Array of entry data in legacy format
         # @return [Hash] YAML data structure
@@ -327,16 +329,17 @@ module Lich
           yaml_data = { 'accounts' => {} }
 
           entry_data.each do |entry|
-            username = entry[:user_id]
+            # Normalize account name to UPCASE for consistent storage
+            normalized_username = normalize_account_name(entry[:user_id])
 
             # Initialize account if not exists, with password at account level
-            yaml_data['accounts'][username] ||= {
+            yaml_data['accounts'][normalized_username] ||= {
               'password'   => entry[:password],
               'characters' => []
             }
 
             character_data = {
-              'char_name'         => entry[:char_name],
+              'char_name'         => normalize_character_name(entry[:char_name]),
               'game_code'         => entry[:game_code],
               'game_name'         => entry[:game_name],
               'frontend'          => entry[:frontend],
@@ -351,7 +354,17 @@ module Lich
               character_data['favorite_added'] = entry[:favorite_added] || Time.now.to_s
             end
 
-            yaml_data['accounts'][username]['characters'] << character_data
+            # Check for duplicate character using precision matching (account/character/game_code/frontend)
+            existing_character = yaml_data['accounts'][normalized_username]['characters'].find do |char|
+              char['char_name'] == character_data['char_name'] &&
+                char['game_code'] == character_data['game_code'] &&
+                char['frontend'] == character_data['frontend']
+            end
+
+            # Only add if no exact match exists
+            unless existing_character
+              yaml_data['accounts'][normalized_username]['characters'] << character_data
+            end
           end
 
           yaml_data
@@ -514,6 +527,26 @@ module Lich
           all_favorites.each_with_index do |character, index|
             character['favorite_order'] = index + 1
           end
+        end
+
+        # Normalizes account names to UPCASE for consistent storage and comparison
+        # Prevents duplicate accounts due to case variations
+        #
+        # @param name [String] Raw account name
+        # @return [String] Normalized account name in UPCASE
+        def self.normalize_account_name(name)
+          return '' if name.nil?
+          name.to_s.upcase
+        end
+
+        # Normalizes character names to Title case (first letter capitalized)
+        # Ensures consistent character name formatting across the application
+        #
+        # @param name [String] Raw character name
+        # @return [String] Normalized character name in Title case
+        def self.normalize_character_name(name)
+          return '' if name.nil?
+          name.to_s.capitalize
         end
       end
     end
