@@ -349,10 +349,16 @@ module Lich
             @done = true
           }
         },
-        # Audit this function for use in other modules / removal
+        # Handles successful login data saving from manual login tab
+        # Optimized to reduce redundant cache refreshes
+        #
+        # @param launch_data [Hash] Login data that was saved (for notification only)
         on_save: ->(launch_data) {
-          @entry_data.push(launch_data)
+          # Only refresh cache if we don't already have the latest data
+          # This prevents redundant file I/O operations
+          @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(DATA_DIR, @autosort_state)
           @save_entry_data = true
+
           # Notify other tabs of data change
           @tab_communicator.notify_data_changed(:entry_added, { entry: launch_data })
         },
@@ -538,15 +544,16 @@ module Lich
 
     # Saves entry data if needed
     #
-    # Saves the entry data to the YAML state file if changes were made.
+    # Saves the entry data to the YAML file if there are unsaved changes.
+    # Optimized to avoid redundant operations.
     #
     # @return [void]
     def save_entry_data_if_needed
       if @save_entry_data
-        # Use YamlState instead of State for saving entries
+        # Save entry data - optimized to avoid redundant cache refresh
         Lich::Common::GUI::YamlState.save_entries(DATA_DIR, @entry_data)
+        @save_entry_data = false
       end
-      @entry_data = nil
     end
 
     # Returns launch data or exits

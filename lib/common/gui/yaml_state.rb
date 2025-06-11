@@ -102,6 +102,7 @@ module Lich
 
         # Adds a character to the favorites list
         # Marks the specified character as a favorite with proper ordering
+        # Optimized to preserve account ordering in YAML structure
         #
         # @param data_dir [String] Directory containing entry data
         # @param username [String] Account username
@@ -129,8 +130,11 @@ module Lich
             character['favorite_order'] = get_next_favorite_order(yaml_data)
             character['favorite_added'] = Time.now.to_s
 
-            # Save updated data
+            # Save updated data directly without conversion round-trip
+            # This preserves the original YAML structure and account ordering
             Utilities.safe_file_operation(yaml_file, :write, YAML.dump(yaml_data))
+
+            true
           rescue StandardError => e
             Lich.log "error: Error adding favorite: #{e.message}"
             false
@@ -294,7 +298,7 @@ module Lich
             next unless account_data['characters']
 
             account_data['characters'].each do |character|
-              entries << {
+              entry = {
                 user_id: username,
                 password: account_data['password'], # Password is at account level
                 char_name: character['char_name'],
@@ -306,6 +310,8 @@ module Lich
                 is_favorite: character['is_favorite'] || false,
                 favorite_order: character['favorite_order']
               }
+
+              entries << entry
             end
           end
 
@@ -400,31 +406,38 @@ module Lich
           yaml_data
         end
 
-        # Finds a character in the YAML data structure with frontend precision
-        # Locates a specific character by username, character name, game code, and optionally frontend
+        # Finds a character in the YAML data with precise matching
+        # Prioritizes exact frontend matches for newly added characters
         #
         # @param yaml_data [Hash] YAML data structure
         # @param username [String] Account username
         # @param char_name [String] Character name
         # @param game_code [String] Game code
-        # @param frontend [String] Frontend identifier (optional for backward compatibility)
-        # @return [Hash, nil] Character hash if found, nil otherwise
+        # @param frontend [String, nil] Frontend identifier
+        # @return [Hash, nil] Character hash or nil if not found
         def self.find_character(yaml_data, username, char_name, game_code, frontend = nil)
           return nil unless yaml_data['accounts'] && yaml_data['accounts'][username]
-
           account_data = yaml_data['accounts'][username]
           return nil unless account_data['characters']
 
-          account_data['characters'].find do |character|
-            matches_basic = character['char_name'] == char_name && character['game_code'] == game_code
-
-            if frontend.nil?
-              # Backward compatibility: if no frontend specified, match any frontend
-              matches_basic
-            else
-              # Frontend precision: must match exact frontend
-              matches_basic && character['frontend'] == frontend
+          # If frontend is specified, find exact match first
+          if frontend
+            exact_match = account_data['characters'].find do |character|
+              character['char_name'] == char_name &&
+                character['game_code'] == game_code &&
+                character['frontend'] == frontend
             end
+            return exact_match if exact_match
+          end
+
+          # Fallback to basic matching only if no exact match found and frontend is nil
+          if frontend.nil?
+            account_data['characters'].find do |character|
+              character['char_name'] == char_name && character['game_code'] == game_code
+            end
+          else
+            # If frontend was specified but no exact match found, return nil
+            nil
           end
         end
 

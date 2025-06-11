@@ -403,7 +403,18 @@ module Lich
           }
         end
 
-        # Sets up play button click handler
+        # Sets up play button click handler with synchronized save and favorite operations
+        #
+        # Handles character login with optional quick entry saving and favorite marking.
+        # Implements synchronization to prevent race conditions between save and favorite
+        # operations by ensuring save completes successfully before favorite marking begins.
+        #
+        # Duplicate Detection Logic:
+        # - Entries are uniquely identified by: char_name + game_code + user_id + frontend
+        # - If identical entry exists: skips save (prevents true duplicates)
+        # - If entry exists with different data: updates existing entry in-place
+        # - If no matching entry exists: adds new entry to collection
+        # - Favorite marking always operates on the final entry state
         #
         # @param play_button [Gtk::Button] Play button
         # @param treeview [Gtk::TreeView] Tree view for character list
@@ -431,7 +442,7 @@ module Lich
               elsif suks_option.active?
                 frontend = 'suks'
               else
-                frontend = 'stormfront'
+                frontend = 'stormfront' # default frontend
               end
 
               # Determine custom launch settings
@@ -454,34 +465,88 @@ module Lich
               # Prep login data
               @launch_data = launch_data
 
+              # Initialize save success tracking for synchronization
+              save_success = true
+
               # Save quick entry if selected
               if @make_quick_option.active?
                 entry_data = { :char_name => selected_iter[3], :game_code => selected_iter[0], :game_name => selected_iter[1], :user_id => user_id_entry.text, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir }
-                @entry_data.push entry_data
-                @save_entry_data = true
 
-                save_entry_data_if_needed
+                # Check for duplicate entries using unique key: char_name + game_code + user_id + frontend
+                existing_entry = @entry_data.find do |entry|
+                  entry[:char_name] == entry_data[:char_name] &&
+                    entry[:game_code] == entry_data[:game_code] &&
+                    entry[:user_id] == entry_data[:user_id] &&
+                    entry[:frontend] == entry_data[:frontend]
+                end
+
+                if existing_entry
+                  # Check if data is identical (excluding potential favorite fields)
+                  data_identical = existing_entry[:game_name] == entry_data[:game_name] &&
+                                   existing_entry[:password] == entry_data[:password] &&
+                                   existing_entry[:custom_launch] == entry_data[:custom_launch] &&
+                                   existing_entry[:custom_launch_dir] == entry_data[:custom_launch_dir]
+
+                  if data_identical
+                    save_success = true # Consider this a successful "save" since entry already exists
+                  else
+                    # Update existing entry with new data
+                    existing_entry[:game_name] = entry_data[:game_name]
+                    existing_entry[:password] = entry_data[:password]
+                    existing_entry[:custom_launch] = entry_data[:custom_launch]
+                    existing_entry[:custom_launch_dir] = entry_data[:custom_launch_dir]
+                    @save_entry_data = true
+
+                    save_success = Lich::Common::GUI::YamlState.save_entries(@data_dir, @entry_data)
+                  end
+                else
+                  @entry_data.push entry_data
+                  @save_entry_data = true
+
+                  # Trigger save through main GUI's save mechanism with synchronization
+                  save_success = Lich::Common::GUI::YamlState.save_entries(@data_dir, @entry_data)
+                end
+
+                if save_success
+                  # Reset save flag to prevent duplicate save on window destruction
+                  @save_entry_data = false
+                  # Trigger main GUI cache refresh only once after successful save
+                  @callbacks.on_save.call(entry_data) if @callbacks.on_save
+                else
+                  # Log save failure for debugging
+                  Lich.log "error: Failed to save entry data for character '#{selected_iter[3]}' (#{selected_iter[0]})"
+                end
               end
 
-              # Handle favorites if selected
-              if @make_favorite_option.active?
+              # Handle favorites if selected - only proceed if save was successful or not required
+              if @make_favorite_option.active? && save_success
                 begin
-                  # Add character to favorites
-                  FavoritesManager.add_favorite(@data_dir, user_id_entry.text, selected_iter[3], selected_iter[0])
+                  # Add character to favorites with precise frontend matching
+                  favorite_success = FavoritesManager.add_favorite(@data_dir, user_id_entry.text, selected_iter[3], selected_iter[0], frontend)
 
-                  # Trigger favorites change callback if available
-                  if @callbacks.on_favorites_change
-                    @callbacks.on_favorites_change.call(
-                      username: user_id_entry.text,
-                      char_name: selected_iter[3],
-                      game_code: selected_iter[0],
-                      is_favorite: true
-                    )
+                  if favorite_success
+                    # Single optimized cache refresh after favorite marking
+                    # This replaces multiple redundant refresh operations
+                    @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, @autosort_state)
+
+                    # Notify main GUI of the change without triggering additional cache refresh
+                    # The main GUI will use the notification to update UI without reloading from disk
+                    if @callbacks.on_favorites_change
+                      @callbacks.on_favorites_change.call(
+                        username: user_id_entry.text,
+                        char_name: selected_iter[3],
+                        game_code: selected_iter[0],
+                        is_favorite: true
+                      )
+                    end
+                  else
+                    # Log favorite marking failure for debugging
+                    Lich.log "warning: Failed to mark character '#{selected_iter[3]}' (#{selected_iter[0]}) as favorite"
                   end
                 rescue StandardError => e
                   Lich.log "error: Error adding character to favorites: #{e.message}"
 
-                  # Show error dialog
+                  # Show error dialog to user
                   dialog = Gtk::MessageDialog.new(
                     parent: @parent,
                     flags: :modal,

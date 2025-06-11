@@ -535,7 +535,7 @@ module Lich
             frontend_display = login_params.frontend.capitalize == 'Stormfront' ? 'Wrayth' : login_params.frontend.capitalize
           end
 
-          fe_label = Gtk::Label.new("(#{frontend_display})")
+          fe_label = Gtk::Label.new("#{frontend_display}")
           fe_label.set_width_chars(15)
           instance_label = Gtk::Label.new(realm)
           instance_label.set_width_chars(10)
