@@ -6,6 +6,14 @@ module Lich
       # Handles YAML-based state management for the Lich GUI login system
       # Provides a more maintainable alternative to the Marshal-based state system
       module YamlState
+        # Generates the full path to the entry.yml file.
+        #
+        # @param data_dir [String] The directory where the entry.yml file is located.
+        # @return [String] The full path to the entry.yml file.
+        def self.yaml_file_path(data_dir)
+          File.join(data_dir, "entry.yaml")
+        end
+
         # Loads saved entry data from YAML file
         # Reads and deserializes entry data from the entry.yml file, with fallback to entry.dat
         # Enhanced to support favorites functionality with backward compatibility
@@ -17,7 +25,7 @@ module Lich
           # Guard against nil data_dir
           return [] if data_dir.nil?
 
-          yaml_file = File.join(data_dir, "entry.yml")
+          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
           dat_file = File.join(data_dir, "entry.dat")
 
           if File.exist?(yaml_file)
@@ -53,7 +61,7 @@ module Lich
         # @param entry_data [Array] Array of entry data in legacy format
         # @return [Boolean] True if save was successful
         def self.save_entries(data_dir, entry_data)
-          yaml_file = File.join(data_dir, "entry.yml")
+          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
 
           # Convert legacy format to YAML structure
           yaml_data = convert_legacy_to_yaml_format(entry_data)
@@ -87,7 +95,7 @@ module Lich
         # @return [Boolean] True if migration was successful
         def self.migrate_from_legacy(data_dir)
           dat_file = File.join(data_dir, "entry.dat")
-          yaml_file = File.join(data_dir, "entry.yml")
+          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
 
           # Skip if YAML file already exists or DAT file doesn't exist
           return false unless File.exist?(dat_file)
@@ -111,7 +119,7 @@ module Lich
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
         # @return [Boolean] True if operation was successful
         def self.add_favorite(data_dir, username, char_name, game_code, frontend = nil)
-          yaml_file = File.join(data_dir, "entry.yml")
+          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
           return false unless File.exist?(yaml_file)
 
           begin
@@ -151,7 +159,7 @@ module Lich
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
         # @return [Boolean] True if operation was successful
         def self.remove_favorite(data_dir, username, char_name, game_code, frontend = nil)
-          yaml_file = File.join(data_dir, "entry.yml")
+          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
           return false unless File.exist?(yaml_file)
 
           begin
@@ -191,7 +199,7 @@ module Lich
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
         # @return [Boolean] True if character is a favorite
         def self.is_favorite?(data_dir, username, char_name, game_code, frontend = nil)
-          yaml_file = File.join(data_dir, "entry.yml")
+          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
           return false unless File.exist?(yaml_file)
 
           begin
@@ -212,7 +220,7 @@ module Lich
         # @param data_dir [String] Directory containing entry data
         # @return [Array] Array of favorite character data in legacy format
         def self.get_favorites(data_dir)
-          yaml_file = File.join(data_dir, "entry.yml")
+          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
           return [] unless File.exist?(yaml_file)
 
           begin
@@ -254,7 +262,7 @@ module Lich
         # @param ordered_favorites [Array] Array of hashes with username, char_name, game_code, frontend
         # @return [Boolean] True if operation was successful
         def self.reorder_favorites(data_dir, ordered_favorites)
-          yaml_file = File.join(data_dir, "entry.yml")
+          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
           return false unless File.exist?(yaml_file)
 
           begin

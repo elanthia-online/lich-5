@@ -22,7 +22,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         expect(described_class.add_or_update_account(data_dir, username, password)).to be true
 
         # Verify YAML file structure
-        yaml_file = File.join(data_dir, "entry.yml")
+        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
         expect(File.exist?(yaml_file)).to be true
 
         yaml_data = YAML.load_file(yaml_file)
@@ -43,14 +43,14 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         expect(described_class.add_or_update_account(data_dir, username, password)).to be true
 
         # Verify password is updated
-        yaml_file = File.join(data_dir, "entry.yml")
+        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
         yaml_data = YAML.load_file(yaml_file)
         expect(yaml_data['accounts'][username.upcase]['password']).to eq(password)
       end
 
       it "preserves existing characters" do
         # Add a character first
-        yaml_file = File.join(data_dir, "entry.yml")
+        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
         yaml_data = YAML.load_file(yaml_file)
         yaml_data['accounts'][username.upcase]['characters'] = [{ 'char_name' => 'TestChar', 'game_code' => 'GS', 'game_name' => 'GemStone', 'frontend' => 'stormfront' }]
         File.write(yaml_file, YAML.dump(yaml_data))
@@ -68,7 +68,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
     context "when file operations fail" do
       it "handles YAML load errors" do
         # Create invalid YAML file
-        yaml_file = File.join(data_dir, "entry.yml")
+        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
         File.write(yaml_file, "invalid: yaml: content: - ]")
 
         # Should handle error and create new structure
@@ -101,7 +101,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         expect(described_class.remove_account(data_dir, username)).to be true
 
         # Verify account is removed
-        yaml_file = File.join(data_dir, "entry.yml")
+        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
         yaml_data = YAML.load_file(yaml_file)
         expect(yaml_data['accounts']).not_to have_key(username)
       end
@@ -110,7 +110,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
     context "when account doesn't exist" do
       before do
         # Create YAML file without the account
-        yaml_file = File.join(data_dir, "entry.yml")
+        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
         File.write(yaml_file, YAML.dump({ 'accounts' => {} }))
       end
 
@@ -160,7 +160,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         expect(result[:success]).to be true
 
         # Verify character is added
-        yaml_file = File.join(data_dir, "entry.yml")
+        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
         yaml_data = YAML.load_file(yaml_file)
         expect(yaml_data['accounts'][username.upcase]['characters'].size).to eq(1)
         expect(yaml_data['accounts'][username.upcase]['characters'][0]['char_name']).to eq(character_data[:char_name].capitalize)
@@ -177,7 +177,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         expect(result[:success]).to be true
 
         # Verify both characters are present
-        yaml_file = File.join(data_dir, "entry.yml")
+        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
         yaml_data = YAML.load_file(yaml_file)
         expect(yaml_data['accounts'][username.upcase]['characters'].size).to eq(2)
         expect(yaml_data['accounts'][username.upcase]['characters'][1]['char_name']).to eq("Secondchar")
@@ -200,7 +200,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
     before do
       # Create account with character
       described_class.add_or_update_account(data_dir, username, "password")
-      yaml_file = File.join(data_dir, "entry.yml")
+      yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
       yaml_data = YAML.load_file(yaml_file)
       yaml_data['accounts'][username.upcase]['characters'] = [
         {
@@ -219,7 +219,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         expect(described_class.remove_character(data_dir, username, char_name, game_code)).to be true
 
         # Verify character is removed
-        yaml_file = File.join(data_dir, "entry.yml")
+        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
         yaml_data = YAML.load_file(yaml_file)
         expect(yaml_data['accounts'][username.upcase]['characters'].size).to eq(0)
       end
@@ -276,7 +276,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
     context "when no accounts exist" do
       before do
         # Create empty YAML file
-        yaml_file = File.join(data_dir, "entry.yml")
+        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
         File.write(yaml_file, YAML.dump({ 'accounts' => {} }))
       end
 
@@ -313,7 +313,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
     context "when no accounts exist" do
       before do
         # Create empty YAML file
-        yaml_file = File.join(data_dir, "entry.yml")
+        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
         File.write(yaml_file, YAML.dump({ 'accounts' => {} }))
       end
 
@@ -378,7 +378,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
     context "when account doesn't exist" do
       before do
         # Create YAML file without the account
-        yaml_file = File.join(data_dir, "entry.yml")
+        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
         File.write(yaml_file, YAML.dump({ 'accounts' => {} }))
       end
 

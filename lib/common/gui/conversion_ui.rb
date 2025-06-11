@@ -14,7 +14,7 @@ module Lich
         # @return [Boolean] True if conversion is needed (entry.dat exists but entry.yml doesn't)
         def self.conversion_needed?(data_dir)
           dat_file = File.join(data_dir, "entry.dat")
-          yml_file = File.join(data_dir, "entry.yml")
+          yml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
 
           # TODO: need a guard for new installs with no dat_file
           File.exist?(dat_file) && !File.exist?(yml_file)
@@ -34,7 +34,6 @@ module Lich
             parent: parent,
             flags: :modal,
             buttons: [
-              ["Cancel", Gtk::ResponseType::CANCEL],
               ["Convert Data", Gtk::ResponseType::APPLY]
             ]
           )
@@ -46,7 +45,7 @@ module Lich
           Accessibility.make_window_accessible(
             dialog,
             "Data Conversion Dialog",
-            "Dialog for converting entry.dat to entry.yml format"
+            "Dialog for converting entry.dat to entry.yaml format"
           )
 
           # Create content area
@@ -56,12 +55,11 @@ module Lich
           # Add explanatory text
           info_label = Gtk::Label.new
           info_label.set_markup(
-            "<span size='large'>Account Data Format Conversion Required</span>\n\n" +
-            "Your account data needs to be converted to a new format before " +
-            "you can use the account management features.\n\n" +
-            "This is a one-time process that will convert your saved entries " +
-            "and characters to the new format.\n\n" +
-            "Your original data will not be modified."
+            "<span size='x-large'>Data Format Conversion\n\n</span>" +
+            "<span size='large'>To take advantage of all new features your\n" +
+            "data will be converted to a new format.\n\n" +
+            "This is a one-time process to improve your experience.\n" +
+            "Your original data will be retained unmodified.</span>"
           )
           info_label.set_line_wrap(true)
           info_label.set_justify(:center)

@@ -200,7 +200,7 @@ module Lich
           # @param password [String] Password to verify
           # @return [Boolean] True if password is correct
           def verify_current_password(data_dir, username, password)
-            yaml_file = File.join(data_dir, "entry.yml")
+            yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
 
             # Check if YAML file exists
             return false unless File.exist?(yaml_file)
