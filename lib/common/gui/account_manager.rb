@@ -49,7 +49,7 @@ module Lich
           # Normalize character data if provided
           normalized_characters = characters.map do |char|
             {
-              'char_name'         => char[:char_name].to_s.capitalize,
+              'char_name'         => char[:char_name].to_s.strip.split.map(&:capitalize).join(' '),
               'game_code'         => char[:game_code],
               'game_name'         => char[:game_name],
               'frontend'          => char[:frontend],

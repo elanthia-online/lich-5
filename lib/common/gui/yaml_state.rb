@@ -536,7 +536,7 @@ module Lich
         # @return [String] Normalized account name in UPCASE
         def self.normalize_account_name(name)
           return '' if name.nil?
-          name.to_s.upcase
+          name.to_s.strip.upcase
         end
 
         # Normalizes character names to Title case (first letter capitalized)
@@ -546,7 +546,7 @@ module Lich
         # @return [String] Normalized character name in Title case
         def self.normalize_character_name(name)
           return '' if name.nil?
-          name.to_s.capitalize
+          name.to_s.strip.capitalize
         end
       end
     end
