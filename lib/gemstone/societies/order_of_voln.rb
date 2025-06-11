@@ -24,6 +24,7 @@ module Lich
             long_name: "Symbol of Recognition",
             type: :utility,
             cost_modifier: 0.00,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "Detect other members of the Order and any undead creatures present in the room.",
             spell_number: 9801,
@@ -34,10 +35,11 @@ module Lich
             long_name: "Symbol of Blessing",
             type: :utility,
             cost_modifier: 0.04, # 0.20 if magical
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             alt_cost_modifier: 0.20, # TODO: Is this really a good solution?  Probably not.
             alt_cost_reason: "magical",
             duration: -> { Society.rank * 2 },
-            summary: -> { "Bless weapons and other combat gear, up to 2x rank (+#{(Society.rank * 2)}) for Level + 2x Rank (#{Char.level + (Society.rank * 2)}) swings." },
+            summary: -> { "Bless weapons and other combat gear, up to 2x rank (+#{(Society.rank * 2)}) for Level + 2x Rank (#{Stats.level + (Society.rank * 2)}) swings." },
             spell_number: 9802,
           },
           "symbol_of_thought"       => {
@@ -56,6 +58,7 @@ module Lich
             long_name: "Symbol of Diminishment",
             type: :attack,
             cost_modifier: 0.30,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: -> { Society.rank * 2 },
             summary: -> { "Successful SSR check will temporarily reduce target undead creature's DS, TD, and CMAN -1 per rank (#{Society.rank * 2}) for rank x 2 (#{Society.rank * 2}) seconds." },
             spell_number: 9804,
@@ -66,6 +69,7 @@ module Lich
             long_name: "Symbol of Courage",
             type: :offense,
             cost_modifier: 0.10,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: -> { Society.rank * 10 },
             summary: -> { "Increases your generic AS and UAF by +1 per rank (+#{Society.rank}).  Adds 3 phantom levels against fear-based attacks." },
             spell_number: 9805,
@@ -76,6 +80,7 @@ module Lich
             long_name: "Symbol of Protection",
             type: :defense,
             cost_modifier: 0.10,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: -> { Society.rank * 20 },
             summary: -> { "Increases your DS +1 and TD +.5 per rank (+#{Society.rank} DS / +#{(Society.rank * 0.5).floor} TD)." },
             spell_number: 9806,
@@ -86,6 +91,7 @@ module Lich
             long_name: "Symbol of Submission",
             type: :attack,
             cost_modifier: 0.30,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "Successful SSR forces undead to offensive stance and to briefly kneel.",
             spell_number: 9807,
@@ -96,6 +102,7 @@ module Lich
             long_name: "Kai's Strike",
             type: :utility,
             cost_modifier: 0.00,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "Enables unarmed combat attacks to damage undead creatures without the normal requirement of blessed gear.",
             spell_number: 9808,
@@ -106,6 +113,7 @@ module Lich
             long_name: "Symbol of Holiness",
             type: :attack,
             cost_modifier: 0.30,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "A SSR-based fire attack against an Undead creature.",
             spell_number: 9809,
@@ -116,6 +124,7 @@ module Lich
             long_name: "Symbol of Recall",
             type: :utility,
             cost_modifier: 0.40,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "Restores spells after death.  Must be invoked while dead.  No effect for voluntary departs.",
             spell_number: 9810,
@@ -126,6 +135,7 @@ module Lich
             long_name: "Symbol of Sleep",
             type: :attack,
             cost_modifier: 0.20, # base cost is 0.20, but it can be increased by the number of targets
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "SSR-based targeted or mass disabling attack used against most creatures. Player friendly.",
             spell_number: 9811,
@@ -136,6 +146,7 @@ module Lich
             long_name: "Symbol of Transcendence",
             type: :defense,
             cost_modifier: 0.60,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: 30,
             cooldown_duration: 180, # 3 minutes cooldown, or 10 minutes if used in an emergency, appear in effects??
             summary: "Take damage as if incorporeal for 30 seconds.  3m cooldown or 10 if used in an emergency.",
@@ -147,6 +158,7 @@ module Lich
             long_name: "Symbol of Mana",
             type: :utility,
             cost_modifier: 0.30,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "Restores 50 mana. Initially, no deed cost, 5 min cooldown.",
             spell_number: 9813,
@@ -157,6 +169,7 @@ module Lich
             long_name: "Symbol of Sight",
             type: :utility,
             cost_modifier: 0.30,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: 10,
             summary: "Locate voln member within range.",
             spell_number: 9814,
@@ -167,6 +180,7 @@ module Lich
             long_name: "Symbol of Retribution",
             type: :attack,
             cost_modifier: 0.04, # attack version, 0.30 for selfcast
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "SSR-based direct attack against undead when you are dead.  Living use grants SSR-based reactive flare when struck by undead.",
             spell_number: 9815,
@@ -177,6 +191,7 @@ module Lich
             long_name: "Symbol of Supremacy",
             type: :offense,
             cost_modifier: 0.50,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: -> { Society.rank * 10 },
             summary: -> { "Bonus of +1 per 2 ranks (+#{(Society.rank / 2).floor}) to AS/CS, CMAN, UAF against undead for (#{Society.rank * 10}) seconds." },
             spell_number: 9816,
@@ -187,6 +202,7 @@ module Lich
             long_name: "Symbol of Restoration",
             type: :utility,
             cost_modifier: 0.40,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "Restores half (10min/50max) hit points.",
             spell_number: 9817,
@@ -197,6 +213,7 @@ module Lich
             long_name: "Symbol of Need",
             type: :utility,
             cost_modifier: 0.40,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "Transmits an image of the member's location to all other members within range.",
             spell_number: 9818,
@@ -207,6 +224,7 @@ module Lich
             long_name: "Symbol of Renewal",
             type: :utility,
             cost_modifier: 0.50,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             cooldown_duration: 120, # 2 minutes cooldown
             summary: "Restores 1 Spirit Point. 2 min hard cooldown.",
@@ -218,6 +236,7 @@ module Lich
             long_name: "Symbol of Disruption",
             type: :attack,
             cost_modifier: 0.30, # Base cost is 0.30, but it can be increased by the number of targets
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: -> { Society.rank * 10 },
             summary: -> { "Group defense penalizing (AS/DS, CS/TD, UDF, CMAN) noncorporeal undead that are struck. Duration: #{Society.rank * 10} seconds stackable." },
             spell_number: 9820,
@@ -228,6 +247,7 @@ module Lich
             long_name: "Kai's Smite",
             type: :attack,
             cost_modifier: 0.00,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "Temporarily make a non-corporeal undead creature corporeal and more susceptible to damage using SMITE (unarmed attack).",
             spell_number: 9821,
@@ -239,6 +259,7 @@ module Lich
             long_name: "Symbol of Turning",
             type: :attack,
             cost_modifier: 0.30, # Base cost is 0.30, but it can be increased by the number of targets
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "Targeted or mass SSR-based attack similar to fear effects with possible instant death result.",
             spell_number: 9822,
@@ -249,6 +270,7 @@ module Lich
             long_name: "Symbol of Preservation",
             type: :utility,
             cost_modifier: 0.60,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil, ## TODO: try to figure this out?
             summary: "Lifekeep. Can be used on self and other characters.",
             spell_number: 9823,
@@ -259,6 +281,7 @@ module Lich
             long_name: "Symbol of Dreams",
             type: :utility,
             cost_modifier: 0.60,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil, ## TODO: try to figure this out?
             summary: "Dream state - increases recovery of health, mana, spirit and reduced stats from Death's Sting.",
             spell_number: 9824,
@@ -269,6 +292,7 @@ module Lich
             long_name: "Symbol of Return",
             type: :utility,
             cost_modifier: 1.00,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "Immediate Teleportation of member and group to the nearest Voln outpost.",
             spell_number: 9825,
@@ -279,6 +303,7 @@ module Lich
             long_name: "Symbol of Seeking",
             type: :utility,
             cost_modifier: 0.00,
+            cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
             duration: nil,
             summary: "Teleportation of group from a Voln outpost to an undead hunting area.",
             spell_number: 9826,
@@ -311,10 +336,21 @@ module Lich
         # @return [Hash, nil] The symbol metadata, or nil if not found
         #
         def self.[](name)
-          raw = Society.lookup(name, @@voln_symbols, symbol_lookups)
-          return nil unless raw
+          lookup = Society.lookup(name, symbol_lookups)
+          return nil unless lookup
 
-          raw.transform_values { |v| Society.resolve(v) }
+          key = lookup[:short_name]
+          symbol = @@voln_symbols.values.find { |entry| entry[:short_name] == key }
+          return nil unless symbol
+
+          symbol.transform_values do |v|
+            if v.respond_to?(:call)
+              # Provide the hash as context to lambdas expecting it
+              v.arity == 1 ? v.call(symbol) : v.call
+            else
+              v
+            end
+          end
         end
 
         ##
@@ -323,21 +359,21 @@ module Lich
         # @return [Array<Hash>] An array of symbol metadata hashes with lambdas resolved
         #
         def self.all
-          @@voln_symbols.values.map { |entry| entry.transform_values { |v| Society.resolve(v) } }
+          @@voln_symbols.values.map { |entry| entry.transform_values { |v| Society.resolve(v, entry) } }
         end
 
         ##
-        # Calculates the favor cost of a symbol based on the character's level.
+        # Calculates the favor cost of a Voln symbol based on the character's level
+        # and the provided symbol-specific cost modifier.
         #
-        # @param symbol_name [String] Long or short name of the symbol
-        # @return [Integer] The rounded-up favor cost
+        # @param cost_modifier [Float] The cost modifier for the symbol.
+        # @return [Integer] The rounded-up favor cost in favor points.
         #
-        def self.calculate_cost(symbol_name)
-          symbol = self[symbol_name]
-          return 0 unless symbol && symbol[:cost_modifier]
+        def self.calculate_cost(cost_modifier)
+          return nil if cost_modifier.nil?
 
-          base_cost = BASE_FAVOR_COST_BY_LEVEL[Char.level]
-          (base_cost * symbol[:cost_modifier].to_f).ceil
+          base_cost = BASE_FAVOR_COST_BY_LEVEL[Stats.level]
+          (base_cost * cost_modifier).to_f.ceil
         end
 
         ##
@@ -351,7 +387,7 @@ module Lich
               long_name: symbol[:long_name],
               short_name: symbol[:short_name],
               rank: symbol[:rank],
-              cost: calculate_cost(symbol[:short_name])
+              cost: Society.resolve(symbol[:cost], symbol),
             }
           end
         end
@@ -397,7 +433,11 @@ module Lich
         def self.affordable?(symbol_name)
           symbol = self[symbol_name]
           return false unless symbol
-          favor >= calculate_cost(symbol_name)
+
+          cost = symbol[:cost]
+          return true if cost.nil? # No cost defined, so it's always affordable
+
+          favor >= cost
         end
 
         ##

@@ -104,17 +104,15 @@ module Lich
       # @param lookups [Array<Hash>] An array of hashes containing at least `:short_name` and `:long_name`
       # @return [Hash, nil] The matching entry from the base hash, or nil if not found
       #
-      def self.lookup(name, entries, lookups)
-        normalized = Lich::Utils.normalize_name(name)
+      def self.lookup(name, lookups)
+        normalized = Lich::Util.normalize_name(name)
 
-        match = lookups.find do |entry|
+        lookups.find do |entry|
           [entry[:short_name], entry[:long_name]]
             .compact
-            .map { |n| Lich::Utils.normalize_name(n) }
+            .map { |n| Lich::Util.normalize_name(n) }
             .include?(normalized)
         end
-
-        match ? entries[match[:short_name]] : nil
       end
 
       ##
@@ -129,14 +127,16 @@ module Lich
       # @param value [Object, Proc] The value to resolve
       # @return [Object] The resolved value, or the original value if not callable
       #
-      def self.resolve(value)
-        value.respond_to?(:call) ? value.call : value
+      def self.resolve(value, context = nil)
+        return value.call if value.respond_to?(:call) && value.arity == 0
+        return value.call(context) if value.respond_to?(:call) && value.arity == 1
+        value
       end
 
       ##
       # Defines singleton accessors for both short and long names on a given target class.
       #
-      # Method names are normalized using {Lich::Utils.normalize_name}, which ensures
+      # Method names are normalized using {Lich::Util.normalize_name}, which ensures
       # compatibility with Ruby method naming (e.g., downcased, underscores instead of spaces, etc.).
       #
       # Example:

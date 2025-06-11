@@ -168,7 +168,7 @@ module Lich
             spell_number: 9717,
             cost: { stamina: 20, mana: 10 },
             duration: nil,
-            summary: -> { "Instantly recover 15 HP or half of your lost HP, whichever is greater (right now: #{[((Char.max_hp - Char.hp) / 2), 15].max})." }
+            summary: -> { "Instantly recover 15 HP or half of your lost HP, whichever is greater (right now: #{[((Char.max_health - Char.health) / 2), 15].max})." }
           },
           "sigil_of_power"            => {
             rank: 18,
@@ -209,10 +209,20 @@ module Lich
         # @return [Hash, nil] The sigil metadata, or nil if not found
         #
         def self.[](name)
-          raw = Society.lookup(name, @@sunfist_sigils, sigil_lookups)
-          return nil unless raw
+          lookup = Society.lookup(name, sigil_lookups)
+          return nil unless lookup
 
-          raw.transform_values { |v| Society.resolve(v) }
+          key = lookup[:short_name]
+          sigil = @@sunfist_sigils.values.find { |entry| entry[:short_name] == key }
+          return nil unless sigil
+
+          sigil.transform_values do |v|
+            if v.respond_to?(:call)
+              v.arity == 1 ? v.call(sigil) : v.call
+            else
+              v
+            end
+          end
         end
 
         ##
@@ -227,12 +237,12 @@ module Lich
         #   - :cost [Hash]
         #
         def self.sigil_lookups
-          @@sunfist_sigils.values.map do |sigil|
+          @@sunfist_sigils.map do |_, sigil|
             {
-              short_name: sigil[:short_name],
               long_name: sigil[:long_name],
+              short_name: sigil[:short_name],
               rank: sigil[:rank],
-              cost: sigil[:cost]
+              cost: sigil[:cost],
             }
           end
         end
@@ -322,7 +332,7 @@ module Lich
         # @return [Array<Hash>] An array of sigil metadata hashes with lambdas resolved
         #
         def self.all
-          @@sunfist_sigils.values.map { |entry| entry.transform_values { |v| Society.resolve(v) } }
+          @@sunfist_sigils.values.map { |entry| entry.transform_values { |v| Society.resolve(v, entry) } }
         end
 
         ##
