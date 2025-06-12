@@ -271,7 +271,7 @@ module Lich
             type: :utility,
             cost_modifier: 0.60,
             cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
-            duration: nil, ## TODO: try to figure this out?
+            duration: -> { Society.rank * 30 },
             summary: "Lifekeep. Can be used on self and other characters.",
             spell_number: 9823,
           },
@@ -282,7 +282,7 @@ module Lich
             type: :utility,
             cost_modifier: 0.60,
             cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
-            duration: nil, ## TODO: try to figure this out?
+            duration: nil,
             summary: "Dream state - increases recovery of health, mana, spirit and reduced stats from Death's Sting.",
             spell_number: 9824,
           },
