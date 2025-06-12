@@ -92,8 +92,9 @@ reconnect_if_wanted = proc {
     if requested_instance
       char_data = Lich::Util.find_character_by_name_and_game(entry_data, requested_character, requested_instance).first # there can be only one
     else
-      char_data = Lich::Util.find_character_by_name(entry_data, requested_character).first # yes, only one -- but which one
-      if char_data.count > 1
+      char_data_temp = Lich::Util.find_character_by_name(entry_data, requested_character)
+      char_data = char_data_temp.first # yes, only one -- but which one
+      if char_data_temp.count > 1
         $stdout.puts "warning: there is more than one character by the name #{requested_character}. Specify a game instance for better results."
         Lich.log "warning: there is more than one character by the name #{requested_character}.  Only logged in the first occurrence."
       end
