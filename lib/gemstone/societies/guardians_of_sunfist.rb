@@ -282,6 +282,8 @@ module Lich
 
           if available?(sigil_name)
             command = sigil[:usage] || "sigil of #{sigil[:short_name]}"
+            waitrt?
+            waitcastrt?
             fput "#{command} #{target}".strip
           else
             Lich::Messaging.msg("warn", "You cannot use the #{sigil_name} sigil right now.")

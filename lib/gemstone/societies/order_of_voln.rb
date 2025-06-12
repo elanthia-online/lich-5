@@ -421,6 +421,8 @@ module Lich
 
           if self.available?(symbol_name)
             command = symbol[:usage] || "symbol of #{symbol[:short_name]}"
+            waitrt?
+            waitcastrt?
             fput "#{command} #{target}".strip
           else
             Lich::Messaging.msg("warn", "You cannot use the #{symbol_name} symbol right now.")

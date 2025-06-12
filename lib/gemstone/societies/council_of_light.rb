@@ -319,6 +319,8 @@ module Lich
 
           if available?(sign_name)
             command = sign[:usage] || "sign of #{sign[:short_name]}"
+            waitrt?
+            waitcastrt?
             fput "#{command} #{target}".strip
           else
             Lich::Messaging.msg("warn", "You cannot use the #{sign_name} sign right now.")
