@@ -34,10 +34,10 @@ module Lich
             short_name: "blessing",
             long_name: "Symbol of Blessing",
             type: :utility,
-            cost_modifier: 0.04, # 0.20 if magical
+            cost_modifier: 0.20, # 0.04 if not magical
             cost: ->(s) { OrderOfVoln.calculate_cost(s[:cost_modifier]) },
-            alt_cost_modifier: 0.20, # TODO: Is this really a good solution?  Probably not.
-            alt_cost_reason: "magical",
+            alt_cost_modifier: 0.04,
+            alt_cost_reason: "non-magical",
             duration: -> { Society.rank * 2 },
             summary: -> { "Bless weapons and other combat gear, up to 2x rank (+#{(Society.rank * 2)}) for Level + 2x Rank (#{Stats.level + (Society.rank * 2)}) swings." },
             spell_number: 9802,
@@ -47,9 +47,9 @@ module Lich
             short_name: "thought",
             long_name: "Symbol of Thought",
             type: :utility,
-            cost_modifier: nil, ## TODO: should add the ability to calculate this based on message length
+            cost_modifier: nil,
             duration: nil,
-            summary: -> { "Transmit thought message to all members within the same realm.  Cost = ceiling((message length - 1) / 3)" },
+            summary: "[Symbol of Thought is no longer required and will be replaced in the future.  Click ESP to learn more about the Society ESP channel.]",
             spell_number: 9803,
           },
           "symbol_of_diminishment"  => {
