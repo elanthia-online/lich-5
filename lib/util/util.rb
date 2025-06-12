@@ -226,7 +226,7 @@ module Lich
     # @param frontend [String, nil] The frontend type to filter by (optional)
     # @return [Hash] of character result with account and character data
     def self.find_character_by_attributes(symbolized_data, char_name: nil, game_code: nil, frontend: nil)
-      matches = Hash.new
+      matches = Array.new
 
       symbolized_data[:accounts].each do |account_name, account_data|
         account_data[:characters].each do |character|
@@ -238,7 +238,7 @@ module Lich
           match = false if frontend && character[:frontend] != frontend
 
           if match
-            matches.merge!(build_character_result(account_name, account_data, character))
+            matches << build_character_result(account_name, account_data, character)
           end
         end
       end
