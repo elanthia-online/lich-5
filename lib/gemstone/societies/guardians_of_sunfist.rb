@@ -266,23 +266,25 @@ module Lich
         # Attempts to use a Guardians of Sunfist sigil by issuing the appropriate command.
         #
         # If the sigil has a defined `:usage` string, it is used directly.
-        # Otherwise, defaults to `sigil of <short_name>`. Will raise if the sigil is unknown
-        # or currently unavailable due to rank, cost, or status.
+        # Otherwise, defaults to `sigil of <short_name>`.
         #
         # @param sigil_name [String] The short or long name of the sigil to invoke
         # @param target [String, nil] Optional target for the sigil (appended to command)
-        # @raise [RuntimeError] If the sigil is not known or cannot be used at this time
         # @return [void]
         #
         def self.use(sigil_name, target = nil)
           sigil = self[sigil_name]
-          raise "Unknown sigil: #{sigil_name}" unless sigil
+
+          unless sigil
+            Lich::Messaging.msg("error", "Unknown sigil: #{sigil_name}")
+            return
+          end
 
           if available?(sigil_name)
             command = sigil[:usage] || "sigil of #{sigil[:short_name]}"
             fput "#{command} #{target}".strip
           else
-            raise "You cannot use the #{sigil_name} sigil right now." ## TODO: do we really want to raise an error or just return false?
+            Lich::Messaging.msg("warn", "You cannot use the #{sigil_name} sigil right now.")
           end
         end
 

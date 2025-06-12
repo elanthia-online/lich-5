@@ -410,17 +410,20 @@ module Lich
         #
         # @param symbol_name [String] Long or short name of the symbol
         # @param target [String, nil] Optional target to append
-        # @raise [RuntimeError] If the symbol is not available
         #
         def self.use(symbol_name, target = nil)
           symbol = self[symbol_name]
-          raise "Unknown symbol: #{symbol_name}" unless symbol
+
+          unless symbol
+            Lich::Messaging.msg("error", "Unknown symbol: #{symbol_name}")
+            return
+          end
 
           if self.available?(symbol_name)
             command = symbol[:usage] || "symbol of #{symbol[:short_name]}"
             fput "#{command} #{target}".strip
           else
-            raise "You cannot use the #{symbol_name} symbol right now." ## TODO: do we really want to raise an error here?
+            Lich::Messaging.msg("warn", "You cannot use the #{symbol_name} symbol right now.")
           end
         end
 

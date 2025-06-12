@@ -303,23 +303,25 @@ module Lich
         # Attempts to use a Council of Light sign by issuing the appropriate command.
         #
         # If the sign has a defined `:usage` string (e.g., "signal"), it is used directly.
-        # Otherwise, defaults to `sign of <short_name>`. Will raise if the sign is unknown
-        # or currently unavailable due to rank, cost, or status.
+        # Otherwise, defaults to `sign of <short_name>`.
         #
         # @param sign_name [String] The long or short name of the sign to invoke
         # @param target [String, nil] Optional target for the sign (appended to command)
-        # @raise [RuntimeError] If the sign is not known or cannot be used at this time
         # @return [void]
         #
         def self.use(sign_name, target = nil)
           sign = self[sign_name]
-          raise "Unknown sign: #{sign_name}" unless sign
+
+          unless sign
+            Lich::Messaging.msg("error", "Unknown sign: #{sign_name}")
+            return
+          end
 
           if available?(sign_name)
             command = sign[:usage] || "sign of #{sign[:short_name]}"
             fput "#{command} #{target}".strip
           else
-            raise "You cannot use the #{sign_name} sign right now." ## TODO: do we want to raise or return false?
+            Lich::Messaging.msg("warn", "You cannot use the #{sign_name} sign right now.")
           end
         end
 
