@@ -336,6 +336,8 @@ module Lich
           },
         }
 
+        Lich::Util.deep_freeze(@@armor_stats)
+
         ##
         # Returns the critical divisor used for determining damage reduction based on armor type,
         # armor group (AG), or armor subgroup (ASG).

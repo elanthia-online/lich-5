@@ -93,11 +93,6 @@ module Lich
           WeaponStats.all_categories + ArmorStats.all_categories + ShieldStats.all_categories
         end.uniq
       end
-
-      # Deep freeze all data structures in the Armaments module
-      Lich::Util.deep_freeze(@@weapon_stats)
-      Lich::Util.deep_freeze(@@armor_stats)
-      Lich::Util.deep_freeze(@@shield_stats)
     end
   end
 end

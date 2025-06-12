@@ -43,6 +43,8 @@ module Lich
           },
         }
 
+        Lich::Util.deep_freeze(@@shield_stats)
+
         ##
         # Finds the shield stats hash by category symbol.
         #

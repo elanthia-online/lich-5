@@ -52,6 +52,8 @@ module Lich
           unarmed: @@weapon_stats_unarmed,
         }
 
+        Lich::Util.deep_freeze(@@weapon_stats)
+
         ##
         # Finds the weapon's stats hash by one of its names.
         #
