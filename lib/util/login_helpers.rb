@@ -1,4 +1,4 @@
-# lgoin_helpers.rb: Core lich file for collection of utilities to extend Lich capabilities.
+# login_helpers.rb: Core lich file for collection of utilities to extend Lich capabilities.
 # Entries added here should always be accessible from Lich::Util::LoginHelpers.method namespace.
 
 module Lich
