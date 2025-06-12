@@ -47,11 +47,12 @@ reconnect_if_wanted = proc {
 
   if ARGV.include?('--login')
     require File.join(LIB_DIR, 'common', 'gui', 'yaml_state')
+    require File.join(LIB_DIR, 'util', 'login_helpers')
     requested_character = ARGV[ARGV.index('--login') + 1].capitalize
     if File.exist?(Lich::Common::GUI::YamlState.yaml_file_path(DATA_DIR))
       # entry_data = Hash.new
       data_to_convert = YAML.load_file(Lich::Common::GUI::YamlState.yaml_file_path(DATA_DIR))
-      entry_data = Lich::Util.symbolize_keys(data_to_convert)
+      entry_data = Lich::Util::LoginHelpers.symbolize_keys(data_to_convert)
     else
       char_data = Array.new
     end
@@ -90,9 +91,9 @@ reconnect_if_wanted = proc {
       }
     end
     if requested_instance
-      char_data = Lich::Util.find_character_by_name_and_game(entry_data, requested_character, requested_instance).first # there can be only one
+      char_data = Lich::Util::LoginHelpers.find_character_by_name_and_game(entry_data, requested_character, requested_instance).first # there can be only one
     else
-      char_data_temp = Lich::Util.find_character_by_name(entry_data, requested_character)
+      char_data_temp = Lich::Util::LoginHelpers.find_character_by_name(entry_data, requested_character)
       char_data = char_data_temp.first # yes, only one -- but which one
       if char_data_temp.count > 1
         $stdout.puts "warning: there is more than one character by the name #{requested_character}. Specify a game instance for better results."
