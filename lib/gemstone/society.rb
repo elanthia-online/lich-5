@@ -87,13 +87,13 @@ module Lich
       end
 
       ##
-      # @deprecated Use {Voln.favor} instead.  Deprecated 6/2025
+      # @deprecated Use {OrderOfVoln.favor} instead.  Deprecated 6/2025
       #
       # @return [Integer] The amount of Voln favor
       def self.favor
-        Lich.deprecated("Society.favor", "Society::Voln.favor", caller[0], fe_log: false)
+        Lich.deprecated("Society.favor", "Society::OrderOfVoln.favor", caller[0], fe_log: false)
         # Infomon.get('resources.voln_favor')
-        Society::Voln.favor
+        Society::OrderOfVoln.favor
       end
 
       ##
@@ -159,7 +159,14 @@ module Lich
   end
 end
 
-# these are at the bottom because Society has to be loaded first
+# these are at the bottom because Society has to be loaded first before the sub-classes can be loaded
 require_relative 'societies/council_of_light.rb'
 require_relative 'societies/guardians_of_sunfist.rb'
 require_relative 'societies/order_of_voln.rb'
+
+# This module provides a simple namespace for accessing society classes.
+module Lich::Gemstone::Societies
+  def self.voln = OrderOfVoln
+  def self.col = CouncilOfLight
+  def self.sunfist = GuardiansOfSunfist
+end
