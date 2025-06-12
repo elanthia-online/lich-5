@@ -226,7 +226,7 @@ module Lich
     # @param frontend [String, nil] The frontend type to filter by (optional)
     # @return [Hash] of character result with account and character data
     def self.find_character_by_attributes(symbolized_data, char_name: nil, game_code: nil, frontend: nil)
-      matches = []
+      matches = Hash.new
 
       symbolized_data[:accounts].each do |account_name, account_data|
         account_data[:characters].each do |character|
@@ -238,14 +238,12 @@ module Lich
           match = false if frontend && character[:frontend] != frontend
 
           if match
-            matches << build_character_result(account_name, account_data, character)
+            matches.merge!(build_character_result(account_name, account_data, character))
           end
         end
       end
 
-      return Hash.new if matches.empty?
-      return matches[0] if matches.is_a?(Array)
-      return matches if matches.is_a?(Hash)
+      matches
     end
 
     # Constructs a standardized character result hash with account and character data.
@@ -258,10 +256,10 @@ module Lich
     # @param account_data [Hash] The account data hash containing password and characters
     # @param character [Hash] The individual character data hash
     # @return [Hash] Standardized result hash with both account and character information
-    def self.build_character_result(account_name, account_data, character)
+    def self.build_character_result(username, account_data, character)
       {
         # account_name: account_name,
-        username: account_name.to_s,
+        username: username.to_s,
         password: account_data[:password],
         #      character: character,
         # Flattened character data for easy access
@@ -324,24 +322,6 @@ module Lich
     # @return [Array<Hash>] Array of characters matching all three criteria
     def self.find_character_by_name_game_and_frontend(symbolized_data, char_name, game_code, frontend)
       find_character_by_attributes(symbolized_data, char_name: char_name, game_code: game_code, frontend: frontend)
-    end
-
-    # Converts a character search result to the same format as the original get_account_info method.
-    #
-    # This compatibility method allows existing code that expects the get_account_info
-    # format to work seamlessly with character search results. It wraps the character
-    # data in the expected account info structure.
-    #
-    # @param character_result [Hash, nil] A character result hash from search methods
-    # @return [Hash, nil] Account info hash in original format, or nil if input is nil
-    def self.get_account_info_for_character(character_result)
-      return nil unless character_result
-
-      {
-        username: character_result[:account_name],
-        password: character_result[:password],
-        characters: [character_result[:character]] # Return as array for consistency
-      }
     end
   end
 end

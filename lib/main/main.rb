@@ -46,10 +46,11 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'eaccess.rb')
 
   if ARGV.include?('--login')
+    require File.join(LIB_DIR, 'common', 'gui', 'yaml_state')
     requested_character = ARGV[ARGV.index('--login') + 1].capitalize
-    if File.exist?(File.join(DATA_DIR, "entry.yaml"))
+    if File.exist?(Lich::Common::GUI::YamlState.yaml_file_path(DATA_DIR))
       # entry_data = Hash.new
-      data_to_convert = YAML.load_file(File.join(DATA_DIR, "entry.yml"))
+      data_to_convert = YAML.load_file(Lich::Common::GUI::YamlState.yaml_file_path(DATA_DIR))
       entry_data = Lich::Util.symbolize_keys(data_to_convert)
     else
       char_data = Array.new

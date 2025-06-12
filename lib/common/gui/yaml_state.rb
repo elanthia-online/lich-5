@@ -6,16 +6,16 @@ module Lich
       # Handles YAML-based state management for the Lich GUI login system
       # Provides a more maintainable alternative to the Marshal-based state system
       module YamlState
-        # Generates the full path to the entry.yml file.
+        # Generates the full path to the entry.yaml file.
         #
-        # @param data_dir [String] The directory where the entry.yml file is located.
-        # @return [String] The full path to the entry.yml file.
+        # @param data_dir [String] The directory where the entry.yaml file is located.
+        # @return [String] The full path to the entry.yaml file.
         def self.yaml_file_path(data_dir)
           File.join(data_dir, "entry.yaml")
         end
 
         # Loads saved entry data from YAML file
-        # Reads and deserializes entry data from the entry.yml file, with fallback to entry.dat
+        # Reads and deserializes entry data from the entry.yaml file, with fallback to entry.dat
         # Enhanced to support favorites functionality with backward compatibility
         #
         # @param data_dir [String] Directory containing entry data
@@ -55,7 +55,7 @@ module Lich
         end
 
         # Saves entry data to YAML file
-        # Converts and serializes entry data to the entry.yml file
+        # Converts and serializes entry data to the entry.yaml file
         #
         # @param data_dir [String] Directory to save entry data
         # @param entry_data [Array] Array of entry data in legacy format
@@ -89,7 +89,7 @@ module Lich
         end
 
         # Migrates from legacy Marshal format to YAML format
-        # Converts entry.dat to entry.yml format for improved maintainability
+        # Converts entry.dat to entry.yaml format for improved maintainability
         #
         # @param data_dir [String] Directory containing entry data
         # @return [Boolean] True if migration was successful
