@@ -486,6 +486,8 @@ module Lich
         # @param name [String] the armor name or alias
         # @return [String, nil] the armor type, or nil if not found
         def self.category_for(name)
+          name = name.downcase.strip
+          
           armor = find_armor(name)
           armor ? armor[:type] : nil
         end

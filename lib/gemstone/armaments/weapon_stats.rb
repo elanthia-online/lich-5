@@ -289,6 +289,8 @@ module Lich
         # @param name [String] the weapon name or alias
         # @return [Symbol, nil] the category symbol (e.g., :OHE, :THW) or nil
         def self.category_for(name)
+          name = name.downcase.strip
+          
           weapon = find_weapon(name)
           weapon ? weapon[:category] : nil
         end
