@@ -100,7 +100,7 @@ module Lich
               Lich.log "error: Invalid entry data type in ManualLoginTab.update_entry_data: #{new_entry_data.class}"
               return
             end
-            
+
             @entry_data = new_entry_data
           rescue StandardError => e
             Lich.log "error: Failed to update entry data in ManualLoginTab: #{e.message}"
