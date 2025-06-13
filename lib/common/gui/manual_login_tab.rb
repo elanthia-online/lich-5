@@ -19,13 +19,15 @@ module Lich
         # @param default_icon [Gdk::Pixbuf] Default icon for dialogs
         # @param data_dir [String] Data directory for favorites storage
         # @param callbacks [Hash, CallbackParams] Callback handlers for various events
+        # @param autosort_state [Boolean] Whether auto-sorting is enabled (optional, defaults to false)
         # @return [ManualLoginTab] New instance
-        def initialize(parent, entry_data, theme_state, default_icon, data_dir, callbacks = {})
+        def initialize(parent, entry_data, theme_state, default_icon, data_dir, callbacks = {}, autosort_state = false)
           @parent = parent
           @entry_data = entry_data
           @theme_state = theme_state
           @default_icon = default_icon
           @data_dir = data_dir
+          @autosort_state = autosort_state
 
           # Convert callbacks hash to CallbackParams if needed
           @callbacks = if callbacks.is_a?(CallbackParams)
@@ -70,21 +72,40 @@ module Lich
         # Refreshes the cached entry data from YAML file
         # This method is called when other tabs modify the data to ensure cache consistency.
         # Prevents stale data issues when accounts or characters are removed via account management.
+        # Enhanced with error handling and consistent autosort usage.
         #
         # @return [void]
         def refresh_entry_data
-          # Reload data from YAML file
-          @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, false)
+          begin
+            # Reload data from YAML file using consistent autosort state
+            @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, @autosort_state)
+          rescue StandardError => e
+            Lich.log "error: Failed to refresh entry data in ManualLoginTab: #{e.message}"
+            # Fallback to empty array to prevent crashes
+            @entry_data = []
+          end
         end
 
         # Updates the entry data reference (for external updates)
         # This method allows the main GUI to update the cached data directly.
         # Used for immediate cache updates without file I/O operations.
+        # Enhanced with error handling and validation.
         #
         # @param new_entry_data [Array] New entry data array
         # @return [void]
         def update_entry_data(new_entry_data)
-          @entry_data = new_entry_data
+          begin
+            # Validate input parameter
+            unless new_entry_data.is_a?(Array)
+              Lich.log "error: Invalid entry data type in ManualLoginTab.update_entry_data: #{new_entry_data.class}"
+              return
+            end
+            
+            @entry_data = new_entry_data
+          rescue StandardError => e
+            Lich.log "error: Failed to update entry data in ManualLoginTab: #{e.message}"
+            # Keep existing data on error
+          end
         end
 
         private

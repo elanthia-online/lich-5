@@ -250,12 +250,12 @@ module Lich
 
         # Refresh saved login tab for all data changes to ensure synchronization
         @saved_login_tab.refresh_data if @saved_login_tab
-
+        
         # Refresh manual login tab cache when accounts are removed to prevent stale data
         if @manual_login_tab && (change_type == :account_removed || change_type == :character_removed)
           @manual_login_tab.refresh_entry_data
         end
-
+        
         Lich.log "info: Data change notification (cache and UI refreshed): #{change_type} - #{data}"
       })
 
@@ -392,7 +392,8 @@ module Lich
         @theme_state,
         @default_icon,
         DATA_DIR,
-        manual_login_callbacks
+        manual_login_callbacks,
+        @autosort_state
       )
 
       # Get UI elements from tabs
