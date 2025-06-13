@@ -44,17 +44,18 @@ reconnect_if_wanted = proc {
 
   @launch_data = nil
   require File.join(LIB_DIR, 'common', 'eaccess.rb')
+  requested_fe = requested_instance = nil
 
   if ARGV.include?('--login')
     require File.join(LIB_DIR, 'common', 'gui', 'yaml_state')
     require File.join(LIB_DIR, 'util', 'login_helpers')
     requested_character = ARGV[ARGV.index('--login') + 1].capitalize
     if File.exist?(Lich::Common::GUI::YamlState.yaml_file_path(DATA_DIR))
-      # entry_data = Hash.new
       data_to_convert = YAML.load_file(Lich::Common::GUI::YamlState.yaml_file_path(DATA_DIR))
       entry_data = Lich::Util::LoginHelpers.symbolize_keys(data_to_convert)
     else
-      char_data = Array.new
+      $stdout.puts "error: no saved entries YAML file found"
+      Lich.log "error: no saved entry YAML file found"
     end
 
     if ARGV.include?('--gemstone')
@@ -83,26 +84,24 @@ reconnect_if_wanted = proc {
       requested_instance = 'DRF'
     else
       ARGV.each { |arg|
-        if arg =~ (/--(?<instance>GS.?)/i)
-          requested_instance = Regexp.last_match[:instance].sub('4', '3') # too many folks will just try --GS4
-        elsif arg =~ (/--(?<instance>DR.?)/i)
-          requested_instance = Regexp.last_match[:instance]
+        if arg =~ (/^--(?<frontend>avalon|stormfront|wizard)$/i)
+          requested_fe = Regexp.last_match[:frontend]
+        elsif arg =~ (/^--(?<instance>GS.?$|DR.?$)/i)
+          requested_instance = Regexp.last_match[:instance].upcase.sub('4', '3') # too many folks will just try --GS4
         end
       }
     end
-    if requested_instance
-      char_data = Lich::Util::LoginHelpers.find_character_by_name_and_game(entry_data, requested_character, requested_instance).first # there can be only one
-    else
-      char_data_temp = Lich::Util::LoginHelpers.find_character_by_name(entry_data, requested_character)
-      char_data = char_data_temp.first # yes, only one -- but which one
-      if char_data_temp.count > 1
-        $stdout.puts "warning: there is more than one character by the name #{requested_character}. Specify a game instance for better results."
-        Lich.log "warning: there is more than one character by the name #{requested_character}.  Only logged in the first occurrence."
-      end
-    end
 
-    unless char_data.empty?
-      Lich.log "info: using quick game entry settings for #{char_data[:char_name]}"
+    # cast broadest possible net for requested character saved info, convenience method assigns nil to any missing parameters
+    # receives [Array<Hash>] Array of all characters with the specified name
+    p requested_instance, requested_fe
+    char_data_sets = Lich::Util::LoginHelpers.find_character_by_name_game_and_frontend(entry_data, requested_character, requested_instance, requested_fe)
+    # filter based on provided information to select best match
+    # receives [Hash, nil] The best matching character hash, or nil if the input array is nil or empty.
+    char_data = Lich::Util::LoginHelpers.select_best_fit(char_data_sets, requested_character, requested_instance, requested_fe)
+
+    unless char_data.nil?
+      Lich.log "info: using quick game entry settings for #{requested_character}"
 
       launch_data_hash = EAccess.auth(
         account: char_data[:username],

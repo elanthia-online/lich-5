@@ -28,31 +28,53 @@ module Lich
 
       # Searches for characters across all accounts based on specified criteria.
       #
-      # This is the primary search method that scans through all accounts and their
-      # characters to find matches based on any combination of character name,
-      # game code, and frontend. All parameters are optional, allowing for flexible
-      # search patterns.
+      # This method filters a symbolized account data structure to return character
+      # records that match the provided character name, game code, and frontend.
+      # All parameters are optional except for the symbolized data and character name,
+      # allowing for flexible search patterns.
       #
-      # @param symbolized_data [Hash] The symbolized YAML data structure
-      # @param char_name [String, nil] The character name to search for (optional)
-      # @param game_code [String, nil] The game code/instance to filter by (optional)
-      # @param frontend [String, nil] The frontend type to filter by (optional)
-      # @return [Hash] of character result with account and character data
-      def self.find_character_by_attributes(symbolized_data, char_name: nil, game_code: nil, frontend: nil)
-        matches = Array.new
+      # Matching Rules:
+      # - `char_name` must match to include a record.
+      # - If `game_code` is provided, it must match exactly OR fall back to a substitute:
+      #     - 'GST' falls back to 'GS3'
+      #     - 'DRT' falls back to 'DR'
+      #     - any other invalid instance will try to select by `frontend` or fail
+      # - If `frontend` is provided, it must match exactly.
+      #
+      # All parameters are optional except `symbolized_data` and character name. If no
+      # other parameters are provided, multple character records may be returned.
+      #
+      # @param symbolized_data [Hash] The symbolized YAML data structure, including account and character info.
+      # @param char_name [String] The character name to match against `:char_name`. If nil, all names are considered.
+      # @param game_code [String, Symbol, nil] The desired game instance (`:__unset` by default). Supports fallbacks for 'GST' and 'DRT'.
+      # @param frontend [String, Symbol, nil] The frontend to match against `:frontend`. If nil, all frontends are considered.
+      # @return [Array<Hash>] An array of character result hashes matching the provided criteria.
+      def self.find_character_by_attributes(symbolized_data, char_name: nil, game_code: :__unset, frontend: :__unset)
+        matches = []
 
         symbolized_data[:accounts].each do |account_name, account_data|
           account_data[:characters].each do |character|
-            # Check if character matches all specified criteria
-            match = true
+            next unless char_name.nil? || character[:char_name] == char_name
 
-            match = false if char_name && character[:char_name] != char_name
-            match = false if game_code && character[:game_code] != game_code
-            match = false if frontend && character[:frontend] != frontend
+            # Game code filtering with fallback support
+            unless game_code == :__unset || game_code.nil?
+              normalized_code = game_code.to_s.upcase
+              char_code = character[:game_code].to_s.upcase
 
-            if match
-              matches << build_character_result(account_name, account_data, character)
+              fallback_code = case normalized_code
+                              when 'GST' then 'GS3'
+                              when 'DRT' then 'DR'
+                              end
+
+              next unless char_code == normalized_code || char_code == fallback_code
             end
+
+            # Frontend filtering (optional)
+            unless frontend == :__unset || frontend.nil?
+              next unless character[:frontend].to_s == frontend.to_s
+            end
+
+            matches << build_character_result(account_name, account_data, character)
           end
         end
 
@@ -135,6 +157,57 @@ module Lich
       # @return [Array<Hash>] Array of characters matching all three criteria
       def self.find_character_by_name_game_and_frontend(symbolized_data, char_name, game_code, frontend)
         find_character_by_attributes(symbolized_data, char_name: char_name, game_code: game_code, frontend: frontend)
+      end
+
+      # Selects the best matching character data hash from an array based on weighted criteria.
+      #
+      # Rules:
+      # - A match on `:char_name` is required for any record to be considered.
+      # - If `requested_instance` is provided, a match on `:game_code` is also required.
+      # - Among valid matches, `:frontend` improves the match but is not required.
+      #
+      # Scoring:
+      # - Matching `:frontend` = 1 point
+      #
+      # The highest-scoring matching record is returned. If scores are tied,
+      # the first encountered is returned. If no valid instance match, returns nil.
+      # The hash with the highest cumulative score is returned. If there is a tie,
+      # the first highest-scoring hash encountered is returned.
+      #
+      # @param char_data_sets [Array<Hash>] An array of character data hashes, each containing keys :char_name, :game_code, and :frontend.
+      # @param requested_character [String] The character name to match against `:char_name`.
+      # @param requested_instance [String, nil] The game instance to match against `:game_code` or nil.
+      # @param requested_fe [String, nil] The frontend to optionally match against `:frontend` or nil.
+      # @return [Hash, nil] The best matching character hash, or nil if the input array is nil or empty.
+      def self.select_best_fit(char_data_sets, requested_character, requested_instance, requested_fe)
+        return nil if char_data_sets.nil? || char_data_sets.empty?
+        return nil unless requested_character
+
+        # Filter by required character match
+        matching_chars = char_data_sets.select { |char| char[:char_name] == requested_character }
+        return nil if matching_chars.empty?
+
+        # If instance is specified, filter further
+        if requested_instance
+          matching_chars.select! { |char| char[:game_code] == requested_instance }
+          return nil if matching_chars.empty?
+        end
+
+        # Rank by frontend if provided
+        best_match = matching_chars.first
+        highest_score = 0
+
+        matching_chars.each do |char_data|
+          score = 0
+          score += 1 if requested_fe && char_data[:frontend] == requested_fe
+
+          if score > highest_score
+            best_match = char_data
+            highest_score = score
+          end
+        end
+
+        best_match
       end
     end
   end
