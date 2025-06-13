@@ -9,6 +9,7 @@ module Lich
     module GUI
       # Handles the "Manual Entry" tab functionality for the Lich GUI login system
       # Provides a class-based implementation for the manual login tab
+      # Enhanced with cache management methods to support cross-tab data synchronization
       class ManualLoginTab
         # Initializes a new ManualLoginTab instance with favorites support
         #
@@ -64,6 +65,26 @@ module Lich
         def update_theme_state(theme_state)
           @theme_state = theme_state
           apply_theme_to_ui_elements
+        end
+
+        # Refreshes the cached entry data from YAML file
+        # This method is called when other tabs modify the data to ensure cache consistency.
+        # Prevents stale data issues when accounts or characters are removed via account management.
+        #
+        # @return [void]
+        def refresh_entry_data
+          # Reload data from YAML file
+          @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, false)
+        end
+
+        # Updates the entry data reference (for external updates)
+        # This method allows the main GUI to update the cached data directly.
+        # Used for immediate cache updates without file I/O operations.
+        #
+        # @param new_entry_data [Array] New entry data array
+        # @return [void]
+        def update_entry_data(new_entry_data)
+          @entry_data = new_entry_data
         end
 
         private
