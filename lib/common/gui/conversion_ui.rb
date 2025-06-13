@@ -38,7 +38,7 @@ module Lich
             ]
           )
 
-          dialog.set_default_size(400, -1)
+          dialog.set_default_size(410, -1)
           dialog.border_width = 10
 
           # Set accessible properties for screen readers
@@ -53,16 +53,21 @@ module Lich
           content_area.spacing = 10
 
           # Add explanatory text
+          header_label = Gtk::Label.new
           info_label = Gtk::Label.new
-          info_label.set_markup(
-            "<span size='x-large'>Data Format Conversion\n\n</span>" +
-            "<span size='large'>To take advantage of all new features your\n" +
-            "data will be converted to a new format.\n\n" +
-            "This is a one-time process to improve your experience.\n" +
-            "Your original data will be retained unmodified.</span>"
+          header_label.set_markup(
+            "<span size='x-large'>Saved Entries Data Conversion\n\n</span>"
           )
+          info_label.set_markup(
+            "<span size='large'>Your existing saved entries data will be converted to a new format. This is a one-time process and your original saved entries data will be retained unmodified.\n\n" +
+            "Existing:\t\t#{LIB_DIR}/entry.dat\n" +
+            "Converted:\t#{LIB_DIR}/entry.yaml\n\n" +
+            "entry.dat will no longer be used, and may be deleted at your convenience</span>"
+          )
+          header_label.set_line_wrap(false)
           info_label.set_line_wrap(true)
-          info_label.set_justify(:center)
+          header_label.set_justify(:center)
+          info_label.set_justify(:left)
 
           # Set accessible properties for screen readers
           Accessibility.make_accessible(
@@ -72,6 +77,7 @@ module Lich
             :label
           )
 
+          content_area.add(header_label)
           content_area.add(info_label)
 
           # Add progress bar (initially hidden)
