@@ -55,23 +55,6 @@ module Lich
         Lich::Util.deep_freeze(@@weapon_stats)
 
         ##
-        # Finds the category symbol (e.g., :edged, :polearm) for a given weapon name.
-        #
-        # @param name [String] The name or alias of the weapon.
-        # @return [Symbol, nil] The category symbol if found, or nil.
-        def self.find_category(name)
-          name = name.downcase.strip
-
-          @@weapon_stats.each do |category, weapons|
-            weapons.each_value do |weapon_info|
-              return category if weapon_info[:all_names]&.include?(name)
-            end
-          end
-
-          nil
-        end
-
-        ##
         # Finds the weapon's stats hash by one of its names.
         #
         # @param name [String] The name or alias of the weapon.

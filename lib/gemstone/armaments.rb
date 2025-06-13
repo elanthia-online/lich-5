@@ -29,31 +29,6 @@ module Lich
       end
 
       ##
-      # Returns the top-level category type (:weapon, :armor, or :shield)
-      #
-      # @param name [String] the equipment name or alias.
-      # @return [Symbol, nil] The category type or nil.
-      def self.find_type(name)
-        name = name.downcase.strip
-
-        return :weapon if WeaponStats.valid_weapon_name?(name)
-        return :armor  if ArmorStats.valid_armor_name?(name)
-        return :shield if ShieldStats.valid_shield_name?(name)
-        nil
-      end
-
-      ##
-      # Returns subcategory symbol (e.g., :edged, :plate, :tower_shield)
-      #
-      # @param name [String] the equipment name or alias.
-      # @return [Symbol, nil] The specific category.
-      def self.find_category(name)
-        name = name.downcase.strip
-
-        WeaponStats.find_category(name) || ArmorStats.find_category(name) || ShieldStats.find_category(name)
-      end
-
-      ##
       # Determines if the name corresponds to any known item.
       #
       # @param name [String] The name to check.

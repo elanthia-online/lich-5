@@ -46,21 +46,6 @@ module Lich
         Lich::Util.deep_freeze(@@shield_stats)
 
         ##
-        # Finds the category symbol (e.g., :small_shield, :tower_shield) for a given shield name.
-        #
-        # @param name [String] The name or alias of the shield.
-        # @return [Symbol, nil] The category symbol if found, or nil.
-        def self.find_category(name)
-          name = name.downcase.strip
-
-          @@shield_stats.each do |category, stats|
-            return category if stats[:all_names].include?(name)
-          end
-
-          nil
-        end
-
-        ##
         # Finds the shield stats hash by category symbol.
         #
         # @param category [Symbol] The shield category (e.g., :small_shield, :tower_shield).

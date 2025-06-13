@@ -339,24 +339,6 @@ module Lich
         Lich::Util.deep_freeze(@@armor_stats)
 
         ##
-        # Finds the armor type (e.g., :cloth, :leather, :plate) for a given armor name.
-        #
-        # @param name [String] The name or alias of the armor.
-        # @return [Symbol, nil] The armor type if found, or nil.
-        def self.find_category(name)
-          name = name.downcase.strip
-
-          @@armor_stats.each_value do |subgroups|
-            subgroups.each_value do |stats|
-              next unless stats.is_a?(Hash)
-              return stats[:type] if stats[:all_names].include?(name)
-            end
-          end
-
-          nil
-        end
-
-        ##
         # Returns the critical divisor used for determining damage reduction based on armor type,
         # armor group (AG), or armor subgroup (ASG).
         #
