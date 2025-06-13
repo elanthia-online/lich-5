@@ -120,7 +120,7 @@ module Lich
         # @return [Symbol, nil] the category symbol (e.g., :small_shield) or nil
         def self.category_for(name)
           name = name.downcase.strip
-          
+
           shield = find_shield(name)
           shield ? shield[:category] : nil
         end

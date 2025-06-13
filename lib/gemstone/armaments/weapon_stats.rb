@@ -280,7 +280,7 @@ module Lich
 
           weapon = find_weapon(name)
 
-          weapon && weapon[:gripable?] == true
+          weapon && weapon[:grippable?] == true
         end
 
         ##
@@ -290,7 +290,7 @@ module Lich
         # @return [Symbol, nil] the category symbol (e.g., :OHE, :THW) or nil
         def self.category_for(name)
           name = name.downcase.strip
-          
+
           weapon = find_weapon(name)
           weapon ? weapon[:category] : nil
         end

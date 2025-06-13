@@ -70,7 +70,7 @@ module Lich
             :avd_by_asg    => [nil, 30, 30, nil, nil, 31, 30, 29, 28, 31, 29, 27, 25, 32, 28, 24, 20, 31, 25, 19, 13],
             :base_rt       => 6,
             :min_rt        => 4,
-            :gripable?     => true,
+            :grippable?    => true,
           },
           :broadsword    => {
             :category      => :edged,
@@ -139,7 +139,7 @@ module Lich
             :min_rt           => 4,
             :weighting_type   => :critical,
             :weighting_amount => 10,
-            :gripable?        => true,
+            :grippable?       => true,
           },
           :longsword     => {
             :category      => :edged,

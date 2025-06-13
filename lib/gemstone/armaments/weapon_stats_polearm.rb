@@ -137,7 +137,7 @@ module Lich
             :avd_by_asg    => [[nil, 27, 27, nil, nil, 29, 28, 27, 26, 27, 25, 23, 21, 30, 26, 22, 18, 25, 19, 13, 7], [nil, 33, 33, nil, nil, 32, 31, 30, 29, 34, 32, 30, 28, 36, 32, 28, 24, 33, 27, 21, 15]],
             :base_rt       => [5, 6],
             :min_rt        => 4,
-            :gripable?     => true,
+            :grippable?    => true,
           },
           :trident       => {
             :category      => :polearm,
@@ -150,7 +150,7 @@ module Lich
             :avd_by_asg    => [[nil, 31, 31, nil, nil, 31, 30, 29, 28, 34, 32, 30, 28, 42, 38, 34, 30, 29, 23, 17, 11], [nil, 29, 29, nil, nil, 30, 29, 28, 27, 30, 28, 26, 24, 37, 33, 29, 25, 25, 19, 13, 7]],
             :base_rt       => [5, 6],
             :min_rt        => 4,
-            :gripable?     => true,
+            :grippable?    => true,
           },
         }
       end

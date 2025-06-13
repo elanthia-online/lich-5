@@ -48,7 +48,7 @@ module Lich
             :avd_by_asg    => [nil, 42, 42, nil, nil, 45, 44, 43, 42, 41, 39, 37, 35, 44, 40, 36, 32, 43, 37, 31, 25],
             :base_rt       => 6,
             :min_rt        => 4,
-            :gripable?     => true,
+            :grippable?    => true,
           },
           :battle_axe       => {
             :category      => :two_handed,
@@ -108,7 +108,7 @@ module Lich
             :min_rt           => 4,
             :weighting_type   => :critical,
             :weighting_amount => 10,
-            :gripable?        => true,
+            :grippable?       => true,
           },
           :maul             => {
             :category      => :two_handed,
