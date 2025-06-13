@@ -27,7 +27,7 @@ module Lich
         ThiefKhriStart = /^From the Subtlety tree, you know the following khri:/.freeze
         SpellBookFormat = /^You will .* (?<format>column-formatted|non-column) output for the SPELLS verb/.freeze
         PlayedAccount = /^(?:<.*?\/>)?Account Info for (?<account>.+):/.freeze
-        PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium)/.freeze
+        PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium|Platinum)/.freeze
         LastLogoff = /^\s+Logoff :  (?<weekday>[A-Z][a-z]{2}) (?<month>[A-Z][a-z]{2}) (?<day>[\s\d]{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2}) ET (?<year>\d{4})/.freeze
       end
 
@@ -341,9 +341,10 @@ module Lich
             end
           when Pattern::PlayedSubscription
             if Account.subscription.nil?
-              Account.subscription = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
+              Account.subscription = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
             end
-            if Account.subscription == 'PREMIUM' || XMLData.game == 'DRF'
+            UserVars.account_type = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
+            if Account.subscription == 'PREMIUM' || XMLData.game == 'DRX' || XMLData.game == 'DRF'
               UserVars.premium = true
             else
               UserVars.premium = false
