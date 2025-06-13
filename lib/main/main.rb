@@ -55,7 +55,7 @@ reconnect_if_wanted = proc {
       entry_data = Lich::Util::LoginHelpers.symbolize_keys(data_to_convert)
     else
       $stdout.puts "error: no saved entries YAML file found"
-      Lich.log "error: no saved entry YAML file found"
+      Lich.log "error: no saved entries YAML file found"
     end
 
     if ARGV.include?('--gemstone')
@@ -94,7 +94,6 @@ reconnect_if_wanted = proc {
 
     # cast broadest possible net for requested character saved info, convenience method assigns nil to any missing parameters
     # receives [Array<Hash>] Array of all characters with the specified name
-    p requested_instance, requested_fe
     char_data_sets = Lich::Util::LoginHelpers.find_character_by_name_game_and_frontend(entry_data, requested_character, requested_instance, requested_fe)
     # filter based on provided information to select best match
     # receives [Hash, nil] The best matching character hash, or nil if the input array is nil or empty.

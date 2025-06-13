@@ -42,7 +42,7 @@ module Lich
       # - If `frontend` is provided, it must match exactly.
       #
       # All parameters are optional except `symbolized_data` and character name. If no
-      # other parameters are provided, multple character records may be returned.
+      # other parameters are provided, multiple character records may be returned.
       #
       # @param symbolized_data [Hash] The symbolized YAML data structure, including account and character info.
       # @param char_name [String] The character name to match against `:char_name`. If nil, all names are considered.
