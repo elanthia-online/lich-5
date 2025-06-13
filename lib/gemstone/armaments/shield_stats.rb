@@ -108,7 +108,7 @@ module Lich
         ##
         # Returns all defined shield category keys.
         #
-        # @return [Array<Symbol>] an array of shield categories (e.g., [:small, :medium, :large, :tower])
+        # @return [Array<Symbol>] an array of shield categories (e.g., [:small_shield, :medium_shield, :large_shield, :tower_shield])
         def self.all_shield_categories
           @@shield_stats.keys
         end
