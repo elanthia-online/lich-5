@@ -6,23 +6,23 @@ module Lich
   module Gemstone
     module Armaments
       ##
-      # Finds matching equipment info by name.
+      # Finds matching armament info by name.
       #
       # @param name [String] the equipment name or alias.
-      # @return [Hash, nil] { type: :weapon|:armor|:shield, category: Symbol, data: Hash }
+      # @return [Hash, nil] { type: :weapon|:armor|:shield, data: Hash }
       def self.find(name)
-        normalized = Lich::Util.normalize_name(name)
+        name = name.downcase.strip
 
-        if (data = WeaponStats.find_weapon(normalized))
-          return { type: :weapon, category: WeaponStats.find_category(normalized), data: data }
+        if (data = WeaponStats.find_weapon(name))
+          return { type: :weapon, data: data }
         end
 
-        if (data = ArmorStats.find_armor(normalized))
-          return { type: :armor, category: ArmorStats.find_category(normalized), data: data }
+        if (data = ArmorStats.find_armor(name))
+          return { type: :armor, data: data }
         end
 
-        if (data = ShieldStats.find_shield(normalized))
-          return { type: :shield, category: ShieldStats.find_category(normalized), data: data }
+        if (data = ShieldStats.find_shield(name))
+          return { type: :shield, data: data }
         end
 
         nil
@@ -34,11 +34,11 @@ module Lich
       # @param name [String] the equipment name or alias.
       # @return [Symbol, nil] The category type or nil.
       def self.find_type(name)
-        normalized = Lich::Util.normalize_name(name)
+        name = name.downcase.strip
 
-        return :weapon if WeaponStats.valid_weapon_name?(normalized)
-        return :armor  if ArmorStats.valid_armor_name?(normalized)
-        return :shield if ShieldStats.valid_shield_name?(normalized)
+        return :weapon if WeaponStats.valid_weapon_name?(name)
+        return :armor  if ArmorStats.valid_armor_name?(name)
+        return :shield if ShieldStats.valid_shield_name?(name)
         nil
       end
 
@@ -48,9 +48,9 @@ module Lich
       # @param name [String] the equipment name or alias.
       # @return [Symbol, nil] The specific category.
       def self.find_category(name)
-        normalized = Lich::Util.normalize_name(name)
+        name = name.downcase.strip
 
-        WeaponStats.find_category(normalized) || ArmorStats.find_category(normalized) || ShieldStats.find_category(normalized)
+        WeaponStats.find_category(name) || ArmorStats.find_category(name) || ShieldStats.find_category(name)
       end
 
       ##
@@ -59,9 +59,9 @@ module Lich
       # @param name [String] The name to check.
       # @return [Boolean] True if valid, false otherwise.
       def self.valid_name?(name)
-        normalized = Lich::Util.normalize_name(name)
+        name = name.downcase.strip
 
-        !find(normalized).nil?
+        !find(name).nil?
       end
 
       ##
@@ -92,6 +92,54 @@ module Lich
         else
           WeaponStats.all_categories + ArmorStats.all_categories + ShieldStats.all_categories
         end.uniq
+      end
+
+      ##
+      # Determines the type of item for a given name.
+      #
+      # @param name [String] the item name or alias
+      # @return [Symbol, nil] the type of the item: :weapon, :armor, :shield, or nil if not found
+      def self.type_for(name)
+        name = name.downcase.strip
+
+        return :weapon if WeaponStats.find_weapon(name)
+        return :armor if ArmorStats.find_armor(name)
+        return :shield if ShieldStats.find_shield(name)
+
+        nil
+      end
+
+      ##
+      # Returns the category of the item with the given name.
+      #
+      # For weapons, this is the weapon category (e.g., :OHE).
+      # For shields, this is the shield size category (e.g., :medium).
+      # For armor, this is the ASG symbol (e.g., :asg_18).
+      #
+      # @param name [String] the item name or alias
+      # @return [Symbol, nil] the category symbol or nil if not found
+      def self.category_for(name)
+        name = name.downcase.strip
+
+        WeaponStats.all_categories.each do |cat|
+          weapon = WeaponStats.all_weapons_in_category(cat).find do |entry|
+            entry[:all_names]&.map(&:downcase)&.include?(name)
+          end
+          return cat if weapon
+        end
+
+        ArmorStats.send(:@@armor_stats).each_value do |subgroup|
+          subgroup.each do |asg_sym, entry|
+            return asg_sym if entry[:all_names]&.map(&:downcase)&.include?(name)
+          end
+        end
+
+        ShieldStats.all_shield_categories.each do |cat|
+          shield = ShieldStats.find_shield(name)
+          return shield[:category] if shield
+        end
+
+        nil
       end
     end
   end

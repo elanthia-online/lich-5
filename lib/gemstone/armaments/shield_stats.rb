@@ -46,6 +46,21 @@ module Lich
         Lich::Util.deep_freeze(@@shield_stats)
 
         ##
+        # Finds the category symbol (e.g., :small_shield, :tower_shield) for a given shield name.
+        #
+        # @param name [String] The name or alias of the shield.
+        # @return [Symbol, nil] The category symbol if found, or nil.
+        def self.find_category(name)
+          name = name.downcase.strip
+
+          @@shield_stats.each do |category, stats|
+            return category if stats[:all_names].include?(name)
+          end
+
+          nil
+        end
+
+        ##
         # Finds the shield stats hash by category symbol.
         #
         # @param category [Symbol] The shield category (e.g., :small_shield, :tower_shield).
@@ -64,16 +79,18 @@ module Lich
         end
 
         ##
-        # Returns the shield stats hash matching a given name (either base or alias).
-        # WARNING: Matching by name may not return correct information due to historical name use
+        # Finds a shield entry by name or alias.
         #
-        # @param name [String] The name or alias of the shield.
-        # @return [Hash, nil] The full stats hash for the matching shield, or nil if not found.
+        # @param name [String] the name or alias of the shield (e.g., "aegis", "tower shield")
+        # @return [Hash, nil] the shield stats hash if found, or nil
         def self.find_shield(name)
-          normalized = Lich::Util.normalize_name(name)
+          name = name.downcase.strip
 
-          _, shield_info = @@shield_stats.find { |_, stats| stats[:all_names].include?(normalized) }
-          shield_info
+          @@shield_stats.each_value do |shield|
+            return shield if shield[:all_names]&.map(&:downcase)&.include?(name)
+          end
+
+          nil
         end
 
         ##
@@ -86,6 +103,14 @@ module Lich
           @@shield_stats.map(&:last).select do |shield|
             shield[:evade_modifier].between?(min, max)
           end
+        end
+
+        ##
+        # Returns all defined shield category keys.
+        #
+        # @return [Array<Symbol>] an array of shield categories (e.g., [:small, :medium, :large, :tower])
+        def self.all_shield_categories
+          @@shield_stats.keys
         end
       end
     end

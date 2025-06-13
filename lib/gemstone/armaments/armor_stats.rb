@@ -269,8 +269,8 @@ module Lich
               :type            => :plate,
               :base_name       => :metal_breastplate,
               :all_names       => ["plate armor", "plate-and-mail", "metal breastplate", "breastplate", "cuirass", "disc armor", "mirror armor", "plate corslet", "plate corselet"],
-              :armor_group     => 2,
-              :armor_sub_group => 5,
+              :armor_group     => 5,
+              :armor_sub_group => 17,
               :base_weight     => 23,
               :min_rt          => 9,
               :action_penalty  => -20,
@@ -286,8 +286,8 @@ module Lich
               :type            => :plate,
               :base_name       => :augmented_plate,
               :all_names       => ["plate armor", "plate-and-mail", "augmented breastplate", "breastplate", "coracia", "cuirass", "platemail", "plate corslet", "plate corselet"],
-              :armor_group     => 2,
-              :armor_sub_group => 5,
+              :armor_group     => 5,
+              :armor_sub_group => 18,
               :base_weight     => 25,
               :min_rt          => 10,
               :action_penalty  => -25,
@@ -303,8 +303,8 @@ module Lich
               :type            => :plate,
               :base_name       => :half_plate,
               :all_names       => ["plate armor", "plate-and-mail", "half plate", "half-plate", "plate", "platemail"],
-              :armor_group     => 2,
-              :armor_sub_group => 5,
+              :armor_group     => 5,
+              :armor_sub_group => 19,
               :base_weight     => 50,
               :min_rt          => 11,
               :action_penalty  => -30,
@@ -320,8 +320,8 @@ module Lich
               :type            => :plate,
               :base_name       => :full_plate,
               :all_names       => ["plate armor", "plate-and-mail", "full plate", "full platemail", "body armor", "field plate", "field platemail", "lasktol'zko", "plate", "platemail"],
-              :armor_group     => 2,
-              :armor_sub_group => 5,
+              :armor_group     => 5,
+              :armor_sub_group => 20,
               :base_weight     => 75,
               :min_rt          => 12,
               :action_penalty  => -35,
@@ -337,6 +337,24 @@ module Lich
         }
 
         Lich::Util.deep_freeze(@@armor_stats)
+
+        ##
+        # Finds the armor type (e.g., :cloth, :leather, :plate) for a given armor name.
+        #
+        # @param name [String] The name or alias of the armor.
+        # @return [Symbol, nil] The armor type if found, or nil.
+        def self.find_category(name)
+          name = name.downcase.strip
+
+          @@armor_stats.each_value do |subgroups|
+            subgroups.each_value do |stats|
+              next unless stats.is_a?(Hash)
+              return stats[:type] if stats[:all_names].include?(name)
+            end
+          end
+
+          nil
+        end
 
         ##
         # Returns the critical divisor used for determining damage reduction based on armor type,
@@ -368,6 +386,7 @@ module Lich
         # @param asg [Integer] The armor subgroup number (1 to 20).
         # @return [Symbol, nil] The body coverage classification, or nil if ASG is not found.
         def self.find_coverage(asg)
+          return nil unless asg.is_a?(Integer) && asg.between?(1, 20)
           coverage = {
             torso: [1, 2, 5, 9, 13, 17],
             torso_and_arms: [6, 10, 14, 18],
@@ -378,6 +397,7 @@ module Lich
           coverage.each do |key, asgs|
             return key if asgs.include?(asg)
           end
+
           nil
         end
 
@@ -387,12 +407,15 @@ module Lich
         # @param asg_number [Integer] The armor sub group number (ASG) to search for.
         # @return [Hash, nil] The stats hash of the matching armor, or nil if not found.
         def self.find_armor_by_asg(asg_number)
+          return nil unless asg_number.is_a?(Integer) && asg_number.between?(1, 5)
+
           @@armor_stats.each_value do |subgroups|
             subgroups.each do |_, asg_data|
               next unless asg_data.is_a?(Hash)
               return asg_data if asg_data[:armor_sub_group] == asg_number
             end
           end
+
           nil
         end
 
@@ -413,12 +436,12 @@ module Lich
         # @param name [String] The name or alias of the armor.
         # @return [Hash, nil] The full stats hash for the matching armor, or nil if not found.
         def self.find_armor(name)
-          normalized = Lich::Util.normalize_name(name)
+          name = name.downcase.strip
 
           @@armor_stats.each_value do |subgroups|
             subgroups.each_value do |asg_data|
               next unless asg_data.is_a?(Hash)
-              return asg_data if asg_data[:all_names].include?(normalized)
+              return asg_data if asg_data[:all_names].include?(name)
             end
           end
           nil
@@ -433,6 +456,26 @@ module Lich
           @@armor_stats.flat_map do |_, subgroups|
             subgroups.values.compact.select { |asg| asg[:type] == type }
           end
+        end
+
+        ##
+        # Returns all known name aliases for a specific armor ASG.
+        #
+        # This method is useful when you want to list the name variants associated
+        # with a particular armor subgroup (ASG).
+        #
+        # @param asg [Integer, Symbol] the Armor Sub Group number (1–20) or symbol (e.g., :asg_18)
+        # @return [Array<String>] list of all known aliases for the armor type, or an empty array if not found
+        def self.all_armor_names_in_asg(asg)
+          asg_sym = asg.is_a?(Integer) ? :"asg_#{asg}" : asg.to_sym
+
+          @@armor_stats.each_value do |subgroups|
+            if subgroups.key?(asg_sym)
+              return subgroups[asg_sym][:all_names] || []
+            end
+          end
+
+          []
         end
       end
     end

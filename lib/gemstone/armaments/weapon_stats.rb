@@ -55,25 +55,42 @@ module Lich
         Lich::Util.deep_freeze(@@weapon_stats)
 
         ##
+        # Finds the category symbol (e.g., :edged, :polearm) for a given weapon name.
+        #
+        # @param name [String] The name or alias of the weapon.
+        # @return [Symbol, nil] The category symbol if found, or nil.
+        def self.find_category(name)
+          name = name.downcase.strip
+
+          @@weapon_stats.each do |category, weapons|
+            weapons.each_value do |weapon_info|
+              return category if weapon_info[:all_names]&.include?(name)
+            end
+          end
+
+          nil
+        end
+
+        ##
         # Finds the weapon's stats hash by one of its names.
         #
         # @param name [String] The name or alias of the weapon.
         # @param category [Symbol, nil] (optional) The weapon category to narrow the search.
         # @return [Hash, nil] The stats hash of the matching weapon, or nil if not found.
         def self.find_weapon(name, category = nil)
-          normalized = Lich::Util.normalize_name(name)
+          name = name.downcase.strip
 
           unless category.nil?
             weapons = @@weapon_stats[category]
             return nil unless weapons
 
             weapons.each_value do |weapon_info|
-              return weapon_info if weapon_info[:all_names]&.include?(normalized)
+              return weapon_info if weapon_info[:all_names]&.include?(name)
             end
           else
             @@weapon_stats.each_value do |weapons|
               weapons.each_value do |weapon_info|
-                return weapon_info if weapon_info[:all_names]&.include?(normalized)
+                return weapon_info if weapon_info[:all_names]&.include?(name)
               end
             end
           end
@@ -114,9 +131,9 @@ module Lich
         # @param category [Symbol, nil] optional category to narrow the search
         # @return [Hash, nil] damage type summary or nil if not found
         def self.damage_summary(name, category = nil)
-          normalized = Lich::Util.normalize_name(name)
+          name = name.downcase.strip
 
-          weapon = find_weapon(normalized, category)
+          weapon = find_weapon(name, category)
           return nil unless weapon
 
           {
@@ -135,9 +152,9 @@ module Lich
         # @param category [Symbol, nil] optional category to limit the search
         # @return [Array<String>] an array of all recognized names for the weapon
         def self.aliases_for(name, category = nil)
-          normalized = Lich::Util.normalize_name(name)
+          name = name.downcase.strip
 
-          weapon = find_weapon(normalized, category)
+          weapon = find_weapon(name, category)
           weapon ? weapon[:all_names] : []
         end
 
@@ -150,11 +167,14 @@ module Lich
         # @param category2 [Symbol, nil] optional category for second weapon
         # @return [Hash, nil] comparison data or nil if either weapon not found
         def self.compare_weapons(name1, name2, category1 = nil, category2 = nil)
-          normalized1 = Lich::Util.normalize_name(name1)
-          normalized2 = Lich::Util.normalize_name(name2)
+          name1 = name1.downcase.strip
+          name2 = name2.downcase.strip
 
-          w1 = find_weapon(normalized1, category1)
-          w2 = find_weapon(normalized2, category2)
+          return nil if name1 == name2
+          return nil if category1 == category2
+
+          w1 = find_weapon(name1, category1)
+          w2 = find_weapon(name2, category2)
           return nil unless w1 && w2
 
           {
@@ -228,6 +248,39 @@ module Lich
           end
 
           results
+        end
+
+        ##
+        # Returns all weapon data entries within a given category.
+        #
+        # @param category [Symbol, String] the weapon category (e.g., :OHE, :THW)
+        # @return [Array<Hash>] array of weapon stat hashes for that category
+        def self.all_weapons_in_category(category)
+          category = category.to_sym
+          return [] unless @@weapon_stats.key?(category)
+
+          @@weapon_stats[category].values
+        end
+
+        ##
+        # Returns a list of all defined weapon categories.
+        #
+        # @return [Array<Symbol>] an array of weapon category symbols (e.g., [:OHE, :THW])
+        def self.all_categories
+          @@weapon_stats.keys
+        end
+
+        ##
+        # Determines whether the specified weapon is grippable (e.g., bastard sword).
+        #
+        # @param name [String] the name or alias of the weapon
+        # @return [Boolean] true if the weapon is grippable, false otherwise
+        def self.is_grippable?(name)
+          name = name.downcase.strip
+
+          weapon = find_weapon(name)
+
+          weapon && weapon[:gripable?] == true
         end
       end
     end
