@@ -14,6 +14,7 @@ module Lich
       require_relative 'drinfomon/drroom'
       require_relative 'drinfomon/drspells'
       require_relative 'drinfomon/events'
+      require_relative 'drinfomon/skillrecorder'
     end
   end
 end
