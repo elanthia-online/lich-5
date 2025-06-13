@@ -282,6 +282,16 @@ module Lich
 
           weapon && weapon[:gripable?] == true
         end
+
+        ##
+        # Returns the weapon category for the given name.
+        #
+        # @param name [String] the weapon name or alias
+        # @return [Symbol, nil] the category symbol (e.g., :OHE, :THW) or nil
+        def self.category_for(name)
+          weapon = find_weapon(name)
+          weapon ? weapon[:category] : nil
+        end
       end
     end
   end

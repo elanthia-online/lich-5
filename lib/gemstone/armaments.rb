@@ -110,34 +110,23 @@ module Lich
       end
 
       ##
-      # Returns the category of the item with the given name.
+      # Returns the category of the item with the given name by delegating to the appropriate stats module.
       #
-      # For weapons, this is the weapon category (e.g., :OHE).
-      # For shields, this is the shield size category (e.g., :medium).
-      # For armor, this is the ASG symbol (e.g., :asg_18).
+      # This avoids redundant lookups by letting each submodule handle the logic internally.
       #
       # @param name [String] the item name or alias
-      # @return [Symbol, nil] the category symbol or nil if not found
+      # @return [Symbol, String, nil] the category (e.g., :OHE, "full plate", :tower) or nil if not found
       def self.category_for(name)
         name = name.downcase.strip
 
-        WeaponStats.all_categories.each do |cat|
-          weapon = WeaponStats.all_weapons_in_category(cat).find do |entry|
-            entry[:all_names]&.map(&:downcase)&.include?(name)
-          end
-          return cat if weapon
-        end
+        category = WeaponStats.category_for(name)
+        return category unless category.nil?
 
-        ArmorStats.send(:@@armor_stats).each_value do |subgroup|
-          subgroup.each do |asg_sym, entry|
-            return asg_sym if entry[:all_names]&.map(&:downcase)&.include?(name)
-          end
-        end
+        category = ArmorStats.category_for(name)
+        return category unless category.nil?
 
-        ShieldStats.all_shield_categories.each do |cat|
-          shield = ShieldStats.find_shield(name)
-          return shield[:category] if shield
-        end
+        category = ShieldStats.category_for(name)
+        return category unless category.nil?
 
         nil
       end

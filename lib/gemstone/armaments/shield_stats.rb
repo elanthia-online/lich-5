@@ -112,6 +112,16 @@ module Lich
         def self.all_shield_categories
           @@shield_stats.keys
         end
+
+        ##
+        # Returns the category for the given shield name.
+        #
+        # @param name [String] the shield name or alias
+        # @return [Symbol, nil] the category symbol (e.g., :small_shield) or nil
+        def self.category_for(name)
+          shield = find_shield(name)
+          shield ? shield[:category] : nil
+        end
       end
     end
   end

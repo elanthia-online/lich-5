@@ -477,6 +477,18 @@ module Lich
 
           []
         end
+
+        ##
+        # Returns the armor type for the given name.
+        #
+        # This corresponds to the :type field in the armor entry, such as "rigid leather" or "full plate".
+        #
+        # @param name [String] the armor name or alias
+        # @return [String, nil] the armor type, or nil if not found
+        def self.category_for(name)
+          armor = find_armor(name)
+          armor ? armor[:type] : nil
+        end
       end
     end
   end
