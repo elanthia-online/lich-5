@@ -389,7 +389,7 @@ module Lich
         # @param asg_number [Integer] The armor sub group number (ASG) to search for.
         # @return [Hash, nil] The stats hash of the matching armor, or nil if not found.
         def self.find_armor_by_asg(asg_number)
-          return nil unless asg_number.is_a?(Integer) && asg_number.between?(1, 5)
+          return nil unless asg_number.is_a?(Integer) && asg_number.between?(1, 20)
 
           @@armor_stats.each_value do |subgroups|
             subgroups.each do |_, asg_data|
