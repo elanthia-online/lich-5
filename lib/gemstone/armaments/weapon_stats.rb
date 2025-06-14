@@ -153,8 +153,7 @@ module Lich
           name1 = name1.downcase.strip
           name2 = name2.downcase.strip
 
-          return nil if name1 == name2
-          return nil if category1 == category2
+          return nil if name1 == name2 && category1 == category2
 
           w1 = find_weapon(name1, category1)
           w2 = find_weapon(name2, category2)
