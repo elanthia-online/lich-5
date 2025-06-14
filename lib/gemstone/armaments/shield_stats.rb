@@ -109,6 +109,40 @@ module Lich
           shield = find_shield(name)
           shield ? shield[:category] : nil
         end
+
+        ##
+        # Prints a concise summary of shield metadata in a single block.
+        #
+        # @param name [String] the base name or alias of the shield
+        # @return [String] formatted one-block summary or (no data) if not found
+        def self.pretty(name)
+          shield = find_shield(name)
+          return "\n(no data)\n" unless shield.is_a?(Hash)
+
+          lines = []
+          lines << ""
+
+          fields = {
+            "Shield"      => shield[:base_name],
+            "Category"    => shield[:category].to_s.gsub('_', ' ').capitalize,
+            "Size Mod"    => format('%.2f', shield[:size_modifier]),
+            "Evade Mod"   => format('%.2f', shield[:evade_modifier]),
+            "Base Weight" => "#{shield[:base_weight]} lbs"
+          }
+
+          max_label = fields.keys.map(&:length).max
+
+          fields.each do |label, value|
+            lines << "%-#{max_label}s: %s" % [label, value]
+          end
+
+          if shield[:all_names]&.any?
+            lines << "%-#{max_label}s: %s" % ["Alternate", shield[:all_names].join(", ")]
+          end
+
+          lines << ""
+          lines.join("\n")
+        end
       end
     end
   end

@@ -5,6 +5,60 @@ require_relative "armaments/shield_stats.rb"
 module Lich
   module Gemstone
     module Armaments
+      AG_INDEX_TO_NAME = {
+        1 => "Cloth",
+        2 => "Soft Leather",
+        3 => "Rigid Leather",
+        4 => "Chain",
+        5 => "Plate"
+      }.freeze
+
+      ASG_INDEX_TO_NAME = {
+        1  => "Robes",
+        2  => "Light Leather",
+        3  => "Full Leather",
+        4  => "Double Leather",
+        5  => "Leather Breastplate",
+        6  => "Cuirbouilli",
+        7  => "Studded Leather",
+        8  => "Reinforced Leather",
+        9  => "Hardened Leather",
+        10 => "Brigandine",
+        11 => "Chain Mail",
+        12 => "Double Chain",
+        13 => "Augmented Chain",
+        14 => "Chain Hauberk",
+        15 => "Metal Breastplate",
+        16 => "Augmented Breastplate",
+        17 => "Half Plate",
+        18 => "Full Plate",
+        19 => "Field Plate",
+        20 => "Augmented Plate"
+      }.freeze
+
+      SPELL_CIRCLE_INDEX_TO_NAME = {
+        0  => { name: "Action Penalty",          abbr: "ActPn"  },
+        1  => { name: "Minor Spiritual",         abbr: "MinSp"  },
+        2  => { name: "Major Spiritual",         abbr: "MajSp"  },
+        3  => { name: "Cleric",                  abbr: "Clerc"  },
+        4  => { name: "Minor Elemental",         abbr: "MinEl"  },
+        5  => { name: "Major Elemental",         abbr: "MajEl"  },
+        6  => { name: "Ranger",                  abbr: "Rngr"   },
+        7  => { name: "Sorcerer",                abbr: "Sorc"   },
+        8  => { name: "Old Empath (Deprecated)", abbr: "OldEm"  },
+        9  => { name: "Wizard",                  abbr: "Wiz"    },
+        10 => { name: "Bard",                    abbr: "Bard"   },
+        11 => { name: "Empath",                  abbr: "Emp"    },
+        12 => { name: "Minor Mental",            abbr: "MinMn"  },
+        13 => { name: "Major Mental",            abbr: "MajMn"  },
+        14 => { name: "Savant",                  abbr: "Sav"    },
+        15 => { name: "Unused",                  abbr: " - "    },
+        16 => { name: "Paladin",                 abbr: "Pal"    },
+        17 => { name: "Arcane Spells",           abbr: "Arcne"  },
+        18 => { name: "Unused",                  abbr: " - "    },
+        19 => { name: "Lost Arts",               abbr: "Lost"   },
+      }.freeze
+
       ##
       # Finds matching armament info by name.
       #

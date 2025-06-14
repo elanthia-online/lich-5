@@ -277,6 +277,124 @@ module Lich
           weapon = find_weapon(name)
           weapon ? weapon[:category] : nil
         end
+
+        ##
+        # Pretty-prints a weapon's data by name in long format.
+        #
+        # @param name [String] the name or alias of the weapon
+        # @return [String] formatted weapon display string
+        def self.pretty_long(name)
+          weapon = find_weapon(name)
+          return "\n(no data)\n" unless weapon.is_a?(Hash)
+
+          lines = []
+
+          core_fields = [
+            :category, :base_name, :all_names, :base_rt, :min_rt,
+            :grippable?, :weighting_type, :weighting_amount
+          ]
+
+          # Field labels for max width calc
+          top_labels = core_fields.map(&:to_s) + ["damage_types", "damage_factor", "avd_by_asg"]
+          nested_labels = %w[slash crush puncture special] +
+                          Armaments::AG_INDEX_TO_NAME.values +
+                          Armaments::ASG_INDEX_TO_NAME.values
+
+          indent = 2
+          max_label_width = (top_labels + nested_labels.map { |s| " " * indent + s })
+                            .map(&:length).max
+
+          # Print top-level fields
+          core_fields.each do |key|
+            next unless weapon.key?(key)
+            val = weapon[key]
+            str_val = val.is_a?(Array) ? val.join(", ") : val.to_s
+            lines << "%-#{max_label_width}s : %s" % [key.to_s, str_val]
+          end
+
+          # Damage Types
+          if weapon[:damage_types].is_a?(Array)
+            lines << "%-#{max_label_width}s :" % "damage_types"
+            weapon[:damage_types].each do |entry|
+              entry.each do |type, value|
+                val_str = value.is_a?(Array) && value.empty? ? "(none)" : value.to_s
+                lines << "  %-#{max_label_width - indent}s : %s" % [type.to_s, val_str]
+              end
+            end
+          end
+
+          # Damage Factor
+          if weapon[:damage_factor].is_a?(Array)
+            lines << "%-#{max_label_width}s :" % "damage_factor"
+            weapon[:damage_factor][1..].each_with_index do |df, i|
+              ag_index = i + 1
+              label = Armaments::AG_INDEX_TO_NAME[ag_index] || "AG #{ag_index}"
+              lines << "  %-#{max_label_width - indent}s : %s" % [label, df]
+            end
+          end
+
+          # AvD by ASG
+          if weapon[:avd_by_asg].is_a?(Array)
+            lines << "%-#{max_label_width}s :" % "avd_by_asg"
+            weapon[:avd_by_asg][1..].each_with_index do |avd, i|
+              next unless avd
+              label = Armaments::ASG_INDEX_TO_NAME[i + 1] || "ASG #{i + 1}"
+              lines << "  %-#{max_label_width - indent}s : %s" % [label, avd]
+            end
+          end
+
+          lines.join("\n")
+        end
+
+        ##
+        # Pretty-prints a weapon's data by name in long format.
+        #
+        # @param name [String] the name or alias of the weapon
+        # @return [String] formatted weapon display string
+        def self.pretty(name)
+          weapon = find_weapon(name)
+          return "\n(no data)\n" unless weapon.is_a?(Hash)
+
+          lines = []
+          lines << "" # leading blank
+
+          [:category, :base_name, :all_names, :base_rt, :min_rt, :grippable?, :weighting_type, :weighting_amount].each do |key|
+            next unless weapon.key?(key)
+            val = weapon[key]
+            str_val = val.is_a?(Array) ? val.join(", ") : val.to_s
+            lines << "%-18s: %s" % [key.to_s, str_val]
+          end
+
+          # damage types inline
+          if weapon[:damage_types].is_a?(Array)
+            damage_str = weapon[:damage_types].map do |entry|
+              entry.map { |type, val| "#{type}=#{val.is_a?(Array) && val.empty? ? 'n/a' : val}" }
+            end.flatten.join(", ")
+            lines << "%-18s: %s" % ["damage_types", damage_str]
+          end
+
+          # damage_factor inline
+          if weapon[:damage_factor].is_a?(Array)
+            df = weapon[:damage_factor][1..] || []
+            df_str = df.each_with_index.map { |v, i| "AG%-2d=%0.3f" % [i + 1, v] }.join("  ")
+            lines << "%-18s: %s" % ["damage_factor", df_str]
+          end
+
+          # AVD in aligned two-line block
+          if weapon[:avd_by_asg].is_a?(Array)
+            avds = weapon[:avd_by_asg][1..] || []
+
+            col_width = 4
+            header = avds.each_index.map { |i| i + 1 }.map { |asg| asg.to_s.rjust(col_width) }.join
+            values = avds.map { |v| v.nil? ? '--'.rjust(col_width) : v.to_s.rjust(col_width) }.join
+
+            lines << "%-18s: %s" % ["avd_by_asg", header]
+            lines << " " * 20 + values
+          end
+
+          lines << "" # trailing blank
+          lines.join("\n")
+        end
       end
     end
   end
