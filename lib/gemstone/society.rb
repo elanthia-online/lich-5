@@ -93,7 +93,7 @@ module Lich
       def self.favor
         Lich.deprecated("Society.favor", "Society::OrderOfVoln.favor", caller[0], fe_log: false)
         # Infomon.get('resources.voln_favor')
-        Society::OrderOfVoln.favor
+        Societies::OrderOfVoln.favor
       end
 
       ##

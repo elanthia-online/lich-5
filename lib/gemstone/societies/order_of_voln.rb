@@ -474,6 +474,15 @@ module Lich
         end
 
         ##
+        # Provides the current rank of the character within the Order of Voln (called a step in Voln).
+        #
+        # @return [Integer] The current rank (step) of the character
+        #
+        def self.step
+          Society.rank
+        end
+
+        ##
         # Checks if the character is a member of Voln and optionally at a given rank.
         #
         # @param rank [Integer, nil] Optionally check if the character is at this rank
