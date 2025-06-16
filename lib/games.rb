@@ -382,9 +382,9 @@ module Lich
             case e.to_s
             # Missing attribute equal: <s> - in dynamic dialogs with a single apostrophe for possessive 'Tsetem's Items'
             when /nested single quotes|nested double quotes|Missing attribute equal: <\w+>/
-              origin_string = server_string.dup
+              original_server_string = server_string.dup
               server_string = XMLCleaner.clean_nested_quotes(server_string)
-              if origin_string != server_string
+              if original_server_string != server_string
                 retry
               else
                 handle_xml_error(server_string, e)
