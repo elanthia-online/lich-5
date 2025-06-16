@@ -44,7 +44,6 @@ reconnect_if_wanted = proc {
 
   @launch_data = nil
   require File.join(LIB_DIR, 'common', 'eaccess.rb')
-  # requested_fe = requested_instance = nil
 
   if ARGV.include?('--login')
     require File.join(LIB_DIR, 'common', 'gui', 'yaml_state')
