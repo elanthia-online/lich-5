@@ -186,10 +186,10 @@ module Lich
       #
       # @param char_data_sets [Array<Hash>] An array of character data hashes, each containing keys :char_name, :game_code, and :frontend.
       # @param requested_character [String] The character name to match against `:char_name`.
-      # @param requested_instance [String, nil] The game instance to match against `:game_code` or nil.
+      # @param requested_instance [String, nil] The game instance to match against if provided `:game_code` or nil.
       # @param requested_fe [String, nil] The frontend to optionally match against `:frontend` or nil.
       # @return [Hash, nil] The best matching character hash, or nil if the input array is nil or empty.
-      def self.select_best_fit(char_data_sets, requested_character, requested_instance, requested_fe)
+      def self.select_best_fit(char_data_sets:, requested_character:, requested_instance: :__unset, requested_fe: :__unset)
         return nil if char_data_sets.nil? || char_data_sets.empty?
         return nil unless requested_character
 
@@ -197,22 +197,30 @@ module Lich
         matching_chars = char_data_sets.select { |char| char[:char_name] == requested_character }
         return nil if matching_chars.empty?
 
-        # If instance is specified, filter further
-        if requested_instance
-          matching_chars.select! { |char| char[:game_code] == requested_instance }
-          return nil if matching_chars.empty?
+        # Filter by game instance if explicitly provided and valid
+        if requested_instance != :__unset # not provided, proceed with no additional operation
+          unless requested_instance.nil? # provided and not valid if NIL, drop to ERROR
+            if VALID_GAME_CODES.include?(requested_instance)
+              matching_chars.select! { |char| char[:game_code] == requested_instance }
+              return nil if matching_chars.empty?
+            end
+          else
+            echo "[ERROR] Invalid instance '#{requested_instance}'. Valid instances: #{VALID_GAME_CODES.join(', ')}"
+            matching_chars = {}
+            return nil
+          end
         end
 
         # Rank by frontend if provided
         best_match = matching_chars.first
         highest_score = 0
 
-        matching_chars.each do |char_data|
+        matching_chars.each do |char|
           score = 0
-          score += 1 if requested_fe && char_data[:frontend] == requested_fe
+          score += 1 if requested_fe != :__unset && char[:frontend] == requested_fe
 
           if score > highest_score
-            best_match = char_data
+            best_match = char
             highest_score = score
           end
         end
@@ -275,9 +283,8 @@ module Lich
       # @param argv [Array<String>] e.g. ARGV
       # @return [Array(String, String)] [game_code, frontend]
       def self.resolve_login_args(argv)
-        frontend = nil
-
-        instance = resolve_instance(argv)
+        frontend = :__unset
+        instance = resolve_instance(argv) || :__unset
 
         argv.each do |arg|
           case arg
@@ -285,6 +292,7 @@ module Lich
             frontend = Regexp.last_match[:fe].downcase
           end
         end
+
         [instance, frontend]
       end
 
@@ -297,29 +305,31 @@ module Lich
       # @param entry [Legacy::EntryStore::Entry] the saved login entry
       # @param lich_path [String, nil] optional path to lich.rbw; defaults to LICH_DIR/lich.rbw
       # @param startup_scripts [Array<String>] optional list of autostart scripts
-      # @return [Thread, nil] the thread running spawn, or nil if spawn fails
+      # @return [Process::Waiter, nil] detached process handle, or nil on failure
       def self.spawn_login(entry, lich_path: nil, startup_scripts: [], instance_override: nil, frontend_override: nil)
         ruby_path = RbConfig.ruby
         lich_path ||= File.join(LICH_DIR, 'lich.rbw')
 
         spawn_cmd = [
-          "\"#{ruby_path}\"",
-          "\"#{lich_path}\"",
-          "--login #{entry.char_name}"
+          "#{ruby_path}",
+          "#{lich_path}",
+          '--login', entry.char_name
         ]
         spawn_cmd << "--#{instance_override}" unless instance_override.nil?
         spawn_cmd << "--#{frontend_override}" unless frontend_override.nil?
         spawn_cmd << "--start-scripts=#{startup_scripts.join(',')}" if startup_scripts.any?
 
-        echo "[INFO] Spawning login: #{spawn_cmd.join(' ')}"
+        echo "[INFO] Spawning login: #{spawn_cmd}"
 
         begin
-          pid = Process.spawn(spawn_cmd.join(' '))
+          pid = Process.spawn(*spawn_cmd)
           Process.detach(pid)
         rescue Errno::ENOENT => e
           echo "[ERROR] Executable not found: #{e.message}"
+          nil
         rescue StandardError => e
           echo "[ERROR] Failed to launch login session: #{e.class} - #{e.message}"
+          nil
         end
       end
     end

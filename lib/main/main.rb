@@ -66,7 +66,7 @@ reconnect_if_wanted = proc {
     char_data_sets = Lich::Util::LoginHelpers.find_character_by_name_game_and_frontend(entry_data, requested_character, requested_instance, requested_fe)
     # filter based on provided information to select best match
     # receives [Hash, nil] The best matching character hash, or nil if the input array is nil or empty.
-    char_data = Lich::Util::LoginHelpers.select_best_fit(char_data_sets, requested_character, requested_instance, requested_fe)
+    char_data = Lich::Util::LoginHelpers.select_best_fit(char_data_sets: char_data_sets, requested_character: requested_character, requested_instance: requested_instance, requested_fe: requested_fe)
 
     unless char_data.nil?
       Lich.log "info: using quick game entry settings for #{requested_character}"
