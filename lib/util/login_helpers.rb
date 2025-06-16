@@ -5,7 +5,7 @@ module Lich
   module Util
     module LoginHelpers
       # Valid game codes
-      VALID_GAME_CODES = %w[GS3 GSX GSF GST DR DRX DRF DRT].freeze
+      VALID_GAME_CODES = %w[GS3 GS4 GSX GSF GST DR DRX DRF DRT].freeze
 
       # Valid frontend flags
       VALID_FRONTENDS = %w[avalon stormfront wizard].freeze
@@ -76,7 +76,16 @@ module Lich
                               when 'DRT' then 'DR'
                               end
 
-              next unless char_code == normalized_code || char_code == fallback_code
+              # next unless char_code == normalized_code || char_code == fallback_code
+              if char_code == normalized_code
+                # :noop : exact match — use as-is
+              elsif char_code == fallback_code
+                # fallback match — tag it
+                character = character.dup
+                character[:_requested_game_code] = normalized_code
+              else
+                next
+              end
             end
 
             # Frontend filtering (optional)
@@ -109,7 +118,7 @@ module Lich
           #      character: character,
           # Flattened character data for easy access
           char_name: character[:char_name],
-          game_code: character[:game_code],
+          game_code: character[:_requested_game_code] || character[:game_code],
           game_name: character[:game_name],
           frontend: character[:frontend],
           custom_launch: character[:custom_launch],
@@ -197,18 +206,18 @@ module Lich
         matching_chars = char_data_sets.select { |char| char[:char_name] == requested_character }
         return nil if matching_chars.empty?
 
-        # Filter by game instance if explicitly provided and valid
-        if requested_instance != :__unset # not provided, proceed with no additional operation
-          unless requested_instance.nil? # provided and not valid if NIL, drop to ERROR
-            if VALID_GAME_CODES.include?(requested_instance)
-              matching_chars.select! { |char| char[:game_code] == requested_instance }
-              return nil if matching_chars.empty?
-            end
-          else
+        # Filter by game instance if explicitly provided and valid, includes fallback GST -> GS3
+        if requested_instance != :__unset
+          if requested_instance.nil? || !VALID_GAME_CODES.include?(requested_instance)
             echo "[ERROR] Invalid instance '#{requested_instance}'. Valid instances: #{VALID_GAME_CODES.join(', ')}"
-            matching_chars = {}
             return nil
           end
+
+          matching_chars.select! do |char|
+            effective_code = char[:_requested_game_code] || char[:game_code]
+            effective_code == requested_instance
+          end
+          return nil if matching_chars.empty?
         end
 
         # Rank by frontend if provided
@@ -232,41 +241,58 @@ module Lich
       # @param argv [Array<String>] command line arguments
       # @return [String, nil] game instance code or nil if no valid pattern found
       def self.resolve_instance(argv)
+        instance_flags_seen = false
+        resolved_instance = nil
+
         # Check for --gemstone with variants
         if argv.include?('--gemstone')
-          return 'GST' if argv.include?('--test')
-          return 'GSX' if argv.include?('--platinum')
-          return 'GSF' if argv.include?('--shattered')
-          return 'GS3' # default gemstone
+          instance_flags_seen = true
+          resolved_instance ||= 'GST' if argv.include?('--test')
+          resolved_instance ||= 'GSX' if argv.include?('--platinum')
+          resolved_instance ||= 'GSF' if argv.include?('--shattered')
+          resolved_instance ||= 'GS3' # default gemstone
         end
 
         if argv.include?('--dragonrealms')
-          return 'DRT' if argv.include?('--test')
-          return 'DRX' if argv.include?('--platinum')
-          return 'DRF' if argv.include?('--fallen')
-          return 'DR' # default dragonrealms
+          instance_flags_seen = true
+          resolved_instance ||= 'DRT' if argv.include?('--test')
+          resolved_instance ||= 'DRX' if argv.include?('--platinum')
+          resolved_instance ||= 'DRF' if argv.include?('--fallen')
+          resolved_instance ||= 'DR' # default dragonrealms
         end
 
         # Check for standalone --shattered
-        return 'GSF' if argv.include?('--shattered')
-        return 'DRF' if argv.include?('--fallen')
+        if argv.include?('--shattered')
+          instance_flags_seen ||= true
+          resolved_instance = 'GSF'
+        end
+        if argv.include?('--fallen')
+          instance_flags_seen ||= true
+          resolved_instance = 'DRF'
+        end
 
         # Check for direct instance codes (GS3, GS4, GST, GSX, etc.)
-        argv.each do |arg|
-          case arg.upcase
-          when '--GS3', '--GS4' then return 'GS3' # someone, somewhere, is going to use GS4
-          when '--GST' then return 'GST'
-          when '--GSX' then return 'GSX'
-          when '--GSF' then return 'GSF'
-          # DR patterns would go here
-          when '--DR' then return 'DR'
-          when '--DRT' then return 'DRT'
-          when '--DRX' then return 'DRX'
-          when '--DRF' then return 'DRF'
+        if resolved_instance.nil?
+          argv.each do |arg|
+            next unless arg.start_with?('--')
+
+            flag = arg.sub('--', '').downcase
+
+            next if VALID_FRONTENDS.include?(flag)
+            next if flag == 'login'
+
+            # all permitted entries are screened, this must be a game instance or game_code attempt
+            instance_flags_seen = true
+
+            if VALID_GAME_CODES.include?(flag.upcase)
+              resolved_instance = flag.upcase
+              break
+            end
           end
         end
 
-        # No valid game instance pattern found
+        return resolved_instance unless resolved_instance.nil?
+        return :__unset unless instance_flags_seen
         nil
       end
 
@@ -284,7 +310,7 @@ module Lich
       # @return [Array(String, String)] [game_code, frontend]
       def self.resolve_login_args(argv)
         frontend = :__unset
-        instance = resolve_instance(argv) || :__unset
+        instance = resolve_instance(argv)
 
         argv.each do |arg|
           case arg
