@@ -4,6 +4,38 @@
 module Lich
   module Util
     module LoginHelpers
+      VALID_GAME_CODES = %w[GS3 GSX GSF GST DR DRX DRF DRT].freeze
+
+      # Game configuration mapping
+      GAME_CONFIGS = {
+        'gemstone'     => {
+          base: 'GS3',
+          variants: {
+            'platinum'  => 'GSX',
+            'shattered' => 'GSF',
+            'test'      => 'GST'
+          }
+        },
+        'dragonrealms' => {
+          base: 'DR',
+          variants: {
+            'platinum' => 'DRX',
+            'fallen'   => 'DRF',
+            'test'     => 'DRT'
+          }
+        }
+      }.freeze
+
+      # Standalone game flags that map directly to instances
+      STANDALONE_FLAGS = {
+        'shattered' => 'GSF',
+        'fallen'    => 'DRF'
+      }.freeze
+
+      # Frontend pattern for regex matching
+      FRONTEND_PATTERN = /^--(?<fe>avalon|stormfront|wizard)$/i.freeze
+      INSTANCE_PATTERN = /^--(?<inst>GS.?$|DR.?$)/i.freeze
+
       # Recursively converts string keys to symbols in nested hash and array structures.
       #
       # This method ensures that YAML data loaded with string keys can be accessed
@@ -208,6 +240,81 @@ module Lich
         end
 
         best_match
+      end
+
+      # Parses Lich CLI args to determine game instance and frontend.
+      #
+      # Returns [instance, frontend] (both may be nil). Invalid game codes are not rejected here;
+      # call site can choose to validate against VALID_GAME_CODES.
+      #
+      # Examples:
+      #   --gemstone --platinum   → ['GSX', nil]
+      #   --dragonrealms --fallen → ['DRF', nil]
+      #   --GS4 --wizard          → ['GS3', 'wizard']
+      #
+      # @param argv [Array<String>] e.g. ARGV
+      # @return [Array(String, String)] [game_code, frontend]
+      def self.resolve_login_args(argv)
+        instance = resolve_instance(argv)
+        frontend = resolve_frontend(argv)
+
+        [instance, frontend]
+      end
+
+      # Resolves the game instance from command line arguments
+      # @param argv [Array<String>] command line arguments
+      # @return [String, nil] game instance code or nil
+      def self.resolve_instance(argv)
+        # Check for main game flags with variants
+        GAME_CONFIGS.each do |game_flag, config|
+          next unless argv.include?("--#{game_flag}")
+
+          return resolve_game_variant(argv, config)
+        end
+
+        # Check for standalone flags
+        STANDALONE_FLAGS.each do |flag, instance_code|
+          return instance_code if argv.include?("--#{flag}")
+        end
+
+        # Check for direct instance codes (e.g., --GS4, --DR)
+        resolve_direct_instance(argv)
+      end
+
+      # Resolves game variant based on additional flags
+      # @param argv [Array<String>] command line arguments
+      # @param config [Hash] game configuration with base and variants
+      # @return [String] game instance code
+      def self.resolve_game_variant(argv, config)
+        config[:variants].each do |variant_flag, instance_code|
+          return instance_code if argv.include?("--#{variant_flag}")
+        end
+
+        config[:base]
+      end
+
+      # Resolves direct instance codes from arguments
+      # @param argv [Array<String>] command line arguments
+      # @return [String, nil] game instance code or nil
+      def self.resolve_direct_instance(argv)
+        argv.each do |arg|
+          match = INSTANCE_PATTERN.match(arg)
+          return match[:inst].upcase.sub('4', '3') if match
+        end
+
+        nil
+      end
+
+      # Resolves the frontend from command line arguments
+      # @param argv [Array<String>] command line arguments
+      # @return [String, nil] frontend name or nil
+      def self.resolve_frontend(argv)
+        argv.each do |arg|
+          match = FRONTEND_PATTERN.match(arg)
+          return match[:fe].downcase if match
+        end
+
+        nil
       end
     end
   end

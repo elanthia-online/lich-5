@@ -44,7 +44,7 @@ reconnect_if_wanted = proc {
 
   @launch_data = nil
   require File.join(LIB_DIR, 'common', 'eaccess.rb')
-  requested_fe = requested_instance = nil
+  # requested_fe = requested_instance = nil
 
   if ARGV.include?('--login')
     require File.join(LIB_DIR, 'common', 'gui', 'yaml_state')
@@ -58,39 +58,9 @@ reconnect_if_wanted = proc {
       Lich.log "error: no saved entries YAML file found"
     end
 
-    if ARGV.include?('--gemstone')
-      if ARGV.include?('--platinum')
-        requested_instance = 'GSX'
-      elsif ARGV.include?('--shattered')
-        requested_instance = 'GSF'
-      elsif ARGV.include?('--test')
-        requested_instance = 'GST'
-      else
-        requested_instance = 'GS3'
-      end
-    elsif ARGV.include?('--shattered')
-      requested_instance = 'GSF'
-    elsif ARGV.include?('--dragonrealms')
-      if ARGV.include?('--platinum')
-        requested_instance = 'DRX'
-      elsif ARGV.include?('--fallen')
-        requested_instance = 'DRF'
-      elsif ARGV.include?('--test')
-        requested_instance = 'DRT'
-      else
-        requested_instance = 'DR'
-      end
-    elsif ARGV.include?('--fallen')
-      requested_instance = 'DRF'
-    else
-      ARGV.each { |arg|
-        if arg =~ (/^--(?<frontend>avalon|stormfront|wizard)$/i)
-          requested_fe = Regexp.last_match[:frontend]
-        elsif arg =~ (/^--(?<instance>GS.?$|DR.?$)/i)
-          requested_instance = Regexp.last_match[:instance].upcase.sub('4', '3') # too many folks will just try --GS4
-        end
-      }
-    end
+    # previous realm / game instance detection modernized to support YAML / elogin efforts
+    modifiers = ARGV.dup
+    requested_instance, requested_fe = Lich::Util::LoginHelpers.resolve_login_args(modifiers)
 
     # cast broadest possible net for requested character saved info, convenience method assigns nil to any missing parameters
     # receives [Array<Hash>] Array of all characters with the specified name
