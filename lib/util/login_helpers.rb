@@ -283,8 +283,6 @@ module Lich
         return nil if char_data_sets.nil? || char_data_sets.empty?
         return nil unless requested_character
 
-        p requested_instance
-
         # Filter by required character match
         matching_chars = char_data_sets.select { |char| char[:char_name] == requested_character }
         return nil if matching_chars.empty?
