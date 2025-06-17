@@ -57,13 +57,13 @@ module Lich
         def self.game_code_to_realm(game_code)
           case game_code
           when "GS3"
-            "Prime"
+            "GS Prime"
           when "GSF"
-            "Shattered"
+            "GS Shattered"
           when "GSX"
-            "Platinum"
+            "GS Platinum"
           when "GST"
-            "Test"
+            "GS Test"
           when "DR"
             "DR Prime"
           when "DRF"
