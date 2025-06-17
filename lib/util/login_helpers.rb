@@ -137,32 +137,42 @@ module Lich
       def self.find_character_by_attributes(symbolized_data, char_name: nil, game_code: :__unset, frontend: :__unset)
         candidates = extract_candidate_characters_with_accounts(symbolized_data)
 
-        matches = candidates.filter_map do |entry|
+        # Step 1: Try to find exact matches only
+        exact_matches = candidates.filter_map do |entry|
+          character = entry[:character] || entry # supports flat and nested formats
+          account_name = entry[:account_name] rescue nil
+          account_data = entry[:account_data] rescue nil
+
+          next unless character[:char_name].casecmp?(char_name)
+          next unless game_code == :__unset || character[:game_code].to_s.casecmp?(game_code.to_s)
+
+          build_character_result(account_name, account_data, character)
+        end
+        echo "RETURNING EXACT MATCHES ONLY: #{exact_matches.inspect}"
+        return exact_matches unless exact_matches.empty?
+
+        # Step 2: Fallback match (if needed)
+        fallback_code = case game_code.to_s.upcase
+                        when 'GST' then 'GS3'
+                        when 'DRT' then 'DR'
+                        else nil
+                        end
+
+        candidates.filter_map do |entry|
           account_name = entry[:account_name]
           account_data = entry[:account_data]
           character    = entry[:character]
 
-          next unless char_name.nil? || character[:char_name] == char_name
+          next unless character[:char_name].casecmp?(char_name)
 
-          # Game code filter + fallback
-          if game_code != :__unset && !game_code.nil?
-            normalized_code = game_code.to_s.upcase
-            char_code = character[:game_code].to_s.upcase
+          char_code = character[:game_code].to_s.upcase
 
-            fallback_code = case normalized_code
-                            when 'GST' then 'GS3'
-                            when 'DRT' then 'DR'
-                            end
+          # Fallback logic
+          next unless fallback_code && char_code == fallback_code
 
-            if char_code == normalized_code
-              # pass
-            elsif fallback_code && char_code == fallback_code
-              character = character.dup
-              character[:_requested_game_code] = normalized_code
-            else
-              next
-            end
-          end
+          # Optional: mark that this was a fallback
+          character = character.dup
+          character[:_requested_game_code] = game_code
 
           # Frontend filter
           if frontend != :__unset && !frontend.nil?
@@ -171,8 +181,6 @@ module Lich
 
           build_character_result(account_name, account_data, character)
         end
-
-        matches
       end
 
       # Constructs a unified character hash with necessary login metadata.
@@ -275,6 +283,8 @@ module Lich
         return nil if char_data_sets.nil? || char_data_sets.empty?
         return nil unless requested_character
 
+        p requested_instance
+
         # Filter by required character match
         matching_chars = char_data_sets.select { |char| char[:char_name] == requested_character }
         return nil if matching_chars.empty?
@@ -288,6 +298,7 @@ module Lich
           end
 
           matching_chars.select! do |char|
+            echo char[:game_code]
             effective_code = char[:_requested_game_code] || char[:game_code]
             effective_code == requested_instance
           end
@@ -402,16 +413,41 @@ module Lich
         [instance, frontend]
       end
 
+      # Formats the game instance launch flag for Lich based on version.
+      #
+      # Older versions of Lich (pre-5.12) only recognize specific lowercase flags
+      # (e.g., `--gst`, `--drt`). Newer versions (5.12+) accept generalized `--GAMECODE` format.
+      #
+      # @param game_code [String, Symbol] the game instance code (e.g., 'GS3', 'GST', 'GSX')
+      # @return [String, nil] the correctly formatted launch flag (e.g., '--gst', '--GSX'), or nil if not needed
+      def self.format_launch_flag(game_code)
+        return nil if game_code.to_s.strip.empty?
+
+        normalized_code = game_code.to_s.upcase
+
+        if lich_version_at_least?(5, 12, 0)
+          "--#{normalized_code}"
+        else
+          case normalized_code
+          when 'GST' then '--gst'
+          when 'DRT' then '--drt'
+          else nil
+          end
+        end
+      end
+
       # Spawns a Lich login session using a saved entry.
       #
-      # Constructs the Ruby + Lich command-line and spawns it in a detached thread.
-      # Only the character name and game code are passed — all sensitive info is handled
-      # internally by Lich.
+      # This constructs and launches a Ruby + Lich command line with proper login arguments.
+      # It is aware of the Lich version and formats launch flags (e.g., `--gst`, `--GSX`) accordingly.
+      # Only the character name and game instance are passed — all sensitive data is handled by Lich internally.
       #
-      # @param entry [Legacy::EntryStore::Entry] the saved login entry
+      # @param entry [Hash] the login entry (must include :char_name and :game_code)
       # @param lich_path [String, nil] optional path to lich.rbw; defaults to LICH_DIR/lich.rbw
-      # @param startup_scripts [Array<String>] optional list of autostart scripts
-      # @return [Process::Waiter, nil] detached process handle, or nil on failure
+      # @param startup_scripts [Array<String>] optional scripts to autostart post-login
+      # @param instance_override [String, Symbol, nil] optional instance override (e.g., 'GST', 'GSX')
+      # @param frontend_override [String, nil] optional frontend (e.g., 'avalon', 'wizard')
+      # @return [Process::Waiter, nil] detached process handle if successful, nil otherwise
       def self.spawn_login(entry, lich_path: nil, startup_scripts: [], instance_override: nil, frontend_override: nil)
         ruby_path = RbConfig.ruby
         lich_path ||= File.join(LICH_DIR, 'lich.rbw')
@@ -421,7 +457,10 @@ module Lich
           "#{lich_path}",
           '--login', entry[:char_name]
         ]
-        spawn_cmd << "--#{instance_override}" unless instance_override.nil?
+        if instance_override
+          flag = format_launch_flag(instance_override)
+          spawn_cmd << flag if flag
+        end
         spawn_cmd << "--#{frontend_override}" unless frontend_override.nil?
         spawn_cmd << "--start-scripts=#{startup_scripts.join(',')}" if startup_scripts.any?
 
