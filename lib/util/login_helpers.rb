@@ -358,7 +358,7 @@ module Lich
               break
             elsif VALID_FRONTENDS.include?(flag) # ignore anything else that isn't a valid game code
               next
-            elsif flag =~ /^start-scripts|login$/
+            elsif flag =~ /^(?:start-scripts|login)$/
               next
             else
               instance_flags_seen = true # set to true so that we fall through to returning nil
