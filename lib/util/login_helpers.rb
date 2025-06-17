@@ -10,6 +10,9 @@ module Lich
       # Valid frontend flags
       VALID_FRONTENDS = %w[avalon stormfront wizard].freeze
 
+      # Valid realms for elogin support
+      VALID_REALMS = %w[prime platinum shattered test].freeze
+
       # Frontend pattern for regex matching
       FRONTEND_PATTERN = /^--(?<fe>avalon|stormfront|wizard)$/i.freeze
       INSTANCE_PATTERN = /^--(?<inst>GS.?$|DR.?$)/i.freeze
@@ -355,7 +358,7 @@ module Lich
               break
             elsif VALID_FRONTENDS.include?(flag) # ignore anything else that isn't a valid game code
               next
-            elsif flag =~ /start-scripts|login/
+            elsif flag =~ /^start-scripts|login$/
               next
             else
               instance_flags_seen = true # set to true so that we fall through to returning nil
