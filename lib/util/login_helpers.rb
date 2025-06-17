@@ -14,6 +14,49 @@ module Lich
       FRONTEND_PATTERN = /^--(?<fe>avalon|stormfront|wizard)$/i.freeze
       INSTANCE_PATTERN = /^--(?<inst>GS.?$|DR.?$)/i.freeze
 
+      # Game code to realm mappings
+      GAME_CODE_TO_REALM = {
+        'GSX' => 'platinum',
+        'GSF' => 'shattered',
+        'GST' => 'test'
+      }.freeze
+
+      # Realm to game code mappings
+      REALM_TO_GAME_CODE = {
+        'prime'     => 'GS3',
+        'platinum'  => 'GSX',
+        'shattered' => 'GSF',
+        'test'      => 'GST'
+      }.freeze
+
+      # Game code to human-readable name mappings
+      GAME_CODE_TO_NAME = {
+        'GS3' => 'GemStone IV',
+        'GSX' => 'GemStone IV Platinum',
+        'GSF' => 'GemStone IV Shattered',
+        'GST' => 'GemStone IV Test',
+        'DR'  => 'DragonRealms',
+        'DRX' => 'DragonRealms Platinum',
+        'DRF' => 'DragonRealms Fallen',
+        'DRT' => 'DragonRealms Test'
+      }.freeze
+
+      def self.realm_from_game_code(code)
+        GAME_CODE_TO_REALM.fetch(code.to_s.upcase, GameConfig::DEFAULT_REALM)
+      end
+
+      def self.realm_to_game_code(realm)
+        REALM_TO_GAME_CODE[realm]
+      end
+
+      def self.game_name_from_game_code(game_code)
+        GAME_CODE_TO_NAME.fetch(game_code, GameConfig::DEFAULT_GAME_NAME)
+      end
+
+      def self.valid_realm?(realm)
+        VALID_REALMS.include?(realm)
+      end
+
       # Recursively converts string keys to symbols in nested hash and array structures.
       #
       # This method ensures that YAML data loaded with string keys can be accessed
@@ -36,6 +79,36 @@ module Lich
         end
       end
 
+      # Detects the data format of the provided symbolized structure.
+      #
+      # @param data [Object] The symbolized data to analyze
+      # @return [Symbol] :yaml_accounts, :legacy_array, or :unknown
+      def self.data_format(data)
+        return :legacy_array if data.is_a?(Array)
+        return :yaml_accounts if data.is_a?(Hash) && data.key?(:accounts)
+        :unknown
+      end
+
+      # Extracts character hashes and their owning account context from any supported data structure.
+      #
+      # @param data [Object] The symbolized data (YAML or legacy entry format)
+      # @return [Array<Array>] An array of [account_name, account_data, character_hash]
+      def self.extract_candidate_characters_with_accounts(data)
+        case data_format(data)
+        when :legacy_array
+          data.map { |char| { account_name: nil, account_data: nil, character: char } }
+        when :yaml_accounts
+          data[:accounts].flat_map do |account_name, account_data|
+            (account_data[:characters] || []).map do |character|
+              { account_name: account_name, account_data: account_data, character: character }
+            end
+          end
+        else
+          echo "[WARN] Unsupported character data structure."
+          []
+        end
+      end
+
       # Searches for characters across all accounts based on specified criteria.
       #
       # This method filters a symbolized account data structure to return character
@@ -48,75 +121,72 @@ module Lich
       # - If `game_code` is provided, it must match exactly OR fall back to a substitute:
       #     - 'GST' falls back to 'GS3'
       #     - 'DRT' falls back to 'DR'
-      #     - any other invalid instance will try to select by `frontend` or fail
       # - If `frontend` is provided, it must match exactly.
       #
       # All parameters are optional except `symbolized_data` and character name. If no
       # other parameters are provided, multiple character records may be returned.
       #
-      # @param symbolized_data [Hash] The symbolized YAML data structure, including account and character info.
+      # @param symbolized_data [Object] The symbolized YAML or legacy data structure.
       # @param char_name [String] The character name to match against `:char_name`. If nil, all names are considered.
       # @param game_code [String, Symbol, nil] The desired game instance (`:__unset` by default). Supports fallbacks for 'GST' and 'DRT'.
       # @param frontend [String, Symbol, nil] The frontend to match against `:frontend`. If nil, all frontends are considered.
       # @return [Array<Hash>] An array of character result hashes matching the provided criteria.
       def self.find_character_by_attributes(symbolized_data, char_name: nil, game_code: :__unset, frontend: :__unset)
-        matches = []
+        candidates = extract_candidate_characters_with_accounts(symbolized_data)
 
-        symbolized_data[:accounts].each do |account_name, account_data|
-          account_data[:characters].each do |character|
-            next unless char_name.nil? || character[:char_name] == char_name
+        matches = candidates.filter_map do |entry|
+          account_name = entry[:account_name]
+          account_data = entry[:account_data]
+          character    = entry[:character]
 
-            # Game code filtering with fallback support
-            unless game_code == :__unset || game_code.nil?
-              normalized_code = game_code.to_s.upcase
-              char_code = character[:game_code].to_s.upcase
+          next unless char_name.nil? || character[:char_name] == char_name
 
-              fallback_code = case normalized_code
-                              when 'GST' then 'GS3'
-                              when 'DRT' then 'DR'
-                              end
+          # Game code filter + fallback
+          if game_code != :__unset && !game_code.nil?
+            normalized_code = game_code.to_s.upcase
+            char_code = character[:game_code].to_s.upcase
 
-              # next unless char_code == normalized_code || char_code == fallback_code
-              if char_code == normalized_code
-                # :noop : exact match — use as-is
-              elsif char_code == fallback_code
-                # fallback match — tag it
-                character = character.dup
-                character[:_requested_game_code] = normalized_code
-              else
-                next
-              end
+            fallback_code = case normalized_code
+                            when 'GST' then 'GS3'
+                            when 'DRT' then 'DR'
+                            end
+
+            if char_code == normalized_code
+              # pass
+            elsif fallback_code && char_code == fallback_code
+              character = character.dup
+              character[:_requested_game_code] = normalized_code
+            else
+              next
             end
-
-            # Frontend filtering (optional)
-            unless frontend == :__unset || frontend.nil?
-              next unless character[:frontend].to_s == frontend.to_s
-            end
-
-            matches << build_character_result(account_name, account_data, character)
           end
+
+          # Frontend filter
+          if frontend != :__unset && !frontend.nil?
+            next unless character[:frontend].to_s == frontend.to_s
+          end
+
+          build_character_result(account_name, account_data, character)
         end
 
         matches
       end
 
-      # Constructs a standardized character result hash with account and character data.
+      # Constructs a unified character hash with necessary login metadata.
       #
-      # This helper method ensures consistent structure across all search results,
-      # combining account-level information (name, password) with character-specific
-      # data in a flattened, easily accessible format.
+      # For legacy data (no account context), the character hash is returned as-is.
+      # For YAML-sourced data, it extracts username/password and flattens the result.
       #
-      # @param account_name [Symbol] The account name/identifier
-      # @param account_data [Hash] The account data hash containing password and characters
-      # @param character [Hash] The individual character data hash
-      # @return [Hash] Standardized result hash with both account and character information
-      def self.build_character_result(username, account_data, character)
+      # @param account_name [String, nil] The owning account's name (YAML mode)
+      # @param account_data [Hash, nil] The owning account's data hash (YAML mode)
+      # @param character [Hash] The raw character data hash
+      # @return [Hash] A flattened login entry hash suitable for authentication
+      def self.build_character_result(account_name, account_data, character)
+        return character if account_name.nil? && account_data.nil?
+
         {
-          # account_name: account_name,
-          username: username.to_s,
+          username: account_name.to_s,
           password: account_data[:password],
-          #      character: character,
-          # Flattened character data for easy access
           char_name: character[:char_name],
           game_code: character[:_requested_game_code] || character[:game_code],
           game_name: character[:game_name],
@@ -125,8 +195,8 @@ module Lich
           custom_launch_dir: character[:custom_launch_dir],
           is_favorite: character[:is_favorite],
           favorite_order: character[:favorite_order],
-          favorite_added: character[:favorite_added]
-        }
+          favorite_added: character[:favorite_added],
+        }.compact
       end
 
       # Returns the first character matching the specified criteria, or nil if none found.
@@ -209,7 +279,8 @@ module Lich
         # Filter by game instance if explicitly provided and valid, includes fallback GST -> GS3
         if requested_instance != :__unset
           if requested_instance.nil? || !VALID_GAME_CODES.include?(requested_instance)
-            echo "[ERROR] Invalid instance '#{requested_instance}'. Valid instances: #{VALID_GAME_CODES.join(', ')}"
+            Lich.log "error: Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}"
+            $stdout.puts "Error: Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}"
             return nil
           end
 
@@ -263,30 +334,31 @@ module Lich
 
         # Check for standalone --shattered
         if argv.include?('--shattered')
-          instance_flags_seen ||= true
-          resolved_instance = 'GSF'
+          instance_flags_seen = true
+          resolved_instance ||= 'GSF'
         end
         if argv.include?('--fallen')
-          instance_flags_seen ||= true
-          resolved_instance = 'DRF'
+          instance_flags_seen = true
+          resolved_instance ||= 'DRF'
         end
 
         # Check for direct instance codes (GS3, GS4, GST, GSX, etc.)
+        # this filter ignores --login, --start-scripts=, and captures valid game codes
+        # if anything else is sent with a --flag, it is processed as an incorrect instance
         if resolved_instance.nil?
           argv.each do |arg|
             next unless arg.start_with?('--')
-
             flag = arg.sub('--', '').downcase
-
-            next if VALID_FRONTENDS.include?(flag)
-            next if flag == 'login'
-
-            # all permitted entries are screened, this must be a game instance or game_code attempt
-            instance_flags_seen = true
-
             if VALID_GAME_CODES.include?(flag.upcase)
+              instance_flags_seen = true
               resolved_instance = flag.upcase
               break
+            elsif VALID_FRONTENDS.include?(flag) # ignore anything else that isn't a valid game code
+              next
+            elsif flag =~ /start-scripts|login/
+              next
+            else
+              instance_flags_seen = true # set to true so that we fall through to returning nil
             end
           end
         end
@@ -319,6 +391,11 @@ module Lich
           end
         end
 
+        Lich.log "debug: Login arguments from CLI login -> #{argv.inspect}"
+        Lich.log "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}"
+        # $stdout.puts "[DEBUG] ARGV: #{argv.inspect}"
+        # $stdout.puts "[DEBUG] Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}"
+
         [instance, frontend]
       end
 
@@ -339,7 +416,7 @@ module Lich
         spawn_cmd = [
           "#{ruby_path}",
           "#{lich_path}",
-          '--login', entry.char_name
+          '--login', entry[:char_name]
         ]
         spawn_cmd << "--#{instance_override}" unless instance_override.nil?
         spawn_cmd << "--#{frontend_override}" unless frontend_override.nil?
