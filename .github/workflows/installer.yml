@@ -44,7 +44,7 @@ jobs:
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml > lich5/data/effect-list.xml
           cp lich.rbw Lich5/
           cp -r lib Lich5/
-          gem install activesupport ascii_charts concurrent-ruby curses ftools gtk3 json jwt logger mechanize nokogiri ostruct redis sequel sqlite3 terminal-table tomlib tzinfo tzinfo-data webrick xmpp4r --no-document
+          gem install activesupport ascii_charts concurrent-ruby curses ftools gtk3 json jwt logger mechanize nokogiri os ostruct redis sequel sqlite3 terminal-table tomlib tzinfo tzinfo-data webrick xmpp4r --no-document
           gem uninstall rexml --force
           gem install rexml --version 3.3.1
           gem list
