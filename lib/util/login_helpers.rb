@@ -4,6 +4,9 @@
 module Lich
   module Util
     module LoginHelpers
+      # Load up / require gem 'os' for operating system detection work
+      Lich::Util.install_gem_requirements({ 'os' => true })
+
       # Valid game codes
       VALID_GAME_CODES = %w[GS3 GS4 GSX GSF GST DR DRX DRF DRT].freeze
 
@@ -107,7 +110,8 @@ module Lich
             end
           end
         else
-          echo "[WARN] Unsupported character data structure."
+          Lich::Messaging.msg('info', "[WARN] Unsupported character data structure.")
+          Lich.log("info: Unsupported character data structure in saved entries.")
           []
         end
       end
@@ -148,7 +152,10 @@ module Lich
 
           build_character_result(account_name, account_data, character)
         end
-        echo "RETURNING EXACT MATCHES ONLY: #{exact_matches.inspect}"
+
+        Lich::Messaging.msg('debug', "RETURNING EXACT MATCH COUNT OF #{exact_matches.count} RECORD(S).")
+        Lich::Messaging.msg('debug', "Exact match character = #{exact_matches[0][:char_name]} for instance #{exact_matches[0][:game_code]}.") unless exact_matches.empty?
+        Lich.log("info: Returning exact match count of #{exact_matches.count}")
         return exact_matches unless exact_matches.empty?
 
         # Step 2: Fallback match (if needed)
@@ -296,7 +303,6 @@ module Lich
           end
 
           matching_chars.select! do |char|
-            echo char[:game_code]
             effective_code = char[:_requested_game_code] || char[:game_code]
             effective_code == requested_instance
           end
@@ -403,6 +409,8 @@ module Lich
           end
         end
 
+        Lich::Messaging.msg "debug: Login arguments from CLI login -> #{argv.inspect}"
+        Lich::Messaging.msg "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}"
         Lich.log "debug: Login arguments from CLI login -> #{argv.inspect}"
         Lich.log "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}"
         # $stdout.puts "[DEBUG] ARGV: #{argv.inspect}"
@@ -447,7 +455,7 @@ module Lich
       # @param frontend_override [String, nil] optional frontend (e.g., 'avalon', 'wizard')
       # @return [Process::Waiter, nil] detached process handle if successful, nil otherwise
       def self.spawn_login(entry, lich_path: nil, startup_scripts: [], instance_override: nil, frontend_override: nil)
-        ruby_path = RbConfig.ruby
+        ruby_path = OS.windows? ? RbConfig.ruby.sub('ruby', 'rubyw') : RbConfig.ruby
         lich_path ||= File.join(LICH_DIR, 'lich.rbw')
 
         spawn_cmd = [
@@ -462,16 +470,18 @@ module Lich
         spawn_cmd << "--#{frontend_override}" unless frontend_override.nil?
         spawn_cmd << "--start-scripts=#{startup_scripts.join(',')}" if startup_scripts.any?
 
-        echo "[INFO] Spawning login: #{spawn_cmd}"
+        Lich::Messaging.msg('info', "Spawning login: #{spawn_cmd}")
 
         begin
           pid = Process.spawn(*spawn_cmd)
           Process.detach(pid)
         rescue Errno::ENOENT => e
-          echo "[ERROR] Executable not found: #{e.message}"
+          Lich::Messaging.msg('error', "Executable not found: #{e.message}")
+          Lich.log "error: Executable not found: #{e.message}"
           nil
         rescue StandardError => e
-          echo "[ERROR] Failed to launch login session: #{e.class} - #{e.message}"
+          Lich::Messaging.msg('error', "Failed to launch login session: #{e.class} - #{e.message}")
+          Lich.log "error: Failed to launch login session: #{e.class} - #{e.message}"
           nil
         end
       end
