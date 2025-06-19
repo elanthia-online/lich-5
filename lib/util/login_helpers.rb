@@ -298,7 +298,8 @@ module Lich
         if requested_instance != :__unset
           if requested_instance.nil? || !VALID_GAME_CODES.include?(requested_instance)
             Lich.log "error: Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}"
-            $stdout.puts "Error: Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}"
+            Lich::Messaging.msg('error', "Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}")
+            
             return nil
           end
 
@@ -409,8 +410,8 @@ module Lich
           end
         end
 
-        Lich::Messaging.msg "debug: Login arguments from CLI login -> #{argv.inspect}"
-        Lich::Messaging.msg "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}"
+        Lich::Messaging.msg('debug', "Login arguments from CLI login -> #{argv.inspect}")
+        Lich::Messaging.msg('debug', "Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}")
         Lich.log "debug: Login arguments from CLI login -> #{argv.inspect}"
         Lich.log "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}"
         # $stdout.puts "[DEBUG] ARGV: #{argv.inspect}"
