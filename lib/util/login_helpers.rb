@@ -299,7 +299,7 @@ module Lich
           if requested_instance.nil? || !VALID_GAME_CODES.include?(requested_instance)
             Lich.log "error: Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}"
             Lich::Messaging.msg('error', "Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}")
-            
+
             return nil
           end
 
