@@ -104,6 +104,11 @@ module Lich
         delegate_conversion(:to_hash, strict: true)
       end
 
+      # added 20250620 for JSON.pretty_generate
+      def to_json(*args)
+        @target.to_json(*args)
+      end
+
       # Other common conversions
       def to_proc
         delegate_conversion(:to_proc, strict: true)
