@@ -37,7 +37,7 @@ module Lich
             :asg_2 => {
               :type            => :cloth,
               :base_name       => :robes,
-              :all_names       => ["robes", "robe", "vestments", "tunic", ""],
+              :all_names       => ["robes", "robe", "vestments", "tunic"],
               :armor_group     => 1,
               :armor_sub_group => 2,
               :base_weight     => 8,
