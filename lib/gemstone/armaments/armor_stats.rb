@@ -37,7 +37,7 @@ module Lich
             :asg_2 => {
               :type            => :cloth,
               :base_name       => :robes,
-              :all_names       => ["robes", "robe"],
+              :all_names       => ["robes", "robe", "vestments", "tunic", ""],
               :armor_group     => 1,
               :armor_sub_group => 2,
               :base_weight     => 8,
@@ -370,10 +370,10 @@ module Lich
         def self.find_coverage(asg)
           return nil unless asg.is_a?(Integer) && asg.between?(1, 20)
           coverage = {
-            torso: [1, 2, 5, 9, 13, 17],
+            torso: [1, 5, 9, 13, 17],
             torso_and_arms: [6, 10, 14, 18],
             torso_arms_and_legs: [7, 11, 15, 19],
-            torso_arms_legs_and_head: [8, 12, 16, 20],
+            torso_arms_legs_and_head: [2, 8, 12, 16, 20],
           }
 
           coverage.each do |key, asgs|
@@ -409,6 +409,15 @@ module Lich
           @@armor_stats.flat_map do |_, subgroups|
             subgroups.values.compact.map { |asg| asg[:all_names] }
           end.flatten.compact.uniq
+        end
+
+        ##
+        # Returns a sorted list of all unique armor type categories in the dataset.
+        #
+        # @return [Array<String>] List of armor type names (e.g., "Robes", "Light Leather", etc.)
+        #
+        def self.all_categories
+          @@armor_stats.values.flat_map(&:values).map { _1[:armor_type] }.uniq.compact.sort
         end
 
         ##
@@ -571,6 +580,80 @@ module Lich
           end
 
           lines.join("\n")
+        end
+
+        ##
+        # Returns all known aliases for the armor that matches the given name.
+        #
+        # @param name [String] the name or alias of the armor
+        # @return [Array<String>] all aliases for the matching armor, or [] if not found
+        def self.aliases_for(name)
+          armor = find_armor(name)
+          armor ? armor[:all_names] : []
+        end
+
+        ##
+        # Compares two armor types and returns key differences.
+        #
+        # @param name1 [String] first armor name
+        # @param name2 [String] second armor name
+        # @return [Hash, nil] comparison hash or nil if either armor not found
+        def self.compare_armor(name1, name2)
+          a1 = find_armor(name1)
+          a2 = find_armor(name2)
+          return nil unless a1 && a2
+
+          {
+            name1: a1[:base_name],
+            name2: a2[:base_name],
+            weight: [a1[:base_weight], a2[:base_weight]],
+            min_rt: [a1[:min_rt], a2[:min_rt]],
+            ap: [a1[:action_penalty], a2[:action_penalty]],
+            normal_cva: [a1[:normal_cva], a2[:normal_cva]],
+            magical_cva: [a1[:magical_cva], a2[:magical_cva]],
+            type: [a1[:type], a2[:type]],
+            coverage: [find_coverage(a1[:armor_sub_group]), find_coverage(a2[:armor_sub_group])],
+            aliases: [a1[:all_names], a2[:all_names]]
+          }
+        end
+
+        ##
+        # Searches armor entries using optional filters.
+        #
+        # @param filters [Hash] optional criteria:
+        #   - :name [String]
+        #   - :type [Symbol] (e.g., :leather, :chain)
+        #   - :max_weight [Integer]
+        #   - :min_cva [Integer]
+        #   - :max_rt [Integer]
+        #   - :min_ap [Integer]
+        #   - :coverage [Symbol] (e.g., :torso_arms_and_legs)
+        # @return [Array<Hash>] matching armor stat blocks
+        def self.search(filters = {})
+          @@armor_stats.values.flat_map(&:values).compact.select do |armor|
+            next if filters[:name] && !armor[:all_names].include?(filters[:name].downcase.strip)
+            next if filters[:type] && armor[:type] != filters[:type]
+            next if filters[:max_weight] && armor[:base_weight] > filters[:max_weight]
+            next if filters[:min_cva] && armor[:normal_cva] < filters[:min_cva]
+            next if filters[:max_rt] && armor[:min_rt] > filters[:max_rt]
+            next if filters[:min_ap] && armor[:action_penalty] < filters[:min_ap]
+            next if filters[:coverage] && find_coverage(armor[:armor_sub_group]) != filters[:coverage]
+
+            true
+          end
+        end
+
+        ##
+        # Checks if the provided name is a valid armor alias.
+        #
+        # Note that names for robes are very flexible, so this method
+        # may not always return true for items that are robes
+        #
+        # @param name [String] the armor name to check
+        # @return [Boolean] true if recognized
+        def self.valid_name?(name)
+          name = name.downcase.strip
+          all_armor_names.include?(name)
         end
       end
     end

@@ -81,22 +81,20 @@ module Lich
         end
 
         ##
-        # Lists all weapon base names, optionally filtered by weapon category.
+        # Returns a list of weapon stat hashes, optionally filtered by category.
         #
-        # @param category [Symbol, nil] the weapon category to limit the results (e.g., :edged, :polearm)
-        # @return [Array<String>] an array of base weapon names
+        # @param category [Symbol, nil] the weapon category to limit results (e.g., :edged, :polearm)
+        # @return [Array<Hash>] array of weapon stat hashes
         def self.list_weapons(category = nil)
           result = []
           if category
-            @@weapon_stats[category]&.each_value do |weapon_info|
-              result << weapon_info[:base_name]
-            end
+            result.concat(@@weapon_stats[category]&.values || [])
           else
             @@weapon_stats.each_value do |weapons|
-              weapons.each_value { |weapon_info| result << weapon_info[:base_name] }
+              result.concat(weapons.values)
             end
           end
-          result.uniq
+          result
         end
 
         ##
@@ -242,6 +240,16 @@ module Lich
           return [] unless @@weapon_stats.key?(category)
 
           @@weapon_stats[category].values
+        end
+
+        ##
+        # Returns all recognized weapon names and aliases across all categories.
+        #
+        # @return [Array<String>] all valid weapon names (including base names and aliases)
+        def self.all_weapon_names
+          @@weapon_stats.values.flat_map do |weapons|
+            weapons.values.map { |w| w[:all_names] }
+          end.flatten.compact.uniq
         end
 
         ##
@@ -393,6 +401,18 @@ module Lich
 
           lines << "" # trailing blank
           lines.join("\n")
+        end
+
+        ##
+        # Checks if the provided name is a valid weapon alias.
+        #
+        # @param name [String] the weapon name or alias
+        # @return [Boolean] true if recognized, false otherwise
+        def self.valid_name?(name)
+          name = name.downcase.strip
+          @@weapon_stats.values.any? do |weapons|
+            weapons.values.any? { |w| w[:all_names].include?(name) }
+          end
         end
       end
     end

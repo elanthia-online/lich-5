@@ -144,7 +144,7 @@ module Lich
       # This avoids redundant lookups by letting each submodule handle the logic internally.
       #
       # @param name [String] the item name or alias
-      # @return [Symbol, String, nil] the category (e.g., :OHE, "full plate", :tower) or nil if not found
+      # @return [Symbol, nil] the category (e.g., :OHE, :full_plate, :tower) or nil if not found
       def self.category_for(name)
         name = name.downcase.strip
 

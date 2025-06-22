@@ -94,7 +94,7 @@ module Lich
         # Returns all defined shield category keys.
         #
         # @return [Array<Symbol>] an array of shield categories (e.g., [:small_shield, :medium_shield, :large_shield, :tower_shield])
-        def self.all_shield_categories
+        def self.all_categories
           @@shield_stats.keys
         end
 
@@ -142,6 +142,88 @@ module Lich
 
           lines << ""
           lines.join("\n")
+        end
+
+        ##
+        # Pretty-prints a shield's data in long format.
+        # Currently identical to `.pretty`.
+        #
+        # @param name [String] the name or alias of the shield
+        # @return [String] formatted display string
+        def self.pretty_long(name)
+          pretty(name)
+        end
+
+        ##
+        # Returns all known aliases for a given shield name or alias.
+        #
+        # @param name [String] the shield name or alias
+        # @return [Array<String>] array of alternate names or [] if not found
+        def self.aliases_for(name)
+          name = name.downcase.strip
+          shield = find_shield(name)
+          shield ? shield[:all_names] : []
+        end
+
+        ##
+        # Compares two shields and returns key stat differences.
+        #
+        # @param name1 [String] first shield name
+        # @param name2 [String] second shield name
+        # @return [Hash, nil] comparison of shield properties, or nil if either is not found
+        def self.compare_shields(name1, name2)
+          name1 = name1.downcase.strip
+          name2 = name2.downcase.strip
+
+          s1 = find_shield(name1)
+          s2 = find_shield(name2)
+          return nil unless s1 && s2
+
+          {
+            name1: s1[:base_name],
+            name2: s2[:base_name],
+            size_modifier: [s1[:size_modifier], s2[:size_modifier]],
+            evade_modifier: [s1[:evade_modifier], s2[:evade_modifier]],
+            base_weight: [s1[:base_weight], s2[:base_weight]],
+            category: [s1[:category], s2[:category]],
+            aliases: [s1[:all_names], s2[:all_names]]
+          }
+        end
+
+        ##
+        # Searches the shield stats using optional filters.
+        #
+        # @param filters [Hash] filtering criteria
+        #   - :name [String] matches name/alias
+        #   - :category [Symbol] e.g., :small_shield
+        #   - :min_evade_modifier [Float]
+        #   - :max_evade_modifier [Float]
+        #   - :min_size_modifier [Float]
+        #   - :max_size_modifier [Float]
+        #   - :max_weight [Integer]
+        # @return [Array<Hash>] array of matching shield stat hashes
+        def self.search(filters = {})
+          @@shield_stats.values.select do |shield|
+            next if filters[:name] && !shield[:all_names].include?(filters[:name].downcase.strip)
+            next if filters[:category] && shield[:category] != filters[:category]
+            next if filters[:min_evade_modifier] && shield[:evade_modifier] < filters[:min_evade_modifier]
+            next if filters[:max_evade_modifier] && shield[:evade_modifier] > filters[:max_evade_modifier]
+            next if filters[:min_size_modifier] && shield[:size_modifier] < filters[:min_size_modifier]
+            next if filters[:max_size_modifier] && shield[:size_modifier] > filters[:max_size_modifier]
+            next if filters[:max_weight] && shield[:base_weight] > filters[:max_weight]
+
+            true
+          end
+        end
+
+        ##
+        # Checks if a given name is a valid shield name.
+        #
+        # @param name [String] the name or alias to check
+        # @return [Boolean] true if the name is recognized, false otherwise
+        def self.valid_name?(name)
+          name = name.downcase.strip
+          all_shield_names.include?(name)
         end
       end
     end
