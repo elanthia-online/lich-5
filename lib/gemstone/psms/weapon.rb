@@ -233,6 +233,7 @@ module Lich
       #   Weapon.affordable?("Weapon_blessing") => true # if enough skill and stamina
       #   Weapon.affordable?("Weapon_blessing", forcert_count: 1) => false  # if not enough skill or stamina
       def Weapon.affordable?(name, forcert_count: 0)
+        return true if @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:type] == :area_of_effect && Effects::Buffs.active?("Glorious Momentum")
         return PSMS.assess(name, 'Weapon', true, forcert_count: forcert_count)
       end
 
