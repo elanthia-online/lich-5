@@ -45,6 +45,11 @@ module Lich
         end
       end
 
+      def type?(type_to_check)
+        # handle nil types
+        return self.type.to_s.split(',').any?(type_to_check)
+      end
+
       def sellable
         GameObj.load_data if @@sellable_data.empty?
         list = @@sellable_data.keys.find_all { |t| (@name =~ @@sellable_data[t][:name] or @noun =~ @@sellable_data[t][:noun]) and (@@sellable_data[t][:exclude].nil? or @name !~ @@sellable_data[t][:exclude]) }
