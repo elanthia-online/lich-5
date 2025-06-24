@@ -106,6 +106,8 @@ module Lich
         @society_task = String.new
 
         @dr_active_spells = Hash.new
+        @dr_active_spells_clear = false
+        @dr_active_spells_tmp = Hash.new
         @dr_active_spell_tracking = false
         @dr_active_spells_stellar_percentage = 0
         @dr_active_spells_slivers = false
@@ -278,15 +280,6 @@ module Lich
             end
           end
 
-          if (name == 'clearStream' && attributes['id'] == 'percWindow')
-            @dr_active_spells = {}
-            @dr_active_spells_slivers = false
-          end
-
-          if (name == 'pushStream' && attributes['id'] == 'percWindow')
-            @dr_active_spell_tracking = true
-          end
-
           if (name == 'compDef') or (name == 'component')
             if attributes['id'] == 'room objs'
               GameObj.clear_loot
@@ -375,11 +368,30 @@ module Lich
           if name == 'style'
             @current_style = attributes['id']
           end
+          if (name == 'clearStream' && attributes['id'] == 'percWindow')
+            @dr_active_spells_clear = true
+          end
+
+          if (name == 'pushStream' && attributes['id'] == 'percWindow')
+            @dr_active_spell_tracking = true
+            @dr_active_spells_clear = false
+          end
+
           if name == 'prompt'
             @server_time = attributes['time'].to_i
             @server_time_offset = (Time.now.to_i - @server_time)
             $_CLIENT_.puts "\034GSq#{sprintf('%010d', @server_time)}\r\n" if @send_fake_tags
+
+            if @dr_active_spell_tracking
+              @dr_active_spell_tracking = false
+              @dr_active_spells_slivers = false
+              @dr_active_spells = @dr_active_spells_tmp
+              @dr_active_spells_tmp = {}
+            elsif @dr_active_spells_clear
+              @dr_active_spells = {}
+            end
           end
+
           if name == 'clearContainer'
             if attributes['id'] == 'stow'
               GameObj.clear_container(@stow_container_id)
@@ -662,18 +674,25 @@ module Lich
             spell = nil
             duration = nil
             case text_string
-            when /(?<spell>[^<>]+?)\s+\((?:\D*)(?<duration>\d+)\s*(?:%|roisae?n)\)/i
+            when /(?<spell>^[^\(]+)\((?<duration>\d+|Indefinite|OM|Fading)\s*(?:%|roisae?n)?\)/i
               # Spell with known duration remaining
+              # XML looks like:
+              # Hydra Hex  (Indefinite)
+              # Persistence of Mana  (OM)
+              # Cure Disease  (Fading)
+              # Osrel Meraud  (94%)
+              # Landslide (4 roisaen)
+              # Khri Sagacity  (1 roisan)
               spell = Regexp.last_match[:spell]
-              duration = Regexp.last_match[:duration].to_i
-            when /(?<spell>[^<>]+?)\s+\(fading\)/i
-              # Spell fading away
-              spell = Regexp.last_match[:spell]
-              duration = 0
-            when /(?<spell>[^<>]+?)\s+\((?<duration>indefinite|om)\)/i
-              # Cyclic spell or Osrel Meraud cyclic spell
-              spell = Regexp.last_match[:spell]
-              duration = 1000
+              duration = Regexp.last_match[:duration]
+
+              if duration.match?(/Indefinite|OM/)
+                duration = 1000
+              elsif duration.match?(/Fading/)
+                duration = 0
+              else
+                duration = duration.to_i
+              end
             when /(?<spell>Stellar Collector)\s+\((?<percentage>\d+)%,\s*(?<duration>\d+)?\s*(?<unit>(?:roisae?n|anlaen|fading))/
               # Stellar collector special case
               # XML looks like:
@@ -684,7 +703,7 @@ module Lich
               @dr_active_spells_stellar_percentage = Regexp.last_match[:percentage].to_i
               unit = Regexp.last_match[:unit]
               duration = unit == 'anlaen' ? duration * 30 : duration
-            when /(?<spell>[^<>]+?)\s+\(.+\)/i
+            when /(?<spell>^[^\(]+)\(.+\)/i
               # Spells with inexact duration verbiage, such as with
               # Barbarians without knowledge of Power Monger mastery
               spell = Regexp.last_match[:spell]
@@ -692,14 +711,10 @@ module Lich
             when /.*orbiting sliver.*/i
               # Moon Mage slivers
               @dr_active_spells_slivers = true
-            when /^(.*)$/
-              # No idea what we received, just a general catch all
-              spell = Regexp.last_match(1)
-              duration = 1000
             end
             spell.strip!
             if spell
-              @dr_active_spells[spell] = duration
+              @dr_active_spells_tmp[spell] = duration
             end
           end
 
@@ -881,10 +896,6 @@ module Lich
               @room_count += 1
               $room_count += 1
             end
-          end
-
-          if (name == 'popStream')
-            @dr_active_spell_tracking = false if @dr_active_spell_tracking
           end
 
           if name == 'inv'

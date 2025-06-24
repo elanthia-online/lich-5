@@ -27,7 +27,8 @@ module Lich
         ThiefKhriStart = /^From the Subtlety tree, you know the following khri:/.freeze
         SpellBookFormat = /^You will .* (?<format>column-formatted|non-column) output for the SPELLS verb/.freeze
         PlayedAccount = /^(?:<.*?\/>)?Account Info for (?<account>.+):/.freeze
-        PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium)/.freeze
+        PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium|Platinum)/.freeze
+        LastLogoff = /^\s+Logoff :  (?<weekday>[A-Z][a-z]{2}) (?<month>[A-Z][a-z]{2}) (?<day>[\s\d]{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2}) ET (?<year>\d{4})/.freeze
       end
 
       @parsing_exp_mods_output = false
@@ -45,21 +46,43 @@ module Lich
       end
 
       def self.check_exp_mods(server_string)
+        # This method parses the output from `exp mods` command
+        # and updates the DRSkill.exp_modifiers hash with the skill and value.
+        # This is primarily used by the `skill-recorder` script.
+        #
+        # Example output without any modifiers:
+        #     The following skills are currently under the influence of a modifier:
+        #     <output class="mono"/>
+        #       None
+        #     <output class=""/>
+        #
+        # Example output with modifiers:
+        #     The following skills are currently under the influence of a modifier:
+        #     <output class="mono"/>
+        #     +75 Athletics
+        #     -10 Evasion
+        #     <output class=""/>
+        #
+        # Zero or more skills may be listed between the <output> tags
+        # but exactly one skill and its skill modifier are listed per line.
+        # The number is signed to indicate a buff (+) or debuff (-).
+        #
         case server_string
-        when %r{^<preset id="speech">}, %r{^<preset id="thought">}
+        when %r{^<output class=""/>}
           if @parsing_exp_mods_output
-            match = /(?<sign>\+|\-)+(?<value>\d+) \b(?<skill>[\w\s]+)\b/.match(server_string)
+            @parsing_exp_mods_output = false
+          end
+        else
+          if @parsing_exp_mods_output
+            # https://regex101.com/r/5ZE8lq/1
+            match = /^(?<sign>[+-])(?<value>\d+)\s+(?<skill>[\w\s]+)$/.match(server_string)
             if match
-              skill = match[:skill]
+              skill = match[:skill].strip
               sign = match[:sign]
               value = match[:value].to_i
               value = (value * -1) if sign == '-'
               DRSkill.update_mods(skill, value)
             end
-          end
-        when %r{^<output class=""/>}
-          if @parsing_exp_mods_output
-            @parsing_exp_mods_output = false
           end
         end
         server_string
@@ -318,13 +341,25 @@ module Lich
             end
           when Pattern::PlayedSubscription
             if Account.subscription.nil?
-              Account.subscription = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
+              Account.subscription = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
             end
-            if Account.subscription == 'Premium' || XMLData.game == 'DRF'
+            UserVars.account_type = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
+            if Account.subscription == 'PREMIUM' || XMLData.game == 'DRX' || XMLData.game == 'DRF'
               UserVars.premium = true
             else
               UserVars.premium = false
             end
+          when Pattern::LastLogoff
+            matches = Regexp.last_match
+            month = Date::ABBR_MONTHNAMES.find_index(matches[:month])
+            weekdays = [nil, 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+            dst_check = matches[:day].to_i - weekdays.find_index(matches[:weekday])
+            if month.between?(4, 10) || (month == 3 && dst_check >= 7) || (month == 11 && dst_check < 0)
+              tz = '-0400'
+            else
+              tz = '-0500'
+            end
+            $last_logoff = Time.new(matches[:year].to_i, month, matches[:day].to_i, matches[:hour].to_i, matches[:minute].to_i, matches[:second].to_i, tz).getlocal
           else
             :noop
           end
