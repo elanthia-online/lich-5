@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        ruby: ['3.4.3']
+        ruby: ['3.4.4']
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,7 +44,12 @@ jobs:
           curl https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml > lich5/data/effect-list.xml
           cp lich.rbw Lich5/
           cp -r lib Lich5/
-          gem install activesupport ascii_charts concurrent-ruby curses ftools gtk3 json jwt logger mechanize nokogiri ostruct redis sequel sqlite3 terminal-table tomlib tzinfo tzinfo-data webrick xmpp4r --no-document
+          ridk exec pacman -Syu --needed --noconfirm
+          ridk exec pacman -S mingw-w64-x86_64-sqlite3 --noconfirm
+          gem install sqlite3 --platform ruby
+          gem install activesupport ascii_charts concurrent-ruby curses ftools gtk3 json jwt logger mechanize nokogiri ostruct redis sequel terminal-table tomlib tzinfo tzinfo-data webrick xmpp4r --no-document
+          gem update
+          gem clean
           gem uninstall rexml --force
           gem install rexml --version 3.3.1
           gem list
