@@ -1992,23 +1992,25 @@ def fb_to_sf(line)
   end
 end
 
-def sf_to_wiz(line)
+def sf_to_wiz(line, bypass_multiline: false)
   begin
     return line if line == "\r\n"
 
-    if $sftowiz_multiline
-      $sftowiz_multiline = $sftowiz_multiline + line
-      line = $sftowiz_multiline
+    unless bypass_multiline
+      if $sftowiz_multiline
+        $sftowiz_multiline = $sftowiz_multiline + line
+        line = $sftowiz_multiline
+      end
+      if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
+        $sftowiz_multiline = line
+        return nil
+      end
+      if (line.scan(/<style id="\w+"[^>]*\/>/).length > line.scan(/<style id=""[^>]*\/>/).length)
+        $sftowiz_multiline = line
+        return nil
+      end
+      $sftowiz_multiline = nil
     end
-    if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
-      $sftowiz_multiline = line
-      return nil
-    end
-    if (line.scan(/<style id="\w+"[^>]*\/>/).length > line.scan(/<style id=""[^>]*\/>/).length)
-      $sftowiz_multiline = line
-      return nil
-    end
-    $sftowiz_multiline = nil
     if line =~ /<LaunchURL src="(.*?)" \/>/
       $_CLIENT_.puts "\034GSw00005\r\nhttps://www.play.net#{$1}\r\n"
     end
