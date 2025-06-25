@@ -7,7 +7,7 @@ module Lich
   module Messaging
     def self.xml_encode(msg)
       if $frontend =~ /^(wizard|avalon)$/i
-        sf_to_wiz(msg.encode(:xml => :text))
+        sf_to_wiz(msg.encode(:xml => :text), bypass_multiline: true)
       else
         msg.encode(:xml => :text)
       end
