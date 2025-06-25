@@ -587,7 +587,7 @@ module Lich
         "swiftkick"              => {
           :short_name          => "swiftkick",
           :type                => :setup,
-          :cost                => 7,
+          :cost                => { stamina: 7 },
           :regex               => /You spin around behind .+, attempting a swiftkick!/,
           :usage               => "swiftkick",
           "ignorable_cooldown" => true
