@@ -571,7 +571,7 @@ module Lich
         "surge_of_strength"      => {
           :short_name          => "surge",
           :type                => :buff,
-          :cost                => Lich::Util.normalize_lookup('Cooldowns', 'surge_of_strength') ? 60 : 30,
+          :cost                => { stamina: Lich::Util.normalize_lookup('Cooldowns', 'surge_of_strength') ? 60 : 30 },
           :regex               => /You focus deep within yourself, searching for untapped sources of strength\./,
           :usage               => "surge",
           "ignorable_cooldown" => true
@@ -587,7 +587,7 @@ module Lich
         "swiftkick"              => {
           :short_name          => "swiftkick",
           :type                => :setup,
-          :cost                => 7,
+          :cost                => { stamina: 7 },
           :regex               => /You spin around behind .+, attempting a swiftkick!/,
           :usage               => "swiftkick",
           "ignorable_cooldown" => true
