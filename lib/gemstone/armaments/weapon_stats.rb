@@ -60,7 +60,7 @@ module Lich
         # @param name [String] The name or alias of the weapon.
         # @param category [Symbol, nil] (optional) The weapon category to narrow the search.
         # @return [Hash, nil] The stats hash of the matching weapon, or nil if not found.
-        def self.find_weapon(name, category = nil)
+        def self.find(name, category = nil)
           name = name.downcase.strip
 
           unless category.nil?
@@ -85,7 +85,7 @@ module Lich
         #
         # @param category [Symbol, nil] the weapon category to limit results (e.g., :edged, :polearm)
         # @return [Array<Hash>] array of weapon stat hashes
-        def self.list_weapons(category = nil)
+        def self.list(category = nil)
           result = []
           if category
             result.concat(@@weapon_stats[category]&.values || [])
@@ -147,7 +147,7 @@ module Lich
         # @param category1 [Symbol, nil] optional category for first weapon
         # @param category2 [Symbol, nil] optional category for second weapon
         # @return [Hash, nil] comparison data or nil if either weapon not found
-        def self.compare_weapons(name1, name2, category1 = nil, category2 = nil)
+        def self.compare(name1, name2, category1 = nil, category2 = nil)
           name1 = name1.downcase.strip
           name2 = name2.downcase.strip
 
@@ -235,7 +235,7 @@ module Lich
         #
         # @param category [Symbol, String] the weapon category (e.g., :OHE, :THW)
         # @return [Array<Hash>] array of weapon stat hashes for that category
-        def self.all_weapons_in_category(category)
+        def self.weapons_in_category(category)
           category = category.to_sym
           return [] unless @@weapon_stats.key?(category)
 
@@ -246,18 +246,10 @@ module Lich
         # Returns all recognized weapon names and aliases across all categories.
         #
         # @return [Array<String>] all valid weapon names (including base names and aliases)
-        def self.all_weapon_names
+        def self.names
           @@weapon_stats.values.flat_map do |weapons|
             weapons.values.map { |w| w[:all_names] }
           end.flatten.compact.uniq
-        end
-
-        ##
-        # Returns a list of all defined weapon categories.
-        #
-        # @return [Array<Symbol>] an array of weapon category symbols (e.g., [:OHE, :THW])
-        def self.all_categories
-          @@weapon_stats.keys
         end
 
         ##

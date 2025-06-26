@@ -50,7 +50,11 @@ module Lich
         #
         # @param category [Symbol] The shield category (e.g., :small_shield, :tower_shield).
         # @return [Hash, nil] The stats hash of the matching shield, or nil if not found.
-        def self.find_shield_by_category(category)
+        #
+        # @example
+        #   ShieldStats.find_by_category(:small_shield)
+        #   #=> { :category => :small_shield, :base_name => "small shield", ... }
+        def self.find_by_category(category)
           _, shield_info = @@shield_stats.find { |_, stats| stats[:category] == category }
           shield_info
         end
@@ -59,7 +63,11 @@ module Lich
         # Returns a list of all recognized shield names across all shield categories.
         #
         # @return [Array<String>] All valid shield names.
-        def self.all_shield_names
+        #
+        # @example
+        #   ShieldStats.names
+        #   #=> ["buckler", "kidney shield", "small shield", ...]
+        def self.names
           @@shield_stats.map { |_, s| s[:all_names] }.flatten.uniq
         end
 
@@ -68,7 +76,11 @@ module Lich
         #
         # @param name [String] the name or alias of the shield (e.g., "aegis", "tower shield")
         # @return [Hash, nil] the shield stats hash if found, or nil
-        def self.find_shield(name)
+        #
+        # @example
+        #   ShieldStats.find("tower shield")
+        #   #=> { :category => :tower_shield, :base_name => "tower shield", ... }
+        def self.find(name)
           name = name.downcase.strip
 
           @@shield_stats.each_value do |shield|
@@ -84,6 +96,10 @@ module Lich
         # @param min [Float] Minimum evade modifier (inclusive).
         # @param max [Float] Maximum evade modifier (inclusive).
         # @return [Array<Hash>] Array of shield stat hashes matching the criteria.
+        #
+        # @example
+        #   ShieldStats.list_shields_by_evade_modifier(min: -0.4, max: 0.0)
+        #   #=> [ { :category => :large_shield, ... }, { :category => :medium_shield, ... } ]
         def self.list_shields_by_evade_modifier(min:, max:)
           @@shield_stats.map(&:last).select do |shield|
             shield[:evade_modifier].between?(min, max)
@@ -94,7 +110,11 @@ module Lich
         # Returns all defined shield category keys.
         #
         # @return [Array<Symbol>] an array of shield categories (e.g., [:small_shield, :medium_shield, :large_shield, :tower_shield])
-        def self.all_categories
+        #
+        # @example
+        #   ShieldStats.categories
+        #   #=> [:small_shield, :medium_shield, :large_shield, :tower_shield]
+        def self.categories
           @@shield_stats.keys
         end
 
@@ -103,6 +123,10 @@ module Lich
         #
         # @param name [String] the shield name or alias
         # @return [Symbol, nil] the category symbol (e.g., :small_shield) or nil
+        #
+        # @example
+        #   ShieldStats.category_for("buckler")
+        #   #=> :small_shield
         def self.category_for(name)
           name = name.downcase.strip
 
@@ -115,6 +139,10 @@ module Lich
         #
         # @param name [String] the base name or alias of the shield
         # @return [String] formatted one-block summary or (no data) if not found
+        #
+        # @example
+        #   puts ShieldStats.pretty("tower shield")
+        #   #=> (prints formatted summary)
         def self.pretty(name)
           shield = find_shield(name)
           return "\n(no data)\n" unless shield.is_a?(Hash)
@@ -150,6 +178,10 @@ module Lich
         #
         # @param name [String] the name or alias of the shield
         # @return [String] formatted display string
+        #
+        # @example
+        #   puts ShieldStats.pretty_long("buckler")
+        #   #=> (prints formatted summary)
         def self.pretty_long(name)
           pretty(name)
         end
@@ -159,6 +191,10 @@ module Lich
         #
         # @param name [String] the shield name or alias
         # @return [Array<String>] array of alternate names or [] if not found
+        #
+        # @example
+        #   ShieldStats.aliases_for("kite shield")
+        #   #=> ["aegis", "kite shield", "large shield", ...]
         def self.aliases_for(name)
           name = name.downcase.strip
           shield = find_shield(name)
@@ -171,12 +207,16 @@ module Lich
         # @param name1 [String] first shield name
         # @param name2 [String] second shield name
         # @return [Hash, nil] comparison of shield properties, or nil if either is not found
-        def self.compare_shields(name1, name2)
+        #
+        # @example
+        #   ShieldStats.compare("buckler", "tower shield")
+        #   #=> { name1: "small shield", name2: "tower shield", ... }
+        def self.compare(name1, name2)
           name1 = name1.downcase.strip
           name2 = name2.downcase.strip
 
-          s1 = find_shield(name1)
-          s2 = find_shield(name2)
+          s1 = find(name1)
+          s2 = find(name2)
           return nil unless s1 && s2
 
           {
@@ -202,6 +242,10 @@ module Lich
         #   - :max_size_modifier [Float]
         #   - :max_weight [Integer]
         # @return [Array<Hash>] array of matching shield stat hashes
+        #
+        # @example
+        #   ShieldStats.search(category: :large_shield, max_weight: 10)
+        #   #=> [ { :category => :large_shield, ... } ]
         def self.search(filters = {})
           @@shield_stats.values.select do |shield|
             next if filters[:name] && !shield[:all_names].include?(filters[:name].downcase.strip)
@@ -221,6 +265,10 @@ module Lich
         #
         # @param name [String] the name or alias to check
         # @return [Boolean] true if the name is recognized, false otherwise
+        #
+        # @example
+        #   ShieldStats.valid_name?("targe")
+        #   #=> true
         def self.valid_name?(name)
           name = name.downcase.strip
           all_shield_names.include?(name)

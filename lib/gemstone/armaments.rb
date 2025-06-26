@@ -37,7 +37,7 @@ module Lich
       }.freeze
 
       SPELL_CIRCLE_INDEX_TO_NAME = {
-        0  => { name: "Action Penalty",          abbr: "ActPn"  },
+        0  => { name: "Action",                  abbr: "Act"},
         1  => { name: "Minor Spiritual",         abbr: "MinSp"  },
         2  => { name: "Major Spiritual",         abbr: "MajSp"  },
         3  => { name: "Cleric",                  abbr: "Clerc"  },
@@ -67,15 +67,15 @@ module Lich
       def self.find(name)
         name = name.downcase.strip
 
-        if (data = WeaponStats.find_weapon(name))
+        if (data = WeaponStats.find(name))
           return { type: :weapon, data: data }
         end
 
-        if (data = ArmorStats.find_armor(name))
+        if (data = ArmorStats.find(name))
           return { type: :armor, data: data }
         end
 
-        if (data = ShieldStats.find_shield(name))
+        if (data = ShieldStats.find(name))
           return { type: :shield, data: data }
         end
 
@@ -90,7 +90,8 @@ module Lich
       def self.valid_name?(name)
         name = name.downcase.strip
 
-        !find(name).nil?
+        return true unless Armaments.find(name).nil? # if we found it, then it's valid
+        return false # if nil, then the name was not found and it's not a valid name
       end
 
       ##
@@ -98,13 +99,13 @@ module Lich
       #
       # @param type [Symbol, nil] :weapon, :armor, or :shield. If nil, includes all.
       # @return [Array<String>] List of names.
-      def self.all_names(type = nil)
+      def self.names(type = nil)
         case type
-        when :weapon then WeaponStats.all_names
-        when :armor  then ArmorStats.all_names
-        when :shield then ShieldStats.all_names
+        when :weapon then WeaponStats.names
+        when :armor  then ArmorStats.names
+        when :shield then ShieldStats.names
         else
-          WeaponStats.all_names + ArmorStats.all_names + ShieldStats.all_names
+          WeaponStats.names + ArmorStats.names + ShieldStats.names
         end.uniq
       end
 
@@ -113,13 +114,13 @@ module Lich
       #
       # @param type [Symbol, nil] :weapon, :armor, or :shield. If nil, includes all.
       # @return [Array<Symbol>] List of category keys.
-      def self.all_categories(type = nil)
+      def self.categories(type = nil)
         case type
-        when :weapon then WeaponStats.all_categories
-        when :armor  then ArmorStats.all_categories
-        when :shield then ShieldStats.all_categories
+        when :weapon then WeaponStats.categories
+        when :armor  then ArmorStats.categories
+        when :shield then ShieldStats.categories
         else
-          WeaponStats.all_categories + ArmorStats.all_categories + ShieldStats.all_categories
+          WeaponStats.categories + ArmorStats.categories + ShieldStats.categories
         end.uniq
       end
 
@@ -131,9 +132,9 @@ module Lich
       def self.type_for(name)
         name = name.downcase.strip
 
-        return :weapon if WeaponStats.find_weapon(name)
-        return :armor if ArmorStats.find_armor(name)
-        return :shield if ShieldStats.find_shield(name)
+        return :weapon if WeaponStats.find(name)
+        return :armor if ArmorStats.find(name)
+        return :shield if ShieldStats.find(name)
 
         nil
       end

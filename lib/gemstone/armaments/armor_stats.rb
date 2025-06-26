@@ -388,7 +388,7 @@ module Lich
         #
         # @param asg_number [Integer] The armor sub group number (ASG) to search for.
         # @return [Hash, nil] The stats hash of the matching armor, or nil if not found.
-        def self.find_armor_by_asg(asg_number)
+        def self.find_by_asg(asg_number)
           return nil unless asg_number.is_a?(Integer) && asg_number.between?(1, 20)
 
           @@armor_stats.each_value do |subgroups|
@@ -405,7 +405,7 @@ module Lich
         # Returns a list of all recognized alternative and base armor names across all ASGs.
         #
         # @return [Array<String>] All valid armor names.
-        def self.all_armor_names
+        def self.names
           @@armor_stats.flat_map do |_, subgroups|
             subgroups.values.compact.map { |asg| asg[:all_names] }
           end.flatten.compact.uniq
@@ -416,8 +416,19 @@ module Lich
         #
         # @return [Array<String>] List of armor type names (e.g., "Robes", "Light Leather", etc.)
         #
-        def self.all_categories
-          @@armor_stats.values.flat_map(&:values).map { _1[:armor_type] }.uniq.compact.sort
+        def self.categories
+          @@armor_stats.values.flat_map(&:values).map { _1[:base] }.uniq.compact
+        end
+
+        ##
+        # Returns a list of all base armor names across all ASGs.
+        #
+        # @return [Array<String>] List of base armor names.
+        #
+        def self.base_names
+          @@armor_stats.flat_map do |_, subgroups|
+            subgroups.values.compact.map { |asg| asg[:base_name] }.uniq.compact
+          end
         end
 
         ##
@@ -425,17 +436,20 @@ module Lich
         # WARNING: Names are not strict, it could match multiple types of armor
         #
         # @param name [String] The name or alias of the armor.
-        # @return [Hash, nil] The full stats hash for the matching armor, or nil if not found.
-        def self.find_armor(name)
+        # @return [Array<Hash>] The full stats hash for the matching armor, or nil if not found.
+        def self.find(name)
           name = name.downcase.strip
 
+          matches = []
           @@armor_stats.each_value do |subgroups|
             subgroups.each_value do |asg_data|
               next unless asg_data.is_a?(Hash)
-              return asg_data if asg_data[:all_names].include?(name)
+              matches << asg_data if asg_data[:all_names].include?(name)
             end
           end
-          nil
+
+          return matches.uniq unless matches.empty?
+          return nil if matches.empty?
         end
 
         ##
@@ -443,7 +457,7 @@ module Lich
         #
         # @param type [Symbol] The armor type to filter by (e.g., :cloth, :leather, :chain).
         # @return [Array<Hash>] Array of armor stat hashes matching the given type.
-        def self.list_armor_by_type(type)
+        def self.list_by_type(type)
           @@armor_stats.flat_map do |_, subgroups|
             subgroups.values.compact.select { |asg| asg[:type] == type }
           end
@@ -457,7 +471,7 @@ module Lich
         #
         # @param asg [Integer, Symbol] the Armor Sub Group number (1–20) or symbol (e.g., :asg_18)
         # @return [Array<String>] list of all known aliases for the armor type, or an empty array if not found
-        def self.all_armor_names_in_asg(asg)
+        def self.names_in_asg(asg)
           asg_sym = asg.is_a?(Integer) ? :"asg_#{asg}" : asg.to_sym
 
           @@armor_stats.each_value do |subgroups|
@@ -598,7 +612,7 @@ module Lich
         # @param name1 [String] first armor name
         # @param name2 [String] second armor name
         # @return [Hash, nil] comparison hash or nil if either armor not found
-        def self.compare_armor(name1, name2)
+        def self.compare(name1, name2)
           a1 = find_armor(name1)
           a2 = find_armor(name2)
           return nil unless a1 && a2
