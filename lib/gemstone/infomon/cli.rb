@@ -39,7 +39,8 @@ module Lich
         end
         respond 'Requested Infomon sync complete.'
         respond 'ATTENTION:  TEND TO YOUR SHROUD!' if shroud_detected
-        Infomon.set('infomon.last_sync', Time.now.to_i)
+        Infomon.set('infomon.last_sync_date', Time.now.to_i)
+        Infomon.set('infomon.last_sync_version', LICH_VERSION)
       end
 
       def self.redo!
@@ -70,7 +71,10 @@ module Lich
       def self.db_refresh_needed?
         # Change date below to the last date of infomon.db structure change to allow for a forced reset of data.
         # Change Lich version below to also force a refresh of DB as well due to new API/methods used by infomon (introduction of CHE and account subscription status for example).
-        Infomon.get("infomon.last_sync").nil? || Infomon.get("infomon.last_sync") < Time.new(2025, 6, 26, 20, 0, 0).to_i || Gem::Version.new("5.12.2") > Gem::Version.new(Lich.core_updated_with_lich_version)
+        return true if Infomon.get("infomon.last_sync_date").nil?
+        return true if Infomon.get("infomon.last_sync_date") < Time.new(2025, 6, 26, 20, 0, 0).to_i
+        return true if Gem::Version.new("5.12.2") > Gem::Version.new(Infomon.get("infomon.last_sync_version"))
+        return false
       end
     end
   end
