@@ -69,7 +69,8 @@ module Lich
 
       def self.db_refresh_needed?
         # Change date below to the last date of infomon.db structure change to allow for a forced reset of data.
-        Infomon.get("infomon.last_sync").nil? || Infomon.get("infomon.last_sync") < Time.new(2025, 6, 26, 20, 0, 0).to_i
+        # Change Lich version below to also force a refresh of DB as well due to new API/methods used by infomon (introduction of CHE and account subscription status for example).
+        Infomon.get("infomon.last_sync").nil? || Infomon.get("infomon.last_sync") < Time.new(2025, 6, 26, 20, 0, 0).to_i || Gem::Version.new("5.12.2") > Gem::Version.new(Lich.core_updated_with_lich_version)
       end
     end
   end
