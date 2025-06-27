@@ -29,7 +29,8 @@ module Lich
                     'weapon list all'    => /<a exist=.+#{XMLData.name}/,
                     'ascension list all' => /<a exist=.+#{XMLData.name}/,
                     'resource'           => /^Health: \d+\/(?:<pushBold\/>)?\d+(?:<popBold\/>)?\s+Mana: \d+\/(?:<pushBold\/>)?\d+(?:<popBold\/>)?\s+Stamina: \d+\/(?:<pushBold\/>)?\d+(?:<popBold\/>)?\s+Spirit: \d+\/(?:<pushBold\/>)?\d+/,
-                    'warcry'             => /^You have learned the following War Cries:|^You must be an active member of the Warrior Guild to use this skill/ }
+                    'warcry'             => /^You have learned the following War Cries:|^You must be an active member of the Warrior Guild to use this skill/,
+                    'profile full'       => %r{<output class="mono"/>} }
 
         request.each do |command, start_capture|
           respond "Retrieving character #{command}." if $infomon_debug
@@ -68,7 +69,7 @@ module Lich
 
       def self.db_refresh_needed?
         # Change date below to the last date of infomon.db structure change to allow for a forced reset of data.
-        Infomon.get("infomon.last_sync").nil? || Infomon.get("infomon.last_sync") < Time.new(2024, 8, 5, 20, 0, 0).to_i
+        Infomon.get("infomon.last_sync").nil? || Infomon.get("infomon.last_sync") < Time.new(2025, 6, 26, 20, 0, 0).to_i
       end
     end
   end
