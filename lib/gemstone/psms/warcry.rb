@@ -27,7 +27,7 @@ module Lich
           :cost       => { stamina: 20 }, # @todo only 10 for single
           :regex      => /You glare at .+ and let out a nerve-shattering bellow!/,
         },
-        "yerties_yowlp"  => {
+        "yerties_yowlp"     => {
           :long_name  => "yerties_yowlp",
           :short_name => "yowlp",
           :type       => :buff,
@@ -35,14 +35,14 @@ module Lich
           :regex      => /You throw back your shoulders and let out a resounding yowlp!/,
           :buff       => "Yertie's Yowlp",
         },
-        "gerrelles_growl"  => {
+        "gerrelles_growl"   => {
           :long_name  => "gerrelles_growl",
           :short_name => "growl",
           :type       => :setup,
           :cost       => { stamina: 14 }, # @todo only 7 for single
           :regex      => /Your face contorts as you unleash a guttural, deep-throated growl at .+!/,
         },
-        "seanettes_shout"  => {
+        "seanettes_shout"   => {
           :long_name  => "seanettes_shout",
           :short_name => "shout",
           :type       => :buff,
@@ -50,14 +50,14 @@ module Lich
           :regex      => /You let loose an echoing shout!/,
           :buff       => 'Empowered (+20)',
         },
-        "carns_cry"    => {
+        "carns_cry"         => {
           :long_name  => "carns_cry",
           :short_name => "cry",
           :type       => :setup,
           :cost       => { stamina: 20 },
           :regex      => /You stare down .+ and let out an eerie, modulating cry!/,
         },
-        "horlands_holler" => {
+        "horlands_holler"   => {
           :long_name  => "horlands_holler",
           :short_name => "holler",
           :type       => :buff,
