@@ -13,7 +13,7 @@ module Lich
     class Warcry
       # Internal table of all warcry abilities.
       #
-      # @return [Hash<String, Hash>] Mapping from short name to metadata, including:
+      # @return [Hash<String, Hash>] Mapping from long name to metadata, including:
       #   - `:long_name` [String]
       #   - `:short_name` [String]
       #   - `:cost` [Integer]
