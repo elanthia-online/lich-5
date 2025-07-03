@@ -399,6 +399,7 @@ module Lich
         # @return [Boolean] True if the symbol is known (rank unlocked)
         #
         def self.known?(symbol_name)
+          return false unless Society.membership == "Order of Voln"
           symbol = self[symbol_name]
           return false unless symbol
 
@@ -436,6 +437,7 @@ module Lich
         # @return [Boolean] True if the character has enough favor
         #
         def self.affordable?(symbol_name)
+          return false unless Society.membership == "Order of Voln"
           symbol = self[symbol_name]
           return false unless symbol
 
@@ -452,6 +454,7 @@ module Lich
         # @return [Boolean] True if the symbol is usable
         #
         def self.available?(symbol_name)
+          return false unless Society.membership == "Order of Voln"
           self.known?(symbol_name) && self.affordable?(symbol_name)
         end
 
@@ -470,6 +473,7 @@ module Lich
         # @return [Boolean] True if the character has achieved master rank
         #
         def self.master?
+          return false unless Society.membership == "Order of Voln"
           Society.rank == 26 # is the rank of a Voln Master
         end
 
@@ -479,9 +483,20 @@ module Lich
         # @return [Integer] The current rank (step) of the character
         #
         def self.step
+          return 0 unless Society.membership == "Order of Voln"
           Society.rank
         end
 
+        ##
+        # Provides the current rank of the character within the Order of Voln (called a step in Voln).
+        #
+        # @return [Integer] The current rank of the character
+        #
+        def self.rank
+          return 0 unless Society.membership == "Order of Voln"
+          Society.rank
+        end
+        
         ##
         # Checks if the character is a member of Voln and optionally at a given rank.
         #
@@ -489,10 +504,7 @@ module Lich
         # @return [Boolean] True if the character is a Voln member (and at the specified rank, if given)
         #
         def self.member?(rank = nil)
-          unless Society.membership == "Order of Voln"
-            return false
-          end
-
+          return false unless Society.membership == "Order of Voln"
           rank.nil? || Society.rank == rank
         end
 
