@@ -413,6 +413,10 @@ module Lich
         # @param target [String, nil] Optional target to append
         #
         def self.use(symbol_name, target = nil)
+          unless Society.membership == "Order of Voln"
+            Lich::Messaging.msg("error", "Not a member of Order of Voln, can't use: #{sign_name}")
+            return
+          end
           symbol = self[symbol_name]
 
           unless symbol
