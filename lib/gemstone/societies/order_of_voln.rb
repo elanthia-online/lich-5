@@ -414,7 +414,7 @@ module Lich
         #
         def self.use(symbol_name, target = nil)
           unless member?
-            Lich::Messaging.msg("error", "Not a member of Order of Voln, can't use: #{sign_name}")
+            Lich::Messaging.msg("error", "Not a member of Order of Voln, can't use: #{symbol_name}")
             return
           end
           symbol = self[symbol_name]
