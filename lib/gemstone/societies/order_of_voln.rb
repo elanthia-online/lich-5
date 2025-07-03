@@ -399,7 +399,7 @@ module Lich
         # @return [Boolean] True if the symbol is known (rank unlocked)
         #
         def self.known?(symbol_name)
-          return false unless Society.membership == "Order of Voln"
+          return false unless member?
           symbol = self[symbol_name]
           return false unless symbol
 
@@ -413,7 +413,7 @@ module Lich
         # @param target [String, nil] Optional target to append
         #
         def self.use(symbol_name, target = nil)
-          unless Society.membership == "Order of Voln"
+          unless member?
             Lich::Messaging.msg("error", "Not a member of Order of Voln, can't use: #{sign_name}")
             return
           end
@@ -441,7 +441,7 @@ module Lich
         # @return [Boolean] True if the character has enough favor
         #
         def self.affordable?(symbol_name)
-          return false unless Society.membership == "Order of Voln"
+          return false unless member?
           symbol = self[symbol_name]
           return false unless symbol
 
@@ -458,7 +458,7 @@ module Lich
         # @return [Boolean] True if the symbol is usable
         #
         def self.available?(symbol_name)
-          return false unless Society.membership == "Order of Voln"
+          return false unless member?
           self.known?(symbol_name) && self.affordable?(symbol_name)
         end
 
@@ -477,7 +477,7 @@ module Lich
         # @return [Boolean] True if the character has achieved master rank
         #
         def self.master?
-          return false unless Society.membership == "Order of Voln"
+          return false unless member?
           Society.rank == 26 # is the rank of a Voln Master
         end
 
@@ -487,7 +487,7 @@ module Lich
         # @return [Integer] The current rank of the character
         #
         def self.rank
-          return 0 unless Society.membership == "Order of Voln"
+          return 0 unless member?
           Society.rank
         end
 
