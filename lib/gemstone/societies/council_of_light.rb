@@ -293,6 +293,7 @@ module Lich
         # @return [Boolean] True if the character's rank is sufficient to use the sign
         #
         def self.known?(sign_name)
+          return false unless Society.membership == "Council of Light"
           sign = self[sign_name]
           return false unless sign
 
@@ -338,6 +339,7 @@ module Lich
         # @return [Boolean] True if the sign can be afforded now
         #
         def self.affordable?(sign_name)
+          return false unless Society.membership == "Council of Light"
           sign = self[sign_name]
           return false unless sign
 
@@ -390,6 +392,7 @@ module Lich
         # @return [Boolean] True if the character has achieved master rank
         #
         def self.master?
+          return false unless Society.membership == "Council of Light"
           Society.rank == 20 # is the rank of a COL Master
         end
 
@@ -400,11 +403,18 @@ module Lich
         # @return [Boolean] True if the character is a COL member (and at the specified rank, if given)
         #
         def self.member?(rank = nil)
-          unless Society.membership == "Council of Light"
-            return false
-          end
-
+          return false unless Society.membership == "Council of Light"
           rank.nil? || Society.rank == rank
+        end
+
+        ##
+        # Provides the current rank of the character within the Council of Light.
+        #
+        # @return [Integer] The current rank of the character
+        #
+        def self.rank
+          return 0 unless Society.membership == "Council of Light"
+          Society.rank
         end
 
         ##
@@ -420,6 +430,7 @@ module Lich
         # @return [Boolean] True if the sign can be used right now
         #
         def self.available?(sign_name)
+          return false unless Society.membership == "Council of Light"
           sign = self[sign_name]
           return false unless sign
           return false unless known?(sign_name) && affordable?(sign_name)
