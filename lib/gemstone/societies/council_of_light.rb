@@ -311,6 +311,10 @@ module Lich
         # @return [void]
         #
         def self.use(sign_name, target = nil)
+          unless Society.membership == "Council of Light"
+            Lich::Messaging.msg("error", "Not a member of Council of Light, can't use: #{sign_name}")
+            return
+          end
           sign = self[sign_name]
 
           unless sign
