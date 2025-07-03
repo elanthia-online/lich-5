@@ -484,23 +484,20 @@ module Lich
         ##
         # Provides the current rank of the character within the Order of Voln (called a step in Voln).
         #
-        # @return [Integer] The current rank (step) of the character
-        #
-        def self.step
-          return 0 unless Society.membership == "Order of Voln"
-          Society.rank
-        end
-
-        ##
-        # Provides the current rank of the character within the Order of Voln (called a step in Voln).
-        #
         # @return [Integer] The current rank of the character
         #
         def self.rank
           return 0 unless Society.membership == "Order of Voln"
           Society.rank
         end
-        
+
+        ##
+        # Provides an alias of step for rank
+        #
+        def self.step
+          self.rank
+        end
+
         ##
         # Checks if the character is a member of Voln and optionally at a given rank.
         #
