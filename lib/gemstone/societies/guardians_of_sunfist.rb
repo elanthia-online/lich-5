@@ -274,6 +274,10 @@ module Lich
         # @return [void]
         #
         def self.use(sigil_name, target = nil)
+          unless Society.membership == "Guardians of Sunfist"
+            Lich::Messaging.msg("error", "Not a member of Guardians of Sunfist, can't use: #{sign_name}")
+            return
+          end
           sigil = self[sigil_name]
 
           unless sigil
