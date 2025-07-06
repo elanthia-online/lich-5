@@ -7,7 +7,7 @@ module Lich
       attr_accessor :max_size
 
       def initialize(size = 0, obj = nil)
-        @max_size = 200
+        @max_size = 400
         super
       end
 
