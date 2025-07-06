@@ -364,6 +364,7 @@ module Lich
           when Pattern::RoomIDOff
             put("flag showroomid on")
             respond("Lich requires ShowRoomID to be ON for mapping to work, please do not turn this off.")
+            respond("If you wish to hide the Real ID#, you can toggle it off by doing ;display flaguid")
           else
             :noop
           end
