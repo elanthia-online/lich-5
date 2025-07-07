@@ -919,6 +919,7 @@ module Lich
         @cmd_data = cmd_data
         @vars = Array.new
         @downstream_buffer = LimitedArray.new
+        @downstream_buffer.max_size = 400
         @killer_mutex = Mutex.new
         @want_downstream = true
         @want_downstream_xml = false
