@@ -256,6 +256,7 @@ module Lich
         # @return [Boolean] True if the character's rank is sufficient to use the sigil
         #
         def self.known?(sigil_name)
+          return false unless member?
           sigil = self[sigil_name]
           return false unless sigil
 
@@ -273,6 +274,10 @@ module Lich
         # @return [void]
         #
         def self.use(sigil_name, target = nil)
+          unless member?
+            Lich::Messaging.msg("error", "Not a member of Guardians of Sunfist, can't use: #{sigil_name}")
+            return
+          end
           sigil = self[sigil_name]
 
           unless sigil
@@ -298,6 +303,7 @@ module Lich
         # @return [Boolean] True if the sigil can be afforded now
         #
         def self.affordable?(sigil_name)
+          return false unless member?
           sigil = self[sigil_name]
           return false unless sigil
 
@@ -327,6 +333,7 @@ module Lich
         # @return [Boolean] True if the sigil can be used right now
         #
         def self.available?(sigil_name)
+          return false unless member?
           known?(sigil_name) && affordable?(sigil_name)
         end
 
@@ -357,7 +364,18 @@ module Lich
         # @return [Boolean] True if the character has achieved master rank in the Guardians of Sunfist
         #
         def self.master?
+          return false unless member?
           Society.rank == 20
+        end
+
+        ##
+        # Provides the current rank of the character within the Guardians of Sunfist.
+        #
+        # @return [Integer] The current rank of the character
+        #
+        def self.rank
+          return 0 unless member?
+          Society.rank
         end
 
         ##
