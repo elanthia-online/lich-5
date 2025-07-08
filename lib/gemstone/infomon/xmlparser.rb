@@ -95,8 +95,10 @@ module Lich
           ReadyItemClear = /^Cleared your default (?<type>shield|(?:secondary |ranged )?weapon|ammo2? bundle|(?:secondary )?sheath)\.\r?\n?$/
           ReadyItemSet = /^Setting (?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^<]+)? to be your default (?<type>shield|(?:secondary |ranged )?weapon|ammo2? bundle|(?:secondary )?sheath)\.\r?\n?$/
 
+          StatusPrompt = /<prompt time="[0-9]+">/
+
           All = Regexp.union(NpcDeathMessage, Group_Short, Also_Here_Arrival, StowListOutputStart, StowListContainer, StowSetContainer1, StowSetContainer2,
-                             ReadyListOutputStart, ReadyListNormal, ReadyListAmmo2, ReadyListSheathsSet, ReadyListFinished, ReadyItemClear, ReadyItemSet)
+                             ReadyListOutputStart, ReadyListNormal, ReadyListAmmo2, ReadyListSheathsSet, ReadyListFinished, ReadyItemClear, ReadyItemSet, StatusPrompt)
         end
 
         def self.parse(line)
@@ -149,6 +151,9 @@ module Lich
             when Pattern::ReadyItemClear
               match = Regexp.last_match
               ReadyList.__send__("#{Lich::Util.normalize_name(match[:type].downcase)}=", nil)
+              :ok
+            when Pattern::StatusPrompt
+              Infomon::Parser::State.set(Infomon::Parser::State::Ready) unless Infomon::Parser::State.get.eql?(Infomon::Parser::State::Ready)
               :ok
             else
               :noop
