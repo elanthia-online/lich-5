@@ -587,6 +587,7 @@ module Lich
         end
         @quiet = (args[:quiet] ? true : false)
         @downstream_buffer = LimitedArray.new
+        @downstream_buffer.max_size = 400
         @want_downstream = true
         @want_downstream_xml = false
         @want_script_output = false
@@ -919,6 +920,7 @@ module Lich
         @cmd_data = cmd_data
         @vars = Array.new
         @downstream_buffer = LimitedArray.new
+        @downstream_buffer.max_size = 400
         @killer_mutex = Mutex.new
         @want_downstream = true
         @want_downstream_xml = false
@@ -985,6 +987,7 @@ module Lich
           @quiet = false
         end
         @downstream_buffer = LimitedArray.new
+        @downstream_buffer.max_size = 400
         @want_downstream = true
         @want_downstream_xml = false
         @upstream_buffer = LimitedArray.new
