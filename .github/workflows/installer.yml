@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   installer:
-    runs-on: windows-latest
+    runs-on: windows-2022
     strategy:
       matrix:
         ruby: ['3.4.4']
