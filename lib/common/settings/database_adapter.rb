@@ -40,7 +40,7 @@ module Lich
         rescue => e
           _respond "--- Error: failed to serialize settings ---"
           Lich.log("--- Error: failed to serialize settings ---")
-          Lich_log(e.message)
+          Lich.log(e.message)
           return false
         end
 
