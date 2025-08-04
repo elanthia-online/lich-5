@@ -853,9 +853,21 @@ module Lich
         if target_list.include?(@id)
           @id
         else
-          _, shortest_distances = Map.dijkstra(@id, target_list)
-          target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
-          target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }.first
+          _previous, shortest_distances = Map.dijkstra(@id, target_list)
+          shortest_room = nil
+          shortest_value = Float::INFINITY
+
+          target_list.each do |room_num|
+            distance = shortest_distances[room_num]
+            next unless distance.is_a?(Numeric)
+
+            if distance < shortest_value
+              shortest_room = room_num
+              shortest_value = distance
+            end
+          end
+
+          return shortest_room
         end
       end
     end
