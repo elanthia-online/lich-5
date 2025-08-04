@@ -52,7 +52,7 @@ module Lich
         rescue Sequel::DatabaseError => db_err
           Lich::Messaging.msg("error", "--- Database error while saving settings ---")
           Lich.log("--- Database error while saving settings ---")
-          Lich.log(db_err.message)
+          Lich.log("#{db_err.message}\n#{db_err.backtrace.join("\n")}")
         rescue => e
           Lich::Messaging.msg("error", "--- Unexpected error while saving settings ---")
           Lich.log("--- Unexpected error while saving settings ---")
