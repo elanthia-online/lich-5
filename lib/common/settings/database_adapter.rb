@@ -56,7 +56,7 @@ module Lich
         rescue => e
           Lich::Messaging.msg("error", "--- Unexpected error while saving settings ---")
           Lich.log("--- Unexpected error while saving settings ---")
-          Lich.log(e.backtrace)
+          Lich.log("#{e.message}\n#{e.backtrace.join("\n")}")
         end
 
         false
