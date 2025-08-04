@@ -40,7 +40,7 @@ module Lich
         rescue => e
           Lich::Messaging.msg("error", "--- Error: failed to serialize settings ---")
           Lich.log("--- Error: failed to serialize settings ---")
-          Lich.log(e.message)
+          Lich.log("#{e.message}\n#{e.backtrace.join("\n")}")
           return false
         end
 
