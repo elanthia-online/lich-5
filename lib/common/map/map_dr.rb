@@ -1,6 +1,7 @@
 module Lich
   module Common
     class Map
+      include Enumerable
       @@loaded                   = false
       @@load_mutex               = Mutex.new
       @@list                   ||= Array.new
@@ -854,20 +855,8 @@ module Lich
           @id
         else
           _previous, shortest_distances = Map.dijkstra(@id, target_list)
-          shortest_room = nil
-          shortest_value = Float::INFINITY
-
-          target_list.each do |room_num|
-            distance = shortest_distances[room_num]
-            next unless distance.is_a?(Numeric)
-
-            if distance < shortest_value
-              shortest_room = room_num
-              shortest_value = distance
-            end
-          end
-
-          return shortest_room
+          valid_rooms = target_list.select { |room_num| shortest_distances[room_num].is_a?(Numeric) }
+          return valid_rooms.min_by { |room_num| shortest_distances[room_num] }
         end
       end
     end
