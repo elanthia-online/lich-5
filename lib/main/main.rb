@@ -312,7 +312,7 @@ reconnect_if_wanted = proc {
         end
 
         frontend_pid = spawn(launcher_cmd)
-        Process.detach(wrayth_pid)
+        Process.detach(frontend_pid)
         $frontend_pid = frontend_pid
       rescue
         Lich.log "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}\n\t#{$!.backtrace.join("\n\t")}"
