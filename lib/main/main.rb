@@ -1,6 +1,71 @@
 # Carve out for later carving and refining - main_thread and reconnect
 # this needs work to break up and improve 2024-06-13
 
+# --- Windows FFI bindings (top-level, safe to require once) ---
+if RUBY_PLATFORM =~ /mingw|mswin/ && !defined?(Win32Enum)
+  require 'fiddle/import'
+  module Win32Enum
+    extend Fiddle::Importer
+    dlload 'user32.dll'
+    extern 'int EnumWindows(void*, long)'
+    extern 'int IsWindowVisible(void*)'
+    extern 'int GetWindowThreadProcessId(void*, void*)'
+  end
+end
+
+module FrontendPID
+  extend self
+
+  def resolve(pid)
+    pid = pid.to_i
+    return 0 if pid <= 0
+
+    case RUBY_PLATFORM
+    when /mingw|mswin/ # Windows: climb to the first ancestor that owns a window
+      require 'win32ole'
+      wmi = WIN32OLE.connect('winmgmts://')
+      p = pid
+      16.times do
+        # does p own any visible top-level window?
+        found = false
+        cb = Fiddle::Closure::BlockCaller.new(Fiddle::TYPE_INT, [Fiddle::TYPE_VOIDP, Fiddle::TYPE_LONG]) do |hwnd, _|
+          next 1 if Win32Enum.IsWindowVisible(hwnd).zero?
+          buf = [0].pack('L'); Win32Enum.GetWindowThreadProcessId(hwnd, buf)
+          if buf.unpack1('L') == p then found = true; 0 else 1 end
+        end
+        Win32Enum.EnumWindows(cb, 0)
+        return p if found
+
+        # climb to parent
+        parent = nil
+        wmi.ExecQuery("SELECT ParentProcessId FROM Win32_Process WHERE ProcessId=#{p}").each { |row| parent = row.ParentProcessId.to_i; break }
+        break if parent.nil? || parent.zero? || parent == p
+        p = parent
+      end
+      pid # fallback
+
+    when /linux/ # Linux: use xdotool; walk parents until one has a window
+      return pid unless system('which xdotool > /dev/null 2>&1')
+      p = pid
+      16.times do
+        return p if system("xdotool search --pid #{p} >/dev/null 2>&1")
+        begin
+          status = File.read("/proc/#{p}/status")
+          parent = status[/PPid:\s+(\d+)/, 1].to_i
+        rescue
+          parent = 0
+        end
+        break if parent.zero? || parent == p
+        p = parent
+      end
+      pid  # fallback
+
+    else
+      pid  # macOS/other: PID usually already owns the window
+    end
+  end
+end
+
 reconnect_if_wanted = proc {
   if ARGV.include?('--reconnect') and ARGV.include?('--login') and not $_CLIENTBUFFER_.any? { |cmd| cmd =~ /^(?:\[.*?\])?(?:<c>)?(?:quit|exit)/i }
     if (reconnect_arg = ARGV.find { |arg| arg =~ /^\-\-reconnect\-delay=[0-9]+(?:\+[0-9]+)?$/ })
@@ -758,7 +823,8 @@ reconnect_if_wanted = proc {
               # --------------------------------------------------------------
               # Profanity / FrostBite handshake:  SET_FRONTEND_PID <pid>
               if client_string =~ /^SET_FRONTEND_PID\s+(\d+)\s*$/
-                $frontend_pid = $1.to_i
+                raw = $1.to_i
+                $frontend_pid = FrontendPID.resolve(raw)
                 next # swallow the control line; don't pass it to do_client
               end
               # --------------------------------------------------------------
