@@ -13,6 +13,12 @@ if RUBY_PLATFORM =~ /mingw|mswin/ && !defined?(Win32Enum)
   end
 end
 
+def windows_parent_pid(wmi, p)
+  rows  = wmi.ExecQuery("SELECT ParentProcessId FROM Win32_Process WHERE ProcessId=#{p}")
+  row   = rows.each.first rescue nil
+  row ? row.ParentProcessId.to_i : 0
+end
+
 module FrontendPID
   extend self
 
@@ -37,8 +43,7 @@ module FrontendPID
         return p if found
 
         # climb to parent
-        parent = nil
-        wmi.ExecQuery("SELECT ParentProcessId FROM Win32_Process WHERE ProcessId=#{p}").each { |row| parent = row.ParentProcessId.to_i; break }
+        parent = windows_parent_pid(wmi, p)
         break if parent.nil? || parent.zero? || parent == p
         p = parent
       end
