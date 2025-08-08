@@ -251,6 +251,7 @@ if (arg = ARGV.find { |a| (a == '-g') or (a == '--game') })
   else
     $frontend = 'unknown'
   end
+  $frontend_pid = Process.ppid unless @argv_options[:detachable_client] && !$frontend_pid.nil
 elsif ARGV.include?('--gemstone')
   if ARGV.include?('--platinum')
     $platinum = true
@@ -364,4 +365,5 @@ else
   @game_host, @game_port = nil, nil
   Lich.log "info: no force-mode info given"
 end
+
 # rubocop:enable Lint/UselessAssignment

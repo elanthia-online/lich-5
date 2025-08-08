@@ -755,6 +755,13 @@ reconnect_if_wanted = proc {
               }
             end
             while (client_string = $_DETACHABLE_CLIENT_.gets)
+              # --------------------------------------------------------------
+              # Profanity / FrostBite handshake:  SET_FRONTEND_PID <pid>
+              if client_string =~ /^SET_FRONTEND_PID\s+(\d+)\s*$/
+                $frontend_pid = $1.to_i
+                next # swallow the control line; don't pass it to do_client
+              end
+              # --------------------------------------------------------------
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
               begin
                 $_IDLETIMESTAMP_ = Time.now
