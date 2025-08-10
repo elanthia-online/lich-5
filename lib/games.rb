@@ -442,7 +442,11 @@ module Lich
             process_room_information(alt_string)
 
             # Handle frontend-specific modifications
-            if $frontend =~ /genie|frostbite/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+            if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+              alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+            end
+
+            if $frontend =~ /frostbite/i && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
               alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
             end
 
