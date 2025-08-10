@@ -76,7 +76,7 @@ module Lich
       # @return [Integer, nil] The resolved frontend PID
       def self.init_from_spawn(spawn_pid)
         return nil unless spawn_pid && spawn_pid > 0
-        resolved_pid = resolve_pid(spawn_id)
+        resolved_pid = resolve_pid(spawn_pid)
         self.pid = resolved_pid
         Lich.log "Frontend PID initialized from spawn: #{resolved_pid}" if defined?(Lich.log)
         resolved_pid
@@ -151,8 +151,6 @@ module Lich
         }
       end
 
-      private
-
       # Detect the current platform
       # @return [Symbol] :windows, :macos, :linux, or :unsupported
       def self.detect_platform
@@ -167,7 +165,7 @@ module Lich
       # Resolve PID by walking up process tree to find window owner
       # @param pid [Integer] Starting process ID
       # @return [Integer] The resolved PID
-      def self.resolved_pid(pid)
+      def self.resolve_pid(pid)
         pid = pid.to_i
         return pid if pid <= 0
         case detect_platform
@@ -197,7 +195,7 @@ module Lich
             ) do |hwnd, _|
               next 1 if Win32Enum.IsWindowVisible(hwnd).zero?
               buf = [0].pack('L')
-              Win32Enum.GetWindowThreadProcessID(hwnd, buf)
+              Win32Enum.GetWindowThreadProcessId(hwnd, buf)
               if buf.unpack1('L') == p
                 found = true
                 0
@@ -221,7 +219,7 @@ module Lich
 
       # Get parent process ID on Windows
       def self.windows_parent_pid(wmi, pid)
-        rows = wmi.ExecQuery("SELECT ParentProcessID FROM Win32_Process WHERE ProcessID=#{pid}")
+        rows = wmi.ExecQuery("SELECT ParentProcessId FROM Win32_Process WHERE ProcessId=#{pid}")
         row = rows.each.first rescue nil
         row ? row.ParentProcessId.to_i : 0
       end
@@ -231,7 +229,7 @@ module Lich
         return pid unless system('which xdotool > /dev/null 2>&1')
         p = pid
         16.times do
-          return p if system("xdotool search --pid #{pid} >/dev/null 2>&1")
+          return p if system("xdotool search --pid #{p} >/dev/null 2>&1")
           begin 
             status = File.read("/proc/#{p}/status")
             parent = status[/PPid:\s+(\d+)/, 1].to_i
@@ -250,7 +248,7 @@ module Lich
       # Windows refocus implementation
       def self.refocus_windows(pid)
         ensure_windows_modules
-        hwnd_buf = Fiddle::Pointer.malloc(Fiddle::SIZE_OF_VOIDP)
+        hwnd_buf = Fiddle::Pointer.malloc(Fiddle::SIZEOF_VOIDP)
         enum_cb = Fiddle::Closure::BlockCaller.new(
           Fiddle::TYPE_INT,
           [Fiddle::TYPE_VOIDP, Fiddle::TYPE_LONG]
@@ -259,7 +257,7 @@ module Lich
 
           pid_tmp = [0].pack('L')
           WinAPI.GetWindowThreadProcessId(hwnd, pid_tmp)
-          win_pid = pid_tmp.unpack('L')
+          win_pid = pid_tmp.unpack1('L')
 
           if win_pid == pid
             hwnd_buf[0, Fiddle::SIZEOF_VOIDP] = [hwnd].pack('L!')
