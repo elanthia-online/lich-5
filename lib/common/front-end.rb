@@ -64,7 +64,7 @@ module Lich
       # Get the current frontend PID
       # @return [Integer, nil] The PID if set, nil otherwise
       def self.pid
-        @pid_mutex.synchronize { @frontend_pid || $frontend_pid }
+        @pid_mutex.synchronize { @frontend_pid }
       end
 
       # Set the frontend PID
@@ -72,10 +72,7 @@ module Lich
       # @return [Integer] The stored PID
       def self.pid=(value)
         value = value.to_i
-        @pid_mutex.synchronize {
-          @frontend_pid = value
-          $frontend_pid = value # Maintain backward compatibility
-        }
+        @pid_mutex.synchronize { @frontend_pid = value }
       end
 
       # Initialize PID from parent process (for Warlock)
