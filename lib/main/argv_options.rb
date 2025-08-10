@@ -252,7 +252,7 @@ if (arg = ARGV.find { |a| (a == '-g') or (a == '--game') })
     $frontend = 'unknown'
   end
   unless @argv_options[:detachable_client]
-    Frontend.init_from_parent if defined?(Frontend)
+    Lich::Common::Frontend.init_from_parent(Process.ppid)
   end
 elsif ARGV.include?('--gemstone')
   if ARGV.include?('--platinum')
