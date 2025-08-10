@@ -8,8 +8,8 @@ require 'open3'
 # Windows API modules for frontend PID detection and window focus
 # These need to be defined at the top level
 if RUBY_PLATFORM =~ /mingw|mswin/
-  unless defined?(Win32Enum)
-    module Win32Enum
+  unless defined?(::Win32Enum)
+    module ::Win32Enum
       extend Fiddle::Importer
       dlload 'user32.dll'
       extern 'int EnumWindows(void*, long)'
@@ -18,8 +18,8 @@ if RUBY_PLATFORM =~ /mingw|mswin/
     end
   end
 
-  unless defined?(WinAPI)
-    module WinAPI
+  unless defined?(::WinAPI)
+    module ::WinAPI
       extend Fiddle::Importer
       dlload 'user32.dll'
       extern 'int EnumWindows(void*, long)'
@@ -226,9 +226,9 @@ module Lich
               Fiddle::TYPE_INT,
               [Fiddle::TYPE_VOIDP, Fiddle::TYPE_LONG]
             ) do |hwnd, _|
-              next 1 if Win32Enum.IsWindowVisible(hwnd).zero?
+              next 1 if ::Win32Enum.IsWindowVisible(hwnd).zero?
               buf = [0].pack('L')
-              Win32Enum.GetWindowThreadProcessId(hwnd, buf)
+              ::Win32Enum.GetWindowThreadProcessId(hwnd, buf)
               if buf.unpack1('L') == p
                 found = true
                 Lich.log "  Found visible window for PID #{p}"
@@ -237,7 +237,7 @@ module Lich
                 1  # continue enumeration
               end
             end
-            Win32Enum.EnumWindows(cb, 0)
+            ::Win32Enum.EnumWindows(cb, 0)
 
             if found
               Lich.log "  Stopping at PID #{p} (#{process_name}) - has visible window"
@@ -302,10 +302,10 @@ module Lich
           Fiddle::TYPE_INT,
           [Fiddle::TYPE_VOIDP, Fiddle::TYPE_LONG]
         ) do |hwnd, _|
-          next 1 if WinAPI.IsWindowVisible(hwnd).zero?
+          next 1 if ::WinAPI.IsWindowVisible(hwnd).zero?
 
           pid_tmp = [0].pack('L')
-          WinAPI.GetWindowThreadProcessId(hwnd, pid_tmp)
+          ::WinAPI.GetWindowThreadProcessId(hwnd, pid_tmp)
           win_pid = pid_tmp.unpack1('L')
 
           if win_pid == pid
@@ -316,11 +316,11 @@ module Lich
           end
         end
 
-        WinAPI.EnumWindows(enum_cb, 0)
+        ::WinAPI.EnumWindows(enum_cb, 0)
         hwnd = hwnd_buf[0, Fiddle::SIZEOF_VOIDP].unpack1('L!')
 
         if hwnd != 0
-          WinAPI.SetForegroundWindow(hwnd)
+          ::WinAPI.SetForegroundWindow(hwnd)
           true
         else
           Lich.log "Frontend window for PID #{pid} not found" if defined?(Lich.log)
