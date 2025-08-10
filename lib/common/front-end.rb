@@ -6,9 +6,10 @@ require 'fiddle/import'
 require 'open3'
 
 # Windows API modules for frontend PID detection and window focus
+# These need to be defined at the top level
 if RUBY_PLATFORM =~ /mingw|mswin/
-  unless defined?(::Win32Enum)
-    module ::Win32Enum
+  unless defined?(Win32Enum)
+    module Win32Enum
       extend Fiddle::Importer
       dlload 'user32.dll'
       extern 'int EnumWindows(void*, long)'
@@ -17,8 +18,8 @@ if RUBY_PLATFORM =~ /mingw|mswin/
     end
   end
 
-  unless defined?(::WinAPI)
-    module ::WinAPI
+  unless defined?(WinAPI)
+    module WinAPI
       extend Fiddle::Importer
       dlload 'user32.dll'
       extern 'int EnumWindows(void*, long)'
@@ -29,7 +30,6 @@ if RUBY_PLATFORM =~ /mingw|mswin/
   end
 end
 
-
 module Lich
   module Common
     module Frontend
@@ -38,6 +38,7 @@ module Lich
       @frontend_pid = nil
       @pid_mutex = Mutex.new
 
+      # Existing session file methods
       def self.create_session_file(name, host, port, display_session: true)
         return if name.nil?
         FileUtils.mkdir_p @tmp_session_dir
@@ -58,41 +59,51 @@ module Lich
         File.delete(@session_file) if File.exist? @session_file
       end
 
+      # Frontend PID tracking functionality
+
       # Get the current frontend PID
       # @return [Integer, nil] The PID if set, nil otherwise
       def self.pid
-        @pid_mutex.synchronize { @frontend_pid }
+        @pid_mutex.synchronize { @frontend_pid || $frontend_pid }
       end
 
       # Set the frontend PID
       # @param value [Integer] The PID to store
       # @return [Integer] The stored PID
       def self.pid=(value)
-        @pid_mutex.synchronize { @frontend_pid = value.to_i }
+        value = value.to_i
+        @pid_mutex.synchronize {
+          @frontend_pid = value
+          $frontend_pid = value # Maintain backward compatibility
+        }
       end
 
-      # Initialize PID from spawn
+      # Initialize PID from spawn (called from main.rb after spawn)
       # @param spawn_pid [Integer] The PID returned from spawn()
       # @return [Integer, nil] The resolved frontend PID
       def self.init_from_spawn(spawn_pid)
         return nil unless spawn_pid && spawn_pid > 0
+
+        # Resolve to actual window owner
         resolved_pid = resolve_pid(spawn_pid)
         self.pid = resolved_pid
+
         Lich.log "Frontend PID initialized from spawn: #{resolved_pid}" if defined?(Lich.log)
         resolved_pid
       end
 
-      # Initialize PID from parent process (FE's that launch lich)
+      # Initialize PID from parent process (for Warlock)
       # @return [Integer, nil] The resolved frontend PID
       def self.init_from_parent
         parent_pid = Process.ppid
         resolved_pid = resolve_pid(parent_pid)
         self.pid = resolved_pid
+
         Lich.log "Frontend PID initialized from parent: #{resolved_pid}" if defined?(Lich.log)
         resolved_pid
       end
 
-      # Set PID from detachable client
+      # Set PID from detachable client (for Profanity)
       # @param pid [Integer] The PID sent by the client
       # @return [Integer] The stored PID
       def self.set_from_client(pid)
@@ -105,13 +116,15 @@ module Lich
       # Uses various methods depending on how Lich was launched
       # @return [Integer, nil] The detected PID or nil if detection fails
       def self.detect_pid
+        # Return existing PID if already set
         current_pid = self.pid
         return current_pid if current_pid && current_pid > 0
-        
+
         # Try to detect based on launch method
-        # This isa fallback for cases where init wasn't called
+        # This is a fallback for cases where init wasn't called
         parent_pid = Process.ppid
         resolved_pid = resolve_pid(parent_pid)
+
         if resolved_pid && resolved_pid > 0
           self.pid = resolved_pid
           Lich.log "Frontend PID detected (fallback): #{resolved_pid}" if defined?(Lich.log)
@@ -127,6 +140,7 @@ module Lich
       def self.refocus
         pid = self.pid
         return false unless pid && pid > 0
+
         case detect_platform
         when :windows
           refocus_windows(pid)
@@ -167,21 +181,27 @@ module Lich
       # @return [Integer] The resolved PID
       def self.resolve_pid(pid)
         pid = pid.to_i
-        return pid if pid <= 0
+        return pid if pid <= 0 # Return as-is if invalid
+
+        # Use the FrontendPID resolver logic
         case detect_platform
         when :windows
           resolve_windows_pid(pid)
         when :linux
           resolve_linux_pid(pid)
         else
+          # macOS/other: PID usually already owns the window
           pid
         end
       end
 
       # Windows-specific PID resolution
       def self.resolve_windows_pid(pid)
+        # Ensure Win32 modules are loaded
         ensure_windows_modules
+
         require 'win32ole' rescue (return pid)
+
         begin
           wmi = WIN32OLE.connect('winmgmts://')
           p = pid
@@ -191,16 +211,16 @@ module Lich
             found = false
             cb = Fiddle::Closure::BlockCaller.new(
               Fiddle::TYPE_INT,
-              [Fiddle::TYPE_VOIDP. Fiddle::TYPE_LONG]
+              [Fiddle::TYPE_VOIDP, Fiddle::TYPE_LONG]
             ) do |hwnd, _|
               next 1 if Win32Enum.IsWindowVisible(hwnd).zero?
               buf = [0].pack('L')
               Win32Enum.GetWindowThreadProcessId(hwnd, buf)
               if buf.unpack1('L') == p
                 found = true
-                0
+                0  # stop enumeration
               else
-                1
+                1  # continue enumeration
               end
             end
             Win32Enum.EnumWindows(cb, 0)
@@ -208,12 +228,13 @@ module Lich
 
             # Walk up to parent process
             parent = windows_parent_pid(wmi, p)
-            return pid if parent.nil? || parent.zero? || parent == p
+            break if parent.nil? || parent.zero? || parent == p
             p = parent
           end
         rescue => e
           Lich.log "Error resolving Windows PID: #{e}" if defined?(Lich.log)
         end
+
         pid # fallback to original
       end
 
@@ -227,28 +248,35 @@ module Lich
       # Linux-specific PID resolution
       def self.resolve_linux_pid(pid)
         return pid unless system('which xdotool > /dev/null 2>&1')
+
         p = pid
         16.times do
+          # Check if this process has a window
           return p if system("xdotool search --pid #{p} >/dev/null 2>&1")
-          begin 
+
+          # Walk up to parent process
+          begin
             status = File.read("/proc/#{p}/status")
             parent = status[/PPid:\s+(\d+)/, 1].to_i
           rescue
             parent = 0
           end
-          break if parent.zero? || parent == p
+          return pid if parent.zero? || parent == p
           p = parent
         end
-        pid
+
+        pid # fallback
       rescue => e
         Lich.log "Error resolving Linux PID: #{e}" if defined?(Lich.log)
         pid
       end
-      
+
       # Windows refocus implementation
       def self.refocus_windows(pid)
         ensure_windows_modules
+
         hwnd_buf = Fiddle::Pointer.malloc(Fiddle::SIZEOF_VOIDP)
+
         enum_cb = Fiddle::Closure::BlockCaller.new(
           Fiddle::TYPE_INT,
           [Fiddle::TYPE_VOIDP, Fiddle::TYPE_LONG]
@@ -261,9 +289,9 @@ module Lich
 
           if win_pid == pid
             hwnd_buf[0, Fiddle::SIZEOF_VOIDP] = [hwnd].pack('L!')
-            0
+            0  # stop enumeration
           else
-            1
+            1  # continue enumeration
           end
         end
 
@@ -271,11 +299,10 @@ module Lich
         hwnd = hwnd_buf[0, Fiddle::SIZEOF_VOIDP].unpack1('L!')
 
         if hwnd != 0
-          WinAPI.SetForegroundWindow(hwnd)
-          true
+          -> { WinAPI.SetForegroundWindow(hwnd) }
         else
           Lich.log "Frontend window for PID #{pid} not found" if defined?(Lich.log)
-          false
+          nil
         end
       rescue => e
         Lich.log "Error refocusing Windows: #{e}" if defined?(Lich.log)
@@ -285,8 +312,10 @@ module Lich
       # macOS refocus implementation
       def self.refocus_macos(pid)
         return false unless system('which osascript > /dev/null 2>&1')
+
         script = %{tell application "System Events" to set frontmost of (first process whose unix id is #{pid}) to true}
-        stdout, stderr, status = Open3.capture3('osascript', '-e', script)
+        _stdout, stderr, status = Open3.capture3('osascript', '-e', script)
+
         if status.success?
           true
         else
@@ -294,14 +323,16 @@ module Lich
           false
         end
       rescue => e
-        Lich.log "Error refousing macOS: #{e}" if defined?(Lich.log)
+        Lich.log "Error refocusing macOS: #{e}" if defined?(Lich.log)
         false
       end
 
-      # linux refocus implementation
+      # Linux refocus implementation
       def self.refocus_linux(pid)
         return false unless system('which xdotool > /dev/null 2>&1')
-        stdout, stderr, status = Open3.capture3('xdotool', 'search', '--pid', pid.to_s, 'windowactivate')
+
+        _stdout, stderr, status = Open3.capture3('xdotool', 'search', '--pid', pid.to_s, 'windowactivate')
+
         if status.success?
           true
         else
@@ -313,8 +344,9 @@ module Lich
         false
       end
 
-      # Ensure Windows modules are loaded
+      # Ensure Windows modules are loaded (they're defined at top level)
       def self.ensure_windows_modules
+        # Check if modules exist - they should be defined at file load time
         if RUBY_PLATFORM =~ /mingw|mswin/
           return defined?(::Win32Enum) && defined?(::WinAPI)
         end
@@ -322,4 +354,9 @@ module Lich
       end
     end
   end
+end
+
+# Maintain backward compatibility for direct access to frontend_pid
+def frontend_pid
+  Frontend.pid
 end
