@@ -38,7 +38,6 @@ module Lich
       @frontend_pid = nil
       @pid_mutex = Mutex.new
 
-      # Existing session file methods
       def self.create_session_file(name, host, port, display_session: true)
         return if name.nil?
         FileUtils.mkdir_p @tmp_session_dir
@@ -208,9 +207,7 @@ module Lich
           wmi = WIN32OLE.connect('winmgmts://')
           p = pid
 
-          16.times do |iteration|
-            Lich.log "Iteration #{iteration}: checking PID #{p}"
-
+          16.times do
             # Get process name for debugging
             rows = wmi.ExecQuery("SELECT Name FROM Win32_Process WHERE ProcessId=#{p}")
             row = rows.each.first rescue nil
@@ -243,7 +240,6 @@ module Lich
 
             # Walk up to parent process
             parent = windows_parent_pid(wmi, p)
-            Lich.log "  Parent PID: #{parent}"
 
             break if parent.nil? || parent.zero? || parent == p
             p = parent
@@ -373,9 +369,4 @@ module Lich
       end
     end
   end
-end
-
-# Maintain backward compatibility for direct access to frontend_pid
-def frontend_pid
-  Frontend.pid
 end
