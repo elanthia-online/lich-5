@@ -78,28 +78,33 @@ module Lich
         }
       end
 
-      # Initialize PID from spawn (called from main.rb after spawn)
-      # @param spawn_pid [Integer] The PID returned from spawn()
-      # @return [Integer, nil] The resolved frontend PID
-      def self.init_from_spawn(spawn_pid)
-        return nil unless spawn_pid && spawn_pid > 0
-
-        # Resolve to actual window owner
-        resolved_pid = resolve_pid(spawn_pid)
-        self.pid = resolved_pid
-
-        Lich.log "Frontend PID initialized from spawn: #{resolved_pid}" if defined?(Lich.log)
-        resolved_pid
-      end
-
       # Initialize PID from parent process (for Warlock)
       # @return [Integer, nil] The resolved frontend PID
-      def self.init_from_parent
-        parent_pid = Process.ppid
-        resolved_pid = resolve_pid(parent_pid)
-        self.pid = resolved_pid
+      def self.init_from_parent(parent_pid)
+        Lich.log "=== Frontend.init_from_parent called ==="
+        Lich.log "Parent process PID: #{parent_pid}"
 
-        Lich.log "Frontend PID initialized from parent: #{resolved_pid}" if defined?(Lich.log)
+        # Let's see what process this actually is on Windows
+        if RUBY_PLATFORM =~ /mingw|mswin/
+          begin
+            require 'win32ole'
+            wmi = WIN32OLE.connect('winmgmts://')
+            rows = wmi.ExecQuery("SELECT Name, ProcessId FROM Win32_Process WHERE ProcessId=#{parent_pid}")
+            row = rows.each.first rescue nil
+            if row
+              Lich.log "Parent process name: #{row.Name}"
+            end
+          rescue => e
+            Lich.log "Could not get parent process name: #{e.message}"
+          end
+        end
+
+        resolved_pid = resolve_pid(parent_pid)
+        Lich.log "resolve_pid(#{parent_pid}) returned: #{resolved_pid}"
+
+        self.pid = resolved_pid
+        Lich.log "Frontend PID set to: #{self.pid}"
+
         resolved_pid
       end
 
@@ -197,16 +202,24 @@ module Lich
 
       # Windows-specific PID resolution
       def self.resolve_windows_pid(pid)
-        # Ensure Win32 modules are loaded
-        ensure_windows_modules
+        Lich.log "=== resolve_windows_pid starting with PID: #{pid} ==="
 
+        ensure_windows_modules
         require 'win32ole' rescue (return pid)
 
         begin
           wmi = WIN32OLE.connect('winmgmts://')
           p = pid
 
-          16.times do
+          16.times do |iteration|
+            Lich.log "Iteration #{iteration}: checking PID #{p}"
+
+            # Get process name for debugging
+            rows = wmi.ExecQuery("SELECT Name FROM Win32_Process WHERE ProcessId=#{p}")
+            row = rows.each.first rescue nil
+            process_name = row ? row.Name : "unknown"
+            Lich.log "  Process name: #{process_name}"
+
             # Check if this process owns any visible window
             found = false
             cb = Fiddle::Closure::BlockCaller.new(
@@ -218,24 +231,32 @@ module Lich
               Win32Enum.GetWindowThreadProcessId(hwnd, buf)
               if buf.unpack1('L') == p
                 found = true
+                Lich.log "  Found visible window for PID #{p}"
                 0  # stop enumeration
               else
                 1  # continue enumeration
               end
             end
             Win32Enum.EnumWindows(cb, 0)
-            return p if found
+
+            if found
+              Lich.log "  Stopping at PID #{p} (#{process_name}) - has visible window"
+              return p
+            end
 
             # Walk up to parent process
             parent = windows_parent_pid(wmi, p)
+            Lich.log "  Parent PID: #{parent}"
+
             break if parent.nil? || parent.zero? || parent == p
             p = parent
           end
         rescue => e
-          Lich.log "Error resolving Windows PID: #{e}" if defined?(Lich.log)
+          Lich.log "ERROR in resolve_windows_pid: #{e}"
         end
 
-        pid # fallback to original
+        Lich.log "Fallback: returning original PID #{pid}"
+        pid
       end
 
       # Get parent process ID on Windows
