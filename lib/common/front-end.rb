@@ -299,10 +299,11 @@ module Lich
         hwnd = hwnd_buf[0, Fiddle::SIZEOF_VOIDP].unpack1('L!')
 
         if hwnd != 0
-          -> { WinAPI.SetForegroundWindow(hwnd) }
+          WinAPI.SetForegroundWindow(hwnd)
+          true
         else
           Lich.log "Frontend window for PID #{pid} not found" if defined?(Lich.log)
-          nil
+          false
         end
       rescue => e
         Lich.log "Error refocusing Windows: #{e}" if defined?(Lich.log)
