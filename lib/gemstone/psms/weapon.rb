@@ -334,7 +334,7 @@ module Lich
             end
             break if usage_result.eql?(false)
             break if usage_result =~ technique[:assault_rx]
-            break if usage_result =~ /^#{name} what\?$/i,
+            break if usage_result =~ /^#{name} what\?$/i
             break if usage_result =~ in_cooldown_regex
             break if Time.now() > break_out
             sleep 0.25
