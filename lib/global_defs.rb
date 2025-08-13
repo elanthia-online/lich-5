@@ -157,7 +157,7 @@ end
 
 def goto(label)
   Script.current.jump_label = label.to_s
-  raise JUMP
+  raise Lich::Common::Script::JUMP
 end
 
 def pause_script(*names)
