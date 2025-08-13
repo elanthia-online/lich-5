@@ -329,7 +329,7 @@ module Lich
           if (npc = @@npcs.find { |n| n.id == id })
             next if (npc.status =~ /dead|gone/i)
             next if (npc.name =~ /^animated\b/i && npc.name !~ /^animated slush/i)
-            next if (npc.noun =~ /^(?:arm|appendage|claw|limb|pincer|tentacle)s?$|^(?:palpus|palpi)$/i)
+            next if (npc.noun =~ /^(?:arm|appendage|claw|limb|pincer|tentacle)s?$|^(?:palpus|palpi)$/i && npc.name !~ /amaranthine kraken tentacle/i)
             a.push(npc)
           end
         }
