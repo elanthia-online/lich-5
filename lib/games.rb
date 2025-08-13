@@ -446,6 +446,10 @@ module Lich
               alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
             end
 
+            if $frontend =~ /frostbite/i && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+              alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+            end
+
             # Handle room number display
             if @room_number_after_ready && alt_string =~ /<prompt /
               alt_string = @game_instance ? @game_instance.process_room_display(alt_string) : alt_string
