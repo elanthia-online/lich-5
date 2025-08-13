@@ -37,7 +37,7 @@ module Lich
       }.freeze
 
       SPELL_CIRCLE_INDEX_TO_NAME = {
-        0  => { name: "Action",                  abbr: "Act"},
+        0  => { name: "Action",                  abbr: "Act"    },
         1  => { name: "Minor Spiritual",         abbr: "MinSp"  },
         2  => { name: "Major Spiritual",         abbr: "MajSp"  },
         3  => { name: "Cleric",                  abbr: "Clerc"  },
