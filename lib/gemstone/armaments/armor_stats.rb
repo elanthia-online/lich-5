@@ -449,7 +449,6 @@ module Lich
           end
 
           return matches.empty? ? nil : matches.uniq
-          return nil if matches.empty?
         end
 
         ##
