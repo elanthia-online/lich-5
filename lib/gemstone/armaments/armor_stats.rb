@@ -432,12 +432,35 @@ module Lich
         end
 
         ##
-        # Returns the armor stats hash matching the given name from any armor group.
-        # WARNING: Names are not strict, it could match multiple types of armor
+        # Returns the lowest asg armor stats hash matching the given name from any armor group.
+        # WARNING: Names are not strict, it could match multiple types of armor, in which case
+        #          the lowest asg group will be returned.
+        #
+        # @param name [String] The name or alias of the armor.
+        # @return [Hash, nil] The full stats hash for the matching armor, or nil if not found.
+        def self.find(name)
+          name = name.downcase.strip
+
+          matches = []
+          @@armor_stats.each_value do |subgroups|
+            subgroups.each_value do |asg_data|
+              next unless asg_data.is_a?(Hash)
+              matches << asg_data if asg_data[:all_names].include?(name)
+            end
+          end
+
+          return nil if matches.empty?
+          matches.min_by { |asg| asg[:armor_sub_group] }
+        end
+
+        ##
+        # Returns the armor stats hash or hashes matching the given name from any armor group.
+        # WARNING: Names are not strict, it could match multiple types of armor, and this version
+        #          will return an array of hashes for all matches
         #
         # @param name [String] The name or alias of the armor.
         # @return [Array<Hash>] The full stats hash for the matching armor, or nil if not found.
-        def self.find(name)
+        def self.find_all(name)
           name = name.downcase.strip
 
           matches = []

@@ -87,7 +87,7 @@ module Lich
             :base_name     => "impale",
             :all_names     => ["impale"],
             :damage_types  => [slash: 0.0, crush: nil, puncture: nil, special: [:unbalance]],
-            :damage_factor => [nil, 0.325, 0.315, 0.300, 0.285],
+            :damage_factor => [nil, 0.350, 0.325, 0.315, 0.300, 0.285],
             #                       /Cloth             / Leather       / Scale         / Chain         / Plate
             :avd_by_asg    => [nil, 37, 37, nil, nil, 43, 42, 41, 40, 33, 31, 29, 27, 35, 31, 27, 23, 31, 25, 19, 13],
             :base_rt       => 5,
