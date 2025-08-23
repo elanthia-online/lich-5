@@ -271,7 +271,7 @@ module Lich
         #   #=> true
         def self.valid_name?(name)
           name = name.downcase.strip
-          all_shield_names.include?(name)
+          self.names.include?(name)
         end
       end
     end
