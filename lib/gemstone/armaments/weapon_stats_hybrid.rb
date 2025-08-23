@@ -39,7 +39,7 @@ module Lich
 =end
         @@weapon_stats_hybrid = {
           # Hybrid Weapons
-          "katar" => {
+          :katar => {
             :category      => :hybrid,
             :hybrid_skills => [:OHE, :BRAWL],
             :base_name     => "katar",
