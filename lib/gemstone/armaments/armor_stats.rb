@@ -417,7 +417,7 @@ module Lich
         # @return [Array<String>] List of armor type names (e.g., "Robes", "Light Leather", etc.)
         #
         def self.categories
-          @@armor_stats.values.flat_map(&:values).map { _1[:base] }.uniq.compact
+          @@armor_stats.values.flat_map(&:values).map { _1[:base_name] }.uniq.compact
         end
 
         ##
