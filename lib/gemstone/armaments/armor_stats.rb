@@ -448,7 +448,7 @@ module Lich
             end
           end
 
-          return matches.uniq unless matches.empty?
+          return matches.empty? ? nil : matches.uniq
           return nil if matches.empty?
         end
 
