@@ -114,7 +114,7 @@ module Lich
         def self.damage_summary(name, category = nil)
           name = name.downcase.strip
 
-          weapon = find_weapon(name, category)
+          weapon = self.find(name, category)
           return nil unless weapon
 
           {
@@ -135,7 +135,7 @@ module Lich
         def self.aliases_for(name, category = nil)
           name = name.downcase.strip
 
-          weapon = find_weapon(name, category)
+          weapon = self.find(name, category)
           weapon ? weapon[:all_names] : []
         end
 
@@ -153,8 +153,8 @@ module Lich
 
           return nil if name1 == name2 && category1 == category2
 
-          w1 = find_weapon(name1, category1)
-          w2 = find_weapon(name2, category2)
+          w1 = self.find(name1, category1)
+          w2 = self.find(name2, category2)
           return nil unless w1 && w2
 
           {
@@ -260,7 +260,7 @@ module Lich
         def self.is_grippable?(name)
           name = name.downcase.strip
 
-          weapon = find_weapon(name)
+          weapon = self.find(name)
 
           weapon && weapon[:grippable?] == true
         end
@@ -273,7 +273,7 @@ module Lich
         def self.category_for(name)
           name = name.downcase.strip
 
-          weapon = find_weapon(name)
+          weapon = self.find(name)
           weapon ? weapon[:category] : nil
         end
 
@@ -283,7 +283,7 @@ module Lich
         # @param name [String] the name or alias of the weapon
         # @return [String] formatted weapon display string
         def self.pretty_long(name)
-          weapon = find_weapon(name)
+          weapon = self.find(name)
           return "\n(no data)\n" unless weapon.is_a?(Hash)
 
           lines = []
@@ -351,7 +351,7 @@ module Lich
         # @param name [String] the name or alias of the weapon
         # @return [String] formatted weapon display string
         def self.pretty(name)
-          weapon = find_weapon(name)
+          weapon = self.find(name)
           return "\n(no data)\n" unless weapon.is_a?(Hash)
 
           lines = []

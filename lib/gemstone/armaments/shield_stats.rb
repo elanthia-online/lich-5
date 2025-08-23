@@ -130,7 +130,7 @@ module Lich
         def self.category_for(name)
           name = name.downcase.strip
 
-          shield = find_shield(name)
+          shield = self.find(name)
           shield ? shield[:category] : nil
         end
 
@@ -144,7 +144,7 @@ module Lich
         #   puts ShieldStats.pretty("tower shield")
         #   #=> (prints formatted summary)
         def self.pretty(name)
-          shield = find_shield(name)
+          shield = self.find(name)
           return "\n(no data)\n" unless shield.is_a?(Hash)
 
           lines = []
@@ -197,7 +197,7 @@ module Lich
         #   #=> ["aegis", "kite shield", "large shield", ...]
         def self.aliases_for(name)
           name = name.downcase.strip
-          shield = find_shield(name)
+          shield = self.find(name)
           shield ? shield[:all_names] : []
         end
 

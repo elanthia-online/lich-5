@@ -493,7 +493,7 @@ module Lich
         def self.category_for(name)
           name = name.downcase.strip
 
-          armor = find_armor(name)
+          armor = self.find(name)
           armor ? armor[:type] : nil
         end
 
@@ -503,7 +503,7 @@ module Lich
         # @param name [String] the name or alias of the armor
         # @return [String] formatted armor display string
         def self.pretty(name)
-          armor = find_armor(name)
+          armor = self.find(name)
           return "\n(no data)\n" unless armor.is_a?(Hash)
 
           lines = []
@@ -545,7 +545,7 @@ module Lich
         # @param name [String] the armor name or alias
         # @return [String] formatted armor display string
         def self.pretty_long(name)
-          armor = find_armor(name)
+          armor = self.find(name)
           return "\n(no data)\n" unless armor.is_a?(Hash)
 
           lines = []
@@ -602,7 +602,7 @@ module Lich
         # @param name [String] the name or alias of the armor
         # @return [Array<String>] all aliases for the matching armor, or [] if not found
         def self.aliases_for(name)
-          armor = find_armor(name)
+          armor = self.find(name)
           armor ? armor[:all_names] : []
         end
 
@@ -613,8 +613,8 @@ module Lich
         # @param name2 [String] second armor name
         # @return [Hash, nil] comparison hash or nil if either armor not found
         def self.compare(name1, name2)
-          a1 = find_armor(name1)
-          a2 = find_armor(name2)
+          a1 = self.find(name1)
+          a2 = self.find(name2)
           return nil unless a1 && a2
 
           {
@@ -667,7 +667,7 @@ module Lich
         # @return [Boolean] true if recognized
         def self.valid_name?(name)
           name = name.downcase.strip
-          all_armor_names.include?(name)
+          self.names.include?(name)
         end
       end
     end
