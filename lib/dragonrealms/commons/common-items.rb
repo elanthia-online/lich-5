@@ -467,7 +467,7 @@ module Lich
             end
           end
         end
-        
+
         trashcans = DRRoom.room_objs
                           .reject { |obj| obj =~ /azure \w+ tree/ }
                           .map { |long_name| DRC.get_noun(long_name) }
