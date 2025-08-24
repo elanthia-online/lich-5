@@ -423,20 +423,51 @@ module Lich
         return unless DRCI.get_item_if_not_held?(item)
 
         if worn_trashcan
-          case DRC.bput("put my #{item} in my #{worn_trashcan}", DROP_TRASH_RETRY_PATTERNS, DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, /^Perhaps you should be holding that first/)
-          when /^Perhaps you should be holding that first/
-            return (DRCI.get_item?(item) && DRCI.dispose_trash(item, worn_trashcan, worn_trashcan_verb))
-          when *DROP_TRASH_RETRY_PATTERNS
-            return DRCI.dispose_trash(item, worn_trashcan, worn_trashcan_verb)
+          case DRC.bput("put my #{item} in my #{worn_trashcan}", DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/)
           when *DROP_TRASH_SUCCESS_PATTERNS
             if worn_trashcan_verb
               DRC.bput("#{worn_trashcan_verb} my #{worn_trashcan}", *WORN_TRASHCAN_VERB_PATTERNS)
               DRC.bput("#{worn_trashcan_verb} my #{worn_trashcan}", *WORN_TRASHCAN_VERB_PATTERNS)
             end
             return true
+          when *DROP_TRASH_FAILURE_PATTERNS
+            # NOOP, try next trashcan option
+          when *DROP_TRASH_RETRY_PATTERNS
+            return DRCI.dispose_trash(item, worn_trashcan, worn_trashcan_verb)
+          when /^Perhaps you should be holding that first/
+            return (DRCI.get_item?(item) && DRCI.dispose_trash(item, worn_trashcan, worn_trashcan_verb))
           end
         end
 
+        # Check for meta:trashcan tag on the room to identify a specific trashcan to use.
+        if Room.current.tags.find { |t| t =~ /meta:trashcan:(.*)/ }
+          trashcan = Regexp.last_match(1)
+
+          # Gelapod needs special handling since you feed it, and it disappears in winter
+          trash_command = nil
+          if trashcan == 'gelapod'
+            trash_command = "feed my #{item} to gelapod" if DRRoom.room_objs.include?('gelapod')
+          else
+            trash_command = "put my #{item} in #{trashcan}"
+          end
+
+          # gelapod is not here - probably winter move on to next attempt to get rid of
+          unless trash_command.nil?
+            case DRC.bput(trash_command, DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/)
+            when *DROP_TRASH_SUCCESS_PATTERNS
+              return true
+            when *DROP_TRASH_FAILURE_PATTERNS
+              # NOOP, try next trashcan option
+            when *DROP_TRASH_RETRY_PATTERNS
+              # If still didn't dispose of trash after retry
+              # then don't return yet, will try to drop it later.
+              return dispose_trash(item)
+            when /^Perhaps you should be holding that first/
+              return (DRCI.get_item?(item) && DRCI.dispose_trash(item))
+            end
+          end
+        end
+        
         trashcans = DRRoom.room_objs
                           .reject { |obj| obj =~ /azure \w+ tree/ }
                           .map { |long_name| DRC.get_noun(long_name) }
@@ -474,26 +505,31 @@ module Lich
           trash_command = "put my #{item} in #{trashcan}" unless trashcan == 'gelapod'
 
           case DRC.bput(trash_command, DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/)
-          when /^Perhaps you should be holding that first/
-            return (DRCI.get_item?(item) && DRCI.dispose_trash(item))
+          when *DROP_TRASH_SUCCESS_PATTERNS
+            return true
+          when *DROP_TRASH_FAILURE_PATTERNS
+            # NOOP, try next trashcan option
           when *DROP_TRASH_RETRY_PATTERNS
             # If still didn't dispose of trash after retry
             # then don't return yet, will try to drop it later.
             return true if dispose_trash(item)
-          when *DROP_TRASH_SUCCESS_PATTERNS
-            return true
+          when /^Perhaps you should be holding that first/
+            return (DRCI.get_item?(item) && DRCI.dispose_trash(item))
           end
         end
 
         # No trash bins or not able to put item in a bin, just drop it.
         case DRC.bput("drop my #{item}", DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/, /^But you aren't holding that/)
-        when /^Perhaps you should be holding that first/, /^But you aren't holding that/
-          return (DRCI.get_item?(item) && DRCI.dispose_trash(item))
-        when *DROP_TRASH_RETRY_PATTERNS
-          return dispose_trash(item)
         when *DROP_TRASH_SUCCESS_PATTERNS
           return true
+        when *DROP_TRASH_FAILURE_PATTERNS
+          return false
+        when *DROP_TRASH_RETRY_PATTERNS
+          return dispose_trash(item)
+        when /^Perhaps you should be holding that first/, /^But you aren't holding that/
+          return (DRCI.get_item?(item) && DRCI.dispose_trash(item))
         else
+          # failure of match patterns in the bput, but still need to return a value
           return false
         end
       end
