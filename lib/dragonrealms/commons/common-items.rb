@@ -441,19 +441,19 @@ module Lich
 
         # Check for meta:trashcan tag on the room to identify a specific trashcan to use.
         if Room.current.tags.find { |t| t =~ /meta:trashcan:(.*)/ }
-          trashcan = Regexp.last_match(1)
+          metatag_trashcan = Regexp.last_match(1)
 
           # Gelapod needs special handling since you feed it, and it disappears in winter
-          trash_command = nil
-          if trashcan == 'gelapod'
-            trash_command = "feed my #{item} to gelapod" if DRRoom.room_objs.include?('gelapod')
+          metatag_trash_command = nil
+          if metatag_trashcan == 'gelapod'
+            metatag_trash_command = "feed my #{item} to gelapod" if DRRoom.room_objs.include?('gelapod')
           else
-            trash_command = "put my #{item} in #{trashcan}"
+            metatag_trash_command = "put my #{item} in #{metatag_trashcan}"
           end
 
           # gelapod is not here - probably winter move on to next attempt to get rid of
-          unless trash_command.nil?
-            case DRC.bput(trash_command, DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/)
+          unless metatag_trash_command.nil?
+            case DRC.bput(metatag_trash_command, DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/)
             when *DROP_TRASH_SUCCESS_PATTERNS
               return true
             when *DROP_TRASH_FAILURE_PATTERNS
