@@ -855,7 +855,7 @@ module Lich
 
           if (script = Script.current)
             Thread.current.priority = 1
-            respond("--- Lich: #{Pathname.new(script.file_name).expand_path.dirname.basename.to_s == 'custom' ? 'custom/' : ''}#{script.name} active.") unless script.quiet
+            respond("--- Lich: #{script.name} active.") unless script.quiet
             begin
               script_binding = TRUSTED_SCRIPT_BINDING.call
               eval('script = Script.current', script_binding, script.name.to_s)
