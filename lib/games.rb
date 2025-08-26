@@ -239,7 +239,11 @@ module Lich
         end
 
         def puts(str)
-          script_name = Script.current&.name || '(unknown script)'
+          if Script.current&.file_name
+            script_name = "#{Pathname.new(Script.current&.file_name).expand_path.dirname.basename.to_s == 'custom' ? 'custom/' : ''}#{Script.current&.name}"
+          else
+            script_name = '(unknown script)'
+          end
           $_CLIENTBUFFER_.push "[#{script_name}]#{$SEND_CHARACTER}#{$cmd_prefix}#{str}\r\n"
 
           unless Script.current&.silent
