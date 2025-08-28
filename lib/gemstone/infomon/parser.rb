@@ -443,7 +443,7 @@ module Lich
               :ok
             when Pattern::ProfileName
               match = Regexp.last_match
-              if State.get.eql?(State::Profile) && match[:name].split(' ').last != Char.name
+              if State.get.eql?(State::Profile) && !match[:name].split(' ').include?(Char.name)
                 State.set(State::Ready)
                 :ok
               else

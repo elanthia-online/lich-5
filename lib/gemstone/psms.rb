@@ -110,11 +110,14 @@ module Lich
         case costcheck
         when true
           base_cost = seek_psm[:cost]
-          if forcert_count > 0
-            return (base_cost + (base_cost * ((25 + (10.0 * forcert_count)) / 100))).truncate < XMLData.stamina
-          else
-            return base_cost < XMLData.stamina
+          base_cost.each do |cost_type, cost_amount|
+            if forcert_count > 0
+              return false unless (cost_amount + (cost_amount * ((25 + (10.0 * forcert_count)) / 100))).truncate < XMLData.public_send(cost_type)
+            else
+              return false unless cost_amount < XMLData.public_send(cost_type)
+            end
           end
+          return true
         else
           Infomon.get("#{type.downcase}.#{seek_psm[:short_name]}")
         end

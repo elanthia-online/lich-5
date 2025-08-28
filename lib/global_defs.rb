@@ -20,7 +20,7 @@ def start_scripts(*script_names)
 end
 
 def force_start_script(script_name, cli_vars = [], flags = {})
-  flags = Hash.new unless flags.class == Hash
+  flags = Hash.new unless flags.is_a?(Hash)
   flags[:force] = true
   start_script(script_name, cli_vars, flags)
 end
@@ -157,7 +157,7 @@ end
 
 def goto(label)
   Script.current.jump_label = label.to_s
-  raise JUMP
+  raise Lich::Common::Script::JUMP
 end
 
 def pause_script(*names)
@@ -817,7 +817,7 @@ end
 def check_mind(string = nil)
   if string.nil?
     return XMLData.mind_text
-  elsif (string.class == String) and (string.to_i == 0)
+  elsif (string.is_a?(String)) and (string.to_i == 0)
     if string =~ /#{XMLData.mind_text}/i
       return true
     else
@@ -834,7 +834,7 @@ end
 def checkmind(string = nil)
   if string.nil?
     return XMLData.mind_text
-  elsif string.class == String and string.to_i == 0
+  elsif string.is_a?(String) and string.to_i == 0
     if string =~ /#{XMLData.mind_text}/i
       return true
     else
@@ -1002,7 +1002,7 @@ def checkstance(num = nil)
   Lich.deprecated('checkstance', 'Char.stance')
   if num.nil?
     XMLData.stance_text
-  elsif (num.class == String) and (num.to_i == 0)
+  elsif (num.is_a?(String)) and (num.to_i == 0)
     if num =~ /off/i
       XMLData.stance_value == 0
     elsif num =~ /adv/i
@@ -1019,7 +1019,7 @@ def checkstance(num = nil)
       echo "checkstance: invalid argument (#{num}).  Must be off/adv/for/neu/gua/def or 0-100"
       nil
     end
-  elsif (num.class == Integer) or (num =~ /^[0-9]+$/ and (num = num.to_i))
+  elsif (num.is_a?(Integer)) or (num =~ /^[0-9]+$/ and (num = num.to_i))
     XMLData.stance_value == num.to_i
   else
     echo "checkstance: invalid argument (#{num}).  Must be off/adv/for/neu/gua/def or 0-100"
@@ -1040,7 +1040,7 @@ def checkencumbrance(string = nil)
   Lich.deprecated('checkencumbrance', 'Char.encumbrance')
   if string.nil?
     XMLData.encumbrance_text
-  elsif (string.class == Integer) or (string =~ /^[0-9]+$/ and (string = string.to_i))
+  elsif (string.is_a?(Integer)) or (string =~ /^[0-9]+$/ and (string = string.to_i))
     string <= XMLData.encumbrance_value
   else
     # fixme
@@ -1235,7 +1235,7 @@ end
 def checkprep(spell = nil)
   if spell.nil?
     XMLData.prepared_spell
-  elsif spell.class != String
+  elsif !spell.is_a?(String)
     echo("Checkprep error, spell # not implemented!  You must use the spell name")
     false
   else
@@ -1331,11 +1331,11 @@ def pause(num = 1)
 end
 
 def cast(spell, target = nil, results_of_interest = nil)
-  if spell.class == Spell
+  if spell.is_a?(Spell)
     spell.cast(target, results_of_interest)
-  elsif ((spell.class == Integer) or (spell.to_s =~ /^[0-9]+$/)) and (find_spell = Spell[spell.to_i])
+  elsif ((spell.is_a?(Integer)) or (spell.to_s =~ /^[0-9]+$/)) and (find_spell = Spell[spell.to_i])
     find_spell.cast(target, results_of_interest)
-  elsif (spell.class == String) and (find_spell = Spell[spell])
+  elsif (spell.is_a?(String)) and (find_spell = Spell[spell])
     find_spell.cast(target, results_of_interest)
   else
     echo "cast: invalid spell (#{spell})"
@@ -1373,7 +1373,7 @@ end
 
 def matchtimeout(secs, *strings)
   unless (Script.current) then echo("An unknown script thread tried to fetch a game line from the queue, but Lich can't process the call without knowing which script is calling! Aborting..."); Thread.current.kill; return false end
-  unless (secs.class == Float || secs.class == Integer)
+  unless (secs.is_a?(Float) || secs.is_a?(Integer))
     echo('matchtimeout error! You appear to have given it a string, not a #! Syntax:  matchtimeout(30, "You stand up")')
     return false
   end
@@ -1448,14 +1448,14 @@ end
 
 def waitforre(regexp)
   unless (script = Script.current) then respond('--- waitforre: Unable to identify calling script.'); return false; end
-  unless regexp.class == Regexp then echo("Script error! You have given 'waitforre' something to wait for, but it isn't a Regular Expression! Use 'waitfor' if you want to wait for a string."); sleep 1; return nil end
+  unless regexp.is_a?(Regexp) then echo("Script error! You have given 'waitforre' something to wait for, but it isn't a Regular Expression! Use 'waitfor' if you want to wait for a string."); sleep 1; return nil end
   regobj = regexp.match(script.gets) until regobj
 end
 
 def waitfor(*strings)
   unless (script = Script.current) then respond('--- waitfor: Unable to identify calling script.'); return false; end
   strings.flatten!
-  if (script.class == WizardScript) and (strings.length == 1) and (strings.first.strip == '>')
+  if (script.is_a?(WizardScript)) and (strings.length == 1) and (strings.first.strip == '>')
     return script.gets
   end
 
@@ -1683,7 +1683,7 @@ end
 def respond(first = "", *messages)
   str = ''
   begin
-    if first.class == Array
+    if first.is_a?(Array)
       first.flatten.each { |ln| str += sprintf("%s\r\n", ln.to_s.chomp) }
     else
       str += sprintf("%s\r\n", first.to_s.chomp)
@@ -1724,7 +1724,7 @@ end
 def _respond(first = "", *messages)
   str = ''
   begin
-    if first.class == Array
+    if first.is_a?(Array)
       first.flatten.each { |ln| str += sprintf("%s\r\n", ln.to_s.chomp) }
     else
       str += sprintf("%s\r\n", first.to_s.chomp)
@@ -1992,23 +1992,25 @@ def fb_to_sf(line)
   end
 end
 
-def sf_to_wiz(line)
+def sf_to_wiz(line, bypass_multiline: false)
   begin
     return line if line == "\r\n"
 
-    if $sftowiz_multiline
-      $sftowiz_multiline = $sftowiz_multiline + line
-      line = $sftowiz_multiline
+    unless bypass_multiline
+      if $sftowiz_multiline
+        $sftowiz_multiline = $sftowiz_multiline + line
+        line = $sftowiz_multiline
+      end
+      if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
+        $sftowiz_multiline = line
+        return nil
+      end
+      if (line.scan(/<style id="\w+"[^>]*\/>/).length > line.scan(/<style id=""[^>]*\/>/).length)
+        $sftowiz_multiline = line
+        return nil
+      end
+      $sftowiz_multiline = nil
     end
-    if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
-      $sftowiz_multiline = line
-      return nil
-    end
-    if (line.scan(/<style id="\w+"[^>]*\/>/).length > line.scan(/<style id=""[^>]*\/>/).length)
-      $sftowiz_multiline = line
-      return nil
-    end
-    $sftowiz_multiline = nil
     if line =~ /<LaunchURL src="(.*?)" \/>/
       $_CLIENT_.puts "\034GSw00005\r\nhttps://www.play.net#{$1}\r\n"
     end

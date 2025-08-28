@@ -478,7 +478,7 @@ module Lich
 
         # handle khri silence as it's not part of base-spells data, and method of ending it differs from spells
         bput('khri stop silence', 'You attempt to relax') if DRSpells.active_spells.keys.include?('Khri Silence')
-        bput('khri stop vanish', /^You would need to start Vanish/, /^Your control over the limited subversion of reality falters/) if DRStats.guild == "Thief"
+        bput('khri stop vanish', /^You would need to start Vanish/, /^Your control over the limited subversion of reality falters/, /^You are not trained in the Vanish meditation/) if (DRStats.guild == "Thief" && invisible?)
       end
 
       def check_encumbrance(refresh = true)

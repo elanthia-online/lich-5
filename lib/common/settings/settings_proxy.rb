@@ -104,6 +104,16 @@ module Lich
         delegate_conversion(:to_hash, strict: true)
       end
 
+      # added 20250620 for JSON.pretty_generate
+      def to_json(*args)
+        if @target.respond_to?(:to_json)
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "to_json: delegating with args" })
+          @target.to_json(*args)
+        else
+          raise NoMethodError, "undefined method :to_json for #{@target.inspect}:#{@target.class}"
+        end
+      end
+
       # Other common conversions
       def to_proc
         delegate_conversion(:to_proc, strict: true)

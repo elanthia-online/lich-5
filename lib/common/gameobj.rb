@@ -45,6 +45,11 @@ module Lich
         end
       end
 
+      def type?(type_to_check)
+        # handle nil types
+        return self.type.to_s.split(',').any?(type_to_check)
+      end
+
       def sellable
         GameObj.load_data if @@sellable_data.empty?
         list = @@sellable_data.keys.find_all { |t| (@name =~ @@sellable_data[t][:name] or @noun =~ @@sellable_data[t][:noun]) and (@@sellable_data[t][:exclude].nil? or @name !~ @@sellable_data[t][:exclude]) }
@@ -324,7 +329,7 @@ module Lich
           if (npc = @@npcs.find { |n| n.id == id })
             next if (npc.status =~ /dead|gone/i)
             next if (npc.name =~ /^animated\b/i && npc.name !~ /^animated slush/i)
-            next if (npc.noun =~ /^(?:arm|appendage|claw|limb|pincer|tentacle)s?$|^(?:palpus|palpi)$/i)
+            next if (npc.noun =~ /^(?:arm|appendage|claw|limb|pincer|tentacle)s?$|^(?:palpus|palpi)$/i && npc.name !~ /amaranthine kraken tentacle/i)
             a.push(npc)
           end
         }

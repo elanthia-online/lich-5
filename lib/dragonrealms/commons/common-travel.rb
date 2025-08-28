@@ -165,7 +165,7 @@ module Lich
           end
           path = Map.findpath(room, Map[room_num])
           way = room.wayto[path.first.to_s]
-          if way.class == Proc
+          if way.is_a?(StringProc)
             way.call
           else
             move way

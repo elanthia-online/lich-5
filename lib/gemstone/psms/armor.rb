@@ -28,65 +28,65 @@ module Lich
         "armor_blessing"      => {
           :short_name => "blessing",
           :type       => :buff,
-          :cost       => 0,
+          :cost       => { stamina: 0 },
           :regex      => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i,
           :usage      => "blessing"
         },
         "armor_reinforcement" => {
           :short_name => "reinforcement",
           :type       => :buff,
-          :cost       => 0,
+          :cost       => { stamina: 0 },
           :regex      => /\w+ adjusts? \w+(?:'s)? [\w\s]+, reinforcing weak spots\./i,
           :usage      => "reinforcement"
         },
         "armor_spike_mastery" => {
           :short_name => "spikemastery",
           :type       => :passive,
-          :cost       => 0,
+          :cost       => { stamina: 0 },
           :regex      => /Armor Spike Mastery is passive and always active once learned\./i,
           :usage      => "spikemastery"
         },
         "armor_support"       => {
           :short_name => "support",
           :type       => :buff,
-          :cost       => 0,
+          :cost       => { stamina: 0 },
           :regex      => /\w+ adjusts? \w+(?:'s)? [\w\s]+, improving its ability to support the weight of \w+ gear\./i,
           :usage      => "support"
         },
         "armored_casting"     => {
           :short_name => "casting",
           :type       => :buff,
-          :cost       => 0,
+          :cost       => { stamina: 0 },
           :regex      => /\w+ adjusts? \w+(?:'s)? [\w\s]+, making it easier for \w+ to recover from failed spell casting\./i,
           :usage      => "casting"
         },
         "armored_evasion"     => {
           :short_name => "evasion",
           :type       => :buff,
-          :cost       => 0,
+          :cost       => { stamina: 0 },
           :regex      => /\w+ adjusts? \w+(?:'s)? [\w\s]+, improving its comfort and maneuverability\./i,
           :usage      => "evasion"
         },
         "armored_fluidity"    => {
           :short_name => "fluidity",
           :type       => :buff,
-          :cost       => 0,
+          :cost       => { stamina: 0 },
           :regex      => /\w+ adjusts? \w+(?:'s)? [\w\s]+, making it easier for \w+ to cast spells\./i,
           :usage      => "fluidity"
         },
         "armored_stealth"     => {
           :short_name => "stealth",
           :type       => :buff,
-          :cost       => 0,
+          :cost       => { stamina: 0 },
           :regex      => /\w+ adjusts? \w+(?:'s)? [\w\s]+ to cushion \w+ movements\./i,
           :usage      => "stealth"
         },
         "crush_protection"    => {
           :short_name => "crush",
           :type       => :passive,
-          :cost       => 0,
+          :cost       => { stamina: 0 },
           :regex      => Regexp.union(
-            /You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
+            /You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against crushing damage\./i,
             /You must specify an armor slot\./,
             /You don't seem to have the necessary armor fittings in hand\./
           ),
@@ -95,9 +95,9 @@ module Lich
         "puncture_protection" => {
           :short_name => "puncture",
           :type       => :passive,
-          :cost       => 0,
+          :cost       => { stamina: 0 },
           :regex      => Regexp.union(
-            /You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
+            /You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against puncturing damage\./i,
             /You must specify an armor slot\./,
             /You don't seem to have the necessary armor fittings in hand\./
           ),
@@ -106,9 +106,9 @@ module Lich
         "slash_protection"    => {
           :short_name => "slash",
           :type       => :passive,
-          :cost       => 0,
+          :cost       => { stamina: 0 },
           :regex      => Regexp.union(
-            /You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against (?:punctur|crush|slash)ing damage\./i,
+            /You adjust \w+(?:'s)? [\w\s]+ with your (?:cloth|leather|scale|chain|plate|accessory) armor fittings, rearranging and reinforcing the armor to better protect against slashing damage\./i,
             /You must specify an armor slot\./,
             /You don't seem to have the necessary armor fittings in hand\./
           ),

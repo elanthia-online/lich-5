@@ -1,6 +1,7 @@
 module Lich
   module Common
     class Map
+      include Enumerable
       @@loaded                   = false
       @@load_mutex               = Mutex.new
       @@list                   ||= Array.new
@@ -48,7 +49,7 @@ module Lich
 
       def Map.[](val)
         Map.load unless @@loaded
-        if (val.class == Integer) or val =~ /^[0-9]+$/
+        if (val.is_a?(Integer)) or val =~ /^[0-9]+$/
           @@list[val.to_i]
         elsif val =~ /^u(-?\d+)$/i
           uid_request = $1.dup.to_i
@@ -360,7 +361,7 @@ module Lich
                       end
                     }
                     room['timeto'].keys.each { |k|
-                      if (room['timeto'][k].class == String) and (room['timeto'][k][0..2] == ';e ')
+                      if (room['timeto'][k].is_a?(String)) and (room['timeto'][k][0..2] == ';e ')
                         room['timeto'][k] = StringProc.new(room['timeto'][k][3..-1])
                       end
                     }
@@ -579,7 +580,7 @@ module Lich
           :check_location => @check_location,
           :unique_loot    => @unique_loot,
           :uid            => @uid,
-        }).delete_if { |_a, b| b.nil? or (b.class == Array and b.empty?) };
+        }).delete_if { |_a, b| b.nil? or (b.is_a?(Array) and b.empty?) };
         JSON.pretty_generate(mapjson);
       end
 
@@ -648,14 +649,14 @@ module Lich
               room.room_objects.to_a.each { |loot| file.write "      <room_objects>#{loot.gsub(/(<|>|"|'|&)/) { escape[$1] }}</room_objects>\n" }
               file.write "      <image name=\"#{room.image.gsub(/(<|>|"|'|&)/) { escape[$1] }}\" coords=\"#{room.image_coords.join(',')}\" />\n" if room.image and room.image_coords
               room.wayto.keys.each { |target|
-                if room.timeto[target].class == Proc
+                if room.timeto[target].is_a?(StringProc)
                   cost = " cost=\"#{room.timeto[target]._dump.gsub(/(<|>|"|'|&)/) { escape[$1] }}\""
                 elsif room.timeto[target]
                   cost = " cost=\"#{room.timeto[target]}\""
                 else
                   cost = ''
                 end
-                if room.wayto[target].class == Proc
+                if room.wayto[target].is_a?(StringProc)
                   file.write "      <exit target=\"#{target}\" type=\"Proc\"#{cost}>#{room.wayto[target]._dump.gsub(/(<|>|"|'|&)/) { escape[$1] }}</exit>\n"
                 else
                   file.write "      <exit target=\"#{target}\" type=\"#{room.wayto[target].class}\"#{cost}>#{room.wayto[target].gsub(/(<|>|"|'|&)/) { escape[$1] }}</exit>\n"
@@ -675,14 +676,14 @@ module Lich
 
       def Map.estimate_time(array)
         Map.load unless @@loaded
-        unless array.class == Array
+        unless array.is_a?(Array)
           raise Exception.exception("MapError"), "Map.estimate_time was given something not an array!"
         end
         time = 0.to_f
         until array.length < 2
           room = array.shift
           if (t = Map[room].timeto[array.first.to_s])
-            if t.class == Proc
+            if t.is_a?(StringProc)
               time += t.call.to_f
             else
               time += t.to_f
@@ -695,7 +696,7 @@ module Lich
       end
 
       def Map.dijkstra(source, destination = nil)
-        if source.class == Map
+        if source.is_a?(Map)
           source.dijkstra(destination)
         elsif (room = Map[source])
           room.dijkstra(destination)
@@ -731,7 +732,7 @@ module Lich
               @@list[v].wayto.keys.each { |adj_room|
                 adj_room_i = adj_room.to_i
                 unless visited[adj_room_i]
-                  if @@list[v].timeto[adj_room].class == Proc
+                  if @@list[v].timeto[adj_room].is_a?(StringProc)
                     nd = @@list[v].timeto[adj_room].call
                   else
                     nd = @@list[v].timeto[adj_room]
@@ -747,7 +748,7 @@ module Lich
                 end
               }
             end
-          elsif destination.class == Integer
+          elsif destination.is_a?(Integer)
             until pq.size == 0
               v = pq.shift
               break if v == destination
@@ -755,7 +756,7 @@ module Lich
               @@list[v].wayto.keys.each { |adj_room|
                 adj_room_i = adj_room.to_i
                 unless visited[adj_room_i]
-                  if @@list[v].timeto[adj_room].class == Proc
+                  if @@list[v].timeto[adj_room].is_a?(StringProc)
                     nd = @@list[v].timeto[adj_room].call
                   else
                     nd = @@list[v].timeto[adj_room]
@@ -771,7 +772,7 @@ module Lich
                 end
               }
             end
-          elsif destination.class == Array
+          elsif destination.is_a?(Array)
             dest_list = destination.collect { |dest| dest.to_i }
             until pq.size == 0
               v = pq.shift
@@ -780,7 +781,7 @@ module Lich
               @@list[v].wayto.keys.each { |adj_room|
                 adj_room_i = adj_room.to_i
                 unless visited[adj_room_i]
-                  if @@list[v].timeto[adj_room].class == Proc
+                  if @@list[v].timeto[adj_room].is_a?(StringProc)
                     nd = @@list[v].timeto[adj_room].call
                   else
                     nd = @@list[v].timeto[adj_room]
@@ -806,7 +807,7 @@ module Lich
       end
 
       def Map.findpath(source, destination)
-        if source.class == Map
+        if source.is_a?(Map)
           source.path_to(destination)
         elsif (room = Map[source])
           room.path_to(destination)
@@ -853,9 +854,9 @@ module Lich
         if target_list.include?(@id)
           @id
         else
-          _, shortest_distances = Map.dijkstra(@id, target_list)
-          target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
-          target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }.first
+          _previous, shortest_distances = Map.dijkstra(@id, target_list)
+          valid_rooms = target_list.select { |room_num| shortest_distances[room_num].is_a?(Numeric) }
+          return valid_rooms.min_by { |room_num| shortest_distances[room_num] }
         end
       end
     end

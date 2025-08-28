@@ -108,7 +108,7 @@ module Lich
           end
 
           # Fix nested double quotes
-          unless (matches = server_string.scan(/"([^=]*"[^=]*)"/)).empty?
+          unless (matches = server_string.scan(/"([^=>]*"[^=>]*)"/)).empty?
             Lich.log "Invalid nested double quotes XML tags detected: #{server_string.inspect}"
             matches.flatten.each do |match|
               server_string.gsub!(match, match.gsub(/"/, '&quot;'))
@@ -381,9 +381,16 @@ module Lich
           rescue => e
             case e.to_s
             # Missing attribute equal: <s> - in dynamic dialogs with a single apostrophe for possessive 'Tsetem's Items'
-            when /nested single quotes|nested double quotes|Missing attribute equal: <s>/
+            when /nested single quotes|nested double quotes|Missing attribute equal: <\w+>/
+              original_server_string = server_string.dup
               server_string = XMLCleaner.clean_nested_quotes(server_string)
-              retry
+              if original_server_string != server_string
+                retry
+              else
+                handle_xml_error(server_string, e)
+                XMLData.reset
+                return
+              end
             when /invalid characters/
               server_string = XMLCleaner.fix_invalid_characters(server_string)
               retry
@@ -436,6 +443,10 @@ module Lich
 
             # Handle frontend-specific modifications
             if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+              alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+            end
+
+            if $frontend =~ /frostbite/i && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
               alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
             end
 
@@ -622,7 +633,7 @@ module Lich
           room_exits = []
           Map.current.wayto.each do |key, value|
             # Don't include cardinals / up/down/out (usually just climb/go)
-            if value.class == Proc
+            if value.is_a?(StringProc)
               if Map.current.timeto[key].is_a?(Numeric) || (Map.current.timeto[key].is_a?(StringProc) && Map.current.timeto[key].call.is_a?(Numeric))
                 room_exits << "<d cmd=';go2 #{key}'>#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? ('(' + Map[key].id.to_s + ')') : ''}</d>"
               end
@@ -636,7 +647,7 @@ module Lich
           Map.current.wayto.each do |_key, value|
             # Don't include cardinals / up/down/out (usually just climb/go)
             next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
-            if value.class != Proc
+            unless value.is_a?(StringProc)
               room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
             end
           end
@@ -758,7 +769,7 @@ module Lich
           room_exits = []
           Map.current.wayto.each do |key, value|
             # Don't include cardinals / up/down/out (usually just climb/go)
-            if value.class == Proc
+            if value.is_a?(StringProc)
               if Map.current.timeto[key].is_a?(Numeric) || (Map.current.timeto[key].is_a?(StringProc) && Map.current.timeto[key].call.is_a?(Numeric))
                 room_exits << "<d cmd=';go2 #{key}'>#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? ('(' + Map[key].id.to_s + ')') : ''}</d>"
               end
@@ -772,7 +783,7 @@ module Lich
           Map.current.wayto.each do |_key, value|
             # Don't include cardinals / up/down/out (usually just climb/go)
             next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
-            if value.class != Proc
+            unless value.is_a?(StringProc)
               room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
             end
           end
