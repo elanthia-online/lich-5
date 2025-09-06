@@ -82,7 +82,7 @@ module Lich
 
           # the following are for parsing STOW LIST and setting of STOW containers
           StowListOutputStart = /^You have the following containers set as stow targets:\r?\n?$/
-          StowListContainer = /^  (?:an?|some) <a exist="(?<id>\d+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^\(]+)?\((?<type>box|gem|herb|skin|wand|scroll|potion|trinket|reagent|lockpick|treasure|forageable|collectible|default)\)\r?\n?$/
+          StowListContainer = /^  (?:an?|some) <a exist="(?<id>\d+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^\(]+)? \((?<type>box|gem|herb|skin|wand|scroll|potion|trinket|reagent|lockpick|treasure|forageable|collectible|default)\)\r?\n?$/
           StowSetContainer1 = /^Set "a <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^"]+)?" to be your STOW (?<type>BOX|GEM|HERB|SKIN|WAND|SCROLL|POTION|TRINKET|REAGENT|LOCKPICK|TREASURE|FORAGEABLE|COLLECTIBLE) container\.\r?\n?$/
           StowSetContainer2 = /Set "a <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^"]+)?" to be your (?<type>default) STOW container\.\r?\n?$/
 
