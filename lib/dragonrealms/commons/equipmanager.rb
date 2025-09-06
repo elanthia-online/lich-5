@@ -97,20 +97,9 @@ module Lich
       end
 
       def get_combat_items
-        DRC.bput('inv combat', 'Use INVENTORY HELP for more options')
-        snapshot = reget(40)
-        if snapshot.grep(/All of your combat|You aren't wearing anything like that/).any? &&
-           snapshot.grep(/Use INVENTORY HELP/).any?
-          snapshot
-            .map(&:strip)
-            .reverse
-            .take_while { |item| !['All of your combat equipment:', "You aren't wearing anything like that."].include?(item) }
-            .drop_while { |item| item != '[Use INVENTORY HELP for more options.]' }
-            .drop(1)
-            .reverse
-        else
-          get_combat_items
-        end
+        snapshot = Lich::Util.issue_command("inv combat", /All of your worn combat|You aren't wearing anything like that/, /Use INVENTORY HELP for more options/, usexml: false, include_end: false)
+          .map(&:strip)
+        snapshot - ["All of your worn combat equipment:", "You aren't wearing anything like that."]
       end
 
       def worn_items(list)
