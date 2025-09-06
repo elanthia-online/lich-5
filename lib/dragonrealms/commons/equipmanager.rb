@@ -98,7 +98,7 @@ module Lich
 
       def get_combat_items
         snapshot = Lich::Util.issue_command("inv combat", /All of your worn combat|You aren't wearing anything like that/, /Use INVENTORY HELP for more options/, usexml: false, include_end: false)
-          .map(&:strip)
+                   .map(&:strip)
         snapshot - ["All of your worn combat equipment:", "You aren't wearing anything like that."]
       end
 
