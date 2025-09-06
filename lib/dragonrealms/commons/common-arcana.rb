@@ -499,8 +499,7 @@ module Lich
 
         snapshot = Lich::Util.issue_command("inv combat", /All of your worn combat|You aren't wearing anything like that/, /Use INVENTORY HELP for more options/, usexml: false, include_end: false)
                              .map(&:strip)
-        snapshot = snapshot - ["All of your worn combat equipment:", "You aren't wearing anything like that."]
-        snapshot.select { |item| item.include?('rough-cut crystal') || item.include?('faceted crystal') || item.include?('resplendent crystal') }
+        (snapshot - ["All of your worn combat equipment:", "You aren't wearing anything like that."]).select { |item| item.include?('rough-cut crystal') || item.include?('faceted crystal') || item.include?('resplendent crystal') }
                 .map { |item| DRC.get_noun(item) }
       end
 
