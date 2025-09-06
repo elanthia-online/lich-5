@@ -500,7 +500,7 @@ module Lich
         snapshot = Lich::Util.issue_command("inv combat", /All of your worn combat|You aren't wearing anything like that/, /Use INVENTORY HELP for more options/, usexml: false, include_end: false)
                              .map(&:strip)
         (snapshot - ["All of your worn combat equipment:", "You aren't wearing anything like that."]).select { |item| item.include?('rough-cut crystal') || item.include?('faceted crystal') || item.include?('resplendent crystal') }
-                .map { |item| DRC.get_noun(item) }
+                                                                                                     .map { |item| DRC.get_noun(item) }
       end
 
       def shatter_regalia?(worn_regalia = nil) # takes an array of armor nouns to remove or gets its own from parse_regalia
