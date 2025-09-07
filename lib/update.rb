@@ -14,21 +14,21 @@ module Lich
 
       def self.request(type = '--announce')
         case type
-        when /--announce|-a\b/
+        when /^--announce\b|^-a\b/
           self.announce
-        when /--(?:beta|test)(?: --(?:(script|library|data))=(.*))?/
+        when /^--(?:beta|test)(?: --(?:(script|library|data))=(.+))?\b/
           self.prep_betatest($1.dup, $2.dup)
-        when /--help|-h\b/
+        when /^--help\b|^-h\b/
           self.help # Ok, that's just wrong.
-        when /--update|-u\b/
+        when /^--update\b|^-u\b/
           self.download_update
-        when /--refresh/
+        when /^--refresh\b/
           respond; respond "This command has been removed."
-        when /--revert|-r\b/
+        when /^--revert\b|^-r\b/
           self.revert
-        when /--(?:(script|library|data))=(.*)/
+        when /^--(?:(script|library|data))=(.+)\b/
           self.update_file($1.dup, $2.dup)
-        when /--snapshot|-s\b/ # this one needs to be after --script
+        when /^--snapshot\b|^-s\b/ # this one needs to be after --script
           self.snapshot
         else
           respond; respond "Command '#{type}' unknown, illegitimate and ignored.  Exiting . . ."; respond
