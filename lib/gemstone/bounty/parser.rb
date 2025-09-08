@@ -28,7 +28,7 @@ module Lich
           :rescue_assignment   => /#{HMM_REGEX}It appears that a local resident urgently needs our help in some matter/,
           :skin_assignment     => /#{HMM_REGEX}The local furrier (?<npc_name>.+) has an order to fill and wants our help/,
           :taskmaster          => /^You have succeeded in your task and can return to the Adventurer's Guild/,
-          :heirloom_found      => /^You have located (?:an?|some) (?<item>.+) and should bring it back to #{GUARD_REGEX}\.$/,
+          :heirloom_found      => /^You have located (?:an?|some) (?<item>.+) and should bring (?:it back|your find) to #{GUARD_REGEX}\.$/,
           :guard               => /^You succeeded in your task and should report back to #{GUARD_REGEX}\.$/,
           :dangerous_spawned   => /^You have been tasked to hunt down and kill a particularly dangerous (?<creature>[^.]+) that has established a territory #{LOCATION_REGEX}\.  You have provoked (?:his|her|its) attention and now you must(?: return to where you left (?:him|her|it) and)? kill (?:him|her|it)!$/,
           :rescue_spawned      => /^You have made contact with the child you are to rescue and you must get (?:him|her) back alive to #{GUARD_REGEX}\.$/,
