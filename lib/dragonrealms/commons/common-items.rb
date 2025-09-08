@@ -503,7 +503,7 @@ module Lich
       #########################################
 
       def search?(item)
-        /Your .* is in/ =~ DRC.bput("inv search #{item}", /^You can't seem to find anything/, /Your .* is in/)
+        /(?:An?|Some) .+ is (?:in|being)/ =~ DRC.bput("inv search #{item}", /^You can't seem to find anything/, /(?:An?|Some) .+ is (?:in|being)/)
       end
 
       # Taps items to check if you're wearing it.
