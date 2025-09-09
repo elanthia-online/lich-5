@@ -4,8 +4,7 @@ module Lich
   module Common
     module SocketConfigurator
       if Gem.win_platform?
-        Lich::Util.install_gem_requirements({ "ffi" => false })
-        require 'ffi'
+        Lich::Util.install_gem_requirements({ "ffi" => true })
 
         module WinFFI
           extend FFI::Library
