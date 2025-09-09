@@ -62,37 +62,44 @@ module Lich
       # Unix / Linux / macOS
       # -------------------------
       def self.configure_unix(sock, keepalive, linger, timeout, buffer_size, tcp_nodelay)
+        # Helper: error-checked setsockopt
+        check_setsockopt = lambda do |level, option, value, size|
+          ret = sock.setsockopt(level, option, value, size)
+          raise SystemCallError.new("setsockopt(#{option})", Errno::errno) if ret != 0
+        end
+
         # Keepalive
         if keepalive[:enable]
-          sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, 1)
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, 1, 4)
           if Socket.const_defined?(:TCP_KEEPIDLE)
-            sock.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_KEEPIDLE, keepalive[:idle])
-          elsif Socket.const_defined?(:TCP_KEEPALIVE) # macOS
-            sock.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_KEEPALIVE, keepalive[:idle])
+            check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_KEEPIDLE, keepalive[:idle], 4)
+          elsif Socket.const_defined?(:TCP_KEEPALIVE)
+            check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_KEEPALIVE, keepalive[:idle], 4)
           end
-          sock.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_KEEPINTVL, keepalive[:interval]) if Socket.const_defined?(:TCP_KEEPINTVL)
-          sock.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_KEEPCNT, 5) if Socket.const_defined?(:TCP_KEEPCNT)
+          check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_KEEPINTVL, keepalive[:interval], 4) if Socket.const_defined?(:TCP_KEEPINTVL)
+          check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_KEEPCNT, 5, 4) if Socket.const_defined?(:TCP_KEEPCNT)
         end
 
         # Linger
         if linger
-          sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_LINGER, [linger[:enable] ? 1 : 0, linger[:timeout]].pack("ii"))
+          linger_struct = [linger[:enable] ? 1 : 0, linger[:timeout]].pack("ii")
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_LINGER, linger_struct, linger_struct.bytesize)
         end
 
         # Timeouts
         if timeout
-          sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_RCVTIMEO, [timeout[:recv], 0].pack("l!l!"))
-          sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDTIMEO, [timeout[:send], 0].pack("l!l!"))
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_RCVTIMEO, [timeout[:recv], 0].pack("l!l!"), 8)
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_SNDTIMEO, [timeout[:send], 0].pack("l!l!"), 8)
         end
 
         # Buffer sizes
         if buffer_size
-          sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_RCVBUF, [buffer_size[:recv]].pack('l')) if buffer_size[:recv]
-          sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDBUF, [buffer_size[:send]].pack('l')) if buffer_size[:send]
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_RCVBUF, [buffer_size[:recv]].pack('l'), 4) if buffer_size[:recv]
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_SNDBUF, [buffer_size[:send]].pack('l'), 4) if buffer_size[:send]
         end
 
         # TCP_NODELAY
-        sock.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1) if tcp_nodelay
+        check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1, 4) if tcp_nodelay
       end
 
       # -------------------------
@@ -101,6 +108,12 @@ module Lich
       def self.configure_windows(sock, keepalive, linger, timeout, buffer_size, tcp_nodelay)
         fd = sock.fileno
 
+        # Helper: error-checked setsockopt
+        check_setsockopt = lambda do |level, option, ptr, size|
+          ret = WinFFI.setsockopt(fd, level, option, ptr, size)
+          raise SystemCallError.new("setsockopt(#{option})", FFI.errno) if ret != 0
+        end
+
         # Keepalive
         if keepalive[:enable]
           ka = WinFFI::TcpKeepalive.new
@@ -108,7 +121,6 @@ module Lich
           ka[:keepalivetime] = keepalive[:idle] * 1000
           ka[:keepaliveinterval] = keepalive[:interval] * 1000
           bytes_returned = FFI::MemoryPointer.new(:ulong)
-
           ret = WinFFI.WSAIoctl(fd, WinFFI::SIO_KEEPALIVE_VALS, ka.to_ptr, ka.size,
                                 nil, 0, bytes_returned, nil, nil)
           raise SystemCallError.new("WSAIoctl", FFI.errno) if ret != 0
@@ -119,8 +131,7 @@ module Lich
           l = WinFFI::Linger.new
           l[:l_onoff] = linger[:enable] ? 1 : 0
           l[:l_linger] = linger[:timeout]
-          ret = WinFFI.setsockopt(fd, WinFFI::SOL_SOCKET, WinFFI::SO_LINGER, l.to_ptr, l.size)
-          raise SystemCallError.new("setsockopt(SO_LINGER)", FFI.errno) if ret != 0
+          check_setsockopt.call(WinFFI::SOL_SOCKET, WinFFI::SO_LINGER, l.to_ptr, l.size)
         end
 
         # Timeouts
@@ -128,31 +139,20 @@ module Lich
           tv = WinFFI::Timeval.new
           tv[:tv_sec] = timeout[:recv]
           tv[:tv_usec] = 0
-          ret = WinFFI.setsockopt(fd, WinFFI::SOL_SOCKET, WinFFI::SO_RCVTIMEO, tv.to_ptr, tv.size)
-          raise SystemCallError.new("setsockopt(SO_RCVTIMEO)", FFI.errno) if ret != 0
+          check_setsockopt.call(WinFFI::SOL_SOCKET, WinFFI::SO_RCVTIMEO, tv.to_ptr, tv.size)
 
           tv[:tv_sec] = timeout[:send]
-          ret = WinFFI.setsockopt(fd, WinFFI::SOL_SOCKET, WinFFI::SO_SNDTIMEO, tv.to_ptr, tv.size)
-          raise SystemCallError.new("setsockopt(SO_SNDTIMEO)", FFI.errno) if ret != 0
+          check_setsockopt.call(WinFFI::SOL_SOCKET, WinFFI::SO_SNDTIMEO, tv.to_ptr, tv.size)
         end
 
         # Buffer sizes
         if buffer_size
-          if buffer_size[:recv]
-            ret = WinFFI.setsockopt(fd, WinFFI::SOL_SOCKET, Socket::SO_RCVBUF, [buffer_size[:recv]].pack('l'), 4)
-            raise SystemCallError.new("setsockopt(SO_RCVBUF)", FFI.errno) if ret != 0
-          end
-          if buffer_size[:send]
-            ret = WinFFI.setsockopt(fd, WinFFI::SOL_SOCKET, Socket::SO_SNDBUF, [buffer_size[:send]].pack('l'), 4)
-            raise SystemCallError.new("setsockopt(SO_SNDBUF)", FFI.errno) if ret != 0
-          end
+          check_setsockopt.call(WinFFI::SOL_SOCKET, Socket::SO_RCVBUF, [buffer_size[:recv]].pack('l'), 4) if buffer_size[:recv]
+          check_setsockopt.call(WinFFI::SOL_SOCKET, Socket::SO_SNDBUF, [buffer_size[:send]].pack('l'), 4) if buffer_size[:send]
         end
 
         # TCP_NODELAY
-        if tcp_nodelay
-          ret = WinFFI.setsockopt(fd, WinFFI::IPPROTO_TCP, WinFFI::TCP_NODELAY, [1].pack('l'), 4)
-          raise SystemCallError.new("setsockopt(TCP_NODELAY)", FFI.errno) if ret != 0
-        end
+        check_setsockopt.call(WinFFI::IPPROTO_TCP, WinFFI::TCP_NODELAY, [1].pack('l'), 4) if tcp_nodelay
       end
     end
   end
