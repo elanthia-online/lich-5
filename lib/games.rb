@@ -197,7 +197,13 @@ module Lich
         def open(host, port)
           @socket = TCPSocket.open(host, port)
           begin
-            @socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, true)
+            # @socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, true)
+            SocketConfigurator.configure(@socket,
+                             keepalive: {enable: true, idle: 60, interval: 10},
+                             linger: {enable: true, timeout: 5},
+                             timeout: {recv: 10, send: 10},
+                             buffer_size: {recv: 65536, send: 65536},
+                             tcp_nodelay: true)
           rescue StandardError => e
             log_error("Socket option error", e)
           end
