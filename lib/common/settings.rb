@@ -155,7 +155,7 @@ module Lich
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache hit for #{cache_key} (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
         end
 
-        # EMPTY PATH → Save *current root* (not proxy.target). Also covers detached “view” proxies.
+        # EMPTY PATH → Save *current root* (not proxy.target). Also covers detached "view" proxies.
         if path.empty?
           _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Empty path; saving CURRENT ROOT for scope #{scope.inspect}" })
 
