@@ -11,6 +11,7 @@ module Lich
         ammo2_bundle: nil,
         sheath: nil,
         secondary_sheath: nil,
+        wand: nil,
       }
       @store_list = {
         shield: nil,
@@ -53,8 +54,8 @@ module Lich
         def valid?
           # check if existing ready items are valid or not
           return false unless checked?
-          @ready_list.each_value do |value|
-            unless value.nil? || GameObj.inv.map(&:id).include?(value.id) || GameObj.containers.values.flatten.map(&:id).include?(value.id)
+          @ready_list.each do |key, value|
+            unless key.eql?(:wand) || value.nil? || GameObj.inv.map(&:id).include?(value.id) || GameObj.containers.values.flatten.map(&:id).include?(value.id)
               @checked = false
               return false
             end
