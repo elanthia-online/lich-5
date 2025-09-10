@@ -88,12 +88,12 @@ module Lich
 
           # the following are for parsing READY LIST and setting of READY items
           ReadyListOutputStart = /^Your current settings are:\r?\n?$/
-          ReadyListNormal = /^  (?<type>shield|(?:secondary |ranged )?weapon|ammo bundle): \(?<d cmd=['"](?:store|ready) (?:SHIELD|2?WEAPON|RANGED|AMMO)(?: clear)?['"]>(?:(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^<]+)?|none)<\/d>\)? \(<d cmd='store set'>(?<store>worn if possible, stowed otherwise|stowed|put in (?:secondary )?sheath)<\/d>\)\r?\n?$/
+          ReadyListNormal = /^  (?<type>shield|(?:secondary |ranged )?weapon|ammo bundle|wand): \(?<d cmd=['"](?:store|ready) (?:SHIELD|2?WEAPON|RANGED|AMMO|WAND)(?: clear)?['"]>(?:(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^<]+)?|none)<\/d>\)? \(<d cmd='store set'>(?<store>worn if possible, stowed otherwise|stowed|put in (?:secondary )?sheath)<\/d>\)\r?\n?$/
           ReadyListAmmo2 = /^  (?<type>ammo2 bundle): <d cmd="store AMMO2 clear">(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^<]+)?<\/d>\r?\n?$/
           ReadyListSheathsSet = /^  (?<type>(?:secondary )?sheath): <d cmd="store 2?SHEATH clear">(?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^<]+)?<\/d>\r?\n?$/
           ReadyListFinished = /To change your default item for a category that is already set, clear the category first by clicking on the item in the list above.  Click <d cmd="ready list">here<\/d> to update the list\.\r?\n?$/
-          ReadyItemClear = /^Cleared your default (?<type>shield|(?:secondary |ranged )?weapon|ammo2? bundle|(?:secondary )?sheath)\.\r?\n?$/
-          ReadyItemSet = /^Setting (?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^<]+)? to be your default (?<type>shield|(?:secondary |ranged )?weapon|ammo2? bundle|(?:secondary )?sheath)\.\r?\n?$/
+          ReadyItemClear = /^Cleared your default (?<type>shield|(?:secondary |ranged )?weapon|ammo2? bundle|(?:secondary )?sheath|wand)\.\r?\n?$/
+          ReadyItemSet = /^Setting (?:an?|some) <a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^<]+)? to be your default (?<type>shield|(?:secondary |ranged )?weapon|ammo2? bundle|(?:secondary )?sheath|wand)\.\r?\n?$/
           ReadyStoreSet = /^When storing your (?<type>shield|(?:ranged |secondary )?weapon|ammo bundle|wand), it will be (?<store>worn if possible and stowed if not|stowed|stored in your (?:secondary )?sheath)\.\r?\n?$/
 
           StatusPrompt = /<prompt time="[0-9]+">/
