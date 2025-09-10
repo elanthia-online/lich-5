@@ -55,7 +55,7 @@ module Lich
           # check if existing ready items are valid or not
           return false unless checked?
           @ready_list.each do |key, value|
-            unless key.eql?(:wand) || value.nil? || GameObj.inv.map(&:id).include?(value.id) || GameObj.containers.values.flatten.map(&:id).include?(value.id)
+            unless key.eql?(:wand) || value.nil? || GameObj.inv.map(&:id).include?(value.id) || GameObj.containers.values.flatten.map(&:id).include?(value.id) || GameObj.right_hand.id.include?(value.id) || GameObj.left_hand.id.include?(value.id)
               @checked = false
               return false
             end
