@@ -672,6 +672,13 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       fput "stow feet"
       sleep 1
       put_dir.call
+    elsif line =~ /The electricity courses through you in a raging torrent, its power singing in your veins!  Spent, the boltstone apparatus shatters into glinting fragments\.|The lightning strikes you in an agonizing eruption of liquid radiance!/
+      sleep(0.5)
+      wait_while { stunned? }
+      waitrt?
+      fput 'stand' unless standing?
+      waitrt?
+      put_dir.call
     elsif line == "You don't seem to be able to move to do that."
       30.times {
         break if clear.include?('You regain control of your senses!')
