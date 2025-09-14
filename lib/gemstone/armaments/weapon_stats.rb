@@ -312,13 +312,13 @@ module Lich
           end
 
           # Damage Types
-          if weapon[:damage_types].is_a?(Array)
+          if weapon[:damage_types].is_a?(Hash)
             lines << "%-#{max_label_width}s :" % "damage_types"
-            weapon[:damage_types].each do |entry|
-              entry.each do |type, value|
-                val_str = value.is_a?(Array) && value.empty? ? "(none)" : value.to_s
-                lines << "  %-#{max_label_width - indent}s : %s" % [type.to_s, val_str]
-              end
+            sub_indent = 2
+            sub_label_width = max_label_width - sub_indent
+            weapon[:damage_types].each do |type, value|
+              val_str = (type == :special) ? (value.empty? ? "(none)" : value.join(", ")) : value.to_s
+              lines << "%s%-#{sub_label_width}s : %s" % [" " * sub_indent, type.to_s, val_str]
             end
           end
 
@@ -364,12 +364,16 @@ module Lich
             lines << "%-18s: %s" % [key.to_s, str_val]
           end
 
-          # damage types inline
-          if weapon[:damage_types].is_a?(Array)
-            damage_str = weapon[:damage_types].map do |entry|
-              entry.map { |type, val| "#{type}=#{val.is_a?(Array) && val.empty? ? 'n/a' : val}" }
-            end.flatten.join(", ")
-            lines << "%-18s: %s" % ["damage_types", damage_str]
+          # damage types inline (always show, hash style)
+          if weapon[:damage_types].is_a?(Hash)
+            damage_str = weapon[:damage_types].map do |type, val|
+              if type == :special
+                "special=[#{val.join(", ")}]"
+              else
+                "#{type}=#{val}"
+              end
+            end.join(", ")
+            lines << "% -18s: %s" % ["damage_types", damage_str]
           end
 
           # damage_factor inline
