@@ -5,6 +5,11 @@ require_relative "armaments/shield_stats.rb"
 module Lich
   module Gemstone
     module Armaments
+      ##
+      # Maps armor group (AG) index to human-readable armor group names.
+      #
+      # @type [Hash{Integer => String}]
+      # @example AG_INDEX_TO_NAME[1] #=> "Cloth"
       AG_INDEX_TO_NAME = {
         1 => "Cloth",
         2 => "Soft Leather",
@@ -13,6 +18,11 @@ module Lich
         5 => "Plate"
       }.freeze
 
+      ##
+      # Maps armor subgroup (ASG) index to human-readable armor subgroup names.
+      #
+      # @type [Hash{Integer => String}]
+      # @example ASG_INDEX_TO_NAME[10] #=> "Brigandine"
       ASG_INDEX_TO_NAME = {
         1  => "Robes",
         2  => "Light Leather",
@@ -36,6 +46,11 @@ module Lich
         20 => "Augmented Plate"
       }.freeze
 
+      ##
+      # Maps spell circle index to a hash with full name and abbreviation.
+      #
+      # @type [Hash{Integer => Hash}]
+      # @example SPELL_CIRCLE_INDEX_TO_NAME[1] #=> { name: "Minor Spiritual", abbr: "MinSp" }
       SPELL_CIRCLE_INDEX_TO_NAME = {
         0  => { name: "Action",                  abbr: "Act"    },
         1  => { name: "Minor Spiritual",         abbr: "MinSp"  },
