@@ -57,6 +57,7 @@ module Lich
           else
             start_pattern = /Your current settings are:/
           end
+          waitrt?
           Lich::Util.issue_command("ready list", start_pattern, silent: silent, quiet: quiet)
           @checked = true
         end

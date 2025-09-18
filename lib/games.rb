@@ -108,7 +108,7 @@ module Lich
           end
 
           # Fix nested double quotes
-          unless (matches = server_string.scan(/"([^=]*"[^=]*)"/)).empty?
+          unless (matches = server_string.scan(/"([^=>]*"[^=>]*)"/)).empty?
             Lich.log "Invalid nested double quotes XML tags detected: #{server_string.inspect}"
             matches.flatten.each do |match|
               server_string.gsub!(match, match.gsub(/"/, '&quot;'))
@@ -239,7 +239,12 @@ module Lich
         end
 
         def puts(str)
-          script_name = Script.current&.name || '(unknown script)'
+          if Script.current&.file_name
+            script_name = "#{Script.current.custom? ? 'custom/' : ''}#{Script.current&.name}"
+          else
+            script_name = Script.current&.name || '(unknown script)'
+          end
+
           $_CLIENTBUFFER_.push "[#{script_name}]#{$SEND_CHARACTER}#{$cmd_prefix}#{str}\r\n"
 
           unless Script.current&.silent
@@ -381,9 +386,16 @@ module Lich
           rescue => e
             case e.to_s
             # Missing attribute equal: <s> - in dynamic dialogs with a single apostrophe for possessive 'Tsetem's Items'
-            when /nested single quotes|nested double quotes|Missing attribute equal: <s>/
+            when /nested single quotes|nested double quotes|Missing attribute equal: <\w+>/
+              original_server_string = server_string.dup
               server_string = XMLCleaner.clean_nested_quotes(server_string)
-              retry
+              if original_server_string != server_string
+                retry
+              else
+                handle_xml_error(server_string, e)
+                XMLData.reset
+                return
+              end
             when /invalid characters/
               server_string = XMLCleaner.fix_invalid_characters(server_string)
               retry
@@ -436,6 +448,10 @@ module Lich
 
             # Handle frontend-specific modifications
             if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+              alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+            end
+
+            if $frontend =~ /frostbite/i && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
               alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
             end
 

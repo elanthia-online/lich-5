@@ -135,7 +135,7 @@ def echo(*messages)
   respond if messages.empty?
   if (script = Script.current)
     unless script.no_echo
-      messages.each { |message| respond("[#{script.name}: #{message.to_s.chomp}]") }
+      messages.each { |message| respond("[#{script.custom? ? 'custom/' : ''}#{script.name}: #{message.to_s.chomp}]") }
     end
   else
     messages.each { |message| respond("[(unknown script): #{message.to_s.chomp}]") }
@@ -147,7 +147,7 @@ def _echo(*messages)
   _respond if messages.empty?
   if (script = Script.current)
     unless script.no_echo
-      messages.each { |message| _respond("[#{script.name}: #{message.to_s.chomp}]") }
+      messages.each { |message| _respond("[#{script.custom? ? 'custom/' : ''}#{script.name}: #{message.to_s.chomp}]") }
     end
   else
     messages.each { |message| _respond("[(unknown script): #{message.to_s.chomp}]") }
@@ -157,7 +157,7 @@ end
 
 def goto(label)
   Script.current.jump_label = label.to_s
-  raise JUMP
+  raise Lich::Common::Script::JUMP
 end
 
 def pause_script(*names)
@@ -671,6 +671,13 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /^(You notice .* at your feet, and do not wish to leave it behind|As you prepare to move away, you remember)/
       fput "stow feet"
       sleep 1
+      put_dir.call
+    elsif line =~ /The electricity courses through you in a raging torrent, its power singing in your veins!  Spent, the boltstone apparatus shatters into glinting fragments\.|The lightning strikes you in an agonizing eruption of liquid radiance!/
+      sleep(0.5)
+      wait_while { stunned? }
+      waitrt?
+      fput 'stand' unless standing?
+      waitrt?
       put_dir.call
     elsif line == "You don't seem to be able to move to do that."
       30.times {
@@ -1992,23 +1999,25 @@ def fb_to_sf(line)
   end
 end
 
-def sf_to_wiz(line)
+def sf_to_wiz(line, bypass_multiline: false)
   begin
     return line if line == "\r\n"
 
-    if $sftowiz_multiline
-      $sftowiz_multiline = $sftowiz_multiline + line
-      line = $sftowiz_multiline
+    unless bypass_multiline
+      if $sftowiz_multiline
+        $sftowiz_multiline = $sftowiz_multiline + line
+        line = $sftowiz_multiline
+      end
+      if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
+        $sftowiz_multiline = line
+        return nil
+      end
+      if (line.scan(/<style id="\w+"[^>]*\/>/).length > line.scan(/<style id=""[^>]*\/>/).length)
+        $sftowiz_multiline = line
+        return nil
+      end
+      $sftowiz_multiline = nil
     end
-    if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
-      $sftowiz_multiline = line
-      return nil
-    end
-    if (line.scan(/<style id="\w+"[^>]*\/>/).length > line.scan(/<style id=""[^>]*\/>/).length)
-      $sftowiz_multiline = line
-      return nil
-    end
-    $sftowiz_multiline = nil
     if line =~ /<LaunchURL src="(.*?)" \/>/
       $_CLIENT_.puts "\034GSw00005\r\nhttps://www.play.net#{$1}\r\n"
     end

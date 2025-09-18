@@ -1,6 +1,7 @@
 module Lich
   module Common
     class Map
+      include Enumerable
       @@loaded                   = false
       @@load_mutex               = Mutex.new
       @@list                   ||= Array.new
@@ -853,9 +854,9 @@ module Lich
         if target_list.include?(@id)
           @id
         else
-          _, shortest_distances = Map.dijkstra(@id, target_list)
-          target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
-          target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }.first
+          _previous, shortest_distances = Map.dijkstra(@id, target_list)
+          valid_rooms = target_list.select { |room_num| shortest_distances[room_num].is_a?(Numeric) }
+          return valid_rooms.min_by { |room_num| shortest_distances[room_num] }
         end
       end
     end

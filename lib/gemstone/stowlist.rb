@@ -63,6 +63,7 @@ module Lich
           else
             start_pattern = /You have the following containers set as stow targets:/
           end
+          waitrt?
           Lich::Util.issue_command("stow list", start_pattern, silent: silent, quiet: quiet)
           @checked = true
         end

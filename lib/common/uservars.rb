@@ -8,8 +8,8 @@ module Lich
         Vars.list
       end
 
-      def UserVars.method_missing(arg1, arg2 = '')
-        Vars.method_missing(arg1, arg2)
+      def UserVars.method_missing(*args)
+        Vars.method_missing(*args)
       end
 
       def UserVars.change(var_name, value, _t = nil)

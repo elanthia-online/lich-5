@@ -142,9 +142,6 @@ XMLData = Lich::Common::XMLParser.new
 #
 # Start deprecated stuff
 #
-JUMP = Exception.exception('JUMP')
-JUMP_ERROR = Exception.exception('JUMP_ERROR')
-
 require File.join(LIB_DIR, 'deprecated.rb')
 #
 # End deprecated stuff

@@ -125,7 +125,7 @@ module Lich
 
           existing_spell_names = []
           active_spells = Spell.active
-          ignore_spells = ["Berserk", "Council Task", "Council Punishment", "Briar Betrayer"]
+          ignore_spells = ["Berserk", "Council Task", "Council Punishment", "Briar Betrayer", "Rapid Fire Penalty"]
           active_spells.each { |s| existing_spell_names << s.name }
           inactive_spells = existing_spell_names - ignore_spells - spell_update_names
           inactive_spells.reject! do |s|

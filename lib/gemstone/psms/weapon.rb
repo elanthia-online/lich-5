@@ -233,6 +233,7 @@ module Lich
       #   Weapon.affordable?("Weapon_blessing") => true # if enough skill and stamina
       #   Weapon.affordable?("Weapon_blessing", forcert_count: 1) => false  # if not enough skill or stamina
       def Weapon.affordable?(name, forcert_count: 0)
+        return true if @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:type] == :area_of_effect && Effects::Buffs.active?("Glorious Momentum")
         return PSMS.assess(name, 'Weapon', true, forcert_count: forcert_count)
       end
 
@@ -330,11 +331,12 @@ module Lich
             if usage_result =~ /\.\.\.wait/i
               waitrt?
               next
-            elsif usage_result =~ technique[:assault_rx] || Time.now() > break_out
-              break
-            elsif usage_result == false || usage_result =~ in_cooldown_regex
-              break
             end
+            break if usage_result.eql?(false)
+            break if usage_result =~ technique[:assault_rx]
+            break if usage_result =~ /^#{name} what\?$/i
+            break if usage_result =~ in_cooldown_regex
+            break if Time.now() > break_out
             sleep 0.25
           }
         else

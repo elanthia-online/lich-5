@@ -119,6 +119,7 @@ module Lich
         /^You work your way into/,
         /^You are already wearing/,
         /^Gritting your teeth, you grip/,
+        /^You expertly sling the/,
         /put it on/, # weird clerical collar thing, trying to make it a bit generic
         /slide effortlessly onto your/,
         /^You carefully arrange/,
@@ -187,7 +188,8 @@ module Lich
         /slide themselves off of your/,
         /you manage to loosen/,
         /you unlace/,
-        /^You slam the heels/
+        /^You slam the heels/,
+        /^With masterful grace, you ready/
       ]
 
       REMOVE_ITEM_FAILURE_PATTERNS = [
@@ -501,7 +503,7 @@ module Lich
       #########################################
 
       def search?(item)
-        /Your .* is in/ =~ DRC.bput("inv search #{item}", /^You can't seem to find anything/, /Your .* is in/)
+        /(?:An?|Some) .+ is (?:in|being)/ =~ DRC.bput("inv search #{item}", /^You can't seem to find anything/, /(?:An?|Some) .+ is (?:in|being)/)
       end
 
       # Taps items to check if you're wearing it.
