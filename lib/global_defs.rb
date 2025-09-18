@@ -135,7 +135,7 @@ def echo(*messages)
   respond if messages.empty?
   if (script = Script.current)
     unless script.no_echo
-      messages.each { |message| respond("[#{script.name}: #{message.to_s.chomp}]") }
+      messages.each { |message| respond("[#{script.custom? ? 'custom/' : ''}#{script.name}: #{message.to_s.chomp}]") }
     end
   else
     messages.each { |message| respond("[(unknown script): #{message.to_s.chomp}]") }
@@ -147,7 +147,7 @@ def _echo(*messages)
   _respond if messages.empty?
   if (script = Script.current)
     unless script.no_echo
-      messages.each { |message| _respond("[#{script.name}: #{message.to_s.chomp}]") }
+      messages.each { |message| _respond("[#{script.custom? ? 'custom/' : ''}#{script.name}: #{message.to_s.chomp}]") }
     end
   else
     messages.each { |message| _respond("[(unknown script): #{message.to_s.chomp}]") }

@@ -107,7 +107,7 @@ module Lich
           if (script = Script.current)
             eval('script = Script.current', script_binding, script.name)
             Thread.current.priority = 1
-            respond("--- Lich: #{script.name} active.") unless script.quiet
+            respond("--- Lich: #{script.custom? ? 'custom/' : ''}#{script.name} active.") unless script.quiet
             if trusted
               begin
                 eval(script.labels[script.current_label].to_s, script_binding, script.name)
@@ -572,6 +572,7 @@ module Lich
       def initialize(args)
         @file_name = args[:file]
         @name = /.*[\/\\]+([^\.]+)\./.match(@file_name).captures.first
+        @custom = (/.*[\/\\]+(custom)[\/\\]+[^\.]+\./.match(@file_name).captures.nil? ? false : true)
         if args[:args].is_a?(String)
           if args[:args].empty?
             @vars = Array.new
@@ -838,6 +839,10 @@ module Lich
         @match_stack_labels.clear
         @match_stack_strings.clear
       end
+
+      def custom?
+        @custom
+      end
     end
 
     class ExecScript < Script
@@ -917,6 +922,7 @@ module Lich
       # rubocop:disable Lint/MissingSuper
       def initialize(cmd_data, flags = Hash.new)
         @cmd_data = cmd_data
+        @custom = false
         @vars = Array.new
         @downstream_buffer = LimitedArray.new
         @downstream_buffer.max_size = 400
