@@ -341,10 +341,11 @@ module Lich
               Account.name = Regexp.last_match[:account].upcase
             end
           when Pattern::PlayedSubscription
+            matches = Regexp.last_match
             if Account.subscription.nil?
-              Account.subscription = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
+              Account.subscription = matches[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
             end
-            UserVars.account_type = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
+            UserVars.account_type = matches[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
             if Account.subscription == 'PREMIUM' || XMLData.game == 'DRX' || XMLData.game == 'DRF'
               UserVars.premium = true
             else
