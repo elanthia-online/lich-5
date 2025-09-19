@@ -47,7 +47,7 @@ jobs:
           ridk exec pacman -Syu --needed --noconfirm
           ridk exec pacman -S mingw-w64-x86_64-sqlite3 --noconfirm
           gem install sqlite3 --platform ruby
-          gem install activesupport ascii_charts concurrent-ruby curses ftools gtk3 json jwt logger mechanize nokogiri os ostruct redis sequel terminal-table tomlib tzinfo tzinfo-data webrick xmpp4r --no-document
+          gem install activesupport ascii_charts concurrent-ruby curses ftools gtk3 json jwt logger mechanize nokogiri ostruct redis sequel terminal-table tomlib tzinfo tzinfo-data webrick xmpp4r --no-document
           gem uninstall rexml --force
           gem install rexml --version 3.3.1
           gem list
