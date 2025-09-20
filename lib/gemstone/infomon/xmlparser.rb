@@ -83,8 +83,8 @@ module Lich
           # the following are for parsing STOW LIST and setting of STOW containers
           StowListOutputStart = /^You have the following containers set as stow targets:\r?\n?$/
           StowListContainer = /^  (?:an?|some) (?<before>[^<]+)?<a exist="(?<id>\d+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^\(]+)? \((?<type>box|gem|herb|skin|wand|scroll|potion|trinket|reagent|lockpick|treasure|forageable|collectible|default)\)\r?\n?$/
-          StowSetContainer1 = /^Set "an? (?<before>[^<]+)?<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^"]+)?" to be your STOW (?<type>BOX|GEM|HERB|SKIN|WAND|SCROLL|POTION|TRINKET|REAGENT|LOCKPICK|TREASURE|FORAGEABLE|COLLECTIBLE) container\.\r?\n?$/
-          StowSetContainer2 = /Set "an? (?<before>[^<]+)?<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^"]+)?" to be your (?<type>default) STOW container\.\r?\n?$/
+          StowSetContainer1 = /^Set "(?:an?|some) (?<before>[^<]+)?<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^"]+)?" to be your STOW (?<type>BOX|GEM|HERB|SKIN|WAND|SCROLL|POTION|TRINKET|REAGENT|LOCKPICK|TREASURE|FORAGEABLE|COLLECTIBLE) container\.\r?\n?$/
+          StowSetContainer2 = /Set "(?:an?|some) (?<before>[^<]+)?<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>(?<after> [^"]+)?" to be your (?<type>default) STOW container\.\r?\n?$/
 
           # the following are for parsing READY LIST and setting of READY items
           ReadyListOutputStart = /^Your current settings are:\r?\n?$/
