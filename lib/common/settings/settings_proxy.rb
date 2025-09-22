@@ -66,7 +66,7 @@ module Lich
       # @return [self]
       private def rebind_to_live!(new_target)
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> {
-          "REBINd to live: old_target_oid=#{@target&.object_id}, new_target_oid=#{new_target&.object_id}, scope=#{@scope.inspect}, path=#{@path.inspect}"
+          "REBIND to live: old_target_oid=#{@target&.object_id}, new_target_oid=#{new_target&.object_id}, scope=#{@scope.inspect}, path=#{@path.inspect}"
         })
         @target = new_target
         @detached = false if instance_variable_defined?(:@detached)
@@ -269,9 +269,7 @@ module Lich
             # NEW (5.12.7+): auto-reattach derived views before mutating
             # ensure destructive methods (.push) do not target a proxy non-destructive method (.sort)
             if detached?
-              _respond 'detached entry'
               unless @settings_module._reattach_live!(self)
-                _respond 'reattached entry'
                 @settings_module._log(Settings::LOG_LEVEL_ERROR, LOG_PREFIX, -> { "CALL   reattach failed; aborting destructive op #{method} on detached view" })
                 return self
               end

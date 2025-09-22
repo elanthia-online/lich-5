@@ -641,13 +641,6 @@ describe 'Settings#save_proxy_changes refresh-before-save' do
       def self.name; 'test_script'; end
     end
   end
-  # Minimal Script stub to satisfy Settings.save_proxy_changes constant lookup
-  unless defined?(::Script)
-    module ::Script
-      def self.current; self; end
-      def self.name; 'test_script'; end
-    end
-  end
 
   it 'refreshes from DB to prevent stale-cache overwrites' do
     settings_module = Lich::Common::Settings
