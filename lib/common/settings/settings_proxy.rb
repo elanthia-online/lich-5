@@ -252,6 +252,16 @@ module Lich
             return handle_non_destructive_result(method, result)
           else
             @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   destructive method: #{method}" })
+
+            # NEW (5.12.7+): auto-reattach derived views before mutating
+            # ensure destructive methods (.push) do not target a derived proxy view (.sort)
+            if detached?
+              unless @settings_module._reattach_live!(self)
+                @settings_module._log(Settings::LOG_LEVEL_ERROR, LOG_PREFIX, -> { "CALL   reattach failed; aborting destructive op #{method} on detached view" })
+                return self
+              end
+            end
+
             unwrapped_args = args.map { |arg| arg.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(arg) : arg } # Corrected
             @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_before_op: #{@target.inspect}" })
             result = @target.send(method, *unwrapped_args, &block)
