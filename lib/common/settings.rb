@@ -84,9 +84,9 @@ module Lich
           return false
         end
 
-        # Swap the proxy onto the live object and clear detached state
-        proxy.instance_variable_set(:@target, live)
-        proxy.instance_variable_set(:@detached, false)
+        # Swap the proxy onto the live object via SettingsProxy API (encapsulated)
+        # Centralizes invariants/logging within SettingsProxy itself.
+        proxy.rebind_to_live!(live)
         true
       end
 
@@ -169,6 +169,24 @@ module Lich
         script_name = Script.current.name
         cache_key   = "#{script_name || ""}::#{scope}"
 
+        # Local helper to keep cache in sync with the just-persisted root
+        sync_cache = lambda do |root_obj|
+          cached = @settings_cache[cache_key]
+          if cached && cached.object_id != root_obj.object_id
+            if cached.is_a?(Hash) && root_obj.is_a?(Hash)
+              cached.replace(root_obj)
+            elsif cached.is_a?(Array) && root_obj.is_a?(Array)
+              cached.clear
+              cached.concat(root_obj)
+            else
+              @settings_cache[cache_key] = root_obj
+            end
+          elsif cached.nil?
+            @settings_cache[cache_key] = root_obj
+          end
+          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Cache synchronized post-save for #{cache_key}" })
+        end
+
         # --- Refresh-before-save to prevent stale-cache overwrites ---
         fresh_root = @db_adapter.get_settings(script_name, scope)
 
@@ -182,7 +200,6 @@ module Lich
             cached.concat(fresh_root)
             current_root_for_scope = cached
           else
-            # Type changed or not a container: replace cache entry outright
             @settings_cache[cache_key] = fresh_root
             current_root_for_scope = fresh_root
           end
@@ -207,22 +224,7 @@ module Lich
           if proxy.respond_to?(:detached?) && proxy.detached?
             _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Proxy is detached (view); persisting current root without copying view target." })
             save_to_database(current_root_for_scope, scope)
-
-            # --- Post-save cache sync ---
-            cached = @settings_cache[cache_key]
-            if cached && cached.object_id != current_root_for_scope.object_id
-              if cached.is_a?(Hash) && current_root_for_scope.is_a?(Hash)
-                cached.replace(current_root_for_scope)
-              elsif cached.is_a?(Array) && current_root_for_scope.is_a?(Array)
-                cached.clear
-                cached.concat(current_root_for_scope)
-              else
-                @settings_cache[cache_key] = current_root_for_scope
-              end
-            end
-            _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Cache synchronized post-save for #{cache_key}" })
-            # ---------------------------
-
+            sync_cache.call(current_root_for_scope)
             return nil
           end
 
@@ -241,22 +243,7 @@ module Lich
           end
 
           save_to_database(current_root_for_scope, scope)
-
-          # --- Post-save cache sync ---
-          cached = @settings_cache[cache_key]
-          if cached && cached.object_id != current_root_for_scope.object_id
-            if cached.is_a?(Hash) && current_root_for_scope.is_a?(Hash)
-              cached.replace(current_root_for_scope)
-            elsif cached.is_a?(Array) && current_root_for_scope.is_a?(Array)
-              cached.clear
-              cached.concat(current_root_for_scope)
-            else
-              @settings_cache[cache_key] = current_root_for_scope
-            end
-          end
-          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Cache synchronized post-save for #{cache_key}" })
-          # ---------------------------
-
+          sync_cache.call(current_root_for_scope)
           return nil
         end
 
@@ -342,21 +329,7 @@ module Lich
 
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: root after update (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
         save_to_database(current_root_for_scope, scope)
-
-        # --- Post-save cache sync (ensure cache reflects persisted root) ---
-        cached = @settings_cache[cache_key]
-        if cached && cached.object_id != current_root_for_scope.object_id
-          if cached.is_a?(Hash) && current_root_for_scope.is_a?(Hash)
-            cached.replace(current_root_for_scope)
-          elsif cached.is_a?(Array) && current_root_for_scope.is_a?(Array)
-            cached.clear
-            cached.concat(current_root_for_scope)
-          else
-            @settings_cache[cache_key] = current_root_for_scope
-          end
-        end
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Cache synchronized post-save for #{cache_key}" })
-        # -------------------------------------------------------------------
+        sync_cache.call(current_root_for_scope)
       end
 
       def self.current_script_settings(scope = DEFAULT_SCOPE)

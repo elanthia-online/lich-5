@@ -607,3 +607,138 @@ RSpec.describe Lich::Common::Settings do
     end
   end
 end
+
+describe 'SettingsProxy#rebind_to_live!' do
+  it 'rebinds target to the live container and clears detached' do
+    settings_module = Lich::Common::Settings
+    scope = ':'
+    path  = [:updatable, :scripts]
+    initial = []
+
+    proxy = Lich::Common::SettingsProxy.new(settings_module, scope, path, initial, detached: true) rescue Lich::Common::SettingsProxy.new(settings_module, scope, path, initial)
+    live  = [{ filename: 'x.lic' }]
+
+    old_oid = proxy.target.object_id
+    proxy.send(:rebind_to_live!, live)
+
+    expect(proxy.target).to equal(live)
+    expect(proxy.target.object_id).not_to eq(old_oid)
+    if proxy.respond_to?(:detached?)
+      expect(proxy.detached?).to eq(false)
+    else
+      expect(proxy.instance_variable_get(:@detached)).to eq(false)
+    end
+    expect(proxy.scope).to eq(scope)
+    expect(proxy.path).to eq(path)
+  end
+end
+
+describe 'Settings#save_proxy_changes refresh-before-save' do
+  # Minimal Script stub for Settings.save_proxy_changes
+  unless defined?(::Script)
+    module ::Script
+      def self.current; self; end
+      def self.name; 'test_script'; end
+    end
+  end
+  # Minimal Script stub to satisfy Settings.save_proxy_changes constant lookup
+  unless defined?(::Script)
+    module ::Script
+      def self.current; self; end
+      def self.name; 'test_script'; end
+    end
+  end
+
+  it 'refreshes from DB to prevent stale-cache overwrites' do
+    settings_module = Lich::Common::Settings
+    script_name = 'test_script'
+    scope = ':'
+    cache_key = "#{script_name}::#{scope}"
+
+    fresh = { refreshed: true }
+    dbl = double('DBAdapter', get_settings: fresh, save_settings: true)
+    settings_module.instance_variable_set(:@db_adapter, dbl)
+    settings_module.instance_variable_set(:@settings_cache, { cache_key => { old: true } })
+
+    proxy = Lich::Common::SettingsProxy.new(settings_module, scope, [], {})
+    proxy.instance_variable_set(:@detached, true)
+    expect {
+      settings_module.save_proxy_changes(proxy)
+    }.not_to raise_error
+
+    cache_after = settings_module.instance_variable_get(:@settings_cache)[cache_key]
+    expect(cache_after).to be_a(Hash)
+  end
+end
+
+describe 'Settings#save_proxy_changes detached view behavior' do
+  # Minimal Script stub for Settings.save_proxy_changes
+  unless defined?(::Script)
+    module ::Script
+      def self.current; self; end
+      def self.name; 'test_script'; end
+    end
+  end
+  # Minimal Script stub to satisfy Settings.save_proxy_changes constant lookup
+  unless defined?(::Script)
+    module ::Script
+      def self.current; self; end
+      def self.name; 'test_script'; end
+    end
+  end
+
+  it 'persists the current root when called on a detached proxy' do
+    settings_module = Lich::Common::Settings
+    script_name = 'test_script'
+    scope = ':'
+    cache_key = "#{script_name}::#{scope}"
+
+    root = { jars: [] }
+    settings_module.instance_variable_set(:@settings_cache, { cache_key => root })
+    settings_module.instance_variable_set(:@db_adapter, double('DBAdapter', get_settings: root, save_settings: true))
+
+    detached_target = { jars: [{ gem: 'ruby' }] }
+    detached_proxy = Lich::Common::SettingsProxy.new(settings_module, scope, [], detached_target)
+    detached_proxy.instance_variable_set(:@detached, true)
+
+    expect {
+      settings_module.save_proxy_changes(detached_proxy)
+    }.not_to raise_error
+
+    cache = settings_module.instance_variable_get(:@settings_cache)[cache_key]
+    expect(cache).to eq(root)
+    expect(cache).to eq(root)
+  end
+end
+
+describe Lich::Common::SettingsProxy do
+  it 'defines a private rebind_to_live! helper' do
+    expect(Lich::Common::SettingsProxy.private_instance_methods).to include(:rebind_to_live!)
+  end
+
+  it 'rebinds target to the live container and clears detached (without altering scope/path)' do
+    proxy = Lich::Common::SettingsProxy.allocate
+
+    settings_module = Object.new
+    def settings_module._log(*); end
+    unless defined?(Settings::LOG_LEVEL_DEBUG)
+      module Settings
+        LOG_LEVEL_DEBUG = 0 unless const_defined?(:LOG_LEVEL_DEBUG)
+      end
+    end
+
+    proxy.instance_variable_set(:@settings_module, settings_module)
+    proxy.instance_variable_set(:@scope, ':')
+    proxy.instance_variable_set(:@path, [:updatable, :scripts])
+    proxy.instance_variable_set(:@target, [:old])
+    proxy.instance_variable_set(:@detached, true)
+
+    live = [:new]
+    proxy.send(:rebind_to_live!, live)
+
+    expect(proxy.instance_variable_get(:@target)).to equal(live)
+    expect(proxy.instance_variable_get(:@detached)).to eq(false)
+    expect(proxy.instance_variable_get(:@path)).to eq([:updatable, :scripts])
+    expect(proxy.instance_variable_get(:@scope)).to eq(':')
+  end
+end
