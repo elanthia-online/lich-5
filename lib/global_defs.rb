@@ -573,6 +573,9 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       fput 'stand' unless standing?
       waitrt?
       put_dir.call
+    elsif line =~ /^(?:You swim .*, (?:cutting through|navigating)|You swim .*, struggling against|Your lungs burn and your muscles ache)/
+      # swims in Sailor's Grief
+      return true
     elsif line =~ /^You begin to climb up the silvery thread.* you tumble to the ground/
       sleep 0.5
       waitrt?
