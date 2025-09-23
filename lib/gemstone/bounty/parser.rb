@@ -18,7 +18,7 @@ module Lich
           /the tavernkeeper at Rawknuckle's Common House/,
           /the captain of the (?<town>Contempt)/
         )
-        CONCOCTION_REGEX = /is working on a concoction that requires (?:an?|some) (?<herb>[^.]+?) found [oi]n (?:the\s+)?(?<area>[^.]+?)(?:\s+(?:near|under|between) [^.]+)?\.  These samples must be in pristine condition\.  You have been tasked to retrieve (?<number>\d+) (?:more\s+)?samples?\./
+        CONCOCTION_REGEX = /is working on a concoction that requires (?:an?|some|several) (?<herb>[^.]+?) found [oi]n (?:the\s+)?(?<area>[^.]+?)(?:\s+(?:near|under|between) [^.]+)?\.  These samples must be in pristine condition\.  You have been tasked to retrieve (?<number>\d+) (?:more\s+)?samples?\./
         TASK_MAYBE_REGEX = /^(?:The taskmaster told you:  ")/
 
         TASK_MATCHERS = {
