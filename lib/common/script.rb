@@ -667,7 +667,7 @@ module Lich
                 @at_exit_procs.each { |p| report_errors { p.call } }
                 @die_with = @at_exit_procs = @downstream_buffer = @upstream_buffer = @match_stack_labels = @match_stack_strings = nil
                 @@running.delete(self)
-                respond("--- Lich: #{@name} has exited.") unless @quiet
+                respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} has exited.") unless @quiet
                 GC.start
               rescue
                 respond "--- Lich: error: #{$!}"
