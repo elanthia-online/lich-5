@@ -66,9 +66,7 @@ module Lich
       def self.lich_version_at_least?(major, minor = 0, patch = 0)
         return false unless defined?(LICH_VERSION)
 
-        current = LICH_VERSION.scan(/\d+/).map(&:to_i)
-        target = [major, minor, patch]
-        (current <=> target) >= 0
+        Gem::Version.new(LICH_VERSION) >= Gem::Version.new([major, minor, patch].join('.'))
       end
 
       # Recursively converts string keys to symbols in nested hash and array structures.
