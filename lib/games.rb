@@ -239,7 +239,12 @@ module Lich
         end
 
         def puts(str)
-          script_name = Script.current&.name || '(unknown script)'
+          if Script.current&.file_name
+            script_name = "#{Script.current.custom? ? 'custom/' : ''}#{Script.current&.name}"
+          else
+            script_name = Script.current&.name || '(unknown script)'
+          end
+
           $_CLIENTBUFFER_.push "[#{script_name}]#{$SEND_CHARACTER}#{$cmd_prefix}#{str}\r\n"
 
           unless Script.current&.silent
@@ -443,6 +448,10 @@ module Lich
 
             # Handle frontend-specific modifications
             if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+              alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+            end
+
+            if $frontend =~ /frostbite/i && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
               alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
             end
 

@@ -6,15 +6,22 @@ module Lich
     class SettingsProxy
       LOG_PREFIX = "[SettingsProxy]".freeze
 
-      def initialize(settings_module, scope, path, target)
+      # Minimal change: add detached flag (default false)
+      def initialize(settings_module, scope, path, target, detached: false)
         @settings_module = settings_module # This should be the Settings module itself
-        @scope = scope
-        @path = path.dup
+        @scope  = scope
+        @path   = path.dup
         @target = target
-        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}" })
+        @detached = detached
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}, detached: #{@detached}" })
       end
 
       attr_reader :target, :path, :scope
+
+      # Minimal change: expose detached? status
+      def detached?
+        !!@detached
+      end
 
       def nil?
         @target.nil?
@@ -51,6 +58,19 @@ module Lich
             options[:default]
           end
         end
+      end
+
+      # Internal: rebind this proxy to the live container and clear detached state.
+      # This centralizes target swaps so invariants/logging stay consistent.
+      # @param new_target [Hash, Array] the live container resolved from root+path
+      # @return [self]
+      private def rebind_to_live!(new_target)
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> {
+          "REBIND to live: old_target_oid=#{@target&.object_id}, new_target_oid=#{new_target&.object_id}, scope=#{@scope.inspect}, path=#{@path.inspect}"
+        })
+        @target = new_target
+        @detached = false if instance_variable_defined?(:@detached)
+        self
       end
 
       # String conversions
@@ -145,7 +165,7 @@ module Lich
 
       # New method to show the proxy's internal details
       def proxy_details
-        "<SettingsProxy scope=#{@scope.inspect} path=#{@path.inspect} target_class=#{@target.class} target_object_id=#{@target.object_id}>"
+        "<SettingsProxy scope=#{@scope.inspect} path=#{@path.inspect} target_class=#{@target.class} target_object_id=#{@target.object_id} detached=#{@detached}>"
       end
 
       def pretty_print(pp)
@@ -168,12 +188,14 @@ module Lich
         super || @target.respond_to?(method, include_private)
       end
 
+      # Minimal change: items yielded from #each are "views" over the container.
+      # Mark them detached so mutations during a derived iteration won't clobber root.
       def each(&_block)
         return enum_for(:each) unless block_given?
         if @target.respond_to?(:each)
           @target.each do |item|
             if @settings_module.container?(item)
-              yield SettingsProxy.new(@settings_module, @scope, [], item)
+              yield SettingsProxy.new(@settings_module, @scope, [], item, detached: true)
             else
               yield item
             end
@@ -185,7 +207,7 @@ module Lich
       NON_DESTRUCTIVE_METHODS = [
         :+, :-, :&, :|, :*,
         :all?, :any?, :assoc, :at, :bsearch, :bsearch_index, :chunk, :chunk_while,
-        :collect, :collect_concat, :combination, :compact, :compare_by_identity?, :count, :cycle,
+        :collect, :collect_concat, :compact, :compare_by_identity?, :count, :cycle,
         :default, :default_proc, :detect, :dig, :drop, :drop_while,
         :each_cons, :each_entry, :each_slice, :each_with_index, :each_with_object, :empty?,
         :entries, :except, :fetch, :fetch_values, :filter, :find, :find_all, :find_index,
@@ -197,6 +219,12 @@ module Lich
         :slice_after, :slice_before, :slice_when, :sort, :sort_by, :sum,
         :take, :take_while, :to_a, :to_h, :to_proc, :transform_keys, :transform_values,
         :uniq, :values, :values_at, :zip
+      ].freeze
+
+      # Subset of non-destructive methods that return container "views"
+      NON_DESTRUCTIVE_CONTAINER_VIEWS = [
+        :map, :collect, :select, :filter, :reject, :find_all, :grep, :grep_v,
+        :sort, :sort_by, :uniq, :compact, :flatten, :slice, :take, :drop, :values
       ].freeze
 
       def [](key)
@@ -233,9 +261,20 @@ module Lich
             target_dup = @target.dup
             unwrapped_args = args.map { |arg| arg.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(arg) : arg } # Corrected
             result = target_dup.send(method, *unwrapped_args, &block)
-            return handle_non_destructive_result(result)
+            # Minimal change: pass method name so we can tag views as detached and keep path
+            return handle_non_destructive_result(method, result)
           else
             @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   destructive method: #{method}" })
+
+            # NEW (5.12.7+): auto-reattach derived views before mutating
+            # ensure destructive methods (.push) do not target a proxy non-destructive method (.sort)
+            if detached?
+              unless @settings_module._reattach_live!(self)
+                @settings_module._log(Settings::LOG_LEVEL_ERROR, LOG_PREFIX, -> { "CALL   reattach failed; aborting destructive op #{method} on detached view" })
+                return self
+              end
+            end
+
             unwrapped_args = args.map { |arg| arg.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(arg) : arg } # Corrected
             @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_before_op: #{@target.inspect}" })
             result = @target.send(method, *unwrapped_args, &block)
@@ -249,10 +288,12 @@ module Lich
         end
       end
 
-      def handle_non_destructive_result(result)
+      # Minimal change: keep path (not []), and tag view proxies as detached.
+      def handle_non_destructive_result(method, result)
         @settings_module.reset_path_and_return(
           if @settings_module.container?(result)
-            SettingsProxy.new(@settings_module, @scope, [], result)
+            is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
+            SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view)
           else
             result
           end

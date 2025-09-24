@@ -29,6 +29,7 @@ module Lich
         PlayedAccount = /^(?:<.*?\/>)?Account Info for (?<account>.+):/.freeze
         PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium|Platinum)/.freeze
         LastLogoff = /^\s+Logoff :  (?<weekday>[A-Z][a-z]{2}) (?<month>[A-Z][a-z]{2}) (?<day>[\s\d]{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2}) ET (?<year>\d{4})/.freeze
+        RoomIDOff = /^You will no longer see room IDs when LOOKing in the game and room windows\./.freeze
       end
 
       @parsing_exp_mods_output = false
@@ -340,10 +341,11 @@ module Lich
               Account.name = Regexp.last_match[:account].upcase
             end
           when Pattern::PlayedSubscription
+            matches = Regexp.last_match
             if Account.subscription.nil?
-              Account.subscription = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
+              Account.subscription = matches[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
             end
-            UserVars.account_type = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
+            UserVars.account_type = matches[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
             if Account.subscription == 'PREMIUM' || XMLData.game == 'DRX' || XMLData.game == 'DRF'
               UserVars.premium = true
             else
@@ -360,6 +362,10 @@ module Lich
               tz = '-0500'
             end
             $last_logoff = Time.new(matches[:year].to_i, month, matches[:day].to_i, matches[:hour].to_i, matches[:minute].to_i, matches[:second].to_i, tz).getlocal
+          when Pattern::RoomIDOff
+            put("flag showroomid on")
+            respond("Lich requires ShowRoomID to be ON for mapping to work, please do not turn this off.")
+            respond("If you wish to hide the Real ID#, you can toggle it off by doing ;display flaguid")
           else
             :noop
           end

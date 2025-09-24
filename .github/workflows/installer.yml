@@ -10,10 +10,10 @@ permissions:
 
 jobs:
   installer:
-    runs-on: windows-latest
+    runs-on: windows-2022
     strategy:
       matrix:
-        ruby: ['3.4.4']
+        ruby: ['3.4.5']
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

@@ -29,7 +29,8 @@ module Lich
                     'weapon list all'    => /<a exist=.+#{XMLData.name}/,
                     'ascension list all' => /<a exist=.+#{XMLData.name}/,
                     'resource'           => /^Health: \d+\/(?:<pushBold\/>)?\d+(?:<popBold\/>)?\s+Mana: \d+\/(?:<pushBold\/>)?\d+(?:<popBold\/>)?\s+Stamina: \d+\/(?:<pushBold\/>)?\d+(?:<popBold\/>)?\s+Spirit: \d+\/(?:<pushBold\/>)?\d+/,
-                    'warcry'             => /^You have learned the following War Cries:|^You must be an active member of the Warrior Guild to use this skill/ }
+                    'warcry'             => /^You have learned the following War Cries:|^You must be an active member of the Warrior Guild to use this skill/,
+                    'profile full'       => %r{<output class="mono"/>} }
 
         request.each do |command, start_capture|
           respond "Retrieving character #{command}." if $infomon_debug
@@ -38,7 +39,8 @@ module Lich
         end
         respond 'Requested Infomon sync complete.'
         respond 'ATTENTION:  TEND TO YOUR SHROUD!' if shroud_detected
-        Infomon.set('infomon.last_sync', Time.now.to_i)
+        Infomon.set('infomon.last_sync_date', Time.now.to_i)
+        Infomon.set('infomon.last_sync_version', LICH_VERSION)
       end
 
       def self.redo!
@@ -68,7 +70,11 @@ module Lich
 
       def self.db_refresh_needed?
         # Change date below to the last date of infomon.db structure change to allow for a forced reset of data.
-        Infomon.get("infomon.last_sync").nil? || Infomon.get("infomon.last_sync") < Time.new(2024, 8, 5, 20, 0, 0).to_i
+        # Change Lich version below to also force a refresh of DB as well due to new API/methods used by infomon (introduction of CHE and account subscription status for example).
+        return true if Infomon.get("infomon.last_sync_date").nil?
+        return true if Infomon.get("infomon.last_sync_date") < Time.new(2025, 6, 26, 20, 0, 0).to_i
+        return true if Gem::Version.new("5.12.2") > Gem::Version.new(Infomon.get("infomon.last_sync_version"))
+        return false
       end
     end
   end

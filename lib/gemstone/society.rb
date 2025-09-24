@@ -166,7 +166,15 @@ require_relative 'societies/order_of_voln.rb'
 
 # This module provides a simple namespace for accessing society classes.
 module Lich::Gemstone::Societies
-  def self.voln = OrderOfVoln
-  def self.col = CouncilOfLight
-  def self.sunfist = GuardiansOfSunfist
+  def self.voln
+    OrderOfVoln
+  end
+
+  def self.col
+    CouncilOfLight
+  end
+
+  def self.sunfist
+    GuardiansOfSunfist
+  end
 end

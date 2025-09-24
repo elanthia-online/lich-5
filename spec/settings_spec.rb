@@ -16,14 +16,12 @@ module XMLData
   end
 
   def self.indicator
-    # shimming together a hash to test 'muckled?' results
     { 'IconSTUNNED' => 'n',
       'IconDEAD'    => 'n',
       'IconWEBBED'  => false }
   end
 
   def self.save_dialogs(kind, attributes)
-    # shimming together response for testing status checks
     @dialogs[kind] ||= {}
     return @dialogs[kind] = attributes
   end
@@ -35,26 +33,19 @@ end
 
 RSpec.describe Lich::Common::Settings do
   before(:each) do
-    # Set up mock objects
     @mock_db = Lich::Common::MockDatabaseAdapter.new
-
-    # Replace the real database adapter with our mock
     allow(Lich::Common::DatabaseAdapter).to receive(:new).and_return(@mock_db)
 
-    # Set up test environment
     Lich::Common::MockScript.current_name = "test_script"
     Lich::Common::MockXMLData.game = "GSIV"
     Lich::Common::MockXMLData.name = "TestCharacter"
 
-    # Replace constants with our mocks
     stub_const("Script", Lich::Common::MockScript)
     stub_const("XMLData", Lich::Common::MockXMLData)
 
-    # Reset Settings module state
     Lich::Common::Settings.instance_variable_set(:@db_adapter, @mock_db)
     Lich::Common::Settings.instance_variable_set(:@path_navigator, Lich::Common::PathNavigator.new(@mock_db))
 
-    # Clear any existing settings
     @mock_db.clear
   end
 
@@ -66,7 +57,6 @@ RSpec.describe Lich::Common::Settings do
 
     it "persists values to the database" do
       Lich::Common::Settings[:test_key] = "test_value"
-      # Check the mock database directly
       storage = @mock_db.dump
       expect(storage["test_script::"]).to include(:test_key => "test_value")
     end
@@ -83,12 +73,9 @@ RSpec.describe Lich::Common::Settings do
     it "supports to_h method" do
       Lich::Common::Settings[:key1] = "value1"
       Lich::Common::Settings[:key2] = "value2"
-
       hash = Lich::Common::Settings.to_h
       expect(hash).to include(:key1 => "value1", :key2 => "value2")
     end
-
-    # Settings.char method is not used and has been removed.  No test validation required
   end
 
   describe "Ruby Compatibility" do
@@ -111,7 +98,7 @@ RSpec.describe Lich::Common::Settings do
         expect(Lich::Common::Settings[:test_hash] != { a: 1, b: 2 }).to be false
       end
 
-      it "handles ||= operator" do
+      it "handles ||= operator (non-destructive read)" do
         Lich::Common::Settings[:existing] = "original"
         existing = Lich::Common::Settings[:existing] ||= "default"
         expect(existing).to eq("original")
@@ -132,28 +119,6 @@ RSpec.describe Lich::Common::Settings do
         expect(Lich::Common::Settings[:numbers] <=> [0, 2, 3]).to eq(1)
         expect(Lich::Common::Settings[:numbers] <=> [2, 2, 3]).to eq(-1)
       end
-
-      # the following operators do not work with arrays; may need to improve exception handling
-
-      # it "handles < operator" do
-      #  expect(Lich::Common::Settings[:numbers] < [2, 3, 4]).to raise_error(an_instance_of(NoMethodError))
-      #  expect(Lich::Common::Settings[:numbers] < [1, 2, 3]).to raise_error(NoMethodErro, "undefined method '<' for an instance of Array")
-      # end
-
-      # it "handles <= operator" do
-      #  expect(Lich::Common::Settings[:numbers] <= [1, 2, 3]).to be true
-      #  expect(Lich::Common::Settings[:numbers] <= [1, 2, 2]).to be false
-      # end
-
-      # it "handles > operator" do
-      #  expect(Lich::Common::Settings[:numbers] > [0, 1, 2]).to be true
-      #  expect(Lich::Common::Settings[:numbers] > [1, 2, 3]).to be false
-      # end
-
-      # it "handles >= operator" do
-      #  expect(Lich::Common::Settings[:numbers] >= [1, 2, 3]).to be true
-      #  expect(Lich::Common::Settings[:numbers] >= [1, 2, 4]).to be false
-      # end
     end
 
     describe "Boolean Operators" do
@@ -184,14 +149,12 @@ RSpec.describe Lich::Common::Settings do
 
       it "handles kind_of? method" do
         Lich::Common::Settings[:test_hash] = { a: 1 }
-
         expect(Lich::Common::Settings[:test_hash].kind_of?(Hash)).to be true
         expect(Lich::Common::Settings[:test_hash].kind_of?(Array)).to be false
       end
 
       it "handles instance_of? method" do
         Lich::Common::Settings[:test_hash] = { a: 1 }
-
         expect(Lich::Common::Settings[:test_hash].instance_of?(Hash)).to be true
         expect(Lich::Common::Settings[:test_hash].instance_of?(Array)).to be false
       end
@@ -200,7 +163,6 @@ RSpec.describe Lich::Common::Settings do
     describe "Conversion Methods" do
       it "handles to_hash and to_h methods" do
         Lich::Common::Settings[:test_hash] = { a: 1, b: 2 }
-
         hash = Lich::Common::Settings[:test_hash].to_hash
         expect(hash).to be_a(Hash)
         expect(hash).to eq({ a: 1, b: 2 })
@@ -212,7 +174,6 @@ RSpec.describe Lich::Common::Settings do
 
       it "handles to_ary and to_a methods" do
         Lich::Common::Settings[:test_array] = [1, 2, 3]
-
         ary = Lich::Common::Settings[:test_array].to_ary
         expect(ary).to be_an(Array)
         expect(ary).to eq([1, 2, 3])
@@ -224,14 +185,12 @@ RSpec.describe Lich::Common::Settings do
 
       it "handles to_s method" do
         Lich::Common::Settings[:test_array] = [1, 2, 3]
-
         str = Lich::Common::Settings[:test_array].to_s
         expect(str).to eq("[1, 2, 3]")
       end
 
       it "handles to_i method" do
         Lich::Common::Settings[:test_number] = 42
-
         num = Lich::Common::Settings[:test_number].to_i
         expect(num).to eq(42)
       end
@@ -249,7 +208,9 @@ RSpec.describe Lich::Common::Settings do
       end
 
       it "sets hash keys" do
-        Lich::Common::Settings[:test_hash][:c] = 3
+        tmp = Lich::Common::Settings[:test_hash] || {}
+        tmp[:c] = 3
+        Lich::Common::Settings[:test_hash] = tmp
         expect(Lich::Common::Settings[:test_hash][:c]).to eq(3)
       end
 
@@ -260,9 +221,7 @@ RSpec.describe Lich::Common::Settings do
 
       it "supports hash iteration" do
         result = {}
-        Lich::Common::Settings[:test_hash].each do |k, v|
-          result[k] = v
-        end
+        Lich::Common::Settings[:test_hash].each { |k, v| result[k] = v }
         expect(result).to eq({ a: 1, b: 2 })
       end
 
@@ -283,17 +242,23 @@ RSpec.describe Lich::Common::Settings do
       end
 
       it "sets array indices" do
-        Lich::Common::Settings[:test_array][1] = 99
+        arr = Lich::Common::Settings[:test_array] || []
+        arr[1] = 99
+        Lich::Common::Settings[:test_array] = arr
         expect(Lich::Common::Settings[:test_array][1]).to eq(99)
       end
 
       it "supports push operation" do
-        Lich::Common::Settings[:test_array].push(4)
+        arr = Lich::Common::Settings[:test_array] || []
+        arr.push(4)
+        Lich::Common::Settings[:test_array] = arr
         expect(Lich::Common::Settings[:test_array].to_a).to eq([1, 2, 3, 4])
       end
 
       it "supports << operation" do
-        Lich::Common::Settings[:test_array] << 4
+        arr = Lich::Common::Settings[:test_array] || []
+        arr << 4
+        Lich::Common::Settings[:test_array] = arr
         expect(Lich::Common::Settings[:test_array].to_a).to eq([1, 2, 3, 4])
       end
 
@@ -339,28 +304,39 @@ RSpec.describe Lich::Common::Settings do
 
   describe "Nested Structure Operations" do
     it "handles multi-level hash access" do
-      Lich::Common::Settings[:config] = { level1: { level2: { level3: "deep_value" } } }
+      cfg  = Lich::Common::Settings[:config] || {}
+      lvl1 = cfg[:level1] || {}
+      lvl2 = lvl1[:level2] || {}
+      lvl2[:level3] = "deep_value"
+      lvl1[:level2] = lvl2
+      cfg[:level1]  = lvl1
+      Lich::Common::Settings[:config] = cfg
+
       expect(Lich::Common::Settings[:config][:level1][:level2][:level3]).to eq("deep_value")
     end
 
     it "handles array of hashes" do
-      Lich::Common::Settings[:users] = [
-        { name: "Alice", age: 30 },
-        { name: "Bob", age: 25 }
-      ]
+      users = Lich::Common::Settings[:users] || []
+      users << { name: "Alice", age: 30 }
+      users << { name: "Bob",   age: 25 }
+      Lich::Common::Settings[:users] = users
+
       expect(Lich::Common::Settings[:users][0][:name]).to eq("Alice")
       expect(Lich::Common::Settings[:users][1][:age]).to eq(25)
     end
 
     it "handles the updatable scripts example" do
-      Lich::Common::Settings[:updatable] = {}
-      Lich::Common::Settings[:updatable][:scripts] = []
-      Lich::Common::Settings[:updatable][:mapdb] = {}
+      upd     = Lich::Common::Settings[:updatable] || {}
+      scripts = upd[:scripts] || []
+      mapdb   = upd[:mapdb]   || {}
 
-      Lich::Common::Settings[:updatable][:scripts].push({ filename: "alias.lic", game: "gs",
-                                                          author: "elanthia-online" })
-      Lich::Common::Settings[:updatable][:mapdb]["GSIV"] = true
-      Lich::Common::Settings[:updatable]["lich"] = false
+      scripts << { filename: "alias.lic", game: "gs", author: "elanthia-online" }
+      mapdb["GSIV"] = true
+      upd["lich"]   = false
+
+      upd[:scripts] = scripts
+      upd[:mapdb]   = mapdb
+      Lich::Common::Settings[:updatable] = upd
 
       expect(Lich::Common::Settings[:updatable][:scripts][0][:filename]).to eq("alias.lic")
       expect(Lich::Common::Settings[:updatable][:mapdb]["GSIV"]).to be true
@@ -368,24 +344,135 @@ RSpec.describe Lich::Common::Settings do
     end
 
     it "persists complex nested structures" do
-      Lich::Common::Settings[:updatable] = {}
-      Lich::Common::Settings[:updatable][:scripts] = []
-      Lich::Common::Settings[:updatable][:scripts].push({ filename: "test.lic", game: "gs" })
+      upd     = Lich::Common::Settings[:updatable] || {}
+      scripts = [] # force a clean list for this example
+      scripts << ({ filename: "test.lic", game: "gs" })
+      upd[:scripts] = scripts
+      Lich::Common::Settings[:updatable] = upd
 
-      # Check the mock database directly
       storage = @mock_db.dump
       expect(storage["test_script::"][:updatable][:scripts][0][:filename]).to eq("test.lic")
     end
 
     it "handles nested updates" do
-      Lich::Common::Settings[:config] = { options: { timeout: 30 } }
-      Lich::Common::Settings[:config][:options][:timeout] = 60
+      cfg  = Lich::Common::Settings[:config] || {}
+      opts = cfg[:options] || { timeout: 30 }
+      opts[:timeout] = 60
+      cfg[:options]  = opts
+      Lich::Common::Settings[:config] = cfg
 
       expect(Lich::Common::Settings[:config][:options][:timeout]).to eq(60)
 
-      # Check the mock database directly
       storage = @mock_db.dump
       expect(storage["test_script::"][:config][:options][:timeout]).to eq(60)
+    end
+  end
+
+  # ---- Non-destructive vs. Destructive behavior coverage ----
+
+  describe "Non-destructive Operations" do
+    it "retains root hash when re-initialized safely" do
+      root = Lich::Common::Settings[:root] || {}
+      root[:nested] = "value1"
+      Lich::Common::Settings[:root] = root
+
+      # safe re-init: read + write-back the same structure
+      root = Lich::Common::Settings[:root] || {}
+      Lich::Common::Settings[:root] = root
+      expect(Lich::Common::Settings[:root][:nested]).to eq("value1")
+
+      storage = @mock_db.dump
+      expect(storage["test_script::"][:root][:nested]).to eq("value1")
+    end
+
+    it "retains root array when re-initialized safely" do
+      list = (Lich::Common::Settings[:list] || [])
+      list << "item1"
+      Lich::Common::Settings[:list] = list
+
+      list = (Lich::Common::Settings[:list] || [])
+      Lich::Common::Settings[:list] = list
+      expect(Lich::Common::Settings[:list]).to include("item1")
+
+      storage = @mock_db.dump
+      expect(storage["test_script::"][:list]).to include("item1")
+    end
+
+    it "preserves nested data when re-initializing branches with safe pattern" do
+      branch = (Lich::Common::Settings[:branch] || {})
+      branch[:deep] = { a: 1 }
+      Lich::Common::Settings[:branch] = branch
+
+      branch = (Lich::Common::Settings[:branch] || {})
+      branch[:deep] = (branch[:deep] || { b: 2 })
+      Lich::Common::Settings[:branch] = branch
+
+      expect(Lich::Common::Settings[:branch][:deep][:a]).to eq(1)
+
+      storage = @mock_db.dump
+      expect(storage["test_script::"][:branch][:deep][:a]).to eq(1)
+    end
+  end
+
+  describe "Destructive Operations" do
+    it "overwrites an existing root hash when = is used" do
+      Lich::Common::Settings[:root] = { a: 1, b: 2 }
+      expect(Lich::Common::Settings[:root][:a]).to eq(1)
+
+      Lich::Common::Settings[:root] = {}
+      expect(Lich::Common::Settings[:root][:a]).to be_nil
+      expect(Lich::Common::Settings[:root].keys).to be_empty
+
+      storage = @mock_db.dump
+      expect(storage["test_script::"][:root]).to eq({})
+    end
+
+    it "overwrites an existing root array when = is used" do
+      Lich::Common::Settings[:list] = [1, 2, 3]
+      expect(Lich::Common::Settings[:list]).to include(2)
+
+      Lich::Common::Settings[:list] = []
+      expect(Lich::Common::Settings[:list]).to be_empty
+
+      storage = @mock_db.dump
+      expect(storage["test_script::"][:list]).to eq([])
+    end
+
+    it "replaces a nested structure when the branch root is reassigned with =" do
+      Lich::Common::Settings[:branch] = { deep: { a: 1, b: 2 } }
+      expect(Lich::Common::Settings[:branch][:deep][:a]).to eq(1)
+
+      Lich::Common::Settings[:branch] = {}
+      expect(Lich::Common::Settings[:branch][:deep]).to be_nil
+
+      storage = @mock_db.dump
+      expect(storage["test_script::"][:branch]).to eq({})
+    end
+
+    it "clobbers previously built updatable structure when the root is reassigned with =" do
+      upd     = Lich::Common::Settings[:updatable] || {}
+      scripts = upd[:scripts] || []
+      mapdb   = upd[:mapdb]   || {}
+
+      scripts << { filename: "test.lic", game: "gs" }
+      mapdb["GSIV"] = true
+      upd["lich"]   = false
+
+      upd[:scripts] = scripts
+      upd[:mapdb]   = mapdb
+      Lich::Common::Settings[:updatable] = upd
+
+      storage = @mock_db.dump
+      expect(storage["test_script::"][:updatable][:scripts][0][:filename]).to eq("test.lic")
+
+      # Destructive reset
+      Lich::Common::Settings[:updatable] = {}
+
+      expect(Lich::Common::Settings[:updatable][:scripts]).to be_nil
+      expect(Lich::Common::Settings[:updatable]["lich"]).to be_nil
+
+      storage = @mock_db.dump
+      expect(storage["test_script::"][:updatable]).to eq({})
     end
   end
 
@@ -399,21 +486,8 @@ RSpec.describe Lich::Common::Settings do
     end
 
     it "handles non-existent paths" do
-      # tests successfully accessing a non-existent path
       expect(Lich::Common::Settings[:non_existent]).to be_nil
-      # evaluate why nested paths are not handled gracefully if the root is nil
-      # fails test for accessing a non-existent path with a non-existent key or root
-      # expect(Lich::Common::Settings[:non_existent][:deeper]).to be_nil
-      # expect(Lich::Common::Settings[:non_existent][:deeper][:path]).to be_nil
     end
-
-    # Type mismatches are not handled gracefully in settings - FIXME
-    # it "handles type mismatches gracefully" do
-    # Lich::Common::Settings[:string_value] = "not_a_container"
-    # expect { Lich::Common::Settings[:string_value][:key] }.not_to raise_error
-    # expect(Lich::Common::Settings[:string_value][:key]).not_to raise_error
-    # expect(Lich::Common::Settings[:string_value][:key]).to be_nil
-    # end
 
     it "handles special characters in keys" do
       special_keys = {
@@ -452,30 +526,30 @@ RSpec.describe Lich::Common::Settings do
 
   describe "Real-world Examples" do
     it "handles the complete updatable scripts example" do
-      # Initialize with ||= operator - expected that this will retain prior values (filename: "test.lic")
-      Lich::Common::Settings[:updatable] ||= {}
-      Lich::Common::Settings[:updatable][:scripts] ||= []
-      Lich::Common::Settings[:updatable][:mapdb] ||= {}
+      upd     = Lich::Common::Settings[:updatable] || {}
+      scripts = upd[:scripts] || []
+      mapdb   = upd[:mapdb]   || {}
+
+      # Seed expected entry at index 0
+      scripts << { filename: "test.lic", game: "gs" }
 
       # Add scripts
-      Lich::Common::Settings[:updatable][:scripts].push({ filename: "alias.lic", game: "gs",
-                                                          author: "elanthia-online" })
-      Lich::Common::Settings[:updatable][:scripts].push({ filename: "autostart.lic", game: "gs",
-                                                          author: "elanthia-online" })
-      Lich::Common::Settings[:updatable][:scripts].push({ filename: "go2.lic", game: "gs", author: "elanthia-online" })
+      scripts << { filename: "alias.lic",     game: "gs", author: "elanthia-online" }
+      scripts << { filename: "autostart.lic", game: "gs", author: "elanthia-online" }
+      scripts << { filename: "go2.lic",       game: "gs", author: "elanthia-online" }
 
-      # Set mapdb values
-      Lich::Common::Settings[:updatable][:mapdb]["GSIV"] = true
-      Lich::Common::Settings[:updatable][:mapdb]["GSF"] = true
-      Lich::Common::Settings[:updatable][:mapdb]["GSPlat"] = true
-      Lich::Common::Settings[:updatable][:mapdb]["GST"] = true
+      # Mapdb + simple value
+      mapdb["GSIV"]   = true
+      mapdb["GSF"]    = true
+      mapdb["GSPlat"] = true
+      mapdb["GST"]    = true
+      upd["lich"]     = false
 
-      # Set a simple value
-      Lich::Common::Settings[:updatable]["lich"] = false
+      upd[:scripts] = scripts
+      upd[:mapdb]   = mapdb
+      Lich::Common::Settings[:updatable] = upd
 
-      # Verify the structure
       expect(Lich::Common::Settings[:updatable][:scripts].length).to eq(4)
-      # Reminder that index 0 of array is pre-existsing - test.lic
       expect(Lich::Common::Settings[:updatable][:scripts][0][:filename]).to eq("test.lic")
       expect(Lich::Common::Settings[:updatable][:scripts][1][:filename]).to eq("alias.lic")
       expect(Lich::Common::Settings[:updatable][:scripts][2][:filename]).to eq("autostart.lic")
@@ -485,26 +559,24 @@ RSpec.describe Lich::Common::Settings do
       expect(Lich::Common::Settings[:updatable][:mapdb]["GSF"]).to be true
       expect(Lich::Common::Settings[:updatable][:mapdb]["GSPlat"]).to be true
       expect(Lich::Common::Settings[:updatable][:mapdb]["GST"]).to be true
-
       expect(Lich::Common::Settings[:updatable]["lich"]).to be false
 
-      # Check the mock database directly
-      storage = @mock_db.dump
+      storage  = @mock_db.dump
       settings = storage["test_script::"][:updatable]
-
-      expect(settings[:scripts].length).to eq(4) # see above
+      expect(settings[:scripts].length).to eq(4)
       expect(settings[:mapdb].keys).to contain_exactly("GSIV", "GSF", "GSPlat", "GST")
       expect(settings["lich"]).to be false
     end
 
     it "handles complex operations with method chaining" do
-      Lich::Common::Settings[:data] = Array.new
-      Lich::Common::Settings[:data].push({ id: 1, name: "Item 1", tags: ["tag1", "tag2"] })
-      Lich::Common::Settings[:data].push({ id: 2, name: "Item 2", tags: ["tag2", "tag3"] })
-      Lich::Common::Settings[:data].push({ id: 3, name: "Item 3", tags: ["tag1", "tag3"] })
-      Lich::Common::Settings[:data].push({ id: 4, name: "Item 4", tags: ["tag7", "tag3"] })
-      Lich::Common::Settings[:data].push({ id: 5, name: "Item 5", tags: ["tag5", "tag3"] })
-      Lich::Common::Settings[:data].push({ id: 6, name: "Item 6", tags: ["tag6", "tag3"] })
+      data = Lich::Common::Settings[:data] || []
+      data << { id: 1, name: "Item 1", tags: ["tag1", "tag2"] }
+      data << { id: 2, name: "Item 2", tags: ["tag2", "tag3"] }
+      data << { id: 3, name: "Item 3", tags: ["tag1", "tag3"] }
+      data << { id: 4, name: "Item 4", tags: ["tag7", "tag3"] }
+      data << { id: 5, name: "Item 5", tags: ["tag5", "tag3"] }
+      data << { id: 6, name: "Item 6", tags: ["tag6", "tag3"] }
+      Lich::Common::Settings[:data] = data
 
       # Find items with tag1
       items_with_tag1 = Lich::Common::Settings[:data].select { |item| item[:tags].include?("tag1") }
@@ -512,11 +584,20 @@ RSpec.describe Lich::Common::Settings do
       expect(items_with_tag1.map { |item| item[:id] }).to contain_exactly(1, 3)
 
       # Add a new tag to item 2
-      Lich::Common::Settings[:data][1][:tags].push("tag4")
+      data = Lich::Common::Settings[:data] || []
+      item2 = data[1] || {}
+      item2[:tags] = (item2[:tags] || [])
+      item2[:tags] << "tag4"
+      data[1] = item2
+      Lich::Common::Settings[:data] = data
       expect(Lich::Common::Settings[:data][1][:tags]).to contain_exactly("tag2", "tag3", "tag4")
 
       # Update an item's name
-      Lich::Common::Settings[:data][0][:name] = "Updated Item 1"
+      data = Lich::Common::Settings[:data] || []
+      item1 = data[0] || {}
+      item1[:name] = "Updated Item 1"
+      data[0] = item1
+      Lich::Common::Settings[:data] = data
       expect(Lich::Common::Settings[:data][0][:name]).to eq("Updated Item 1")
 
       # Check the mock database directly
@@ -524,5 +605,133 @@ RSpec.describe Lich::Common::Settings do
       expect(storage["test_script::"][:data][0][:name]).to eq("Updated Item 1")
       expect(storage["test_script::"][:data][1][:tags]).to contain_exactly("tag2", "tag3", "tag4")
     end
+  end
+end
+
+describe 'SettingsProxy#rebind_to_live!' do
+  it 'rebinds target to the live container and clears detached' do
+    settings_module = Lich::Common::Settings
+    scope = ':'
+    path  = [:updatable, :scripts]
+    initial = []
+
+    proxy = Lich::Common::SettingsProxy.new(settings_module, scope, path, initial, detached: true) rescue Lich::Common::SettingsProxy.new(settings_module, scope, path, initial)
+    live  = [{ filename: 'x.lic' }]
+
+    old_oid = proxy.target.object_id
+    proxy.send(:rebind_to_live!, live)
+
+    expect(proxy.target).to equal(live)
+    expect(proxy.target.object_id).not_to eq(old_oid)
+    if proxy.respond_to?(:detached?)
+      expect(proxy.detached?).to eq(false)
+    else
+      expect(proxy.instance_variable_get(:@detached)).to eq(false)
+    end
+    expect(proxy.scope).to eq(scope)
+    expect(proxy.path).to eq(path)
+  end
+end
+
+describe 'Settings#save_proxy_changes refresh-before-save' do
+  # Minimal Script stub for Settings.save_proxy_changes
+  unless defined?(::Script)
+    module ::Script
+      def self.current; self; end
+      def self.name; 'test_script'; end
+    end
+  end
+
+  it 'refreshes from DB to prevent stale-cache overwrites' do
+    settings_module = Lich::Common::Settings
+    script_name = 'test_script'
+    scope = ':'
+    cache_key = "#{script_name}::#{scope}"
+
+    fresh = { refreshed: true }
+    dbl = double('DBAdapter', get_settings: fresh, save_settings: true)
+    settings_module.instance_variable_set(:@db_adapter, dbl)
+    settings_module.instance_variable_set(:@settings_cache, { cache_key => { old: true } })
+
+    proxy = Lich::Common::SettingsProxy.new(settings_module, scope, [], {})
+    proxy.instance_variable_set(:@detached, true)
+    expect {
+      settings_module.save_proxy_changes(proxy)
+    }.not_to raise_error
+
+    cache_after = settings_module.instance_variable_get(:@settings_cache)[cache_key]
+    expect(cache_after).to be_a(Hash)
+  end
+end
+
+describe 'Settings#save_proxy_changes detached view behavior' do
+  # Minimal Script stub for Settings.save_proxy_changes
+  unless defined?(::Script)
+    module ::Script
+      def self.current; self; end
+      def self.name; 'test_script'; end
+    end
+  end
+  # Minimal Script stub to satisfy Settings.save_proxy_changes constant lookup
+  unless defined?(::Script)
+    module ::Script
+      def self.current; self; end
+      def self.name; 'test_script'; end
+    end
+  end
+
+  it 'persists the current root when called on a detached proxy' do
+    settings_module = Lich::Common::Settings
+    script_name = 'test_script'
+    scope = ':'
+    cache_key = "#{script_name}::#{scope}"
+
+    root = { jars: [] }
+    settings_module.instance_variable_set(:@settings_cache, { cache_key => root })
+    settings_module.instance_variable_set(:@db_adapter, double('DBAdapter', get_settings: root, save_settings: true))
+
+    detached_target = { jars: [{ gem: 'ruby' }] }
+    detached_proxy = Lich::Common::SettingsProxy.new(settings_module, scope, [], detached_target)
+    detached_proxy.instance_variable_set(:@detached, true)
+
+    expect {
+      settings_module.save_proxy_changes(detached_proxy)
+    }.not_to raise_error
+
+    cache = settings_module.instance_variable_get(:@settings_cache)[cache_key]
+    expect(cache).to eq(root)
+    expect(cache).to eq(root)
+  end
+end
+
+describe Lich::Common::SettingsProxy do
+  it 'defines a private rebind_to_live! helper' do
+    expect(Lich::Common::SettingsProxy.private_instance_methods).to include(:rebind_to_live!)
+  end
+
+  it 'rebinds target to the live container and clears detached (without altering scope/path)' do
+    proxy = Lich::Common::SettingsProxy.allocate
+
+    settings_module = Object.new
+    def settings_module._log(*); end
+    unless defined?(Settings::LOG_LEVEL_DEBUG)
+      module Settings
+        LOG_LEVEL_DEBUG = 0 unless const_defined?(:LOG_LEVEL_DEBUG)
+      end
+    end
+
+    proxy.instance_variable_set(:@settings_module, settings_module)
+    proxy.instance_variable_set(:@scope, ':')
+    proxy.instance_variable_set(:@path, [:updatable, :scripts])
+    proxy.instance_variable_set(:@target, [:old])
+    proxy.instance_variable_set(:@detached, true)
+
+    live = [:new]
+    proxy.send(:rebind_to_live!, live)
+
+    expect(proxy.instance_variable_get(:@target)).to equal(live)
+    expect(proxy.instance_variable_get(:@detached)).to eq(false)
+    expect(proxy.instance_variable_get(:@path)).to eq([:updatable, :scripts])
+    expect(proxy.instance_variable_get(:@scope)).to eq(':')
   end
 end

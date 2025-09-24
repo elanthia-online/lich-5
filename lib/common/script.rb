@@ -107,7 +107,7 @@ module Lich
           if (script = Script.current)
             eval('script = Script.current', script_binding, script.name)
             Thread.current.priority = 1
-            respond("--- Lich: #{script.name} active.") unless script.quiet
+            respond("--- Lich: #{script.custom? ? 'custom/' : ''}#{script.name} active.") unless script.quiet
             if trusted
               begin
                 eval(script.labels[script.current_label].to_s, script_binding, script.name)
@@ -134,7 +134,7 @@ module Lich
               rescue SystemStackError
                 respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
                 Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue StandardError # Exception
+              rescue JumpError
                 if $! == JUMP
                   retry if Script.current.get_next_label != JUMP_ERROR
                   respond "--- label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!"
@@ -145,7 +145,7 @@ module Lich
                   respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
                   Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                 end
-              rescue
+              rescue StandardError
                 respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
                 Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
               ensure
@@ -183,7 +183,7 @@ module Lich
               rescue SystemStackError
                 respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
                 Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue StandardError # Exception
+              rescue JumpError
                 if $! == JUMP
                   retry if Script.current.get_next_label != JUMP_ERROR
                   respond "--- label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!"
@@ -194,7 +194,7 @@ module Lich
                   respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
                   Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
                 end
-              rescue
+              rescue StandardError
                 respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
                 Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
               ensure
@@ -288,6 +288,10 @@ module Lich
 
       attr_reader :name, :vars, :safe, :file_name, :label_order, :at_exit_procs
       attr_accessor :quiet, :no_echo, :jump_label, :current_label, :want_downstream, :want_downstream_xml, :want_upstream, :want_script_output, :hidden, :paused, :silent, :no_pause_all, :no_kill_all, :downstream_buffer, :upstream_buffer, :unique_buffer, :die_with, :match_stack_labels, :match_stack_strings, :watchfor, :command_line, :ignore_pause
+
+      class JumpError < StandardError; end
+      JUMP = JumpError.exception('JUMP')
+      JUMP_ERROR = JumpError.exception('JUMP_ERROR')
 
       def Script.version(script_name, script_version_required = nil)
         script_name = script_name.sub(/[.](lic|rb|cmd|wiz)$/, '')
@@ -568,6 +572,7 @@ module Lich
       def initialize(args)
         @file_name = args[:file]
         @name = /.*[\/\\]+([^\.]+)\./.match(@file_name).captures.first
+        @custom = (/.*[\/\\]+(custom)[\/\\]+[^\.]+\./.match(@file_name).captures.nil? ? false : true)
         if args[:args].is_a?(String)
           if args[:args].empty?
             @vars = Array.new
@@ -587,6 +592,7 @@ module Lich
         end
         @quiet = (args[:quiet] ? true : false)
         @downstream_buffer = LimitedArray.new
+        @downstream_buffer.max_size = 400
         @want_downstream = true
         @want_downstream_xml = false
         @want_script_output = false
@@ -833,6 +839,10 @@ module Lich
         @match_stack_labels.clear
         @match_stack_strings.clear
       end
+
+      def custom?
+        @custom
+      end
     end
 
     class ExecScript < Script
@@ -894,15 +904,10 @@ module Lich
               respond $!.backtrace.first
               Lich.log "SystemStackError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
               Script.current.kill
-            rescue StandardError # Exception
-              respond "--- Exception: #{$!}"
+            rescue StandardError
+              respond "--- Lich error: #{$!}"
               respond $!.backtrace.first
               Lich.log "Exception: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Script.current.kill
-            rescue
-              respond "--- Lich: error: #{$!}"
-              respond $!.backtrace.first
-              Lich.log "Error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
               Script.current.kill
             end
           else
@@ -917,8 +922,10 @@ module Lich
       # rubocop:disable Lint/MissingSuper
       def initialize(cmd_data, flags = Hash.new)
         @cmd_data = cmd_data
+        @custom = false
         @vars = Array.new
         @downstream_buffer = LimitedArray.new
+        @downstream_buffer.max_size = 400
         @killer_mutex = Mutex.new
         @want_downstream = true
         @want_downstream_xml = false
@@ -985,6 +992,7 @@ module Lich
           @quiet = false
         end
         @downstream_buffer = LimitedArray.new
+        @downstream_buffer.max_size = 400
         @want_downstream = true
         @want_downstream_xml = false
         @upstream_buffer = LimitedArray.new
@@ -1105,7 +1113,7 @@ module Lich
           elsif line =~ /^([\s\t]*)matchwait\b/i
             line = "#{$1}matchwait"
           elsif line =~ /^([\s\t]*)if_([0-9])[\s\t]+(.*)/i
-            indent, num, stuff = $1, $2, $3
+            indent, num, _stuff = $1, $2, $3
             line = "#{indent}if script.vars[#{num}]\n#{indent}\t#{fixline.call($3)}\n#{indent}end"
           elsif line =~ /^([\s\t]*)shift\b/i
             line = "#{$1}script.vars.shift"

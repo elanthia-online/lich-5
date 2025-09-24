@@ -16,28 +16,53 @@ module Lich
           /the sentry just outside (?<town>Kraken's Fall)/,
           /the purser of (?<town>River's Rest)/,
           /the tavernkeeper at Rawknuckle's Common House/,
+          /the captain of the (?<town>Contempt)/
         )
+        CONCOCTION_REGEX = /is working on a concoction that requires (?:an?|some|several) (?<herb>[^.]+?) found [oi]n (?:the\s+)?(?<area>[^.]+?)(?:\s+(?:near|under|between) [^.]+)?\.  These samples must be in pristine condition\.  You have been tasked to retrieve (?<number>\d+) (?:more\s+)?samples?\./
+        TASK_MAYBE_REGEX = /^(?:The taskmaster told you:  ")/
 
         TASK_MATCHERS = {
           :none                => /^You are not currently assigned a task/,
           :bandit_assignment   => /#{HMM_REGEX}It appears they have a bandit problem they'd like you to solve/,
-          :creature_assignment => /#{HMM_REGEX}It appears they have a creature problem they'd like you to solve/,
-          :gem_assignment      => /#{HMM_REGEX}The local gem dealer, (?<npc_name>[^,]+), has an order to fill and wants our help/,
-          :heirloom_assignment => /#{HMM_REGEX}It appears they need your help in tracking down some kind of lost heirloom/,
-          :herb_assignment     => /#{HMM_REGEX}The local [^,]+?, (?<npc_name>[^,]+), has asked for our aid.  Head over there and see what you can do.  Be sure to ASK about BOUNTIES./,
+          :creature_assignment => Regexp.union(
+            /#{HMM_REGEX}It appears they have a creature problem they'd like you to solve/,
+            /#{TASK_MAYBE_REGEX}I've got an urgent mission for you.  We have a creature problem we'd like you to solve.  Go report to the (?<town>[A-Z].*?) to find out/,
+            /#{TASK_MAYBE_REGEX}I've a favor to ask of you.  We have a creature problem we'd like you to solve: you know, by killing.  Go report to the (?<town>[A-Z].*?)/
+          ),
+          :gem_assignment      => Regexp.union(
+            /#{HMM_REGEX}The local gem dealer, (?<npc_name>[^,]+), has an order to fill and wants our help/,
+            /All right.  I've a mission for you.  Our guest, the trader (?<npc_name>[^,]+)/,
+          ),
+          :heirloom_assignment => Regexp.union(
+            /#{HMM_REGEX}It appears they need your help in tracking down some kind of lost heirloom/,
+            /#{TASK_MAYBE_REGEX}?It's time for you to earn your keep around here.  I'd like you track down a lost heirloom./
+          ),
+          :herb_assignment     => Regexp.union(
+            /#{HMM_REGEX}The local [^,]+?, (?<npc_name>[^,]+), has asked for our aid.  Head over there and see what you can do.  Be sure to ASK about BOUNTIES./,
+            /#{TASK_MAYBE_REGEX}I've got a mission for you.  Our [^,]+?, (?<npc_name>[^,]+), has asked for our aid.  Head over there and see what you can do./
+          ),
           :rescue_assignment   => /#{HMM_REGEX}It appears that a local resident urgently needs our help in some matter/,
-          :skin_assignment     => /#{HMM_REGEX}The local furrier (?<npc_name>.+) has an order to fill and wants our help/,
+          :skin_assignment     => Regexp.union(
+            /#{HMM_REGEX}The local furrier (?<npc_name>.+) has an order to fill and wants our help/,
+            /#{TASK_MAYBE_REGEX}?You look like you need work.  The flesh merchant (?<npc_name>.+), down in the hold, has an order to fill and wants our help./
+          ),
           :taskmaster          => /^You have succeeded in your task and can return to the Adventurer's Guild/,
-          :heirloom_found      => /^You have located (?:an?|some) (?<item>.+) and should bring it back to #{GUARD_REGEX}\.$/,
+          :heirloom_found      => /^You have located (?:an?|some) (?<item>.+) and should bring (it back|your find) to #{GUARD_REGEX}\.$/,
           :guard               => /^You succeeded in your task and should report back to #{GUARD_REGEX}\.$/,
           :dangerous_spawned   => /^You have been tasked to hunt down and kill a particularly dangerous (?<creature>[^.]+) that has established a territory #{LOCATION_REGEX}\.  You have provoked (?:his|her|its) attention and now you must(?: return to where you left (?:him|her|it) and)? kill (?:him|her|it)!$/,
           :rescue_spawned      => /^You have made contact with the child you are to rescue and you must get (?:him|her) back alive to #{GUARD_REGEX}\.$/,
           :bandit              => /^You have been tasked to(?: help (?<assist>\w+))? suppress (?<creature>bandit) activity #{LOCATION_REGEX}\.  You need to kill (?<number>\d+) (?:more\s+)?of them to complete your task\.$/,
           :dangerous           => /^You have been tasked to hunt down and kill a (?:particularly )?dangerous (?<creature>[^.]+) that has established a territory #{LOCATION_REGEX}\.  You can get its attention by killing other creatures of the same type in its territory\.$/,
-          :escort              => /^(?:The taskmaster told you:  ")?I've got a special mission for you\.  A certain client has hired us to provide a protective escort on (?:his|her) upcoming journey\.  Go to (?<start>[^.]+) and WAIT for (?:him|her) to meet you there\.  You must guarantee (?:his|her) safety to (?<destination>[^.]+) as soon as you can, being ready for any dangers that the two of you may face\.  Good luck!"?$/,
-          :gem                 => /^The gem dealer in (?<town>[^,]+), (?<npc_name>[^,]+), has received orders from multiple customers requesting (?:an?|some) (?<gem>[^.]+)\.  You have been tasked to retrieve (?<number>\d+) (?:more\s+)?of them\.  You can SELL them to the gem dealer as you find them\.$/,
+          :escort              => /#{TASK_MAYBE_REGEX}?I've got a special mission for you\.  A certain client has hired us to provide a protective escort on (?:his|her) upcoming journey\.  Go to (?<start>[^.]+) and WAIT for (?:him|her) to meet you there\.  You must guarantee (?:his|her) safety to (?<destination>[^.]+) as soon as you can, being ready for any dangers that the two of you may face\.  Good luck!"?$/,
+          :gem                 => Regexp.union(
+            /^The gem dealer in (?<town>[^,]+), (?<npc_name>[^,]+), has received orders from multiple customers requesting (?:an?|some) (?<gem>[^.]+)\.  You have been tasked to retrieve (?<number>\d+) (?:more\s+)?of them\.  You can SELL them to the gem dealer as you find them\.$/,
+            /^The gem dealer in has received orders from multiple customers requesting (?:an?|some) (?<gem>[^.]+)\.  You have been tasked to retrieve (?<number>\d+) (?:more\s+)?of them\.  You can SELL them to the gem dealer as you find them\.$/
+          ),
           :heirloom            => /^You have been tasked to recover (?:an?|some) (?<item>[^.]+) that an unfortunate citizen lost after being attacked by an? (?<creature>[^.]+?) #{LOCATION_REGEX}\.  The heirloom can be identified by the initials \w+ engraved upon it\.  [^.]*?(?<action>LOOT|SEARCH)[^.]+\.$/,
-          :herb                => /^The .+? in (?<town>[^,]+?), (?<npc_name>[^,]+), is working on a concoction that requires (?:an?|some) (?<herb>[^.]+?) found [oi]n (?:the\s+)?(?<area>[^.]+?)(?:\s+(?:near|under|between) [^.]+)?\.  These samples must be in pristine condition\.  You have been tasked to retrieve (?<number>\d+) (?:more\s+)?samples?\.$/,
+          :herb                => Regexp.union(
+            /^The .+? in (?<town>[^,]+?), (?<npc_name>[^,]+), #{CONCOCTION_REGEX}$/,
+            /^The .+, (?<npc_name>[^,]+), aboard the (?<town>\w+?) in .*? #{CONCOCTION_REGEX}$/
+          ),
           :rescue              => /^You have been tasked to rescue the young (?:runaway|kidnapped) (?:son|daughter) of a local citizen\.  A local divinist has had visions of the child fleeing from an? (?<creature>[^.]+?) #{LOCATION_REGEX}\.  Find the area where the child was last seen and clear out the creatures that have been tormenting (?:him|her) in order to bring (?:him|her) out of hiding\.$/,
           :skin                => /^You have been tasked to retrieve (?<number>\d+) (?<skin>[^.]+?)s? of at least (?<quality>[^.]+) quality for (?<npc_name>.+) in (?<town>[^.]+?)\.  You can SKIN them off the corpse of an? (?<creature>[^.]+) or purchase them from another adventurer\.  You can SELL the skins to the furrier as you collect them\."$/,
           :cull                => Regexp.union(
@@ -115,6 +140,10 @@ module Lich
             "Kraken's Fall"
           elsif description =~ /the tavernkeeper at Rawknuckle's Common House\.$/
             "Cold River"
+          elsif description =~ /Captain|Reiya/ || description =~ /gem dealer in has received/
+            # the latter is a temporary workaround because of an actual typo in the messaging
+            # that should be removed if it is ever actually fixed
+            'Contempt'
           else
             captured_town
           end
