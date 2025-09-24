@@ -3,6 +3,7 @@
 # first, let's ignore files we don't want in the zip
 .git*           export-ignore
 *.yml           export-ignore
+*.yaml          export-ignore
 .ruby-version   export-ignore
 README.adoc     export-ignore
 netlify.toml    export-ignore
