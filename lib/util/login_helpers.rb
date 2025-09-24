@@ -63,6 +63,14 @@ module Lich
         VALID_REALMS.include?(realm)
       end
 
+      def self.lich_version_at_least?(major, minor = 0, patch = 0)
+        return false unless defined?(LICH_VERSION)
+
+        current = LICH_VERSION.scan(/\d+/).map(&:to_i)
+        target = [major, minor, patch]
+        (current <=> target) >= 0
+      end
+
       # Recursively converts string keys to symbols in nested hash and array structures.
       #
       # This method ensures that YAML data loaded with string keys can be accessed
@@ -291,7 +299,7 @@ module Lich
         return nil unless requested_character
 
         # Filter by required character match
-        matching_chars = char_data_sets.select { |char| char[:char_name] == requested_character }
+        matching_chars = char_data_sets.select { |char| char[:char_name].casecmp?(requested_character) }
         return nil if matching_chars.empty?
 
         # Filter by game instance if explicitly provided and valid, includes fallback GST -> GS3
@@ -432,7 +440,7 @@ module Lich
 
         normalized_code = game_code.to_s.upcase
 
-        if lich_version_at_least?(5, 12, 0)
+        if LoginHelpers.lich_version_at_least?(5, 12, 0)
           "--#{normalized_code}"
         else
           case normalized_code

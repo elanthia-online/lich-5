@@ -3,15 +3,15 @@
 module Lich
   module Common
     module GUI
-      # Provides UI for handling entry.dat to entry.yml conversion
-      # This module detects when entry.yml is missing but entry.dat exists
+      # Provides UI for handling entry.dat to entry.yaml conversion
+      # This module detects when entry.yaml is missing but entry.dat exists
       # and provides a simple UI for conversion
       module ConversionUI
         # Checks if conversion is needed
         # Determines if the legacy data format needs to be converted to the new YAML format
         #
         # @param data_dir [String] Directory containing entry data
-        # @return [Boolean] True if conversion is needed (entry.dat exists but entry.yml doesn't)
+        # @return [Boolean] True if conversion is needed (entry.dat exists but entry.yaml doesn't)
         def self.conversion_needed?(data_dir)
           dat_file = File.join(data_dir, "entry.dat")
           yml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
@@ -73,7 +73,7 @@ module Lich
           Accessibility.make_accessible(
             info_label,
             "Conversion Information",
-            "Information about converting account data from entry.dat to entry.yml format",
+            "Information about converting account data from entry.dat to entry.yaml format",
             :label
           )
 

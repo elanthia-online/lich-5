@@ -11,11 +11,12 @@ module Lich
         # @return [void]
         def self.initialize_accessibility
           # In GTK3, accessibility is enabled by default through ATK
-          # Ensure ATK is loaded by referencing a GAIL widget type
+          # Ensure ATK is loaded by referencing a Gail widget type
+          # accessibility is not available on any non-linux platform
           begin
             GLib::Object.type_from_name('GailWidget')
           rescue NoMethodError => e
-            Lich.log "warning: Could not initialize accessibility: #{e.message}"
+            Lich.log "warning: Could not initialize accessibility: #{e.message}" if OS.linux?
           end
         end
 
