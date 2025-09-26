@@ -258,6 +258,27 @@ module Lich
         tag.sub(/^v/, '')
       end
 
+      # Optional fallback: newest branch whose name starts with prefix and encodes a version
+      # Only branches with (major,minor) > stable's (major,minor) are considered.
+      # Accepts names like "pre/beta/5.15" or "pre/beta-5.15.0".
+      def self.latest_prefixed_branch_greater_than(prefix, stable_major, stable_minor)
+        branches = fetch_github_json('https://api.github.com/repos/elanthia-online/lich-5/branches?per_page=100')
+        return nil unless branches.is_a?(Array)
+        names = branches.map { |b| b['name'] }.compact
+        candidates = names.select { |n| n.start_with?(prefix) }
+        filtered = candidates.select do |n|
+          maj, min = self.major_minor_from(n)
+          maj && min && ((maj > stable_major) || (maj == stable_major && min > stable_minor))
+        end
+        return nil if filtered.empty?
+        begin
+          filtered.max_by { |n| self.version_key(n) }
+        rescue => e
+          respond "Update notice: ordering branches (latest_prefixed_branch_greater_than): #{e.message}"
+          filtered.sort.last
+        end
+      end
+
       def self.version_key(tag)
         Gem::Version.new(tag.to_s.sub(/^v/, '').gsub('-beta.', '.beta.'))
       end
