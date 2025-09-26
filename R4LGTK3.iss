@@ -13,7 +13,7 @@
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 ; Release Please does not increment the AppId with every build.  So do not change this number.
-; The AppId idendifies the Lich 5 application.  When we move to Lich 6, we generate a new GUID.
+; The AppId identifies the Lich 5 application.  When we move to Lich 6, we generate a new GUID.
 AppId= {{edd9ccd7-33cb-4577-a470-fe8fd087eb07}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
