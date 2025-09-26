@@ -4,7 +4,7 @@
   "packages": {
     ".": {
       "release-type": "ruby",
-      "component": "ng-betalich",
+      "component": "lich-5",
       "extra-files": [
         "lib/version.rb",
         "R4LGTK3.iss"
