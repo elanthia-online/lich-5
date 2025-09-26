@@ -12,7 +12,8 @@
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
-; Here we are testing NOT changing the AppID with every build.  So do not change this number.
+; Release Please does not increment the AppId with every build.  So do not change this number.
+; The AppId idendifies the Lich 5 application.  When we move to Lich 6, we generate a new GUID.
 AppId= {{edd9ccd7-33cb-4577-a470-fe8fd087eb07}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
@@ -83,7 +84,7 @@ Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\DefaultIcon";         ValueType: 
 Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\DefaultIcon";        ValueType: string; ValueName: ""; ValueData: "{app}\{#RubyVersion}\bin\rubyw.exe,0";             Components: rubygem; Flags: uninsdeletekey
 Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\shell\open\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\ruby.exe"" ""%1"" %*";  Components: rubygem; Flags: uninsdeletekey
 Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\rubyw.exe"" ""%1"" %*"; Components: rubygem; Flags: uninsdeletekey
-; Put Ruby’s bin, then the old PATH
+; Put Ruby bin, then the old PATH
 Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{app}\{#RubyVersion}\bin;{olddata}"; Flags: preservestringtype
 
 [RUN]
