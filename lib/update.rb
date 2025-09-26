@@ -279,8 +279,18 @@ module Lich
         end
       end
 
-      def self.version_key(tag)
-        Gem::Version.new(tag.to_s.sub(/^v/, '').gsub('-beta.', '.beta.'))
+      def self.version_key(tag_or_name)
+        s = tag_or_name.to_s
+        # strip leading 'v'
+        s = s.sub(/^v/, '')
+        # if this looks like a branch or path (e.g., "pre/beta/5.15.0" or "pre/beta-5.15.0"),
+        # extract the first version-looking substring to avoid prefix text interfering
+        if s =~ /(\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z\.]+)?)/ # captures 1.2 or 1.2.3 and optional suffix like -beta.
+          s = Regexp.last_match(1)
+        end
+        # normalize beta prerelease so beta.10 > beta.9
+        s = s.gsub('-beta.', '.beta.').gsub(/-beta(?!\.)/, '.beta')
+        Gem::Version.new(s)
       end
 
       def self.major_minor_from(str)
