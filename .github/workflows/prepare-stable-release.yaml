@@ -1,0 +1,33 @@
+name: Prepare Stable Release
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Branch to release from"
+        required: true
+        default: "main"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-pr-stable-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  stable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+          fetch-depth: 0
+
+      - name: Release Please (open/update Release PR)
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: ${{ inputs.target_branch }}
+          # This opens/updates the PR. The actual tag+GitHub Release happen when you merge that PR.

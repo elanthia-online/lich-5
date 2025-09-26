@@ -1,0 +1,93 @@
+name: Prepare Pre-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Branch to prepare prerelease from"
+        required: true
+        default: "pre/beta"
+      seed_beta_zero:
+        description: "Force the first prerelease to end in .0 (e.g., 5.13.0-beta.0)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout prerelease branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --tags --force
+
+      # Seed a Release-As footer ONLY for the first prerelease on this branch
+      - name: Seed Release-As for initial beta.0 (first run only)
+        if: ${{ inputs.seed_beta_zero }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # If any beta tag is already reachable from this branch, do nothing
+          if git tag --list 'v*-beta*' --merged HEAD | grep -q .; then
+            echo "Found existing beta tags merged into this branch; not forcing .0"
+            exit 0
+          fi
+
+          # Read current version from the single-package manifest (".")
+          if [[ ! -f .release-please-manifest.json ]]; then
+            echo ".release-please-manifest.json not found"
+            exit 1
+          fi
+
+          CURR=$(jq -r '."."' .release-please-manifest.json)
+          if [[ -z "$CURR" || "$CURR" == "null" ]]; then
+            echo "Could not read current version from .release-please-manifest.json"
+            exit 1
+          fi
+
+          IFS='.' read -r MA MI PA <<<"$CURR"
+          NEXT="${MA}.$((MI+1)).0-beta.0"
+          echo "Seeding Release-As: v$NEXT"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: seed prerelease ${NEXT}" -m "Release-As: v${NEXT}"
+          git push origin HEAD:${{ inputs.target_branch }}
+
+      # Sanity-check that GITHUB_TOKEN can write (labels API) in this context
+      - name: GITHUB_TOKEN write self-test (labels)
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          repo="${{ github.repository }}"
+          lbl="rp-selftest-${{ github.run_id }}"
+          echo "::group::Create test label"
+          gh api -X POST "/repos/$repo/labels" \
+            -f name="$lbl" -f color=ededed -f description="release-please token self-test"
+          echo "::endgroup::"
+          echo "::group::Delete test label"
+          gh api -X DELETE "/repos/$repo/labels/$lbl"
+          echo "::endgroup::"
+
+      - name: Release Please (prerelease)
+        uses: googleapis/release-please-action@v4
+        id: rp
+        with:
+          config-file: release-please-config.prerelease.json
+          manifest-file: .release-please-manifest.json
+          target-branch: pre/beta            # or ${{ github.ref_name }}
+          skip-github-pull-request: false    # you want the PR
+          skip-github-release: true          # <-- prevent create-a-release here

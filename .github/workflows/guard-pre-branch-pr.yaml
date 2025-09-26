@@ -1,0 +1,44 @@
+name: guard pre/* PRs to main
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  actions: write        # <-- needed to cancel other runs
+  pull-requests: write
+  contents: read
+
+jobs:
+  block:
+    if: ${{ startsWith(github.event.pull_request.head.ref, 'pre/') && github.event.pull_request.base.ref == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment and close mistaken PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            -R ${{ github.repository }} \
+            --body "This branch is for prerelease curation only. Please use the Release Please PR. This PR is closing unmerged."
+          gh pr close ${{ github.event.pull_request.number }} \
+            -R ${{ github.repository }}
+
+      - name: Cancel any queued/in-progress runs for this branch/SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          for status in in_progress queued; do
+            gh api -X GET "repos/$REPO/actions/runs" \
+              -f status="$status" -f per_page=100 \
+              -q '.workflow_runs[] | select((.head_branch=="'"$HEAD_REF"'") or (.head_sha=="'"$HEAD_SHA"'")) | .id' |
+            while read -r id; do
+              echo "Cancelling run $id (status=$status)"
+              gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null
+            done
+          done
+
