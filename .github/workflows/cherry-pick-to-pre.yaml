@@ -1,0 +1,164 @@
+name: Curate Pre Branch (Cherry-pick PRs)
+
+on:
+  workflow_dispatch:
+    inputs:
+      destination:
+        description: "Destination pre branch (e.g., pre/beta)"
+        required: true
+        default: "pre/beta"
+      base:
+        description: "Base branch to start from"
+        required: true
+        default: "main"
+      prs:
+        description: "Comma-separated PR numbers to include (e.g., 12,27,43)"
+        required: true
+      mode:
+        description: "auto | merged | head (how to source commits)"
+        required: true
+        default: "auto"
+      squash:
+        description: "Squash multi-commit PRs into one commit on the pre branch? (true/false)"
+        required: true
+        default: "true"
+      conflict_strategy:
+        description: "abort | ours | theirs"
+        required: true
+        default: "abort"
+      reset_destination:
+        description: "Force-create destination from base (discard existing history)? (true/false)"
+        required: true
+        default: "true"
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: curate-${{ github.ref }}-${{ github.event.inputs.destination }}
+  cancel-in-progress: false
+
+jobs:
+  curate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "Guard: refuse to curate into main"
+        shell: bash
+        env:
+          DEST: ${{ inputs.destination }}
+        run: |
+          if [ "$DEST" = "main" ]; then
+            echo "Refusing to curate into 'main'." >&2
+            exit 1
+          fi
+
+      - name: Ensure jq is available
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+      - name: Configure bot identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Prepare destination branch
+        env:
+          DEST: ${{ inputs.destination }}
+          BASE: ${{ inputs.base }}
+          RESET: ${{ inputs.reset_destination }}
+        run: |
+          git fetch origin "$BASE"
+          if [ "$RESET" = "true" ]; then
+            git checkout -B "$DEST" "origin/$BASE"
+          else
+            if git ls-remote --exit-code --heads origin "$DEST" >/dev/null 2>&1; then
+              git fetch origin "$DEST"
+              git checkout "$DEST"
+              git rebase "origin/$BASE"
+            else
+              git checkout -B "$DEST" "origin/$BASE"
+            fi
+          fi
+
+      - name: Cherry-pick PRs (no gh CLI; use PR title for squash message)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DEST: ${{ inputs.destination }}
+          PRS:  ${{ inputs.prs }}
+          MODE: ${{ inputs.mode }}
+          SQUASH: ${{ inputs.squash }}
+          STRAT: ${{ inputs.conflict_strategy }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$STRAT" in
+            ours)   XFLAG="-X ours" ;;
+            theirs) XFLAG="-X theirs" ;;
+            *)      XFLAG="" ;;
+          esac
+
+          api() {
+            curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$@"
+          }
+
+          IFS=',' read -ra ARR <<< "$PRS"
+          for N in "${ARR[@]}"; do
+            N=$(echo "$N" | xargs)
+            echo "::group::PR #$N"
+            PR_JSON=$(api "https://api.github.com/repos/$REPO/pulls/$N")
+            STATE=$(echo "$PR_JSON"     | jq -r '.state')
+            MERGED=$(echo "$PR_JSON"    | jq -r '.merged')
+            MERGE_SHA=$(echo "$PR_JSON" | jq -r '.merge_commit_sha')
+            TITLE=$(echo "$PR_JSON"     | jq -r '.title')
+
+            if [ "$MODE" = "merged" ] || { [ "$MODE" = "auto" ] && [ "$MERGED" = "true" ] && [ "$MERGE_SHA" != "null" ]; }; then
+              echo "Cherry-picking MERGED PR #$N commit $MERGE_SHA"
+              git cherry-pick -x $XFLAG "$MERGE_SHA"
+              echo "::endgroup::"
+              continue
+            fi
+
+            echo "Cherry-picking OPEN PR #$N head"
+            git fetch origin "pull/$N/head:pr-$N"
+            if [ "$SQUASH" = "true" ]; then
+              echo "  - Squashing with PR title as commit message"
+              git merge --squash $XFLAG "pr-$N"
+              git commit -m "$TITLE"
+            else
+              echo "  - Cherry-picking each commit (preserving history)"
+              for C in $(git rev-list --reverse --no-merges ^HEAD "pr-$N"); do
+                git cherry-pick -x $XFLAG "$C"
+              done
+            fi
+            echo "::endgroup::"
+          done
+
+      - name: Push destination branch
+        env:
+          DEST: ${{ inputs.destination }}
+        run: |
+          git push -f origin "$DEST"
+
+      - name: Summary
+        env:
+          DEST: ${{ inputs.destination }}
+          BASE: ${{ inputs.base }}
+          PRS:  ${{ inputs.prs }}
+        run: |
+          {
+            echo "### Curated branch ready"
+            echo "- **Destination:** \`$DEST\`"
+            echo "- **Base:** \`$BASE\`"
+            echo "- **PRs included:** $PRS"
+            echo
+            echo "Next: run **Prepare Pre-release** targeting \`$DEST\`."
+          } >> "$GITHUB_STEP_SUMMARY"
