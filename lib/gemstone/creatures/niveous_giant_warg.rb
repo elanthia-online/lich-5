@@ -84,71 +84,71 @@
 }
 
 =begin
-# hamstring
-With a quick lunge, a niveous giant warg tries to hamstring you with its !
-[SMR result: 92 (Open d100: 83, Bonus: 1)]
-A niveous giant warg's swing goes wide!
+  # hamstring
+  With a quick lunge, a niveous giant warg tries to hamstring you with its !
+  [SMR result: 92 (Open d100: 83, Bonus: 1)]
+  A niveous giant warg's swing goes wide!
 
-# howl? warcry
-A niveous giant warg sits back on its haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine.
-[SSR result: 144 (Open d100: 80)]
-Roundtime: 6 sec.
-Your heart quavers in your chest and you find yourself unable to focus on defending yourself!
+  # howl? warcry
+  A niveous giant warg sits back on its haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine.
+  [SSR result: 144 (Open d100: 80)]
+  Roundtime: 6 sec.
+  Your heart quavers in your chest and you find yourself unable to focus on defending yourself!
 
-# tackle?
-A niveous giant warg hurls itself at you!
-[SMR result: 86 (Open d100: 64, Bonus: 1)]
-A niveous giant warg fails to bring you down, but manages to scramble to its feet!
+  # tackle?
+  A niveous giant warg hurls itself at you!
+  [SMR result: 86 (Open d100: 64, Bonus: 1)]
+  A niveous giant warg fails to bring you down, but manages to scramble to its feet!
 
-# coup?
-A niveous giant warg moves agressively towards you to finish you off, but you still have enough wits about you to thwart its attempt.
-A niveous giant warg sits back on its haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine.
-[SSR result: 122 (Open d100: 58)]
-Roundtime: 3 sec.
-You fall further into the clutches of primal terror, insensate with the sound of the warg's cries!
-
-
-# bite (attack)
-A niveous giant warg lunges at you, maw slathering as it tries to take a ferocious bite!
-  AS: +524 vs DS: +768 with AvD: +39 + d100 roll: +88 = -121
-   A clean miss.
-
-A niveous giant warg lunges at you, maw slathering as it tries to take a ferocious bite!
-  AS: +480 vs DS: +663 with AvD: +39 + d100 roll: +61 = -83
-   A clean miss.
-
-#  slash (attack)
-A niveous giant warg bounds forward and slashes at you with a foreclaw!
-  AS: +520 vs DS: +804 with AvD: +41 + d100 roll: +26 = -217
-   A clean miss.
-
-A niveous giant warg bounds forward and slashes at you with a foreclaw!
-  AS: +480 vs DS: +663 with AvD: +41 + d100 roll: +35 = -107
-   A clean miss.
+  # coup?
+  A niveous giant warg moves agressively towards you to finish you off, but you still have enough wits about you to thwart its attempt.
+  A niveous giant warg sits back on its haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine.
+  [SSR result: 122 (Open d100: 58)]
+  Roundtime: 3 sec.
+  You fall further into the clutches of primal terror, insensate with the sound of the warg's cries!
 
 
-Emboldened by the addition of more pack members, a niveous giant warg bares its teeth in a hungry snarl!
-A niveous giant warg lunges at you, maw slathering as it tries to take a ferocious bite!
-  AS: +541 vs DS: +734 with AvD: +39 + d100 roll: +49 = -105
-   A clean miss.
+  # bite (attack)
+  A niveous giant warg lunges at you, maw slathering as it tries to take a ferocious bite!
+    AS: +524 vs DS: +768 with AvD: +39 + d100 roll: +88 = -121
+    A clean miss.
 
-Emboldened by the addition of more pack members, a niveous giant warg bares its teeth in a hungry snarl!
-A niveous giant warg bounds forward and slashes at you with a foreclaw!
-  AS: +545 vs DS: +629 with AvD: +41 + d100 roll: +41 = -2
-   A clean miss.
+  A niveous giant warg lunges at you, maw slathering as it tries to take a ferocious bite!
+    AS: +480 vs DS: +663 with AvD: +39 + d100 roll: +61 = -83
+    A clean miss.
 
-Bolstered by nearby members of its pack, a niveous giant warg grows bolder and more fierce!
-A niveous giant warg bounds forward and slashes at you with a foreclaw!
-  AS: +570 vs DS: +679 with AvD: +41 + d100 roll: +90 = +22
-   A clean miss.
+  #  slash (attack)
+  A niveous giant warg bounds forward and slashes at you with a foreclaw!
+    AS: +520 vs DS: +804 with AvD: +41 + d100 roll: +26 = -217
+    A clean miss.
 
-Emboldened by the addition of more pack members, a niveous giant warg bares its teeth in a hungry snarl!
-A niveous giant warg lunges at you, maw slathering as it tries to take a ferocious bite!
-  AS: +570 vs DS: +574 with AvD: +39 + d100 roll: +30 = +65
-   A clean miss.
+  A niveous giant warg bounds forward and slashes at you with a foreclaw!
+    AS: +480 vs DS: +663 with AvD: +41 + d100 roll: +35 = -107
+    A clean miss.
 
-# Side by side?  +speed? +as?
-Bolstered by nearby members of its pack, a niveous giant warg grows bolder and more fierce!
-Emboldened by the addition of more pack members, a niveous giant warg bares its teeth in a hungry snarl!
+
+  Emboldened by the addition of more pack members, a niveous giant warg bares its teeth in a hungry snarl!
+  A niveous giant warg lunges at you, maw slathering as it tries to take a ferocious bite!
+    AS: +541 vs DS: +734 with AvD: +39 + d100 roll: +49 = -105
+    A clean miss.
+
+  Emboldened by the addition of more pack members, a niveous giant warg bares its teeth in a hungry snarl!
+  A niveous giant warg bounds forward and slashes at you with a foreclaw!
+    AS: +545 vs DS: +629 with AvD: +41 + d100 roll: +41 = -2
+    A clean miss.
+
+  Bolstered by nearby members of its pack, a niveous giant warg grows bolder and more fierce!
+  A niveous giant warg bounds forward and slashes at you with a foreclaw!
+    AS: +570 vs DS: +679 with AvD: +41 + d100 roll: +90 = +22
+    A clean miss.
+
+  Emboldened by the addition of more pack members, a niveous giant warg bares its teeth in a hungry snarl!
+  A niveous giant warg lunges at you, maw slathering as it tries to take a ferocious bite!
+    AS: +570 vs DS: +574 with AvD: +39 + d100 roll: +30 = +65
+    A clean miss.
+
+  # Side by side?  +speed? +as?
+  Bolstered by nearby members of its pack, a niveous giant warg grows bolder and more fierce!
+  Emboldened by the addition of more pack members, a niveous giant warg bares its teeth in a hungry snarl!
 
 =end
