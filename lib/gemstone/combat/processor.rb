@@ -52,7 +52,7 @@ module Lich
                   # Fallback to name-based lookup only if no ID available
                   apply_status_to_target(status_result[:status], status_result[:target], nil, status_result[:action])
                 end
-                respond "[Combat] Found status effect: #{status_result}" if Tracker.debug?
+                puts "[Combat] Found status effect: #{status_result}" if Tracker.debug?
               end
             end
 
