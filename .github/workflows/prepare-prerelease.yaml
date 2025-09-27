@@ -7,6 +7,10 @@ on:
         description: "Branch to prepare prerelease from"
         required: true
         default: "pre/beta"
+      base_branch:                           # NEW: declare your trunk
+        description: "Base branch for prerelease"
+        required: true
+        default: "main"
       seed_beta_zero:
         description: "Force the first prerelease to end in .0 (e.g., 5.13.0-beta.0)"
         type: boolean
@@ -26,6 +30,11 @@ jobs:
         with:
           ref: ${{ inputs.target_branch }}
           fetch-depth: 0
+
+      - name: Git LF config (stabilize EOL)
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
 
       - name: Fetch tags
         run: git fetch --tags --force
