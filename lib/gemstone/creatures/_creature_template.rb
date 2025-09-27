@@ -9,8 +9,7 @@
   level: nil,                   # Integer
   family: "",                   # e.g., "canine", "gigas"
   type: "",                     # e.g., "biped", "quadruped", "avian", "ooze"
-  undead: false,                # corporeality is separate:
-  non_corporeal: false,         # true => incorporeal; false => corporeal
+  undead: "",                # corporeality is separate:
   boss: false,                  # special encounter flag (optional)
   otherclass: [],               # any extra tags you keep (optional)
   bcs: nil,                     # true/false/nil if unknown
@@ -84,7 +83,7 @@
 
   # ---------- Crafting / Misc ----------
   alchemy: [],
-  abilities_misc: [],            # keep if you want to separate non-combat traits
+  abilities_misc: [], # keep if you want to separate non-combat traits
 
   # ---------- Treasure ----------
   treasure: {
@@ -95,7 +94,7 @@
     # prefer object form so we can carry flags
     # { name: "inky black valravn plume", blunt_required: false }
     skin: nil,
-    other: nil                   # string or [strings]
+    other: nil # string or [strings]
   },
 
   # ---------- Messaging ----------

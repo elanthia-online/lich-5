@@ -5,7 +5,7 @@
   level: 105,
   family: "humanoid",
   type: "biped",
-  undead: "",
+  undead: false,
   otherclass: [],
   areas: [
     "hinterwilds"

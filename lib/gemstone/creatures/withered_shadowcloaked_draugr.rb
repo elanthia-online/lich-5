@@ -5,7 +5,7 @@
   level: 108,
   family: "Gigas",
   type: "Biped",
-  undead: "",
+  undead: true,
   otherclass: [
     "Corporeal undead"
   ],

@@ -5,7 +5,7 @@
   level: 101,
   family: "humanoid",
   type: "biped",
-  undead: "",
+  undead: false,
   otherclass: [],
   areas: [
     "hinterwilds"
@@ -103,7 +103,7 @@
       "Licking {pronoun} lips ravenously, a bloody halfling cannibal creeps {direction}.",
       "You hear soft footfalls."
     ],
-    death: "A monstrous, too-wide smile spreads across the cannibal's face as {prooun} collapses to the ground, dead.",
+    death: "A monstrous, too-wide smile spreads across the cannibal's face as {pronoun} collapses to the ground, dead.",
     decay: "A bloody halfling cannibal's body rots away, leaving only a small stain on the ground.",
     search: [
       "A bloody halfling cannibal sniffs at the air, {pronoun} eyes glinting as {pronoun} searches the shadows.",

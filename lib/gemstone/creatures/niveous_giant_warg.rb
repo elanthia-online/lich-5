@@ -5,7 +5,7 @@
   level: 104,
   family: "canine",
   type: "quadruped",
-  undead: "",
+  undead: false,
   otherclass: [],
   areas: [
     "hinterwilds"
