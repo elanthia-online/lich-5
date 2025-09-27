@@ -7,6 +7,10 @@ on:
         description: "Branch to prepare prerelease from"
         required: true
         default: "pre/beta"
+      base_branch:                           # NEW: declare your trunk
+        description: "Base branch for prerelease"
+        required: true
+        default: "main"
       seed_beta_zero:
         description: "Force the first prerelease to end in .0 (e.g., 5.13.0-beta.0)"
         type: boolean
@@ -26,6 +30,31 @@ jobs:
         with:
           ref: ${{ inputs.target_branch }}
           fetch-depth: 0
+
+      - name: Git LF config (stabilize EOL)
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      # Ensure the prerelease target branch exists; create it from base if missing
+      - name: Ensure target prerelease branch exists (create from base if missing)
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="${{ inputs.target_branch }}"
+          BASE="origin/${{ inputs.base_branch }}"
+
+          # Make sure we have the latest refs for both base and target
+          git fetch --prune --tags --force origin "${{ inputs.base_branch }}"
+          if git ls-remote --exit-code --heads origin "$TARGET" >/dev/null 2>&1; then
+            echo "Remote branch $TARGET exists; checking out local tracking branch"
+            git fetch origin "$TARGET":"$TARGET"
+            git checkout "$TARGET"
+          else
+            echo "Creating $TARGET from base $BASE"
+            git checkout -b "$TARGET" "$BASE"
+            git push -u origin "$TARGET"
+          fi
 
       - name: Fetch tags
         run: git fetch --tags --force
@@ -88,6 +117,6 @@ jobs:
         with:
           config-file: release-please-config.prerelease.json
           manifest-file: .release-please-manifest.json
-          target-branch: pre/beta            # or ${{ github.ref_name }}
+          target-branch: ${{ inputs.target_branch }} # allow input, but default is pre/beta
           skip-github-pull-request: false    # you want the PR
           skip-github-release: true          # <-- prevent create-a-release here
