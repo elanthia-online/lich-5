@@ -43,21 +43,35 @@ jobs:
           set -euo pipefail
           TARGET="${{ inputs.target_branch }}"
           BASE="origin/${{ inputs.base_branch }}"
-
-          # Make sure we have the latest refs for both base and target
-          git fetch --prune --tags --force origin "${{ inputs.base_branch }}"
+      
+          # Fetch base and remote target without mapping into local names
+          git fetch --prune --tags --force origin "${{ inputs.base_branch }}" "$TARGET" || true
+      
+          CURRENT=$(git rev-parse --abbrev-ref HEAD || echo "")
+          echo "Current branch: ${CURRENT}"
+      
           if git ls-remote --exit-code --heads origin "$TARGET" >/dev/null 2>&1; then
-            echo "Remote branch $TARGET exists; checking out local tracking branch"
-            git fetch origin "$TARGET":"$TARGET"
-            git checkout "$TARGET"
+            echo "Remote branch $TARGET exists"
+            if git show-ref --verify --quiet "refs/heads/$TARGET"; then
+              echo "Local branch $TARGET exists"
+              # Stay on it if already checked out; do NOT fetch into it
+              if [ "$CURRENT" != "$TARGET" ]; then
+                git checkout "$TARGET"
+              fi
+              # Option A: do not realign; leave as-is
+            else
+              echo "Creating local $TARGET to track origin/$TARGET"
+              git checkout -b "$TARGET" --track "origin/$TARGET"
+            fi
           else
-            echo "Creating $TARGET from base $BASE"
+            echo "Remote branch $TARGET does not exist; creating from base $BASE"
             git checkout -b "$TARGET" "$BASE"
             git push -u origin "$TARGET"
           fi
 
-      - name: Fetch tags
-        run: git fetch --tags --force
+      # This step should be unnecessary but may be useful in diagnostics so keeping as comment
+      # - name: Fetch tags
+      #   run: git fetch --tags --force
 
       # Seed a Release-As footer ONLY for the first prerelease on this branch
       - name: Seed Release-As for initial beta.0 (first run only)
