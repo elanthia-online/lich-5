@@ -5,7 +5,7 @@
   level: 107,
   family: "Ooze",
   type: "Globoid",
-  undead: "",
+  undead: false,
   otherclass: [],
   areas: [
     "Hinterwilds"

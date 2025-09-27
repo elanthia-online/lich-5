@@ -5,7 +5,7 @@
   level: 106,
   family: "gigas",
   type: "biped",
-  undead: "",
+  undead: false,
   otherclass: [],
   areas: [
     "hinterwilds"

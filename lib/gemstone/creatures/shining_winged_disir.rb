@@ -5,7 +5,7 @@
   level: 114,
   family: "",
   type: "",
-  undead: "",
+  undead: false,
   otherclass: [],
   areas: [
     "Hinterwilds"
