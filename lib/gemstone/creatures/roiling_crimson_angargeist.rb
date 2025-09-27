@@ -5,8 +5,8 @@
   level: 110,
   family: "",
   type: "",
-  undead: "",
-  otherclass: [],
+  undead: true,
+  otherclass: ["Non Corporeal undead"],
   areas: [
     "Hinterwilds"
   ],

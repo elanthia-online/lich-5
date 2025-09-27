@@ -5,7 +5,7 @@
   level: 111,
   family: "Worm",
   type: "Worm",
-  undead: "",
+  undead: false,
   otherclass: [],
   areas: [
     "Hinterwilds"

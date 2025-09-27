@@ -5,7 +5,7 @@
   level: 109,
   family: "Reptilian",
   type: "",
-  undead: "",
+  undead: false,
   otherclass: [],
   areas: [
     "Hinterwilds"

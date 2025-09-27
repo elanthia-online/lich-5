@@ -5,7 +5,7 @@
   level: 112,
   family: "Bird",
   type: "Avian",
-  undead: "",
+  undead: True,
   otherclass: [
     "Corporeal undead"
   ],

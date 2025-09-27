@@ -5,7 +5,7 @@
   level: 104,
   family: "golem",
   type: "biped",
-  undead: "",
+  undead: false,
   otherclass: [],
   areas: [
     "hinterwilds"

@@ -5,7 +5,7 @@
   level: 102,
   family: "elephantid",
   type: "quadruped",
-  undead: "",
+  undead: false,
   otherclass: [],
   areas: [
     "hinterwilds"
