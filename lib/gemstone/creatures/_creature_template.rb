@@ -9,7 +9,7 @@
   level: nil,                   # Integer
   family: "",                   # e.g., "canine", "gigas"
   type: "",                     # e.g., "biped", "quadruped", "avian", "ooze"
-  undead: "",                # corporeality is separate:
+  undead: "",                   # boolean
   boss: false,                  # special encounter flag (optional)
   otherclass: [],               # any extra tags you keep (optional)
   bcs: nil,                     # true/false/nil if unknown
