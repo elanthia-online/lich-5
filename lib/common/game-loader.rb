@@ -39,6 +39,7 @@ module Lich
         require File.join(LIB_DIR, 'gemstone', 'readylist.rb')
         require File.join(LIB_DIR, 'gemstone', 'stowlist.rb')
         require File.join(LIB_DIR, 'gemstone', 'creature.rb')
+        require File.join(LIB_DIR, 'gemstone', 'combat', 'tracker.rb')
         ActiveSpell.watch!
         self.common_after
       end
