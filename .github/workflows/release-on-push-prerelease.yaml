@@ -3,8 +3,8 @@ name: release-please (prerelease on push)
 on:
   push:
     branches:
-      - pre/*
-      - prerelease/*
+      - pre/beta
+      - pre/beta/*
     paths-ignore:
       - '.github/workflows/**'
 
@@ -81,10 +81,43 @@ jobs:
         run: |
           gh release upload "${{ steps.rp.outputs.tag_name }}" lich-5.tar.gz lich-5.zip
 
-  # 4) Build Windows installer (Ruby4Lich5.exe)
-  build_installer:
+  installer_gate:
     needs: release
     if: ${{ needs.release.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      installer: ${{ steps.gate.outputs.installer }}
+    steps:
+      - name: Resolve installer gate (labels only)
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          want="true"
+
+          # Find PRs associated with this commit
+          prs="$(gh api -H 'Accept: application/vnd.github+json' \
+                "/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[].number' || true)"
+
+          # If any associated PR has skip/no-installer (case-insensitive), disable installer
+          if [ -n "$prs" ]; then
+            for pr in $prs; do
+              labels="$(gh pr view "$pr" --json labels --jq '.labels[].name' || true | tr '[:upper:]' '[:lower:]')"
+              if echo "$labels" | grep -Eq '^(skip-installer|no-installer)$'; then
+                want="false"
+              fi
+            done
+          fi
+
+          echo "installer=$want" >> "$GITHUB_OUTPUT"
+          echo "Resolved installer=$want"
+
+  # 4) Build Windows installer (Ruby4Lich5.exe)
+  build_installer:
+    needs: [release, installer_gate]
+    if: ${{ needs.release.outputs.release_created == 'true' && needs.installer_gate.outputs.installer == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 120
 
@@ -114,6 +147,7 @@ jobs:
 
       # Build sanitized PATH that prefers vendored MSYS2 (Option A) and cache it
       - name: Build sanitized PATH for vendored MSYS2
+        id: vendormsys
         shell: powershell
         run: |
           $msys = 'C:\Ruby4Lich5\msys64'
@@ -126,13 +160,15 @@ jobs:
             ($_ -notmatch '^C:\\Strawberry(\\|$)')       # drop Strawberry toolchain
           }
           $san = @("$msys\ucrt64\bin","$msys\usr\bin") + $filtered
-          "PATH_VENDOR_MSYS={0}" -f ($san -join ';') | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          "RI_DEVKIT=" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $joined = ($san -join ';')
+          \"PATH_VENDOR_MSYS=$joined\" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          \"RI_DEVKIT=\" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          \"path=$joined\" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Initialize MSYS2 (minimal UCRT64; no meta toolchain)
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $msys   = 'C:\Ruby4Lich5\msys64'
@@ -155,7 +191,7 @@ jobs:
       - name: Dependency validation (toolchain & pkg-config)
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $msys = 'C:\Ruby4Lich5\msys64'
@@ -197,7 +233,7 @@ jobs:
       - name: Install required gems
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
           CC: gcc
           PKG_CONFIG: pkg-config
@@ -212,7 +248,7 @@ jobs:
         if: ${{ env.EXP_VALIDATE_RUBY_GTK == 'true' }}
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $msys = 'C:\Ruby4Lich5\msys64'
@@ -313,7 +349,7 @@ jobs:
         if: ${{ env.EXP_PRUNE_BULK == 'true' }}
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $msys = 'C:\Ruby4Lich5\msys64'
@@ -361,7 +397,7 @@ jobs:
       - name: Build Windows installer with Inno Setup
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"

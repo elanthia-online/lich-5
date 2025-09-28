@@ -25,10 +25,48 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     steps:
+      - name: Guard validate target and base
+        id: guard_validate
+        shell: bash
+        env:
+          RAW_TARGET: ${{ inputs.target_branch }}
+          RAW_BASE:   ${{ inputs.base_branch }}
+        run: |
+          set -euo pipefail
+          die(){ echo "::error::$*"; exit 1; }
+          norm(){ local s="$1"; s="${s#refs/heads/}"; s="$(echo "$s" | tr -d '[:space:]')"; s="${s%/}"; echo "$s"; }
+      
+          TARGET="$(norm "$RAW_TARGET")"
+          BASE="$(norm "$RAW_BASE")"
+      
+          case "$BASE" in
+            main) ;;
+            *) die "Invalid base '$BASE'. Only 'main' is allowed for prerelease preparation." ;;
+          esac
+      
+          if [[ "$TARGET" =~ (\.\.|[[:space:]]) ]]; then
+            die "Target '$TARGET' contains illegal sequences."
+          fi
+      
+          if [[ "$TARGET" != pre/beta && "$TARGET" != pre/beta/* ]]; then
+            if [[ "$TARGET" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$ ]]; then
+              echo "Shaping '$TARGET' => 'pre/beta/$TARGET'"
+              TARGET="pre/beta/$TARGET"
+            else
+              die "Target '$TARGET' must be 'pre/beta' or 'pre/beta/<slug>'."
+            fi
+          fi
+      
+            printf 'TARGET_SAFE=%s\n' "$TARGET" >> "$GITHUB_ENV"
+            printf 'BASE_SAFE=%s\n'   "$BASE"   >> "$GITHUB_ENV"
+            printf 'target_safe=%s\n' "$TARGET" >> "$GITHUB_OUTPUT"
+            printf 'base_safe=%s\n'   "$BASE"   >> "$GITHUB_OUTPUT"
+
+
       - name: Checkout prerelease branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.target_branch }}
+          ref: ${{ steps.guard_validate.outputs.target_safe }}
           fetch-depth: 0
 
       - name: Git LF config (stabilize EOL)
@@ -131,6 +169,6 @@ jobs:
         with:
           config-file: release-please-config.prerelease.json
           manifest-file: .release-please-manifest.json
-          target-branch: ${{ inputs.target_branch }} # allow input, but default is pre/beta
+          target-branch: ${{ steps.guard_validate.outputs.target_safe }} # allow input, but default is pre/beta
           skip-github-pull-request: false    # you want the PR
           skip-github-release: true          # <-- prevent create-a-release here

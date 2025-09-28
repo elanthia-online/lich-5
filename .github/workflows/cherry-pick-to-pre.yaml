@@ -47,6 +47,44 @@ jobs:
         with:
           fetch-depth: 0
 
+
+      - name: Guard validate destination and base
+        id: guard_validate
+        shell: bash
+        env:
+          RAW_DEST: ${{ inputs.destination }}
+          RAW_BASE: ${{ inputs.base }}
+        run: |
+          set -euo pipefail
+          die(){ echo "::error::$*"; exit 1; }
+          norm(){ local s="$1"; s="${s#refs/heads/}"; s="$(echo "$s" | tr -d '[:space:]')"; s="${s%/}"; echo "$s"; }
+      
+          DEST="$(norm "$RAW_DEST")"
+          BASE="$(norm "$RAW_BASE")"
+      
+          case "$BASE" in
+            main) ;;
+            *) die "Invalid base '$BASE'. Only 'main' is allowed." ;;
+          esac
+      
+          if [[ "$DEST" =~ (\.\.|[[:space:]]) ]]; then
+            die "Destination '$DEST' contains illegal sequences."
+          fi
+      
+          if [[ "$DEST" != pre/beta && "$DEST" != pre/beta/* ]]; then
+            if [[ "$DEST" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$ ]]; then
+              echo "Shaping '$DEST' => 'pre/beta/$DEST'"
+              DEST="pre/beta/$DEST"
+            else
+              die "Destination '$DEST' must be 'pre/beta' or 'pre/beta/<slug>'."
+            fi
+          fi
+      
+          printf 'DEST_SAFE=%s\n' "$DEST" >> "$GITHUB_ENV"
+          printf 'BASE_SAFE=%s\n' "$BASE" >> "$GITHUB_ENV"
+          printf 'dest_safe=%s\n' "$DEST" >> "$GITHUB_OUTPUT"
+          printf 'base_safe=%s\n' "$BASE" >> "$GITHUB_OUTPUT"
+
       - name: "Guard: refuse to curate into main"
         shell: bash
         env:
@@ -54,6 +92,16 @@ jobs:
         run: |
           if [ "$DEST" = "main" ]; then
             echo "Refusing to curate into 'main'." >&2
+            exit 1
+          fi
+
+      - name: Guard only curate into pre beta
+        shell: bash
+        env:
+          DEST_SAFE: ${{ steps.guard_validate.outputs.dest_safe }}
+        run: |
+          if [[ "$DEST_SAFE" != pre/beta && "$DEST_SAFE" != pre/beta/* ]]; then
+            echo "Refusing: destination must be 'pre/beta' or 'pre/beta/<slug>'" >&2
             exit 1
           fi
 
@@ -71,8 +119,8 @@ jobs:
 
       - name: Prepare destination branch
         env:
-          DEST: ${{ inputs.destination }}
-          BASE: ${{ inputs.base }}
+          DEST: ${{ steps.guard_validate.outputs.dest_safe }}
+          BASE: ${{ steps.guard_validate.outputs.base_safe }}
           RESET: ${{ inputs.reset_destination }}
         run: |
           git fetch origin "$BASE"
@@ -92,7 +140,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          DEST: ${{ inputs.destination }}
+          DEST: ${{ steps.guard_validate.outputs.dest_safe }}
           PRS:  ${{ inputs.prs }}
           MODE: ${{ inputs.mode }}
           SQUASH: ${{ inputs.squash }}
@@ -144,14 +192,14 @@ jobs:
 
       - name: Push destination branch
         env:
-          DEST: ${{ inputs.destination }}
+          DEST: ${{ steps.guard_validate.outputs.dest_safe }}
         run: |
           git push -f origin "$DEST"
 
       - name: Summary
         env:
-          DEST: ${{ inputs.destination }}
-          BASE: ${{ inputs.base }}
+          DEST: ${{ steps.guard_validate.outputs.dest_safe }}
+          BASE: ${{ steps.guard_validate.outputs.base_safe }}
           PRS:  ${{ inputs.prs }}
         run: |
           {
