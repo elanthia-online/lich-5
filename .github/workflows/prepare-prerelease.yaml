@@ -137,9 +137,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          # If any beta tag is already reachable from this branch, do nothing
-          if git tag --list 'v*-beta*' --merged HEAD | grep -q .; then
-            echo "Found existing beta tags merged into this branch; not forcing .0"
+          # Only skip seeding if a beta tag exists *after* the prerelease anchor (this cycle).
+          ANCHOR="${{ steps.derive_anchor.outputs.anchor_sha }}"
+          has_beta_after_anchor="false"
+          while IFS= read -r t; do
+            [ -z "$t" ] && continue
+            tsha=$(git rev-list -n1 "$t" || true)
+            # Tag commit must be reachable from HEAD, but NOT from the anchor
+            if git merge-base --is-ancestor "$tsha" HEAD \
+               && ! git merge-base --is-ancestor "$tsha" "$ANCHOR"; then
+              has_beta_after_anchor="true"
+              echo "Found beta tag after anchor: $t ($tsha)"
+              break
+            fi
+          done < <(git tag --list 'v*-beta*' --merged HEAD | sort -V)
+          if [ "$has_beta_after_anchor" = "true" ]; then
+            echo "Beta tags exist after anchor; not forcing .0"
             exit 0
           fi
 
