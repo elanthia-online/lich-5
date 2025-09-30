@@ -96,19 +96,40 @@ jobs:
         run: |
           set -euo pipefail
           want="true"
+          repo="${GITHUB_REPOSITORY}"
+          branch="${GITHUB_REF_NAME}"    # e.g. pre/beta or pre/beta/foo
+          sha="${GITHUB_SHA}"
 
-          # Find PRs associated with this commit
-          prs="$(gh api -H 'Accept: application/vnd.github+json' \
-                "/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[].number' || true)"
+          gh_pr_list() { gh api -H 'Accept: application/vnd.github+json' "$@"; }
 
-          # If any associated PR has skip/no-installer (case-insensitive), disable installer
-          if [ -n "$prs" ]; then
-            for pr in $prs; do
-              labels="$(gh pr view "$pr" --json labels --jq '.labels[].name' || true | tr '[:upper:]' '[:lower:]')"
-              if echo "$labels" | grep -Eq '^(skip-installer|no-installer)$'; then
-                want="false"
+          # 1) Fast path: PRs associated with this commit (works in most merges)
+          prs="$(gh_pr_list "/repos/$repo/commits/$sha/pulls" --jq '.[].number' || true)"
+
+          # 2) Fallback: find the PR merged into this branch whose merge_commit_sha == $sha
+          if [ -z "$prs" ]; then
+            # Search a small window of recently closed PRs targeting this branch
+            candidates="$(gh_pr_list "/repos/$repo/pulls?state=closed&base=$(printf '%s' "$branch" | jq -sRr @uri)&per_page=30" --jq '.[].number' || true)"
+            for pr in $candidates; do
+              msha="$(gh_pr_list "/repos/$repo/pulls/$pr" --jq '.merge_commit_sha' || echo null)"
+              if [ "$msha" != "null" ] && [ "$msha" = "$sha" ]; then
+                prs="$pr"
+                break
               fi
             done
+          fi
+
+          # 3) Label check on the pre-release PR (if found)
+          if [ -n "$prs" ]; then
+            for pr in $prs; do
+              labels="$(gh pr view "$pr" --json labels --jq '.labels[].name' | tr '[:upper:]' '[:lower:]' || true)"
+              if echo "$labels" | grep -Eq '^(skip-installer|no-installer)$'; then
+                want="false"
+                echo "Found no-installer label on PR #$pr → installer=FALSE"
+                break
+              fi
+            done
+          else
+            echo "No PRs detected for $sha on $branch; defaulting to installer=TRUE"
           fi
 
           echo "installer=$want" >> "$GITHUB_OUTPUT"
@@ -161,9 +182,9 @@ jobs:
           }
           $san = @("$msys\ucrt64\bin","$msys\usr\bin") + $filtered
           $joined = ($san -join ';')
-          \"PATH_VENDOR_MSYS=$joined\" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          \"RI_DEVKIT=\" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          \"path=$joined\" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "PATH_VENDOR_MSYS=$joined" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RI_DEVKIT=" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "path=$joined" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Initialize MSYS2 (minimal UCRT64; no meta toolchain)
         shell: powershell
