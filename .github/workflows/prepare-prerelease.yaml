@@ -211,4 +211,61 @@ jobs:
           manifest-file: .release-please-manifest.json
           target-branch: ${{ steps.guard_validate.outputs.target_safe }} # allow input, but default is pre/beta
           skip-github-pull-request: false    # you want the PR
-          skip-github-release: true          # <-- prevent create-a-release here
+          skip-github-release: true           # <-- prevent create-a-release here
+
+      # Clean up the Release Please PR body:
+      #  - keep PR numbers as plain "(#123)"
+      #  - strip commit SHA links "( [abc1234](...) )"
+      #  - remove PR hyperlink wrappers, keeping "(#123)"
+      #  - ensure the standard footer is appended exactly once
+      - name: Normalize Release Please PR body (strip SHAs/links, keep PR #, append footer)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          TARGET_SAFE: ${{ steps.guard_validate.outputs.target_safe }}
+          BASE_SAFE:   ${{ steps.guard_validate.outputs.base_safe }}
+        run: |
+          set -euo pipefail
+
+          footer=$'**For additional usage/install instructions, please visit one of the following:**\n\n**DragonRealms -** https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich\n**Gemstone IV -** https://gswiki.play.net/Lich:Software/Installation'
+
+          # Find the Release Please PR for this prerelease branch
+          # Prefer exact head/base match (open PR from TARGET_SAFE into BASE_SAFE)
+          enc_head="$(printf '%s:%s' "$OWNER" "$TARGET_SAFE" | jq -sRr @uri)"
+          enc_base="$(printf '%s' "$BASE_SAFE" | jq -sRr @uri)"
+          prs_json="$(gh api "/repos/$REPO/pulls?state=open&head=$enc_head&base=$enc_base&per_page=10")"
+          pr_number="$(printf '%s' "$prs_json" | jq -r '.[0].number // empty')"
+          if [ -z "${pr_number:-}" ]; then
+            echo "No open PR found for head=$OWNER:$TARGET_SAFE base=$BASE_SAFE; nothing to normalize."
+            exit 0
+          fi
+
+          tmp_in="$(mktemp)"
+          tmp_out="$(mktemp)"
+          gh api "/repos/$REPO/pulls/$pr_number" --jq '.body' > "$tmp_in"
+
+          # 1) Remove commit SHA link tail patterns:
+          #    e.g. " ([abc1234](https://.../commit/abc1234))"  or  " ([abcdef...](...))"
+          sed -E 's/ *(\(\[[0-9a-f]{7,40}\]\([^)]+\)\))//g' "$tmp_in" > "$tmp_out" && mv "$tmp_out" "$tmp_in"
+
+          # 2) Convert PR links "([#123](https://.../pull/123))" -> "(#123)"
+          sed -E 's/\(\[#([0-9]+)\]\([^)]+\)\)/(#\1)/g' "$tmp_in" > "$tmp_out" && mv "$tmp_out" "$tmp_in"
+
+          # 3) Normalize any stray PR Markdown links like "[#123](.../pull/123)" -> "#123"
+          sed -E 's/\[#([0-9]+)\]\([^)]+\)/#\1/g' "$tmp_in" > "$tmp_out" && mv "$tmp_out" "$tmp_in"
+
+          # 4) (Safety) Remove any remaining *commit* markdown links that escaped step 1
+          sed -E 's/\[[0-9a-f]{7,40}\]\([^)]+\)//g' "$tmp_in" > "$tmp_out" && mv "$tmp_out" "$tmp_in"
+
+          # 5) Ensure footer is present exactly once (append if missing)
+          if ! grep -Fq '**For additional usage/install instructions' "$tmp_in"; then
+            printf '\n\n%s\n' "$footer" >> "$tmp_in"
+          fi
+
+          # Update the PR body
+          gh pr edit "$pr_number" --repo "$REPO" --body-file "$tmp_in"
+
+          echo "Release Please PR #$pr_number body normalized."
+                # <-- prevent create-a-release here

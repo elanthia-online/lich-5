@@ -39,6 +39,39 @@ jobs:
           # We create the PR elsewhere when desired; keep RP in tag/release mode for pre/*
           skip-github-pull-request: true
 
+      # Normalize the just-created GitHub Release notes to match our PR cleanup:
+      #  - remove commit SHA links
+      #  - convert PR links to plain "(#123)"
+      #  - ensure the standard footer is present exactly once
+      - name: Normalize GitHub Release notes (strip SHAs/links, keep PR #, append footer)
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG:  ${{ steps.rp.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          tmp_in="$(mktemp)"
+          tmp_out="$(mktemp)"
+          footer=$'**For additional usage/install instructions, please visit one of the following:**\n\n**DragonRealms -** https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich\n**Gemstone IV -** https://gswiki.play.net/Lich:Software/Installation'
+
+          # Fetch current release notes
+          gh api "/repos/$REPO/releases/tags/$TAG" --jq '.body' > "$tmp_in"
+
+          # Remove commit SHA links like " ([abc1234](...))"
+          sed -E 's/ *(\(\[[0-9a-f]{7,40}\]\([^)]+\)\))//g' "$tmp_in" > "$tmp_out" && mv "$tmp_out" "$tmp_in"
+          # Convert PR links "([#123](.../pull/123))" -> "(#123)"
+          sed -E 's/\(\[#([0-9]+)\]\([^)]+\)\)/(#\1)/g' "$tmp_in" > "$tmp_out" && mv "$tmp_out" "$tmp_in"
+          # Normalize stray "[#123](...)" -> "#123"
+          sed -E 's/\[#([0-9]+)\]\([^)]+\)/#\1/g' "$tmp_in" > "$tmp_out" && mv "$tmp_out" "$tmp_in"
+          # Safety: strip any remaining pure-SHA markdown links
+          sed -E 's/\[[0-9a-f]{7,40}\]\([^)]+\)//g' "$tmp_in" > "$tmp_out" && mv "$tmp_out" "$tmp_in"
+          # Append footer once
+          grep -Fq '**For additional usage/install instructions' "$tmp_in" || printf '\n\n%s\n' "$footer" >> "$tmp_in"
+          # Update release body
+          gh release edit "$TAG" --repo "$REPO" --notes-file "$tmp_in"
+
       # 2) Only build/upload when a new GitHub prerelease was created
       - name: Checkout repository
         if: ${{ steps.rp.outputs.release_created == 'true' }}
