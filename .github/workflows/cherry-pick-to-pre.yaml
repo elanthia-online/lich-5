@@ -136,6 +136,20 @@ jobs:
             fi
           fi
 
+      - name: Create prerelease base tag
+        shell: bash
+        env:
+          DEST: ${{ steps.guard_validate.outputs.dest_safe }}
+          BASE: ${{ steps.guard_validate.outputs.base_safe }}
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+          BASE_SHA=$(git rev-parse "origin/${BASE}")
+          TAG="prebeta-base/${DEST}"
+          echo "Tagging $TAG at $BASE_SHA"
+          git tag -f "$TAG" "$BASE_SHA"
+          git push -f origin "refs/tags/$TAG"
+
       - name: Cherry-pick PRs (no gh CLI; use PR title for squash message)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

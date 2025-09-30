@@ -69,6 +69,25 @@ jobs:
           ref: ${{ steps.guard_validate.outputs.target_safe }}
           fetch-depth: 0
 
+      - name: Derive prerelease anchor sha
+        id: derive_anchor
+        shell: bash
+        env:
+          TARGET_SAFE: ${{ steps.guard_validate.outputs.target_safe }}
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+          if git rev-parse -q --verify "refs/tags/prebeta-base/${TARGET_SAFE}" >/dev/null; then
+            ANCHOR_SHA=$(git rev-parse "refs/tags/prebeta-base/${TARGET_SAFE}")
+            echo "Using tag anchor: $ANCHOR_SHA"
+          else
+            echo "Tag not found; falling back to merge-base with origin/main"
+            git fetch origin main
+            ANCHOR_SHA=$(git merge-base "origin/${TARGET_SAFE}" origin/main)
+            echo "Fallback anchor: $ANCHOR_SHA"
+          fi
+          printf 'anchor_sha=%s\n' "$ANCHOR_SHA" >> "$GITHUB_OUTPUT"
+
       - name: Git LF config (stabilize EOL)
         run: |
           git config --global core.autocrlf false
@@ -162,6 +181,27 @@ jobs:
           echo "::group::Delete test label"
           gh api -X DELETE "/repos/$repo/labels/$lbl"
           echo "::endgroup::"
+      - name: Write last-release-sha into prerelease config
+        shell: bash
+        env:
+          ANCHOR_SHA: ${{ steps.derive_anchor.outputs.anchor_sha }}
+        run: |
+          set -euo pipefail
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "::error::'jq' is required but not found on the runner"; exit 1
+          fi
+          CFG="release-please-config.prerelease.json"
+          if [ ! -f "$CFG" ]; then
+            echo "::error::Config file '$CFG' not found on branch"; exit 1
+          fi
+          tmp=$(mktemp)
+          jq --arg sha "$ANCHOR_SHA" '. + { "last-release-sha": $sha }' "$CFG" > "$tmp"
+          mv "$tmp" "$CFG"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$CFG"
+          git commit -m "chore(${{ steps.guard_validate.outputs.target_safe }}): set prerelease anchor $ANCHOR_SHA" || true
+          git push
 
       - name: Release Please (prerelease)
         uses: googleapis/release-please-action@c2a5a2bd6a758a0937f1ddb1e8950609867ed15c # v4.3.0
