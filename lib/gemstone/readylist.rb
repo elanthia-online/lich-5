@@ -2,6 +2,10 @@ module Lich
   module Gemstone
     class ReadyList
       @checked = false
+
+      ORIGINAL_READY_LIST = [:shield, :weapon, :secondary_weapon, :ranged_weapon, :ammo_bundle, :ammo2_bundle, :sheath, :secondary_sheath, :wand]
+      ORIGINAL_STORE_LIST = [:shield, :weapon, :secondary_weapon, :ranged_weapon, :ammo_bundle, :wand]
+
       @ready_list = {
         shield: nil,
         weapon: nil,
@@ -51,10 +55,11 @@ module Lich
           @checked = value
         end
 
-        def valid?
+        def valid?(all: false)
           # check if existing ready items are valid or not
           return false unless checked?
           @ready_list.each do |key, value|
+            next unless all || ORIGINAL_READY_LIST.include?(key)
             unless key.eql?(:wand) || value.nil? || GameObj.inv.map(&:id).include?(value.id) || GameObj.containers.values.flatten.map(&:id).include?(value.id) || GameObj.right_hand.id.include?(value.id) || GameObj.left_hand.id.include?(value.id)
               @checked = false
               return false
@@ -63,12 +68,14 @@ module Lich
           return true
         end
 
-        def reset
+        def reset(all: false)
           @checked = false
-          @ready_list.each_key do |key|
+          @ready_list.each do |key, value|
+            next unless all || ORIGINAL_READY_LIST.include?(key)
             @ready_list[key] = nil
           end
-          @store_list.each_key do |key|
+          @store_list.each do |key, value|
+            next unless all || ORIGINAL_STORE_LIST.include?(key)
             @store_list[key] = nil
           end
         end
