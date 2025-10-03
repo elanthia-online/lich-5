@@ -56,7 +56,7 @@ module Lich
 
         def reset(all: false)
           @checked = false
-          @stow_list.each do |key, value|
+          @stow_list.each do |key, _value|
             next unless all || ORIGINAL_STOW_LIST.include?(key)
             @stow_list[key] = nil
           end
