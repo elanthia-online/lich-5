@@ -2,6 +2,9 @@ module Lich
   module Gemstone
     class StowList
       @checked = false
+
+      ORIGINAL_STOW_LIST = [:box, :gem, :herb, :skin, :wand, :scroll, :potion, :trinket, :reagent, :lockpick, :treasure, :forageable, :collectible, :default]
+
       @stow_list = {
         box: nil,
         gem: nil,
@@ -38,10 +41,11 @@ module Lich
           @checked = value
         end
 
-        def valid?
+        def valid?(all: false)
           # check if existing containers are valid or not
           return false unless checked?
-          @stow_list.each_value do |value|
+          @stow_list.each do |key, value|
+            next unless all || ORIGINAL_STOW_LIST.include?(key)
             unless value.nil? || GameObj.inv.map(&:id).include?(value.id)
               @checked = false
               return false
@@ -50,9 +54,10 @@ module Lich
           return true
         end
 
-        def reset
+        def reset(all: false)
           @checked = false
-          @stow_list.each_key do |key|
+          @stow_list.each do |key, value|
+            next unless all || ORIGINAL_STOW_LIST.include?(key)
             @stow_list[key] = nil
           end
         end
