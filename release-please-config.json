@@ -1,10 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "include-v-in-tag": true,
-  "bootstrap-sha": "d1a7dcec986eb9b5de6fae21c7bed557747b8432",
-  "last-release-sha": "d1a7dcec986eb9b5de6fae21c7bed557747b8432",
-  "commit-search-depth": 200,
-  "release-search-depth": 50,
   "packages": {
     ".": {
       "release-type": "ruby",
