@@ -70,11 +70,11 @@ module Lich
 
         def reset(all: false)
           @checked = false
-          @ready_list.each do |key, value|
+          @ready_list.each do |key, _value|
             next unless all || ORIGINAL_READY_LIST.include?(key)
             @ready_list[key] = nil
           end
-          @store_list.each do |key, value|
+          @store_list.each do |key, _value|
             next unless all || ORIGINAL_STORE_LIST.include?(key)
             @store_list[key] = nil
           end
