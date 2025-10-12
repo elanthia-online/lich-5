@@ -193,7 +193,8 @@ module Lich
             when Pattern::TotalExp
               match = Regexp.last_match
               @expr_hold.push(['experience.total_experience', match[:total_experience].delete(',').to_i],
-                              ['experience.deaths_sting', match[:deaths_sting]])
+                              ['experience.deaths_sting', match[:deaths_sting]],
+                              ['experience.last_checked', Time.now.to_i])
               :ok
             when Pattern::LTE
               match = Regexp.last_match
