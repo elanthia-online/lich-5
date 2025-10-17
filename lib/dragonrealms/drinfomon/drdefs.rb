@@ -71,7 +71,7 @@ module Lich
                                  .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
                                  .sort
       flat_npcs = []
-      tmp_npc_string.uniq.each { |npc| flat_npcs << tmp_npc_string.size.times.select { |i| tmp_npc_string[i] == npc }.size.times.map { |number| number.zero? ? tmp_npc_string[0] : tmp_npc_string[number].sub(npc, "#{$ORDINALS[number]} #{npc}") } }
+      tmp_npc_string.uniq.each { |npc| flat_npcs << tmp_npc_string.size.times.select { |i| tmp_npc_string[i] == npc }.size.times.map { |number| number.zero? ? npc : tmp_npc_string[number].sub(npc, "#{$ORDINALS[number]} #{npc}") } }
       flat_npcs.flatten
     end
 
