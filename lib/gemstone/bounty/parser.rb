@@ -140,7 +140,7 @@ module Lich
             "Kraken's Fall"
           elsif description =~ /the tavernkeeper at Rawknuckle's Common House\.$/
             "Cold River"
-          elsif description =~ /Captain|Reiya/ || description =~ /gem dealer in has received/
+          elsif description =~ /\b(?:Captain|Reiya|Ataum|Galeb)\b/ || description =~ /gem dealer in has received/
             # the latter is a temporary workaround because of an actual typo in the messaging
             # that should be removed if it is ever actually fixed
             'Contempt'
