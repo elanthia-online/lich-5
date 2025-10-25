@@ -56,16 +56,16 @@ module Lich
 
           # Rank 3 critical injuries prevent casting (Sigil cannot bypass)
           return false if injuries_at_rank?(3, wounds, scars, :head, :nsys, *BODY_PART_GROUPS[:eyes])
-          
+
           # Check for rank 3 in arms/hands (worst of arm vs hand per side)
           left_arm = effective_injury_from_hashes(:leftArm, wounds, scars)
           left_hand = effective_injury_from_hashes(:leftHand, wounds, scars)
           right_arm = effective_injury_from_hashes(:rightArm, wounds, scars)
           right_hand = effective_injury_from_hashes(:rightHand, wounds, scars)
-          
+
           left_side = [left_arm, left_hand].max
           right_side = [right_arm, right_hand].max
-          
+
           return false if left_side == 3 || right_side == 3
 
           # Sigil of Determination bypasses rank 2 or lower injuries
@@ -145,4 +145,3 @@ module Lich
     end
   end
 end
-
