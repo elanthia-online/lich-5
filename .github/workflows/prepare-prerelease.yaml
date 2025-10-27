@@ -1,3 +1,18 @@
+# =============================================================================
+# Workflow: prepare-prerelease.yaml
+# Purpose: Prepare a Release Please prerelease (PR only; no GitHub Release) on
+#          a prerelease train (pre/beta or pre/beta/<slug>).
+#
+# Triggers:
+#   - workflow_dispatch (manual)
+#   - workflow_run (auto) after cherry-pick train completes
+#
+# Contracts / Invariants:
+#   - Base must be "main".
+#   - Target must be "pre/beta" or "pre/beta/<slug>"; normalized and guarded.
+#   - No sed edits to repo files; JSON edits via jq only.
+#   - Do NOT create a GitHub Release; PR only (skip-github-release: true).
+# =============================================================================
 name: Prepare Pre-release
 
 on:
@@ -16,10 +31,18 @@ on:
         type: boolean
         default: true
 
+#  workflow_run:
+#    workflows: ["Curate Pre Branch (Cherry-pick PRs)"]
+#    types: [completed]
+
 permissions:
   contents: write
   pull-requests: write
   issues: write
+
+concurrency:
+  group: prepare-pre-${{ github.event_name }}-${{ github.ref || github.event.workflow_run.head_branch || 'pre/beta' }}
+  cancel-in-progress: true
 
 jobs:
   prepare:
@@ -36,8 +59,11 @@ jobs:
           die(){ echo "::error::$*"; exit 1; }
           norm(){ local s="$1"; s="${s#refs/heads/}"; s="$(echo "$s" | tr -d '[:space:]')"; s="${s%/}"; echo "$s"; }
       
-          TARGET="$(norm "$RAW_TARGET")"
-          BASE="$(norm "$RAW_BASE")"
+          # Fallback for auto-trigger (workflow_run): default curated train
+          RAW="${RAW_TARGET:-}"
+          if [ -z "$RAW" ]; then RAW="pre/beta"; fi
+          TARGET="$(norm "$RAW")"
+          BASE="$(norm "${RAW_BASE:-main}")"
       
           case "$BASE" in
             main) ;;
@@ -62,6 +88,17 @@ jobs:
             printf 'target_safe=%s\n' "$TARGET" >> "$GITHUB_OUTPUT"
             printf 'base_safe=%s\n'   "$BASE"   >> "$GITHUB_OUTPUT"
 
+      - name: Detect destination existence on origin
+        id: dest_state
+        shell: bash
+        env:
+          DEST: ${{ steps.guard_validate.outputs.target_safe }}
+        run: |
+          if git ls-remote --exit-code --heads origin "$DEST" >/dev/null 2>&1; then
+            echo "existed=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "existed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Checkout prerelease branch
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -98,11 +135,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TARGET="${{ inputs.target_branch }}"
-          BASE="origin/${{ inputs.base_branch }}"
+          TARGET="${{ steps.guard_validate.outputs.target_safe }}"
+          BASE="origin/${{ steps.guard_validate.outputs.base_safe }}"
       
           # Fetch base and remote target without mapping into local names
-          git fetch --prune --tags --force origin "${{ inputs.base_branch }}" "$TARGET" || true
+          git fetch --prune --tags --force origin "${{ steps.guard_validate.outputs.base_safe }}" "$TARGET" || true
       
           CURRENT=$(git rev-parse --abbrev-ref HEAD || echo "")
           echo "Current branch: ${CURRENT}"
@@ -135,34 +172,34 @@ jobs:
         if: ${{ inputs.seed_beta_zero }}
         shell: bash
         run: |
+          # If destination branch existed at job start, do not seed .0 again
+          if [ "${{ steps.dest_state.outputs.existed }}" = "true" ]; then
+            echo "Destination branch existed before this run; skipping .0 seed."
+            exit 0
+          fi
           set -euo pipefail
-
           # If any beta tag is already reachable from this branch, do nothing
           if git tag --list 'v*-beta*' --merged HEAD | grep -q .; then
             echo "Found existing beta tags merged into this branch; not forcing .0"
             exit 0
           fi
-
           # Read current version from the single-package manifest (".")
           if [[ ! -f .release-please-manifest.json ]]; then
             echo ".release-please-manifest.json not found"
             exit 1
           fi
-
           CURR=$(jq -r '."."' .release-please-manifest.json)
           if [[ -z "$CURR" || "$CURR" == "null" ]]; then
             echo "Could not read current version from .release-please-manifest.json"
             exit 1
           fi
-
           IFS='.' read -r MA MI PA <<<"$CURR"
           NEXT="${MA}.$((MI+1)).0-beta.0"
           echo "Seeding Release-As: v$NEXT"
-
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit --allow-empty -m "chore: seed prerelease ${NEXT}" -m "Release-As: v${NEXT}"
-          git push origin HEAD:${{ inputs.target_branch }}
+          git push origin HEAD:${{ steps.guard_validate.outputs.target_safe }}
 
       # Sanity-check that GITHUB_TOKEN can write (labels API) in this context
       - name: GITHUB_TOKEN write self-test (labels)
@@ -181,11 +218,16 @@ jobs:
           echo "::group::Delete test label"
           gh api -X DELETE "/repos/$repo/labels/$lbl"
           echo "::endgroup::"
+
       - name: Write last-release-sha into prerelease config
         shell: bash
         env:
           ANCHOR_SHA: ${{ steps.derive_anchor.outputs.anchor_sha }}
         run: |
+          # Sync local branch to remote tip to avoid non-FF push if earlier steps pushed
+          git fetch origin "${{ steps.guard_validate.outputs.target_safe }}"
+          git checkout "${{ steps.guard_validate.outputs.target_safe }}"
+          git reset --hard "origin/${{ steps.guard_validate.outputs.target_safe }}"
           set -euo pipefail
           if ! command -v jq >/dev/null 2>&1; then
             echo "::error::'jq' is required but not found on the runner"; exit 1
@@ -202,6 +244,85 @@ jobs:
           git add "$CFG"
           git commit -m "chore(${{ steps.guard_validate.outputs.target_safe }}): set prerelease anchor $ANCHOR_SHA" || true
           git push
+
+      - name: Pin Release-As to next beta.N on same train (if prior prerelease exists)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Find latest reachable prerelease tag like vMA.MI.0-beta.M
+          last_beta="$(git tag -l 'v[0-9]*.[0-9]*.0-beta.[0-9]*' --merged HEAD --sort=-version:refname | head -n1 || true)"
+          echo "DEBUG(pin): last_beta(reachable)='${last_beta}'"
+          if [ -z "$last_beta" ]; then
+            echo "No reachable prerelease tag; nothing to pin."
+            exit 0
+          fi
+          if [[ ! "$last_beta" =~ ^v([0-9]+)\.([0-9]+)\.0-beta\.([0-9]+)$ ]]; then
+            echo "Latest reachable prerelease tag '$last_beta' is not MA.MI.0-beta.M; skipping pin."
+            exit 0
+          fi
+          MA="${BASH_REMATCH[1]}"; MI="${BASH_REMATCH[2]}"; M="${BASH_REMATCH[3]}"
+          base="v${MA}.${MI}.0"
+          next="v${MA}.${MI}.0-beta.$((M+1))"
+          cnt="$(git rev-list --count "${last_beta}..HEAD" || echo 0)"
+          echo "DEBUG(pin): commits since ${last_beta} -> ${cnt}"
+          echo "DEBUG(pin): next=${next}"
+          # If HEAD already contains next tag (unlikely), skip
+          if git rev-parse -q --verify "refs/tags/${next}" >/dev/null; then
+            echo "Tag ${next} already exists; skipping pin."
+            exit 0
+          fi
+          # Ensure there is at least one new commit since last_beta; otherwise skip
+          if [ "$(git rev-list --count "${last_beta}..HEAD")" -eq 0 ]; then
+            echo "No new commits since ${last_beta}; skipping pin."
+            exit 0
+          fi
+          echo "Pinning Release-As to ${next} to maintain same prerelease train."
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: pin prerelease ${next}" -m "Release-As: ${next}"
+          git push origin HEAD:${{ steps.guard_validate.outputs.target_safe }}
+
+      - name: Sync local view with remote target branch
+        shell: bash
+        env:
+          DEST: ${{ steps.guard_validate.outputs.target_safe }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$DEST"
+          git checkout "$DEST"
+          git reset --hard "origin/$DEST"
+          git --no-pager log --oneline -n 3
+
+      - name: "Guard: ensure there are commits since anchor (or fail fast)"
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+          CFG="release-please-config.prerelease.json"
+          anchor=""
+          if [ -f "$CFG" ] && command -v jq >/dev/null 2>&1; then
+            anchor="$(jq -r '."last-release-sha" // empty' "$CFG")"
+          fi
+          if [ -n "$anchor" ]; then
+            cnt="$(git rev-list --count "${anchor}..HEAD" || echo 0)"
+            echo "Commits since anchor: ${cnt}"
+            if [ "$cnt" -eq 0 ]; then
+              echo "::error::No commits since anchor; nothing for Release Please to include."
+              exit 1
+            fi
+          else
+            last_beta="$(git tag -l 'v[0-9]*.[0-9]*.0-beta.[0-9]*' --merged HEAD --sort=-version:refname | head -n1 || true)"
+            if [ -n "$last_beta" ]; then
+              cnt="$(git rev-list --count "${last_beta}..HEAD" || echo 0)"
+              echo "Commits since ${last_beta}: ${cnt}"
+              if [ "$cnt" -eq 0 ]; then
+                echo "::error::No commits since ${last_beta}; nothing for Release Please to include."
+                exit 1
+              fi
+            else
+              echo "No reachable prerelease tag; fresh train expected."
+            fi
+          fi
 
       - name: Release Please (prerelease)
         uses: googleapis/release-please-action@c2a5a2bd6a758a0937f1ddb1e8950609867ed15c # v4.3.0

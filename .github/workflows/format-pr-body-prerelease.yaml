@@ -1,0 +1,50 @@
+# Purpose: Reformat Release Please PR bodies (targeting pre/beta) into our deterministic structure.
+# Notes for review:
+# - Triggers include opened + labeled + synchronize + edited + reopened to handle RP's asynchronous label/body updates.
+# - Also includes workflow_dispatch for manual runs (escape hatch).
+# - Guard checks PR *author* (not event actor) to allow either release-please[bot] or github-actions[bot].
+# - Concurrency ensures only one formatter job per PR at a time.
+# - Uses composite action ./.github/actions/format-body (pinned actions inside that file). No gh CLI, no sed.
+# - Supply-chain: actions/checkout pinned by commit SHA below.
+name: Format Release PR Body (Prerelease)
+
+on:
+  pull_request:
+    # Broad set of types to catch label-after-open, body edits, and pushes to the PR branch
+    types: [opened, labeled, synchronize, edited, reopened]
+    branches: ["pre/beta"]
+  # Manual escape hatch
+  # workflow_dispatch: {}
+
+permissions:
+  pull-requests: write
+  contents: read
+
+concurrency:
+  group: format-body-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    # Guards:
+    # 1) PR author is Release Please or GitHub Actions bot (repos vary).
+    # 2) RP's staging label present (autorelease: pending).
+    # 3) Base branch is pre/beta.
+    if: |
+      (github.event.pull_request.user.login == 'release-please[bot]' ||
+       github.event.pull_request.user.login == 'github-actions[bot]') &&
+      contains(join(github.event.pull_request.labels.*.name, ','), 'autorelease: pending') &&
+      github.event.pull_request.base.ref == 'pre/beta'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (read optional sections.md if present)
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Format body (prerelease)
+        uses: ./.github/actions/format-body
+        with:
+          mode: beta
+          # Waiting window for Ellipsis injection by Ellipsis bot/RP body updates
+          wait_seconds: 0
+          wait_interval_seconds: 5
+          # Default headers when sections.md is not provided (keeps repo clean)

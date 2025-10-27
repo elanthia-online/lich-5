@@ -1,0 +1,114 @@
+## -----------------------------------------------------------------------------
+## Format Release PR Body (Stable) — Documentation
+##
+## Why two triggers:
+## - pull_request path handles human edits/labels to the Release Please PR.
+## - workflow_run path handles when Release Please updates the PR using GITHUB_TOKEN,
+##   which does not emit pull_request events. Chaining off the upstream workflow
+##   restores deterministic formatting after RP updates.
+##
+## Block scalars for `if:`:
+## - Prefer the folded scalar (>) for multi-line expressions because GitHub's `if:`
+##   expects a single string. The literal scalar (|) preserves newlines and can be
+##   more brittle. If you keep (|) for readability, ensure the expression remains
+##   valid across newlines.
+##
+## Wait behavior:
+## - The composite action's default wait_seconds is 60s, but workflows pass 0 here
+##   for fast feedback (no polling for Ellipsis). The workflow input overrides the
+##   action default.
+## -----------------------------------------------------------------------------
+name: Format Release PR Body (Stable)
+
+on:
+  pull_request:
+    types: [opened, labeled, synchronize, edited, reopened]
+    branches:
+      - "main"
+  workflow_run:
+    workflows: ["Prepare Stable Release"]
+    types: [completed]
+  # Manual escape hatch
+  # workflow_dispatch: {}
+
+permissions:
+  pull-requests: write
+  contents: read
+
+concurrency:
+  group: format-body-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    # Job: Format PR Body on Pull Request
+    # Scope: Runs only on pull_request events (never on workflow_run).
+    # Guards:
+    #   - Confines to the Release Please PR (RP bot author + 'autorelease: pending' label + base 'main').
+    # Block scalar note:
+    #   - Prefer (>) for multi-line `if:`; (|) preserves newlines and is more fragile.
+    name: Format PR Body on Pull Request
+    # Keep the pull_request gate first so this job does not evaluate on workflow_run.
+    if: >
+      github.event_name == 'pull_request' &&
+      (github.event.pull_request.user.login == 'release-please[bot]' ||
+       github.event.pull_request.user.login == 'github-actions[bot]') &&
+      contains(join(github.event.pull_request.labels.*.name, ','), 'autorelease: pending') &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (read optional sections.md if present)
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Format body (stable, idempotent)
+        uses: ./.github/actions/format-body
+        with:
+          mode: stable
+          wait_seconds: 0   # Override action default (60s). 0 = no polling for Ellipsis; fastest feedback.
+          wait_interval_seconds: 5
+
+
+  format_from_release_please_run:
+    # Job: Format PR Body on Workflow Complete
+    # Why: Release Please updates the PR using GITHUB_TOKEN, which does not emit
+    #      pull_request events. This job chains off the upstream workflow completion
+    #      as a reliable signal to re-format the open RP PR.
+    name: Format PR Body on Workflow Complete
+    # Gate strictly to successful workflow_run events from "Prepare Stable Release".
+    if: >
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (read optional sections.md if present)
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Find open Release Please PR (stable)
+      # Criteria:
+      #   - Base branch is main
+      #   - Label 'autorelease: pending'
+      #   - Author is RP bot (release-please[bot] or github-actions[bot])
+      # Adjust here if your labeling/authoring conventions change.
+        id: find
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const all = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', base: 'main', sort: 'updated', direction: 'desc', per_page: 50
+            });
+            const match = all.find(pr =>
+              pr.user && (pr.user.login === 'release-please[bot]' || pr.user.login === 'github-actions[bot]') &&
+              pr.labels && pr.labels.some(l => l.name === 'autorelease: pending')
+            );
+            if (!match) { core.notice('No open Release Please PR (stable) found. Skipping.'); return; }
+            core.setOutput('number', String(match.number));
+
+      - name: Format body (stable via workflow_run)
+        if: ${{ steps.find.outputs.number }}
+        uses: ./.github/actions/format-body
+        with:
+          mode: stable
+          wait_seconds: 0   # Override action default (60s). 0 = no polling for Ellipsis; fastest feedback.
+          wait_interval_seconds: 5
+          pr_number: ${{ steps.find.outputs.number }}
