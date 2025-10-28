@@ -210,6 +210,12 @@ module Lich
         end
 
         def start_wrap_thread
+          begin
+            Lich.db_vacuum_if_due!(months: 6)
+          rescue => e
+            Lich.log "db_maint(startup): #{e.class}: #{e.message}"
+          end
+
           @wrap_thread = Thread.new do
             @last_recv = Time.now
             until @autostarted || (Time.now - @last_recv >= 6)
