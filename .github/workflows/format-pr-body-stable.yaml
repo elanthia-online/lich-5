@@ -77,7 +77,8 @@ jobs:
     # Gate strictly to successful workflow_run events from "Prepare Stable Release".
     if: >
       github.event_name == 'workflow_run' &&
-      github.event.workflow_run.conclusion == 'success'
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.name == 'Prepare Stable Release'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (read optional sections.md if present)

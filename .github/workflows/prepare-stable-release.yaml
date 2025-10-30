@@ -145,9 +145,15 @@ jobs:
                 gh api -X DELETE "/repos/$repo/git/refs/heads/$b" || true
               done
 
+          # prune old checkpoint tags (keep last 3)
+          gh api "/repos/$repo/git/refs/tags" --jq '.[] | .ref' | awk -F'refs/tags/' '/^refs\/tags\/checkpoint\/stable\//{print $2}' | sort -rV | tail -n +4 | while read -r t; do
+            gh api -X DELETE "/repos/$repo/git/refs/tags/$t" || true
+          done
+
           # create new backup branch from current HEAD
           git branch -f "$backup"
-          git push -u origin "$backup"
+          # Use --force-with-lease for safety: ensures atomic push even though branch is force-created locally
+          git push --force-with-lease -u origin "$backup"
 
           {
             echo "tag=$tag"

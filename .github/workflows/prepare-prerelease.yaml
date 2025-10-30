@@ -31,9 +31,9 @@ on:
         type: boolean
         default: true
 
-#  workflow_run:
-#    workflows: ["Curate Pre Branch (Cherry-pick PRs)"]
-#    types: [completed]
+  # workflow_run:
+  #   workflows: ["Curate Pre Branch (Cherry-pick PRs)"]
+  #   types: [completed]
 
 permissions:
   contents: write
@@ -41,7 +41,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: prepare-pre-${{ github.event_name }}-${{ github.ref || github.event.workflow_run.head_branch || 'pre/beta' }}
+  group: prepare-pre-${{ inputs.target_branch || 'pre/beta' }}
   cancel-in-progress: true
 
 jobs:
@@ -238,12 +238,19 @@ jobs:
           fi
           tmp=$(mktemp)
           jq --arg sha "$ANCHOR_SHA" '. + { "last-release-sha": $sha }' "$CFG" > "$tmp"
+          # Validate JSON is valid before committing
+          if ! jq empty "$tmp" 2>/dev/null; then
+            echo "::error::JSON validation failed for config"; exit 1
+          fi
           mv "$tmp" "$CFG"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$CFG"
           git commit -m "chore(${{ steps.guard_validate.outputs.target_safe }}): set prerelease anchor $ANCHOR_SHA" || true
-          git push
+          # Fetch immediately before push to detect concurrent updates
+          git fetch origin "${{ steps.guard_validate.outputs.target_safe }}"
+          # Use --force-if-includes to ensure atomic push (fails if remote changed)
+          git push --force-if-includes origin "${{ steps.guard_validate.outputs.target_safe }}"
 
       - name: Pin Release-As to next beta.N on same train (if prior prerelease exists)
         shell: bash

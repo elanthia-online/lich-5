@@ -76,8 +76,10 @@ runs:
       with:
         script: |
           const MODE = process.env.MODE; // 'pre' or 'stable'
-          const waitTotal = parseInt(process.env.WAIT_S || '60', 10);
-          const waitStep = parseInt(process.env.WAIT_I || '5', 10);
+          // Lines 79-80: Parse wait configuration with exponential backoff
+          const waitTotal = Math.min(parseInt(process.env.WAIT_S || '15', 10), 15); // Default 15s, cap at 15s
+          const waitInitial = Math.min(parseInt(process.env.WAIT_I || '1', 10), 1);  // Initial 1s interval
+          const waitMax = 5;  // Cap backoff at 5s
           const CONTRACT_SHA = process.env.CONTRACT_SHA;
           const sentinelTag = `<!-- FORMATTER:v1 sha=${CONTRACT_SHA} mode=${MODE} -->`;
           const BREAK_AUTO = (process.env.BREAK_AUTO || 'false').toLowerCase() === 'true';
@@ -103,14 +105,25 @@ runs:
           let pr = await getPR();
           let body = pr.body || '';
           let waited = 0;
+          let backoffMs = waitInitial * 1000;
           while (!body.includes(ELLIPSIS_MARK) && waited < waitTotal * 1000) {
-            await sleep(waitStep * 1000);
+            const actualSleep = Math.min(backoffMs, waitTotal * 1000 - waited);  // CAPTURE the actual duration
+            await sleep(actualSleep);
             pr = await getPR();
             body = pr.body || '';
-            waited += waitStep * 1000;
+            waited += actualSleep;  // Use ACTUAL, not intended
+            backoffMs = Math.min(backoffMs * 1.5, waitMax * 1000);
+          }
+
+          // Fast-fail: If Ellipsis never appeared but we hit timeout, log and continue
+          if (!body.includes(ELLIPSIS_MARK)) {
+            core.warning(`Ellipsis block did not appear within ${waitTotal}s; proceeding without it.`);
           }
 
           // ----- Smart sentinel short-circuit -----
+          // Output contract: 'skip' is a string boolean ('true' when sentinel is present)
+          // - When 'true': PR already formatted, skip the update step
+          // - When missing/absent: proceed with formatting update
           const idxSent = body.indexOf(sentinelTag);
           const idxEll  = body.indexOf(ELLIPSIS_MARK);
           if (idxSent >= 0 && (idxEll < 0 || (idxEll >= 0 && idxEll < idxSent))) {
@@ -126,6 +139,8 @@ runs:
             return x.startsWith('v') ? x : `v${x}`;
           }
           function extractVersionAndDate(prBody, prTitle) {
+            // Primary: Try Release-As git footer (most authoritative)
+            // This would require git log access, so defer to PR body parsing
             // Prefer RP header, e.g.: "## [5.13.0-beta.0](...) (2025-10-02)" or "## [v5.13.0] ... (2025-10-02)"
             const mHeader = prBody && prBody.match(/^##\s*\[\s*(v?\d+\.\d+\.\d+(?:-[^\]\s]+)?)\s*\][^\n]*?\(\s*(\d{4}-\d{2}-\d{2})\s*\)/m);
             if (mHeader) return { version: mHeader[1], date: mHeader[2] };
@@ -134,6 +149,9 @@ runs:
             const today = new Date();
             const iso = today.toISOString().slice(0,10); // YYYY-MM-DD (UTC)
             if (mTitle) return { version: mTitle[1], date: iso };
+            // Last resort: extract from Release-As comment if present in body
+            const mReleaseAs = prBody && prBody.match(/Release-As:\s*v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.\-]+)?)/i);
+            if (mReleaseAs) return { version: mReleaseAs[1], date: iso };
             return { version: '', date: iso };
           }
           const vnd = extractVersionAndDate(body, pr.title || '');
