@@ -100,18 +100,18 @@ module Lich
 
     def add_ordinals_to_duplicates(npc_list)
       flat_npcs = []
-      
+
       npc_list.uniq.each do |npc|
         # Count how many times this NPC appears
         count = npc_list.count(npc)
-        
+
         # Create entries with ordinals for duplicates
         count.times do |index|
           name = index.zero? ? npc : "#{$ORDINALS[index]} #{npc}"
           flat_npcs << name
         end
       end
-      
+
       flat_npcs
     end
 
