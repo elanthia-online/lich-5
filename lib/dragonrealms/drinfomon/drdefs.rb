@@ -63,16 +63,56 @@ module Lich
     end
 
     def clean_npc_string(npc_string)
-      tmp_npc_string = npc_string.map { |obj| obj.sub(/.*alfar warrior.*/, 'alfar warrior') }
-                                 .map { |obj| obj.sub(/.*sinewy leopard.*/, 'sinewy leopard') }
-                                 .map { |obj| obj.sub(/.*lesser naga.*/, 'lesser naga') }
-                                 .map { |obj| obj.sub('<pushBold/>', '').sub(%r{<popBold/>.*}, '') }
-                                 .map { |obj| obj.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '') }
-                                 .map { |obj| obj.strip.scan(/[A-z'-]+$/).first }
-                                 .sort
+      # Normalize NPC names
+      normalized_npcs = npc_string
+        .map { |obj| normalize_creature_names(obj) }
+        .map { |obj| remove_html_tags(obj) }
+        .map { |obj| extract_last_creature(obj) }
+        .map { |obj| extract_final_name(obj) }
+        .sort
+
+      # Count occurrences and add ordinals
+      add_ordinals_to_duplicates(normalized_npcs)
+    end
+
+    def normalize_creature_names(text)
+      text
+        .sub(/.*alfar warrior.*/, 'alfar warrior')
+        .sub(/.*sinewy leopard.*/, 'sinewy leopard')
+        .sub(/.*lesser naga.*/, 'lesser naga')
+    end
+
+    def remove_html_tags(text)
+      text
+        .sub('<pushBold/>', '')
+        .sub(%r{<popBold/>.*}, '')
+    end
+
+    def extract_last_creature(text)
+      # Get the last creature name after "and", removing modifiers like "glowing with"
+      text.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '')
+    end
+
+    def extract_final_name(text)
+      # Extract just the creature name (letters, hyphens, apostrophes)
+      text.strip.scan(/[A-z'-]+$/).first
+    end
+
+    def add_ordinals_to_duplicates(npc_list)
       flat_npcs = []
-      tmp_npc_string.uniq.each { |npc| flat_npcs << tmp_npc_string.size.times.select { |i| tmp_npc_string[i] == npc }.size.times.map { |number| number.zero? ? npc : tmp_npc_string[number].sub(npc, "#{$ORDINALS[number]} #{npc}") } }
-      flat_npcs.flatten
+      
+      npc_list.uniq.each do |npc|
+        # Count how many times this NPC appears
+        count = npc_list.count(npc)
+        
+        # Create entries with ordinals for duplicates
+        count.times do |index|
+          name = index.zero? ? npc : "#{$ORDINALS[index]} #{npc}"
+          flat_npcs << name
+        end
+      end
+      
+      flat_npcs
     end
 
     def find_npcs(room_objs)
