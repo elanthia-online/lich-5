@@ -65,11 +65,11 @@ module Lich
     def clean_npc_string(npc_string)
       # Normalize NPC names
       normalized_npcs = npc_string
-        .map { |obj| normalize_creature_names(obj) }
-        .map { |obj| remove_html_tags(obj) }
-        .map { |obj| extract_last_creature(obj) }
-        .map { |obj| extract_final_name(obj) }
-        .sort
+                        .map { |obj| normalize_creature_names(obj) }
+                        .map { |obj| remove_html_tags(obj) }
+                        .map { |obj| extract_last_creature(obj) }
+                        .map { |obj| extract_final_name(obj) }
+                        .sort
 
       # Count occurrences and add ordinals
       add_ordinals_to_duplicates(normalized_npcs)
