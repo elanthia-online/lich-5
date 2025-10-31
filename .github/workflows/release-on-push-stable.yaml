@@ -64,7 +64,7 @@ jobs:
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
       # 1) Release Please for stable branch (creates public release, we convert to draft immediately)
-      - uses: googleapis/release-please-action@c2a5a2bd6a758a0937f1ddb1e8950609867ed15c # v4.3.0
+      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         id: rp
         with:
           skip-github-release: false
@@ -352,7 +352,7 @@ jobs:
 
       # Pin Ruby explicitly on windows-latest
       - name: Set up Ruby (3.4.5)
-        uses: ruby/setup-ruby@0481980f17b760ef6bca5e8c55809102a0af1e5a # v1.263.0
+        uses: ruby/setup-ruby@d5126b9b3579e429dd52e51e68624dda2e05be25 # v1.267.0
         with:
           ruby-version: '3.4.5'
           bundler-cache: false
