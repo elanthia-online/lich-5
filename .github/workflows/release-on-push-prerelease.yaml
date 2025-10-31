@@ -385,7 +385,7 @@ jobs:
 
       # Pin Ruby explicitly on windows-latest
       - name: Set up Ruby (3.4.5)
-        uses: ruby/setup-ruby@16a9c90856f42705d54a6fda1823352bdc62cf38 # v1.267.0
+        uses: ruby/setup-ruby@d5126b9b3579e429dd52e51e68624dda2e05be25 # v1.267.0
         with:
           ruby-version: '3.4.5'
           bundler-cache: false
