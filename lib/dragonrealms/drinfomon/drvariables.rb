@@ -137,39 +137,17 @@ module Lich
         ]
       },
       "guild_skill_aliases": {
-        "Cleric": {
-          "Primary Magic": "Holy Magic"
-        },
-        "Necromancer": {
-          "Primary Magic": "Arcane Magic"
-        },
-        "Warrior Mage": {
-          "Primary Magic": "Elemental Magic"
-        },
-        "Thief": {
-          "Primary Magic": "Inner Magic"
-        },
-        "Barbarian": {
-          "Primary Magic": "Inner Fire"
-        },
-        "Ranger": {
-          "Primary Magic": "Life Magic"
-        },
-        "Bard": {
-          "Primary Magic": "Elemental Magic"
-        },
-        "Paladin": {
-          "Primary Magic": "Holy Magic"
-        },
-        "Empath": {
-          "Primary Magic": "Life Magic"
-        },
-        "Trader": {
-          "Primary Magic": "Lunar Magic"
-        },
-        "Moon Mage": {
-          "Primary Magic": "Lunar Magic"
-        }
+        "Cleric"       => { "Primary Magic" => "Holy Magic" },
+        "Necromancer"  => { "Primary Magic" => "Arcane Magic" },
+        "Warrior Mage" => { "Primary Magic" => "Elemental Magic" },
+        "Thief"        => { "Primary Magic" => "Inner Magic" },
+        "Barbarian"    => { "Primary Magic" => "Inner Fire" },
+        "Ranger"       => { "Primary Magic" => "Life Magic" },
+        "Bard"         => { "Primary Magic" => "Elemental Magic" },
+        "Paladin"      => { "Primary Magic" => "Holy Magic" },
+        "Empath"       => { "Primary Magic" => "Life Magic" },
+        "Trader"       => { "Primary Magic" => "Lunar Magic" },
+        "Moon Mage"    => { "Primary Magic" => "Lunar Magic" }
       }
     }
 
