@@ -162,7 +162,7 @@ jobs:
 
       - name: Release Please (open/update Release PR)
         if: ${{ steps.classify.outputs.skip != 'true' && steps.guard.outputs.has_releasables == 'true' }}
-        # Pinned to SHA for supply-chain safety (release-please-action v4.3.0)
+        # Pinned to SHA for supply-chain safety (release-please-action v4.4.0)
         uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38
         with:
           config-file: release-please-config.json
