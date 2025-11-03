@@ -1,5 +1,21 @@
 # Changelog
 
+## [5.12.0-beta.6](https://github.com/elanthia-online/lich-5/compare/v5.12.11...v5.12.0-beta.6) (2025-11-03)
+
+
+### Features
+
+* **dr:** support meta:trashcan tag for DRCI.dispose_trash ([#966](https://github.com/elanthia-online/lich-5/issues/966)) ([97e1540](https://github.com/elanthia-online/lich-5/commit/97e1540c2332a045f69878ba07e9f8971d35c799))
+* **gs:** Add Armaments (Weapon, Armor, and Shield) Module ([#911](https://github.com/elanthia-online/lich-5/issues/911)) ([89263ee](https://github.com/elanthia-online/lich-5/commit/89263ee066c2db77341eb3f603bd966b189dd75a))
+* **gs:** add creature module, including Hinterwilds creatures ([#1002](https://github.com/elanthia-online/lich-5/issues/1002)) ([46ef960](https://github.com/elanthia-online/lich-5/commit/46ef960f656c6fa07c1e67fc3172f1ec127706cd))
+* **gs:** Creature module combat tracking ([#1003](https://github.com/elanthia-online/lich-5/issues/1003)) ([38b63ef](https://github.com/elanthia-online/lich-5/commit/38b63ef79b98b9d202e73e60bab01e894c2b8eae))
+* **gs:** track time of last total_experience record ([#1030](https://github.com/elanthia-online/lich-5/issues/1030)) ([5708674](https://github.com/elanthia-online/lich-5/commit/5708674aa3dce43deb73c2bd134da741dd7f74cd))
+
+
+### Miscellaneous Chores
+
+* pin prerelease v5.12.0-beta.6 ([55cf228](https://github.com/elanthia-online/lich-5/commit/55cf22831620a047efee0700c7f848ad4421ac24))
+
 ## [5.12.11](https://github.com/elanthia-online/lich-5/compare/v5.12.10...v5.12.11) (2025-10-31)
 
 
