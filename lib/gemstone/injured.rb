@@ -14,9 +14,6 @@ module Lich
           head_and_nerves: %i[head nsys]
         }.freeze
 
-        # Critical body parts where rank 3 injuries cannot be bypassed by Sigil
-        CRITICAL_PARTS = %i[head nsys leftEye rightEye leftArm rightArm leftHand rightHand].freeze
-
         # Helper method to calculate effective injury level from hash data
         # Rank 1 scars are ignored, and wounds take precedence over scars
         def effective_injury_from_hashes(body_part, wounds_hash, scars_hash)
