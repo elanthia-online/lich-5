@@ -772,7 +772,7 @@ module Lich
       # http://forums.play.net/forums/DragonRealms/Discussions%20with%20DragonRealms%20Staff%20and%20Players/Game%20Master%20and%20Official%20Announcements/view/1899
       def get_item_from_eddy_portal?(item, container)
         # Ensure the eddy is open then look in it to force the contents to be loaded.
-        return false unless DRCI.open_container?('my eddy') && DRCI.look_in_container(container)
+        return false unless DRCI.open_container?('my eddy') && DRCI.look_in_container('portal in my eddy')
 
         from = container
         from = "from #{container}" if container && !(container =~ /^(in|on|under|behind|from) /i)

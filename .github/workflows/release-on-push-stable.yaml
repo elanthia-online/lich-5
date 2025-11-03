@@ -1,3 +1,24 @@
+# -----------------------------------------------------------------------------
+# PURPOSE
+#   Create stable tags/releases on pushes to main, then build and upload
+#   artifacts (core zips, optional Windows installer) with a corrected,
+#   production-formatted release body/title as early as possible.
+#   Releases are created as DRAFT and require human review before publication.
+#
+# INVARIANTS
+# - Releases are created as DRAFT (invisible until human publishes via GitHub UI/CLI).
+# - Release body/title must be finalized before packaging begins.
+# - No reliance on a local git checkout for GH release edits/uploads.
+# - PR labels 'skip-installer' or 'no-installer' gate the installer build (case-insensitive).
+#
+# OUTPUTS (selected)
+# - release: steps.rp.outputs.release_created, steps.rp.outputs.tag_name
+# - installer_gate: steps.gate.outputs.installer (true|false)
+#
+# EXTENSION POINTS
+# - EXP_* env toggles at top of file
+# - "Transform body" step: header/footer/normalization rules only (no network)
+# -----------------------------------------------------------------------------
 name: release-please (stable on push)
 
 on:
@@ -5,6 +26,21 @@ on:
     branches: [ main ]
     paths-ignore:
       - '.github/workflows/**'
+      - '.github/actions/**'
+      - 'spec/**'
+      - '.gitattributes'
+      - '.gitignore'
+      - '.rubocop.yml'
+      - '.ruby-version'
+      - 'netlify.toml'
+      - 'README.adoc'
+      - 'release-please-config.json'
+      - 'release-please-config.prerelease.json'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)format"
+        required: true
 
 permissions:
   contents: write
@@ -27,23 +63,186 @@ jobs:
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
-      # 1) Release Please for stable branch
-      - uses: googleapis/release-please-action@c2a5a2bd6a758a0937f1ddb1e8950609867ed15c # v4.3.0
+      # 1) Release Please for stable branch (creates public release, we convert to draft immediately)
+      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         id: rp
         with:
+          skip-github-release: false
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: ${{ github.ref_name }}
-          skip-github-pull-request: true
+          skip-github-pull-request: false
+          
+      - name: Trace RP outputs
+        if: ${{ steps.rp.outputs.release_created != '' }}
+        run: |
+          echo "rp.release_created=${{ steps.rp.outputs.release_created }}"
+          echo "rp.tag_name=${{ steps.rp.outputs.tag_name }}"
+          echo "rp.version=${{ steps.rp.outputs.version }}"
 
-      # 2) Only build/upload when a new GitHub Release was created
+      # 2) Immediately convert release to draft (before any public visibility)
+      - name: Convert release to draft
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.rp.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          # Convert the release to draft immediately (invisible until human publishes)
+          gh release edit -R "$GITHUB_REPOSITORY" "$TAG" --draft
+
+      # --- FAST-PATH: finalize title/body before packaging ---
+      - name: Derive release vars from tag (no REST)
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: derive_rel
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          TAG: ${{ steps.rp.outputs.tag_name }}
+        with:
+          script: |
+            const tag = (process.env.TAG || '').trim();
+            if (!tag) core.setFailed('Missing tag from release-please step');
+            const m = tag.match(/(\d+\.\d+\.\d+(?:-[0-9A-Za-z.\-]+)?)/);
+            const version = m ? m[1] : '';
+            core.setOutput('version', version);
+            core.setOutput('published_at', new Date().toISOString());
+
+      - name: Find Release Please PR by commit SHA
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: find_pr
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          VERSION: ${{ steps.derive_rel.outputs.version }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const sha = context.sha;
+            const version = process.env.VERSION || '';
+            
+            core.info(`Looking for PR associated with commit ${sha}`);
+            
+            // Find PRs associated with this commit (the merge commit that triggered this workflow)
+            let prs = [];
+            try {
+              const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner,
+                repo,
+                commit_sha: sha
+              });
+              prs = data || [];
+              core.info(`Found ${prs.length} PR(s) associated with commit`);
+            } catch (e) {
+              core.warning(`Failed to find PRs by commit: ${e.message}`);
+            }
+            
+            // Filter for merged release-please PRs matching this version
+            const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const v = esc(version);
+            const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');
+            
+            const hit = prs.find(pr => 
+              pr.merged_at && 
+              titleRe.test(pr.title || '')
+            );
+            
+            if (hit) {
+              core.info(`Found PR #${hit.number}: ${hit.title}`);
+              core.setOutput('found', 'true');
+              core.setOutput('number', String(hit.number));
+              core.setOutput('body', hit.body || '');
+            } else {
+              core.warning(`No matching merged PR found for version ${version}`);
+              core.setOutput('found', 'false');
+            }
+
+      - name: Choose seed body (PR preferred)
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: choose_seed
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          PR_BODY: ${{ steps.find_pr.outputs.body }}
+        with:
+          script: |
+            const prb = process.env.PR_BODY || '';
+            core.setOutput('body', prb);
+
+      - name: Transform body (header + cleanup + footer)
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: transform_body
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          SEED: ${{ steps.choose_seed.outputs.body }}
+          VERSION: ${{ steps.derive_rel.outputs.version }}
+          PUBLISHED_AT: ${{ steps.derive_rel.outputs.published_at }}
+        with:
+          script: |
+            const seed = process.env.SEED || '';
+            const version = process.env.VERSION || '';
+            const dt = process.env.PUBLISHED_AT ? new Date(process.env.PUBLISHED_AT) : new Date();
+            const yyyy = dt.getUTCFullYear();
+            const mm = String(dt.getUTCMonth()+1).padStart(2,'0');
+            const dd = String(dt.getUTCDate()).padStart(2,'0');
+            const headerLine = `Lich v${version} (${yyyy}-${mm}-${dd})`;
+            
+            // Split into lines and replace first non-empty line with header
+            const lines = seed.split(/\r?\n/);
+            let i = 0; 
+            while (i < lines.length && /^\s*$/.test(lines[i])) i++;
+            if (i >= lines.length) lines.push(headerLine); 
+            else lines[i] = headerLine;
+            
+            let body = lines.join('\n');
+            
+            // Strip Release Please boilerplate (everything after "---" or "This PR was generated")
+            body = body.replace(/^---\s*\n[\s\S]*$/m, '');
+            body = body.replace(/^This PR was generated with[\s\S]*$/m, '');
+            
+            // Strip Ellipsis comments
+            body = body.replace(/<!--[\s\S]*?-->/g, '');
+            
+            // Strip Co-authored-by footer
+            body = body.replace(/^Co-authored-by:.*$/gm, '');
+            
+            // Convert [#123](...) -> #123
+            body = body.replace(/\[#(\d+)\]\([^)]*\)/g, '#$1');
+            
+            // Clean up multiple blank lines
+            body = body.replace(/\n{3,}/g, '\n\n').trim();
+            
+            // Append install footer
+            const footer = [
+              '',
+              'For additional usage/install instructions, please visit one of the following:',
+              '',
+              'DragonRealms - https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich',
+              'Gemstone IV - https://gswiki.play.net/Lich:Software/Installation'
+            ].join('\n');
+            body = body.replace(/\n+$/, '') + '\n' + footer + '\n';
+            
+            core.setOutput('final', body);
+
+      - name: Apply formatted title/body to draft release
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.rp.outputs.tag_name }}
+          VERSION: ${{ steps.derive_rel.outputs.version }}
+          FINAL: ${{ steps.transform_body.outputs.final }}
+        run: |
+          set -euo pipefail
+          # Update the draft release with formatted title and body
+          gh release edit -R "$GITHUB_REPOSITORY" "$TAG" --title "Lich v$VERSION" --notes-file <(printf '%s' "$FINAL")
+      # --- END FAST-PATH ---
+
+      # 3) Only build/upload when a new GitHub Release was created
       - name: Checkout repository
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
 
-      # 3) Build core Lich-5 payload (same as before)
+      # 4) Build core Lich-5 payload (same as before)
       - name: Create Core Lich-5 package
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         shell: bash
@@ -71,17 +270,80 @@ jobs:
           tar -czvf lich-5.tar.gz Lich5/
           zip -r lich-5.zip Lich5/
 
-      - name: Upload archives to Release
+      - name: Upload archives to draft release
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ steps.rp.outputs.tag_name }}" lich-5.tar.gz lich-5.zip
 
-  # 4) Build Windows installer (Ruby4Lich5.exe)
-  build_installer:
+  # 5) Build Windows installer (Ruby4Lich5.exe)
+  installer_gate:
     needs: release
     if: ${{ needs.release.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve installer gate (labels only, with tracing)
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          set -x
+          repo="${GITHUB_REPOSITORY}"
+          branch="main"
+          tag="${{ needs.release.outputs.tag_name }}"
+          want=true
+          gh_api() { gh api -H 'Accept: application/vnd.github+json' "$@"; }
+          ver="$(printf '%s' "$tag" | sed -nE 's/.*([0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?).*/\1/p')"
+          pulls_json="$(gh_api "/repos/$repo/pulls?state=closed&base=$branch&sort=updated&direction=desc&per_page=100")" || pulls_json="[]"
+          best="$(printf '%s' "$pulls_json" | jq -r --arg v "$ver" '
+            # Escape regex metacharacters in the version string
+            def esc: gsub("([.^$|()\\[\\]{}*+?\\-])"; "\\\\1");
+            .[]
+            | select(.merged_at != null)
+            | select(.title | test( ("(^|[^0-9A-Za-z])" + "v?" + ($v|esc) + "([^0-9A-Za-z]|$)"); "i"))
+            | [ .merged_at, .number ] | @tsv
+          ' | sort -r | head -n1)"
+          pr="$(printf '%s' "$best" | awk '{print $2}')"
+          
+          # Fallback to Search (if REST scan found nothing)
+          if [ -z "${pr:-}" ]; then
+            q="repo:${repo} is:pr is:merged in:title \"${ver}\" base:${branch}"
+            echo "Gate trace (fallback): search q=$q"
+            candidates="$(gh_api "/search/issues?q=$(printf '%s' "$q" | jq -sRr @uri)&sort=updated&order=desc&per_page=10" --jq '.items[].number' 2>/dev/null || true)"
+            if [ -n "$candidates" ]; then
+              best="$(for n in $candidates; do
+                        gh_api "/repos/$repo/pulls/$n" --jq '[.merged_at,.number] | @tsv' 2>/dev/null || true
+                      done | sort -r | head -n1)"
+              pr="$(printf '%s' "$best" | awk '{print $2}')"
+            fi
+          fi
+          
+          echo "Gate trace: matched PR #${pr:-<none>}"
+          if [ -n "${pr:-}" ]; then
+            labels="$(gh_api "/repos/$repo/issues/$pr/labels" | jq -r '.[].name | ascii_downcase')"
+            if printf '%s\n' "$labels" | grep -Eq '(^|[[:space:]])(skip-installer|no-installer)($|[[:space:]])'; then want=false; fi
+          fi
+          echo "installer=$want" >> "$GITHUB_OUTPUT"
+
+    outputs:
+      installer: ${{ steps.gate.outputs.installer }}
+
+  trace_build_condition:
+    needs: [release, installer_gate]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Trace needs for installer job
+        run: |
+          echo "release_created=${{ needs.release.outputs.release_created }}"
+          echo "installer=${{ needs.installer_gate.outputs.installer }}"
+
+  build_installer:
+    needs: [release, installer_gate]
+    if: ${{ needs.release.outputs.release_created == 'true' && needs.installer_gate.outputs.installer == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 120
 
@@ -90,7 +352,7 @@ jobs:
 
       # Pin Ruby explicitly on windows-latest
       - name: Set up Ruby (3.4.5)
-        uses: ruby/setup-ruby@0481980f17b760ef6bca5e8c55809102a0af1e5a # v1.263.0
+        uses: ruby/setup-ruby@d5126b9b3579e429dd52e51e68624dda2e05be25 # v1.267.0
         with:
           ruby-version: '3.4.5'
           bundler-cache: false
@@ -111,6 +373,7 @@ jobs:
 
       # Build sanitized PATH that prefers vendored MSYS2 (Option A) and cache it
       - name: Build sanitized PATH for vendored MSYS2
+        id: vendormsys
         shell: powershell
         run: |
           $msys = 'C:\Ruby4Lich5\msys64'
@@ -123,13 +386,15 @@ jobs:
             ($_ -notmatch '^C:\\Strawberry(\\|$)')       # drop Strawberry toolchain
           }
           $san = @("$msys\ucrt64\bin","$msys\usr\bin") + $filtered
-          "PATH_VENDOR_MSYS={0}" -f ($san -join ';') | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $joined = ($san -join ';')
+          "PATH_VENDOR_MSYS=$joined" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "path=$joined" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
           "RI_DEVKIT=" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Initialize MSYS2 (minimal UCRT64; no meta toolchain)
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $msys   = 'C:\Ruby4Lich5\msys64'
@@ -152,7 +417,7 @@ jobs:
       - name: Dependency validation (toolchain & pkg-config)
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $msys = 'C:\Ruby4Lich5\msys64'
@@ -183,7 +448,11 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Note: mingw-w64-ucrt-x86_64-python present after init (expected via GTK deps); will remove later."
           }
-      
+
+          # Output the library versions installed for troubleshooting
+          Write-Host "MSYS Library versions installed:"
+          & $pac -Q
+
           # Pin tool choices for downstream (regardless of PATH order)
           "CC=$gcc"                  | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "PKG_CONFIG=$pkgc"         | Out-File $env:GITHUB_ENV -Append -Encoding utf8
@@ -194,22 +463,20 @@ jobs:
       - name: Install required gems
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
           CC: gcc
           PKG_CONFIG: pkg-config
         run: |
           gem install sqlite3 --platform ruby -- --enable-system-libraries --with-sqlite3-include=${env:MSYS2_ROOT}/ucrt64/include --with-sqlite3-lib=${env:MSYS2_ROOT}/ucrt64/lib
           gem install ascii_charts gtk3 json logger os ostruct redis sequel terminal-table tzinfo tzinfo-data webrick --no-document
-          gem uninstall rexml --force
-          gem install rexml --version 3.3.1
 
       # Optional experiment: validate Ruby actually initializes GTK (not just require)
       - name: Validate Ruby GTK/sqlite3 runtime
         if: ${{ env.EXP_VALIDATE_RUBY_GTK == 'true' }}
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $msys = 'C:\Ruby4Lich5\msys64'
@@ -241,6 +508,10 @@ jobs:
           #  Use the Stop Parsing Operator ( --% ) for PowerShell to avoid interpolation in the string above
           & $rubyExe -e --% $rb
           if ($LASTEXITCODE -ne 0) { Write-Error "Ruby GTK3/sqlite3 load failed"; exit 1 }
+
+          # Print out installed gems for troubleshooting
+          Write-Host "Gems installed:"
+          gem list
 
       # (Optional) Remove Python to keep the bundle lean. Mode is driven by EXP_PRUNE_PYTHON_MODE:
       #   - 'files'  : delete python binaries/trees by glob (default)
@@ -310,7 +581,7 @@ jobs:
         if: ${{ env.EXP_PRUNE_BULK == 'true' }}
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $msys = 'C:\Ruby4Lich5\msys64'
@@ -345,7 +616,7 @@ jobs:
       
       # Pull the packaged Lich payload from the just-created Release
       - name: Download core Lich payload from the Release
-        if: ${{ needs.release.outputs.release_created == 'true' }}
+        if: ${{ needs.release.outputs.release_created == 'true' && needs.installer_gate.outputs.installer == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -354,22 +625,168 @@ jobs:
           unzip -q lich-5.zip
           # Archive contains Lich5/ (capital L) to match the .iss Source paths
 
-      # Build Windows installer with Inno Setup
+     # Build Windows installer with Inno Setup
       - name: Build Windows installer with Inno Setup
         shell: powershell
-        env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
-          RI_DEVKIT: ''
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $iscc)) { Write-Error "ISCC.exe not found at $iscc"; exit 1 }
           & $iscc "R4LGTK3.iss"
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Write-Error "ISCC exited with code $code (likely missing SignTool or another PATH-dependent tool)."
+            exit $code
+          }
           if (!(Test-Path .\Output\Ruby4Lich5.exe)) { Write-Error "Expected Output\Ruby4Lich5.exe not found"; exit 1 }
           Move-Item -Path .\Output\Ruby4Lich5.exe -Destination .\Ruby4Lich5.exe -Force
 
-      - name: Upload installer to Release
+      - name: Upload installer to draft release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           gh release upload "${{ needs.release.outputs.tag_name }}" Ruby4Lich5.exe
+
+  # ---------------------------------------------------------------------------
+  # BEGIN TEMPORARY: Manual repair path for existing releases (easily removable)
+  # NOTE: This workflow_dispatch job edits existing releases (not drafts).
+  #       For new releases, use the GitHub UI to publish drafts.
+  manual_repair_existing_release:
+    name: "manual repair: format release body for existing tag"
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Derive release vars from tag (manual)
+        id: derive_rel_manual
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+        with:
+          script: |
+            const tag = (process.env.TAG || '').trim();
+            if (!tag) core.setFailed('Missing tag input');
+            const m = tag.match(/(\d+\.\d+\.\d+(?:-[0-9A-Za-z.\-]+)?)/);
+            const version = m ? m[1] : '';
+            core.setOutput('version', version);
+            core.setOutput('published_at', new Date().toISOString());
+
+      - name: Find merged Release Please PR for this tag (manual)
+        id: find_pr_manual
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          VERSION: ${{ steps.derive_rel_manual.outputs.version }}
+          BASE: main
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const rawVersion = process.env.VERSION || '';
+            const base = process.env.BASE || 'main';
+            const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const v = esc(rawVersion);
+            const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');
+            async function listClosed(opts) {
+              const r = await github.rest.pulls.list({ owner, repo, per_page: 100, sort: 'updated', direction: 'desc', ...opts });
+              return r.data || [];
+            }
+            let pulls = await listClosed({ base });
+            let hit = (pulls || []).find(pr => pr.merged_at && titleRe.test(pr.title || ''));
+            if (!hit) {
+              const q = `repo:${owner}/${repo} is:pr is:merged base:${base} (in:title "v${rawVersion}" OR in:title "${rawVersion}")`;
+              try {
+                const search = await github.rest.search.issuesAndPullRequests({ q, per_page: 5, sort: 'updated', order: 'desc' });
+                const item = (search.data.items || [])[0];
+                if (item) {
+                  const pr = await github.rest.pulls.get({ owner, repo, pull_number: item.number });
+                  hit = pr.data;
+                }
+              } catch {}
+            }
+            core.setOutput('found', hit ? 'true' : 'false');
+            if (hit) core.setOutput('number', String(hit.number));
+
+      - name: Read PR body (seed) (manual)
+        if: ${{ steps.find_pr_manual.outputs.found == 'true' }}
+        id: read_pr_manual
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          NUMBER: ${{ steps.find_pr_manual.outputs.number }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const number = parseInt(process.env.NUMBER || '0', 10);
+            const pr = await github.rest.pulls.get({ owner, repo, pull_number: number }).then(r => r.data);
+            core.setOutput('body', pr.body || '');
+
+      - name: Choose seed body (PR preferred) (manual)
+        id: choose_seed_manual
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          PR_BODY: ${{ steps.read_pr_manual.outputs.body }}
+        with:
+          script: |
+            const prb = process.env.PR_BODY || '';
+            core.setOutput('body', prb);
+
+      - name: Transform body (header + cleanup + footer) (manual)
+        id: transform_body_manual
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          SEED: ${{ steps.choose_seed_manual.outputs.body }}
+          VERSION: ${{ steps.derive_rel_manual.outputs.version }}
+          PUBLISHED_AT: ${{ steps.derive_rel_manual.outputs.published_at }}
+        with:
+          script: |
+            const seed = process.env.SEED || '';
+            const version = process.env.VERSION || '';
+            const dt = process.env.PUBLISHED_AT ? new Date(process.env.PUBLISHED_AT) : new Date();
+            const yyyy = dt.getUTCFullYear();
+            const mm = String(dt.getUTCMonth()+1).padStart(2,'0');
+            const dd = String(dt.getUTCDate()).padStart(2,'0');
+            const headerLine = `Lich v${version} (${yyyy}-${mm}-${dd})`;
+            const lines = seed.split(/\r?\n/);
+            let i = 0; while (i < lines.length && /^\s*$/.test(lines[i])) i++;
+            if (i >= lines.length) lines.push(headerLine); else lines[i] = headerLine;
+            let body = lines.join('\n');
+            
+            // Strip Release Please boilerplate
+            body = body.replace(/^---\s*\n[\s\S]*$/m, '');
+            body = body.replace(/^This PR was generated with[\s\S]*$/m, '');
+            
+            // Strip Ellipsis comments
+            body = body.replace(/<!--[\s\S]*?-->/g, '');
+            
+            // Strip Co-authored-by footer
+            body = body.replace(/^Co-authored-by:.*$/gm, '');
+            
+            // Convert [#123](...) -> #123
+            body = body.replace(/\[#(\d+)\]\([^)]*\)/g, '#$1');
+            
+            // Clean up multiple blank lines
+            body = body.replace(/\n{3,}/g, '\n\n').trim();
+            
+            const footer = [
+              '',
+              'For additional usage/install instructions, please visit one of the following:',
+              '',
+              'DragonRealms - https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich',
+              'Gemstone IV - https://gswiki.play.net/Lich:Software/Installation'
+            ].join('\n');
+            body = body.replace(/\n+$/, '') + '\n' + footer + '\n';
+            core.setOutput('final', body);
+
+      - name: Apply title/body to release (gh) (manual)
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+          VERSION: ${{ steps.derive_rel_manual.outputs.version }}
+          FINAL: ${{ steps.transform_body_manual.outputs.final }}
+        run: |
+          set -euo pipefail
+          gh release edit -R "$GITHUB_REPOSITORY" "$TAG" --title "Lich v$VERSION" --notes-file <(printf '%s' "$FINAL")
+  # END TEMPORARY: Manual repair path
+  # ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@ module Lich
     class Bounty
       class Parser
         HMM_REGEX = /(?:Hmm, I've got a task here from .*?(?<town>[A-Z].*?)\..*?)?/
-        LOCATION_REGEX = /(?:on|in|near) (?:the\s+)?(?<area>[^.]+?)(?:\s+(?:near|between) (?<town>[^.]+))?/
+        LOCATION_REGEX = /(?:on|in|near) (?:the\s+)?(?<area>[^.]+?)(?:\s+(?:near|between|under) (?<town>[^.]+))?/
         GUARD_REGEX = Regexp.union(
           /one of the guardsmen just inside the (?<town>Ta'Illistim) City Gate/,
           /one of the guardsmen just inside the Sapphire Gate/,
@@ -140,7 +140,7 @@ module Lich
             "Kraken's Fall"
           elsif description =~ /the tavernkeeper at Rawknuckle's Common House\.$/
             "Cold River"
-          elsif description =~ /Captain|Reiya/ || description =~ /gem dealer in has received/
+          elsif description =~ /\b(?:Captain|Reiya|Ataum|Galeb)\b/ || description =~ /gem dealer in has received/
             # the latter is a temporary workaround because of an actual typo in the messaging
             # that should be removed if it is ever actually fixed
             'Contempt'

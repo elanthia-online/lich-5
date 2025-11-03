@@ -1,0 +1,293 @@
+# ============================================================================
+# Composite Action: Release PR Body Formatter (Sections + PR links, RP credit, Ellipsis)
+# ----------------------------------------------------------------------------
+# WHY
+#   - Clean customer-facing sections with compact PR links, no commit SHAs.
+#   - Preserve Ellipsis verbatim.
+#   - Preserve only the RP credit footer (not the full RP block) to keep credit intact.
+#
+# CONTRACT (ALL CHANNELS)
+#   1) Our sections first (Markdown headers, generated dynamically — no files):
+#        ### Features (general|dr|gs)
+#        ### Features (dr|gs)
+#        ### Bug Fixes (general|dr|gs)
+#      - Include ONLY type=feat|fix with scope=all|dr|gs.
+#      - Bullet format: "* <Title stripped of type(scope):> ([#<N>](https://github.com/<owner>/<repo>/issues/<N>))".
+#      - Sort within each section: PR number ascending (oldest → newest).
+#   2) RP credit footer next (verbatim, two lines), not the RP block:
+#        ---
+#        This PR was generated with [Release Please](https://github.com/googleapis/release-please#release-please). See [documentation](https://github.com/googleapis/release-please#release-please).
+#   3) Ellipsis block last (<!-- ELLIPSIS_HIDDEN --> … <!-- ELLIPSIS_HIDDEN -->), verbatim.
+#   4) Safety: Only allow markdown links in:
+#        - our bullet PR links (to this repo)
+#        - the single RP credit link
+#        - inside Ellipsis
+#      Fail if any other markdown links are present.
+#   5) Sentinel at end: <!-- FORMATTER:v1 sha=<contract-hash> mode=<beta|stable> -->
+#
+# ============================================================================
+
+name: "Format Release PR Body (PR-link bullets)"
+description: "Sections (feat/fix by scope) with PR links -> RP credit -> Ellipsis -> sentinel"
+inputs:
+  mode:
+    description: "beta | stable"
+    required: true
+    default: "beta"
+  pr_number:
+    description: "Explicit PR number (for workflow_run invocations)"
+    required: false
+    default: ""
+  wait_seconds:
+    description: "Max seconds to wait for Ellipsis block to appear"
+    required: false
+    default: "60"
+  wait_interval_seconds:
+    description: "Polling interval while waiting for Ellipsis"
+    required: false
+    default: "5"
+  break_autolinks_in_bullets:
+    description: "If true, use (#\u200B<N>) to avoid GH autolinking (diagnostic sidestep)"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "${{ inputs.mode }}" in
+          beta|stable) ;;
+          *) echo "::error::inputs.mode must be 'beta' or 'stable'"; exit 1;;
+        esac
+
+    - name: Compose prerelease body
+      id: compose
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        MODE: ${{ inputs.mode }}
+        WAIT_S: ${{ inputs.wait_seconds }}
+        WAIT_I: ${{ inputs.wait_interval_seconds }}
+        CONTRACT_SHA: "95f8f517411f9058bc92706310677db8cbba97fbd296bc853f2181274cb0e8bb"
+        BREAK_AUTO: ${{ inputs.break_autolinks_in_bullets }}
+        PR_NUMBER: ${{ inputs.pr_number }}
+      with:
+        script: |
+          const MODE = process.env.MODE; // 'pre' or 'stable'
+          // Lines 79-80: Parse wait configuration with exponential backoff
+          const waitTotal = Math.min(parseInt(process.env.WAIT_S || '15', 10), 15); // Default 15s, cap at 15s
+          const waitInitial = Math.min(parseInt(process.env.WAIT_I || '1', 10), 1);  // Initial 1s interval
+          const waitMax = 5;  // Cap backoff at 5s
+          const CONTRACT_SHA = process.env.CONTRACT_SHA;
+          const sentinelTag = `<!-- FORMATTER:v1 sha=${CONTRACT_SHA} mode=${MODE} -->`;
+          const BREAK_AUTO = (process.env.BREAK_AUTO || 'false').toLowerCase() === 'true';
+
+          const owner = context.repo.owner;
+          const repo = context.repo.repo;
+          const explicit = (process.env.PR_NUMBER || "").trim();
+          const prNumber = explicit || (context.issue && context.issue.number);
+          if (!prNumber) {
+            core.setFailed("No PR context. Provide 'pr_number' when not running on pull_request.");
+            process.exit(1);
+          }
+
+          const ELLIPSIS_MARK = '<!-- ELLIPSIS_HIDDEN -->';
+
+          async function getPR() {
+            const { data } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            return data;
+          }
+          const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+          // Fetch body and briefly wait for Ellipsis (if writer bot still updating)
+          let pr = await getPR();
+          let body = pr.body || '';
+          let waited = 0;
+          let backoffMs = waitInitial * 1000;
+          while (!body.includes(ELLIPSIS_MARK) && waited < waitTotal * 1000) {
+            const actualSleep = Math.min(backoffMs, waitTotal * 1000 - waited);  // CAPTURE the actual duration
+            await sleep(actualSleep);
+            pr = await getPR();
+            body = pr.body || '';
+            waited += actualSleep;  // Use ACTUAL, not intended
+            backoffMs = Math.min(backoffMs * 1.5, waitMax * 1000);
+          }
+
+          // Fast-fail: If Ellipsis never appeared but we hit timeout, log and continue
+          if (!body.includes(ELLIPSIS_MARK)) {
+            core.warning(`Ellipsis block did not appear within ${waitTotal}s; proceeding without it.`);
+          }
+
+          // ----- Smart sentinel short-circuit -----
+          // Output contract: 'skip' is a string boolean ('true' when sentinel is present)
+          // - When 'true': PR already formatted, skip the update step
+          // - When missing/absent: proceed with formatting update
+          const idxSent = body.indexOf(sentinelTag);
+          const idxEll  = body.indexOf(ELLIPSIS_MARK);
+          if (idxSent >= 0 && (idxEll < 0 || (idxEll >= 0 && idxEll < idxSent))) {
+            core.setOutput('finalBody', body);
+            core.setOutput('skip', 'true');
+            return;
+          }
+
+          
+          // ---- Version + date extraction for header "Lich v{version} (YYYY-MM-DD)" ----
+          function ensureV(x) {
+            if (!x) return '';
+            return x.startsWith('v') ? x : `v${x}`;
+          }
+          function extractVersionAndDate(prBody, prTitle) {
+            // Primary: Try Release-As git footer (most authoritative)
+            // This would require git log access, so defer to PR body parsing
+            // Prefer RP header, e.g.: "## [5.13.0-beta.0](...) (2025-10-02)" or "## [v5.13.0] ... (2025-10-02)"
+            const mHeader = prBody && prBody.match(/^##\s*\[\s*(v?\d+\.\d+\.\d+(?:-[^\]\s]+)?)\s*\][^\n]*?\(\s*(\d{4}-\d{2}-\d{2})\s*\)/m);
+            if (mHeader) return { version: mHeader[1], date: mHeader[2] };
+            // Fallback to title for version, use today's date for date
+            const mTitle = (prTitle || '').match(/release\s+v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.\-]+)?)/i);
+            const today = new Date();
+            const iso = today.toISOString().slice(0,10); // YYYY-MM-DD (UTC)
+            if (mTitle) return { version: mTitle[1], date: iso };
+            // Last resort: extract from Release-As comment if present in body
+            const mReleaseAs = prBody && prBody.match(/Release-As:\s*v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.\-]+)?)/i);
+            if (mReleaseAs) return { version: mReleaseAs[1], date: iso };
+            return { version: '', date: iso };
+          }
+          const vnd = extractVersionAndDate(body, pr.title || '');
+          const versionStr = ensureV(vnd.version);
+          const dateStr = vnd.date;
+          const headerLine = versionStr ? `Lich ${versionStr} (${dateStr})` : `Lich (${dateStr})`;
+          // ---------------------------------------------------------
+
+          // Ellipsis (verbatim)
+          let ellipsis = '';
+          if (body.includes(ELLIPSIS_MARK)) {
+            const first = body.indexOf(ELLIPSIS_MARK);
+            const second = body.indexOf(ELLIPSIS_MARK, first + ELLIPSIS_MARK.length);
+            ellipsis = (second > first ? body.slice(first, second + ELLIPSIS_MARK.length) : body.slice(first)).trim();
+          }
+
+          // Harvest PR numbers from existing RP bullets (lines starting with '* ' and containing '#NNN')
+          const prNums = [];
+          for (const l of body.split(/\r?\n/)) {
+            if (/^\s*\*\s+/.test(l)) {
+              const m = l.match(/#(\d+)/);
+              if (m) prNums.push(parseInt(m[1], 10));
+            }
+          }
+          // De-dupe in encounter order
+          const seen = new Set();
+          const uniqueNums = prNums.filter(n => (seen.has(n) ? false : (seen.add(n), true)));
+
+          // Buckets for feat/fix by scope
+          const buckets = { feat: { all: [], dr: [], gs: [] }, fix: { all: [], dr: [], gs: [] } };
+          const cc = /^\s*([a-zA-Z]+)\s*\((all|dr|gs)\)\s*:\s*(.+)\s*$/;
+
+          for (const num of uniqueNums) {
+            try {
+              const { data } = await github.rest.pulls.get({ owner, repo, pull_number: num });
+              const title = (data.title || '').trim();
+              const m = title.match(cc);
+              if (!m) continue;
+              const type = m[1].toLowerCase();
+              const scope = m[2].toLowerCase();
+              const rest  = m[3].trim(); // stripped title
+              if ((type === 'feat' || type === 'fix') && (scope === 'all' || scope === 'dr' || scope === 'gs')) {
+                buckets[type][scope].push({ number: num, text: rest });
+              }
+            } catch (e) {
+              // skip unverifiable PRs
+            }
+          }
+
+          // Sort each section by PR number ascending
+          for (const t of ['feat','fix']) {
+            for (const s of ['all','dr','gs']) {
+              buckets[t][s].sort((a,b) => a.number - b.number);
+            }
+          }
+
+          // Render headers and bullets (only non-empty sections)
+          const header = (t,s) => `${t === 'feat' ? '### Features' : '### Bug Fixes'} (${s === 'all' ? 'general' : s})`;
+          const prLink = (n) => `[#${n}](https://github.com/${owner}/${repo}/pull/${n})`;
+          const bullet = (text, n) => BREAK_AUTO
+            ? `* ${text} (#\u200B${n})`
+            : `* ${text} (${prLink(n)})`;
+
+          const render = (t,s) => {
+            const items = buckets[t][s];
+            if (!items.length) return '';
+            let out = header(t,s) + '\n\n';
+            for (const it of items) out += bullet(it.text, it.number) + '\n';
+            return out + '\n';
+          };
+
+          let ours = '';
+          for (const s of ['all','dr','gs']) ours += render('feat', s);
+          for (const s of ['all','dr','gs']) ours += render('fix', s);
+          ours = ours.trim();
+
+          // RP CREDIT footer (verbatim)
+          const rpCredit = [
+            '---',
+            'This PR was generated with [Release Please](https://github.com/googleapis/release-please#release-please). See [documentation](https://github.com/googleapis/release-please#release-please).'
+          ].join('\n');
+
+          // Final body: Lich v{version} -> OUR SECTIONS -> RP credit -> Ellipsis -> sentinel
+          let finalBody = headerLine + '\n\n';
+          if (ours)    finalBody += ours + '\n\n';
+          finalBody += rpCredit + '\n\n';
+          if (ellipsis) finalBody += ellipsis + '\n\n';
+          finalBody += sentinelTag;
+
+          // Safety: links allowed only in (a) our PR links, (b) the RP credit line, and (c) inside Ellipsis
+          let safety = finalBody;
+          // Allow Release Please credit+doc links in markdown form
+          safety = safety.replace(/\[[^\]]+\]\(https:\/\/github\.com\/googleapis\/release-please(?:#release-please)?\)/g, '');
+          // Normalize/strip extra RP doc link lines that may appear outside Ellipsis
+          finalBody = finalBody.replace(/\n\s*See \[documentation\]\(https:\/\/github\.com\/googleapis\/release-please#release-please\)\./g, '');
+
+          // Remove Ellipsis block for safety checks
+          if (ellipsis) {
+            const escE = ellipsis.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            safety = safety.replace(new RegExp(escE, 'm'), '');
+          }
+
+          // Allow PR links to this repo
+          const allowRe = new RegExp(`\\[#\\d+\\]\\(https://github\\.com/${owner}/${repo}/(?:issues|pull)/\\d+\\)`, 'g');
+          safety = safety.replace(allowRe, '');
+
+          // Allow the RP credit links
+          safety = safety.replace(/\[Release Please\]\(https:\/\/github\.com\/googleapis\/release-please\)/g, '');
+          safety = safety.replace(/\[documentation\]\(https:\/\/github\.com\/googleapis\/release-please#release-please\)/g, '');
+
+          // After removals, if ANY markdown link remains, fail
+          if (/\[[^\]]+]\([^)]+\)/.test(safety)) {
+            core.setFailed('Safety check failed: non-whitelisted links found outside Ellipsis.');
+            return;
+          }
+
+          // Expose final body to next step (and also patch here in case the next step is omitted)
+          core.setOutput('finalBody', finalBody);
+
+    - name: Patch PR body (unless skipped by sentinel)
+      if: steps.compose.outputs.skip != 'true'
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      with:
+        script: |
+          const owner = context.repo.owner;
+          const repo = context.repo.repo;
+          const pull_number = (process.env.PR_NUMBER || "").trim() || (context.issue && context.issue.number);
+          if (!pull_number) { core.setFailed("Missing PR number for PATCH."); process.exit(1); }
+          const finalBody = process.env.finalBody;
+          await github.rest.pulls.update({ owner, repo, pull_number, body: finalBody });
+      env:
+        PR_NUMBER: ${{ inputs.pr_number }}
+        finalBody: ${{ steps.compose.outputs.finalBody }}
+
+    - name: Sentinel unchanged (skipped)
+      if: steps.compose.outputs.skip == 'true'
+      shell: bash
+      run: |
+        echo "Formatter skipped by sentinel; no PATCH performed."
