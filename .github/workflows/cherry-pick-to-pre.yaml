@@ -36,7 +36,7 @@ on:
         required: true
         default: "true"
       conflict_strategy:
-        description: "abort | ours | theirs"
+        description: "abort | ours | theirs | both"
         required: true
         default: "abort"
       reset_destination:
@@ -154,6 +154,7 @@ jobs:
           DEST: ${{ steps.guard_validate.outputs.dest_safe }}
           BASE: ${{ steps.guard_validate.outputs.base_safe }}
           RESET: ${{ inputs.reset_destination }}
+          STRAT: ${{ inputs.conflict_strategy }}
         run: |
           git fetch origin "$BASE"
           if [ "$RESET" = "true" ]; then
@@ -178,8 +179,37 @@ jobs:
                 else
                   echo "::warning::Merge failed but no conflicted files were detected."
                 fi
-                git merge --abort || true
-                echo "::endgroup::"
+
+                # If strategy is 'both', resolve by union-merging both sides and commit; otherwise abort.
+                if [ "$STRAT" = "both" ] && [ -n "$conflicts" ]; then
+                  resolve_conflicts_both() {
+                    local conflicts
+                    conflicts="$(git diff --name-only --diff-filter=U || true)"
+                    [ -z "$conflicts" ] && return 0
+                    while IFS= read -r f; do
+                      [ -z "$f" ] && continue
+                      if git show ":1:$f" >/dev/null 2>&1; then
+                        git show ":2:$f" > "$f.ours"
+                        git show ":1:$f" > "$f.base"
+                        git show ":3:$f" > "$f.theirs"
+                        git merge-file -p --union "$f.ours" "$f.base" "$f.theirs" > "$f"
+                        rm -f "$f.ours" "$f.base" "$f.theirs"
+                      else
+                        git show ":2:$f" > "$f.ours"
+                        git show ":3:$f" > "$f.theirs"
+                        { cat "$f.ours"; echo; cat "$f.theirs"; } > "$f"
+                        rm -f "$f.ours" "$f.theirs"
+                      fi
+                      git add "$f"
+                    done <<<"$conflicts"
+                  }
+                  resolve_conflicts_both
+                  git commit -m "chore: sync base (union merge via workflow)"
+                  echo "::endgroup::"
+                else
+                  git merge --abort || true
+                  echo "::endgroup::"
+                fi
               }
             else
               git checkout -B "$DEST" "origin/$BASE"
@@ -215,13 +245,37 @@ jobs:
           set -euo pipefail
           trap 'echo "::error::Cherry-pick failed. Aborting partial operations."; (git cherry-pick --abort || true); (git merge --abort || true); exit 1' ERR
           case "$STRAT" in
-            ours)   XFLAG="-X ours" ;;
-            theirs) XFLAG="-X theirs" ;;
-            *)      XFLAG="" ;;
+            ours)   XFLAG="-X ours";   USE_BOTH=0 ;;
+            theirs) XFLAG="-X theirs"; USE_BOTH=0 ;;
+            both)   XFLAG="";          USE_BOTH=1 ;;
+            *)      XFLAG="";          USE_BOTH=0 ;;
           esac
 
           api() {
             curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$@"
+          }
+
+          # Keep both sides on conflict: union-merge per file, stage, and continue
+          resolve_conflicts_both() {
+            local conflicts
+            conflicts="$(git diff --name-only --diff-filter=U || true)"
+            [ -z "$conflicts" ] && return 0
+            while IFS= read -r f; do
+              [ -z "$f" ] && continue
+              if git show ":1:$f" >/dev/null 2>&1; then
+                git show ":2:$f" > "$f.ours"
+                git show ":1:$f" > "$f.base"
+                git show ":3:$f" > "$f.theirs"
+                git merge-file -p --union "$f.ours" "$f.base" "$f.theirs" > "$f"
+                rm -f "$f.ours" "$f.base" "$f.theirs"
+              else
+                git show ":2:$f" > "$f.ours"
+                git show ":3:$f" > "$f.theirs"
+                { cat "$f.ours"; echo; cat "$f.theirs"; } > "$f"
+                rm -f "$f.ours" "$f.theirs"
+              fi
+              git add "$f"
+            done <<<"$conflicts"
           }
 
           # Ensure subject ends with (#PR); leave as-is if already present
@@ -248,7 +302,17 @@ jobs:
 
             if [ "$MODE" = "merged" ] || { [ "$MODE" = "auto" ] && [ "$MERGED" = "true" ] && [ "$MERGE_SHA" != "null" ]; }; then
               echo "Cherry-picking MERGED PR #$N commit $MERGE_SHA"
-              git cherry-pick -x $XFLAG "$MERGE_SHA"
+              if [ "$USE_BOTH" -eq 1 ]; then
+                set +e
+                git cherry-pick -x $XFLAG "$MERGE_SHA"
+                st=$?; set -e
+                if [ $st -ne 0 ]; then
+                  resolve_conflicts_both
+                  git cherry-pick --continue
+                fi
+              else
+                git cherry-pick -x $XFLAG "$MERGE_SHA"
+              fi
               BODY="$(git log -1 --pretty=%b HEAD || true)"
               if [ -n "$BODY" ]; then
                 git commit --amend -m "$SUBJECT" -m "$BODY"
@@ -263,12 +327,32 @@ jobs:
             git fetch origin "pull/$N/head:pr-$N"
             if [ "$SQUASH" = "true" ]; then
               echo "  - Squashing with templated commit subject (PR title + trailer)"
-              git merge --squash $XFLAG "pr-$N"
-              git commit -m "$SUBJECT"
+              if [ "$USE_BOTH" -eq 1 ]; then
+                set +e
+                git merge --squash $XFLAG "pr-$N"
+                st=$?; set -e
+                if [ $st -ne 0 ]; then
+                  resolve_conflicts_both
+                fi
+                git commit -m "$SUBJECT"
+              else
+                git merge --squash $XFLAG "pr-$N"
+                git commit -m "$SUBJECT"
+              fi
             else
               echo "  - Cherry-picking each commit (preserving history)"
               for C in $(git rev-list --reverse --no-merges ^HEAD "pr-$N"); do
+                if [ "$USE_BOTH" -eq 1 ]; then
+                set +e
                 git cherry-pick -x $XFLAG "$C"
+                st=$?; set -e
+                if [ $st -ne 0 ]; then
+                  resolve_conflicts_both
+                  git cherry-pick --continue
+                fi
+              else
+                git cherry-pick -x $XFLAG "$C"
+              fi
               done
             fi
             echo "::endgroup::"
