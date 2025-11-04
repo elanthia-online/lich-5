@@ -278,6 +278,22 @@ jobs:
             done <<<"$conflicts"
           }
 
+          # Run a command with conflict resolution; if it fails, resolve and optionally continue
+          run_with_conflict_resolution() {
+            local continue_cmd="$1"
+            shift
+            set +e
+            "$@"
+            local st=$?
+            set -e
+            if [ $st -ne 0 ]; then
+              resolve_conflicts_both
+              if [ -n "$continue_cmd" ]; then
+                eval "$continue_cmd"
+              fi
+            fi
+          }
+
           # Ensure subject ends with (#PR); leave as-is if already present
           with_pr_trailer() {
             local title="$1" pr="$2"
@@ -303,13 +319,7 @@ jobs:
             if [ "$MODE" = "merged" ] || { [ "$MODE" = "auto" ] && [ "$MERGED" = "true" ] && [ "$MERGE_SHA" != "null" ]; }; then
               echo "Cherry-picking MERGED PR #$N commit $MERGE_SHA"
               if [ "$USE_BOTH" -eq 1 ]; then
-                set +e
-                git cherry-pick -x $XFLAG "$MERGE_SHA"
-                st=$?; set -e
-                if [ $st -ne 0 ]; then
-                  resolve_conflicts_both
-                  git cherry-pick --continue
-                fi
+                run_with_conflict_resolution "git cherry-pick --continue" git cherry-pick -x $XFLAG "$MERGE_SHA"
               else
                 git cherry-pick -x $XFLAG "$MERGE_SHA"
               fi
@@ -328,12 +338,7 @@ jobs:
             if [ "$SQUASH" = "true" ]; then
               echo "  - Squashing with templated commit subject (PR title + trailer)"
               if [ "$USE_BOTH" -eq 1 ]; then
-                set +e
-                git merge --squash $XFLAG "pr-$N"
-                st=$?; set -e
-                if [ $st -ne 0 ]; then
-                  resolve_conflicts_both
-                fi
+                run_with_conflict_resolution "" git merge --squash $XFLAG "pr-$N"
                 git commit -m "$SUBJECT"
               else
                 git merge --squash $XFLAG "pr-$N"
@@ -343,16 +348,10 @@ jobs:
               echo "  - Cherry-picking each commit (preserving history)"
               for C in $(git rev-list --reverse --no-merges ^HEAD "pr-$N"); do
                 if [ "$USE_BOTH" -eq 1 ]; then
-                set +e
-                git cherry-pick -x $XFLAG "$C"
-                st=$?; set -e
-                if [ $st -ne 0 ]; then
-                  resolve_conflicts_both
-                  git cherry-pick --continue
+                  run_with_conflict_resolution "git cherry-pick --continue" git cherry-pick -x $XFLAG "$C"
+                else
+                  git cherry-pick -x $XFLAG "$C"
                 fi
-              else
-                git cherry-pick -x $XFLAG "$C"
-              fi
               done
             fi
             echo "::endgroup::"
