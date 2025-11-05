@@ -11,7 +11,7 @@ name: Curate Pre Branch (Cherry-pick PRs)
 #   - prs: comma-separated PR numbers (digits only).
 #   - mode: auto (prefer merge commit if merged), merged (force merge commit), head (use PR head).
 #   - squash: true to squash PR heads to one commit; false preserves commit history.
-#   - conflict_strategy: abort (default), ours, theirs (passed as -X strategy).
+#   - conflict_strategy: abort (default), ours, theirs, both (passed as -X strategy).
 
 on:
   workflow_dispatch:
@@ -36,7 +36,7 @@ on:
         required: true
         default: "true"
       conflict_strategy:
-        description: "abort | ours | theirs"
+        description: "abort | ours | theirs | both"
         required: true
         default: "abort"
       reset_destination:
@@ -137,6 +137,7 @@ jobs:
             for(i=1;i<=n;i++){ if(!(a[i] in seen)){ seen[a[i]]=1; out=(out?out",":""); out=out a[i]; } }
             print out }')"
           printf 'PRS_SAFE=%s\n' "$PRS_SAFE" >> "$GITHUB_ENV"
+
       - name: Ensure jq is available
         run: |
           if ! command -v jq >/dev/null 2>&1; then
@@ -149,11 +150,28 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Initialize conflict tracking
+        run: |
+          echo "CONFLICT_LOG_FILE=$(mktemp)" >> "$GITHUB_ENV"
+          echo "HAD_CONFLICTS=false" >> "$GITHUB_ENV"
+
+      - name: Write union resolver helper
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/union-resolve.sh" <<'BASH'
+          #!/usr/bin/env bash
+          # resolve_conflicts_both [pr_number]
+          # Behavior:
+          # - If PR number is provided: PR-mode (prints header + per-file diff excerpt), sets HAD_CONFLICTS=true.
+          # - If no PR number: Base-sync mode (per-file locations list only; caller prints header).
+          . "$RUNNER_TEMP/union-resolve.sh"
+          BASH
       - name: Prepare destination branch
         env:
           DEST: ${{ steps.guard_validate.outputs.dest_safe }}
           BASE: ${{ steps.guard_validate.outputs.base_safe }}
           RESET: ${{ inputs.reset_destination }}
+          STRAT: ${{ inputs.conflict_strategy }}
         run: |
           git fetch origin "$BASE"
           if [ "$RESET" = "true" ]; then
@@ -178,8 +196,25 @@ jobs:
                 else
                   echo "::warning::Merge failed but no conflicted files were detected."
                 fi
-                git merge --abort || true
-                echo "::endgroup::"
+
+                # If strategy is 'both', resolve by union-merging both sides and commit; otherwise abort.
+                if [ "$STRAT" = "both" ] && [ -n "$conflicts" ]; then
+                  echo "HAD_CONFLICTS=true" >> "$GITHUB_ENV"
+                  {
+                    echo "## 🔀 Base Sync Conflict Resolution (Union Merge)"
+                    echo "**Operation:** Syncing \`$DEST\` with \`origin/$BASE\`"
+                    echo ""
+                    echo "### Files with conflicts:"
+                  } >> "$CONFLICT_LOG_FILE"
+                  
+                  . "$RUNNER_TEMP/union-resolve.sh"
+                  resolve_conflicts_both
+                  git commit -m "chore: sync base (union merge via workflow)"
+                  echo "::endgroup::"
+                else
+                  git merge --abort || true
+                  echo "::endgroup::"
+                fi
               }
             else
               git checkout -B "$DEST" "origin/$BASE"
@@ -215,13 +250,38 @@ jobs:
           set -euo pipefail
           trap 'echo "::error::Cherry-pick failed. Aborting partial operations."; (git cherry-pick --abort || true); (git merge --abort || true); exit 1' ERR
           case "$STRAT" in
-            ours)   XFLAG="-X ours" ;;
-            theirs) XFLAG="-X theirs" ;;
-            *)      XFLAG="" ;;
+            ours)   XFLAG="-X ours";   USE_BOTH=0 ;;
+            theirs) XFLAG="-X theirs"; USE_BOTH=0 ;;
+            both)   XFLAG="";          USE_BOTH=1 ;;
+            *)      XFLAG="";          USE_BOTH=0 ;;
           esac
 
           api() {
             curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$@"
+          }
+
+          # Keep both sides on conflict: union-merge per file, stage, and continue
+          . "$RUNNER_TEMP/union-resolve.sh"
+
+          # Run a command with conflict resolution; if it fails, resolve and optionally continue
+          run_with_conflict_resolution() {
+            local pr_context="$1"
+            local continue_cmd="$2"
+            shift 2
+            set +e
+            "$@"
+            local st=$?
+            set -e
+            if [ $st -ne 0 ]; then
+              if [ "$USE_BOTH" -eq 1 ]; then
+                resolve_conflicts_both "$pr_context"
+                if [ -n "$continue_cmd" ]; then
+                  eval "$continue_cmd"
+                fi
+              else
+                return $st
+              fi
+            fi
           }
 
           # Ensure subject ends with (#PR); leave as-is if already present
@@ -248,7 +308,11 @@ jobs:
 
             if [ "$MODE" = "merged" ] || { [ "$MODE" = "auto" ] && [ "$MERGED" = "true" ] && [ "$MERGE_SHA" != "null" ]; }; then
               echo "Cherry-picking MERGED PR #$N commit $MERGE_SHA"
-              git cherry-pick -x $XFLAG "$MERGE_SHA"
+              if [ "$USE_BOTH" -eq 1 ]; then
+                run_with_conflict_resolution "$N" "git cherry-pick --continue" git cherry-pick -x $XFLAG "$MERGE_SHA"
+              else
+                git cherry-pick -x $XFLAG "$MERGE_SHA"
+              fi
               BODY="$(git log -1 --pretty=%b HEAD || true)"
               if [ -n "$BODY" ]; then
                 git commit --amend -m "$SUBJECT" -m "$BODY"
@@ -263,12 +327,21 @@ jobs:
             git fetch origin "pull/$N/head:pr-$N"
             if [ "$SQUASH" = "true" ]; then
               echo "  - Squashing with templated commit subject (PR title + trailer)"
-              git merge --squash $XFLAG "pr-$N"
-              git commit -m "$SUBJECT"
+              if [ "$USE_BOTH" -eq 1 ]; then
+                run_with_conflict_resolution "$N" "" git merge --squash $XFLAG "pr-$N"
+                git commit -m "$SUBJECT"
+              else
+                git merge --squash $XFLAG "pr-$N"
+                git commit -m "$SUBJECT"
+              fi
             else
               echo "  - Cherry-picking each commit (preserving history)"
               for C in $(git rev-list --reverse --no-merges ^HEAD "pr-$N"); do
-                git cherry-pick -x $XFLAG "$C"
+                if [ "$USE_BOTH" -eq 1 ]; then
+                  run_with_conflict_resolution "$N" "git cherry-pick --continue" git cherry-pick -x $XFLAG "$C"
+                else
+                  git cherry-pick -x $XFLAG "$C"
+                fi
               done
             fi
             echo "::endgroup::"
@@ -285,17 +358,46 @@ jobs:
             git push origin "$DEST"
           fi
 
+      - name: Report conflict resolutions
+        if: always()
+        env:
+          STRAT: ${{ inputs.conflict_strategy }}
+        run: |
+          if [ "$HAD_CONFLICTS" = "true" ] && [ "$STRAT" = "both" ]; then
+            {
+              echo ""
+              echo "---"
+              echo ""
+              echo "# ⚠️ MANUAL REVIEW REQUIRED"
+              echo ""
+              echo "The workflow used **union merge** strategy to automatically resolve conflicts."
+              echo "**This may have introduced syntax errors or logic issues.**"
+              echo ""
+              echo "Please carefully review all files listed above before deploying."
+              echo ""
+              cat "$CONFLICT_LOG_FILE"
+            } >> "$GITHUB_STEP_SUMMARY"
+            
+            echo "::warning::Union merge strategy was used to resolve conflicts. Manual review required!"
+          fi
+
       - name: Summary
         env:
           DEST: ${{ steps.guard_validate.outputs.dest_safe }}
           BASE: ${{ steps.guard_validate.outputs.base_safe }}
           PRS:  ${{ inputs.prs }}
+          STRAT: ${{ inputs.conflict_strategy }}
         run: |
           {
             echo "### Curated branch ready"
             echo "- **Destination:** \`$DEST\`"
             echo "- **Base:** \`$BASE\`"
             echo "- **PRs included:** $PRS"
+            if [ "$HAD_CONFLICTS" = "true" ] && [ "$STRAT" = "both" ]; then
+              echo "- **⚠️ Conflicts auto-resolved:** Yes (see details above)"
+            else
+              echo "- **Conflicts:** None"
+            fi
             echo
             echo "Next: run **Prepare Pre-release** targeting \`$DEST\`."
           } >> "$GITHUB_STEP_SUMMARY"
