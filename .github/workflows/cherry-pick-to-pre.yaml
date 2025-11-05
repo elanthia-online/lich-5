@@ -11,7 +11,7 @@ name: Curate Pre Branch (Cherry-pick PRs)
 #   - prs: comma-separated PR numbers (digits only).
 #   - mode: auto (prefer merge commit if merged), merged (force merge commit), head (use PR head).
 #   - squash: true to squash PR heads to one commit; false preserves commit history.
-#   - conflict_strategy: abort (default), ours, theirs (passed as -X strategy).
+#   - conflict_strategy: abort (default), ours, theirs, both (passed as -X strategy).
 
 on:
   workflow_dispatch:
@@ -137,6 +137,7 @@ jobs:
             for(i=1;i<=n;i++){ if(!(a[i] in seen)){ seen[a[i]]=1; out=(out?out",":""); out=out a[i]; } }
             print out }')"
           printf 'PRS_SAFE=%s\n' "$PRS_SAFE" >> "$GITHUB_ENV"
+
       - name: Ensure jq is available
         run: |
           if ! command -v jq >/dev/null 2>&1; then
@@ -148,6 +149,11 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Initialize conflict tracking
+        run: |
+          echo "CONFLICT_LOG_FILE=$(mktemp)" >> "$GITHUB_ENV"
+          echo "HAD_CONFLICTS=false" >> "$GITHUB_ENV"
 
       - name: Prepare destination branch
         env:
@@ -182,12 +188,37 @@ jobs:
 
                 # If strategy is 'both', resolve by union-merging both sides and commit; otherwise abort.
                 if [ "$STRAT" = "both" ] && [ -n "$conflicts" ]; then
+                  echo "HAD_CONFLICTS=true" >> "$GITHUB_ENV"
+                  {
+                    echo "## 🔀 Base Sync Conflict Resolution (Union Merge)"
+                    echo "**Operation:** Syncing \`$DEST\` with \`origin/$BASE\`"
+                    echo ""
+                    echo "### Files with conflicts:"
+                  } >> "$CONFLICT_LOG_FILE"
+                  
                   resolve_conflicts_both() {
                     local conflicts
                     conflicts="$(git diff --name-only --diff-filter=U || true)"
                     [ -z "$conflicts" ] && return 0
                     while IFS= read -r f; do
                       [ -z "$f" ] && continue
+                      
+                      # Get conflict markers with line numbers
+                      conflict_hunks=$(grep -n "^<<<<<<<\|^=======\|^>>>>>>>" "$f" 2>/dev/null | head -20 || echo "")
+                      
+                      {
+                        echo "#### \`$f\`"
+                        if [ -n "$conflict_hunks" ]; then
+                          echo "<details><summary>Conflict locations (click to expand)</summary>"
+                          echo ""
+                          echo '```'
+                          echo "$conflict_hunks"
+                          echo '```'
+                          echo "</details>"
+                        fi
+                        echo ""
+                      } >> "$CONFLICT_LOG_FILE"
+                      
                       if git show ":1:$f" >/dev/null 2>&1; then
                         git show ":2:$f" > "$f.ours"
                         git show ":1:$f" > "$f.base"
@@ -257,11 +288,43 @@ jobs:
 
           # Keep both sides on conflict: union-merge per file, stage, and continue
           resolve_conflicts_both() {
+            local pr_context="$1"
             local conflicts
             conflicts="$(git diff --name-only --diff-filter=U || true)"
             [ -z "$conflicts" ] && return 0
+            
+            echo "HAD_CONFLICTS=true" >> "$GITHUB_ENV"
+            {
+              echo ""
+              echo "---"
+              echo ""
+              echo "## 🔀 PR #$pr_context - Conflict Resolution (Union Merge)"
+              echo ""
+              echo "### Files with conflicts:"
+            } >> "$CONFLICT_LOG_FILE"
+            
             while IFS= read -r f; do
               [ -z "$f" ] && continue
+              
+              # Capture conflict markers with context
+              conflict_details=$(git diff "$f" 2>/dev/null | grep -A 3 -B 3 "^<<<<<<<\|^=======\|^>>>>>>>" | head -50 || echo "")
+              conflict_line_nums=$(grep -n "^<<<<<<<" "$f" 2>/dev/null || echo "")
+              
+              {
+                echo "#### \`$f\`"
+                if [ -n "$conflict_line_nums" ]; then
+                  echo "<details><summary>Conflict at lines: $(echo "$conflict_line_nums" | cut -d: -f1 | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')</summary>"
+                  echo ""
+                  echo '```diff'
+                  echo "$conflict_details"
+                  echo '```'
+                  echo "</details>"
+                else
+                  echo "*(Conflict detected but markers not found - binary or already resolved)*"
+                fi
+                echo ""
+              } >> "$CONFLICT_LOG_FILE"
+              
               if git show ":1:$f" >/dev/null 2>&1; then
                 git show ":2:$f" > "$f.ours"
                 git show ":1:$f" > "$f.base"
@@ -280,16 +343,21 @@ jobs:
 
           # Run a command with conflict resolution; if it fails, resolve and optionally continue
           run_with_conflict_resolution() {
-            local continue_cmd="$1"
-            shift
+            local pr_context="$1"
+            local continue_cmd="$2"
+            shift 2
             set +e
             "$@"
             local st=$?
             set -e
             if [ $st -ne 0 ]; then
-              resolve_conflicts_both
-              if [ -n "$continue_cmd" ]; then
-                eval "$continue_cmd"
+              if [ "$USE_BOTH" -eq 1 ]; then
+                resolve_conflicts_both "$pr_context"
+                if [ -n "$continue_cmd" ]; then
+                  eval "$continue_cmd"
+                fi
+              else
+                return $st
               fi
             fi
           }
@@ -319,7 +387,7 @@ jobs:
             if [ "$MODE" = "merged" ] || { [ "$MODE" = "auto" ] && [ "$MERGED" = "true" ] && [ "$MERGE_SHA" != "null" ]; }; then
               echo "Cherry-picking MERGED PR #$N commit $MERGE_SHA"
               if [ "$USE_BOTH" -eq 1 ]; then
-                run_with_conflict_resolution "git cherry-pick --continue" git cherry-pick -x $XFLAG "$MERGE_SHA"
+                run_with_conflict_resolution "$N" "git cherry-pick --continue" git cherry-pick -x $XFLAG "$MERGE_SHA"
               else
                 git cherry-pick -x $XFLAG "$MERGE_SHA"
               fi
@@ -338,7 +406,7 @@ jobs:
             if [ "$SQUASH" = "true" ]; then
               echo "  - Squashing with templated commit subject (PR title + trailer)"
               if [ "$USE_BOTH" -eq 1 ]; then
-                run_with_conflict_resolution "" git merge --squash $XFLAG "pr-$N"
+                run_with_conflict_resolution "$N" "" git merge --squash $XFLAG "pr-$N"
                 git commit -m "$SUBJECT"
               else
                 git merge --squash $XFLAG "pr-$N"
@@ -348,7 +416,7 @@ jobs:
               echo "  - Cherry-picking each commit (preserving history)"
               for C in $(git rev-list --reverse --no-merges ^HEAD "pr-$N"); do
                 if [ "$USE_BOTH" -eq 1 ]; then
-                  run_with_conflict_resolution "git cherry-pick --continue" git cherry-pick -x $XFLAG "$C"
+                  run_with_conflict_resolution "$N" "git cherry-pick --continue" git cherry-pick -x $XFLAG "$C"
                 else
                   git cherry-pick -x $XFLAG "$C"
                 fi
@@ -368,17 +436,46 @@ jobs:
             git push origin "$DEST"
           fi
 
+      - name: Report conflict resolutions
+        if: always()
+        env:
+          STRAT: ${{ inputs.conflict_strategy }}
+        run: |
+          if [ "$HAD_CONFLICTS" = "true" ] && [ "$STRAT" = "both" ]; then
+            {
+              echo ""
+              echo "---"
+              echo ""
+              echo "# ⚠️ MANUAL REVIEW REQUIRED"
+              echo ""
+              echo "The workflow used **union merge** strategy to automatically resolve conflicts."
+              echo "**This may have introduced syntax errors or logic issues.**"
+              echo ""
+              echo "Please carefully review all files listed above before deploying."
+              echo ""
+              cat "$CONFLICT_LOG_FILE"
+            } >> "$GITHUB_STEP_SUMMARY"
+            
+            echo "::warning::Union merge strategy was used to resolve conflicts. Manual review required!"
+          fi
+
       - name: Summary
         env:
           DEST: ${{ steps.guard_validate.outputs.dest_safe }}
           BASE: ${{ steps.guard_validate.outputs.base_safe }}
           PRS:  ${{ inputs.prs }}
+          STRAT: ${{ inputs.conflict_strategy }}
         run: |
           {
             echo "### Curated branch ready"
             echo "- **Destination:** \`$DEST\`"
             echo "- **Base:** \`$BASE\`"
             echo "- **PRs included:** $PRS"
+            if [ "$HAD_CONFLICTS" = "true" ] && [ "$STRAT" = "both" ]; then
+              echo "- **⚠️ Conflicts auto-resolved:** Yes (see details above)"
+            else
+              echo "- **Conflicts:** None"
+            fi
             echo
             echo "Next: run **Prepare Pre-release** targeting \`$DEST\`."
           } >> "$GITHUB_STEP_SUMMARY"
