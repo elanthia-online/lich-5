@@ -1,0 +1,78 @@
+name: Install Union Resolver Helper
+description: Writes a reusable resolve_conflicts_both() helper to $RUNNER_TEMP and exports UNION_RESOLVE_HELPER.
+runs:
+  using: "composite"
+  steps:
+    - name: Write helper
+      shell: bash
+      run: |
+        set -euo pipefail
+        helper="$RUNNER_TEMP/union-resolve.sh"
+        cat > "$helper" <<'BASH'
+        #!/usr/bin/env bash
+        # resolve_conflicts_both "HEADER" "OP_LINE" "LOG_FILE"
+        # Writes HAD_CONFLICTS=true to $GITHUB_ENV, appends header + per-file details to LOG_FILE,
+        # and union-resolves all conflicted files, staging the results.
+        resolve_conflicts_both() {
+          local header="${1:-Conflict Resolution (Union Merge)}"
+          local op="${2:-}"
+          local log_file="${3:-}"
+          local conflicts
+          conflicts="$(git diff --name-only --diff-filter=U || true)"
+          [ -z "$conflicts" ] && return 0
+
+          echo "HAD_CONFLICTS=true" >> "$GITHUB_ENV"
+          if [ -n "$log_file" ]; then
+            {
+              echo ""
+              echo "---"
+              echo ""
+              echo "## 🔀 ${header}"
+              [ -n "$op" ] && { echo "$op"; echo ""; }
+              echo ""
+              echo "### Files with conflicts:"
+            } >> "$log_file"
+          fi
+
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            # Append per-file details (best-effort)
+            if [ -n "$log_file" ]; then
+              conflict_details=$(git diff "$f" 2>/dev/null | grep -A 3 -B 3 "^<<<<<<<\|^=======\|^>>>>>>>" | head -50 || echo "")
+              conflict_line_nums=$(grep -n "^<<<<<<<" "$f" 2>/dev/null || echo "")
+              {
+                echo "#### \`$f\`"
+                if [ -n "$conflict_line_nums" ]; then
+                  echo "<details><summary>Conflict at lines: $(echo "$conflict_line_nums" | cut -d: -f1 | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')</summary>"
+                  echo ""
+                  echo '```diff'
+                  echo "$conflict_details"
+                  echo '```'
+                  echo "</details>"
+                else
+                  echo "*(Conflict detected but markers not found - binary or already resolved)*"
+                fi
+                echo ""
+              } >> "$log_file"
+            fi
+            # Resolve: 3-way union if base blob exists; otherwise concatenate both sides
+            if git show ":1:$f" >/dev/null 2>&1; then
+              git show ":2:$f" > "$f.ours"
+              git show ":1:$f" > "$f.base"
+              git show ":3:$f" > "$f.theirs"
+              git merge-file -p --union "$f.ours" "$f.base" "$f.theirs" > "$f"
+              rm -f "$f.ours" "$f.base" "$f.theirs"
+            else
+              git show ":2:$f" > "$f.ours"
+              git show ":3:$f" > "$f.theirs"
+              { cat "$f.ours"; echo; cat "$f.theirs"; } > "$f"
+              rm -f "$f.ours" "$f.theirs"
+            fi
+            git add "$f"
+          done <<<"$conflicts"
+
+          return 0
+        }
+        BASH
+        chmod +x "$helper"
+        echo "UNION_RESOLVE_HELPER=$helper" >> "$GITHUB_ENV"
