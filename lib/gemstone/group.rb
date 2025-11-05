@@ -288,27 +288,27 @@ module Lich
           # Matches when someone joins your group
           # @example "<a exist="-10467645" noun="Oreh">Oreh</a> joins your group."
           JOIN    = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> joins your group.\r?\n?$}
-          
+
           # Matches when someone leaves your group
           # @example "<a exist="-10467645" noun="Oreh">Oreh</a> leaves your group"
           LEAVE   = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> leaves your group.\r?\n?$}
-          
+
           # Matches when you add someone to your group
           # @example "You add <a exist="-10467645" noun="Oreh">Oreh</a> to your group."
           ADD     = %r{^You add <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> to your group.\r?\n?$}
-          
+
           # Matches when you remove someone from the group
           # @example "You remove <a exist="-10467645" noun="Oreh">Oreh</a> from the group."
           REMOVE  = %r{^You remove <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> from the group.\r?\n?$}
-          
+
           # Matches when trying to add someone already in group
           # @example "But <a exist="-10467645" noun="Oreh">Oreh</a> is already a member of your group!"
           NOOP    = %r{^But <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> is already a member of your group!\r?\n?$}
-          
+
           # Matches when you receive leadership
           # @example "<a exist="-10488845" noun="Etanamir">Etanamir</a> designates you as the new leader of the group."
           HAS_LEADER = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> designates you as the new leader of the group\.\r?\n?$}
-          
+
           # Matches when leadership changes to another player
           # @example "<a exist="-10488845" noun="Etanamir">Etanamir</a> designates <a exist="-10488845" noun="Ondreian">Ondreian</a> as the new leader of the group."
           SWAP_LEADER = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> designates <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> as the new leader of the group.\r?\n?$}
@@ -316,88 +316,88 @@ module Lich
           # Matches when you give away leadership
           # @example "You designate <a exist="-10778599" noun="Ondreian">Ondreian</a> as the new leader of the group."
           GAVE_LEADER_AWAY = %r{You designate <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> as the new leader of the group\.\r?\n?$}
-          
+
           # Matches when you disband the group
           # @example "You disband your group."
           DISBAND = %r{^You disband your group}
-          
+
           # Matches when you're added to someone's group
           # @example "<a exist="-10488845" noun="Etanamir">Etanamir</a> adds you to <a exist="-10488845" noun="Etanamir">his</a> group."
           ADDED_TO_NEW_GROUP = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> adds you to <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> group.\r?\n?$}
-          
+
           # Matches when you join someone's group
           # @example "You join <a exist="-10488845" noun="Etanamir">Etanamir</a>."
           JOINED_NEW_GROUP = %r{You join <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a>\.\r?\n?$}
-          
+
           # Matches when your leader adds another member
           # @example "<a exist="-10488845" noun="Etanamir">Etanamir</a> adds <a exist="-10974229" noun="Szan">Szan</a> to <a exist="-10488845" noun="Etanamir">his</a> group."
           LEADER_ADDED_MEMBER = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> adds <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> to <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> group\.\r?\n?$}
-          
+
           # Matches when your leader removes a member
           # @example "<a exist="-10488845" noun="Etanamir">Etanamir</a> removes <a exist="-10974229" noun="Szan">Szan</a> from the group."
           LEADER_REMOVED_MEMBER = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> removes <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> from the group\.\r?\n?$}
-          
+
           # Matches when you grab someone's hand (reserved demeanor)
           # @example "You grab <a exist="-10070682" noun="Dicate">Dicate's</a> hand."
           HOLD_RESERVED_FIRST = %r{^You grab <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> hand.\r?\n?$}
-          
+
           # Matches when you hold someone's hand (neutral demeanor)
           HOLD_NEUTRAL_FIRST = %r{^You reach out and hold <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> hand.\r?\n?$}
-          
+
           # Matches when you take someone's hand (friendly demeanor)
           HOLD_FRIENDLY_FIRST = %r{^You gently take hold of <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> hand.\r?\n?$}
-          
+
           # Matches when you clasp someone's hand (warm demeanor)
           HOLD_WARM_FIRST = %r{^You clasp <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> hand tenderly.\r?\n?$}
-          
+
           # Matches when someone grabs your hand (reserved demeanor)
           # @example "<indicator id='IconJOINED' visible='y'/><a exist="-10966483" noun="Nisugi">Nisugi</a> grabs your hand."
           HOLD_RESERVED_SECOND = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> grabs your hand.\r?\n?$}
-          
+
           # Matches when someone holds your hand (neutral demeanor)
           HOLD_NEUTRAL_SECOND = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> reaches out and holds your hand.\r?\n?$}
-          
+
           # Matches when someone takes your hand (friendly demeanor)
           HOLD_FRIENDLY_SECOND = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> gently takes hold of your hand.\r?\n?$}
-          
+
           # Matches when someone clasps your hand (warm demeanor)
           HOLD_WARM_SECOND = %r{<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> clasps your hand tenderly.\r?\n?$}
-          
+
           # Matches when you observe someone grabbing another's hand (reserved demeanor)
           # @example "<a exist="-10966483" noun="Nisugi">Nisugi</a> grabs <a exist="-10070682" noun="Dicate">Dicate's</a> hand."
           HOLD_RESERVED_THIRD = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> grabs <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> hand.\r?\n?$}
-          
+
           # Matches when you observe someone holding another's hand (neutral demeanor)
           HOLD_NEUTRAL_THIRD = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> reaches out and holds <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> hand.\r?\n?$}
-          
+
           # Matches when you observe someone taking another's hand (friendly demeanor)
           HOLD_FRIENDLY_THIRD = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> gently takes hold of <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> hand.\r?\n?$}
-          
+
           # Matches when you observe someone clasping another's hand (warm demeanor)
           HOLD_WARM_THIRD = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> clasps <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> hand tenderly.\r?\n?$}
-          
+
           # Matches when someone else joins another's group
           # @example "<a exist="-10154507" noun="Zoleta">Zoleta</a> joins <a exist="-10966483" noun="Nisugi">Nisugi's</a> group."
           OTHER_JOINED_GROUP = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> joins <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> group.\r?\n?$}
-          
+
           # Matches when not in any group
           NO_GROUP = /^You are not currently in a group/
-          
+
           # Matches group member listing from GROUP command
           # @example "You are leading PlayerName, PlayerName2."
           # @example "You are grouped with LeaderName, PlayerName."
           MEMBER   = /^You are (?:leading|grouped with) (.*)/
-          
+
           # Matches group status line
           # @example "Your group status is currently open."
           STATUS   = /^Your group status is currently (?<status>open|closed)\./
 
           # UI indicator showing group is empty
           GROUP_EMPTIED    = %[<indicator id='IconJOINED' visible='n'/>]
-          
+
           # UI indicator showing group exists
           GROUP_EXISTS     = %[<indicator id='IconJOINED' visible='y'/>]
-          
+
           # Text indicating leadership transfer
           GIVEN_LEADERSHIP = %[designates you as the new leader of the group.]
 
