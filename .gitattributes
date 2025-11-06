@@ -2,11 +2,12 @@
 
 # let's gussy this up a bit for a working zip / tarball release
 # first, let's ignore files we don't want in the zip
-.git*           export-ignore
-.ruby-version   export-ignore
-README.adoc     export-ignore
-Gemfile*        export-ignore
-/*.toml         export-ignore
+.git*            export-ignore
+.claude*         export-ignore
+.ruby-version    export-ignore
+Gemfile*         export-ignore
+/*.adoc          export-ignore
+/*.toml          export-ignore
 /*.yml           export-ignore
 /*.yaml          export-ignore
 /*.ico           export-ignore
@@ -15,8 +16,8 @@ Gemfile*        export-ignore
 /*.md            export-ignore
 
 # second, let's take a running stab at ignoring a directory
-/spec           export-ignore
-/.github        export-ignore
+/spec            export-ignore
+/.github         export-ignore
 
 # third, let's ignore a file in a directory
 
