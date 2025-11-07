@@ -1,0 +1,114 @@
+name: Curate Pre Branch
+# =============================================================================
+# Orchestrates PR cherry-picking to prerelease branches with conflict resolution
+#
+# Features:
+#   - Multiple conflict strategies (abort, ours, theirs, union)
+#   - Squash or preserve commit history
+#   - Dry-run mode for safe testing
+#   - Syntax validation after auto-resolution
+#   - Pluggable and testable architecture
+#
+# See: .github/scripts/curate-pre-branch.sh for implementation
+# =============================================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      destination:
+        description: "Destination branch (auto-prefixed with pre/beta/)"
+        required: true
+        default: "pre/beta"
+      base:
+        description: "Base branch (must be main)"
+        required: true
+        default: "main"
+      prs:
+        description: "Comma-separated PR numbers (e.g., 12,27,43)"
+        required: true
+      mode:
+        description: "auto | merged | head"
+        required: true
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - merged
+          - head
+      squash:
+        description: "Squash PRs into single commits?"
+        required: true
+        default: true
+        type: boolean
+      conflict_strategy:
+        description: "Conflict resolution strategy"
+        required: true
+        default: "abort"
+        type: choice
+        options:
+          - abort
+          - ours
+          - theirs
+          - union
+      reset_destination:
+        description: "Force-recreate branch? (destroys history)"
+        required: true
+        default: false
+        type: boolean
+      dry_run:
+        description: "Preview without pushing?"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: curate-${{ github.ref }}-${{ inputs.destination }}
+  cancel-in-progress: true
+
+jobs:
+  curate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: |
+          # Install jq for JSON parsing
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y jq
+          fi
+
+          # Install rubocop for union merge validation
+          if ! command -v rubocop >/dev/null 2>&1; then
+            gem install rubocop
+          fi
+
+      - name: Curate pre-branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DESTINATION: ${{ inputs.destination }}
+          BASE: ${{ inputs.base }}
+          PRS: ${{ inputs.prs }}
+          MODE: ${{ inputs.mode }}
+          SQUASH: ${{ inputs.squash }}
+          CONFLICT_STRATEGY: ${{ inputs.conflict_strategy }}
+          RESET_DESTINATION: ${{ inputs.reset_destination }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          chmod +x .github/scripts/curate-pre-branch.sh
+          .github/scripts/curate-pre-branch.sh
