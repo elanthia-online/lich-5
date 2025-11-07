@@ -81,21 +81,17 @@ jobs:
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.2'
+          ruby-version: '3.4'
           bundler-cache: true
 
-      - name: Install dependencies
-        run: |
-          # Install jq for JSON parsing
-          if ! command -v jq >/dev/null 2>&1; then
-            sudo apt-get update -qq
-            sudo apt-get install -y jq
-          fi
+      - name: Install dependencies with pkg cache
+        run: sudo apt-get update -y
 
-          # Install rubocop for union merge validation
-          if ! command -v rubocop >/dev/null 2>&1; then
-            gem install rubocop
-          fi
+      - name: Install jq
+        uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05 # v1.6.0
+        with:
+          packages: jq
+          version: 1.0
 
       - name: Curate pre-branch
         env:
