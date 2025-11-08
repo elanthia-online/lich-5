@@ -79,8 +79,8 @@ module Lich
       # @return [Hash<Symbol, String>] Mapping of modes to Kramdown input types
       # @api private
       MODE_TO_INPUT_FORMAT = {
-        Mode::HTML => 'html',
-        Mode::XML => 'html',  # Kramdown doesn't have native XML, so we use HTML parser
+        Mode::HTML   => 'html',
+        Mode::XML    => 'html', # Kramdown doesn't have native XML, so we use HTML parser
         Mode::MARKUP => 'GFM'
       }.freeze
 
@@ -126,12 +126,12 @@ module Lich
       #   text is returned unchanged
       def self.strip(text, mode)
         return "" if text.nil? || text.empty?
-        
+
         # Normalize mode to symbol for compatibility
         mode = mode.to_sym if mode.is_a?(String)
-        
+
         unless Mode.valid?(mode)
-          raise ArgumentError, 
+          raise ArgumentError,
                 "Invalid mode: #{mode}. Use one of: #{Mode.list}"
         end
 
@@ -139,7 +139,7 @@ module Lich
       rescue Kramdown::Error, ArgumentError => e
         # If it's an ArgumentError about the mode, re-raise it
         raise if e.is_a?(ArgumentError) && e.message.include?("Invalid mode")
-        
+
         # Otherwise, log the parsing error and return original text
         respond("TextStripper: Failed to parse #{mode} (#{e.message}). Returning original.")
         Lich.log("TextStripper: Failed to parse #{mode} (#{e.message}). Returning original.")
@@ -176,7 +176,7 @@ module Lich
       def self.strip_with_kramdown(text, mode)
         input_format = MODE_TO_INPUT_FORMAT[mode]
         doc = Kramdown::Document.new(text, input: input_format)
-        
+
         # Kramdown doesn't have a built-in 'to_remove_html_tags' method.
         # Instead, we need to extract plain text from the parsed document.
         # The standard approach is to traverse the element tree and extract text.
@@ -202,7 +202,7 @@ module Lich
       # @api private
       def self.extract_text(element)
         return '' if element.nil?
-        
+
         case element.type
         when :text
           element.value
