@@ -6,7 +6,8 @@ module Lich
     #
     # This module provides methods to remove various types of formatting
     # from text strings, including HTML tags, XML tags, and Markdown markup.
-    # It uses the Kramdown library for parsing and processing.
+    # It uses the Kramdown library for HTML and Markdown parsing, and REXML
+    # for proper XML parsing.
     #
     # @example Basic usage
     #   TextStripper.strip("<p>Hello</p>", TextStripper::Mode::HTML)
@@ -77,10 +78,10 @@ module Lich
       # Map of modes to their corresponding Kramdown input formats
       #
       # @return [Hash<Symbol, String>] Mapping of modes to Kramdown input types
+      # @note XML mode does not use Kramdown; it uses REXML instead
       # @api private
       MODE_TO_INPUT_FORMAT = {
         Mode::HTML   => 'html',
-        Mode::XML    => 'html', # Kramdown doesn't have native XML, so we use HTML parser
         Mode::MARKUP => 'GFM'
       }.freeze
 
@@ -92,9 +93,9 @@ module Lich
       #
       # @param text [String] The text to process
       # @param mode [Symbol, Mode constant] The stripping mode to use. Valid options are:
-      #   * `Mode::HTML` or `:html` - Strip HTML tags
-      #   * `Mode::XML` or `:xml` - Strip XML tags
-      #   * `Mode::MARKUP` or `:markup` - Strip Markdown formatting (GitHub Flavored Markdown)
+      #   * `Mode::HTML` or `:html` - Strip HTML tags using Kramdown
+      #   * `Mode::XML` or `:xml` - Strip XML tags using REXML
+      #   * `Mode::MARKUP` or `:markup` - Strip Markdown formatting (GitHub Flavored Markdown) using Kramdown
       #
       # @return [String] The stripped text with formatting removed
       # @return [String] Empty string if input text is nil or empty
@@ -114,6 +115,10 @@ module Lich
       #   TextStripper.strip("<root><item>data</item></root>", Mode::XML)
       #   # => "data"
       #
+      # @example Stripping XML with namespaces
+      #   TextStripper.strip("<root xmlns='http://example.com'><item>data</item></root>", Mode::XML)
+      #   # => "data"
+      #
       # @example Stripping Markdown
       #   TextStripper.strip("**bold** and *italic*", Mode::MARKUP)
       #   # => "bold and italic"
@@ -122,7 +127,7 @@ module Lich
       #   TextStripper.strip("text", :invalid)
       #   # raises ArgumentError: Invalid mode: invalid. Use one of: html, xml, markup
       #
-      # @note If Kramdown parsing fails, a warning is issued and the original
+      # @note If Kramdown or REXML parsing fails, a warning is issued and the original
       #   text is returned unchanged
       def self.strip(text, mode)
         return "" if text.nil? || text.empty?
@@ -130,9 +135,19 @@ module Lich
         # Validate mode before attempting to parse
         validated_mode = validate_mode(mode)
 
-        strip_with_kramdown(text, validated_mode)
+        # Route to appropriate parsing method based on mode
+        case validated_mode
+        when Mode::XML
+          strip_xml_with_rexml(text)
+        else
+          strip_with_kramdown(text, validated_mode)
+        end
       rescue Kramdown::Error => e
-        # Handle Kramdown parsing errors
+        # Handle Kramdown parsing errors (HTML/MARKUP modes)
+        log_error("Failed to parse #{validated_mode}", e)
+        text
+      rescue REXML::ParseException => e
+        # Handle REXML parsing errors (XML mode)
         log_error("Failed to parse #{validated_mode}", e)
         text
       rescue StandardError => e
@@ -180,8 +195,8 @@ module Lich
       # Strip tags using Kramdown based on the input format
       #
       # This is a shared helper method that handles the actual parsing and
-      # tag removal for all modes. It converts the parsed document to plain
-      # text using Kramdown's standard conversion methods.
+      # tag removal for HTML and MARKUP modes. It converts the parsed document
+      # to plain text using Kramdown's standard conversion methods.
       #
       # @param text [String] The text to process
       # @param mode [Symbol] The stripping mode, which determines the input format
@@ -194,7 +209,7 @@ module Lich
       #   2. Convert internal representation to plain text
       #   3. Strip leading/trailing whitespace
       #
-      # @note For HTML/XML modes, Kramdown's HTML parser extracts text content
+      # @note For HTML mode, Kramdown's HTML parser extracts text content
       #   while preserving text nodes and ignoring markup. For markup mode,
       #   the GFM parser processes Markdown syntax and then extracts plain text.
       #
@@ -203,10 +218,72 @@ module Lich
         input_format = MODE_TO_INPUT_FORMAT[mode]
         doc = Kramdown::Document.new(text, input: input_format)
 
-        # Kramdown doesn't have a built-in 'to_remove_html_tags' method.
-        # Instead, we need to extract plain text from the parsed document.
-        # The standard approach is to traverse the element tree and extract text.
+        # Extract plain text from the parsed document by traversing the element tree
         extract_text(doc.root).strip
+      end
+
+      # Strip XML tags using REXML and return plain text
+      #
+      # This method uses REXML to properly parse XML content and extract all
+      # text nodes. Unlike the HTML parser, REXML correctly handles XML-specific
+      # features like namespaces, CDATA sections, and processing instructions.
+      #
+      # @param text [String] The XML text to process
+      #
+      # @return [String] Plain text with XML tags removed and whitespace trimmed
+      #
+      # @note This method handles:
+      #   * XML namespaces
+      #   * CDATA sections (content is preserved as text)
+      #   * Nested elements
+      #   * Mixed content (text and elements)
+      #
+      # @api private
+      def self.strip_xml_with_rexml(text)
+        # Parse the XML document
+        doc = REXML::Document.new(text)
+
+        # Extract all text content from the document
+        extract_xml_text(doc.root).strip
+      end
+
+      # Extract plain text from a REXML element tree
+      #
+      # Recursively traverses the REXML element tree and extracts all
+      # text content, including CDATA sections.
+      #
+      # @param element [REXML::Element] The root element to extract text from
+      #
+      # @return [String] The extracted plain text
+      #
+      # @note This method processes all child nodes including:
+      #   * Text nodes
+      #   * CDATA sections
+      #   * Nested elements (recursively)
+      #
+      # @api private
+      def self.extract_xml_text(element)
+        return '' if element.nil?
+
+        text_parts = []
+
+        # Iterate through all child nodes
+        element.each do |node|
+          case node
+          when REXML::Text
+            # Regular text node
+            text_parts << node.value
+          when REXML::CData
+            # CDATA section - extract the content
+            text_parts << node.value
+          when REXML::Element
+            # Nested element - recursively extract text
+            text_parts << extract_xml_text(node)
+          end
+          # Ignore other node types (comments, processing instructions, etc.)
+        end
+
+        text_parts.join
       end
 
       # Extract plain text from a Kramdown element tree
@@ -314,6 +391,7 @@ module Lich
       #   # => "Hello World"
       #
       # @note This method is called internally by {#strip} when mode is Mode::HTML
+      # @note Uses Kramdown for HTML parsing
       # @see #strip
       # @api private
       def self.strip_html(text)
@@ -322,10 +400,10 @@ module Lich
 
       # Strip XML tags and return plain text
       #
-      # Removes XML tags from the input text. Since Kramdown doesn't have
-      # native XML parsing, this method treats the input as HTML for parsing
-      # purposes, which works for basic XML stripping. This is a convenience
-      # wrapper around {#strip_with_kramdown}.
+      # Removes XML tags from the input text using REXML for proper XML parsing.
+      # This method correctly handles XML-specific features like namespaces,
+      # CDATA sections, and processing instructions. This is a convenience
+      # wrapper around {#strip_xml_with_rexml}.
       #
       # @param text [String] The XML text to process
       #
@@ -339,13 +417,21 @@ module Lich
       #   TextStripper.strip_xml("<root><item>data</item></root>")
       #   # => "data"
       #
-      # @note This method treats XML as HTML for parsing purposes, which may
-      #   not handle all XML-specific features correctly (e.g., CDATA, namespaces)
+      # @example XML with CDATA
+      #   TextStripper.strip_xml("<root><![CDATA[Special <characters>]]></root>")
+      #   # => "Special <characters>"
+      #
+      # @example XML with namespaces
+      #   TextStripper.strip_xml("<root xmlns='http://example.com'><item>data</item></root>")
+      #   # => "data"
+      #
+      # @note This method uses REXML for proper XML parsing, which correctly
+      #   handles XML-specific features (CDATA, namespaces, etc.)
       # @note This method is called internally by {#strip} when mode is Mode::XML
       # @see #strip
       # @api private
       def self.strip_xml(text)
-        strip_with_kramdown(text, Mode::XML)
+        strip_xml_with_rexml(text)
       end
 
       # Strip Markdown formatting and return plain text
@@ -371,6 +457,7 @@ module Lich
       #   # => "Heading"
       #
       # @note Uses GitHub Flavored Markdown (GFM) as the input format
+      # @note Uses Kramdown for Markdown parsing
       # @note This method is called internally by {#strip} when mode is Mode::MARKUP
       # @see #strip
       # @api private
