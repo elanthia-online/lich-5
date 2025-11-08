@@ -1,4 +1,4 @@
-Lich::Util.install_gem_requirements({'kramdown' => true})
+Lich::Util.install_gem_requirements({ 'kramdown' => true })
 
 module Lich
   module Util
