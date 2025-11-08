@@ -172,7 +172,7 @@ module Lich
                 elsif entry.include? 'assets'
                   @holder = value
                 elsif entry.include? 'body'
-                  @new_features = value.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!-- .* -->/, '')
+                  @new_features = value.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
                 end
               }
               release_asset = @holder && @holder.find { |x| x['name'] =~ /\b#{ASSET_TARBALL_NAME}\b/ }
