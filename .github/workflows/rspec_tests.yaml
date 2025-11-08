@@ -66,7 +66,7 @@ jobs:
     steps:
       - name: Classify changed files (preflight)
         id: preflight
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v6.1.0
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             const owner = context.repo.owner;
@@ -127,7 +127,7 @@ jobs:
             }
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         if: steps.preflight.outputs.should_test == 'true'
-      - uses: ruby/setup-ruby@0481980f17b760ef6bca5e8c55809102a0af1e5a # v1.263.0
+      - uses: ruby/setup-ruby@d5126b9b3579e429dd52e51e68624dda2e05be25 # v1.267.0
         if: steps.preflight.outputs.should_test == 'true'
         with:
           ruby-version: ${{ matrix.ruby }}
