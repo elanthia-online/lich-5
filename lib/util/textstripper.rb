@@ -27,7 +27,7 @@ module Lich
       # Enumeration of stripping modes
       #
       # Provides a type-safe way to specify which type of content stripping
-      # to perform. Each mode is represented as a frozen string constant.
+      # to perform. Each mode is represented as a symbol constant.
       #
       # @example Using mode constants
       #   TextStripper.strip(text, TextStripper::Mode::HTML)
@@ -127,28 +127,54 @@ module Lich
       def self.strip(text, mode)
         return "" if text.nil? || text.empty?
 
-        # Normalize mode to symbol for compatibility
-        mode = mode.to_sym if mode.is_a?(String)
+        # Validate mode before attempting to parse
+        validated_mode = validate_mode(mode)
 
-        unless Mode.valid?(mode)
+        strip_with_kramdown(text, validated_mode)
+      rescue Kramdown::Error => e
+        # Handle Kramdown parsing errors
+        log_error("Failed to parse #{validated_mode}", e)
+        text
+      rescue StandardError => e
+        # Catch any other unexpected errors during parsing
+        log_error("Unexpected error during #{validated_mode} parsing", e)
+        text
+      end
+
+      # Validate and normalize a mode value
+      #
+      # @param mode [Symbol, String] The mode to validate
+      #
+      # @return [Symbol] The validated and normalized mode
+      #
+      # @raise [ArgumentError] if mode is not valid
+      #
+      # @api private
+      def self.validate_mode(mode)
+        # Normalize mode to symbol for compatibility
+        normalized_mode = mode.to_sym if mode.is_a?(String)
+        normalized_mode ||= mode
+
+        unless Mode.valid?(normalized_mode)
           raise ArgumentError,
                 "Invalid mode: #{mode}. Use one of: #{Mode.list}"
         end
 
-        strip_with_kramdown(text, mode)
-      rescue Kramdown::Error, ArgumentError => e
-        # If it's an ArgumentError about the mode, re-raise it
-        raise if e.is_a?(ArgumentError) && e.message.include?("Invalid mode")
+        normalized_mode
+      end
 
-        # Otherwise, log the parsing error and return original text
-        respond("TextStripper: Failed to parse #{mode} (#{e.message}). Returning original.")
-        Lich.log("TextStripper: Failed to parse #{mode} (#{e.message}). Returning original.")
-        text
-      rescue StandardError => e
-        # Catch any other unexpected errors during parsing
-        respond("TextStripper: Unexpected error during #{mode} parsing (#{e.class}: #{e.message}). Returning original.")
-        Lich.log("TextStripper: Unexpected error during #{mode} parsing (#{e.class}: #{e.message}). Returning original.")
-        text
+      # Log an error message to both the response output and Lich log
+      #
+      # @param message [String] The base error message
+      # @param exception [Exception] The exception that occurred
+      #
+      # @return [void]
+      #
+      # @api private
+      def self.log_error(message, exception)
+        full_message = "TextStripper: #{message} (#{exception.class}: #{exception.message}). Returning original."
+        respond(full_message)
+        Lich.log(full_message)
       end
 
       # Strip tags using Kramdown based on the input format
@@ -195,8 +221,10 @@ module Lich
       # @note This method handles different element types:
       #   * `:text` - Returns the text value directly
       #   * `:entity` - Converts HTML entities to characters
+      #   * `:smart_quote` - Converts smart quotes to regular quotes
       #   * `:codeblock`, `:codespan` - Returns code content as plain text
       #   * `:br` - Converts line breaks to newlines
+      #   * `:blank` - Converts blank lines to newlines
       #   * All other elements - Recursively processes children
       #
       # @api private
