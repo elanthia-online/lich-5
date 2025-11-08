@@ -1,0 +1,5 @@
+require File.join(LIB_DIR, 'gemstone', 'infomon', 'activespell.rb')
+<<<<<<< HEAD
+require File.join(LIB_DIR, 'gemstone', 'new_feature_from_pr6.rb')
+=======
+require File.join(LIB_DIR, 'gemstone', 'other_feature_from_pr12.rb')
