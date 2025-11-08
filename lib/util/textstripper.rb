@@ -31,7 +31,7 @@ module Lich
       # @api private
       MODE_TO_INPUT_FORMAT = {
         html: 'html',
-        xml: 'html',  # Kramdown doesn't have native XML, so we use HTML parser
+        xml: 'html', # Kramdown doesn't have native XML, so we use HTML parser
         markup: 'GFM'
       }.freeze
 
@@ -73,9 +73,9 @@ module Lich
       #   text is returned unchanged
       def self.strip(text, mode)
         return "" if text.nil? || text.empty?
-        
+
         unless ALLOWED_MODES.include?(mode)
-          raise ArgumentError, 
+          raise ArgumentError,
                 "Invalid mode: #{mode}. Use one of: #{ALLOWED_MODES.join(', ')}"
         end
 
@@ -83,7 +83,7 @@ module Lich
       rescue Kramdown::Error, ArgumentError => e
         # If it's an ArgumentError about the mode, re-raise it
         raise if e.is_a?(ArgumentError) && e.message.include?("Invalid mode")
-        
+
         # Otherwise, log the parsing error and return original text
         warn "TextStripper: Failed to parse #{mode} (#{e.message}). Returning original."
         text
