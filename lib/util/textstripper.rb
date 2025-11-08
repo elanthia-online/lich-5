@@ -92,7 +92,7 @@ module Lich
       # formatting based on the mode parameter.
       #
       # @param text [String] The text to process
-      # @param mode [Symbol, Mode constant] The stripping mode to use. Valid options are:
+      # @param mode [Symbol, String, Mode constant] The stripping mode to use. Valid options are:
       #   * `Mode::HTML` or `:html` - Strip HTML tags using Kramdown
       #   * `Mode::XML` or `:xml` - Strip XML tags using REXML
       #   * `Mode::MARKUP` or `:markup` - Strip Markdown formatting (GitHub Flavored Markdown) using Kramdown
@@ -101,7 +101,7 @@ module Lich
       # @return [String] Empty string if input text is nil or empty
       # @return [String] Original text if parsing fails
       #
-      # @raise [ArgumentError] if mode is not one of the valid modes
+      # @raise [ArgumentError] if mode is not one of the valid modes or is not a Symbol/String
       #
       # @example Stripping HTML with constant
       #   TextStripper.strip("<p>Hello <strong>World</strong></p>", Mode::HTML)
@@ -132,7 +132,8 @@ module Lich
       def self.strip(text, mode)
         return "" if text.nil? || text.empty?
 
-        # Validate mode before attempting to parse
+        # Validate mode BEFORE entering the rescue block
+        # This allows ArgumentError to propagate to the caller as documented
         validated_mode = validate_mode(mode)
 
         # Route to appropriate parsing method based on mode
@@ -158,18 +159,24 @@ module Lich
 
       # Validate and normalize a mode value
       #
-      # @param mode [Symbol, String] The mode to validate
+      # @param mode [Symbol, String, Object] The mode to validate
       #
-      # @return [Symbol] The validated and normalized mode
+      # @return [Symbol] The validated and normalized mode as a symbol
       #
-      # @raise [ArgumentError] if mode is not valid
+      # @raise [ArgumentError] if mode is not a Symbol or String, or is not a valid mode
       #
       # @api private
       def self.validate_mode(mode)
-        # Normalize mode to symbol for compatibility
-        normalized_mode = mode.to_sym if mode.is_a?(String)
-        normalized_mode ||= mode
+        # Ensure mode is a Symbol or String
+        unless mode.is_a?(Symbol) || mode.is_a?(String)
+          raise ArgumentError,
+                "Mode must be a Symbol or String, got #{mode.class}"
+        end
 
+        # Normalize to symbol
+        normalized_mode = mode.to_sym
+
+        # Validate against allowed modes
         unless Mode.valid?(normalized_mode)
           raise ArgumentError,
                 "Invalid mode: #{mode}. Use one of: #{Mode.list}"
