@@ -322,7 +322,7 @@ module Lich
 
         @update_to = latest['tag_name'].to_s.sub('v', '')
         @holder = latest['assets']
-        @new_features = latest['body'].to_s.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!-- .* -->/, '')
+        @new_features = latest['body'].to_s.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
         release_asset = @holder && @holder.find { |x| x['name'] =~ /\b#{ASSET_TARBALL_NAME}\b/ }
         @zipfile = release_asset.fetch('browser_download_url')
       end
