@@ -19,7 +19,7 @@ module Lich
       @@vars   = Hash.new
       @@md5    = nil
       @@loaded = false
-      
+
       # Proc that loads variables from database on first access
       @@load = proc {
         Lich.db_mutex.synchronize {
@@ -33,7 +33,7 @@ module Lich
               sleep 0.1
               retry
             end
-            
+
             if h
               begin
                 hash = Marshal.load(h)
@@ -49,7 +49,7 @@ module Lich
         }
         nil
       }
-      
+
       # Proc that saves variables to database if modified
       @@save = proc {
         Lich.db_mutex.synchronize {
@@ -72,7 +72,7 @@ module Lich
         }
         nil
       }
-      
+
       # Background thread that auto-saves variables every 5 minutes
       Thread.new {
         loop {
@@ -85,7 +85,7 @@ module Lich
           end
         }
       }
-      
+
       # Retrieves a variable value by name
       #
       # @param name [String, Symbol] the variable name
@@ -98,7 +98,7 @@ module Lich
         @@load.call unless @@loaded
         @@vars[name]
       end
-      
+
       # Sets a variable value by name
       #
       # @param name [String, Symbol] the variable name
@@ -117,7 +117,7 @@ module Lich
           @@vars[name] = val
         end
       end
-      
+
       # Returns a duplicate of all variables as a Hash
       #
       # @return [Hash] a copy of all stored variables
@@ -130,7 +130,7 @@ module Lich
         @@load.call unless @@loaded
         @@vars.dup
       end
-      
+
       # Immediately saves all variables to the database
       #
       # @return [nil]
@@ -142,7 +142,7 @@ module Lich
       def Vars.save
         @@save.call
       end
-      
+
       # Handles dynamic method calls for variable access
       #
       # Supports both getter and setter syntax:
@@ -160,7 +160,7 @@ module Lich
       #
       def Vars.method_missing(method_name, *args)
         @@load.call unless @@loaded
-    
+
         # Handle []= called through method_missing
         if method_name == :[]= && args.length == 2
           if args[1].nil?
@@ -184,14 +184,14 @@ module Lich
           @@vars[method_name.to_s]
         end
       end
-      
+
       # Declares that method_missing can respond to any method
       #
       # @param method_name [Symbol] the method name to check
       # @param include_private [Boolean] whether to include private methods
       # @return [Boolean] always returns true
       #
-      def Vars.respond_to_missing?(method_name, include_private = false)
+      def Vars.respond_to_missing?(_method_name, _include_private = false)
         true
       end
     end
