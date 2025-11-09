@@ -204,7 +204,7 @@ module Lich
           @@vars[normalize_key(args[0])]
         # Handle setter methods (e.g., foo=)
         elsif method_name.to_s.end_with?('=')
-          key = method_name.to_s.chop
+          key = normalize_key(method_name.to_s.chop)
           if args[0].nil?
             @@vars.delete(key)
           else
@@ -212,7 +212,7 @@ module Lich
           end
         # Handle getter methods
         else
-          @@vars[method_name.to_s]
+          @@vars[normalize_key(method_name.to_s)]
         end
       end
 
