@@ -226,7 +226,7 @@ module Lich
       # @param include_private [Boolean] whether to include private methods
       # @return [Boolean] true if the method name is a valid variable name
       #
-      def Vars.respond_to_missing?(method_name, include_private = false)
+      def Vars.respond_to_missing?(method_name, _include_private = false)
         method_str = method_name.to_s
 
         # Allow bracket operators
