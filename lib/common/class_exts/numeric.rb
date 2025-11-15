@@ -10,6 +10,10 @@ class Numeric
     self.to_s.reverse.scan(/(?:\d*\.)?\d{1,3}-?/).join(',').reverse
   end
 
+  def ago
+    Time.now - self
+  end
+
   def seconds
     return self
   end
