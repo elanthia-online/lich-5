@@ -50,6 +50,21 @@ module Lich
       def self.deaths_sting
         Infomon.get("experience.deaths_sting")
       end
+
+      def self.updated_at
+        timestamp = Infomon.get_updated_at("experience.total_experience")
+        timestamp ? Time.at(timestamp) : nil
+      end
+
+      def self.stale?(threshold: 24.hours)
+        return true unless updated_at
+        updated_at < threshold.ago
+      end
+
+      def self.recently_updated?(threshold: 5.minutes)
+        return false unless updated_at
+        updated_at >= threshold.ago
+      end
     end
   end
 end
