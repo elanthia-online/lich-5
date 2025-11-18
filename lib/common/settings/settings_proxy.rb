@@ -227,6 +227,19 @@ module Lich
         :sort, :sort_by, :uniq, :compact, :flatten, :slice, :take, :drop, :values
       ].freeze
 
+      # Subset of non-destructive methods that are commonly used with blocks that may
+      # mutate nested container elements (e.g., Hash entries inside an Array). When
+      # any of these methods are invoked with a block, we conservatively persist the
+      # root container once after the call completes. This avoids the "deep mutation
+      # with no save" foot-gun without issuing a database write per element.
+      #
+      # NOTE: These methods remain non-destructive in the sense that they do not
+      # change the container's shape; we simply assume the block might have mutated
+      # existing elements.
+      BLOCK_POSSIBLY_MUTATING_METHODS = [
+        :each, :each_with_index, :each_with_object, :find, :detect, :select, :reject, :find_all, :filter, :inject, :reduce
+      ].freeze
+
       def [](key)
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "GET scope: #{@scope.inspect}, path: #{@path.inspect}, key: #{key.inspect}, target_object_id: #{@target.object_id}" })
         value = @target[key]
@@ -261,8 +274,20 @@ module Lich
             target_dup = @target.dup
             unwrapped_args = args.map { |arg| arg.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(arg) : arg } # Corrected
             result = target_dup.send(method, *unwrapped_args, &block)
+
+            # If this non-destructive call was invoked with a block for an iterator-like
+            # method that may mutate nested elements (e.g., hashes inside an Array),
+            # conservatively persist the root container once after it completes. This
+            # avoids the "deep mutation with no save" foot-gun without hammering the DB
+            # once per element.
+            if block && BLOCK_POSSIBLY_MUTATING_METHODS.include?(method)
+              @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   post-iter save for #{method} with block" })
+              @settings_module.save_proxy_changes(self)
+            end
+
             # Minimal change: pass method name so we can tag views as detached and keep path
             return handle_non_destructive_result(method, result)
+
           else
             @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   destructive method: #{method}" })
 
@@ -289,11 +314,32 @@ module Lich
       end
 
       # Minimal change: keep path (not []), and tag view proxies as detached.
+      #
+      # Additionally (2025-11): when operating on an Array container and a selector such
+      # as #find or #detect returns a single container element, refine the proxy path to
+      # include that element's index. This ensures that subsequent writes through the
+      # element proxy update only that element (e.g., jars[i]), instead of replacing the
+      # entire collection at the parent key (e.g., :jars).
       def handle_non_destructive_result(method, result)
+        # Start from the current proxy path. For most methods, the path is unchanged.
+        new_path = @path.dup
+
+        # Refine path only for Array containers returning a single container element.
+        # Example: CharSettings[:jars].find { |j| j[:gem] == "foo" } should return a
+        # proxy whose path is [:jars, index], so that jar_hash[:count] += 1 updates
+        # that element rather than clobbering the entire :jars collection.
+        if @target.is_a?(Array) && @settings_module.container?(result)
+          case method
+          when :find, :detect
+            element_index = @target.index(result)
+            new_path << element_index if element_index
+          end
+        end
+
         @settings_module.reset_path_and_return(
           if @settings_module.container?(result)
             is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
-            SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view)
+            SettingsProxy.new(@settings_module, @scope, new_path, result, detached: is_view)
           else
             result
           end
