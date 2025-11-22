@@ -841,7 +841,6 @@ module Lich
         end
       end
 
-      # Define this outside the method, at the class level
       class MinHeap
         def initialize
           @heap = []
@@ -867,28 +866,31 @@ module Lich
         private
 
         def bubble_up(index)
-          return if index == 0
-          parent_index = (index - 1) / 2
-          if @heap[index][0] < @heap[parent_index][0]
+          while index > 0
+            parent_index = (index - 1) / 2
+            break if @heap[index][0] >= @heap[parent_index][0]
+
             swap(index, parent_index)
-            bubble_up(parent_index)
+            index = parent_index
           end
         end
 
         def bubble_down(index)
-          left_child = 2 * index + 1
-          right_child = 2 * index + 2
-          return if left_child >= @heap.size
+          loop do
+            left_child = 2 * index + 1
+            right_child = 2 * index + 2
+            break if left_child >= @heap.size
 
-          min_child = if right_child >= @heap.size || @heap[left_child][0] < @heap[right_child][0]
-                        left_child
-                      else
-                        right_child
-                      end
+            min_child = if right_child >= @heap.size || @heap[left_child][0] < @heap[right_child][0]
+                          left_child
+                        else
+                          right_child
+                        end
 
-          if @heap[min_child][0] < @heap[index][0]
+            break if @heap[index][0] <= @heap[min_child][0]
+
             swap(index, min_child)
-            bubble_down(min_child)
+            index = min_child
           end
         end
 
