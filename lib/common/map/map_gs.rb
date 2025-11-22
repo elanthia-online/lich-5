@@ -899,7 +899,6 @@ module Lich
         end
       end
 
-      # Now your dijkstra method is much cleaner
       def dijkstra(destination = nil)
         begin
           Map.load unless @@loaded
