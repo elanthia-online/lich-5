@@ -706,24 +706,74 @@ module Lich
         end
       end
 
+      # Define this outside the method, at the class level
+      class MinHeap
+        def initialize
+          @heap = []
+        end
+
+        def push(priority, value)
+          @heap << [priority, value]
+          bubble_up(@heap.size - 1)
+        end
+
+        def pop
+          return nil if @heap.empty?
+          swap(0, @heap.size - 1)
+          min = @heap.pop
+          bubble_down(0) unless @heap.empty?
+          min
+        end
+
+        def empty?
+          @heap.empty?
+        end
+
+        private
+
+        def bubble_up(index)
+          return if index == 0
+          parent_index = (index - 1) / 2
+          if @heap[index][0] < @heap[parent_index][0]
+            swap(index, parent_index)
+            bubble_up(parent_index)
+          end
+        end
+
+        def bubble_down(index)
+          left_child = 2 * index + 1
+          right_child = 2 * index + 2
+          return if left_child >= @heap.size
+
+          min_child = if right_child >= @heap.size || @heap[left_child][0] < @heap[right_child][0]
+                        left_child
+                      else
+                        right_child
+                      end
+
+          if @heap[min_child][0] < @heap[index][0]
+            swap(index, min_child)
+            bubble_down(min_child)
+          end
+        end
+
+        def swap(i, j)
+          @heap[i], @heap[j] = @heap[j], @heap[i]
+        end
+      end
+
+      # Now your dijkstra method is much cleaner
       def dijkstra(destination = nil)
         begin
           Map.load unless @@loaded
           source = @id
           visited = {}
-          shortest_distances = {}
-          previous = {}
+          shortest_distances_hash = {}
+          previous_hash = {}
 
-          # Priority queue using a binary heap (min-heap)
-          # Elements are [distance, room_id]
-          pq = [[0, source]]
-          shortest_distances[source] = 0
-
-          # Helper to maintain heap property
-          pq_push = proc { |distance, room_id|
-            pq << [distance, room_id]
-            pq.sort_by! { |d, _| d } # Ruby doesn't have built-in binary heap, so we sort
-          }
+          pq = MinHeap.new
+          pq.push(0, source)
+          shortest_distances_hash[source] = 0
 
           # Early termination check
           check_destination = proc { |v, dist|
@@ -738,22 +788,17 @@ module Lich
           }
 
           until pq.empty?
-            current_dist, v = pq.shift
+            current_dist, v = pq.pop
 
-            # Skip if we've already processed this node with a shorter distance
             next if visited[v]
-
-            # Check if we've reached our destination
             break if check_destination.call(v, current_dist)
 
             visited[v] = true
 
-            # Process all adjacent rooms
             @@list[v].wayto.keys.each do |adj_room|
               adj_room_i = adj_room.to_i
               next if visited[adj_room_i]
 
-              # Calculate edge weight
               edge_weight = if @@list[v].timeto[adj_room].is_a?(StringProc)
                               @@list[v].timeto[adj_room].call
                             else
@@ -764,14 +809,21 @@ module Lich
 
               new_distance = current_dist + edge_weight
 
-              # Relax the edge if we found a shorter path
-              if !shortest_distances[adj_room_i] || shortest_distances[adj_room_i] > new_distance
-                shortest_distances[adj_room_i] = new_distance
-                previous[adj_room_i] = v
-                pq_push.call(new_distance, adj_room_i)
+              if !shortest_distances_hash[adj_room_i] || shortest_distances_hash[adj_room_i] > new_distance
+                shortest_distances_hash[adj_room_i] = new_distance
+                previous_hash[adj_room_i] = v
+                pq.push(new_distance, adj_room_i)
               end
             end
           end
+
+          # Convert hashes back to arrays for backward compatibility
+          max_room_id = [previous_hash.keys.max, shortest_distances_hash.keys.max].compact.max || 0
+          previous = Array.new(max_room_id + 1)
+          shortest_distances = Array.new(max_room_id + 1)
+
+          previous_hash.each { |k, v| previous[k] = v }
+          shortest_distances_hash.each { |k, v| shortest_distances[k] = v }
 
           return previous, shortest_distances
         rescue => e
