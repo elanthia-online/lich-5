@@ -19,6 +19,8 @@ gem "os", ">= 1.1"
 
 gem "ostruct", ">= 0.6.1"
 
+gem "rexml", ">= 3.3.1"
+
 gem "sequel", ">= 5.66"
 
 gem "sqlite3", ">= 1.6"
