@@ -37,8 +37,8 @@ module Lich
           path = paths.find { |p| File.exist?(p) }
 
           unless path
-            puts "--- error: Template file not found for: #{template_name}"
-            @missing_templates << key
+            # puts "--- error: Template file not found for: #{template_name}"
+            # @missing_templates << key
             return nil
           end
 
