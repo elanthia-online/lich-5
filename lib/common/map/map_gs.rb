@@ -27,10 +27,10 @@ module Lich
       end
 
       def Map.current_room_id; return @@current_room_id; end
-      def Map.current_room_id=(id); return @@current_room_id = id; end
+      def Map.current_room_id=(id); @@current_room_id = id; end
       def Map.loaded; return @@loaded; end
       def Map.previous_room_id; return @@previous_room_id; end
-      def Map.previous_room_id=(id); return @@previous_room_id = id; end
+      def Map.previous_room_id=(id); @@previous_room_id = id; end
       def fuzzy_room_id; return @@current_room_id; end
       def outside?; return @paths.last =~ /^Obvious paths:/ ? true : false; end
       def to_i; return @id; end
@@ -845,98 +845,73 @@ module Lich
         begin
           Map.load unless @@loaded
           source = @id
-          visited = Array.new
-          shortest_distances = Array.new
-          previous = Array.new
-          pq = [source]
-          pq_push = proc { |val|
-            for i in 0...pq.size
-              if shortest_distances[val] <= shortest_distances[pq[i]]
-                pq.insert(i, val)
-                break
+          visited = {}
+          shortest_distances = {}
+          previous = {}
+
+          # Priority queue using a binary heap (min-heap)
+          # Elements are [distance, room_id]
+          pq = [[0, source]]
+          shortest_distances[source] = 0
+
+          # Helper to maintain heap property
+          pq_push = proc { |distance, room_id|
+            pq << [distance, room_id]
+            pq.sort_by! { |d, _| d } # Ruby doesn't have built-in binary heap, so we sort
+          }
+
+          # Early termination check
+          check_destination = proc { |v, dist|
+            case destination
+            when Integer
+              v == destination
+            when Array
+              destination.include?(v) && dist < 20
+            else
+              false
+            end
+          }
+
+          until pq.empty?
+            current_dist, v = pq.shift
+
+            # Skip if we've already processed this node with a shorter distance
+            next if visited[v]
+
+            # Check if we've reached our destination
+            break if check_destination.call(v, current_dist)
+
+            visited[v] = true
+
+            # Process all adjacent rooms
+            @@list[v].wayto.keys.each do |adj_room|
+              adj_room_i = adj_room.to_i
+              next if visited[adj_room_i]
+
+              # Calculate edge weight
+              edge_weight = if @@list[v].timeto[adj_room].is_a?(StringProc)
+                              @@list[v].timeto[adj_room].call
+                            else
+                              @@list[v].timeto[adj_room]
+                            end
+
+              next unless edge_weight
+
+              new_distance = current_dist + edge_weight
+
+              # Relax the edge if we found a shorter path
+              if !shortest_distances[adj_room_i] || shortest_distances[adj_room_i] > new_distance
+                shortest_distances[adj_room_i] = new_distance
+                previous[adj_room_i] = v
+                pq_push.call(new_distance, adj_room_i)
               end
             end
-            pq.push(val) if i.nil? or (i == pq.size - 1)
-          }
-          visited[source] = true
-          shortest_distances[source] = 0
-          if destination.nil?
-            until pq.size == 0
-              v = pq.shift
-              visited[v] = true
-              @@list[v].wayto.keys.each { |adj_room|
-                adj_room_i = adj_room.to_i
-                unless visited[adj_room_i]
-                  if @@list[v].timeto[adj_room].is_a?(StringProc)
-                    nd = @@list[v].timeto[adj_room].call
-                  else
-                    nd = @@list[v].timeto[adj_room]
-                  end
-                  if nd
-                    nd += shortest_distances[v]
-                    if shortest_distances[adj_room_i].nil? or (shortest_distances[adj_room_i] > nd)
-                      shortest_distances[adj_room_i] = nd
-                      previous[adj_room_i] = v
-                      pq_push.call(adj_room_i)
-                    end
-                  end
-                end
-              }
-            end
-          elsif destination.is_a?(Integer)
-            until pq.size == 0
-              v = pq.shift
-              break if v == destination
-              visited[v] = true
-              @@list[v].wayto.keys.each { |adj_room|
-                adj_room_i = adj_room.to_i
-                unless visited[adj_room_i]
-                  if @@list[v].timeto[adj_room].is_a?(StringProc)
-                    nd = @@list[v].timeto[adj_room].call
-                  else
-                    nd = @@list[v].timeto[adj_room]
-                  end
-                  if nd
-                    nd += shortest_distances[v]
-                    if shortest_distances[adj_room_i].nil? or (shortest_distances[adj_room_i] > nd)
-                      shortest_distances[adj_room_i] = nd
-                      previous[adj_room_i] = v
-                      pq_push.call(adj_room_i)
-                    end
-                  end
-                end
-              }
-            end
-          elsif destination.is_a?(Array)
-            dest_list = destination.collect { |dest| dest.to_i }
-            until pq.size == 0
-              v = pq.shift
-              break if dest_list.include?(v) and (shortest_distances[v] < 20)
-              visited[v] = true
-              @@list[v].wayto.keys.each { |adj_room|
-                adj_room_i = adj_room.to_i
-                unless visited[adj_room_i]
-                  if @@list[v].timeto[adj_room].is_a?(StringProc)
-                    nd = @@list[v].timeto[adj_room].call
-                  else
-                    nd = @@list[v].timeto[adj_room]
-                  end
-                  if nd
-                    nd += shortest_distances[v]
-                    if shortest_distances[adj_room_i].nil? or (shortest_distances[adj_room_i] > nd)
-                      shortest_distances[adj_room_i] = nd
-                      previous[adj_room_i] = v
-                      pq_push.call(adj_room_i)
-                    end
-                  end
-                end
-              }
-            end
           end
+
           return previous, shortest_distances
-        rescue
-          echo "Map.dijkstra: error: #{$!}"
-          respond $!.backtrace
+        rescue => e
+          echo "Map.dijkstra: error: #{e}"
+          respond e.backtrace
           nil
         end
       end
