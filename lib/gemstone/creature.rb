@@ -20,7 +20,7 @@ module Lich
         dreary ethereal flashy flexile flickering flinty frenzied ghastly ghostly gleaming glittering
         glorious glowing grotesque hardy illustrious indistinct keen lanky luminous lustrous muculent
         nebulous oozing pestilent radiant raging ready resolute robust rune-covered shadowy shifting
-        shimmering shining sickly green sinous slimy sparkling spindly spiny stalwart steadfast stout
+        shimmering shining sickly green sinuous slimy sparkling spindly spiny stalwart steadfast stout
         tattoed tenebrous tough twinkling unflinching unyielding wavering wispy
       ]
 
