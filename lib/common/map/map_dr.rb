@@ -822,8 +822,8 @@ module Lich
           previous = Array.new(max_room_id + 1)
           shortest_distances = Array.new(max_room_id + 1)
 
-          previous_hash.each { |k, v| previous[k] = v }
-          shortest_distances_hash.each { |k, v| shortest_distances[k] = v }
+          previous_hash.each { |key, value| previous[key] = value }
+          shortest_distances_hash.each { |key, value| shortest_distances[key] = value }
 
           return previous, shortest_distances
         rescue => e
