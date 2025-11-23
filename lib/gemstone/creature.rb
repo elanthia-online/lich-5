@@ -71,7 +71,7 @@ module Lich
 
           # Check template limit
           if template_count >= @@max_templates
-            puts "--- warning: Template cache limit (#{@@max_templates}) reached, skipping remaining templates" if $creature_debug
+            respond "--- warning: Template cache limit (#{@@max_templates}) reached, skipping remaining templates" if $creature_debug
             break
           end
 
@@ -89,12 +89,12 @@ module Lich
             @@templates[normalized_name] = template
             template_count += 1
           rescue => e
-            puts "--- error loading template #{template_name}: #{e.message}" if $creature_debug
+            respond "--- error loading template #{template_name}: #{e.message}" if $creature_debug
           end
         end
 
         @@loaded = true
-        puts "--- loaded #{template_count} creature templates" if $creature_debug
+        respond "--- loaded #{template_count} creature templates" if $creature_debug
       end
 
       # Clean creature name by removing boon adjectives
@@ -239,9 +239,9 @@ module Lich
         duration ||= STATUS_DURATIONS[status_key]
         if duration
           @status_timestamps[status] = Time.now + duration
-          puts "  +status: #{status} (expires in #{duration}s)" if $creature_debug
+          respond "  +status: #{status} (expires in #{duration}s)" if $creature_debug
         else
-          puts "  +status: #{status} (no auto-expiry)" if $creature_debug
+          respond "  +status: #{status} (no auto-expiry)" if $creature_debug
         end
       end
 
@@ -249,7 +249,7 @@ module Lich
       def remove_status(status)
         @status.delete(status)
         @status_timestamps.delete(status)
-        puts "  -status: #{status}" if $creature_debug
+        respond "  -status: #{status}" if $creature_debug
       end
 
       # Clean up expired status effects
@@ -260,7 +260,7 @@ module Lich
         @status_timestamps.select { |_status, expires_at| expires_at <= now }.keys.each do |expired_status|
           @status.delete(expired_status)
           @status_timestamps.delete(expired_status)
-          puts "  ~status: #{expired_status} (auto-expired)" if $creature_debug
+          respond "  ~status: #{expired_status} (auto-expired)" if $creature_debug
         end
       end
 
@@ -298,21 +298,21 @@ module Lich
 
         @ucs_position = new_tier
         @ucs_updated = Time.now
-        puts "  UCS: position=#{new_tier}" if $creature_debug
+        respond "  UCS: position=#{new_tier}" if $creature_debug
       end
 
       # Set UCS tierup vulnerability
       def set_ucs_tierup(attack_type)
         @ucs_tierup = attack_type
         @ucs_updated = Time.now
-        puts "  UCS: tierup=#{attack_type}" if $creature_debug
+        respond "  UCS: tierup=#{attack_type}" if $creature_debug
       end
 
       # Mark creature as smote (crimson mist applied)
       def smite!
         @ucs_smote = Time.now
         @ucs_updated = Time.now
-        puts "  UCS: smote!" if $creature_debug
+        respond "  UCS: smote!" if $creature_debug
       end
 
       # Check if creature is currently smote
@@ -332,7 +332,7 @@ module Lich
       def clear_smote
         @ucs_smote = nil
         @ucs_updated = Time.now
-        puts "  UCS: smote cleared" if $creature_debug
+        respond "  UCS: smote cleared" if $creature_debug
       end
 
       # Check if UCS data has expired
@@ -489,7 +489,7 @@ module Lich
             # Try 15 minutes, then 10, then 5, then 2, then give up
             [900, 600, 300, 120].each do |age_threshold|
               removed = cleanup_old(age_threshold)
-              puts "--- Auto-cleanup: removed #{removed} old creatures (threshold: #{age_threshold}s)" if removed > 0 && $creature_debug
+              respond "--- Auto-cleanup: removed #{removed} old creatures (threshold: #{age_threshold}s)" if removed > 0 && $creature_debug
               break unless full?
             end
             return nil if full? # Still full after all cleanup attempts
@@ -497,7 +497,7 @@ module Lich
 
           instance = new(id, noun, name)
           @@instances[id.to_i] = instance
-          puts "--- Creature registered: #{name} (#{id})" if $creature_debug
+          respond "--- Creature registered: #{name} (#{id})" if $creature_debug
           instance
         end
 
