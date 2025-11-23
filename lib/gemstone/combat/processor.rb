@@ -52,7 +52,15 @@ module Lich
                   # Fallback to name-based lookup only if no ID available
                   apply_status_to_target(status_result[:status], status_result[:target], nil, status_result[:action])
                 end
-                puts "[Combat] Found status effect: #{status_result}" if Tracker.debug?
+                respond "[Combat] Found status effect: #{status_result}" if Tracker.debug?
+              end
+            end
+
+            # Always check for UCS events on every line
+            if Tracker.settings[:track_ucs]
+              if (ucs_result = Parser.parse_ucs(line))
+                apply_ucs_to_target(ucs_result, current_target)
+                puts "[Combat] Found UCS event: #{ucs_result}" if Tracker.debug?
               end
             end
 
@@ -221,6 +229,39 @@ module Lich
           end
 
           puts "  Total damage applied: #{total_damage}" if total_damage > 0 && Tracker.debug?
+        end
+
+        # Apply UCS event to a creature
+        def apply_ucs_to_target(ucs_result, current_target = nil)
+          target_id = ucs_result[:target_id]
+
+          # For tierup events, use current combat target if no ID in the event
+          target_id ||= current_target[:id] if current_target && ucs_result[:type] == :tierup
+
+          return unless target_id
+
+          creature = Creature[target_id.to_i]
+          return unless creature
+
+          case ucs_result[:type]
+          when :position
+            creature.set_ucs_position(ucs_result[:value])
+            puts "[Combat] Set UCS position #{ucs_result[:value]} on #{creature.name} (#{creature.id})" if Tracker.debug?
+
+          when :tierup
+            creature.set_ucs_tierup(ucs_result[:value])
+            puts "[Combat] Set UCS tierup #{ucs_result[:value]} on #{creature.name} (#{creature.id})" if Tracker.debug?
+
+          when :smite_on
+            creature.smite!
+            puts "[Combat] Applied smite to #{creature.name} (#{creature.id})" if Tracker.debug?
+
+          when :smite_off
+            creature.clear_smote
+            puts "[Combat] Cleared smite from #{creature.name} (#{creature.id})" if Tracker.debug?
+          end
+        rescue => e
+          puts "[Combat] Error applying UCS: #{e.message}" if Tracker.debug?
         end
 
         # Apply status effect directly to a creature (outside combat events)
