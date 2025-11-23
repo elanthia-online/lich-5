@@ -17,6 +17,7 @@ module Lich
         @settings = {}
         @async_processor = nil
         @buffer = []
+        @chunks_processed = 0
 
         # Default settings for combat tracking
         DEFAULT_SETTINGS = {
@@ -24,10 +25,13 @@ module Lich
           track_damage: true,
           track_wounds: true,
           track_statuses: true,     # Enable for testing
+          track_ucs: true,          # Track UCS (position, tierup, smite)
           max_threads: 2,           # Keep threading for performance
           debug: false,             # Enable debug for testing
           buffer_size: 200,         # Increase for large combat chunks
-          fallback_max_hp: 350      # Default max HP when template unavailable
+          fallback_max_hp: 350,     # Default max HP when template unavailable
+          cleanup_interval: 100,    # Cleanup creature registry every N chunks
+          cleanup_max_age: 600      # Remove creatures older than N seconds (10 minutes)
         }.freeze
 
         class << self
@@ -98,6 +102,13 @@ module Lich
             else
               Processor.process(chunk)
             end
+
+            # Periodic cleanup of old creature instances
+            @chunks_processed += 1
+            if @chunks_processed >= @settings[:cleanup_interval]
+              cleanup_creatures
+              @chunks_processed = 0
+            end
           end
 
           # Check if line contains combat-relevant content
@@ -110,6 +121,9 @@ module Lich
               line.include?('**') || # Flares
               line.include?('<pushBold/>') || # Creatures
               line.include?('AS:') || # Attack rolls
+              line.include?('positioning against') || # UCS position
+              line.include?('vulnerable to a followup') || # UCS tierup
+              line.include?('crimson mist') || # UCS smite
               line.match?(/\b(?:hit|miss|parr|block|dodge)\b/i)
           end
 
@@ -147,6 +161,19 @@ module Lich
           end
 
           private
+
+          def cleanup_creatures
+            return unless defined?(Creature)
+
+            max_age = @settings[:cleanup_max_age]
+            removed = Creature.cleanup_old(max_age_seconds: max_age)
+
+            if removed && removed > 0
+              puts "[Combat] Cleaned up #{removed} old creature instances (age > #{max_age}s)" if debug?
+            end
+          rescue => e
+            puts "[Combat] Error during creature cleanup: #{e.message}" if debug?
+          end
 
           def load_settings
             # Load from Lich settings system
