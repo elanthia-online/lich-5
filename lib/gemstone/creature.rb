@@ -169,12 +169,16 @@ module Lich
     # Individual creature instance (runtime tracking with ID)
     class CreatureInstance
       @@instances = {}
-      @@max_size = 200
+      @@max_size = 1000
       @@auto_register = true
 
-      attr_accessor :id, :noun, :name, :status, :injuries, :health, :damage_taken, :created_at, :fatal_crit, :status_timestamps
+      attr_accessor :id, :noun, :name, :status, :injuries, :health, :damage_taken, :created_at, :fatal_crit, :status_timestamps,
+                    :ucs_position, :ucs_tierup, :ucs_smote, :ucs_updated
 
       BODY_PARTS = %w[abdomen back chest head leftArm leftEye leftFoot leftHand leftLeg neck nerves rightArm rightEye rightFoot rightHand rightLeg]
+
+      UCS_TTL = 120        # UCS data expires after 2 minutes
+      UCS_SMITE_TTL = 15   # Smite effect expires after 15 seconds
 
       # Status effect durations (in seconds) for auto-cleanup
       # nil = no auto-cleanup (waits for removal message)
@@ -208,6 +212,10 @@ module Lich
         @created_at = Time.now
         @fatal_crit = false
         @status_timestamps = {}
+        @ucs_position = nil
+        @ucs_tierup = nil
+        @ucs_smote = nil
+        @ucs_updated = nil
       end
 
       # Get the template for this creature
@@ -268,20 +276,89 @@ module Lich
         @status.dup
       end
 
+      # UCS (Unarmed Combat System) tracking methods
+
+      # Convert position string/number to tier (1-3)
+      def position_to_tier(pos)
+        case pos
+        when "decent", 1, "1" then 1
+        when "good", 2, "2" then 2
+        when "excellent", 3, "3" then 3
+        else nil
+        end
+      end
+
+      # Set UCS position tier
+      def set_ucs_position(position)
+        new_tier = position_to_tier(position)
+        return unless new_tier
+
+        # Clear tierup if tier changed
+        @ucs_tierup = nil if new_tier != @ucs_position
+
+        @ucs_position = new_tier
+        @ucs_updated = Time.now
+        puts "  UCS: position=#{new_tier}" if $creature_debug
+      end
+
+      # Set UCS tierup vulnerability
+      def set_ucs_tierup(attack_type)
+        @ucs_tierup = attack_type
+        @ucs_updated = Time.now
+        puts "  UCS: tierup=#{attack_type}" if $creature_debug
+      end
+
+      # Mark creature as smote (crimson mist applied)
+      def smite!
+        @ucs_smote = Time.now
+        @ucs_updated = Time.now
+        puts "  UCS: smote!" if $creature_debug
+      end
+
+      # Check if creature is currently smote
+      def smote?
+        return false unless @ucs_smote
+
+        # Check if smite effect has expired
+        if Time.now - @ucs_smote > UCS_SMITE_TTL
+          @ucs_smote = nil
+          return false
+        end
+
+        true
+      end
+
+      # Clear smote status
+      def clear_smote
+        @ucs_smote = nil
+        @ucs_updated = Time.now
+        puts "  UCS: smote cleared" if $creature_debug
+      end
+
+      # Check if UCS data has expired
+      def ucs_expired?
+        return true unless @ucs_updated
+        (Time.now - @ucs_updated) > UCS_TTL
+      end
+
+      # Get UCS position tier (1-3, or nil if expired)
+      def ucs_position
+        return nil if ucs_expired?
+        @ucs_position
+      end
+
+      # Get UCS tierup vulnerability (or nil if expired)
+      def ucs_tierup
+        return nil if ucs_expired?
+        @ucs_tierup
+      end
+
       # Add injury to body part
       def add_injury(body_part, amount = 1)
         unless BODY_PARTS.include?(body_part.to_s)
           raise ArgumentError, "Invalid body part: #{body_part}"
         end
         @injuries[body_part.to_sym] += amount
-      end
-
-      # Remove injury from body part
-      def remove_injury(body_part, amount = 1)
-        unless BODY_PARTS.include?(body_part.to_s)
-          raise ArgumentError, "Invalid body part: #{body_part}"
-        end
-        @injuries[body_part.to_sym] = [@injuries[body_part.to_sym] - amount, 0].max
       end
 
       # Check if injured at location
@@ -358,30 +435,6 @@ module Lich
         @damage_taken = 0
       end
 
-      # Alias for current_hp (backward compatible)
-      def hitpoints
-        current_hp
-      end
-
-      # Update a field dynamically
-      def update_field(key, value)
-        case key
-        when :hitpoints, :hp
-          # Convert HP to damage tracking (reverse calculation)
-          max = max_hp || 400
-          @damage_taken = [max - value.to_i, 0].max
-        when :status
-          add_status(value) unless @status.include?(value)
-        when :injuries
-          # Expects hash like { body_part: amount }
-          value.each { |part, amount| add_injury(part, amount) } if value.is_a?(Hash)
-        else
-          # Try direct attribute assignment
-          setter = "#{key}="
-          send(setter, value) if respond_to?(setter)
-        end
-      end
-
       # Essential data for this instance
       def essential_data
         {
@@ -396,7 +449,10 @@ module Lich
           current_hp: current_hp,
           hp_percent: hp_percent,
           has_template: has_template?,
-          created_at: @created_at
+          created_at: @created_at,
+          ucs_position: ucs_position,
+          ucs_tierup: ucs_tierup,
+          ucs_smote: smote?
         }
       end
 
@@ -427,7 +483,17 @@ module Lich
         def register(name, id, noun = nil)
           return nil unless auto_register?
           return @@instances[id.to_i] if @@instances[id.to_i] # Already exists
-          return nil if full?
+
+          # Auto-cleanup old instances if registry is full - get progressively more aggressive
+          if full?
+            # Try 15 minutes, then 10, then 5, then 2, then give up
+            [900, 600, 300, 120].each do |age_threshold|
+              removed = cleanup_old(age_threshold)
+              puts "--- Auto-cleanup: removed #{removed} old creatures (threshold: #{age_threshold}s)" if removed > 0 && $creature_debug
+              break unless full?
+            end
+            return nil if full? # Still full after all cleanup attempts
+          end
 
           instance = new(id, noun, name)
           @@instances[id.to_i] = instance
@@ -574,31 +640,6 @@ module Lich
       end
     end
 
-    # Registry singleton for API compatibility
-    class Registry
-      include Singleton
-
-      # Get all registered creature instances
-      def all_creatures
-        CreatureInstance.all
-      end
-
-      # Find creature by ID
-      def find_by_id(id)
-        CreatureInstance[id]
-      end
-
-      # Find creature by name (searches all instances)
-      def find_by_name(name)
-        CreatureInstance.all.find { |c| c.name.downcase == name.downcase }
-      end
-
-      # Clear all instances
-      def reset_data
-        CreatureInstance.clear
-      end
-    end
-
     # Main Creature module - provides the public API
     module Creature
       # Lookup creature instance by ID
@@ -609,16 +650,6 @@ module Lich
       # Register a new creature
       def self.register(name, id, noun = nil)
         CreatureInstance.register(name, id, noun)
-      end
-
-      # Register a creature (alias for compatibility)
-      def self.register_creature(name, id)
-        register(name, id, nil)
-      end
-
-      # Find template by name
-      def self.find_by_name(name)
-        CreatureTemplate[name]
       end
 
       # Configure the system
@@ -849,14 +880,3 @@ module Lich
     end
   end
 end
-
-# Configuration helper
-def configure_creatures(max_size: 200, auto_register: true, debug: false)
-  Lich::Gemstone::Creature.configure(max_size: max_size, auto_register: auto_register)
-  $creature_debug = debug
-  puts "--- Creature system configured: max_size=#{max_size}, auto_register=#{auto_register}, debug=#{debug}"
-end
-
-# Convenient aliases
-Creature = Lich::Gemstone::Creature
-CreatureTemplate = Lich::Gemstone::CreatureTemplate
