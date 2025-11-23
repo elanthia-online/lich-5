@@ -8,6 +8,7 @@
 require_relative 'defs/attacks'
 require_relative 'defs/damage'
 require_relative 'defs/statuses'
+require_relative 'defs/ucs'
 
 module Lich
   module Gemstone
@@ -50,6 +51,13 @@ module Lich
 
             # Return the full result including action field
             Definitions::Statuses.parse(line)
+          end
+
+          # Parse UCS events (position, tierup, smite)
+          def parse_ucs(line)
+            return nil unless Tracker.settings[:track_ucs]
+
+            Definitions::UCS.parse(line)
           end
 
           # Extract creature target (must be wrapped in bold tags)
