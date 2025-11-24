@@ -1,17 +1,19 @@
 {
   name: "tattooed gigas berserker",
+  noun: "",
   url: "https://gswiki.play.net/Tattooed_gigas_berserker",
   picture: "",
   level: 103,
   family: "gigas",
   type: "biped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
+  max_hp: nil,
   speed: "",
   height: 30,
   size: "huge",
