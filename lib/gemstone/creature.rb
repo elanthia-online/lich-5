@@ -6,7 +6,7 @@ module Lich
     class CreatureTemplate
       @@templates = {}
       @@loaded = false
-      @@max_templates = 500  # Prevent unbounded template cache growth
+      @@max_templates = 500 # Prevent unbounded template cache growth
 
       attr_reader :name, :url, :picture, :level, :family, :type,
                   :undead, :otherclass, :areas, :bcs, :max_hp,
@@ -167,7 +167,9 @@ module Lich
       @@auto_register = true
 
       attr_accessor :id, :noun, :name, :status, :injuries, :health, :damage_taken, :created_at, :fatal_crit, :status_timestamps,
-                    :ucs_position, :ucs_tierup, :ucs_smote, :ucs_updated
+                    :ucs_smote, :ucs_updated
+
+      attr_reader :ucs_position, :ucs_tierup
 
       BODY_PARTS = %w[abdomen back chest head leftArm leftEye leftFoot leftHand leftLeg neck nerves rightArm rightEye rightFoot rightHand rightLeg]
 
@@ -340,7 +342,7 @@ module Lich
         return nil if ucs_expired?
         @ucs_tierup
       end
-      
+
       # Add injury to body part
       def add_injury(body_part, amount = 1)
         unless BODY_PARTS.include?(body_part.to_s)
@@ -517,10 +519,8 @@ module Lich
           end
           removed
         end
-
       end
     end
-
 
     module Creature
       # Lookup creature instance by ID
@@ -574,7 +574,6 @@ module Lich
     end
 
     class Treasure
-
       def initialize(data = {})
         @data = {
           coins: false,
