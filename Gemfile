@@ -9,6 +9,8 @@ end
 
 gem "ascii_charts", ">= 0.9.1"
 
+gem "base64", ">= 0.1.0"
+
 gem "concurrent-ruby", ">= 1.2"
 
 gem "ffi", ">= 1.17"
