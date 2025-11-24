@@ -1,19 +1,21 @@
 {
   name: "Eyeless black valravn",
+  noun: "",
   url: "https://gswiki.play.net/Eyeless_black_valravn",
   picture: "",
   level: 112,
   family: "Bird",
   type: "Avian",
   undead: true,
+  boss: false,
   otherclass: [
     "Corporeal undead"
   ],
   areas: [
-    "Hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
+  max_hp: nil,
   speed: "",
   height: 5,
   size: "medium",
@@ -83,12 +85,9 @@
 }
 
 =begin
-
 An eyeless black valravn turns to look at you, the empty pits where its eyes should be swelling into lightless pools that hungrily drink the surrounding light.
 Mana cascades across your x'aganjira ataniki, causing the fabric to shiver against your skin as it draws the scattered power into it and transforms it into mana.  [You gain 2 mana!]
   CS: +505 - TD: +441 + CvA: +5 + d98: +2 - -5 == +76
   Warded off!
   You shut your eyes, resisting the force of the valravn's gaze.
-
-
 =end
