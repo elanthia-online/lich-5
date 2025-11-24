@@ -1,17 +1,19 @@
 {
   name: "immense gold-bristled hinterboar",
+  noun: "",
   url: "https://gswiki.play.net/Immense_gold-bristled_hinterboar",
   picture: "",
   level: 102,
   family: "suine",
   type: "quadruped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: 600,
+  max_hp: 600,
   speed: "",
   height: 25,
   size: "huge",
