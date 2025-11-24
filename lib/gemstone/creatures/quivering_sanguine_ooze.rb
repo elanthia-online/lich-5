@@ -1,17 +1,19 @@
 {
   name: "Quivering sanguine ooze",
+  noun: "",
   url: "https://gswiki.play.net/Quivering_sanguine_ooze",
   picture: "",
   level: 107,
   family: "Ooze",
   type: "Globoid",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "Hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
+  max_hp: nil,
   speed: "",
   height: "",
   size: "",
