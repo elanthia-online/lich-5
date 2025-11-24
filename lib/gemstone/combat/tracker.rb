@@ -258,7 +258,7 @@ module Lich
             if @settings[:enabled]
               @enabled = true
               initialize_processor
-              add_downstream_hook 
+              add_downstream_hook
               respond "[Combat] Auto-enabled combat tracking from saved settings" if debug?
             else
               respond "[Combat] Staying disabled (settings[:enabled]=false)" if debug?
