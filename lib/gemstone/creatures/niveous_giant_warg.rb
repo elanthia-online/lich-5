@@ -1,17 +1,19 @@
 {
   name: "niveous giant warg",
+  noun: "",
   url: "https://gswiki.play.net/Niveous_giant_warg",
   picture: "",
   level: 104,
   family: "canine",
   type: "quadruped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
+  max_hp: nil,
   speed: "",
   height: 15,
   size: "large",
@@ -50,19 +52,19 @@
     mnm_td: nil,
     defensive_spells: [],
     defensive_abilities: [],
-    imm1: "",
-    sda1: ""
+    immunities: [],
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
-    coins: "?",
-    magic_items: "",
-    gems: "?",
-    boxes: "?",
-    skin: "Y",
-    other: "?",
+    coins: nil,
+    magic_items: nil,
+    gems: nil,
+    boxes: nil,
+    skin: true,
+    other: nil,
     blunt_required: false
   },
   messaging: {
@@ -77,9 +79,8 @@
       "A niveous giant warg sniffs after unseen prey.",
       "A niveous giant warg sniffs around, its hackles rising in agitation."
     ],
-
     general_advice: "* By design, wargs grow significantly and synergistically more dangerous as more of them come into the same room since the presence of others from their pack bolsters one another's attacks. As such, even though an individual warg might not be threatening, treating them as high priority targets is often a safer option than most other creatures in their areas.",
-    war_cries: "A niveous giant warg sits back on its haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine.\n[SSR result: 111 (Open d100: 16)]\nXXX looks terrified and drops her guard!\n[SSR result: 260 (Open d100: 180)]\nXXX looks terrified and drops his guard!\n[SSR result: 214 (Open d100: 149)]\nRoundtime: 10 sec."
+    war_cries: "As A niveous giant warg moves agressively towards you, XXX moves away a bit.\nA niveous giant warg sits back on its haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine.\n[SSR result: 111 (Open d100: 16)]\nXXX looks terrified and drops her guard!\n[SSR result: 260 (Open d100: 180)]\nXXX looks terrified and drops his guard!\n[SSR result: 214 (Open d100: 149)]\nRoundtime: 10 sec."
   }
 }
 
@@ -107,7 +108,6 @@
   Roundtime: 3 sec.
   You fall further into the clutches of primal terror, insensate with the sound of the warg's cries!
 
-
   # bite (attack)
   A niveous giant warg lunges at you, maw slathering as it tries to take a ferocious bite!
     AS: +524 vs DS: +768 with AvD: +39 + d100 roll: +88 = -121
@@ -125,7 +125,6 @@
   A niveous giant warg bounds forward and slashes at you with a foreclaw!
     AS: +480 vs DS: +663 with AvD: +41 + d100 roll: +35 = -107
     A clean miss.
-
 
   Emboldened by the addition of more pack members, a niveous giant warg bares its teeth in a hungry snarl!
   A niveous giant warg lunges at you, maw slathering as it tries to take a ferocious bite!
