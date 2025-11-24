@@ -1,17 +1,19 @@
 {
   name: "stunted halfling bloodspeaker",
+  noun: "",
   url: "https://gswiki.play.net/Stunted_halfling_bloodspeaker",
   picture: "",
   level: 103,
   family: "humanoid",
   type: "biped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: 367,
+  max_hp: 367,
   speed: "",
   height: 3,
   size: "small",
