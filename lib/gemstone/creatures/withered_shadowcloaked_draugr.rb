@@ -1,19 +1,21 @@
 {
   name: "Withered shadow-cloaked draugr",
+  noun: "",
   url: "https://gswiki.play.net/Withered_shadow-cloaked_draugr",
   picture: "",
   level: 108,
   family: "Gigas",
   type: "Biped",
   undead: true,
+  boss: false,
   otherclass: [
     "Corporeal undead"
   ],
   areas: [
-    "Hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
+  max_hp: nil,
   speed: "",
   height: 30,
   size: "huge",
