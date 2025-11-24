@@ -1,17 +1,19 @@
 {
   name: "Behemothic gorefrost golem",
+  noun: "",
   url: "https://gswiki.play.net/Behemothic_gorefrost_golem",
   picture: "",
   level: 104,
   family: "golem",
   type: "biped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: 1000,
+  max_hp: 1000,
   speed: "",
   height: 40,
   size: "huge",
@@ -133,9 +135,7 @@
     headbutt: "A behemothic gorefrost golem charges towards you and attempts a headbutt!",
     minor_cold: "A behemothic gorefrost golem hurls a chunk of ice at you!",
     cold_snap: "A behemothic gorefrost golem thrusts a blocky fist toward you!",
-
     wizards: "* Golems are great targets for [[Mana Leech (516)]] as they have a lower TD.\n* Open with [[Hand of Tonis (505)]] and prioritize keeping the golems prone. Follow up by bolting.",
     general_advice: "* Like many other creatures of this type, these golems' high amount of health and immunity to being killed by lethal crits is offset by low DS. This makes flurries of unaimed attacks such as assault techniques or [[mstrike]]s backed up by [[Two Weapon Combat]], assault techniques or mstrikes using [[Brawling|unarmed combat]], or repeated attacks backed up by [[Celerity (506)]] relatively effective.\n* These golems take additional damage from [[Fire critical table|fire]], though the exact mechanics of how aren't known at the time of this writing.\n* Weapon techniques and [[combat maneuvers]] that knock golems prone and inflict Staggered, like [[Twin Hammerfists]], [[Sweep]], or [[Tackle]], can often stall out golems since their combat rounds are fairly slow and they don't have high [[Standard_maneuver_roll|SMR]] defense.",
-
   }
 }
