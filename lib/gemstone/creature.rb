@@ -3,7 +3,6 @@ require 'ostruct'
 
 module Lich
   module Gemstone
-    # Static creature template data (ID-less reference information)
     class CreatureTemplate
       @@templates = {}
       @@loaded = false
@@ -58,7 +57,6 @@ module Lich
         @alchemy = data[:alchemy] || []
       end
 
-      # Load all templates from files
       def self.load_all
         return if @@loaded
 
@@ -71,7 +69,7 @@ module Lich
 
           # Check template limit
           if template_count >= @@max_templates
-            respond "--- warning: Template cache limit (#{@@max_templates}) reached, skipping remaining templates" if $creature_debug
+            puts "--- warning: Template cache limit (#{@@max_templates}) reached, skipping remaining templates" if $creature_debug
             break
           end
 
@@ -89,16 +87,14 @@ module Lich
             @@templates[normalized_name] = template
             template_count += 1
           rescue => e
-            respond "--- error loading template #{template_name}: #{e.message}" if $creature_debug
+            puts "--- error loading template #{template_name}: #{e.message}" if $creature_debug
           end
         end
 
         @@loaded = true
-        respond "--- loaded #{template_count} creature templates" if $creature_debug
+        puts "--- loaded #{template_count} creature templates" if $creature_debug
       end
 
-      # Clean creature name by removing boon adjectives
-      # Optimized to use single compiled regex instead of 50+ sequential matches
       BOON_REGEX = /^(#{BOON_ADJECTIVES.join('|')})\s+/i.freeze
 
       def self.fix_template_name(template_name)
@@ -121,7 +117,6 @@ module Lich
       end
       private_class_method :load_template_data
 
-      # Lookup template by name
       def self.[](name)
         load_all unless @@loaded
         return nil unless name
@@ -166,7 +161,6 @@ module Lich
       end
     end
 
-    # Individual creature instance (runtime tracking with ID)
     class CreatureInstance
       @@instances = {}
       @@max_size = 1000
@@ -218,7 +212,6 @@ module Lich
         @ucs_updated = nil
       end
 
-      # Get the template for this creature
       def template
         @template ||= CreatureTemplate[@name]
       end
@@ -228,7 +221,6 @@ module Lich
         !template.nil?
       end
 
-      # Add status to creature
       def add_status(status, duration = nil)
         return if @status.include?(status)
 
@@ -239,9 +231,9 @@ module Lich
         duration ||= STATUS_DURATIONS[status_key]
         if duration
           @status_timestamps[status] = Time.now + duration
-          respond "  +status: #{status} (expires in #{duration}s)" if $creature_debug
+          puts "  +status: #{status} (expires in #{duration}s)" if $creature_debug
         else
-          respond "  +status: #{status} (no auto-expiry)" if $creature_debug
+          puts "  +status: #{status} (no auto-expiry)" if $creature_debug
         end
       end
 
@@ -249,10 +241,9 @@ module Lich
       def remove_status(status)
         @status.delete(status)
         @status_timestamps.delete(status)
-        respond "  -status: #{status}" if $creature_debug
+        puts "  -status: #{status}" if $creature_debug
       end
 
-      # Clean up expired status effects
       def cleanup_expired_statuses
         return unless @status_timestamps && !@status_timestamps.empty?
 
@@ -260,7 +251,7 @@ module Lich
         @status_timestamps.select { |_status, expires_at| expires_at <= now }.keys.each do |expired_status|
           @status.delete(expired_status)
           @status_timestamps.delete(expired_status)
-          respond "  ~status: #{expired_status} (auto-expired)" if $creature_debug
+          puts "  ~status: #{expired_status} (auto-expired)" if $creature_debug
         end
       end
 
@@ -276,9 +267,6 @@ module Lich
         @status.dup
       end
 
-      # UCS (Unarmed Combat System) tracking methods
-
-      # Convert position string/number to tier (1-3)
       def position_to_tier(pos)
         case pos
         when "decent", 1, "1" then 1
@@ -298,21 +286,21 @@ module Lich
 
         @ucs_position = new_tier
         @ucs_updated = Time.now
-        respond "  UCS: position=#{new_tier}" if $creature_debug
+        puts "  UCS: position=#{new_tier}" if $creature_debug
       end
 
       # Set UCS tierup vulnerability
       def set_ucs_tierup(attack_type)
         @ucs_tierup = attack_type
         @ucs_updated = Time.now
-        respond "  UCS: tierup=#{attack_type}" if $creature_debug
+        puts "  UCS: tierup=#{attack_type}" if $creature_debug
       end
 
       # Mark creature as smote (crimson mist applied)
       def smite!
         @ucs_smote = Time.now
         @ucs_updated = Time.now
-        respond "  UCS: smote!" if $creature_debug
+        puts "  UCS: smote!" if $creature_debug
       end
 
       # Check if creature is currently smote
@@ -332,7 +320,7 @@ module Lich
       def clear_smote
         @ucs_smote = nil
         @ucs_updated = Time.now
-        respond "  UCS: smote cleared" if $creature_debug
+        puts "  UCS: smote cleared" if $creature_debug
       end
 
       # Check if UCS data has expired
@@ -352,7 +340,7 @@ module Lich
         return nil if ucs_expired?
         @ucs_tierup
       end
-
+      
       # Add injury to body part
       def add_injury(body_part, amount = 1)
         unless BODY_PARTS.include?(body_part.to_s)
@@ -381,7 +369,6 @@ module Lich
         @injuries.select { |_, value| value >= threshold }.keys
       end
 
-      # Add damage to creature
       def add_damage(amount)
         @damage_taken += amount.to_i
       end
@@ -407,7 +394,6 @@ module Lich
         400
       end
 
-      # Calculate current HP (max_hp - damage_taken)
       def current_hp
         return nil unless max_hp
         [max_hp - @damage_taken, 0].max
@@ -479,9 +465,10 @@ module Lich
           size >= @@max_size
         end
 
-        # Register a new creature instance
         def register(name, id, noun = nil)
           return nil unless auto_register?
+          return nil if (name =~ /^animated\b/ && name !~ /^animated slush/)
+          return nil if (noun =~ /^(?:arm|appendage|claw|limb|pincer|tentacle)s?$|^(?:palpus|palpi)$/i && name !~ /(?:amaranthine|ghostly|grizzled|ancient) kraken tentacle/i)
           return @@instances[id.to_i] if @@instances[id.to_i] # Already exists
 
           # Auto-cleanup old instances if registry is full - get progressively more aggressive
@@ -489,7 +476,7 @@ module Lich
             # Try 15 minutes, then 10, then 5, then 2, then give up
             [900, 600, 300, 120].each do |age_threshold|
               removed = cleanup_old(age_threshold)
-              respond "--- Auto-cleanup: removed #{removed} old creatures (threshold: #{age_threshold}s)" if removed > 0 && $creature_debug
+              puts "--- Auto-cleanup: removed #{removed} old creatures (threshold: #{age_threshold}s)" if removed > 0 && $creature_debug
               break unless full?
             end
             return nil if full? # Still full after all cleanup attempts
@@ -497,7 +484,7 @@ module Lich
 
           instance = new(id, noun, name)
           @@instances[id.to_i] = instance
-          respond "--- Creature registered: #{name} (#{id})" if $creature_debug
+          puts "--- Creature registered: #{name} (#{id})" if $creature_debug
           instance
         end
 
@@ -519,14 +506,22 @@ module Lich
         # Remove old instances (cleanup)
         def cleanup_old(max_age_seconds = 600)
           cutoff = Time.now - max_age_seconds
-          removed = @@instances.select { |_id, instance| instance.created_at < cutoff }.size
-          @@instances.reject! { |_id, instance| instance.created_at < cutoff }
+          removed = 0
+          @@instances.reject! do |_id, instance|
+            if instance.created_at < cutoff
+              removed += 1
+              true
+            else
+              false
+            end
+          end
           removed
         end
+
       end
     end
 
-    # Main Creature module - provides the public API
+
     module Creature
       # Lookup creature instance by ID
       def self.[](id)
@@ -563,23 +558,12 @@ module Lich
         CreatureInstance.cleanup_old(**options)
       end
 
-      # Generate damage report for HP analysis
-      def self.damage_report(**options)
-        CreatureInstance.damage_report(**options)
-      end
-
-      # Print formatted damage report
-      def self.print_damage_report(**options)
-        CreatureInstance.print_damage_report(**options)
-      end
-
       # Get all creature instances
       def self.all
         CreatureInstance.all
       end
     end
 
-    # Keep the supporting classes from the original system
     class SpecialAbility
       attr_accessor :name, :note
 
@@ -590,6 +574,7 @@ module Lich
     end
 
     class Treasure
+
       def initialize(data = {})
         @data = {
           coins: false,
