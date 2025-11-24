@@ -169,7 +169,7 @@ module Lich
       attr_accessor :id, :noun, :name, :status, :injuries, :health, :damage_taken, :created_at, :fatal_crit, :status_timestamps,
                     :ucs_smote, :ucs_updated
 
-      attr_reader :ucs_position, :ucs_tierup
+      attr_writer :ucs_position, :ucs_tierup
 
       BODY_PARTS = %w[abdomen back chest head leftArm leftEye leftFoot leftHand leftLeg neck nerves rightArm rightEye rightFoot rightHand rightLeg]
 
