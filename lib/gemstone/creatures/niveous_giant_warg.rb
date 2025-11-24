@@ -33,7 +33,6 @@
   },
   defense_attributes: {
     asg: "1",
-    immunities: [],
     melee: (432..701),
     ranged: (389..491),
     bolt: nil,
@@ -154,3 +153,4 @@
   Emboldened by the addition of more pack members, a niveous giant warg bares its teeth in a hungry snarl!
 
 =end
+
