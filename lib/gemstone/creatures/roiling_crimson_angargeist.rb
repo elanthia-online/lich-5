@@ -1,17 +1,19 @@
 {
   name: "Roiling crimson angargeist",
+  noun: "",
   url: "https://gswiki.play.net/Roiling_crimson_angargeist",
   picture: "",
   level: 110,
   family: "",
   type: "",
   undead: true,
+  boss: false,
   otherclass: ["Non Corporeal undead"],
   areas: [
-    "Hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
+  max_hp: nil,
   speed: "",
   height: 13,
   size: "large",
