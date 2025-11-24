@@ -27,10 +27,10 @@ module Lich
       end
 
       def Map.current_room_id; return @@current_room_id; end
-      def Map.current_room_id=(id); return @@current_room_id = id; end
+      def Map.current_room_id=(id); @@current_room_id = id; end
       def Map.loaded; return @@loaded; end
       def Map.previous_room_id; return @@previous_room_id; end
-      def Map.previous_room_id=(id); return @@previous_room_id = id; end
+      def Map.previous_room_id=(id); @@previous_room_id = id; end
       def fuzzy_room_id; return @@current_room_id; end
       def outside?; return @paths.last =~ /^Obvious paths:/ ? true : false; end
       def to_i; return @id; end

@@ -172,7 +172,7 @@ module Lich
         # Local helper to keep cache in sync with the just-persisted root
         sync_cache = lambda do |root_obj|
           cached = @settings_cache[cache_key]
-          if cached && cached.object_id != root_obj.object_id
+          if cached && !cached.equal?(root_obj)
             if cached.is_a?(Hash) && root_obj.is_a?(Hash)
               cached.replace(root_obj)
             elsif cached.is_a?(Array) && root_obj.is_a?(Array)
@@ -229,7 +229,7 @@ module Lich
           end
 
           # Root identity drift: sync proxy.target into cached root if different objects (same-type containers).
-          if current_root_for_scope.object_id != proxy.target.object_id
+          if !current_root_for_scope.equal?(proxy.target)
             if proxy.target.is_a?(Hash) && current_root_for_scope.is_a?(Hash)
               _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Root identity mismatch (cache #{current_root_for_scope.object_id} vs proxy #{proxy.target.object_id}); copying via Hash#replace" })
               current_root_for_scope.replace(proxy.target)
