@@ -1,17 +1,19 @@
 {
   name: "Squamous reptilian mutant",
+  noun: "",
   url: "https://gswiki.play.net/Squamous_reptilian_mutant",
   picture: "",
   level: 109,
   family: "Reptilian",
   type: "",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "Hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
+  max_hp: nil,
   speed: "",
   height: "",
   size: "",
