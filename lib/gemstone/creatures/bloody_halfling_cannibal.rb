@@ -1,17 +1,19 @@
 {
   name: "bloody halfling cannibal",
+  noun: "",
   url: "https://gswiki.play.net/Bloody_halfling_cannibal",
   picture: "",
   level: 101,
   family: "humanoid",
   type: "biped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: 300,
+  max_hp: 300,
   speed: "",
   height: 3,
   size: "small",
@@ -125,6 +127,5 @@
     bite: "A bloody halfling cannibal bares {pronoun} sharpened teeth as {pronoun} tries to bite into you!",
     grimy_little_fists: "A bloody halfling cannibal hammers blindly at you with grimy little fists!",
     general_advice: "* Despite being the lowest level creature in the [[Hinterwilds]], cannibals can't be underestimated or ignored, especially if the Boreal Forest has started filling up. Cannibals' namesake biting maneuver can be lethal if its [[standard maneuver roll]] gets a significant bonus from other creatures in the area stunning or otherwise disabling a character. Cannibals also take advantage of stealth, which means they can get stance pushdown from [[ambush]] mechanics in situations where you might never have seen them coming. As such, even in cases where relatively low-mana-cost AoE spells like [[Censure (316)]], [[Elemental Wave (410)]], or [[Grasp of the Grave (709)]] might seem unnecessary for the number of visible creatures, sometimes they can still be helpful in revealing the invisible threat of cannibals.",
-
   }
 }
