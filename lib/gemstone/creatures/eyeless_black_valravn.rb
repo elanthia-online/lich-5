@@ -16,7 +16,7 @@
   ],
   bcs: true,
   max_hp: nil,
-  speed: "",
+  speed: nil,
   height: 5,
   size: "medium",
   attack_attributes: {
@@ -54,19 +54,18 @@
     mnm_td: nil,
     defensive_spells: [],
     defensive_abilities: [],
-    imm1: "",
-    sda1: ""
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
-    coins: "?",
-    magic_items: "",
+    coins: nil,
+    magic_items: nil,
     gems: true,
-    boxes: "?",
+    boxes: nil,
     skin: "inky black valravn plume",
-    other: "?",
+    other: nil,
     blunt_required: false
   },
   messaging: {
@@ -85,9 +84,12 @@
 }
 
 =begin
+
 An eyeless black valravn turns to look at you, the empty pits where its eyes should be swelling into lightless pools that hungrily drink the surrounding light.
 Mana cascades across your x'aganjira ataniki, causing the fabric to shiver against your skin as it draws the scattered power into it and transforms it into mana.  [You gain 2 mana!]
   CS: +505 - TD: +441 + CvA: +5 + d98: +2 - -5 == +76
   Warded off!
   You shut your eyes, resisting the force of the valravn's gaze.
+
+
 =end

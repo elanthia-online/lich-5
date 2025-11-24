@@ -14,7 +14,7 @@
   ],
   bcs: true,
   max_hp: nil,
-  speed: "",
+  speed: nil,
   height: 9,
   size: "medium",
   attack_attributes: {
@@ -57,19 +57,18 @@
     mnm_td: nil,
     defensive_spells: [],
     defensive_abilities: [],
-    imm1: "",
-    sda1: ""
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
-    coins: "?",
-    magic_items: "",
-    gems: "?",
-    boxes: "?",
-    skin: "?",
-    other: "?",
+    coins: nil,
+    magic_items: nil,
+    gems: nil,
+    boxes: nil,
+    skin: nil,
+    other: nil,
     blunt_required: false
   },
   messaging: {
@@ -90,6 +89,7 @@
 }
 
 =begin
+
 # +100 DS pre-resolution flare
 A shining winged disir raises her a gleaming golden aegis and braces for an assault as a luminous barrier momentarily enshrouds her form.
 
@@ -107,4 +107,5 @@ Roundtime: 4 sec.
 Roundtime changed to 1 second.
 
 Many-colored radiance builds in the air nearby, coalescing into the powerful form of a towering woman with shining wings.  The disir steps forth from the light as it ebbs away.
+
 =end

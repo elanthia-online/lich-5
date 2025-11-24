@@ -14,7 +14,7 @@
   ],
   bcs: true,
   max_hp: nil,
-  speed: "",
+  speed: nil,
   height: 28,
   size: "huge",
   attack_attributes: {
@@ -67,19 +67,18 @@
       }
     ],
     defensive_abilities: [],
-    imm1: "",
-    sda1: ""
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
-    coins: "?",
-    magic_items: "",
-    gems: "?",
-    boxes: "?",
-    skin: "?",
-    other: "?",
+    coins: nil,
+    magic_items: nil,
+    gems: nil,
+    boxes: nil,
+    skin: nil,
+    other: nil,
     blunt_required: false
   },
   messaging: {
@@ -100,6 +99,7 @@
 }
 
 =begin
+
 A grim gigas skald raises her sonorous voice into a resounding cry that crashes like mad thunder through the area!
 [SMR result: -6 (Open d100: -12, Bonus: 12)]
 You manage to throw yourself free from the auditory assault!
@@ -115,7 +115,10 @@ A grim gigas skald artfully plays her ruic lyre, sending a ripple of shimmering 
 A grim gigas skald artfully plays her ruic lyre, sending a ripple of shimmering air toward you!
 You move at the last moment to evade the bolt!
 
+
 A grim gigas skald flails on the ground, making the ground shudder, before managing to fight her way into a standing position.
 
 One leg dragging behind her, a grim gigas skald staggers northwest.
+
+
 =end

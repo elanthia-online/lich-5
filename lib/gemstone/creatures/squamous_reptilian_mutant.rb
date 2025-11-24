@@ -14,9 +14,9 @@
   ],
   bcs: true,
   max_hp: nil,
-  speed: "",
-  height: "",
-  size: "",
+  speed: nil,
+  height: nil,
+  size: nil,
   attack_attributes: {
     physical_attacks: [
       {
@@ -57,19 +57,18 @@
     mnm_td: nil,
     defensive_spells: [],
     defensive_abilities: [],
-    imm1: "",
-    sda1: ""
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
-    coins: "?",
-    magic_items: "",
-    gems: "?",
-    boxes: "?",
-    skin: "?",
-    other: "?",
+    coins: nil,
+    magic_items: nil,
+    gems: nil,
+    boxes: nil,
+    skin: nil,
+    other: nil,
     blunt_required: false
   },
   messaging: {

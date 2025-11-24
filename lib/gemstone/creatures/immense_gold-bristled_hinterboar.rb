@@ -14,7 +14,7 @@
   ],
   bcs: true,
   max_hp: 600,
-  speed: "",
+  speed: nil,
   height: 25,
   size: "huge",
   attack_attributes: {
@@ -66,7 +66,8 @@
     mns_td: nil,
     mnm_td: nil,
     defensive_spells: [],
-    defensive_abilities: []
+    defensive_abilities: [],
+    special_defenses: []
   },
   special_other: "",
   abilities: [],

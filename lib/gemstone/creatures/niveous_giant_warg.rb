@@ -14,7 +14,7 @@
   ],
   bcs: true,
   max_hp: nil,
-  speed: "",
+  speed: nil,
   height: 15,
   size: "large",
   attack_attributes: {
@@ -33,6 +33,7 @@
   },
   defense_attributes: {
     asg: "1",
+    immunities: [],
     melee: (432..701),
     ranged: (389..491),
     bolt: nil,
@@ -78,6 +79,7 @@
       "A niveous giant warg sniffs after unseen prey.",
       "A niveous giant warg sniffs around, its hackles rising in agitation."
     ],
+
     general_advice: "* By design, wargs grow significantly and synergistically more dangerous as more of them come into the same room since the presence of others from their pack bolsters one another's attacks. As such, even though an individual warg might not be threatening, treating them as high priority targets is often a safer option than most other creatures in their areas.",
     war_cries: "As A niveous giant warg moves agressively towards you, XXX moves away a bit.\nA niveous giant warg sits back on its haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine.\n[SSR result: 111 (Open d100: 16)]\nXXX looks terrified and drops her guard!\n[SSR result: 260 (Open d100: 180)]\nXXX looks terrified and drops his guard!\n[SSR result: 214 (Open d100: 149)]\nRoundtime: 10 sec."
   }
@@ -107,6 +109,7 @@
   Roundtime: 3 sec.
   You fall further into the clutches of primal terror, insensate with the sound of the warg's cries!
 
+
   # bite (attack)
   A niveous giant warg lunges at you, maw slathering as it tries to take a ferocious bite!
     AS: +524 vs DS: +768 with AvD: +39 + d100 roll: +88 = -121
@@ -124,6 +127,7 @@
   A niveous giant warg bounds forward and slashes at you with a foreclaw!
     AS: +480 vs DS: +663 with AvD: +41 + d100 roll: +35 = -107
     A clean miss.
+
 
   Emboldened by the addition of more pack members, a niveous giant warg bares its teeth in a hungry snarl!
   A niveous giant warg lunges at you, maw slathering as it tries to take a ferocious bite!

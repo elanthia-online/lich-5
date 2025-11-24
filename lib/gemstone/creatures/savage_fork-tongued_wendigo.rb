@@ -14,7 +14,7 @@
   ],
   bcs: true,
   max_hp: 600,
-  speed: "",
+  speed: nil,
   height: 8,
   size: "large",
   attack_attributes: {
@@ -125,6 +125,8 @@
 }
 
 =begin
+
+
 # make you mad spell  Frenzy?
   A savage fork-tongued wendigo rasps out a dissonant, sing-song phrase.
   >
@@ -132,6 +134,7 @@
     CS: +450 - TD: +441 + CvA: +4 + d100: +88 == +101
     Warding failed!
   Anger beyond all reason boils up within you!
+
 
 # some aoe spell... Sympathy?
   A savage fork-tongued wendigo points skyward with a single gristly talon!
@@ -148,6 +151,8 @@
 
   A savage fork-tongued wendigo opens its eyes, looking less focused.
 
+
+
 # cyclone?  frigid cyclone in room
   The air grows even colder as an intensely localized cyclone forms overhead, assailing the area with an onslaught of snow and icy wind.
 
@@ -160,6 +165,8 @@
 
   A frigid cyclone fluctuates before dissipating with a last gust of frigid wind.
 
+
+
 # Jump up and flee
   A savage fork-tongued wendigo jerks up from the ground in a single boneless motion.
   Heedless of its grievous wounds, a savage fork-tongued wendigo stalks northwest.
@@ -168,6 +175,7 @@
   A savage fork-tongued wendigo gets an intense expression.
 
   A savage fork-tongued wendigo tilts its head slowly to an unnatural angle.  Its forked tongue protrudes from split lips, tasting the air ravenously.
+
 
   A savage fork-tongued wendigo tilts its head, eyeing the shadows with a hideous smile upon its face.
   A savage fork-tongued wendigo extends an elongated finger, pointing toward you in your hiding place!

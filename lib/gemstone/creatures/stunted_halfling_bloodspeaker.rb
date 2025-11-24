@@ -14,7 +14,7 @@
   ],
   bcs: true,
   max_hp: 367,
-  speed: "",
+  speed: nil,
   height: 3,
   size: "small",
   attack_attributes: {
@@ -92,6 +92,7 @@
         note: "able to break stuns"
       }
     ],
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
