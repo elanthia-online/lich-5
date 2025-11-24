@@ -240,17 +240,17 @@ module Lich
           end
 
           def initialize!
-            respond "[Combat] initialize! called, @initialized=#{@initialized}, XMLData.game=#{XMLData.game.inspect}, XMLData.name=#{XMLData.name.inspect}"  if debug?
+            respond "[Combat] initialize! called, @initialized=#{@initialized}, XMLData.game=#{XMLData.game.inspect}, XMLData.name=#{XMLData.name.inspect}" if debug?
             return if @initialized
 
             # Don't initialize until XMLData is ready (avoid wrong scope)
             if XMLData.game.nil? || XMLData.game.empty? || XMLData.name.nil? || XMLData.name.empty?
-              respond "[Combat] initialize! skipped - XMLData not ready"  if debug?
+              respond "[Combat] initialize! skipped - XMLData not ready" if debug?
               return
             end
 
             @initialized = true
-            respond "[Combat] initialize! proceeding with initialization"  if debug?
+            respond "[Combat] initialize! proceeding with initialization" if debug?
 
             load_settings
 
@@ -259,9 +259,9 @@ module Lich
               @enabled = true
               initialize_processor
               add_downstream_hook 
-              respond "[Combat] Auto-enabled combat tracking from saved settings"  if debug?
+              respond "[Combat] Auto-enabled combat tracking from saved settings" if debug?
             else
-              respond "[Combat] Staying disabled (settings[:enabled]=false)"  if debug?
+              respond "[Combat] Staying disabled (settings[:enabled]=false)" if debug?
             end
           end
         end
