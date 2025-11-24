@@ -1,17 +1,19 @@
 {
   name: "brawny gigas shield-maiden",
+  noun: "",
   url: "https://gswiki.play.net/Brawny_gigas_shield-maiden",
   picture: "",
   level: 106,
   family: "gigas",
   type: "biped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
+  max_hp: nil,
   speed: "",
   height: 30,
   size: "huge",
@@ -91,7 +93,7 @@
   alchemy: [],
   treasure: {
     coins: true,
-    magic_items: "",
+    magic_items: nil,
     gems: true,
     boxes: true,
     skin: false,
@@ -120,11 +122,9 @@
     shield_strike: "A brawny gigas shield-maiden launches a quick bash with {pronoun} golden targe at you!",
     shield_trample: "A brawny gigas shield-maiden raises her golden targe and charges headlong towards you!",
     spear: "In a display of martial precision, a brawny gigas shield-maiden thrusts with a gold-tipped heavy spear at you!",
-
     general_advice: "* Shield-maidens are [[square]] creatures, so players of [[semi]]s and [[pure]]s can take advantage of their low [[TD]] by casting [[CS]]-based offensive spells.\n* Shield-maidens have a pretty high rate of blocking physical attacks with their shields when unhindered, so setup abilities like [[Sunder Shield]], [[Aura of the Arkati (1614)]], anything that inflicts [[Blinded]], anything that knocks prone, and so forth are recommended for primarily physical combatants. Alternatively, [[Brawling|unarmed combat]] can't be blocked.",
     bards: "* [[Vibration Chant (1002)]] works twice and will often leave them helpless or dead.",
     wizards: "* Shield-maidens can be targeted with [[Mana Leech (516)]].",
-
   }
 }
 
@@ -141,5 +141,4 @@ In response to the vibrations, a brawny gigas shield-maiden's skin seems to disc
 A brawny gigas shield-maiden is unharmed by the impact!
 A brawny gigas shield-maiden is unharmed by the impact!
 A brawny gigas shield-maiden is unharmed by the impact!
-
 =end
