@@ -1,17 +1,19 @@
 {
   name: "Shining winged disir",
+  noun: "",
   url: "https://gswiki.play.net/Shining_winged_disir",
   picture: "",
   level: 114,
   family: "",
   type: "",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "Hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
+  max_hp: nil,
   speed: "",
   height: 9,
   size: "medium",
@@ -88,7 +90,6 @@
 }
 
 =begin
-
 # +100 DS pre-resolution flare
 A shining winged disir raises her a gleaming golden aegis and braces for an assault as a luminous barrier momentarily enshrouds her form.
 
@@ -106,5 +107,4 @@ Roundtime: 4 sec.
 Roundtime changed to 1 second.
 
 Many-colored radiance builds in the air nearby, coalescing into the powerful form of a towering woman with shining wings.  The disir steps forth from the light as it ebbs away.
-
 =end
