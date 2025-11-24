@@ -8,11 +8,11 @@ module Lich
       @@loaded = false
       @@max_templates = 500 # Prevent unbounded template cache growth
 
-      attr_reader :name, :url, :picture, :level, :family, :type,
+      attr_reader :name, :noun, :url, :picture, :level, :family, :type,
                   :undead, :otherclass, :areas, :bcs, :max_hp,
                   :speed, :height, :size, :attack_attributes,
                   :defense_attributes, :treasure, :messaging,
-                  :special_other, :abilities, :alchemy
+                  :special_other, :abilities, :alchemy, :boss
 
       BOON_ADJECTIVES = %w[
         adroit afflicted apt barbed belligerent blurry canny combative dazzling deft diseased drab
@@ -25,16 +25,18 @@ module Lich
 
       def initialize(data)
         @name = data[:name]
+        @noun = data[:noun].to_s.empty? ? data[:name] : data[:noun]
         @url = data[:url]
         @picture = data[:picture]
         @level = data[:level].to_i
         @family = data[:family]
         @type = data[:type]
         @undead = data[:undead]
+        @boss = data[:boss] || false
         @otherclass = data[:otherclass] || []
         @areas = data[:areas] || []
         @bcs = data[:bcs]
-        @max_hp = data[:max_hp]&.to_i || data[:hitpoints]&.to_i
+        @max_hp = data[:max_hp]&.to_i
         @speed = data[:speed]
         @height = data[:height].to_i
         @size = data[:size]
@@ -168,7 +170,6 @@ module Lich
 
       attr_accessor :id, :noun, :name, :status, :injuries, :health, :damage_taken, :created_at, :fatal_crit, :status_timestamps,
                     :ucs_smote, :ucs_updated
-
       attr_writer :ucs_position, :ucs_tierup
 
       BODY_PARTS = %w[abdomen back chest head leftArm leftEye leftFoot leftHand leftLeg neck nerves rightArm rightEye rightFoot rightHand rightLeg]
