@@ -14,6 +14,41 @@ module Lich
           head_and_nerves: %i[head nsys]
         }.freeze
 
+        # Cache variables
+        @injury_cache_key = nil
+        @wounds_cache = nil
+        @scars_cache = nil
+        @cache_mutex = Mutex.new
+
+        # Get cached or fresh injury data
+        def get_injury_data
+          current_key = XMLData.injuries
+
+          # Fast path: return cached data if key hasn't changed
+          if @injury_cache_key == current_key && @wounds_cache && @scars_cache
+            return [@wounds_cache, @scars_cache]
+          end
+
+          # Slow path: fetch new data with mutex protection
+          @cache_mutex.synchronize do
+            # Double-check after acquiring lock (another thread may have updated)
+            if @injury_cache_key == current_key && @wounds_cache && @scars_cache
+              return [@wounds_cache, @scars_cache]
+            end
+
+            # Fetch fresh data
+            wounds = Wounds.all_wounds
+            scars = Scars.all_scars
+
+            # Update cache
+            @wounds_cache = wounds
+            @scars_cache = scars
+            @injury_cache_key = current_key
+
+            [wounds, scars]
+          end
+        end
+
         # Helper method to calculate effective injury level from hash data
         # Rank 1 scars are ignored, and wounds take precedence over scars
         def effective_injury_from_hashes(body_part, wounds_hash, scars_hash)
@@ -47,9 +82,8 @@ module Lich
         def able_to_cast?
           fix_injury_mode("both")
 
-          # Fetch all injury data once
-          wounds = Wounds.all_wounds
-          scars = Scars.all_scars
+          # Fetch cached or fresh injury data
+          wounds, scars = get_injury_data
 
           # Rank 3 critical injuries prevent casting (Sigil cannot bypass)
           return false if injuries_at_rank?(3, wounds, scars, :head, :nsys, *BODY_PART_GROUPS[:eyes])
@@ -85,8 +119,7 @@ module Lich
         def able_to_sneak?
           fix_injury_mode("both")
 
-          wounds = Wounds.all_wounds
-          scars = Scars.all_scars
+          wounds, scars = get_injury_data
 
           # Rank 3 leg/foot injuries always prevent sneaking, but these are NOT critical
           # (Sigil cannot bypass, but they're not in the critical list for other actions)
@@ -105,8 +138,7 @@ module Lich
         def able_to_search?
           fix_injury_mode("both")
 
-          wounds = Wounds.all_wounds
-          scars = Scars.all_scars
+          wounds, scars = get_injury_data
 
           # Rank 3 critical injuries prevent searching (Sigil cannot bypass)
           return false if injuries_at_rank?(3, wounds, scars, :head, :nsys, *BODY_PART_GROUPS[:eyes])
@@ -124,8 +156,7 @@ module Lich
         def able_to_use_ranged?
           fix_injury_mode("both")
 
-          wounds = Wounds.all_wounds
-          scars = Scars.all_scars
+          wounds, scars = get_injury_data
 
           # Rank 3 critical injuries prevent ranged weapon use (Sigil cannot bypass)
           return false if injuries_at_rank?(3, wounds, scars, :head, :nsys, *BODY_PART_GROUPS[:eyes], *BODY_PART_GROUPS[:arms], *BODY_PART_GROUPS[:hands])
