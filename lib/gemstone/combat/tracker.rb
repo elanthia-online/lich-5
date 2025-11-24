@@ -8,6 +8,7 @@
 require_relative 'parser'
 require_relative 'processor'
 require_relative 'async_processor'
+require_relative '../../common/db_store'
 
 module Lich
   module Gemstone
@@ -18,16 +19,17 @@ module Lich
         @async_processor = nil
         @buffer = []
         @chunks_processed = 0
+        @initialized = false
 
         # Default settings for combat tracking
         DEFAULT_SETTINGS = {
-          enabled: true,            # Enable by default for testing
+          enabled: false,           # Disabled by default, user must enable
           track_damage: true,
           track_wounds: true,
-          track_statuses: true,     # Enable for testing
+          track_statuses: true,
           track_ucs: true,          # Track UCS (position, tierup, smite)
           max_threads: 2,           # Keep threading for performance
-          debug: false,             # Enable debug for testing
+          debug: false,
           buffer_size: 200,         # Increase for large combat chunks
           fallback_max_hp: 350,     # Default max HP when template unavailable
           cleanup_interval: 100,    # Cleanup creature registry every N chunks
@@ -38,32 +40,34 @@ module Lich
           attr_reader :settings, :buffer
 
           def enabled?
+            initialize! unless @initialized
             @enabled && @settings[:enabled]
           end
 
           def enable!
             return if @enabled
 
+            initialize! unless @initialized
             @enabled = true
-            load_settings
             @settings[:enabled] = true # Force enabled in settings
             save_settings # Persist enabled state
             initialize_processor
             add_downstream_hook
 
-            puts "[Combat] Combat tracking enabled" if debug?
+            respond "[Combat] Combat tracking enabled" if debug?
           end
 
           def disable!
             return unless @enabled
 
+            initialize! unless @initialized
             @enabled = false
             @settings[:enabled] = false
             save_settings # Persist disabled state
             remove_downstream_hook
             shutdown_processor
 
-            puts "[Combat] Combat tracking disabled" if debug?
+            respond "[Combat] Combat tracking disabled" if debug?
           end
 
           def debug?
@@ -72,24 +76,24 @@ module Lich
 
           def enable_debug!
             configure(debug: true, enabled: true)
-            puts "[Combat] Debug mode enabled"
+            respond "[Combat] Debug mode enabled"
           end
 
           def disable_debug!
             configure(debug: false)
-            puts "[Combat] Debug mode disabled"
+            respond "[Combat] Debug mode disabled"
           end
 
           def set_fallback_hp(hp_value)
             configure(fallback_max_hp: hp_value.to_i)
-            puts "[Combat] Fallback max HP set to #{hp_value}"
+            respond "[Combat] Fallback max HP set to #{hp_value}"
           end
 
           def fallback_hp
+            initialize! unless @initialized
             @settings[:fallback_max_hp]
           end
 
-          # Process a chunk of game lines
           def process(chunk)
             return unless enabled?
             return if chunk.empty?
@@ -111,7 +115,6 @@ module Lich
             end
           end
 
-          # Check if line contains combat-relevant content
           def combat_relevant?(line)
             line.include?('swing') ||
               line.include?('thrust') ||
@@ -127,8 +130,8 @@ module Lich
               line.match?(/\b(?:hit|miss|parr|block|dodge)\b/i)
           end
 
-          # Update settings
           def configure(new_settings = {})
+            initialize! unless @initialized
             @settings.merge!(new_settings)
 
             # Save to Lich settings system for persistence
@@ -140,10 +143,9 @@ module Lich
               initialize_processor
             end
 
-            puts "[Combat] Settings updated: #{@settings}" if debug?
+            respond "[Combat] Settings updated: #{@settings}" if debug?
           end
 
-          # Get processing stats
           def stats
             return { enabled: false } unless enabled?
 
@@ -169,21 +171,26 @@ module Lich
             removed = Creature.cleanup_old(max_age_seconds: max_age)
 
             if removed && removed > 0
-              puts "[Combat] Cleaned up #{removed} old creature instances (age > #{max_age}s)" if debug?
+              respond "[Combat] Cleaned up #{removed} old creature instances (age > #{max_age}s)" if debug?
             end
           rescue => e
-            puts "[Combat] Error during creature cleanup: #{e.message}" if debug?
+            respond "[Combat] Error during creature cleanup: #{e.message}" if debug?
           end
 
           def load_settings
-            # Load from Lich settings system
-            game_settings = Settings['combat'] || {}
-            @settings = DEFAULT_SETTINGS.merge(game_settings)
+            # Load from DB_Store with per-character scope
+            scope = "#{XMLData.game}:#{XMLData.name}"
+            _respond "[Combat] load_settings: scope='#{scope}'"
+            stored_settings = Lich::Common::DB_Store.read(scope, 'lich_combat_tracker')
+            _respond "[Combat] load_settings: stored=#{stored_settings.inspect}"
+            @settings = DEFAULT_SETTINGS.merge(stored_settings)
+            _respond "[Combat] load_settings: @settings[:enabled]=#{@settings[:enabled]}"
           end
 
           def save_settings
-            # Save current settings to Lich settings system
-            Settings['combat'] = @settings
+            # Save current settings to DB_Store with per-character scope
+            scope = "#{XMLData.game}:#{XMLData.name}"
+            Lich::Common::DB_Store.save(scope, 'lich_combat_tracker', @settings)
           end
 
           def initialize_processor
@@ -210,9 +217,9 @@ module Lich
                 # Check if THIS chunk contains creatures (no persistent state)
                 if chunk.any? { |line| line.match?(/<pushBold\/>.+?<a exist="[^"]+"[^>]*>.+?<\/a><popBold\/>/) }
                   process(chunk) unless chunk.empty?
-                  puts "[Combat] Processed chunk with creatures (#{chunk.size} lines)" if debug?
+                  respond "[Combat] Processed chunk with creatures (#{chunk.size} lines)" if debug?
                 else
-                  puts "[Combat] Discarded non-combat chunk (#{chunk.size} lines)" if debug?
+                  respond "[Combat] Discarded non-combat chunk (#{chunk.size} lines)" if debug?
                 end
               end
 
@@ -231,18 +238,34 @@ module Lich
             DownstreamHook.remove(@hook_id) if @hook_id
             @hook_id = nil
           end
+
+          def initialize!
+            _respond "[Combat] initialize! called, @initialized=#{@initialized}, XMLData.game=#{XMLData.game.inspect}, XMLData.name=#{XMLData.name.inspect}"
+            return if @initialized
+
+            # Don't initialize until XMLData is ready (avoid wrong scope)
+            if XMLData.game.nil? || XMLData.game.empty? || XMLData.name.nil? || XMLData.name.empty?
+              _respond "[Combat] initialize! skipped - XMLData not ready"
+              return
+            end
+
+            @initialized = true
+            _respond "[Combat] initialize! proceeding with initialization"
+
+            load_settings
+
+            # Auto-enable if settings indicate it was previously enabled
+            if @settings[:enabled]
+              @enabled = true
+              initialize_processor
+              add_downstream_hook
+              _respond "[Combat] Auto-enabled combat tracking from saved settings"
+            else
+              _respond "[Combat] Staying disabled (settings[:enabled]=false)"
+            end
+          end
         end
       end
     end
   end
-end
-
-# Auto-enable combat tracking
-# Enable if previously enabled OR if no settings exist (use defaults)
-combat_settings = Settings['combat'] || {}
-should_enable = combat_settings.fetch('enabled', true) # Default to enabled
-
-if should_enable
-  Lich::Gemstone::Combat::Tracker.enable!
-  puts "[Combat] Auto-enabled combat tracking"
 end
