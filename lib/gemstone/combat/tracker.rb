@@ -180,11 +180,11 @@ module Lich
           def load_settings
             # Load from DB_Store with per-character scope
             scope = "#{XMLData.game}:#{XMLData.name}"
-            _respond "[Combat] load_settings: scope='#{scope}'"
+            respond "[Combat] load_settings: scope='#{scope}'" if debug?
             stored_settings = Lich::Common::DB_Store.read(scope, 'lich_combat_tracker')
-            _respond "[Combat] load_settings: stored=#{stored_settings.inspect}"
+            respond "[Combat] load_settings: stored=#{stored_settings.inspect}" if debug?
             @settings = DEFAULT_SETTINGS.merge(stored_settings)
-            _respond "[Combat] load_settings: @settings[:enabled]=#{@settings[:enabled]}"
+            respond "[Combat] load_settings: @settings[:enabled]=#{@settings[:enabled]}" if debug?
           end
 
           def save_settings
@@ -240,17 +240,17 @@ module Lich
           end
 
           def initialize!
-            _respond "[Combat] initialize! called, @initialized=#{@initialized}, XMLData.game=#{XMLData.game.inspect}, XMLData.name=#{XMLData.name.inspect}"
+            respond "[Combat] initialize! called, @initialized=#{@initialized}, XMLData.game=#{XMLData.game.inspect}, XMLData.name=#{XMLData.name.inspect}"  if debug?
             return if @initialized
 
             # Don't initialize until XMLData is ready (avoid wrong scope)
             if XMLData.game.nil? || XMLData.game.empty? || XMLData.name.nil? || XMLData.name.empty?
-              _respond "[Combat] initialize! skipped - XMLData not ready"
+              respond "[Combat] initialize! skipped - XMLData not ready"  if debug?
               return
             end
 
             @initialized = true
-            _respond "[Combat] initialize! proceeding with initialization"
+            respond "[Combat] initialize! proceeding with initialization"  if debug?
 
             load_settings
 
@@ -258,10 +258,10 @@ module Lich
             if @settings[:enabled]
               @enabled = true
               initialize_processor
-              add_downstream_hook
-              _respond "[Combat] Auto-enabled combat tracking from saved settings"
+              add_downstream_hook 
+              respond "[Combat] Auto-enabled combat tracking from saved settings"  if debug?
             else
-              _respond "[Combat] Staying disabled (settings[:enabled]=false)"
+              respond "[Combat] Staying disabled (settings[:enabled]=false)"  if debug?
             end
           end
         end
