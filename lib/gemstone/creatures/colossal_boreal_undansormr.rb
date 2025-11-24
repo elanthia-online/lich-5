@@ -1,17 +1,19 @@
 {
   name: "Colossal boreal undansormr",
+  noun: "",
   url: "https://gswiki.play.net/Colossal_boreal_undansormr",
   picture: "",
   level: 111,
   family: "Worm",
   type: "Worm",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "Hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
+  max_hp: nil,
   speed: "",
   height: "",
   size: "",
