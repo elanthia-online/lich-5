@@ -1,17 +1,19 @@
 {
   name: "Grim gigas skald",
+  noun: "",
   url: "https://gswiki.play.net/Grim_gigas_skald",
   picture: "",
   level: 105,
   family: "Gigas",
   type: "Biped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "Hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
+  max_hp: nil,
   speed: "",
   height: 28,
   size: "huge",
@@ -98,7 +100,6 @@
 }
 
 =begin
-
 A grim gigas skald raises her sonorous voice into a resounding cry that crashes like mad thunder through the area!
 [SMR result: -6 (Open d100: -12, Bonus: 12)]
 You manage to throw yourself free from the auditory assault!
@@ -114,10 +115,7 @@ A grim gigas skald artfully plays her ruic lyre, sending a ripple of shimmering 
 A grim gigas skald artfully plays her ruic lyre, sending a ripple of shimmering air toward you!
 You move at the last moment to evade the bolt!
 
-
 A grim gigas skald flails on the ground, making the ground shudder, before managing to fight her way into a standing position.
 
 One leg dragging behind her, a grim gigas skald staggers northwest.
-
-
 =end
