@@ -1,17 +1,19 @@
 {
   name: "heavily armored battle mastodon",
+  noun: "",
   url: "https://gswiki.play.net/Heavily_armored_battle_mastodon",
   picture: "",
   level: 102,
   family: "elephantid",
   type: "quadruped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
+  max_hp: nil,
   speed: "",
   height: 30,
   size: "huge",
@@ -78,14 +80,11 @@
       "A heavily armored battle mastodon quests about with its trunk, eyes narrowing.",
       "A heavily armored battle mastodon looks about in alarm as its trunk tests the air."
     ],
-
     combat_messaging: "A heavily armored battle mastodon raises its trunk and rears back onto its immense hind legs, blaring out a note of sheer fury!\n[SSR result: 34 (Open d100: 8)]\nYou keep your wits amidst the mastodon's angry trumpeting!\n[SSR result: 138 (Open d100: 87)]\nThe mastodon's angry trumpeting startles XXX!\nA heavily armored battle mastodon slams a gigantic foot down, sending tremors rippling outward from the point of impact!"
   }
 }
 
 =begin
-
-
 A heavily armored battle mastodon tries to spear you with its enormous tusks!
   AS: +529 vs DS: +868 with AvD: +37 + d100 roll: +98 = -204
    A clean miss.
@@ -96,7 +95,4 @@ A heavily armored battle mastodon raises its trunk and slams it down toward you!
 
    A heavily armored battle mastodon rears back and tries to stomp you with a great foot!
 You flail on the ground but manage to barely dodge the attack!
-
-
-
 =end
