@@ -71,7 +71,7 @@ module Lich
 
           # Check template limit
           if template_count >= @@max_templates
-            puts "--- warning: Template cache limit (#{@@max_templates}) reached, skipping remaining templates" if $creature_debug
+            respond "--- warning: Template cache limit (#{@@max_templates}) reached, skipping remaining templates" if $creature_debug
             break
           end
 
@@ -89,12 +89,12 @@ module Lich
             @@templates[normalized_name] = template
             template_count += 1
           rescue => e
-            puts "--- error loading template #{template_name}: #{e.message}" if $creature_debug
+            respond "--- error loading template #{template_name}: #{e.message}" if $creature_debug
           end
         end
 
         @@loaded = true
-        puts "--- loaded #{template_count} creature templates" if $creature_debug
+        respond "--- loaded #{template_count} creature templates" if $creature_debug
       end
 
       # Clean creature name by removing boon adjectives
@@ -240,9 +240,9 @@ module Lich
         duration ||= STATUS_DURATIONS[status_key]
         if duration
           @status_timestamps[status] = Time.now + duration
-          puts "  +status: #{status} (expires in #{duration}s)" if $creature_debug
+          respond "  +status: #{status} (expires in #{duration}s)" if $creature_debug
         else
-          puts "  +status: #{status} (no auto-expiry)" if $creature_debug
+          respond "  +status: #{status} (no auto-expiry)" if $creature_debug
         end
       end
 
@@ -250,7 +250,7 @@ module Lich
       def remove_status(status)
         @status.delete(status)
         @status_timestamps.delete(status)
-        puts "  -status: #{status}" if $creature_debug
+        respond "  -status: #{status}" if $creature_debug
       end
 
       # Clean up expired status effects
@@ -261,7 +261,7 @@ module Lich
         @status_timestamps.select { |_status, expires_at| expires_at <= now }.keys.each do |expired_status|
           @status.delete(expired_status)
           @status_timestamps.delete(expired_status)
-          puts "  ~status: #{expired_status} (auto-expired)" if $creature_debug
+          respond "  ~status: #{expired_status} (auto-expired)" if $creature_debug
         end
       end
 
@@ -299,21 +299,21 @@ module Lich
 
         @ucs_position = new_tier
         @ucs_updated = Time.now
-        puts "  UCS: position=#{new_tier}" if $creature_debug
+        respond "  UCS: position=#{new_tier}" if $creature_debug
       end
 
       # Set UCS tierup vulnerability
       def set_ucs_tierup(attack_type)
         @ucs_tierup = attack_type
         @ucs_updated = Time.now
-        puts "  UCS: tierup=#{attack_type}" if $creature_debug
+        respond "  UCS: tierup=#{attack_type}" if $creature_debug
       end
 
       # Mark creature as smote (crimson mist applied)
       def smite!
         @ucs_smote = Time.now
         @ucs_updated = Time.now
-        puts "  UCS: smote!" if $creature_debug
+        respond "  UCS: smote!" if $creature_debug
       end
 
       # Check if creature is currently smote
@@ -333,7 +333,7 @@ module Lich
       def clear_smote
         @ucs_smote = nil
         @ucs_updated = Time.now
-        puts "  UCS: smote cleared" if $creature_debug
+        respond "  UCS: smote cleared" if $creature_debug
       end
 
       # Check if UCS data has expired
@@ -490,7 +490,7 @@ module Lich
             # Try 15 minutes, then 10, then 5, then 2, then give up
             [900, 600, 300, 120].each do |age_threshold|
               removed = cleanup_old(age_threshold)
-              puts "--- Auto-cleanup: removed #{removed} old creatures (threshold: #{age_threshold}s)" if removed > 0 && $creature_debug
+              respond "--- Auto-cleanup: removed #{removed} old creatures (threshold: #{age_threshold}s)" if removed > 0 && $creature_debug
               break unless full?
             end
             return nil if full? # Still full after all cleanup attempts
@@ -498,7 +498,7 @@ module Lich
 
           instance = new(id, noun, name)
           @@instances[id.to_i] = instance
-          puts "--- Creature registered: #{name} (#{id})" if $creature_debug
+          respond "--- Creature registered: #{name} (#{id})" if $creature_debug
           instance
         end
 
@@ -523,120 +523,6 @@ module Lich
           removed = @@instances.select { |_id, instance| instance.created_at < cutoff }.size
           @@instances.reject! { |_id, instance| instance.created_at < cutoff }
           removed
-        end
-
-        # Generate damage report for HP analysis
-        def damage_report(options = {})
-          min_samples = options[:min_samples] || 2
-          sort_by = options[:sort_by] || :name # :name, :max_damage, :avg_damage
-          include_fatal = options[:include_fatal] || false
-
-          # Group creatures by name and collect damage data
-          creature_data = {}
-          fatal_crit_data = {}
-
-          @@instances.values.each do |instance|
-            next if instance.damage_taken <= 0
-
-            name = instance.name
-
-            if instance.fatal_crit?
-              # Track fatal crit deaths separately
-              fatal_crit_data[name] ||= []
-              fatal_crit_data[name] << instance.damage_taken
-
-              # Include in main data only if requested
-              next unless include_fatal
-            end
-
-            creature_data[name] ||= []
-            creature_data[name] << instance.damage_taken
-          end
-
-          # Calculate statistics for each creature type
-          results = []
-          creature_data.each do |name, damages|
-            next if damages.size < min_samples
-
-            damages.sort!
-            count = damages.size
-            min_dmg = damages.first
-            max_dmg = damages.last
-            avg_dmg = damages.sum.to_f / count
-            median_dmg = if count.odd?
-                           damages[count / 2]
-                         else
-                           (damages[count / 2 - 1] + damages[count / 2]) / 2.0
-                         end
-
-            # Count fatal crit deaths for this creature type
-            fatal_count = fatal_crit_data[name]&.size || 0
-
-            results << {
-              name: name,
-              count: count,
-              min_damage: min_dmg,
-              max_damage: max_dmg,
-              avg_damage: avg_dmg.round(1),
-              median_damage: median_dmg.round(1),
-              fatal_crits: fatal_count
-            }
-          end
-
-          # Sort results
-          case sort_by
-          when :max_damage
-            results.sort_by! { |r| -r[:max_damage] }
-          when :avg_damage
-            results.sort_by! { |r| -r[:avg_damage] }
-          else
-            results.sort_by! { |r| r[:name] }
-          end
-
-          results
-        end
-
-        # Print formatted damage report
-        def print_damage_report(options = {})
-          results = damage_report(options)
-
-          if results.empty?
-            puts "No damage data available (need at least #{options[:min_samples] || 2} samples per creature)"
-            return
-          end
-
-          puts
-          puts "=" * 90
-          puts "CREATURE DAMAGE ANALYSIS REPORT"
-          puts "=" * 90
-          puts "Total creature instances tracked: #{@@instances.size}"
-          puts "Creature types with damage data: #{results.size}"
-          puts "Fatal crits excluded from analysis (they skew max HP calculations)"
-          puts
-
-          # Print header
-          puts "%-35s %5s %5s %5s %7s %7s %6s" % ["Creature Name", "Count", "Min", "Max", "Avg", "Median", "Fatal"]
-          puts "-" * 90
-
-          # Print data rows
-          results.each do |data|
-            puts "%-35s %5d %5d %5d %7.1f %7.1f %6d" % [
-              data[:name].length > 35 ? data[:name][0, 32] + "..." : data[:name],
-              data[:count],
-              data[:min_damage],
-              data[:max_damage],
-              data[:avg_damage],
-              data[:median_damage],
-              data[:fatal_crits]
-            ]
-          end
-
-          puts "-" * 90
-          puts "Max damage likely indicates creature's max HP (fatal crits excluded)"
-          puts "Fatal = number of creatures killed by fatal crits (not HP loss)"
-          puts "Use ;creature_report sort:max to sort by highest max damage"
-          puts "Use ;creature_report include_fatal to include fatal crit deaths in analysis"
-          puts
         end
       end
     end
