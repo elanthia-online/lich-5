@@ -48,6 +48,9 @@ module Lich
           @interval = 900 # 15 minutes default
           @verbose = false
           @thread = nil
+          @restart_queue = Queue.new
+          @restart_handler = nil
+          setup_restart_handler
         end
 
         # Perform a complete memory release cycle
@@ -68,6 +71,10 @@ module Lich
         # Stops any existing thread before starting a new one. The thread will
         # sleep for the specified interval between memory release cycles.
         #
+        # This method uses a restart queue mechanism to ensure threads started
+        # from within Lich scripts persist at the main Lich engine level rather
+        # than being tied to the calling script's lifecycle.
+        #
         # @param interval [Integer] time in seconds between memory releases (default: 900)
         # @param verbose [Boolean] whether to enable verbose logging (default: false)
         # @return [Thread] the background thread
@@ -84,25 +91,11 @@ module Lich
           @verbose = verbose
           @enabled = true
 
-          @thread = Thread.new do
-            log "Memory releaser started (interval: #{@interval}s)"
+          # Queue the restart request to be handled by the persistent restart handler
+          @restart_queue << { interval: interval, verbose: verbose }
 
-            loop do
-              break unless @enabled
-
-              sleep(@interval)
-              break unless @enabled
-
-              begin
-                release
-              rescue => e
-                warn "Memory releaser error: #{e.message}"
-                warn e.backtrace.first(5).join("\n") if @verbose
-              end
-            end
-
-            log "Memory releaser stopped"
-          end
+          # Wait for thread to start
+          sleep 0.1 until @thread&.alive?
 
           @thread
         end
@@ -193,6 +186,60 @@ module Lich
         end
 
         private
+
+        # Set up the persistent restart handler thread
+        #
+        # This thread runs at the main Lich engine level and handles restart
+        # requests from scripts. This ensures that worker threads created after
+        # a stop/start cycle persist beyond individual script lifecycles.
+        #
+        # @return [void]
+        # @api private
+        def setup_restart_handler
+          return if @restart_handler&.alive?
+
+          @restart_handler = Thread.new do
+            loop do
+              config = @restart_queue.pop
+              break if config == :stop
+
+              # Create the worker thread in this persistent handler's context
+              start_worker_thread(config[:interval], config[:verbose])
+            end
+          end
+        end
+
+        # Start the actual worker thread that performs memory releases
+        #
+        # This method is called by the restart handler and creates the worker
+        # thread in the handler's context, ensuring it persists at the main
+        # Lich engine level.
+        #
+        # @param interval [Integer] time in seconds between memory releases
+        # @param verbose [Boolean] whether to enable verbose logging
+        # @return [void]
+        # @api private
+        def start_worker_thread(interval, verbose)
+          @thread = Thread.new do
+            log "Memory releaser started (interval: #{interval}s)"
+
+            loop do
+              break unless @enabled
+
+              sleep(interval)
+              break unless @enabled
+
+              begin
+                release
+              rescue => e
+                warn "Memory releaser error: #{e.message}"
+                warn e.backtrace.first(5).join("\n") if verbose
+              end
+            end
+
+            log "Memory releaser stopped"
+          end
+        end
 
         # Log a message if verbose mode is enabled
         #
