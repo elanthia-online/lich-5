@@ -32,7 +32,7 @@ module Lich
       #
       # @example Get statistics
       #   stats = Combat::Tracker.stats
-      #   puts "Active threads: #{stats[:active]}"
+      #   respond "Active threads: #{stats[:active]}"
       #
       module Tracker
         @enabled = false
