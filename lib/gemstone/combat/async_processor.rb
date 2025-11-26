@@ -41,11 +41,11 @@ module Lich
 
               elapsed = Time.now - Thread.current[:start_time]
               if elapsed > 0.5 && Tracker.debug?
-                puts "[Combat] Processed #{chunk.size} lines in #{elapsed.round(3)}s"
+                respond "[Combat] Processed #{chunk.size} lines in #{elapsed.round(3)}s"
               end
             rescue => e
-              puts "[Combat] Processing error: #{e.message}" if Tracker.debug?
-              puts e.backtrace.first(3) if Tracker.debug?
+              respond "[Combat] Processing error: #{e.message}" if Tracker.debug?
+              respond e.backtrace.first(3) if Tracker.debug?
             ensure
               @active_count.decrement
               # Thread cleans itself up from pool when done (use Thread.current to avoid race)
@@ -58,7 +58,7 @@ module Lich
         end
 
         def shutdown
-          puts "[Combat] Waiting for #{@thread_pool.count(&:alive?)} threads..." if Tracker.debug?
+          respond "[Combat] Waiting for #{@thread_pool.count(&:alive?)} threads..." if Tracker.debug?
           @thread_pool.each(&:join)
           @thread_pool.clear
 
@@ -94,7 +94,7 @@ module Lich
           # If we cleaned up dead threads, suggest GC to help with fragmentation
           if dead_count > 10
             GC.start
-            puts "[Combat] Cleaned #{dead_count} dead threads, triggered GC" if Tracker.debug?
+            respond "[Combat] Cleaned #{dead_count} dead threads, triggered GC" if Tracker.debug?
           end
 
           # Periodic heap compaction to reduce fragmentation (every hour)
@@ -102,7 +102,7 @@ module Lich
             GC.start
             GC.compact
             @last_compact = Time.now
-            puts "[Combat] Triggered hourly GC compaction" if Tracker.debug?
+            respond "[Combat] Triggered hourly GC compaction" if Tracker.debug?
           end
 
           @last_cleanup = Time.now
