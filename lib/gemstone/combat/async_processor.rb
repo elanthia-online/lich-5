@@ -64,15 +64,15 @@ module Lich
 
           # Force GC after shutdown to help with memory fragmentation
           GC.start
-          GC.compact if GC.respond_to?(:compact)  # Ruby 2.7+
+          GC.compact if GC.respond_to?(:compact) # Ruby 2.7+
         end
 
         def stats
           {
             active: @active_count.value,
             total_alive: @thread_pool.count(&:alive?),
-            pool_size: @thread_pool.size,  # ACTUAL array size (includes dead threads if not cleaned)
-            dead_threads: @thread_pool.count { |t| !t.alive? },  # Count dead threads still in pool
+            pool_size: @thread_pool.size, # ACTUAL array size (includes dead threads if not cleaned)
+            dead_threads: @thread_pool.count { |t| !t.alive? }, # Count dead threads still in pool
             max_threads: @max_threads,
             processing: @thread_pool.select(&:alive?).map do |thread|
               {
