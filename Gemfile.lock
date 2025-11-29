@@ -123,6 +123,16 @@ GEM
     set (1.1.2)
     sqlite3 (2.8.1)
       mini_portile2 (~> 2.8.0)
+    sqlite3 (2.8.1-aarch64-linux-gnu)
+    sqlite3 (2.8.1-aarch64-linux-musl)
+    sqlite3 (2.8.1-arm-linux-gnu)
+    sqlite3 (2.8.1-arm-linux-musl)
+    sqlite3 (2.8.1-arm64-darwin)
+    sqlite3 (2.8.1-x86-linux-gnu)
+    sqlite3 (2.8.1-x86-linux-musl)
+    sqlite3 (2.8.1-x86_64-darwin)
+    sqlite3 (2.8.1-x86_64-linux-gnu)
+    sqlite3 (2.8.1-x86_64-linux-musl)
     stringio (3.1.8)
     tempfile (0.3.1)
     terminal-table (4.0.0)
@@ -145,6 +155,7 @@ GEM
     zlib (3.2.2)
 
 PLATFORMS
+  aarch64-linux
   aarch64-linux-gnu
   aarch64-linux-musl
   arm-linux
@@ -153,6 +164,7 @@ PLATFORMS
   arm64-darwin
   x64-mingw
   x64-mingw-ucrt
+  x86-darwin
   x86-linux
   x86-linux-gnu
   x86-linux-musl
