@@ -38,9 +38,9 @@ gem "yaml", ">= 0.4"
 gem "zlib", ">= 3.2"
 
 if Gem.win_platform?
-  gem "gtk3", ">= 4.3"
-  gem "sqlite3", ">= 1.6", force_ruby_platform: true
-  gem "win32ole", ">= 1.9"
+  gem "gtk3", ">= 4.3", platform: :windows
+  gem "sqlite3", ">= 1.6", platform: :windows, force_ruby_platform: true
+  gem "win32ole", ">= 1.9", platform: :windows
 else
   gem "sqlite3", ">= 1.6"
 end
