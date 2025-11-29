@@ -15,6 +15,7 @@ gem "drb", ">= 2.2"
 gem "ffi", ">= 1.17"
 gem "fiddle", ">= 1.1"
 gem "fileutils", ">= 1.7"
+gem "gtk3", ">= 4.3", platforms: :windows
 gem "json", ">= 2.9"
 gem "logger", ">= 1.6"
 gem "openssl", ">= 3.3"
@@ -34,13 +35,12 @@ gem "tmpdir", ">= 0.3"
 gem "tzinfo", ">= 2.0"
 gem "tzinfo-data", ">= 1.2025"
 gem "webrick", ">= 1.9"
+gem "win32ole", ">= 1.9", platforms: :windows
 gem "yaml", ">= 0.4"
 gem "zlib", ">= 3.2"
 
 if Gem.win_platform?
-  gem "gtk3", ">= 4.3", platforms: :windows
   gem "sqlite3", ">= 1.6", platforms: :windows, force_ruby_platform: true
-  gem "win32ole", ">= 1.9", platforms: :windows
 else
   gem "sqlite3", ">= 1.6"
 end
