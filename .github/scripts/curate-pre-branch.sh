@@ -216,6 +216,13 @@ process_single_pr() {
   local pr_num="$1"
   log_group "PR #${pr_num}"
 
+  # Detect whether this PR has already been curated into DEST_SAFE
+  local pr_already_curated=false
+  if git log --format=%s HEAD | grep -qE "\(#${pr_num}\)$"; then
+    pr_already_curated=true
+    log_info "PR #${pr_num} already present in ${DEST_SAFE}; treating as update."
+  fi
+
   local pr_json
   pr_json="$(fetch_pr "$GITHUB_REPOSITORY" "$pr_num")"
 
@@ -227,6 +234,18 @@ process_single_pr() {
   if ! echo "$title" | grep -Eq '\(#?[0-9]+\)$'; then
     title="${title} (#${pr_num})"
   fi
+  # Save current conflict strategy
+  local prev_git_strategy_flag="$GIT_STRATEGY_FLAG"
+  local prev_use_union="$USE_UNION"
+
+  if [[ "$pr_already_curated" == "true" && "$STRAT_SAFE" == "union" ]]; then
+    # For already-in-train PRs, prefer incoming changes (-X theirs)
+    # shellcheck source=.github/scripts/strategies/conflict/theirs.sh
+    source "${SCRIPT_DIR}/strategies/conflict/theirs.sh"
+    GIT_STRATEGY_FLAG="$(get_strategy_flag_theirs)"
+    USE_UNION=false
+    log_info "Using -X theirs strategy for updated PR #${pr_num}"
+  fi
 
   # Determine cherry-pick mode
   if [[ "$MODE_SAFE" == "merged" ]] || { [[ "$MODE_SAFE" == "auto" ]] && pr_is_merged "$pr_json" && [[ "$merge_sha" != "null" ]]; }; then
@@ -234,6 +253,10 @@ process_single_pr() {
   else
     cherry_pick_open_pr "$pr_num" "$title"
   fi
+
+  # Restore previous conflict strategy for the next PR
+  GIT_STRATEGY_FLAG="$prev_git_strategy_flag"
+  USE_UNION="$prev_use_union"
 
   log_endgroup
 }
