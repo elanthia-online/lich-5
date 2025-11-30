@@ -465,24 +465,24 @@ module Lich
           file_path = File.join(location, requested_file)
           tmp_file_path = file_path + ".tmp"
           old_file_path = file_path + ".old"
-          
+
           # Rename existing file to .old if it exists
           if File.exist?(file_path)
             File.rename(file_path, old_file_path)
           end
-          
+
           begin
             # Download to .tmp file first
             File.open(tmp_file_path, "wb") do |file|
               file.write URI.parse(File.join(remote_repo, requested_file)).open.read
             end
-            
+
             # If successful, move .tmp to final location
             File.rename(tmp_file_path, file_path)
-            
+
             # Clean up .old file if everything succeeded
             File.delete(old_file_path) if File.exist?(old_file_path)
-            
+
             respond
             respond "#{requested_file} has been updated."
           rescue StandardError => e
@@ -490,7 +490,7 @@ module Lich
             respond
             respond "Error updating #{requested_file}: #{e.class} - #{e.message}"
             respond "Backtrace: #{e.backtrace.first(3).join(' | ')}" if $debug
-            
+
             # Clean up the .tmp file if it exists
             if File.exist?(tmp_file_path)
               begin
@@ -500,7 +500,7 @@ module Lich
                 respond "Warning: Could not delete temporary file: #{cleanup_error.message}"
               end
             end
-            
+
             # Restore the .old file if it exists
             if File.exist?(old_file_path)
               begin
@@ -510,7 +510,7 @@ module Lich
                 respond "Warning: Could not restore original file: #{restore_error.message}"
               end
             end
-            
+
             respond
             respond "The filename #{requested_file} is not available via lich5-update."
             respond "Check the spelling of your requested file, or use '#{$clean_lich_char}jinx' to"
