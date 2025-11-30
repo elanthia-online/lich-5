@@ -1,5 +1,28 @@
 # Changelog
 
+## [5.13.0-beta.1](https://github.com/elanthia-online/lich-5/compare/v5.13.0-beta.0...v5.13.0-beta.1) (2025-11-30)
+
+
+### Features
+
+* **all:** add simplified DB maintenance ([#991](https://github.com/elanthia-online/lich-5/issues/991)) ([77023f0](https://github.com/elanthia-online/lich-5/commit/77023f0e60137f02f3c70c869339923f764c477d))
+* **all:** Refocus Frontend ([#960](https://github.com/elanthia-online/lich-5/issues/960)) ([bf1e0b4](https://github.com/elanthia-online/lich-5/commit/bf1e0b495330b9ec2f31e1ee9b4e7acbb7471a13))
+* **all:** TextStripper module support for XML, HTML, Markdown ([#1055](https://github.com/elanthia-online/lich-5/issues/1055)) ([928c661](https://github.com/elanthia-online/lich-5/commit/928c661dd031b50a8fe1f38acc2aae9d1bc3e29e))
+* **gs:** add creature module, including Hinterwilds creatures ([#1002](https://github.com/elanthia-online/lich-5/issues/1002)) ([0dfc73c](https://github.com/elanthia-online/lich-5/commit/0dfc73c6cfb2c17321424323109683e748d64087))
+* **gs:** add Injured class for checking ability to perform actions ([#1035](https://github.com/elanthia-online/lich-5/issues/1035)) ([184b5b5](https://github.com/elanthia-online/lich-5/commit/184b5b5d797221b4f783a4876aec236503ee6f12))
+* **gs:** Creature module combat tracking ([#1003](https://github.com/elanthia-online/lich-5/issues/1003)) ([f6a1481](https://github.com/elanthia-online/lich-5/commit/f6a14812e1968cf55f9e697bc2fc5f59f42725c8))
+
+
+### Bug Fixes
+
+* **all:** map dijkstra optimization ([#1061](https://github.com/elanthia-online/lich-5/issues/1061)) ([62c2f06](https://github.com/elanthia-online/lich-5/commit/62c2f06295c907a68e67a2b41baa65cbbb1586a8))
+* **gs:** Infomon additional CHE resign regex ([#1067](https://github.com/elanthia-online/lich-5/issues/1067)) ([4bf4f78](https://github.com/elanthia-online/lich-5/commit/4bf4f7817578a29f4adb597615f20fa1a49a9f7e))
+
+
+### Miscellaneous Chores
+
+* pin prerelease v5.13.0-beta.1 ([671955a](https://github.com/elanthia-online/lich-5/commit/671955a66f92dd44cae1d90db77ede090b0df7a8))
+
 ## [5.13.0-beta.0](https://github.com/elanthia-online/lich-5/compare/v5.12.12...v5.13.0-beta.0) (2025-11-15)
 
 
