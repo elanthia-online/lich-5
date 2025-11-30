@@ -487,8 +487,8 @@ module Lich
 
           # Auto-cleanup old instances if registry is full - get progressively more aggressive
           if full?
-            # Try 15 minutes, then 10, then 5, then 2, then give up
-            [900, 600, 300, 120].each do |age_threshold|
+            # Try 120 minutes, then 15 minute intervals.
+            [7200, 6300, 5400, 4500, 3600, 2700, 1800, 900].each do |age_threshold|
               removed = cleanup_old(age_threshold)
               respond "--- Auto-cleanup: removed #{removed} old creatures (threshold: #{age_threshold}s)" if removed > 0 && $creature_debug
               break unless full?
