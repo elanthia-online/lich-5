@@ -1,18 +1,20 @@
 {
   name: "Roiling crimson angargeist",
+  noun: "",
   url: "https://gswiki.play.net/Roiling_crimson_angargeist",
   picture: "",
   level: 110,
   family: "",
   type: "",
   undead: true,
+  boss: false,
   otherclass: ["Non Corporeal undead"],
   areas: [
-    "Hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
-  speed: "",
+  max_hp: nil,
+  speed: nil,
   height: 13,
   size: "large",
   attack_attributes: {
@@ -50,19 +52,18 @@
     mnm_td: nil,
     defensive_spells: [],
     defensive_abilities: [],
-    imm1: "",
-    sda1: ""
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
-    coins: "?",
-    magic_items: "",
-    gems: "?",
-    boxes: "?",
-    skin: "?",
-    other: "?",
+    coins: nil,
+    magic_items: nil,
+    gems: nil,
+    boxes: nil,
+    skin: nil,
+    other: nil,
     blunt_required: false
   },
   messaging: {

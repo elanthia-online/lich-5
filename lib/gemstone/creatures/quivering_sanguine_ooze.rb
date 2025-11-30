@@ -1,20 +1,22 @@
 {
   name: "Quivering sanguine ooze",
+  noun: "",
   url: "https://gswiki.play.net/Quivering_sanguine_ooze",
   picture: "",
   level: 107,
   family: "Ooze",
   type: "Globoid",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "Hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
-  speed: "",
-  height: "",
-  size: "",
+  max_hp: nil,
+  speed: nil,
+  height: nil,
+  size: nil,
   attack_attributes: {
     physical_attacks: [
       {
@@ -50,19 +52,18 @@
     mnm_td: nil,
     defensive_spells: [],
     defensive_abilities: [],
-    imm1: "",
-    sda1: ""
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
-    coins: "?",
-    magic_items: "",
-    gems: "?",
+    coins: nil,
+    magic_items: nil,
+    gems: nil,
     boxes: true,
-    skin: "?",
-    other: "?",
+    skin: nil,
+    other: nil,
     blunt_required: false
   },
   messaging: {

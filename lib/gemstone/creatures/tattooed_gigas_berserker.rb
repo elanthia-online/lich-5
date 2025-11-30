@@ -1,18 +1,20 @@
 {
   name: "tattooed gigas berserker",
+  noun: "",
   url: "https://gswiki.play.net/Tattooed_gigas_berserker",
   picture: "",
   level: 103,
   family: "gigas",
   type: "biped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
-  speed: "",
+  max_hp: nil,
+  speed: nil,
   height: 30,
   size: "huge",
   attack_attributes: {
@@ -50,16 +52,15 @@
     mnm_td: nil,
     defensive_spells: [],
     defensive_abilities: [],
-    imm1: "",
-    sda1: ""
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
-    coins: "?",
-    magic_items: "",
-    gems: "?",
+    coins: nil,
+    magic_items: nil,
+    gems: nil,
     boxes: true,
     skin: false,
     other: "gigas fragments",
