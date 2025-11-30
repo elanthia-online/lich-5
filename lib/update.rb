@@ -462,20 +462,59 @@ module Lich
           requested_file =~ /(\.(?:xml|ui))$/ ? requested_file_ext = $1&.dup : requested_file_ext = "bad extension"
         end
         unless requested_file_ext == "bad extension"
-          File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))
+          file_path = File.join(location, requested_file)
+          tmp_file_path = file_path + ".tmp"
+          old_file_path = file_path + ".old"
+          
+          # Rename existing file to .old if it exists
+          if File.exist?(file_path)
+            File.rename(file_path, old_file_path)
+          end
+          
           begin
-            File.open(File.join(location, requested_file), "wb") do |file|
+            # Download to .tmp file first
+            File.open(tmp_file_path, "wb") do |file|
               file.write URI.parse(File.join(remote_repo, requested_file)).open.read
             end
+            
+            # If successful, move .tmp to final location
+            File.rename(tmp_file_path, file_path)
+            
+            # Clean up .old file if everything succeeded
+            File.delete(old_file_path) if File.exist?(old_file_path)
+            
             respond
             respond "#{requested_file} has been updated."
-          rescue
-            # we created a garbage file (zero bytes filename) so let's clean it up and inform.
-            sleep 1
-            File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))
-            respond; respond "The filename #{requested_file} is not available via lich5-update."
+          rescue StandardError => e
+            # Log the actual error for debugging
+            respond
+            respond "Error updating #{requested_file}: #{e.class} - #{e.message}"
+            respond "Backtrace: #{e.backtrace.first(3).join(' | ')}" if $debug
+            
+            # Clean up the .tmp file if it exists
+            if File.exist?(tmp_file_path)
+              begin
+                File.delete(tmp_file_path)
+                respond "Cleaned up incomplete temporary file."
+              rescue => cleanup_error
+                respond "Warning: Could not delete temporary file: #{cleanup_error.message}"
+              end
+            end
+            
+            # Restore the .old file if it exists
+            if File.exist?(old_file_path)
+              begin
+                File.rename(old_file_path, file_path)
+                respond "Restored original file."
+              rescue => restore_error
+                respond "Warning: Could not restore original file: #{restore_error.message}"
+              end
+            end
+            
+            respond
+            respond "The filename #{requested_file} is not available via lich5-update."
             respond "Check the spelling of your requested file, or use '#{$clean_lich_char}jinx' to"
-            respond "to download #{requested_file} from another respository."
+            respond "download #{requested_file} from another repository."
           end
         else
           respond
