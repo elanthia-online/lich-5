@@ -196,17 +196,38 @@ module Lich
 
         def open(host, port)
           @socket = TCPSocket.open(host, port)
+          
+          # Configure socket with error handling
+          # More forgiving settings for Windows reliability under network stress
           begin
-            # @socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, true)
             SocketConfigurator.configure(@socket,
-                                         keepalive: { enable: true, idle: 60, interval: 10 },
-                                         linger: { enable: true, timeout: 5 },
-                                         timeout: { recv: 10, send: 10 },
-                                         buffer_size: { recv: 65536, send: 65536 },
-                                         tcp_nodelay: true)
+                                         keepalive: { 
+                                           enable: true, 
+                                           idle: 120,      # 2 minutes before first keepalive
+                                           interval: 30    # 30 seconds between keepalive probes
+                                         },
+                                         linger: { 
+                                           enable: true, 
+                                           timeout: 5      # Wait 5 seconds for data to send on close
+                                         },
+                                         timeout: { 
+                                           recv: 30,       # 30 second receive timeout (increased from 10)
+                                           send: 30        # 30 second send timeout (increased from 10)
+                                         },
+                                         buffer_size: { 
+                                           recv: 32768,    # 32KB receive buffer (reduced from 65536)
+                                           send: 32768     # 32KB send buffer (reduced from 65536)
+                                         },
+                                         tcp_nodelay: true, # Disable Nagle's algorithm for low latency
+                                         tcp_maxrt: 10)     # Windows: max 10 retransmissions before giving up
+            
+            Lich.log("Socket configured successfully for #{host}:#{port}")
           rescue StandardError => e
-            log_error("Socket option error", e)
+            # Log the error but continue - socket may still work with default settings
+            log_error("Socket configuration error (continuing with defaults)", e)
+            Lich.log("WARNING: Socket running with default OS settings - may be less reliable under network stress")
           end
+          
           @socket.sync = true
 
           start_wrap_thread
