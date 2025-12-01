@@ -659,7 +659,6 @@ module Lich
           @instance = nil
         end
       end
-      start unless running?
     end
   end
 end
