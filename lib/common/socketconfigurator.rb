@@ -37,38 +37,38 @@ module Lich
         # @api private
         module WinFFI
           extend FFI::Library
-          ffi_lib 'Ws2_32'
+          ffi_lib 'Ws2_32', 'msvcrt'
 
           # WSAIoctl command code for setting TCP keep-alive parameters
           SIO_KEEPALIVE_VALS = 0x98000004
-          
+
           # Socket option level for socket-level options
-          SOL_SOCKET  = 0xffff
-          
+          SOL_SOCKET = 0xffff
+
           # Socket option to enable/disable keep-alive
           SO_KEEPALIVE = 0x0008
-          
+
           # Socket option to control connection linger on close
           SO_LINGER   = 0x0080
-          
+
           # Socket option to set receive timeout
           SO_RCVTIMEO = 0x1006
-          
+
           # Socket option to set send timeout
           SO_SNDTIMEO = 0x1005
-          
+
           # Socket option to set receive buffer size
           SO_RCVBUF   = 0x1002
-          
+
           # Socket option to set send buffer size
           SO_SNDBUF   = 0x1003
-          
+
           # Protocol number for TCP
           IPPROTO_TCP = 6
-          
+
           # TCP option to disable Nagle's algorithm
           TCP_NODELAY = 0x0001
-          
+
           # TCP option to set maximum retransmission time
           TCP_MAXRT   = 5
 
@@ -123,7 +123,7 @@ module Lich
           attach_function :WSAIoctl, [:int, :ulong, :pointer, :ulong,
                                       :pointer, :ulong, :pointer,
                                       :pointer, :pointer], :int
-          
+
           # Sets socket options (Windows-specific).
           #
           # @param socket [Integer] Socket file descriptor
@@ -133,13 +133,21 @@ module Lich
           # @param optlen [Integer] Size of option value
           # @return [Integer] 0 on success, SOCKET_ERROR on failure
           attach_function :setsockopt, [:int, :int, :int, :pointer, :int], :int
+
+          # Converts a C runtime file descriptor to a Windows OS file handle.
+          # This is critical because Ruby's socket.fileno returns a CRT file descriptor,
+          # but Winsock2 functions need the actual Windows SOCKET handle.
+          #
+          # @param fd [Integer] C runtime file descriptor
+          # @return [Integer] Windows OS file handle (SOCKET handle)
+          attach_function :_get_osfhandle, [:int], :long
         end
       end
 
       # -------------------------
       # Public interface
       # -------------------------
-      
+
       # Configures a TCP socket with optimal settings for reliable game connections.
       #
       # This method applies platform-specific socket options to improve connection
@@ -194,18 +202,17 @@ module Lich
                          buffer_size: { recv: 32768, send: 32768 },
                          tcp_nodelay: true,
                          tcp_maxrt: 10)
-        
-        Lich.log("Configuring socket: keepalive=#{keepalive}, linger=#{linger}, timeout=#{timeout}, buffer_size=#{buffer_size}, tcp_nodelay=#{tcp_nodelay}, tcp_maxrt=#{tcp_maxrt}")
-        
+        Lich.log("Configuring socket: keepalive=#{keepalive}, linger=#{linger}, timeout=#{timeout}, buffer_size=#{buffer_size}, tcp_nodelay=#{tcp_nodelay}, tcp_maxrt=#{tcp_maxrt}") if ARGV.include?("--debug")
+
         begin
           if Gem.win_platform?
             configure_windows(sock, keepalive, linger, timeout, buffer_size, tcp_nodelay, tcp_maxrt)
           else
             configure_unix(sock, keepalive, linger, timeout, buffer_size, tcp_nodelay)
           end
-          Lich.log("Socket configuration successful")
+          Lich.log("Socket configuration successful") if ARGV.include?("--debug")
         rescue => e
-          Lich.log("Socket configuration failed: #{e.class} - #{e.message}\n\t#{e.backtrace.join("\n\t")}")
+          Lich.log("Socket configuration failed: #{e.class} - #{e.message}\n\t#{e.backtrace.join("\n\t")}") if ARGV.include?("--debug")
           raise
         end
       end
@@ -213,7 +220,7 @@ module Lich
       # -------------------------
       # Unix / Linux / macOS
       # -------------------------
-      
+
       # Configures socket for Unix-like operating systems (Linux, macOS, BSD).
       #
       # This method uses Ruby's native Socket API to configure socket options.
@@ -244,7 +251,7 @@ module Lich
               raise SystemCallError.new("setsockopt(level=#{level}, option=#{option})", errno_val)
             end
           rescue => e
-            Lich.log("Unix setsockopt failed: level=#{level}, option=#{option}, error=#{e.message}")
+            Lich.log("Unix setsockopt failed: level=#{level}, option=#{option}, error=#{e.message}") if ARGV.include?("--debug")
             raise
           end
         end
@@ -284,18 +291,18 @@ module Lich
 
         # TCP_USER_TIMEOUT (Linux only - how long to retry before giving up)
         if Socket.const_defined?(:TCP_USER_TIMEOUT)
-          user_timeout_ms = 120000  # 120 seconds
+          user_timeout_ms = 120000 # 120 seconds
           check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_USER_TIMEOUT, user_timeout_ms, 4)
         end
       rescue => e
-        Lich.log("Unix socket configuration error: #{e.class} - #{e.message}")
+        Lich.log("Unix socket configuration error: #{e.class} - #{e.message}") if ARGV.include?("--debug")
         raise
       end
 
       # -------------------------
       # Windows
       # -------------------------
-      
+
       # Configures socket for Windows operating systems.
       #
       # This method uses FFI to access Winsock2 functions directly, as Ruby's
@@ -319,96 +326,117 @@ module Lich
       # @note All time values are converted from seconds to milliseconds for Windows
       # @note TCP_MAXRT may not be supported on older Windows versions
       # @api private
+      # Configures socket for Windows operating systems.
+      #
+      # This method uses Ruby's Socket API with platform-specific packing for most options,
+      # only falling back to FFI for WSAIoctl (keep-alive parameters). This approach works
+      # with Ruby 3.x on Windows which uses UCRT and doesn't map sockets to CRT file descriptors.
+      #
+      # @param sock [TCPSocket] The socket to configure
+      # @param keepalive [Hash] Keep-alive configuration (times converted to milliseconds)
+      # @param linger [Hash] Linger configuration
+      # @param timeout [Hash] Timeout configuration
+      # @param buffer_size [Hash] Buffer size configuration
+      # @param tcp_nodelay [Boolean] TCP_NODELAY flag
+      # @param tcp_maxrt [Integer] Maximum retransmission count
+      #
+      # @return [void]
+      #
+      # @raise [SystemCallError] If a critical socket option cannot be set
+      #
+      # @note Uses Ruby's Socket API for most options, FFI only for WSAIoctl
+      # @note All time values are converted from seconds to milliseconds for Windows
+      # @note TCP_MAXRT may not be supported on older Windows versions
+      # @api private
       def self.configure_windows(sock, keepalive, linger, timeout, buffer_size, tcp_nodelay, tcp_maxrt)
-        fd = sock.fileno
-
-        # Helper: error-checked setsockopt
-        check_setsockopt = lambda do |level, option, ptr, size|
-          ret = WinFFI.setsockopt(fd, level, option, ptr, size)
-          if ret != 0
-            errno = FFI.errno
-            Lich.log("Windows setsockopt failed: level=#{level}, option=#{option}, errno=#{errno}")
-            raise SystemCallError.new("setsockopt(level=#{level}, option=#{option})", errno)
-          end
-        end
-
-        # Keepalive - enable base setting first, then configure parameters
-        if keepalive[:enable]
-          # Step 1: Enable SO_KEEPALIVE
-          onoff = FFI::MemoryPointer.new(:int)
-          onoff.write_int(1)
-          check_setsockopt.call(WinFFI::SOL_SOCKET, WinFFI::SO_KEEPALIVE, onoff, 4)
-          
-          # Step 2: Configure keep-alive parameters via WSAIoctl
-          ka = WinFFI::TcpKeepalive.new
-          ka[:onoff] = 1
-          ka[:keepalivetime] = keepalive[:idle] * 1000  # Convert to milliseconds
-          ka[:keepaliveinterval] = keepalive[:interval] * 1000  # Convert to milliseconds
-          bytes_returned = FFI::MemoryPointer.new(:ulong)
-          ret = WinFFI.WSAIoctl(fd, WinFFI::SIO_KEEPALIVE_VALS, ka.to_ptr, ka.size,
-                                nil, 0, bytes_returned, nil, nil)
-          if ret != 0
-            errno = FFI.errno
-            Lich.log("WSAIoctl (keepalive) failed: errno=#{errno}")
-            raise SystemCallError.new("WSAIoctl(SIO_KEEPALIVE_VALS)", errno)
-          end
-        end
-
-        # Linger
-        if linger
-          l = WinFFI::Linger.new
-          l[:l_onoff] = linger[:enable] ? 1 : 0
-          l[:l_linger] = linger[:timeout]
-          check_setsockopt.call(WinFFI::SOL_SOCKET, WinFFI::SO_LINGER, l.to_ptr, l.size)
-        end
-
-        # Timeouts
-        if timeout
-          tv_recv = WinFFI::Timeval.new
-          tv_recv[:tv_sec] = timeout[:recv]
-          tv_recv[:tv_usec] = 0
-          check_setsockopt.call(WinFFI::SOL_SOCKET, WinFFI::SO_RCVTIMEO, tv_recv.to_ptr, tv_recv.size)
-
-          tv_send = WinFFI::Timeval.new
-          tv_send[:tv_sec] = timeout[:send]
-          tv_send[:tv_usec] = 0
-          check_setsockopt.call(WinFFI::SOL_SOCKET, WinFFI::SO_SNDTIMEO, tv_send.to_ptr, tv_send.size)
-        end
-
-        # Buffer sizes - use WinFFI constants
-        if buffer_size
-          if buffer_size[:recv]
-            ptr = FFI::MemoryPointer.new(:int)
-            ptr.write_int(buffer_size[:recv])
-            check_setsockopt.call(WinFFI::SOL_SOCKET, WinFFI::SO_RCVBUF, ptr, 4)
-          end
-          if buffer_size[:send]
-            ptr = FFI::MemoryPointer.new(:int)
-            ptr.write_int(buffer_size[:send])
-            check_setsockopt.call(WinFFI::SOL_SOCKET, WinFFI::SO_SNDBUF, ptr, 4)
-          end
-        end
-
-        # TCP_NODELAY
-        if tcp_nodelay
-          ptr = FFI::MemoryPointer.new(:int)
-          ptr.write_int(1)
-          check_setsockopt.call(WinFFI::IPPROTO_TCP, WinFFI::TCP_NODELAY, ptr, 4)
-        end
-
-        # TCP_MAXRT - max retransmission time (Windows-specific, helps with lag)
-        if tcp_maxrt
-          ptr = FFI::MemoryPointer.new(:int)
-          ptr.write_int(tcp_maxrt)
+        # Helper: error-checked setsockopt using Ruby's Socket API
+        check_setsockopt = lambda do |level, option, value|
           begin
-            check_setsockopt.call(WinFFI::IPPROTO_TCP, WinFFI::TCP_MAXRT, ptr, 4)
+            sock.setsockopt(level, option, value)
+            Lich.log("Windows setsockopt succeeded: level=#{level}, option=#{option}") if ARGV.include?("--debug")
           rescue => e
-            # TCP_MAXRT might not be supported on all Windows versions, log but don't fail
-            Lich.log("TCP_MAXRT not supported on this Windows version: #{e.message}")
+            Lich.log("Windows setsockopt failed: level=#{level}, option=#{option}, error=#{e.class}: #{e.message}") if ARGV.include?("--debug")
+            raise SystemCallError.new("setsockopt(level=#{level}, option=#{option})", 0)
           end
         end
+
+        # Keepalive - Step 1: Enable SO_KEEPALIVE using Ruby's API
+        if keepalive[:enable]
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, [1].pack('i'))
+
+          # Step 2: Try to configure keep-alive parameters via WSAIoctl
+          # This may fail on Ruby 3.x, so we'll catch and log but continue
+          begin
+            crt_fd = sock.fileno
+            fd = WinFFI._get_osfhandle(crt_fd)
+
+            if fd != -1
+              ka = WinFFI::TcpKeepalive.new
+              ka[:onoff] = 1
+              ka[:keepalivetime] = keepalive[:idle] * 1000
+              ka[:keepaliveinterval] = keepalive[:interval] * 1000
+              bytes_returned = FFI::MemoryPointer.new(:ulong)
+
+              ret = WinFFI.WSAIoctl(fd, WinFFI::SIO_KEEPALIVE_VALS, ka.to_ptr, ka.size,
+                                    nil, 0, bytes_returned, nil, nil)
+              if ret == 0
+                Lich.log("WSAIoctl keepalive configuration succeeded") if ARGV.include?("--debug")
+              else
+                errno = FFI.errno
+                Lich.log("WSAIoctl keepalive failed (errno=#{errno}), using default Windows keepalive settings") if ARGV.include?("--debug")
+              end
+            else
+              Lich.log("Could not get OS handle for WSAIoctl, using default Windows keepalive settings") if ARGV.include?("--debug")
+            end
+          rescue => e
+            Lich.log("WSAIoctl keepalive configuration failed: #{e.class} - #{e.message}") if ARGV.include?("--debug")
+            Lich.log("Continuing with basic keepalive enabled (default Windows settings)") if ARGV.include?("--debug")
+          end
+        end
+
+        # Linger - using Ruby's Socket API
+        if linger
+          linger_bytes = [linger[:enable] ? 1 : 0, linger[:timeout]].pack('SS')
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_LINGER, linger_bytes)
+        end
+
+        # Timeouts - using Ruby's Socket API
+        if timeout
+          # Windows expects timeout in milliseconds as a DWORD (4 bytes)
+          recv_timeout_ms = timeout[:recv] * 1000
+          send_timeout_ms = timeout[:send] * 1000
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_RCVTIMEO, [recv_timeout_ms].pack('L'))
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_SNDTIMEO, [send_timeout_ms].pack('L'))
+        end
+
+        # Buffer sizes - using Ruby's Socket API
+        if buffer_size
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_RCVBUF, [buffer_size[:recv]].pack('i')) if buffer_size[:recv]
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_SNDBUF, [buffer_size[:send]].pack('i')) if buffer_size[:send]
+        end
+
+        # TCP_NODELAY - using Ruby's Socket API
+        if tcp_nodelay
+          check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, [1].pack('i'))
+        end
+
+        # TCP_MAXRT - Windows-specific, may not be supported
+        if tcp_maxrt
+          begin
+            # Try using Ruby's API first
+            if defined?(Socket::TCP_MAXRT)
+              check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_MAXRT, [tcp_maxrt].pack('i'))
+            else
+              Lich.log("TCP_MAXRT constant not available in Ruby's Socket API") if ARGV.include?("--debug")
+            end
+          rescue => e
+            Lich.log("TCP_MAXRT not supported on this Windows version: #{e.message}") if ARGV.include?("--debug")
+          end
+        end
+
+        Lich.log("Windows socket configuration completed successfully") if ARGV.include?("--debug")
       rescue => e
-        Lich.log("Windows socket configuration error: #{e.class} - #{e.message}")
+        Lich.log("Windows socket configuration error: #{e.class} - #{e.message}") if ARGV.include?("--debug")
         raise
       end
     end
