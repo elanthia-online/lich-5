@@ -135,7 +135,7 @@ def echo(*messages)
   respond if messages.empty?
   if (script = Script.current)
     unless script.no_echo
-      messages.each { |message| respond("[#{script.name}: #{message.to_s.chomp}]") }
+      messages.each { |message| respond("[#{script.custom? ? 'custom/' : ''}#{script.name}: #{message.to_s.chomp}]") }
     end
   else
     messages.each { |message| respond("[(unknown script): #{message.to_s.chomp}]") }
@@ -147,7 +147,7 @@ def _echo(*messages)
   _respond if messages.empty?
   if (script = Script.current)
     unless script.no_echo
-      messages.each { |message| _respond("[#{script.name}: #{message.to_s.chomp}]") }
+      messages.each { |message| _respond("[#{script.custom? ? 'custom/' : ''}#{script.name}: #{message.to_s.chomp}]") }
     end
   else
     messages.each { |message| _respond("[(unknown script): #{message.to_s.chomp}]") }
@@ -573,6 +573,9 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       fput 'stand' unless standing?
       waitrt?
       put_dir.call
+    elsif line =~ /^(?:You swim .*, (?:cutting through|navigating)|You swim .*, struggling against|Your lungs burn and your muscles ache)/
+      # swims in Sailor's Grief
+      return true
     elsif line =~ /^You begin to climb up the silvery thread.* you tumble to the ground/
       sleep 0.5
       waitrt?
@@ -671,6 +674,13 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /^(You notice .* at your feet, and do not wish to leave it behind|As you prepare to move away, you remember)/
       fput "stow feet"
       sleep 1
+      put_dir.call
+    elsif line =~ /The electricity courses through you in a raging torrent, its power singing in your veins!  Spent, the boltstone apparatus shatters into glinting fragments\.|The lightning strikes you in an agonizing eruption of liquid radiance!/
+      sleep(0.5)
+      wait_while { stunned? }
+      waitrt?
+      fput 'stand' unless standing?
+      waitrt?
       put_dir.call
     elsif line == "You don't seem to be able to move to do that."
       30.times {

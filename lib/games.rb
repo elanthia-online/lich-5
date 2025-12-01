@@ -266,7 +266,12 @@ module Lich
         end
 
         def puts(str)
-          script_name = Script.current&.name || '(unknown script)'
+          if Script.current&.file_name
+            script_name = "#{Script.current.custom? ? 'custom/' : ''}#{Script.current&.name}"
+          else
+            script_name = Script.current&.name || '(unknown script)'
+          end
+
           $_CLIENTBUFFER_.push "[#{script_name}]#{$SEND_CHARACTER}#{$cmd_prefix}#{str}\r\n"
 
           unless Script.current&.silent
@@ -408,7 +413,7 @@ module Lich
           rescue => e
             case e.to_s
             # Missing attribute equal: <s> - in dynamic dialogs with a single apostrophe for possessive 'Tsetem's Items'
-            when /nested single quotes|nested double quotes|Missing attribute equal: <\w+>/
+            when /nested single quotes|nested double quotes|Missing attribute equal: <[^>]+>|Invalid attribute name: <[^>]+>/
               original_server_string = server_string.dup
               server_string = XMLCleaner.clean_nested_quotes(server_string)
               if original_server_string != server_string

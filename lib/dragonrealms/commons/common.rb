@@ -45,6 +45,12 @@ module Lich
           log += [response]
 
           case response
+          when /^For some strange reason you are unable to do that\.  The world somehow seems frozen in place/
+            # Zadraes — 13:32 It's a "You're in an area actively being updated" message
+            pause 1
+            put message
+            timer = Time.now
+            next
           when /(?:\.\.\.wait |Wait |\.\.\. wait )([0-9]+)/
             unless ignore_rt
               pause(Regexp.last_match(1).to_i - 0.5)

@@ -1,0 +1,13 @@
+require File.join(LIB_DIR, 'gemstone', 'infomon', 'activespell.rb')
+<<<<<<< HEAD
+require File.join(LIB_DIR, 'gemstone', 'feature_a.rb')
+=======
+require File.join(LIB_DIR, 'gemstone', 'feature_b.rb')
+>>>>>>> theirs
+require File.join(LIB_DIR, 'gemstone', 'psms.rb')
+<<<<<<< HEAD
+require File.join(LIB_DIR, 'gemstone', 'feature_c.rb')
+=======
+require File.join(LIB_DIR, 'gemstone', 'feature_d.rb')
+>>>>>>> theirs
+require File.join(LIB_DIR, 'gemstone', 'wounds.rb')

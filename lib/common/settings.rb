@@ -66,6 +66,30 @@ module Lich
         end
       end
 
+      # Internal non-destructive correction method (issue from Lich 5.12.6)
+      # non-destructive methods (.sort) cannot own a proxy that requires update (.push)
+      def self._reattach_live!(proxy)
+        script_name = Script.current.name
+        scope       = proxy.scope
+        path        = proxy.path
+
+        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "reattach_live!: scope=#{scope.inspect} path=#{path.inspect}" })
+
+        @path_navigator.reset_path
+        @path_navigator.set_path(path)
+        live, _root = @path_navigator.navigate_to_path(script_name, true, scope)
+
+        if live.nil?
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "reattach_live!: failed to resolve live target for path=#{path.inspect} scope=#{scope.inspect}" })
+          return false
+        end
+
+        # Swap the proxy onto the live object via SettingsProxy API (encapsulated)
+        # Centralizes invariants/logging within SettingsProxy itself.
+        proxy.rebind_to_live!(live)
+        true
+      end
+
       @db_adapter = DatabaseAdapter.new(DATA_DIR, :script_auto_settings)
       @path_navigator = PathNavigator.new(@db_adapter)
       @settings_cache = {}
@@ -107,60 +131,205 @@ module Lich
       end
       private_class_method :unwrap_proxies
 
+      # Creates a root-level SettingsProxy for the given scope.
+      #
+      # This factory ensures the proxy directly targets the cached root object
+      # for the (script_name, scope) pair. By using the cached root, it avoids
+      # "identity drift" bugs where the proxy’s @target differs from the object
+      # being persisted by save_proxy_changes.
+      #
+      # @param scope [String] A logical scope identifier (for example,
+      #   "#{XMLData.game}:#{XMLData.name}").
+      # @param script_name [String, nil] The script namespace; defaults to
+      #   Script.current.name. Pass nil to fall back to the empty string.
+      #
+      # @return [SettingsProxy] a proxy wrapping the cached root object.
+      #
+      # @raise [ArgumentError] if scope is nil or empty.
+      #
+      # @example Create a root proxy for the current character
+      #   settings = Lich::Common::Settings.root_proxy_for("#{XMLData.game}:#{XMLData.name}")
+      #
+      def self.root_proxy_for(scope, script_name: Script.current.name)
+        raise ArgumentError, "scope must be a non-empty String" if scope.nil? || scope.to_s.strip.empty?
+
+        script_name ||= ""
+        cache_key = "#{script_name}::#{scope}"
+        root = @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope)
+
+        SettingsProxy.new(self, scope, [], root)
+      end
+
       def self.save_proxy_changes(proxy)
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Initiated for proxy.scope: #{proxy.scope.inspect}, proxy.path: #{proxy.path.inspect}, proxy.target_object_id: #{proxy.target.object_id}" })
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: proxy.target data: #{proxy.target.inspect}" })
 
-        path = proxy.path
-        scope = proxy.scope
+        path        = proxy.path
+        scope       = proxy.scope
+        script_name = Script.current.name
+        cache_key   = "#{script_name || ""}::#{scope}"
 
-        if path.empty?
-          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Path is empty, saving proxy.target as root for scope: #{scope.inspect}" })
-          save_to_database(proxy.target, scope)
-          return nil # Explicitly return nil
+        # Local helper to keep cache in sync with the just-persisted root
+        sync_cache = lambda do |root_obj|
+          cached = @settings_cache[cache_key]
+          if cached && !cached.equal?(root_obj)
+            if cached.is_a?(Hash) && root_obj.is_a?(Hash)
+              cached.replace(root_obj)
+            elsif cached.is_a?(Array) && root_obj.is_a?(Array)
+              cached.clear
+              cached.concat(root_obj)
+            else
+              @settings_cache[cache_key] = root_obj
+            end
+          elsif cached.nil?
+            @settings_cache[cache_key] = root_obj
+          end
+          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Cache synchronized post-save for #{cache_key}" })
         end
 
-        script_name = Script.current.name
-        cache_key = "#{script_name || ""}::#{scope}" # Use an empty string if script_name is nil
+        # --- Refresh-before-save to prevent stale-cache overwrites ---
+        fresh_root = @db_adapter.get_settings(script_name, scope)
+
+        cached = @settings_cache[cache_key]
+        if cached
+          if cached.is_a?(Hash) && fresh_root.is_a?(Hash)
+            cached.replace(fresh_root)
+            current_root_for_scope = cached
+          elsif cached.is_a?(Array) && fresh_root.is_a?(Array)
+            cached.clear
+            cached.concat(fresh_root)
+            current_root_for_scope = cached
+          else
+            @settings_cache[cache_key] = fresh_root
+            current_root_for_scope = fresh_root
+          end
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache refreshed from DB for #{cache_key} (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
+        else
+          @settings_cache[cache_key] = fresh_root
+          current_root_for_scope = fresh_root
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache populated from DB for #{cache_key} (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
+        end
+        # -------------------------------------------------------------
+
+        # EMPTY PATH → Save *current root* (not proxy.target). Also covers detached "view" proxies.
+        if path.empty?
+          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Empty path; saving CURRENT ROOT for scope #{scope.inspect}" })
+
+          unless current_root_for_scope.is_a?(Hash) || current_root_for_scope.is_a?(Array)
+            _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Root not a container; initializing {} for scope #{scope.inspect}" })
+            current_root_for_scope = {}
+            @settings_cache[cache_key] = current_root_for_scope
+          end
+
+          if proxy.respond_to?(:detached?) && proxy.detached?
+            _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Proxy is detached (view); persisting current root without copying view target." })
+            save_to_database(current_root_for_scope, scope)
+            sync_cache.call(current_root_for_scope)
+            return nil
+          end
+
+          # Root identity drift: sync proxy.target into cached root if different objects (same-type containers).
+          if !current_root_for_scope.equal?(proxy.target)
+            if proxy.target.is_a?(Hash) && current_root_for_scope.is_a?(Hash)
+              _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Root identity mismatch (cache #{current_root_for_scope.object_id} vs proxy #{proxy.target.object_id}); copying via Hash#replace" })
+              current_root_for_scope.replace(proxy.target)
+            elsif proxy.target.is_a?(Array) && current_root_for_scope.is_a?(Array)
+              _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Root identity mismatch (Array); copying elements" })
+              current_root_for_scope.clear
+              current_root_for_scope.concat(proxy.target)
+            else
+              _log(LOG_LEVEL_WARN, @@log_prefix, -> { "save_proxy_changes: Root/target type mismatch; persisting current root only (root=#{current_root_for_scope.class}, target=#{proxy.target.class})." })
+            end
+          end
+
+          save_to_database(current_root_for_scope, scope)
+          sync_cache.call(current_root_for_scope)
+          return nil
+        end
+
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: script_name: #{script_name.inspect}, cache_key: #{cache_key}" })
 
-        current_root_for_scope = @settings_cache[cache_key]
-        if current_root_for_scope.nil?
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache miss for #{cache_key}. Loading from DB." })
-          current_root_for_scope = @db_adapter.get_settings(script_name, scope)
+        # From here on, we’re saving into a nested path. Ensure root is a container.
+        unless current_root_for_scope.is_a?(Hash) || current_root_for_scope.is_a?(Array)
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Root not a container; initializing {} for scope #{scope.inspect}" })
+          current_root_for_scope = {}
           @settings_cache[cache_key] = current_root_for_scope
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Loaded from DB and cached (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
-        else
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache hit for #{cache_key} (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
         end
 
-        parent = current_root_for_scope
         parent_path = path[0...-1]
+        leaf_key    = path.last
 
-        parent_path.each_with_index do |key_segment, index|
-          unless parent.is_a?(Hash) || parent.is_a?(Array)
-            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Parent is not a container at path segment #{path[0..index].inspect} for scope #{scope.inspect}. Parent class: #{parent.class}" })
-            return nil # Explicitly return nil
+        # Pre-navigation diagnostics
+        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> {
+          "save_proxy_changes: Navigation preflight — parent_path=#{parent_path.inspect} (#{parent_path.map { |s| s.class }.inspect}), leaf_key=#{leaf_key.inspect} (#{leaf_key.class}), root_class=#{current_root_for_scope.class}"
+        })
+
+        # Navigate **within the freshly-loaded root** (do NOT re-fetch via PathNavigator here).
+        begin
+          parent = current_root_for_scope
+          parent_path.each_with_index do |seg, idx|
+            next_seg = parent_path[idx + 1]
+
+            if parent.is_a?(Hash)
+              unless parent.key?(seg)
+                parent[seg] = next_seg.is_a?(Integer) ? [] : {}
+                _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Created #{parent[seg].class} at #{parent_path[0..idx].inspect} for scope #{scope.inspect}" })
+              end
+              parent = parent[seg]
+            elsif parent.is_a?(Array)
+              unless seg.is_a?(Integer) && seg >= 0
+                _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Non-integer or negative index #{seg.inspect} for Array at #{parent_path[0..idx].inspect} in scope #{scope.inspect}" })
+                return nil
+              end
+              if seg >= parent.length
+                (parent.length..seg).each { parent << nil }
+                _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Extended Array to index #{seg} at #{parent_path[0..idx].inspect} for scope #{scope.inspect}" })
+              end
+              parent[seg] ||= (next_seg.is_a?(Integer) ? [] : {})
+              parent = parent[seg]
+            else
+              _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Parent is not a container at #{parent_path[0..idx].inspect} (#{parent.class}) for scope #{scope.inspect}" })
+              return nil
+            end
           end
-          if (parent.is_a?(Hash) && parent.key?(key_segment)) || (parent.is_a?(Array) && key_segment.is_a?(Integer) && key_segment < parent.length)
-            parent = parent[key_segment]
-          else
-            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Path segment #{key_segment.inspect} not found at #{path[0..index].inspect} in scope #{scope.inspect}. Parent: #{parent.inspect}" })
-            return nil # Explicitly return nil
-          end
+        rescue => e
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> {
+            "save_proxy_changes: Local navigation raised #{e.class}: #{e.message}. "\
+            "scope=#{scope.inspect}, script_name=#{script_name.inspect}, cache_key=#{cache_key}, "\
+            "parent_path=#{parent_path.inspect}, leaf_key=#{leaf_key.inspect}"
+          })
+          bt = (e.backtrace || [])[0, 5]
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Backtrace (top 5): #{bt.join(' | ')}" })
+          return nil
         end
 
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Navigated to parent (object_id: #{parent.object_id}): #{parent.inspect}" })
+        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Navigated/created parent (object_id: #{parent.object_id}, class=#{parent.class}): #{parent.inspect}" })
 
-        if parent.is_a?(Hash) || (parent.is_a?(Array) && path.last.is_a?(Integer))
-          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Updating parent at key '#{path.last}' with proxy.target (object_id: #{proxy.target.object_id}): #{proxy.target.inspect}" })
-          parent[path.last] = proxy.target
-          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: current_root_for_scope after update (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
+        if parent.is_a?(Hash)
+          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Setting Hash key #{leaf_key.inspect} with proxy.target (object_id: #{proxy.target.object_id})" })
+          parent[leaf_key] = proxy.target
+        elsif parent.is_a?(Array) && leaf_key.is_a?(Integer)
+          if leaf_key < 0
+            _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Negative array index #{leaf_key} not supported at path #{path.inspect} in scope #{scope.inspect}" })
+            return nil
+          end
+          if leaf_key >= parent.length
+            (parent.length..leaf_key).each { parent << nil }
+            _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Extended Array to index #{leaf_key} for parent at path #{parent_path.inspect}" })
+          end
+          parent[leaf_key] = proxy.target
+          _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Set Array index #{leaf_key} with proxy.target (object_id: #{proxy.target.object_id})" })
         else
-          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_proxy_changes: Cannot set value in non-container or invalid index for path #{path.inspect} in scope #{scope.inspect}. Final parent class: #{parent.class}" })
-          return nil # Explicitly return nil
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> {
+            "save_proxy_changes: Cannot set value at path #{path.inspect} in scope #{scope.inspect}; "\
+            "parent_class=#{parent.class}, leaf_key_class=#{leaf_key.class}"
+          })
+          return nil
         end
+
+        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: root after update (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
         save_to_database(current_root_for_scope, scope)
+        sync_cache.call(current_root_for_scope)
       end
 
       def self.current_script_settings(scope = DEFAULT_SCOPE)

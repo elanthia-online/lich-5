@@ -3,7 +3,7 @@
 ; to support the Lich scripting environment for Simutronics games
 
 #define MyAppName "Ruby4Lich5"
-#define MyAppVersion "5.12.5"
+#define MyAppVersion "5.12.12" ; x-release-please-version
 #define RubyVersion "3.4.5"
 #define MyAppPublisher "Elanthia-Online"
 #define MyAppURL "https://github.com/elanthia-online/lich-5/"
@@ -12,7 +12,9 @@
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
-AppId= {{edd9ccd7-33cb-4577-a470-fe8fd087eb05}
+; Release Please does not increment the AppId with every build.  So do not change this number.
+; The AppId identifies the Lich 5 application.  When we move to Lich 6, we generate a new GUID.
+AppId= {{edd9ccd7-33cb-4577-a470-fe8fd087eb07}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} Ruby {#RubyVersion} & Lich {#MyAppVersion}
@@ -22,7 +24,7 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 SetupLogging=yes
 ChangesAssociations=yes
-;ChangesEnvironment=true
+ChangesEnvironment=true
 ;
 ;Only need Changes Environment when setting path.
 ;
@@ -67,8 +69,9 @@ Name: "{app}\R4LInstall"; Attribs: hidden
 
 [Files]
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
-Source: "C:\hostedtoolcache\windows\Ruby\{#RubyVersion}\x64\*"; DestDir: "{app}\{#RubyVersion}";                 Components: rubygem; Flags: ignoreversion createallsubdirs recursesubdirs
-Source: "C:\msys64\*";                                          DestDir: "{app}\{#RubyVersion}\msys64";          Components: rubygem; Flags: ignoreversion createallsubdirs recursesubdirs
+Source: "C:\hostedtoolcache\windows\Ruby\{#RubyVersion}\x64\*"; DestDir: "{app}\{#RubyVersion}";                 Components: rubygem; Flags: ignoreversion createallsubdirs recursesubdirs; Excludes: "msys64"
+; MSYS2 installed into app tree on the runner
+Source: "C:\Ruby4Lich5\msys64\*";                               DestDir: "{app}\{#RubyVersion}\msys64";          Components: rubygem; Flags: ignoreversion createallsubdirs recursesubdirs
 Source: ".\fly64.ico";                                          DestDir: "{app}\R4LInstall";                     Components: lich;    Flags: ignoreversion
 Source: ".\Lich5\*";                                            DestDir: "{app}\R4LInstall\Lich{#MyAppVersion}"; Components: lich;    Flags: ignoreversion createallsubdirs recursesubdirs   
 
@@ -81,6 +84,8 @@ Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\DefaultIcon";         ValueType: 
 Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\DefaultIcon";        ValueType: string; ValueName: ""; ValueData: "{app}\{#RubyVersion}\bin\rubyw.exe,0";             Components: rubygem; Flags: uninsdeletekey
 Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\shell\open\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\ruby.exe"" ""%1"" %*";  Components: rubygem; Flags: uninsdeletekey
 Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\rubyw.exe"" ""%1"" %*"; Components: rubygem; Flags: uninsdeletekey
+; Put Ruby bin, then the old PATH
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{app}\{#RubyVersion}\bin;{olddata}"; Flags: preservestringtype
 
 [RUN]
 Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s /y ""{app}\R4LInstall\Lich{#MyAppVersion}"" ""{userdesktop}\Lich5"""""; Tasks: LichGS

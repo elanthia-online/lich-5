@@ -1,0 +1,204 @@
+name: Prepare Stable Release
+# Purpose: Open/update the Release Please PR on the stable trunk (main).
+# Notes:
+#  - Tag + GitHub Release occur when the PR is merged.
+#  - Hardened to prevent foot-guns; no prerelease (beta) train logic here.
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Branch to release from"
+        required: true
+        default: "main"
+  # Future: also trigger automatically when main changes (uncomment when ready).
+  # this may be problematic and requires rigorous testing
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - 'spec/**'
+      - '.gitattributes'
+      - '.gitignore'
+      - '.rubocop.yml'
+      - '.ruby-version'
+      - 'netlify.toml'
+      - 'README.adoc'
+      - 'release-please-config.json'
+      - 'release-please-config.prerelease.json'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: prepare-stable-${{ github.event_name }}-${{ inputs.target_branch || 'main' }}
+  cancel-in-progress: true
+
+jobs:
+  stable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Guard: require main as target"
+        shell: bash
+        env:
+          RAW_TARGET: ${{ inputs.target_branch || github.ref_name || 'main' }}
+        run: |
+          set -euo pipefail
+          tgt="${RAW_TARGET:-}"
+          tgt="${tgt#refs/heads/}"
+          tgt="${tgt//[[:space:]]/}"
+          if [ "$tgt" != "main" ]; then
+            echo "::error::Stable releases must be prepared from 'main' (got '$tgt')."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ inputs.target_branch || github.ref_name || 'main' }}
+          fetch-depth: 0
+
+
+      - name: "Classify: skip if this is the release commit"
+        id: classify
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          subject="$(git show -s --format=%s "$GITHUB_SHA")"
+          if [[ "$subject" =~ ^chore\(main\):[[:space:]]release[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping: release commit detected: '${subject}'"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+
+      - name: Git LF config (stabilize EOL)
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: GITHUB_TOKEN write self-test (labels)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          repo="${{ github.repository }}"
+          lbl="rp-selftest-${{ github.run_id }}"
+          gh api -X POST "repos/$repo/labels" \
+            -f name="$lbl" -f color='ededed' -f description='release-please token self-test' >/dev/null 2>&1 || \
+          gh api -X PATCH "repos/$repo/labels/$lbl" \
+            -f new_name="$lbl" -f color='ededed' -f description='release-please token self-test' >/dev/null
+          gh api -X DELETE "/repos/$repo/labels/$lbl"
+
+      # Only proceed if releasable units exist since last stable tag.
+      # Releasable units for this repo: feat|fix with scope (all|dr|gs).
+      - name: "Guard: detect releasable units since last stable tag"
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          last="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -n1 || true)"
+          range="${last:+$last..}HEAD"
+          echo "Last stable tag: ${last:-<none>}"
+          if [ -n "$last" ]; then
+            rel="$(git log --pretty=%s "$range" | grep -E '^(feat|fix)\((all|dr|gs)\):' || true)"
+          else
+            rel="$(git log --pretty=%s | grep -E '^(feat|fix)\((all|dr|gs)\):' || true)"
+          fi
+          if [ -z "$rel" ]; then
+            echo "has_releasables=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No releasable units (feat/fix with scope all|dr|gs) since ${last:-repo start}; skipping Release Please."
+            exit 0
+          else
+            echo "has_releasables=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: "Checkpoint: tag + rotating backup/stable/*"
+        id: checkpoint
+        if: ${{ steps.guard.outputs.has_releasables == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # identity required for annotated tags & branch refs
+          git config --local user.name  "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          ts="$(date -u +%Y%m%d-%H%M%S)"
+          tag="checkpoint/stable/$ts"
+          backup="backup/stable/$ts"
+
+          git tag -a "$tag" -m "Checkpoint before prepare-stable (run ${{ github.run_id }})"
+          git push origin "$tag"
+
+          # prune previous backup/stable/* branches (safe scope)
+          repo="${{ github.repository }}"
+          gh api "/repos/$repo/git/refs/heads" --jq '.[] | .ref'       | awk -F'refs/heads/' '/^refs\/heads\/backup\/stable\//{print $2}'       | while read -r b; do
+                gh api -X DELETE "/repos/$repo/git/refs/heads/$b" || true
+              done
+
+          # prune old checkpoint tags (keep last 3)
+          gh api "/repos/$repo/git/refs/tags" --jq '.[] | .ref' | awk -F'refs/tags/' '/^refs\/tags\/checkpoint\/stable\//{print $2}' | sort -rV | tail -n +4 | while read -r t; do
+            gh api -X DELETE "/repos/$repo/git/refs/tags/$t" || true
+          done
+
+          # create new backup branch from current HEAD
+          git branch -f "$backup"
+          # Use --force-with-lease for safety: ensures atomic push even though branch is force-created locally
+          git push --force-with-lease -u origin "$backup"
+
+          {
+            echo "tag=$tag"
+            echo "backup=$backup"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Release Please (open/update Release PR)
+        if: ${{ steps.classify.outputs.skip != 'true' && steps.guard.outputs.has_releasables == 'true' }}
+        # Pinned to SHA for supply-chain safety (release-please-action v4.4.0)
+        uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: ${{ inputs.target_branch || github.ref_name || 'main' }}
+          skip-github-release: true
+
+      # PR body and Release body formatting are handled by:
+      #  - format-pr-body-stable.yml  (PR body)
+      #  - release-on-push-stable.yml + format-release-notes.yml (Release body)
+      # This workflow intentionally does not format bodies.
+      - name: "Run summary (prepare-stable)"
+        if: always()
+        env:
+          EVENT: ${{ github.event_name }}
+          TARGET: ${{ inputs.target_branch || github.ref_name || 'main' }}
+          HAS_REL: ${{ steps.guard.outputs.has_releasables }}
+          CK_TAG: ${{ steps.checkpoint.outputs.tag }}
+          CK_BACKUP: ${{ steps.checkpoint.outputs.backup }}
+        shell: bash
+        run: |
+          {
+            echo "## Prepare Stable — Run Summary"
+            echo ""
+            echo "- Event: **$EVENT**"
+            echo "- Target branch: **${TARGET:-unknown}**"
+            if [ "${HAS_REL:-false}" = "true" ]; then
+              echo "- Releasables: **yes**"
+            else
+              echo "- Releasables: **no** (Release Please step skipped)"
+            fi
+            if [ -n "${CK_TAG:-}" ] || [ -n "${CK_BACKUP:-}" ]; then
+              echo "- Checkpoint: tag=\`$CK_TAG\`, backup branch=\`$CK_BACKUP\`"
+            fi
+            echo ""
+            echo "> **Revert guidance (stable):** If you must revert after a stable release,"
+            echo "> open a PR with a Conventional Commit title like:"
+            echo "> \`fix(<scope>): revert '<original subject>' (#<PR>)\` to guarantee a patch bump."
+          } >> "$GITHUB_STEP_SUMMARY"
