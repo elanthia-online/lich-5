@@ -221,7 +221,7 @@ module Lich
                                          tcp_nodelay: true, # Disable Nagle's algorithm for low latency
                                          tcp_maxrt: 10)     # Windows: max 10 retransmissions before giving up
 
-            Lich.log("Socket configured successfully for #{host}:#{port}")
+            Lich.log("Socket configured successfully for #{host}:#{port}") if ARGV.include?("--debug")
           rescue StandardError => e
             # Log the error but continue - socket may still work with default settings
             log_error("Socket configuration error (continuing with defaults)", e)
