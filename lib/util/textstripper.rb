@@ -266,11 +266,17 @@ module Lich
       #   * CDATA sections (content is preserved as text)
       #   * Nested elements
       #   * Mixed content (text and elements)
+      #   * Unescaped special characters in plain text (wraps in CDATA if needed)
       #
       # @api private
       def self.strip_xml_with_rexml(text)
-        # Parse the XML document
-        doc = REXML::Document.new("<root>#{text}</root>")
+        # Try to parse as-is first (in case it's already well-formed XML)
+        begin
+          doc = REXML::Document.new("<root>#{text}</root>")
+        rescue REXML::ParseException
+          # If parsing fails due to unescaped characters, wrap in CDATA
+          doc = REXML::Document.new("<root><![CDATA[#{text}]]></root>")
+        end
 
         # Extract all text content from the document
         extract_xml_text(doc.root).strip
