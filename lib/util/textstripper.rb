@@ -21,9 +21,15 @@ module Lich
     #   TextStripper.strip("**bold** text", TextStripper::Mode::MARKUP)
     #   # => "bold text"
     #
+    #   TextStripper.strip("**bold** text", TextStripper::Mode::MARKDOWN)
+    #   # => "bold text"
+    #
     # @example Using symbol shortcuts (backward compatible)
     #   TextStripper.strip("<p>Hello</p>", :html)
     #   # => "Hello"
+    #
+    #   TextStripper.strip("**bold** text", :markdown)
+    #   # => "bold text"
     module TextStripper
       # Enumeration of stripping modes
       #
@@ -34,8 +40,9 @@ module Lich
       #   TextStripper.strip(text, TextStripper::Mode::HTML)
       #
       # @example Checking valid modes
-      #   TextStripper::Mode.valid?(:html)  # => true
-      #   TextStripper::Mode.valid?(:pdf)   # => false
+      #   TextStripper::Mode.valid?(:html)     # => true
+      #   TextStripper::Mode.valid?(:markdown) # => true
+      #   TextStripper::Mode.valid?(:pdf)      # => false
       module Mode
         # Strip HTML tags
         HTML = :html
@@ -46,10 +53,13 @@ module Lich
         # Strip Markdown/markup formatting
         MARKUP = :markup
 
+        # Alias for MARKUP (both :markup and :markdown are accepted)
+        MARKDOWN = :markdown
+
         # All valid modes
         #
         # @return [Array<Symbol>] List of all supported stripping modes
-        ALL = [HTML, XML, MARKUP].freeze
+        ALL = [HTML, XML, MARKUP, MARKDOWN].freeze
 
         # Check if a mode is valid
         #
@@ -59,6 +69,7 @@ module Lich
         # @example
         #   Mode.valid?(:html)     # => true
         #   Mode.valid?('markup')  # => true
+        #   Mode.valid?(:markdown) # => true
         #   Mode.valid?(:invalid)  # => false
         def self.valid?(mode)
           ALL.include?(mode.to_sym)
@@ -69,7 +80,7 @@ module Lich
         # @return [String] Comma-separated list of valid modes
         #
         # @example
-        #   Mode.list  # => "html, xml, markup"
+        #   Mode.list  # => "html, xml, markup, markdown"
         def self.list
           ALL.join(', ')
         end
@@ -79,10 +90,12 @@ module Lich
       #
       # @return [Hash<Symbol, String>] Mapping of modes to Kramdown input types
       # @note XML mode does not use Kramdown; it uses REXML instead
+      # @note MARKDOWN is an alias for MARKUP and uses the same input format
       # @api private
       MODE_TO_INPUT_FORMAT = {
-        Mode::HTML   => 'html',
-        Mode::MARKUP => 'GFM'
+        Mode::HTML     => 'html',
+        Mode::MARKUP   => 'GFM',
+        Mode::MARKDOWN => 'GFM'
       }.freeze
 
       # Strip markup/code from text based on the specified mode
@@ -96,6 +109,7 @@ module Lich
       #   * `Mode::HTML` or `:html` - Strip HTML tags using Kramdown
       #   * `Mode::XML` or `:xml` - Strip XML tags using REXML
       #   * `Mode::MARKUP` or `:markup` - Strip Markdown formatting (GitHub Flavored Markdown) using Kramdown
+      #   * `Mode::MARKDOWN` or `:markdown` - Strip Markdown formatting (alias for MARKUP)
       #
       # @return [String] The stripped text with formatting removed
       # @return [String] Empty string if input text is nil or empty
@@ -119,13 +133,21 @@ module Lich
       #   TextStripper.strip("<root xmlns='http://example.com'><item>data</item></root>", Mode::XML)
       #   # => "data"
       #
-      # @example Stripping Markdown
+      # @example Stripping Markdown with MARKUP constant
       #   TextStripper.strip("**bold** and *italic*", Mode::MARKUP)
+      #   # => "bold and italic"
+      #
+      # @example Stripping Markdown with MARKDOWN constant
+      #   TextStripper.strip("**bold** and *italic*", Mode::MARKDOWN)
+      #   # => "bold and italic"
+      #
+      # @example Stripping Markdown with symbol
+      #   TextStripper.strip("**bold** and *italic*", :markdown)
       #   # => "bold and italic"
       #
       # @example Invalid mode
       #   TextStripper.strip("text", :invalid)
-      #   # raises ArgumentError: Invalid mode: invalid. Use one of: html, xml, markup
+      #   # raises ArgumentError: Invalid mode: invalid. Use one of: html, xml, markup, markdown
       #
       # @note If Kramdown or REXML parsing fails, a warning is issued and the original
       #   text is returned unchanged
@@ -144,7 +166,7 @@ module Lich
           strip_with_kramdown(text, validated_mode)
         end
       rescue Kramdown::Error => e
-        # Handle Kramdown parsing errors (HTML/MARKUP modes)
+        # Handle Kramdown parsing errors (HTML/MARKUP/MARKDOWN modes)
         log_error("Failed to parse #{validated_mode}", e)
         text
       rescue REXML::ParseException => e
@@ -202,8 +224,8 @@ module Lich
       # Strip tags using Kramdown based on the input format
       #
       # This is a shared helper method that handles the actual parsing and
-      # tag removal for HTML and MARKUP modes. It converts the parsed document
-      # to plain text using Kramdown's standard conversion methods.
+      # tag removal for HTML, MARKUP, and MARKDOWN modes. It converts the parsed
+      # document to plain text using Kramdown's standard conversion methods.
       #
       # @param text [String] The text to process
       # @param mode [Symbol] The stripping mode, which determines the input format
@@ -217,7 +239,7 @@ module Lich
       #   3. Strip leading/trailing whitespace
       #
       # @note For HTML mode, Kramdown's HTML parser extracts text content
-      #   while preserving text nodes and ignoring markup. For markup mode,
+      #   while preserving text nodes and ignoring markup. For markup/markdown modes,
       #   the GFM parser processes Markdown syntax and then extracts plain text.
       #
       # @api private
@@ -248,7 +270,7 @@ module Lich
       # @api private
       def self.strip_xml_with_rexml(text)
         # Parse the XML document
-        doc = REXML::Document.new(text)
+        doc = REXML::Document.new("<root>#{text}</root>")
 
         # Extract all text content from the document
         extract_xml_text(doc.root).strip
@@ -467,9 +489,36 @@ module Lich
       # @note Uses Kramdown for Markdown parsing
       # @note This method is called internally by {#strip} when mode is Mode::MARKUP
       # @see #strip
+      # @see #strip_markdown
       # @api private
       def self.strip_markup(text)
         strip_with_kramdown(text, Mode::MARKUP)
+      end
+
+      # Strip Markdown formatting and return plain text (alias for strip_markup)
+      #
+      # This is an alias for {#strip_markup} that provides a more explicit method name
+      # for working with Markdown content. Both :markup and :markdown modes are
+      # functionally identical.
+      #
+      # @param text [String] The Markdown text to process
+      #
+      # @return [String] Plain text with Markdown formatting removed and whitespace trimmed
+      #
+      # @example Bold and italic
+      #   TextStripper.strip_markdown("**bold** and *italic*")
+      #   # => "bold and italic"
+      #
+      # @example Links
+      #   TextStripper.strip_markdown("[link text](http://example.com)")
+      #   # => "link text"
+      #
+      # @note This is functionally identical to strip_markup
+      # @note Uses GitHub Flavored Markdown (GFM) as the input format
+      # @see #strip_markup
+      # @api private
+      def self.strip_markdown(text)
+        strip_with_kramdown(text, Mode::MARKDOWN)
       end
     end
   end
