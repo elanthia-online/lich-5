@@ -19,7 +19,8 @@ module Lich
 
         # Bold tag pattern - creatures are wrapped in bold tags
         # Non-greedy match to avoid spanning multiple creatures
-        BOLD_WRAPPER_PATTERN = /<pushBold\/>([^<]+<a exist="[^"]+"[^>]+>[^<]+<\/a>)<popBold\/>/i.freeze
+        # Allow zero or more characters before <a> tag (e.g., "a creature" or just "creature")
+        BOLD_WRAPPER_PATTERN = /<pushBold\/>([^<]*<a exist="[^"]+"[^>]+>[^<]+<\/a>)<popBold\/>/i.freeze
 
         class << self
           # Parse attack initiation
