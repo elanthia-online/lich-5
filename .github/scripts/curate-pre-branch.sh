@@ -218,8 +218,11 @@ process_single_pr() {
 
   # Instrumenting to see where failures might occur
   log_info "DEBUG: HEAD ref = $(git rev-parse --abbrev-ref HEAD)"
-  log_info "DEBUG: Last 10 commits on HEAD:"
-  git log --format='%h %s' -10 HEAD | sed 's/^/DEBUG:   /'
+  log_info "DEBUG: Last 200 commits on HEAD:"
+  git log --format='%h %s' -200 HEAD | sed 's/^/DEBUG:   /'
+
+  log_info "DEBUG: Last 200 commits on origin/${DEST_SAFE}:"
+  git log --no-color --format='%h %s' "origin/${DEST_SAFE}" -200 | sed 's/^/DEBUG:   /'
 
   # Detect whether this PR has already been curated into DEST_SAFE
   local pr_already_curated=false
