@@ -230,7 +230,9 @@ process_single_pr() {
   # type changes, and the merge strategy must be '-X theirs' to avoid
   # duplicating code into syntax errors from the Hinterlands. So always check
   # against the 'origin/${DEST_SAFE}' to avoid branch merge shinanigans.
-  if git log --format=%s "origin/${DEST_SAFE}" | grep -qE "\(#${pr_num}\)$"; then
+  # Also taking out the color / formatting commands.
+  if git log --no-color --format=%s "origin/${DEST_SAFE}" \
+     | grep -qE "\(#${pr_num}\)[[:space:]]*$"; then
     pr_already_curated=true
     log_info "PR #${pr_num} already present in origin/${DEST_SAFE}; treating as update."
   else
