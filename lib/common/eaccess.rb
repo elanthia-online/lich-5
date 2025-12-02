@@ -5,12 +5,14 @@ require_relative 'account'
 module Lich
   module Common
     module EAccess
-      PEM = File.join(DATA_DIR, "simu.pem")
-      # pp PEM
       PACKET_SIZE = 8192
 
+      def self.pem
+        @pem ||= File.join(DATA_DIR, "simu.pem")
+      end
+
       def self.pem_exist?
-        File.exist? PEM
+        File.exist? pem
       end
 
       def self.download_pem(hostname = "eaccess.play.net", port = 7910)
@@ -23,18 +25,18 @@ module Lich
         # establish connection, if possible
         ssl.connect
         # write the .pem to disk
-        File.write(EAccess::PEM, ssl.peer_cert)
+        File.write(pem, ssl.peer_cert)
       end
 
       def self.verify_pem(conn)
-        # return if conn.peer_cert.to_s = File.read(EAccess::PEM)
-        if !(conn.peer_cert.to_s == File.read(EAccess::PEM))
-          Lich.log "Exception, \nssl peer certificate did not match #{EAccess::PEM}\nwas:\n#{conn.peer_cert}"
+        # return if conn.peer_cert.to_s = File.read(pem)
+        if !(conn.peer_cert.to_s == File.read(pem))
+          Lich.log "Exception, \nssl peer certificate did not match #{pem}\nwas:\n#{conn.peer_cert}"
           download_pem
         else
           return true
         end
-        #     fail Exception, "\nssl peer certificate did not match #{EAccess::PEM}\nwas:\n#{conn.peer_cert}"
+        #     fail Exception, "\nssl peer certificate did not match #{pem}\nwas:\n#{conn.peer_cert}"
       end
 
       def self.socket(hostname = "eaccess.play.net", port = 7910)
@@ -44,7 +46,7 @@ module Lich
         ssl_context             = OpenSSL::SSL::SSLContext.new
         ssl_context.cert_store  = cert_store
         ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER
-        cert_store.add_file(EAccess::PEM) if pem_exist?
+        cert_store.add_file(pem) if pem_exist?
         ssl_socket = OpenSSL::SSL::SSLSocket.new(socket, ssl_context)
         ssl_socket.sync_close = true
         EAccess.verify_pem(ssl_socket.connect)
