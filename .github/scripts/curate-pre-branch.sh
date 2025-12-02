@@ -216,14 +216,6 @@ process_single_pr() {
   local pr_num="$1"
   log_group "PR #${pr_num}"
 
-  # Instrumenting to see where failures might occur
-  log_info "DEBUG: HEAD ref = $(git rev-parse --abbrev-ref HEAD)"
-  log_info "DEBUG: Last 200 commits on HEAD:"
-  git log --format='%h %s' -200 HEAD | sed 's/^/DEBUG:   /'
-
-  log_info "DEBUG: Last 200 commits on origin/${DEST_SAFE}:"
-  git log --no-color --format='%h %s' "origin/${DEST_SAFE}" -200 | sed 's/^/DEBUG:   /'
-
   # Detect whether this PR has already been curated into DEST_SAFE
   local pr_already_curated=false
   # Proper behavior through process would be to provide fixes in new PRs
@@ -234,8 +226,8 @@ process_single_pr() {
   # duplicating code into syntax errors from the Hinterlands. So always check
   # against the 'origin/${DEST_SAFE}' to avoid branch merge shinanigans.
   # Also taking out the color / formatting commands.
-  if git log --no-color --format=%s "origin/${DEST_SAFE}" \
-     | grep -qE "\(#${pr_num}\)[[:space:]]*$"; then
+  if git log --no-color --oneline --grep="(#${pr_num})" \
+    "origin/${DEST_SAFE}" > /dev/null 2>&1; then
     pr_already_curated=true
     log_info "PR #${pr_num} already present in origin/${DEST_SAFE}; treating as update."
   else
