@@ -223,12 +223,18 @@ process_single_pr() {
 
   # Detect whether this PR has already been curated into DEST_SAFE
   local pr_already_curated=false
-  if git log --format=%s HEAD | grep -qE "\(#${pr_num}\)$"; then
+  # Proper behavior through process would be to provide fixes in new PRs
+  # to any feature PRs that are being beta tested.  For now, we will make
+  # the call that if a PR is added to beta, at any point in the beta train,
+  # any changes brought back through the curate process need to be 'update'
+  # type changes, and the merge strategy must be '-X theirs' to avoid
+  # duplicating code into syntax errors from the Hinterlands. So always check
+  # against the 'origin/${DEST_SAFE}' to avoid branch merge shinanigans.
+  if git log --format=%s "origin/${DEST_SAFE}" | grep -qE "\(#${pr_num}\)$"; then
     pr_already_curated=true
-    log_info "PR #${pr_num} already present in ${DEST_SAFE}; treating as update."
+    log_info "PR #${pr_num} already present in origin/${DEST_SAFE}; treating as update."
   else
-    # more logging
-    log_info "DEBUG: did NOT detect prior curated commit for #${pr_num}"
+    log_info "DEBUG: did NOT detect prior curated commit for #${pr_num} in origin/${DEST_SAFE}"
   fi
 
   local pr_json
