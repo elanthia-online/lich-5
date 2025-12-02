@@ -216,6 +216,11 @@ process_single_pr() {
   local pr_num="$1"
   log_group "PR #${pr_num}"
 
+  # Instrumenting to see where failures might occur
+  log_info "DEBUG: HEAD ref = $(git rev-parse --abbrev-ref HEAD)"
+  log_info "DEBUG: Last 10 commits on HEAD:"
+  git log --format='%h %s' -10 HEAD | sed 's/^/DEBUG:   /'
+
   # Detect whether this PR has already been curated into DEST_SAFE
   local pr_already_curated=false
   if git log --format=%s HEAD | grep -qE "\(#${pr_num}\)$"; then
