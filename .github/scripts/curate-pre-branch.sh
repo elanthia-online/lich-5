@@ -226,6 +226,9 @@ process_single_pr() {
   if git log --format=%s HEAD | grep -qE "\(#${pr_num}\)$"; then
     pr_already_curated=true
     log_info "PR #${pr_num} already present in ${DEST_SAFE}; treating as update."
+  else
+    # more logging
+    log_info "DEBUG: did NOT detect prior curated commit for #${pr_num}"
   fi
 
   local pr_json
@@ -251,6 +254,9 @@ process_single_pr() {
     USE_UNION=false
     log_info "Using -X theirs strategy for updated PR #${pr_num}"
   fi
+
+  # and more logging
+  log_info "DEBUG: strategy for PR #${pr_num}: STRAT_SAFE=$STRAT_SAFE GIT_STRATEGY_FLAG='${GIT_STRATEGY_FLAG:-<none>}' USE_UNION=${USE_UNION}"
 
   # Determine cherry-pick mode
   if [[ "$MODE_SAFE" == "merged" ]] || { [[ "$MODE_SAFE" == "auto" ]] && pr_is_merged "$pr_json" && [[ "$merge_sha" != "null" ]]; }; then
