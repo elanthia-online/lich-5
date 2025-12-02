@@ -628,7 +628,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.display_lichid
@@ -653,7 +652,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.hide_uid_flag
@@ -678,7 +676,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.core_updated_with_lich_version
@@ -698,7 +695,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.display_uid
@@ -723,7 +719,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.display_exits
@@ -748,7 +743,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.display_stringprocs
@@ -773,7 +767,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.track_autosort_state
@@ -797,7 +790,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.track_dark_mode
@@ -821,7 +813,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.track_layout_state
@@ -845,6 +836,5 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 end

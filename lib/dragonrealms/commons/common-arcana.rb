@@ -47,7 +47,7 @@ module Lich
         /^The web of shadows twitches one last time and then goes inert/, # Shadow Web (SHW)
         /^You release your mental hold on the lunar energy that sustains your moongate/, # Moongate (MG)
         /^The refractive field surrounding you fades away/, # Steps of Vuan (SOV)
-        /^A \w+ brilliant \w+ sphere suddenly flares with a cold light and vaporizes/, # Starlight Sphere (SLS)
+        /^A .* sphere suddenly flares with a cold light and vaporizes/, # Starlight Sphere (SLS)
         # Trader spells
         /^Your calligraphy of light assailing/, # Arbiter's Stylus (ARS)
         /^The .* moonsmoke blows away from your face/, # Mask of the Moons (MOM)
@@ -497,20 +497,10 @@ module Lich
       def parse_regalia # generates an array of currently-worn regalia armor nouns
         return unless DRStats.trader?
 
-        DRC.bput('inv armor', 'Use INVENTORY HELP for more options')
-        snapshot = reget(40)
-        if snapshot.grep(/All of your armor|You aren't wearing anything like that/).any? && snapshot.grep(/Use INVENTORY HELP/).any?
-          snapshot
-            .map(&:strip)
-            .reverse
-            .take_while { |item| !['All of your armor:', "You aren't wearing anything like that."].include?(item) }
-            .drop_while { |item| item != '[Use INVENTORY HELP for more options.]' }
-            .drop(1)
-            .select { |item| item.include?('rough-cut crystal') || item.include?('faceted crystal') || item.include?('resplendent crystal') }
-            .map { |item| DRC.get_noun(item) }
-        else
-          parse_regalia
-        end
+        snapshot = Lich::Util.issue_command("inv combat", /All of your worn combat|You aren't wearing anything like that/, /Use INVENTORY HELP for more options/, usexml: false, include_end: false)
+                             .map(&:strip)
+        (snapshot - ["All of your worn combat equipment:", "You aren't wearing anything like that."]).select { |item| item.include?('rough-cut crystal') || item.include?('faceted crystal') || item.include?('resplendent crystal') }
+                                                                                                     .map { |item| DRC.get_noun(item) }
       end
 
       def shatter_regalia?(worn_regalia = nil) # takes an array of armor nouns to remove or gets its own from parse_regalia
@@ -830,7 +820,9 @@ module Lich
         return if training_spells.empty?
         return if DRStats.mana <= settings.waggle_spells_mana_threshold
 
-        if !XMLData.prepared_spell.eql?('None') && checkcastrt == 0
+        if checkcastrt > 0
+          return
+        elsif !XMLData.prepared_spell.eql?('None') && checkcastrt == 0
           spell = XMLData.prepared_spell
           data = training_spells.find { |_skill, info| info['name'] == spell }.last
           crafting_cast_spell(data, settings)

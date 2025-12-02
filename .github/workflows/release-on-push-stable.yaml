@@ -1,0 +1,792 @@
+# -----------------------------------------------------------------------------
+# PURPOSE
+#   Create stable tags/releases on pushes to main, then build and upload
+#   artifacts (core zips, optional Windows installer) with a corrected,
+#   production-formatted release body/title as early as possible.
+#   Releases are created as DRAFT and require human review before publication.
+#
+# INVARIANTS
+# - Releases are created as DRAFT (invisible until human publishes via GitHub UI/CLI).
+# - Release body/title must be finalized before packaging begins.
+# - No reliance on a local git checkout for GH release edits/uploads.
+# - PR labels 'skip-installer' or 'no-installer' gate the installer build (case-insensitive).
+#
+# OUTPUTS (selected)
+# - release: steps.rp.outputs.release_created, steps.rp.outputs.tag_name
+# - installer_gate: steps.gate.outputs.installer (true|false)
+#
+# EXTENSION POINTS
+# - EXP_* env toggles at top of file
+# - "Transform body" step: header/footer/normalization rules only (no network)
+# -----------------------------------------------------------------------------
+name: release-please (stable on push)
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - 'spec/**'
+      - '.gitattributes'
+      - '.gitignore'
+      - '.rubocop.yml'
+      - '.ruby-version'
+      - 'netlify.toml'
+      - 'README.adoc'
+      - 'release-please-config.json'
+      - 'release-please-config.prerelease.json'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)format"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  # --- Experiments / toggles (live) ---
+  # python prune behavior: files | pacman | off
+  EXP_PRUNE_PYTHON_MODE: files
+  # prune the large non-runtime trees (man/doc/info/locale/cache/clang)
+  EXP_PRUNE_BULK: 'true'
+  # run ruby runtime validation via Gtk.init (not just requires)
+  EXP_VALIDATE_RUBY_GTK: 'true'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      # 1) Release Please for stable branch (creates public release, we convert to draft immediately)
+      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
+        id: rp
+        with:
+          skip-github-release: false
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: ${{ github.ref_name }}
+          skip-github-pull-request: false
+          
+      - name: Trace RP outputs
+        if: ${{ steps.rp.outputs.release_created != '' }}
+        run: |
+          echo "rp.release_created=${{ steps.rp.outputs.release_created }}"
+          echo "rp.tag_name=${{ steps.rp.outputs.tag_name }}"
+          echo "rp.version=${{ steps.rp.outputs.version }}"
+
+      # 2) Immediately convert release to draft (before any public visibility)
+      - name: Convert release to draft
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.rp.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          # Convert the release to draft immediately (invisible until human publishes)
+          gh release edit -R "$GITHUB_REPOSITORY" "$TAG" --draft
+
+      # --- FAST-PATH: finalize title/body before packaging ---
+      - name: Derive release vars from tag (no REST)
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: derive_rel
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          TAG: ${{ steps.rp.outputs.tag_name }}
+        with:
+          script: |
+            const tag = (process.env.TAG || '').trim();
+            if (!tag) core.setFailed('Missing tag from release-please step');
+            const m = tag.match(/(\d+\.\d+\.\d+(?:-[0-9A-Za-z.\-]+)?)/);
+            const version = m ? m[1] : '';
+            core.setOutput('version', version);
+            core.setOutput('published_at', new Date().toISOString());
+
+      - name: Find Release Please PR by commit SHA
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: find_pr
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          VERSION: ${{ steps.derive_rel.outputs.version }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const sha = context.sha;
+            const version = process.env.VERSION || '';
+            
+            core.info(`Looking for PR associated with commit ${sha}`);
+            
+            // Find PRs associated with this commit (the merge commit that triggered this workflow)
+            let prs = [];
+            try {
+              const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner,
+                repo,
+                commit_sha: sha
+              });
+              prs = data || [];
+              core.info(`Found ${prs.length} PR(s) associated with commit`);
+            } catch (e) {
+              core.warning(`Failed to find PRs by commit: ${e.message}`);
+            }
+            
+            // Filter for merged release-please PRs matching this version
+            const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const v = esc(version);
+            const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');
+            
+            const hit = prs.find(pr => 
+              pr.merged_at && 
+              titleRe.test(pr.title || '')
+            );
+            
+            if (hit) {
+              core.info(`Found PR #${hit.number}: ${hit.title}`);
+              core.setOutput('found', 'true');
+              core.setOutput('number', String(hit.number));
+              core.setOutput('body', hit.body || '');
+            } else {
+              core.warning(`No matching merged PR found for version ${version}`);
+              core.setOutput('found', 'false');
+            }
+
+      - name: Choose seed body (PR preferred)
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: choose_seed
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          PR_BODY: ${{ steps.find_pr.outputs.body }}
+        with:
+          script: |
+            const prb = process.env.PR_BODY || '';
+            core.setOutput('body', prb);
+
+      - name: Transform body (header + cleanup + footer)
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: transform_body
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          SEED: ${{ steps.choose_seed.outputs.body }}
+          VERSION: ${{ steps.derive_rel.outputs.version }}
+          PUBLISHED_AT: ${{ steps.derive_rel.outputs.published_at }}
+        with:
+          script: |
+            const seed = process.env.SEED || '';
+            const version = process.env.VERSION || '';
+            const dt = process.env.PUBLISHED_AT ? new Date(process.env.PUBLISHED_AT) : new Date();
+            const yyyy = dt.getUTCFullYear();
+            const mm = String(dt.getUTCMonth()+1).padStart(2,'0');
+            const dd = String(dt.getUTCDate()).padStart(2,'0');
+            const headerLine = `Lich v${version} (${yyyy}-${mm}-${dd})`;
+            
+            // Split into lines and replace first non-empty line with header
+            const lines = seed.split(/\r?\n/);
+            let i = 0; 
+            while (i < lines.length && /^\s*$/.test(lines[i])) i++;
+            if (i >= lines.length) lines.push(headerLine); 
+            else lines[i] = headerLine;
+            
+            let body = lines.join('\n');
+            
+            // Strip Release Please boilerplate (everything after "---" or "This PR was generated")
+            body = body.replace(/^---\s*\n[\s\S]*$/m, '');
+            body = body.replace(/^This PR was generated with[\s\S]*$/m, '');
+            
+            // Strip Ellipsis comments
+            body = body.replace(/<!--[\s\S]*?-->/g, '');
+            
+            // Strip Co-authored-by footer
+            body = body.replace(/^Co-authored-by:.*$/gm, '');
+            
+            // Convert [#123](...) -> #123
+            body = body.replace(/\[#(\d+)\]\([^)]*\)/g, '#$1');
+            
+            // Clean up multiple blank lines
+            body = body.replace(/\n{3,}/g, '\n\n').trim();
+            
+            // Append install footer
+            const footer = [
+              '',
+              'For additional usage/install instructions, please visit one of the following:',
+              '',
+              'DragonRealms - https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich',
+              'Gemstone IV - https://gswiki.play.net/Lich:Software/Installation'
+            ].join('\n');
+            body = body.replace(/\n+$/, '') + '\n' + footer + '\n';
+            
+            core.setOutput('final', body);
+
+      - name: Apply formatted title/body to draft release
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.rp.outputs.tag_name }}
+          VERSION: ${{ steps.derive_rel.outputs.version }}
+          FINAL: ${{ steps.transform_body.outputs.final }}
+        run: |
+          set -euo pipefail
+          # Update the draft release with formatted title and body
+          gh release edit -R "$GITHUB_REPOSITORY" "$TAG" --title "Lich v$VERSION" --notes-file <(printf '%s' "$FINAL")
+      # --- END FAST-PATH ---
+
+      # 3) Only build/upload when a new GitHub Release was created
+      - name: Checkout repository
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      # 4) Build core Lich-5 payload (same as before)
+      - name: Create Core Lich-5 package
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p Lich5 Lich5/data Lich5/scripts
+
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/alias.lic         > Lich5/scripts/alias.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/autostart.lic     > Lich5/scripts/autostart.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/ewaggle.lic       > Lich5/scripts/ewaggle.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/go2.lic           > Lich5/scripts/go2.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/jinx.lic          > Lich5/scripts/jinx.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/lich5-update.lic  > Lich5/scripts/lich5-update.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/log.lic           > Lich5/scripts/log.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/map.lic           > Lich5/scripts/map.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/repository.lic    > Lich5/scripts/repository.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/vars.lic          > Lich5/scripts/vars.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/version.lic       > Lich5/scripts/version.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/dr-scripts/master/dependency.lic         > Lich5/scripts/dependency.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml   > Lich5/data/effect-list.xml
+
+          cp lich.rbw Lich5/
+          cp -r lib Lich5/
+
+          tar -czvf lich-5.tar.gz Lich5/
+          zip -r lich-5.zip Lich5/
+
+      - name: Upload archives to draft release
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.rp.outputs.tag_name }}" lich-5.tar.gz lich-5.zip
+
+  # 5) Build Windows installer (Ruby4Lich5.exe)
+  installer_gate:
+    needs: release
+    if: ${{ needs.release.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve installer gate (labels only, with tracing)
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          set -x
+          repo="${GITHUB_REPOSITORY}"
+          branch="main"
+          tag="${{ needs.release.outputs.tag_name }}"
+          want=true
+          gh_api() { gh api -H 'Accept: application/vnd.github+json' "$@"; }
+          ver="$(printf '%s' "$tag" | sed -nE 's/.*([0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?).*/\1/p')"
+          pulls_json="$(gh_api "/repos/$repo/pulls?state=closed&base=$branch&sort=updated&direction=desc&per_page=100")" || pulls_json="[]"
+          best="$(printf '%s' "$pulls_json" | jq -r --arg v "$ver" '
+            # Escape regex metacharacters in the version string
+            def esc: gsub("([.^$|()\\[\\]{}*+?\\-])"; "\\\\1");
+            .[]
+            | select(.merged_at != null)
+            | select(.title | test( ("(^|[^0-9A-Za-z])" + "v?" + ($v|esc) + "([^0-9A-Za-z]|$)"); "i"))
+            | [ .merged_at, .number ] | @tsv
+          ' | sort -r | head -n1)"
+          pr="$(printf '%s' "$best" | awk '{print $2}')"
+          
+          # Fallback to Search (if REST scan found nothing)
+          if [ -z "${pr:-}" ]; then
+            q="repo:${repo} is:pr is:merged in:title \"${ver}\" base:${branch}"
+            echo "Gate trace (fallback): search q=$q"
+            candidates="$(gh_api "/search/issues?q=$(printf '%s' "$q" | jq -sRr @uri)&sort=updated&order=desc&per_page=10" --jq '.items[].number' 2>/dev/null || true)"
+            if [ -n "$candidates" ]; then
+              best="$(for n in $candidates; do
+                        gh_api "/repos/$repo/pulls/$n" --jq '[.merged_at,.number] | @tsv' 2>/dev/null || true
+                      done | sort -r | head -n1)"
+              pr="$(printf '%s' "$best" | awk '{print $2}')"
+            fi
+          fi
+          
+          echo "Gate trace: matched PR #${pr:-<none>}"
+          if [ -n "${pr:-}" ]; then
+            labels="$(gh_api "/repos/$repo/issues/$pr/labels" | jq -r '.[].name | ascii_downcase')"
+            if printf '%s\n' "$labels" | grep -Eq '(^|[[:space:]])(skip-installer|no-installer)($|[[:space:]])'; then want=false; fi
+          fi
+          echo "installer=$want" >> "$GITHUB_OUTPUT"
+
+    outputs:
+      installer: ${{ steps.gate.outputs.installer }}
+
+  trace_build_condition:
+    needs: [release, installer_gate]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Trace needs for installer job
+        run: |
+          echo "release_created=${{ needs.release.outputs.release_created }}"
+          echo "installer=${{ needs.installer_gate.outputs.installer }}"
+
+  build_installer:
+    needs: [release, installer_gate]
+    if: ${{ needs.release.outputs.release_created == 'true' && needs.installer_gate.outputs.installer == 'true' }}
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      # Pin Ruby explicitly on windows-latest
+      - name: Set up Ruby (3.4.5)
+        uses: ruby/setup-ruby@d5126b9b3579e429dd52e51e68624dda2e05be25 # v1.267.0
+        with:
+          ruby-version: '3.4.5'
+          bundler-cache: false
+
+      # Install Inno Setup
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          choco feature disable -n=showDownloadProgress
+          choco install -y --limit-output innosetup
+
+      # Install MSYS2 directly into the app tree
+      - name: Install MSYS2 into app tree
+        shell: powershell
+        run: |
+          choco feature disable -n=showDownloadProgress
+          choco install -y --limit-output msys2 --params '"/InstallDir:C:\Ruby4Lich5\msys64 /NoUpdate"'
+
+      # Build sanitized PATH that prefers vendored MSYS2 (Option A) and cache it
+      - name: Build sanitized PATH for vendored MSYS2
+        id: vendormsys
+        shell: powershell
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          if (!(Test-Path $msys)) { Write-Error "Expected $msys to exist at this point"; exit 1 }
+          $orig = $env:Path -split ';'
+          $filtered = $orig | Where-Object {
+            $_ -and
+            ($_ -notlike '*\Ruby\*\x64\msys64\*') -and   # drop runner DevKit MSYS2
+            ($_ -ne 'C:\mingw64\bin') -and               # drop global mingw
+            ($_ -notmatch '^C:\\Strawberry(\\|$)')       # drop Strawberry toolchain
+          }
+          $san = @("$msys\ucrt64\bin","$msys\usr\bin") + $filtered
+          $joined = ($san -join ';')
+          "PATH_VENDOR_MSYS=$joined" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "path=$joined" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "RI_DEVKIT=" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Initialize MSYS2 (minimal UCRT64; no meta toolchain)
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ''
+        run: |
+          $msys   = 'C:\Ruby4Lich5\msys64'
+          $pacman = Join-Path $msys 'usr\bin\pacman.exe'
+          if (!(Test-Path $pacman)) { Write-Error "pacman not found at $pacman"; exit 1 }
+
+          $env:MSYSTEM = 'UCRT64'
+          & $pacman -Sy --noconfirm
+          & $pacman -S --needed --noconfirm `
+            mingw-w64-ucrt-x86_64-gcc `
+            mingw-w64-ucrt-x86_64-gcc-libs `
+            mingw-w64-ucrt-x86_64-make `
+            mingw-w64-ucrt-x86_64-pkgconf `
+            mingw-w64-ucrt-x86_64-gobject-introspection `
+            mingw-w64-ucrt-x86_64-sqlite3 `
+            mingw-w64-ucrt-x86_64-gtk3 `
+            make
+
+      # Sanity checks: ensure vendored toolchain resolves first & libs are discoverable
+      - name: Dependency validation (toolchain & pkg-config)
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ''
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          $gcc  = Join-Path $msys 'ucrt64\bin\gcc.exe'
+          $pkgc = Join-Path $msys 'ucrt64\bin\pkg-config.exe'
+          $pac  = Join-Path $msys 'usr\bin\pacman.exe'
+      
+          if (!(Test-Path $pac))  { Write-Error "pacman not found at $pac"; exit 1 }
+          if (!(Test-Path $gcc))  { Write-Error "vendored gcc not found at $gcc"; exit 1 }
+          if (!(Test-Path $pkgc)) { Write-Error "vendored pkg-config not found at $pkgc"; exit 1 }
+      
+          # Prove the vendored tools run
+          & $gcc --version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) { Write-Error "vendored gcc failed to execute"; exit 1 }
+          & $pkgc --version
+          if ($LASTEXITCODE -ne 0) { Write-Error "vendored pkg-config failed to execute"; exit 1 }
+      
+          # Prove pkg-config sees the libraries we installed
+          cmd /c `"$pkgc`" --print-errors --exists gtk+-3.0
+          if ($LASTEXITCODE -ne 0) { Write-Error "pkg-config cannot resolve gtk+-3.0"; exit 1 }
+          cmd /c `"$pkgc`" --print-errors --exists sqlite3
+          if ($LASTEXITCODE -ne 0) { Write-Error "pkg-config cannot resolve sqlite3"; exit 1 }
+      
+          # Python WILL be pulled in by GTK deps; we remove it later. Don't fail here.
+          # Just surface whether it showed up so we can observe the behavior.
+          $env:MSYSTEM = 'UCRT64'
+          & $pac -Qq mingw-w64-ucrt-x86_64-python 1>$null 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Note: mingw-w64-ucrt-x86_64-python present after init (expected via GTK deps); will remove later."
+          }
+
+          # Output the library versions installed for troubleshooting
+          Write-Host "MSYS Library versions installed:"
+          & $pac -Q
+
+          # Pin tool choices for downstream (regardless of PATH order)
+          "CC=$gcc"                  | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "PKG_CONFIG=$pkgc"         | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          # Helpful for Ruby native gems that honor these
+          "PKG_CONFIG_PATH=$($msys)\ucrt64\lib\pkgconfig;$($msys)\lib\pkgconfig" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      # Install required gems (pruned list)
+      - name: Install required gems
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ''
+          CC: gcc
+          PKG_CONFIG: pkg-config
+        run: |
+          gem install sqlite3 --platform ruby -- --enable-system-libraries --with-sqlite3-include=${env:MSYS2_ROOT}/ucrt64/include --with-sqlite3-lib=${env:MSYS2_ROOT}/ucrt64/lib
+          gem install ascii_charts gtk3 json logger os ostruct redis sequel terminal-table tzinfo tzinfo-data webrick --no-document
+
+      # Optional experiment: validate Ruby actually initializes GTK (not just require)
+      - name: Validate Ruby GTK/sqlite3 runtime
+        if: ${{ env.EXP_VALIDATE_RUBY_GTK == 'true' }}
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ''
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          # Prepend vendored MSYS; keep the rest so ruby.exe is still found
+          $env:Path = "$msys\ucrt64\bin;$msys\usr\bin;$env:Path"
+      
+          # Resolve ruby.exe from PATH (hostedtoolcache)
+          $rubyExe = (& "$env:SystemRoot\System32\where.exe" ruby 2>$null | Select-Object -First 1)
+          if (-not $rubyExe) { Write-Error "ruby.exe not found on PATH"; exit 1 }
+      
+          # Prove vendored tools win
+          $gccFirst = @(& "$env:SystemRoot\System32\where.exe" gcc 2>$null)[0]
+          $pcFirst  = @(& "$env:SystemRoot\System32\where.exe" pkg-config 2>$null)[0]
+          if (-not $gccFirst -or -not $pcFirst) { Write-Error "Missing gcc/pkg-config"; exit 1 }
+          if (-not $gccFirst.StartsWith('C:\Ruby4Lich5\msys64', 'OrdinalIgnoreCase')) { Write-Error "gcc resolves to non-vendored: $gccFirst"; exit 1 }
+          if (-not $pcFirst.StartsWith('C:\Ruby4Lich5\msys64', 'OrdinalIgnoreCase')) { Write-Error "pkg-config resolves to non-vendored: $pcFirst"; exit 1 }
+      
+          # pkg-config sanity
+          cmd /c pkg-config --print-errors --exists gtk+-3.0
+          if ($LASTEXITCODE -ne 0) { Write-Error "pkg-config cannot resolve gtk+-3.0"; exit 1 }
+          cmd /c pkg-config --print-errors --exists sqlite3
+          if ($LASTEXITCODE -ne 0) { Write-Error "pkg-config cannot resolve sqlite3"; exit 1 }
+      
+          # IMPORTANT: correct Ruby code, correct quoting
+          #  - constant is Gtk (not GTK)
+          #  - keep quotes around string literals
+          #  - pass an empty ARGV to Gtk.init to avoid surprises
+          $rb = 'require "gtk3"; require "sqlite3"; puts "ruby=#{RUBY_VERSION}"; Gtk.init([]); puts "GTK.init OK"'
+          #  Use the Stop Parsing Operator ( --% ) for PowerShell to avoid interpolation in the string above
+          & $rubyExe -e --% $rb
+          if ($LASTEXITCODE -ne 0) { Write-Error "Ruby GTK3/sqlite3 load failed"; exit 1 }
+
+          # Print out installed gems for troubleshooting
+          Write-Host "Gems installed:"
+          gem list
+
+      # (Optional) Remove Python to keep the bundle lean. Mode is driven by EXP_PRUNE_PYTHON_MODE:
+      #   - 'files'  : delete python binaries/trees by glob (default)
+      #   - 'pacman' : uninstall python packages via pacman, then also run the files sweep
+      #   - 'off'    : skip this step entirely (use the job/step-level if: to skip)
+      - name: Prune Python from bundled MSYS2 (mode=${{ env.EXP_PRUNE_PYTHON_MODE || 'files' }})
+        if: ${{ env.EXP_PRUNE_PYTHON_MODE != 'off' }}
+        shell: powershell
+        env:
+          EXP_PRUNE_PYTHON_MODE: ${{ env.EXP_PRUNE_PYTHON_MODE }}
+        run: |
+          $msys   = 'C:\Ruby4Lich5\msys64'
+          if (!(Test-Path $msys)) { Write-Host "No MSYS2 at $msys; skipping."; exit 0 }
+
+          # Report size BEFORE
+          $beforeMB = [math]::Round((Get-ChildItem -Recurse $msys | Measure-Object Length -Sum).Sum / 1MB)
+          Write-Host "Python-prune: before = $beforeMB MB"
+
+          $mode   = "${env:EXP_PRUNE_PYTHON_MODE}"; if (-not $mode) { $mode = 'files' }
+          $pacman = Join-Path $msys 'usr\bin\pacman.exe'
+
+          if ($mode -eq 'pacman' -and (Test-Path $pacman)) {
+            $env:MSYSTEM = 'UCRT64'
+            $installed = & $pacman -Qq 2>$null; if ($LASTEXITCODE -ne 0) { $installed = @() }
+            $pattern   = '^(python($|[0-9]))|(mingw-w64-(ucrt-)?x86_64-python.*)$'
+            $py = @($installed | Where-Object { $_ -match $pattern })
+            if ($py.Count -gt 0) {
+              Write-Host "pacman removing: $($py -join ' ')"
+              & $pacman -Rns --noconfirm @py 1>$null 2>$null
+              if ($LASTEXITCODE -ne 0) {
+                Write-Warning "pacman -Rns failed; retrying -Rdd"
+                & $pacman -Rdd --noconfirm @py 1>$null 2>$null
+              }
+            } else {
+              Write-Host "pacman: no python packages installed"
+            }
+            # fall through to files sweep for belt-and-suspenders
+          } else {
+            Write-Host "pacman phase skipped (mode='$mode' or pacman missing); doing files sweep"
+          }
+
+          # Files sweep (runs for mode=files and mode=pacman)
+          $targets = @(
+            "$msys\ucrt64\bin\python*.exe",
+            "$msys\ucrt64\lib\python*",
+            "$msys\mingw64\bin\python*.exe",
+            "$msys\mingw64\lib\python*",
+            "$msys\usr\bin\python*.exe",
+            "$msys\usr\lib\python*"
+          )
+          $removed = 0
+          foreach ($g in $targets) {
+            Get-ChildItem -Path $g -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+              Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $_.FullName
+              $removed++
+            }
+          }
+          Write-Host "files sweep removed ≈ $removed paths"
+
+          # Report size AFTER
+          $afterMB = [math]::Round((Get-ChildItem -Recurse $msys | Measure-Object Length -Sum).Sum / 1MB)
+          $savedMB = [math]::Max(0, $beforeMB - $afterMB)
+          Write-Host "Python-prune: after  = $afterMB MB (saved $savedMB MB)"
+
+      # Bulk prune of MSYS non-runtime trees (report size delta)
+      - name: Bulk prune non-runtime trees (report delta)
+        if: ${{ env.EXP_PRUNE_BULK == 'true' }}
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ''
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          Write-Host "::group::MSYS2 size report & prune"
+          # Report size BEFORE
+          $beforeMB = [math]::Round((Get-ChildItem -Recurse $msys | Measure-Object Length -Sum).Sum / 1MB)
+          Write-Host "MSYS2-prune: before = $beforeMB MB"
+
+          $paths = @(
+            Join-Path $msys 'var\cache\pacman\pkg'
+            Join-Path $msys 'usr\share\man'
+            Join-Path $msys 'usr\share\doc'
+            Join-Path $msys 'usr\share\info'
+            Join-Path $msys 'usr\share\locale'
+            Join-Path $msys 'usr\lib\clang'
+          )
+          foreach ($p in $paths) {
+            if (Test-Path $p) {
+              Write-Host "Removing $p ..."
+              Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue
+            } else {
+              Write-Host "Skip (not present): $p"
+            }
+          }
+
+          # Report size AFTER
+          $afterMB = [math]::Round((Get-ChildItem -Recurse $msys | Measure-Object Length -Sum).Sum / 1MB)
+          $savedMB = [math]::Max(0, $beforeMB - $afterMB)
+          Write-Host "MSYS2-prune: after  = $afterMB MB (saved $savedMB MB)"
+          Write-Host "::endgroup::"
+
+      
+      # Pull the packaged Lich payload from the just-created Release
+      - name: Download core Lich payload from the Release
+        if: ${{ needs.release.outputs.release_created == 'true' && needs.installer_gate.outputs.installer == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release download "${{ needs.release.outputs.tag_name }}" -p 'lich-5.zip'
+          unzip -q lich-5.zip
+          # Archive contains Lich5/ (capital L) to match the .iss Source paths
+
+     # Build Windows installer with Inno Setup
+      - name: Build Windows installer with Inno Setup
+        shell: powershell
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { Write-Error "ISCC.exe not found at $iscc"; exit 1 }
+          & $iscc "R4LGTK3.iss"
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Write-Error "ISCC exited with code $code (likely missing SignTool or another PATH-dependent tool)."
+            exit $code
+          }
+          if (!(Test-Path .\Output\Ruby4Lich5.exe)) { Write-Error "Expected Output\Ruby4Lich5.exe not found"; exit 1 }
+          Move-Item -Path .\Output\Ruby4Lich5.exe -Destination .\Ruby4Lich5.exe -Force
+
+      - name: Upload installer to draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release upload "${{ needs.release.outputs.tag_name }}" Ruby4Lich5.exe
+
+  # ---------------------------------------------------------------------------
+  # BEGIN TEMPORARY: Manual repair path for existing releases (easily removable)
+  # NOTE: This workflow_dispatch job edits existing releases (not drafts).
+  #       For new releases, use the GitHub UI to publish drafts.
+  manual_repair_existing_release:
+    name: "manual repair: format release body for existing tag"
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Derive release vars from tag (manual)
+        id: derive_rel_manual
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+        with:
+          script: |
+            const tag = (process.env.TAG || '').trim();
+            if (!tag) core.setFailed('Missing tag input');
+            const m = tag.match(/(\d+\.\d+\.\d+(?:-[0-9A-Za-z.\-]+)?)/);
+            const version = m ? m[1] : '';
+            core.setOutput('version', version);
+            core.setOutput('published_at', new Date().toISOString());
+
+      - name: Find merged Release Please PR for this tag (manual)
+        id: find_pr_manual
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          VERSION: ${{ steps.derive_rel_manual.outputs.version }}
+          BASE: main
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const rawVersion = process.env.VERSION || '';
+            const base = process.env.BASE || 'main';
+            const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const v = esc(rawVersion);
+            const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');
+            async function listClosed(opts) {
+              const r = await github.rest.pulls.list({ owner, repo, per_page: 100, sort: 'updated', direction: 'desc', ...opts });
+              return r.data || [];
+            }
+            let pulls = await listClosed({ base });
+            let hit = (pulls || []).find(pr => pr.merged_at && titleRe.test(pr.title || ''));
+            if (!hit) {
+              const q = `repo:${owner}/${repo} is:pr is:merged base:${base} (in:title "v${rawVersion}" OR in:title "${rawVersion}")`;
+              try {
+                const search = await github.rest.search.issuesAndPullRequests({ q, per_page: 5, sort: 'updated', order: 'desc' });
+                const item = (search.data.items || [])[0];
+                if (item) {
+                  const pr = await github.rest.pulls.get({ owner, repo, pull_number: item.number });
+                  hit = pr.data;
+                }
+              } catch {}
+            }
+            core.setOutput('found', hit ? 'true' : 'false');
+            if (hit) core.setOutput('number', String(hit.number));
+
+      - name: Read PR body (seed) (manual)
+        if: ${{ steps.find_pr_manual.outputs.found == 'true' }}
+        id: read_pr_manual
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          NUMBER: ${{ steps.find_pr_manual.outputs.number }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const number = parseInt(process.env.NUMBER || '0', 10);
+            const pr = await github.rest.pulls.get({ owner, repo, pull_number: number }).then(r => r.data);
+            core.setOutput('body', pr.body || '');
+
+      - name: Choose seed body (PR preferred) (manual)
+        id: choose_seed_manual
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          PR_BODY: ${{ steps.read_pr_manual.outputs.body }}
+        with:
+          script: |
+            const prb = process.env.PR_BODY || '';
+            core.setOutput('body', prb);
+
+      - name: Transform body (header + cleanup + footer) (manual)
+        id: transform_body_manual
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          SEED: ${{ steps.choose_seed_manual.outputs.body }}
+          VERSION: ${{ steps.derive_rel_manual.outputs.version }}
+          PUBLISHED_AT: ${{ steps.derive_rel_manual.outputs.published_at }}
+        with:
+          script: |
+            const seed = process.env.SEED || '';
+            const version = process.env.VERSION || '';
+            const dt = process.env.PUBLISHED_AT ? new Date(process.env.PUBLISHED_AT) : new Date();
+            const yyyy = dt.getUTCFullYear();
+            const mm = String(dt.getUTCMonth()+1).padStart(2,'0');
+            const dd = String(dt.getUTCDate()).padStart(2,'0');
+            const headerLine = `Lich v${version} (${yyyy}-${mm}-${dd})`;
+            const lines = seed.split(/\r?\n/);
+            let i = 0; while (i < lines.length && /^\s*$/.test(lines[i])) i++;
+            if (i >= lines.length) lines.push(headerLine); else lines[i] = headerLine;
+            let body = lines.join('\n');
+            
+            // Strip Release Please boilerplate
+            body = body.replace(/^---\s*\n[\s\S]*$/m, '');
+            body = body.replace(/^This PR was generated with[\s\S]*$/m, '');
+            
+            // Strip Ellipsis comments
+            body = body.replace(/<!--[\s\S]*?-->/g, '');
+            
+            // Strip Co-authored-by footer
+            body = body.replace(/^Co-authored-by:.*$/gm, '');
+            
+            // Convert [#123](...) -> #123
+            body = body.replace(/\[#(\d+)\]\([^)]*\)/g, '#$1');
+            
+            // Clean up multiple blank lines
+            body = body.replace(/\n{3,}/g, '\n\n').trim();
+            
+            const footer = [
+              '',
+              'For additional usage/install instructions, please visit one of the following:',
+              '',
+              'DragonRealms - https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich',
+              'Gemstone IV - https://gswiki.play.net/Lich:Software/Installation'
+            ].join('\n');
+            body = body.replace(/\n+$/, '') + '\n' + footer + '\n';
+            core.setOutput('final', body);
+
+      - name: Apply title/body to release (gh) (manual)
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+          VERSION: ${{ steps.derive_rel_manual.outputs.version }}
+          FINAL: ${{ steps.transform_body_manual.outputs.final }}
+        run: |
+          set -euo pipefail
+          gh release edit -R "$GITHUB_REPOSITORY" "$TAG" --title "Lich v$VERSION" --notes-file <(printf '%s' "$FINAL")
+  # END TEMPORARY: Manual repair path
+  # ---------------------------------------------------------------------------

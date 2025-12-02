@@ -45,6 +45,12 @@ module Lich
           log += [response]
 
           case response
+          when /^For some strange reason you are unable to do that\.  The world somehow seems frozen in place/
+            # Zadraes — 13:32 It's a "You're in an area actively being updated" message
+            pause 1
+            put message
+            timer = Time.now
+            next
           when /(?:\.\.\.wait |Wait |\.\.\. wait )([0-9]+)/
             unless ignore_rt
               pause(Regexp.last_match(1).to_i - 0.5)
@@ -478,6 +484,7 @@ module Lich
 
         # handle khri silence as it's not part of base-spells data, and method of ending it differs from spells
         bput('khri stop silence', 'You attempt to relax') if DRSpells.active_spells.keys.include?('Khri Silence')
+        bput('khri stop vanish', /^You would need to start Vanish/, /^Your control over the limited subversion of reality falters/, /^You are not trained in the Vanish meditation/) if (DRStats.guild == "Thief" && invisible?)
       end
 
       def check_encumbrance(refresh = true)

@@ -1,0 +1,68 @@
+# =============================================================================
+# Workflow: guard-pre-branch-pr.yml
+# Purpose : Auto-close any PR that attempts to merge from pre/beta → main.
+#
+# Why pull_request_target?
+#   - Runs in the context of the base repo (safe tokens), without checking out
+#     the untrusted PR head. We only need PR metadata + permissions to comment/close.
+#
+# Triggers:
+#   - pull_request_target: opened, reopened, synchronize, ready_for_review, edited
+#
+# Behavior:
+#   - If head ref starts with 'pre/beta' and base ref == 'main', post a policy
+#     comment and close the PR immediately.
+#
+# Safety / Hardening:
+#   - Concurrency keyed by PR number to avoid duplicate comments on rapid updates.
+#   - Minimal permissions (pull-requests: write). Add actions:write only if you
+#     choose to cancel queued runs tied to the PR (not required).
+# =============================================================================
+name: guard pre/* PRs to main
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+
+concurrency:
+  group: guard-prepr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+permissions:
+  actions: write
+  pull-requests: write
+
+jobs:
+  block:
+    if: ${{ startsWith(github.event.pull_request.head.ref, 'pre/beta') && github.event.pull_request.base.ref == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close with policy comment
+        if: ${{ startsWith(github.head_ref, 'pre/beta') && github.base_ref == 'main' }}
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const number = context.payload.pull_request.number;
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: number,
+              body: "Direct merges from `pre/beta` to `main` are disallowed by policy. This PR will be closed unmerged."
+            });
+            await github.rest.pulls.update({ owner, repo, pull_number: number, state: "closed" });
+
+      - name: Cancel any queued/in-progress runs for this branch/SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          for status in in_progress queued; do
+            gh api -X GET "repos/$REPO/actions/runs" \
+              -f status="$status" -f per_page=100 \
+              -q '.workflow_runs[] | select((.head_branch=="'"$HEAD_REF"'") or (.head_sha=="'"$HEAD_SHA"'")) | .id' |
+            while read -r id; do
+              echo "Cancelling run $id (status=$status)"
+              gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null
+            done
+          done

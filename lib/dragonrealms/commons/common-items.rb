@@ -27,7 +27,7 @@ module Lich
         /^Perhaps you should be holding that first/,
         /^You're kidding, right/,
         /^You can't do that/,
-        /^No littering/,
+        /No littering/, # A guard steps over to you and says, "No littering in the bank."
         /^Where do you want to put that/,
         /^You really shouldn't be loitering/,
         /^You don't seem to be able to move/,
@@ -70,12 +70,14 @@ module Lich
         /^You are already holding/,
         /^You fade in for a moment as you/,
         /^You carefully lift/,
-        /^You carefully remove .* from the bundle/
+        /^You carefully remove .* from the bundle/,
+        /^With a flick of your wrist, you stealthily unsheath/
       ]
 
       GET_ITEM_FAILURE_PATTERNS = [
         /^A magical force keeps you from grasping/,
         /^You'll need both hands free/,
+        /^You need both hands free/,
         /^You need a free hand/,
         /^You can't pick that up with your hand that damaged/,
         /^Your (left|right) hand is too injured/,
@@ -117,13 +119,15 @@ module Lich
         /^You work your way into/,
         /^You are already wearing/,
         /^Gritting your teeth, you grip/,
+        /^You expertly sling the/,
         /put it on/, # weird clerical collar thing, trying to make it a bit generic
         /slide effortlessly onto your/,
         /^You carefully arrange/,
         /^A brisk chill rushes through you as you wear/, # some hiro bearskin gloves interlaced with strips of ice-veined leather
         /^You drape/,
         /You lean over and slip your feet into the boots./, # a pair of weathered barkcloth boots lined in flannel,
-        /^You reach down and step into/ # pair of enaada boots clasped by asharsh'dai
+        /^You reach down and step into/, # pair of enaada boots clasped by asharsh'dai
+        /Gritting your teeth/ # Gritting your teeth, you grip each of your heavy combat boots in turn by the straps, and drive your feet into them for a secure fit.
       ]
 
       WEAR_ITEM_FAILURE_PATTERNS = [
@@ -184,7 +188,8 @@ module Lich
         /slide themselves off of your/,
         /you manage to loosen/,
         /you unlace/,
-        /^You slam the heels/
+        /^You slam the heels/,
+        /^With masterful grace, you ready/
       ]
 
       REMOVE_ITEM_FAILURE_PATTERNS = [
@@ -194,6 +199,7 @@ module Lich
         /^You don't seem to be able to move/,
         /^Remove what/,
         /^I could not/,
+        /^Grunting with momentary exertion/, # Grunting with momentary exertion, you grip each of your heavy combat boots in turn by the heel, and pull them off.
         /^What were you/
       ]
 
@@ -222,6 +228,8 @@ module Lich
         /^You slip/,
         /^You easily strap/,
         /^You gently set/,
+        /^With a flick of your wrist, you stealthily sheath/,
+        /^You strap your .* to your harness/,
         /^You toss .* into/ # You toss the alcohol into the bowl and mix it in thoroughly
       ]
 
@@ -495,7 +503,7 @@ module Lich
       #########################################
 
       def search?(item)
-        /Your .* is in/ =~ DRC.bput("inv search #{item}", /^You can't seem to find anything/, /Your .* is in/)
+        /(?:An?|Some) .+ is (?:in|being)/ =~ DRC.bput("inv search #{item}", /^You can't seem to find anything/, /(?:An?|Some) .+ is (?:in|being)/)
       end
 
       # Taps items to check if you're wearing it.
@@ -764,7 +772,7 @@ module Lich
       # http://forums.play.net/forums/DragonRealms/Discussions%20with%20DragonRealms%20Staff%20and%20Players/Game%20Master%20and%20Official%20Announcements/view/1899
       def get_item_from_eddy_portal?(item, container)
         # Ensure the eddy is open then look in it to force the contents to be loaded.
-        return false unless DRCI.open_container?('my eddy') && DRCI.look_in_container(container)
+        return false unless DRCI.open_container?('my eddy') && DRCI.look_in_container('portal in my eddy')
 
         from = container
         from = "from #{container}" if container && !(container =~ /^(in|on|under|behind|from) /i)

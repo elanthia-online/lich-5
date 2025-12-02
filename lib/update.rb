@@ -8,27 +8,36 @@ module Lich
       require 'rubygems/package'
       require 'zlib'
 
+      # Update channel constants
+      STABLE_REF = 'main'
+      BETA_BRANCH_PREFIX = 'pre/beta' # fallback branch prefix for beta
+      ASSET_TARBALL_NAME = 'lich-5.tar.gz'
+
+      # simple in-memory cache for GitHub API responses
+      @_http_cache = {}
+      @_http_cache_ttl = 60 # seconds
+
       @current = LICH_VERSION
       @snapshot_core_script = ["alias.lic", "autostart.lic", "dependency.lic", "ewaggle.lic", "foreach.lic", "go2.lic", "infomon.lic",
                                "jinx.lic", "lnet.lic", "log.lic", "logxml.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"]
 
       def self.request(type = '--announce')
         case type
-        when /--announce|-a/
+        when /^(?:--announce|-a)\b/
           self.announce
-        when /--(?:beta|test)(?: --(?:(script|library|data))=(.*))?/
-          self.prep_betatest($1.dup, $2.dup)
-        when /--help|-h/
+        when /^--(?:beta|test)(?: --(?:(script|library|data))=(.+))?\b/
+          self.prep_betatest($1&.dup, $2&.dup)
+        when /^(?:--help|-h)\b/
           self.help # Ok, that's just wrong.
-        when /--update|-u/
+        when /^(?:--update|-u)\b/
           self.download_update
-        when /--refresh/
+        when /^--refresh\b/
           respond; respond "This command has been removed."
-        when /--revert|-r/
+        when /^(?:--revert|-r)\b/
           self.revert
-        when /--(?:(script|library|data))=(.*)/
-          self.update_file($1.dup, $2.dup)
-        when /--snapshot|-s/ # this one needs to be after --script
+        when /^--(?:(script|library|data))=(.+)\b/
+          self.update_file($1&.dup, $2&.dup)
+        when /^(?:--snapshot|-s)\b/ # this one needs to be after --script
           self.snapshot
         else
           respond; respond "Command '#{type}' unknown, illegitimate and ignored.  Exiting . . ."; respond
@@ -144,21 +153,38 @@ module Lich
             respond 'Aborting beta test installation request.  Thank you for considering!'
             respond
           end
+
           if @beta_response =~ /accepted/
-            filename = "https://api.github.com/repos/elanthia-online/lich-5/releases"
-            update_info = URI.parse(filename).open.read
-            record = JSON::parse(update_info).first # assumption: Latest beta release always first record in API
-            record.each { |entry, value|
-              if entry.include? 'tag_name'
-                @update_to = value.sub('v', '')
-              elsif entry.include? 'assets'
-                @holder = value
-              elsif entry.include? 'body'
-                @new_features = value.gsub(/\#\# What's Changed.+$/m, '')
+            # Resolve a viable beta ref (enforces: prerelease minor > stable minor)
+            ref = self.resolve_channel_ref(:beta)
+            if ref.nil?
+              respond 'No viable beta found. Aborting beta update.'
+              return
+            end
+            releases_url = "https://api.github.com/repos/elanthia-online/lich-5/releases"
+            update_info = URI.parse(releases_url).open.read
+            releases = JSON::parse(update_info)
+            record = releases.find { |r| r['prerelease'] && r['tag_name'] == (ref.start_with?('v') ? ref : "v#{ref}") }
+            if record
+              record.each { |entry, value|
+                if entry.include? 'tag_name'
+                  @update_to = value.sub('v', '')
+                elsif entry.include? 'assets'
+                  @holder = value
+                elsif entry.include? 'body'
+                  @new_features = value.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
+                end
+              }
+              release_asset = @holder && @holder.find { |x| x['name'] =~ /\b#{ASSET_TARBALL_NAME}\b/ }
+              if release_asset
+                @zipfile = release_asset.fetch('browser_download_url')
+              else
+                @zipfile = "https://codeload.github.com/elanthia-online/lich-5/tar.gz/#{ref}"
               end
-            }
-            beta_asset = @holder.find { |x| x['name'] =~ /lich-5.tar.gz/ }
-            @zipfile = beta_asset.fetch('browser_download_url')
+            else
+              @update_to = ref.sub(/^v/, '')
+              @zipfile = "https://codeload.github.com/elanthia-online/lich-5/tar.gz/#{ref}"
+            end
             Lich::Util::Update.download_update
           elsif @beta_response =~ /rejected/
             nil
@@ -171,20 +197,133 @@ module Lich
         end
       end
 
-      def self.prep_update
-        filename = "https://api.github.com/repos/elanthia-online/lich-5/releases/latest"
-        update_info = URI.parse(filename).open.read
+      # Resolve a Git ref for stable/beta everywhere it's needed
+      def self.resolve_channel_ref(channel)
+        case channel
+        when :stable, 'production'
+          STABLE_REF
+        when :beta
+          # Determine latest stable (non-prerelease) to enforce minor-bump rule
+          stable_tag = self.latest_stable_tag # e.g., "v5.14.3"
+          stable_major, stable_minor = self.major_minor_from(stable_tag)
+          env = ENV['LICH_BETA_REF']
+          return env unless env.nil? || env.empty?
+          tag = self.latest_prerelease_tag_greater_than(stable_major, stable_minor)
+          return tag if tag
+          branch = self.latest_prefixed_branch_greater_than(BETA_BRANCH_PREFIX, stable_major, stable_minor)
+          return branch if branch
+          nil
+        else
+          STABLE_REF
+        end
+      end
 
-        JSON::parse(update_info).each { |entry, value|
-          if entry.include? 'tag_name'
-            @update_to = value.sub('v', '')
-          elsif entry.include? 'assets'
-            @holder = value
-          elsif entry.include? 'body'
-            @new_features = value.gsub(/\#\# What's Changed.+$/m, '')
+      # Minimal GitHub JSON fetch with tiny cache and friendly errors
+      def self.fetch_github_json(url)
+        now = Time.now.to_i
+        entry = @_http_cache[url]
+        if entry && (now - entry[:ts] < @_http_cache_ttl)
+          return entry[:data]
+        end
+        begin
+          raw = URI.parse(url).open.read
+          data = JSON::parse(raw)
+          @_http_cache[url] = { ts: now, data: data }
+          data
+        rescue => e
+          respond "Update notice: network error fetching #{url.split('/repos/').last || url} (fetch_github_json): #{e.message}"
+          nil
+        end
+      end
+
+      def self.latest_stable_tag
+        releases = fetch_github_json('https://api.github.com/repos/elanthia-online/lich-5/releases')
+        return nil unless releases.is_a?(Array)
+        stable = releases.select { |r| !r['prerelease'] && r['tag_name'] }.max_by { |r| self.version_key(r['tag_name']) }
+        stable && stable['tag_name']
+      end
+
+      def self.latest_prerelease_tag_greater_than(stable_major, stable_minor)
+        releases = fetch_github_json('https://api.github.com/repos/elanthia-online/lich-5/releases')
+        return nil unless releases.is_a?(Array)
+        prereleases = releases.select { |r| r['prerelease'] && r['tag_name'] }
+        return nil if prereleases.empty?
+        candidates = prereleases.select do |r|
+          maj, min = self.major_minor_from(r['tag_name'])
+          next false unless maj && min
+          (maj > stable_major) || (maj == stable_major && min > stable_minor)
+        end
+        return nil if candidates.empty?
+        tag = candidates.max_by { |r| self.version_key(r['tag_name']) }['tag_name']
+        tag.sub(/^v/, '')
+      end
+
+      # Optional fallback: newest branch whose name starts with prefix and encodes a version
+      # Only branches with (major,minor) > stable's (major,minor) are considered.
+      # Accepts names like "pre/beta/5.15" or "pre/beta-5.15.0".
+      def self.latest_prefixed_branch_greater_than(prefix, stable_major, stable_minor)
+        branches = fetch_github_json('https://api.github.com/repos/elanthia-online/lich-5/branches?per_page=100')
+        return nil unless branches.is_a?(Array)
+        names = branches.map { |b| b['name'] }.compact
+        candidates = names.select { |n| n.start_with?(prefix) }
+        filtered = candidates.select do |n|
+          maj, min = self.major_minor_from(n)
+          maj && min && ((maj > stable_major) || (maj == stable_major && min > stable_minor))
+        end
+        return nil if filtered.empty?
+        begin
+          filtered.max_by { |n| self.version_key(n) }
+        rescue => e
+          respond "Update notice: ordering branches (latest_prefixed_branch_greater_than): #{e.message}"
+          filtered.sort.last
+        end
+      end
+
+      def self.version_key(tag_or_name)
+        s = tag_or_name.to_s
+        # strip leading 'v'
+        s = s.sub(/^v/, '')
+        # if this looks like a branch or path (e.g., "pre/beta/5.15.0" or "pre/beta-5.15.0"),
+        # extract the first version-looking substring to avoid prefix text interfering
+        if s =~ /(\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z\.]+)?)/ # captures 1.2 or 1.2.3 and optional suffix like -beta.
+          s = Regexp.last_match(1)
+        end
+        # normalize beta prerelease so beta.10 > beta.9
+        s = s.gsub('-beta.', '.beta.').gsub(/-beta(?!\.)/, '.beta')
+        Gem::Version.new(s)
+      end
+
+      def self.major_minor_from(str)
+        return [nil, nil] if str.nil?
+        s = str.to_s
+        s = s.sub(/^v/, '')
+        if s =~ /(\d+)\.(\d+)\.(\d+)/
+          return [$1.to_i, $2.to_i]
+        elsif s =~ /(\d+)\.(\d+)/
+          return [$1.to_i, $2.to_i]
+        else
+          [nil, nil]
+        end
+      end
+
+      def self.prep_update
+        latest = fetch_github_json("https://api.github.com/repos/elanthia-online/lich-5/releases/latest")
+        if latest.is_a?(Hash) && latest['prerelease']
+          all = fetch_github_json('https://api.github.com/repos/elanthia-online/lich-5/releases')
+          if all.is_a?(Array)
+            stable = all.select { |r| !r['prerelease'] && r['tag_name'] }.max_by { |r| self.version_key(r['tag_name']) }
+            latest = stable if stable
           end
-        }
-        release_asset = @holder.find { |x| x['name'] =~ /lich-5.tar.gz/ }
+        end
+        unless latest.is_a?(Hash)
+          respond "Update notice: could not read latest release payload (prep_update)."
+          return
+        end
+
+        @update_to = latest['tag_name'].to_s.sub('v', '')
+        @holder = latest['assets']
+        @new_features = latest['body'].to_s.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
+        release_asset = @holder && @holder.find { |x| x['name'] =~ /\b#{ASSET_TARBALL_NAME}\b/ }
         @zipfile = release_asset.fetch('browser_download_url')
       end
 
@@ -289,6 +428,10 @@ module Lich
       end
 
       def self.update_file(type, rf, version = 'production')
+        if version =~ /^(?:staging|master)$/i
+          respond 'Requested channel %s mapped to main (stable).' % [version]
+          version = 'production'
+        end
         requested_file = rf
         case type
         when "script"
@@ -303,15 +446,20 @@ module Lich
           location = LIB_DIR
           case version
           when "production"
-            remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/master/lib"
+            remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/#{resolve_channel_ref(:stable)}/lib"
           when "beta"
-            remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/staging/lib"
+            ref = resolve_channel_ref(:beta)
+            if ref.nil?
+              respond 'No viable beta found. Aborting beta update.'
+              return
+            end
+            remote_repo = "https://raw.githubusercontent.com/elanthia-online/lich-5/#{ref}/lib"
           end
           requested_file =~ /\.rb$/ ? requested_file_ext = ".rb" : requested_file_ext = "bad extension"
         when "data"
           location = DATA_DIR
           remote_repo = "https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts"
-          requested_file =~ /(\.(?:xml|ui))$/ ? requested_file_ext = $1.dup : requested_file_ext = "bad extension"
+          requested_file =~ /(\.(?:xml|ui))$/ ? requested_file_ext = $1&.dup : requested_file_ext = "bad extension"
         end
         unless requested_file_ext == "bad extension"
           File.delete(File.join(location, requested_file)) if File.exist?(File.join(location, requested_file))

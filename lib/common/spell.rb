@@ -195,9 +195,9 @@ module Lich
 
       def Spell.[](val)
         Spell.load unless @@loaded
-        if val.class == Spell
+        if val.is_a?(Spell)
           val
-        elsif (val.class == Integer) or (val.class == String and val =~ /^[0-9]+$/)
+        elsif (val.is_a?(Integer)) or (val.is_a?(String) and val =~ /^[0-9]+$/)
           @@list.find { |spell| spell.num == val.to_i }
         else
           val = Regexp.escape(val)
@@ -565,7 +565,7 @@ module Lich
         @@cast_lock.delete(Script.current)
       end
 
-      def cast(target = nil, results_of_interest = nil, arg_options = nil)
+      def cast(target = nil, results_of_interest = nil, arg_options = nil, force_stance: nil)
         # fixme: find multicast in target and check mana for it
         check_energy = proc {
           if Feat.known?(:mental_acuity)
@@ -640,9 +640,9 @@ module Lich
               cast_cmd = "incant #{@num}"
             elsif (target.nil? or target.to_s.empty?) and (@type =~ /attack/i) and not [410, 435, 525, 912, 909, 609].include?(@num)
               cast_cmd += ' target'
-            elsif target.class == GameObj
+            elsif target.is_a?(GameObj)
               cast_cmd += " ##{target.id}"
-            elsif target.class == Integer
+            elsif target.is_a?(Integer)
               cast_cmd += " ##{target}"
             elsif cast_cmd !~ /^incant/
               cast_cmd += " #{target}"
@@ -700,11 +700,11 @@ module Lich
                 end
               end
               waitcastrt?
-              if @stance and Char.stance != 'offensive'
+              if ((@stance && force_stance != false) || force_stance == true) && Char.stance != 'offensive'
                 put 'stance offensive'
                 # dothistimeout 'stance offensive', 5, /^You (?:are now in|move into) an? offensive stance|^You are unable to change your stance\.$/
               end
-              if results_of_interest.class == Regexp
+              if results_of_interest.is_a?(Regexp)
                 merged_results_regex = Regexp.union(@@results_regex, results_of_interest)
               else
                 merged_results_regex = @@results_regex
@@ -724,7 +724,7 @@ module Lich
                 sleep(Regexp.last_match(1).to_i + 0.5)
                 cast_result = dothistimeout cast_cmd, 5, merged_results_regex
               end
-              if @stance
+              if ((@stance && force_stance != false) || force_stance == true)
                 if @@after_stance
                   if Char.stance !~ /#{@@after_stance}/
                     waitrt?
@@ -758,40 +758,40 @@ module Lich
         end
       end
 
-      def force_cast(target = nil, arg_options = nil, results_of_interest = nil)
+      def force_cast(target = nil, arg_options = nil, results_of_interest = nil, force_stance: nil)
         unless arg_options.nil? || arg_options.empty?
           arg_options = "cast #{arg_options}"
         else
           arg_options = "cast"
         end
-        cast(target, results_of_interest, arg_options)
+        cast(target, results_of_interest, arg_options, force_stance: force_stance)
       end
 
-      def force_channel(target = nil, arg_options = nil, results_of_interest = nil)
+      def force_channel(target = nil, arg_options = nil, results_of_interest = nil, force_stance: nil)
         unless arg_options.nil? || arg_options.empty?
           arg_options = "channel #{arg_options}"
         else
           arg_options = "channel"
         end
-        cast(target, results_of_interest, arg_options)
+        cast(target, results_of_interest, arg_options, force_stance: force_stance)
       end
 
-      def force_evoke(target = nil, arg_options = nil, results_of_interest = nil)
+      def force_evoke(target = nil, arg_options = nil, results_of_interest = nil, force_stance: nil)
         unless arg_options.nil? || arg_options.empty?
           arg_options = "evoke #{arg_options}"
         else
           arg_options = "evoke"
         end
-        cast(target, results_of_interest, arg_options)
+        cast(target, results_of_interest, arg_options, force_stance: force_stance)
       end
 
-      def force_incant(arg_options = nil, results_of_interest = nil)
+      def force_incant(arg_options = nil, results_of_interest = nil, force_stance: nil)
         unless arg_options.nil? || arg_options.empty?
           arg_options = "incant #{arg_options}"
         else
           arg_options = "incant"
         end
-        cast(nil, results_of_interest, arg_options)
+        cast(nil, results_of_interest, arg_options, force_stance: force_stance)
       end
 
       def _bonus

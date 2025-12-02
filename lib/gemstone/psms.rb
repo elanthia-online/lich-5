@@ -66,6 +66,7 @@ module Lich
       #   PSMS.find_name("feint", "CMan")
       #   # => { long_name: "combat_feint", short_name: "feint", cost: 10 }
       def self.find_name(name, type)
+        name = self.name_normal(name)
         Object.const_get("Lich::Gemstone::#{type}").method("#{type.downcase}_lookups").call
               .find { |h| h[:long_name].eql?(name) || h[:short_name].eql?(name) }
       end
@@ -103,17 +104,20 @@ module Lich
         # this logs then raises an exception to stop (kill) the offending script
         if seek_psm.nil?
           Lich.log("error: PSMS request: #{$!}\n\t")
-          raise StandardError.new "Aborting script - The referenced #{type} skill #{name} is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of #{name}."
+          raise ArgumentError, "Aborting script - The referenced #{type} skill #{name} is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of #{name}.", (caller.find { |call| call =~ /^#{Script.current.name}/ })
         end
         # otherwise process request
         case costcheck
         when true
           base_cost = seek_psm[:cost]
-          if forcert_count > 0
-            return (base_cost + (base_cost * ((25 + (10.0 * forcert_count)) / 100))).truncate < XMLData.stamina
-          else
-            return base_cost < XMLData.stamina
+          base_cost.each do |cost_type, cost_amount|
+            if forcert_count > 0
+              return false unless (cost_amount + (cost_amount * ((25 + (10.0 * forcert_count)) / 100))).truncate < XMLData.public_send(cost_type)
+            else
+              return false unless cost_amount < XMLData.public_send(cost_type)
+            end
           end
+          return true
         else
           Infomon.get("#{type.downcase}.#{seek_psm[:short_name]}")
         end
