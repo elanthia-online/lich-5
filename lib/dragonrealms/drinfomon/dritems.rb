@@ -1,9 +1,8 @@
 module Lich
   module DragonRealms
     class DRItems
-
       @@list ||= Array.new
-      
+
       def self.list
         @@list
       end
