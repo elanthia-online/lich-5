@@ -1,15 +1,14 @@
 module Lich
   module DragonRealms
     class DRItems
-
       @@list ||= Array.new
-      
+
       attr_reader :list
-      
+
       def initialize
         @@list = Array.new
       end
-      
+
       def self.list
         @@list
       end
