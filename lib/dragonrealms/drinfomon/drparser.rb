@@ -33,8 +33,8 @@ module Lich
         InventoryGetStart = %r{You rummage about your person, looking for}.freeze
       end
 
-      @parsing_exp_mods_output = false
       @parsing_inventory_get = false
+      @parsing_exp_mods_output = false
 
       def self.check_events(server_string)
         Flags.matchers.each do |key, regexes|
@@ -49,9 +49,6 @@ module Lich
       end
 
       def self.populate_inventory_get(server_string)
-        # This method parses the output from `inv search <item>` command
-        # and populates the XMLData.dr_inventory_get hash with the cmd attribute as key
-
         case server_string
         when %r{^<output class=""/>}
           if @parsing_inventory_get
@@ -59,21 +56,15 @@ module Lich
           end
         else
           if @parsing_inventory_get && server_string.strip.start_with?('<d cmd=')
-            # Lich.log("DRParser.populate_inventory_get: parsing line='#{server_string.strip}'")
             document = REXML::Document.new(server_string.strip)
             item = document.elements["d"].text.downcase.sub(/^(?:a|an|some)\s/, '').strip
             cmd = document.elements["d"].attributes["cmd"].downcase.strip
             full_description = "#{document.elements["d"].text}#{document.text}"
-            # Lich.log("DRParser.populate_inventory_get: item='#{item}', cmd='#{cmd}', full_description='#{full_description}'")
             DRItems.update_item(item, cmd, full_description)
-            # DRItems.list[item] = Hash.new
-            # DRItems.list[item][:cmd] = cmd
-            # DRItems.list[item][:full_description] = full_description
           end
         end
         server_string
       end
-      
 
       def self.check_exp_mods(server_string)
         # This method parses the output from `exp mods` command
@@ -401,7 +392,6 @@ module Lich
           else
             :noop
           end
-
 
           populate_inventory_get(line) if @parsing_inventory_get
           check_exp_mods(line) if @parsing_exp_mods_output
