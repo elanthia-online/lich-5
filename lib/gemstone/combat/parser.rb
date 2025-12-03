@@ -8,6 +8,7 @@
 require_relative 'defs/attacks'
 require_relative 'defs/damage'
 require_relative 'defs/statuses'
+require_relative 'defs/ucs'
 
 module Lich
   module Gemstone
@@ -18,7 +19,8 @@ module Lich
 
         # Bold tag pattern - creatures are wrapped in bold tags
         # Non-greedy match to avoid spanning multiple creatures
-        BOLD_WRAPPER_PATTERN = /<pushBold\/>([^<]+<a exist="[^"]+"[^>]+>[^<]+<\/a>)<popBold\/>/i.freeze
+        # Allow zero or more characters before <a> tag (e.g., "a creature" or just "creature")
+        BOLD_WRAPPER_PATTERN = /<pushBold\/>([^<]*<a exist="[^"]+"[^>]+>[^<]+<\/a>)<popBold\/>/i.freeze
 
         class << self
           # Parse attack initiation
@@ -50,6 +52,13 @@ module Lich
 
             # Return the full result including action field
             Definitions::Statuses.parse(line)
+          end
+
+          # Parse UCS events (position, tierup, smite)
+          def parse_ucs(line)
+            return nil unless Tracker.settings[:track_ucs]
+
+            Definitions::UCS.parse(line)
           end
 
           # Extract creature target (must be wrapped in bold tags)
