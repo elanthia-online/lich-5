@@ -706,102 +706,130 @@ module Lich
         end
       end
 
+      class MinHeap
+        def initialize
+          @heap = []
+        end
+
+        def push(priority, value)
+          @heap << [priority, value]
+          bubble_up(@heap.size - 1)
+        end
+
+        def pop
+          return nil if @heap.empty?
+          swap(0, @heap.size - 1)
+          min = @heap.pop
+          bubble_down(0) unless @heap.empty?
+          min
+        end
+
+        def empty?
+          @heap.empty?
+        end
+
+        private
+
+        def bubble_up(index)
+          while index > 0
+            parent_index = (index - 1) / 2
+            break if @heap[index][0] >= @heap[parent_index][0]
+
+            swap(index, parent_index)
+            index = parent_index
+          end
+        end
+
+        def bubble_down(index)
+          loop do
+            left_child = 2 * index + 1
+            right_child = 2 * index + 2
+            break if left_child >= @heap.size
+
+            min_child = if right_child >= @heap.size || @heap[left_child][0] < @heap[right_child][0]
+                          left_child
+                        else
+                          right_child
+                        end
+
+            break if @heap[index][0] <= @heap[min_child][0]
+
+            swap(index, min_child)
+            index = min_child
+          end
+        end
+
+        def swap(i, j)
+          @heap[i], @heap[j] = @heap[j], @heap[i]
+        end
+      end
+
       def dijkstra(destination = nil)
         begin
           Map.load unless @@loaded
           source = @id
-          visited = Array.new
-          shortest_distances = Array.new
-          previous = Array.new
-          pq = [source]
-          pq_push = proc { |val|
-            for i in 0...pq.size
-              if shortest_distances[val] <= shortest_distances[pq[i]]
-                pq.insert(i, val)
-                break
+          visited = {}
+          shortest_distances_hash = {}
+          previous_hash = {}
+
+          pq = MinHeap.new
+          pq.push(0, source)
+          shortest_distances_hash[source] = 0
+
+          # Early termination check
+          check_destination = proc { |v, dist|
+            case destination
+            when Integer
+              v == destination
+            when Array
+              destination.include?(v) && dist < 20
+            else
+              false
+            end
+          }
+
+          until pq.empty?
+            current_dist, v = pq.pop
+
+            next if visited[v]
+            break if check_destination.call(v, current_dist)
+
+            visited[v] = true
+
+            @@list[v].wayto.keys.each do |adj_room|
+              adj_room_i = adj_room.to_i
+              next if visited[adj_room_i]
+
+              edge_weight = if @@list[v].timeto[adj_room].is_a?(StringProc)
+                              @@list[v].timeto[adj_room].call
+                            else
+                              @@list[v].timeto[adj_room]
+                            end
+
+              next unless edge_weight
+
+              new_distance = current_dist + edge_weight
+
+              if !shortest_distances_hash[adj_room_i] || shortest_distances_hash[adj_room_i] > new_distance
+                shortest_distances_hash[adj_room_i] = new_distance
+                previous_hash[adj_room_i] = v
+                pq.push(new_distance, adj_room_i)
               end
             end
-            pq.push(val) if i.nil? or (i == pq.size - 1)
-          }
-          visited[source] = true
-          shortest_distances[source] = 0
-          if destination.nil?
-            until pq.size == 0
-              v = pq.shift
-              visited[v] = true
-              @@list[v].wayto.keys.each { |adj_room|
-                adj_room_i = adj_room.to_i
-                unless visited[adj_room_i]
-                  if @@list[v].timeto[adj_room].is_a?(StringProc)
-                    nd = @@list[v].timeto[adj_room].call
-                  else
-                    nd = @@list[v].timeto[adj_room]
-                  end
-                  if nd
-                    nd += shortest_distances[v]
-                    if shortest_distances[adj_room_i].nil? or (shortest_distances[adj_room_i] > nd)
-                      shortest_distances[adj_room_i] = nd
-                      previous[adj_room_i] = v
-                      pq_push.call(adj_room_i)
-                    end
-                  end
-                end
-              }
-            end
-          elsif destination.is_a?(Integer)
-            until pq.size == 0
-              v = pq.shift
-              break if v == destination
-              visited[v] = true
-              @@list[v].wayto.keys.each { |adj_room|
-                adj_room_i = adj_room.to_i
-                unless visited[adj_room_i]
-                  if @@list[v].timeto[adj_room].is_a?(StringProc)
-                    nd = @@list[v].timeto[adj_room].call
-                  else
-                    nd = @@list[v].timeto[adj_room]
-                  end
-                  if nd
-                    nd += shortest_distances[v]
-                    if shortest_distances[adj_room_i].nil? or (shortest_distances[adj_room_i] > nd)
-                      shortest_distances[adj_room_i] = nd
-                      previous[adj_room_i] = v
-                      pq_push.call(adj_room_i)
-                    end
-                  end
-                end
-              }
-            end
-          elsif destination.is_a?(Array)
-            dest_list = destination.collect { |dest| dest.to_i }
-            until pq.size == 0
-              v = pq.shift
-              break if dest_list.include?(v) and (shortest_distances[v] < 20)
-              visited[v] = true
-              @@list[v].wayto.keys.each { |adj_room|
-                adj_room_i = adj_room.to_i
-                unless visited[adj_room_i]
-                  if @@list[v].timeto[adj_room].is_a?(StringProc)
-                    nd = @@list[v].timeto[adj_room].call
-                  else
-                    nd = @@list[v].timeto[adj_room]
-                  end
-                  if nd
-                    nd += shortest_distances[v]
-                    if shortest_distances[adj_room_i].nil? or (shortest_distances[adj_room_i] > nd)
-                      shortest_distances[adj_room_i] = nd
-                      previous[adj_room_i] = v
-                      pq_push.call(adj_room_i)
-                    end
-                  end
-                end
-              }
-            end
           end
+
+          # Convert hashes back to arrays for backward compatibility
+          max_room_id = [previous_hash.keys.max, shortest_distances_hash.keys.max].compact.max || 0
+          previous = Array.new(max_room_id + 1)
+          shortest_distances = Array.new(max_room_id + 1)
+
+          previous_hash.each { |key, value| previous[key] = value }
+          shortest_distances_hash.each { |key, value| shortest_distances[key] = value }
+
           return previous, shortest_distances
-        rescue
-          echo "Map.dijkstra: error: #{$!}"
-          respond $!.backtrace
+        rescue => e
+          echo "Map.dijkstra: error: #{e}"
+          respond e.backtrace
           nil
         end
       end
