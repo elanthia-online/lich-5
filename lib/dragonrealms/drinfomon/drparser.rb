@@ -29,9 +29,11 @@ module Lich
         PlayedAccount = /^(?:<.*?\/>)?Account Info for (?<account>.+):/.freeze
         PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium|Platinum)/.freeze
         LastLogoff = /^\s+Logoff :  (?<weekday>[A-Z][a-z]{2}) (?<month>[A-Z][a-z]{2}) (?<day>[\s\d]{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2}) ET (?<year>\d{4})/.freeze
+        InventoryGetStart = %r{You rummage about your person, looking for}.freeze
         RoomIDOff = /^You will no longer see room IDs when LOOKing in the game and room windows\./.freeze
       end
 
+      @parsing_inventory_get = false
       @parsing_exp_mods_output = false
 
       def self.check_events(server_string)
@@ -41,6 +43,24 @@ module Lich
               Flags.flags[key] = matches
               break
             end
+          end
+        end
+        server_string
+      end
+
+      def self.populate_inventory_get(server_string)
+        case server_string
+        when %r{^<output class=""/>}
+          if @parsing_inventory_get
+            @parsing_inventory_get = false
+          end
+        else
+          if @parsing_inventory_get && server_string.strip.start_with?('<d cmd=')
+            document = REXML::Document.new(server_string.strip)
+            item = document.elements["d"].text.downcase.sub(/^(?:a|an|some)\s/, '').strip
+            cmd = document.elements["d"].attributes["cmd"].downcase.strip
+            full_description = "#{document.elements["d"].text}#{document.text}"
+            DRItems.update_item(item, cmd, full_description)
           end
         end
         server_string
@@ -264,6 +284,9 @@ module Lich
         check_events(line)
         begin
           case line
+          when Pattern::InventoryGetStart
+            @parsing_inventory_get = true
+            DRItems.reset
           when Pattern::GenderAgeCircle
             DRStats.gender = Regexp.last_match[:gender]
             DRStats.age = Regexp.last_match[:age].to_i
@@ -370,6 +393,7 @@ module Lich
             :noop
           end
 
+          populate_inventory_get(line) if @parsing_inventory_get
           check_exp_mods(line) if @parsing_exp_mods_output
           check_known_barbarian_abilities(line) if DRSpells.check_known_barbarian_abilities
           check_known_thief_khri(line) if DRSpells.grabbing_known_khri
