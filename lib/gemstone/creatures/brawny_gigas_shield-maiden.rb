@@ -1,18 +1,20 @@
 {
   name: "brawny gigas shield-maiden",
+  noun: "",
   url: "https://gswiki.play.net/Brawny_gigas_shield-maiden",
   picture: "",
   level: 106,
   family: "gigas",
   type: "biped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
-  speed: "",
+  max_hp: nil,
+  speed: nil,
   height: 30,
   size: "huge",
   attack_attributes: {
@@ -85,13 +87,14 @@
         note: "able to gain resistance to damage type attacked with"
       }
     ],
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
     coins: true,
-    magic_items: "",
+    magic_items: nil,
     gems: true,
     boxes: true,
     skin: false,

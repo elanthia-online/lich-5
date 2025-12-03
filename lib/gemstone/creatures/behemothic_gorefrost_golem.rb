@@ -1,18 +1,20 @@
 {
   name: "Behemothic gorefrost golem",
+  noun: "",
   url: "https://gswiki.play.net/Behemothic_gorefrost_golem",
   picture: "",
   level: 104,
   family: "golem",
   type: "biped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: 1000,
-  speed: "",
+  max_hp: 1000,
+  speed: nil,
   height: 40,
   size: "huge",
   attack_attributes: {
@@ -97,10 +99,10 @@
   alchemy: [],
   treasure: {
     coins: true,
-    magic_items: "",
+    magic_items: nil,
     gems: true,
     boxes: true,
-    skin: "None",
+    skin: false,
     other: "gigas artifact",
     blunt_required: false
   },

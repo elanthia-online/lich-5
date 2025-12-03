@@ -1,18 +1,20 @@
 {
   name: "heavily armored battle mastodon",
+  noun: "",
   url: "https://gswiki.play.net/Heavily_armored_battle_mastodon",
   picture: "",
   level: 102,
   family: "elephantid",
   type: "quadruped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
-  speed: "",
+  max_hp: nil,
+  speed: nil,
   height: 30,
   size: "huge",
   attack_attributes: {
@@ -50,17 +52,18 @@
     mnm_td: nil,
     defensive_spells: [],
     defensive_abilities: [],
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
     coins: false,
-    magic_items: "",
+    magic_items: nil,
     gems: false,
     boxes: false,
     skin: "a woolly mastodon trunk",
-    other: false,
+    other: nil,
     blunt_required: false
   },
   messaging: {

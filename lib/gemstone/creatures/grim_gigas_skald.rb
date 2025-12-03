@@ -1,18 +1,20 @@
 {
   name: "Grim gigas skald",
+  noun: "",
   url: "https://gswiki.play.net/Grim_gigas_skald",
   picture: "",
   level: 105,
   family: "Gigas",
   type: "Biped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "Hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
-  speed: "",
+  max_hp: nil,
+  speed: nil,
   height: 28,
   size: "huge",
   attack_attributes: {
@@ -65,19 +67,18 @@
       }
     ],
     defensive_abilities: [],
-    imm1: "",
-    sda1: ""
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
-    coins: "?",
-    magic_items: "",
-    gems: "?",
-    boxes: "?",
-    skin: "?",
-    other: "?",
+    coins: nil,
+    magic_items: nil,
+    gems: nil,
+    boxes: nil,
+    skin: nil,
+    other: nil,
     blunt_required: false
   },
   messaging: {

@@ -1,18 +1,20 @@
 {
   name: "niveous giant warg",
+  noun: "",
   url: "https://gswiki.play.net/Niveous_giant_warg",
   picture: "",
   level: 104,
   family: "canine",
   type: "quadruped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
-  speed: "",
+  max_hp: nil,
+  speed: nil,
   height: 15,
   size: "large",
   attack_attributes: {
@@ -31,7 +33,6 @@
   },
   defense_attributes: {
     asg: "1",
-    immunities: [],
     melee: (432..701),
     ranged: (389..491),
     bolt: nil,
@@ -50,19 +51,19 @@
     mnm_td: nil,
     defensive_spells: [],
     defensive_abilities: [],
-    imm1: "",
-    sda1: ""
+    immunities: [],
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
-    coins: "?",
-    magic_items: "",
-    gems: "?",
-    boxes: "?",
-    skin: "Y",
-    other: "?",
+    coins: nil,
+    magic_items: nil,
+    gems: nil,
+    boxes: nil,
+    skin: true,
+    other: nil,
     blunt_required: false
   },
   messaging: {

@@ -1,20 +1,22 @@
 {
   name: "Eyeless black valravn",
+  noun: "",
   url: "https://gswiki.play.net/Eyeless_black_valravn",
   picture: "",
   level: 112,
   family: "Bird",
   type: "Avian",
-  undead: True,
+  undead: true,
+  boss: false,
   otherclass: [
     "Corporeal undead"
   ],
   areas: [
-    "Hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: "",
-  speed: "",
+  max_hp: nil,
+  speed: nil,
   height: 5,
   size: "medium",
   attack_attributes: {
@@ -52,19 +54,18 @@
     mnm_td: nil,
     defensive_spells: [],
     defensive_abilities: [],
-    imm1: "",
-    sda1: ""
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
-    coins: "?",
-    magic_items: "",
+    coins: nil,
+    magic_items: nil,
     gems: true,
-    boxes: "?",
+    boxes: nil,
     skin: "inky black valravn plume",
-    other: "?",
+    other: nil,
     blunt_required: false
   },
   messaging: {

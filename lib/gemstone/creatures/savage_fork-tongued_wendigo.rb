@@ -1,18 +1,20 @@
 {
   name: "savage fork-tongued wendigo",
+  noun: "",
   url: "https://gswiki.play.net/Savage_fork-tongued_wendigo",
   picture: "",
   level: 105,
   family: "humanoid",
   type: "biped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: 600,
-  speed: "",
+  max_hp: 600,
+  speed: nil,
   height: 8,
   size: "large",
   attack_attributes: {

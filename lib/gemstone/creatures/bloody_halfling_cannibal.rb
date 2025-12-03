@@ -1,18 +1,20 @@
 {
   name: "bloody halfling cannibal",
+  noun: "",
   url: "https://gswiki.play.net/Bloody_halfling_cannibal",
   picture: "",
   level: 101,
   family: "humanoid",
   type: "biped",
   undead: false,
+  boss: false,
   otherclass: [],
   areas: [
-    "hinterwilds"
+    { name: "Hinterwilds", rooms: [] }
   ],
   bcs: true,
-  hitpoints: 300,
-  speed: "",
+  max_hp: 300,
+  speed: nil,
   height: 3,
   size: "small",
   attack_attributes: {
@@ -80,13 +82,14 @@
         note: "able to evade an attack by hiding in the shadows"
       }
     ],
+    special_defenses: []
   },
   special_other: "",
   abilities: [],
   alchemy: [],
   treasure: {
     coins: true,
-    magic_items: "",
+    magic_items: nil,
     gems: true,
     boxes: true,
     skin: false,
