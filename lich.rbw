@@ -118,6 +118,7 @@ require File.join(LIB_DIR, 'common', 'watchfor.rb')
 ## adding util to the list of defs
 
 require File.join(LIB_DIR, 'util', 'util.rb')
+require File.join(LIB_DIR, 'util', 'memoryreleaser.rb')
 require File.join(LIB_DIR, 'messaging.rb')
 require File.join(LIB_DIR, 'global_defs.rb')
 require File.join(LIB_DIR, 'common', 'buffer.rb')
