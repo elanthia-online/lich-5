@@ -216,6 +216,27 @@ process_single_pr() {
   local pr_num="$1"
   log_group "PR #${pr_num}"
 
+  # Detect whether this PR has already been curated into DEST_SAFE
+  local pr_already_curated=false
+  # Proper behavior through process would be to provide fixes in new PRs
+  # to any feature PRs that are being beta tested.  For now, we will make
+  # the call that if a PR is added to beta, at any point in the beta train,
+  # any changes brought back through the curate process need to be 'update'
+  # type changes, and the merge strategy must be '-X theirs' to avoid
+  # duplicating code into syntax errors from the Hinterlands. So always check
+  # against the 'origin/${DEST_SAFE}' to avoid branch merge shinanigans.
+  # Also taking out the color / formatting commands.
+  local pr_match
+  pr_match="$(git log --no-color --oneline --grep="(#${pr_num})" \
+                  -1 "origin/${DEST_SAFE}" || true)"
+
+  if [[ -n "$pr_match" ]]; then
+    pr_already_curated=true
+    log_info "PR #${pr_num} already present in origin/${DEST_SAFE}; treating as update."
+  else
+    log_info "DEBUG: did NOT detect prior curated commit for #${pr_num} in origin/${DEST_SAFE}"
+  fi
+
   local pr_json
   pr_json="$(fetch_pr "$GITHUB_REPOSITORY" "$pr_num")"
 
@@ -227,6 +248,21 @@ process_single_pr() {
   if ! echo "$title" | grep -Eq '\(#?[0-9]+\)$'; then
     title="${title} (#${pr_num})"
   fi
+  # Save current conflict strategy
+  local prev_git_strategy_flag="$GIT_STRATEGY_FLAG"
+  local prev_use_union="$USE_UNION"
+
+  if [[ "$pr_already_curated" == "true" && "$STRAT_SAFE" == "union" ]]; then
+    # For already-in-train PRs, prefer incoming changes (-X theirs)
+    # shellcheck source=.github/scripts/strategies/conflict/theirs.sh
+    source "${SCRIPT_DIR}/strategies/conflict/theirs.sh"
+    GIT_STRATEGY_FLAG="$(get_strategy_flag_theirs)"
+    USE_UNION=false
+    log_info "Using -X theirs strategy for updated PR #${pr_num}"
+  fi
+
+  # and more logging
+  log_info "DEBUG: strategy for PR #${pr_num}: STRAT_SAFE=$STRAT_SAFE GIT_STRATEGY_FLAG='${GIT_STRATEGY_FLAG:-<none>}' USE_UNION=${USE_UNION}"
 
   # Determine cherry-pick mode
   if [[ "$MODE_SAFE" == "merged" ]] || { [[ "$MODE_SAFE" == "auto" ]] && pr_is_merged "$pr_json" && [[ "$merge_sha" != "null" ]]; }; then
@@ -234,6 +270,10 @@ process_single_pr() {
   else
     cherry_pick_open_pr "$pr_num" "$title"
   fi
+
+  # Restore previous conflict strategy for the next PR
+  GIT_STRATEGY_FLAG="$prev_git_strategy_flag"
+  USE_UNION="$prev_use_union"
 
   log_endgroup
 }
