@@ -240,16 +240,14 @@ module Lich
       #
       # @note Linux supports TCP_USER_TIMEOUT for controlling retransmission timeout
       # @note macOS uses TCP_KEEPALIVE instead of TCP_KEEPIDLE
+      # @note Ruby's setsockopt takes 3 arguments: level, option, and packed value
       # @api private
       def self.configure_unix(sock, keepalive, linger, timeout, buffer_size, tcp_nodelay)
         # Helper: error-checked setsockopt
-        check_setsockopt = lambda do |level, option, value, size|
+        check_setsockopt = lambda do |level, option, value|
           begin
-            ret = sock.setsockopt(level, option, value, size)
-            if ret != 0
-              errno_val = defined?(Errno.errno) ? Errno.errno : 0
-              raise SystemCallError.new("setsockopt(level=#{level}, option=#{option})", errno_val)
-            end
+            sock.setsockopt(level, option, value)
+            Lich.log("Unix setsockopt succeeded: level=#{level}, option=#{option}") if ARGV.include?("--debug")
           rescue => e
             Lich.log("Unix setsockopt failed: level=#{level}, option=#{option}, error=#{e.message}") if ARGV.include?("--debug")
             raise
@@ -258,41 +256,41 @@ module Lich
 
         # Keepalive
         if keepalive[:enable]
-          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, 1, 4)
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, [1].pack('i'))
           if Socket.const_defined?(:TCP_KEEPIDLE)
-            check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_KEEPIDLE, keepalive[:idle], 4)
+            check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_KEEPIDLE, [keepalive[:idle]].pack('i'))
           elsif Socket.const_defined?(:TCP_KEEPALIVE)
-            check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_KEEPALIVE, keepalive[:idle], 4)
+            check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_KEEPALIVE, [keepalive[:idle]].pack('i'))
           end
-          check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_KEEPINTVL, keepalive[:interval], 4) if Socket.const_defined?(:TCP_KEEPINTVL)
-          check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_KEEPCNT, 5, 4) if Socket.const_defined?(:TCP_KEEPCNT)
+          check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_KEEPINTVL, [keepalive[:interval]].pack('i')) if Socket.const_defined?(:TCP_KEEPINTVL)
+          check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_KEEPCNT, [5].pack('i')) if Socket.const_defined?(:TCP_KEEPCNT)
         end
 
         # Linger
         if linger
           linger_struct = [linger[:enable] ? 1 : 0, linger[:timeout]].pack("ii")
-          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_LINGER, linger_struct, linger_struct.bytesize)
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_LINGER, linger_struct)
         end
 
         # Timeouts
         if timeout
-          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_RCVTIMEO, [timeout[:recv], 0].pack("l!l!"), 8)
-          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_SNDTIMEO, [timeout[:send], 0].pack("l!l!"), 8)
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_RCVTIMEO, [timeout[:recv], 0].pack("l!l!"))
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_SNDTIMEO, [timeout[:send], 0].pack("l!l!"))
         end
 
         # Buffer sizes
         if buffer_size
-          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_RCVBUF, [buffer_size[:recv]].pack('l'), 4) if buffer_size[:recv]
-          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_SNDBUF, [buffer_size[:send]].pack('l'), 4) if buffer_size[:send]
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_RCVBUF, [buffer_size[:recv]].pack('i')) if buffer_size[:recv]
+          check_setsockopt.call(Socket::SOL_SOCKET, Socket::SO_SNDBUF, [buffer_size[:send]].pack('i')) if buffer_size[:send]
         end
 
         # TCP_NODELAY
-        check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1, 4) if tcp_nodelay
+        check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, [1].pack('i')) if tcp_nodelay
 
         # TCP_USER_TIMEOUT (Linux only - how long to retry before giving up)
         if Socket.const_defined?(:TCP_USER_TIMEOUT)
           user_timeout_ms = 120000 # 120 seconds
-          check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_USER_TIMEOUT, user_timeout_ms, 4)
+          check_setsockopt.call(Socket::IPPROTO_TCP, Socket::TCP_USER_TIMEOUT, [user_timeout_ms].pack('i'))
         end
       rescue => e
         Lich.log("Unix socket configuration error: #{e.class} - #{e.message}") if ARGV.include?("--debug")
