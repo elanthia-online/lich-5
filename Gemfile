@@ -17,6 +17,7 @@ gem "fiddle", ">= 1.1"
 gem "fileutils", ">= 1.7"
 gem "gtk3", ">= 4.3", platforms: [:windows, :mingw, :mswin, :x64_mingw]
 gem "json", ">= 2.9"
+gem "kramdown", ">= 2.5"
 gem "logger", ">= 1.6"
 gem "openssl", ">= 3.3"
 gem "open-uri", ">= 0.5"
