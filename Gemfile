@@ -4,7 +4,22 @@ git_source(:github) { |repo_name| "https://github.com/#{repo_name}" }
 
 group :development do
   gem "rspec"
-  gem 'rubocop'
+  gem "rubocop"
+end
+
+group :vscode do
+  gem "rbs"
+  gem "prism"
+  gem "sorbet-runtime"
+  gem "ruby-lsp"
+end
+
+group :gtk, :gui do
+  gem "gtk3", ">= 4.3"
+end
+
+group :profanity, :tui do
+  gem "curses"
 end
 
 gem "ascii_charts", ">= 0.9"
@@ -15,7 +30,6 @@ gem "drb", ">= 2.2"
 gem "ffi", ">= 1.17"
 gem "fiddle", ">= 1.1"
 gem "fileutils", ">= 1.7"
-gem "gtk3", ">= 4.3", platforms: [:windows, :mingw, :mswin, :x64_mingw]
 gem "json", ">= 2.9"
 gem "kramdown", ">= 2.5"
 gem "logger", ">= 1.6"
@@ -36,12 +50,12 @@ gem "tmpdir", ">= 0.3"
 gem "tzinfo", ">= 2.0"
 gem "tzinfo-data", ">= 1.2025"
 gem "webrick", ">= 1.9"
-gem "win32ole", ">= 1.9", platforms: [:windows, :mingw, :mswin, :x64_mingw]
+gem "win32ole", ">= 1.9", platforms: :windows
 gem "yaml", ">= 0.4"
 gem "zlib", ">= 3.2"
 
 if Gem.win_platform?
-  gem "sqlite3", ">= 1.6", platforms: [:windows, :mingw, :mswin, :x64_mingw], force_ruby_platform: true
+  gem "sqlite3", ">= 1.6", platforms: :windows, force_ruby_platform: true
 else
   gem "sqlite3", ">= 1.6"
 end
