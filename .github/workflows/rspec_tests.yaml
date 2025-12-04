@@ -132,6 +132,7 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+          cache-version: 1
         env:
           BUNDLE_WITHOUT: 'gtk:vscode:tui'
       - name: Run RSpec tests
