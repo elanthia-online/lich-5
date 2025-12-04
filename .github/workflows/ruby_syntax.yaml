@@ -40,6 +40,8 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+        env:
+          BUNDLE_WITHOUT: 'gtk:vscode:tui'
           
       - name: Run Ruby syntax check on changed scripts
         run: |
