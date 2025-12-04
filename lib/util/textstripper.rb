@@ -1,4 +1,21 @@
-Lich::Util.install_gem_requirements({ 'kramdown' => true })
+# Attempt to install and require kramdown, tracking if it loaded successfully
+KRAMDOWN_LOADED = begin
+  Lich::Util.install_gem_requirements({ 'kramdown' => false })
+  require 'kramdown'
+  true
+rescue Gem::ConflictError => e
+  # Gem version conflict - kramdown can't be activated due to dependency issues
+  warn "TextStripper: Kramdown gem conflict detected (#{e.message}). Restart Lich5 to resolve."
+  false
+rescue LoadError => e
+  # Kramdown gem not found or couldn't be loaded
+  warn "TextStripper: Kramdown could not be loaded (#{e.message}). Restart Lich5 to resolve."
+  false
+rescue StandardError => e
+  # Catch any other gem-related errors
+  warn "TextStripper: Error loading kramdown (#{e.class}: #{e.message}). Restart Lich5 to resolve."
+  false
+end
 
 module Lich
   module Util
@@ -28,7 +45,7 @@ module Lich
     #   TextStripper.strip("<p>Hello</p>", :html)
     #   # => "Hello"
     #
-    #   TextStripper.strip("**bold** text", :markdown)
+    #   TextStripper.strip("**bold** text, :markdown)
     #   # => "bold text"
     module TextStripper
       # Enumeration of stripping modes
@@ -98,6 +115,16 @@ module Lich
         Mode::MARKDOWN => 'GFM'
       }.freeze
 
+      # Check if a mode requires kramdown
+      #
+      # @param mode [Symbol] The mode to check
+      # @return [Boolean] true if the mode requires kramdown, false otherwise
+      #
+      # @api private
+      def self.requires_kramdown?(mode)
+        MODE_TO_INPUT_FORMAT.key?(mode)
+      end
+
       # Strip markup/code from text based on the specified mode
       #
       # This method provides a unified interface for removing different types
@@ -157,6 +184,12 @@ module Lich
         # Validate mode BEFORE entering the rescue block
         # This allows ArgumentError to propagate to the caller as documented
         validated_mode = validate_mode(mode)
+
+        # Check if kramdown is required and available
+        if requires_kramdown?(validated_mode) && !KRAMDOWN_LOADED
+          respond("Need to restart Lich5 in order to use this method.")
+          return text
+        end
 
         # Route to appropriate parsing method based on mode
         case validated_mode
@@ -244,6 +277,11 @@ module Lich
       #
       # @api private
       def self.strip_with_kramdown(text, mode)
+        unless KRAMDOWN_LOADED
+          respond("Need to restart Lich5 in order to use this method.")
+          return text
+        end
+
         input_format = MODE_TO_INPUT_FORMAT[mode]
         doc = Kramdown::Document.new(text, input: input_format)
 
@@ -430,6 +468,11 @@ module Lich
       # @see #strip
       # @api private
       def self.strip_html(text)
+        unless KRAMDOWN_LOADED
+          respond("Need to restart Lich5 in order to use this method.")
+          return text
+        end
+
         strip_with_kramdown(text, Mode::HTML)
       end
 
@@ -498,6 +541,11 @@ module Lich
       # @see #strip_markdown
       # @api private
       def self.strip_markup(text)
+        unless KRAMDOWN_LOADED
+          respond("Need to restart Lich5 in order to use this method.")
+          return text
+        end
+
         strip_with_kramdown(text, Mode::MARKUP)
       end
 
@@ -524,6 +572,11 @@ module Lich
       # @see #strip_markup
       # @api private
       def self.strip_markdown(text)
+        unless KRAMDOWN_LOADED
+          respond("Need to restart Lich5 in order to use this method.")
+          return text
+        end
+
         strip_with_kramdown(text, Mode::MARKDOWN)
       end
     end
