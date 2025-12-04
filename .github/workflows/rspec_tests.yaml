@@ -132,6 +132,8 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+        env:
+          BUNDLE_WITHOUT: 'gtk:vscode:tui'
       - name: Run RSpec tests
         if: steps.preflight.outputs.should_test == 'true'
         run: bundle exec rspec
