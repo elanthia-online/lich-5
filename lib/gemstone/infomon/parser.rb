@@ -49,6 +49,9 @@ module Lich
           Suffused = /^Suffused (?<type>(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck Inspiration|Guile|Vitality)): (?<suffused>[0-9,]+)$/.freeze
           VolnFavor = /^Voln Favor: (?<favor>[-\d,]+)$/.freeze
           CovertArtsCharges = /^Covert Arts Charges: (?<charges>[-\d,]+)\/200$/.freeze
+          ShadowEssence = /^Accumulated Shadow (?:E|e)ssence: (?<essence>\d)/.freeze
+          ShadowEssenceGain = /^You violently shatter the bond on the soul of the .+\.  As you draw it into yourself, you manipulate the chaotic and broken life forces, forming shadow essence\./.freeze
+          ShadowEssenceCap = /^You begin to sacrifice your victim but immediately sense that it would overwhelm you with shadow essence\./.freeze
           GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments?\.$/.freeze
           RedsteelMarks = /^(?:\s* Redsteel Marks:           |You are carrying) (?<redsteel_marks>[\d,]+)(?: redsteel marks?\.)?$/.freeze
           GemstoneDust = /^You are carrying (?<gemstone_dust>[\d,]+) Dust in your reserves?\.$/.freeze
@@ -98,7 +101,8 @@ module Lich
                              TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
                              WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
                              ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
-                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, GemstoneDust)
+                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, GemstoneDust,
+                             ShadowEssence, ShadowEssenceGain, ShadowEssenceCap)
         end
 
         module State
@@ -369,6 +373,16 @@ module Lich
             when Pattern::CovertArtsCharges
               match = Regexp.last_match
               Infomon.set('resources.covert_arts_charges', match[:charges].delete(',').to_i)
+              :ok
+            when Pattern::ShadowEssence
+              match = Regexp.last_match
+              Infomon.set('resources.shadow_essence', match[:essence].to_i)
+              :ok
+            when Pattern::ShadowEssenceGain
+              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i + 1))
+              :ok
+            when Pattern::ShadowEssenceCap
+              Infomon.set('resources.shadow_essence', 5)
               :ok
             when Pattern::GigasArtifactFragments
               match = Regexp.last_match
