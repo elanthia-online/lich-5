@@ -1,5 +1,25 @@
 # Changelog
 
+## [5.13.0-beta.1](https://github.com/elanthia-online/lich-5/compare/v5.13.0-beta.0...v5.13.0-beta.1) (2025-12-03)
+
+
+### Features
+
+* **all:** add simplified DB maintenance ([#991](https://github.com/elanthia-online/lich-5/issues/991)) ([92072a8](https://github.com/elanthia-online/lich-5/commit/92072a89cd8f6ed32344afa5ee73763a5a7a71aa))
+* **all:** Refocus Frontend ([#960](https://github.com/elanthia-online/lich-5/issues/960)) ([72a454d](https://github.com/elanthia-online/lich-5/commit/72a454d2c1f78c9cea76218359af408b63da06f3))
+* **all:** Ruby Memory Releaser module ([#1066](https://github.com/elanthia-online/lich-5/issues/1066)) ([05a7aa1](https://github.com/elanthia-online/lich-5/commit/05a7aa1c092d84d9402eec328bc2f9d95be5c13d))
+* **all:** TextStripper module support for XML, HTML, Markdown ([#1055](https://github.com/elanthia-online/lich-5/issues/1055)) ([8899498](https://github.com/elanthia-online/lich-5/commit/8899498f5df45717df92f02219d5fb2d56d29a7e))
+* **gs:** add creature module, including Hinterwilds creatures ([#1002](https://github.com/elanthia-online/lich-5/issues/1002)) ([51ae0b2](https://github.com/elanthia-online/lich-5/commit/51ae0b25a03ed2c764d476b10a242d940df5d9ec))
+* **gs:** add Injured class for checking ability to perform actions ([#1035](https://github.com/elanthia-online/lich-5/issues/1035)) ([80e0e8f](https://github.com/elanthia-online/lich-5/commit/80e0e8f4aeaddccdfec13de5b239e2e7215b8df1))
+* **gs:** Creature module combat tracking ([#1003](https://github.com/elanthia-online/lich-5/issues/1003)) ([537c86e](https://github.com/elanthia-online/lich-5/commit/537c86ea0c701607875fcf6e74a62f518da05c46))
+
+
+### Bug Fixes
+
+* **all:** map dijkstra optimization ([#1061](https://github.com/elanthia-online/lich-5/issues/1061)) ([2dae7b5](https://github.com/elanthia-online/lich-5/commit/2dae7b54d2b8d4f48c8884863467a5085ec5eba9))
+* **all:** update.rb keep script/data file incase of error on update ([#1070](https://github.com/elanthia-online/lich-5/issues/1070)) ([f71687b](https://github.com/elanthia-online/lich-5/commit/f71687b7b4d4daad8a31fb0277dc46cc4b78996e))
+* **gs:** Infomon additional CHE resign regex ([#1067](https://github.com/elanthia-online/lich-5/issues/1067)) ([f7c43da](https://github.com/elanthia-online/lich-5/commit/f7c43daa9a376481d15eb5c5d19de6aced37f4c1))
+
 ## [5.13.0-beta.0](https://github.com/elanthia-online/lich-5/compare/v5.12.12...v5.13.0-beta.0) (2025-11-15)
 
 
