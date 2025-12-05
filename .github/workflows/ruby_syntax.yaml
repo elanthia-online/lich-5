@@ -18,6 +18,8 @@ on:
 jobs:
   check_syntax:
     runs-on: ubuntu-latest
+    env:
+      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     strategy:
       matrix:
         ruby: ['3.4']
@@ -40,8 +42,6 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-        env:
-          BUNDLE_WITHOUT: 'gtk:vscode:profanity'
           
       - name: Run Ruby syntax check on changed scripts
         run: |
