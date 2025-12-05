@@ -129,22 +129,26 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         if: steps.preflight.outputs.should_test == 'true'
 
-      - name: Configure Bundler for CI
-        if: steps.preflight.outputs.should_test == 'true'
-        run: |
-          mkdir -p .bundle
-          cat > .bundle/config << 'EOF'
-          ---
-          BUNDLE_WITHOUT: "gtk:vscode:tui"
-          EOF
-
       - uses: ruby/setup-ruby@d5126b9b3579e429dd52e51e68624dda2e05be25 # v1.267.0
         if: steps.preflight.outputs.should_test == 'true'
         with:
           ruby-version: ${{ matrix.ruby }}
-          bundler-cache: true
-        env:
-          BUNDLE_WITHOUT: 'gtk:vscode:tui'
+          bundler-cache: false
+
+      - name: Cache gems
+        if: steps.preflight.outputs.should_test == 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: vendor/bundle
+          key: ${{ runner.os }}-gems-${{ matrix.ruby }}-${{ hashFiles('**/Gemfile.lock') }}-without-gtk-vscode-tui
+          restore-keys: |
+            ${{ runner.os }}-gems-${{ matrix.ruby }}-
+
+      - name: Bundle install without gtk/vscode/tui
+        if: steps.preflight.outputs.should_test == 'true'
+        run: |
+          bundle config path vendor/bundle
+          bundle install --without gtk vscode tui --jobs 4
 
       - name: Run RSpec tests
         if: steps.preflight.outputs.should_test == 'true'
