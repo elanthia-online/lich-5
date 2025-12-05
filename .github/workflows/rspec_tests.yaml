@@ -125,35 +125,18 @@ jobs:
               core.notice(`Preflight: changed files = ${files.length}, non-ignored = ${nonIgnored.length}; should_test=${should}`);
               core.setOutput('should_test', should ? 'true' : 'false');
             }
-
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         if: steps.preflight.outputs.should_test == 'true'
-
       - uses: ruby/setup-ruby@d5126b9b3579e429dd52e51e68624dda2e05be25 # v1.267.0
         if: steps.preflight.outputs.should_test == 'true'
         with:
           ruby-version: ${{ matrix.ruby }}
-          bundler-cache: false
-
-      - name: Cache gems
-        if: steps.preflight.outputs.should_test == 'true'
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: vendor/bundle
-          key: ${{ runner.os }}-gems-${{ matrix.ruby }}-${{ hashFiles('**/Gemfile.lock') }}-without-gtk-vscode-tui
-          restore-keys: |
-            ${{ runner.os }}-gems-${{ matrix.ruby }}-
-
-      - name: Bundle install without gtk/vscode/tui
-        if: steps.preflight.outputs.should_test == 'true'
-        run: |
-          bundle config set --local path vendor/bundle
-          bundle install --jobs 4 --without gtk vscode tui
-
+          bundler-cache: true
+        env:
+          BUNDLE_WITHOUT: 'gtk:vscode:tui'
       - name: Run RSpec tests
         if: steps.preflight.outputs.should_test == 'true'
         run: bundle exec rspec
-
       - name: RSpec skipped (docs/meta-only change)
         if: steps.preflight.outputs.should_test != 'true'
         run: echo "Preflight determined only ignored paths changed; skipping RSpec."
