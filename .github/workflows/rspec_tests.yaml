@@ -59,6 +59,8 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     strategy:
       matrix:
         ruby: ['3.4']
@@ -132,8 +134,6 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-        env:
-          BUNDLE_WITHOUT: 'gtk:vscode:profanity'
       - name: Run RSpec tests
         if: steps.preflight.outputs.should_test == 'true'
         run: bundle exec rspec
