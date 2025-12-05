@@ -14,11 +14,11 @@ group :vscode do
   gem "ruby-lsp"
 end
 
-group :gtk, :gui do
+group :gtk do
   gem "gtk3", ">= 4.3"
 end
 
-group :profanity, :tui do
+group :tui do
   gem "curses"
 end
 
