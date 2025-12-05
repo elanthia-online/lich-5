@@ -148,13 +148,7 @@ jobs:
         if: steps.preflight.outputs.should_test == 'true'
         run: |
           bundle config set --local path vendor/bundle
-          bundle config set --local without 'gtk vscode tui'
-          echo "=== Bundle config ==="
-          bundle config list
-          echo "=== Updating Bundle Lock file ==="
-          bundle lock --update  # Re-resolve without excluded groups
-          echo "=== Starting bundle install ==="
-          bundle install --jobs 4
+          bundle install --jobs 4 --without gtk vscode tui
 
       - name: Run RSpec tests
         if: steps.preflight.outputs.should_test == 'true'
