@@ -151,7 +151,7 @@ jobs:
           bundle config set --local without 'gtk vscode tui'
           echo "=== Bundle config ==="
           bundle config list
-          echo "=== Updating Bundle Lock file ===
+          echo "=== Updating Bundle Lock file ==="
           bundle lock --update  # Re-resolve without excluded groups
           echo "=== Starting bundle install ==="
           bundle install --jobs 4
