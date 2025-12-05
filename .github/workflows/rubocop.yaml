@@ -32,7 +32,7 @@ jobs:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
         env:
-          BUNDLE_WITHOUT: 'gtk:vscode:tui'
+          BUNDLE_WITHOUT: 'gtk:vscode:profanity'
 
       - name: Rubocop
         run: |
