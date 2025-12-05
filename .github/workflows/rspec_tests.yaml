@@ -147,7 +147,7 @@ jobs:
       - name: Bundle install without gtk/vscode/tui
         if: steps.preflight.outputs.should_test == 'true'
         run: |
-          bundle config path vendor/bundle
+          bundle config set --local path vendor/bundle
           bundle config set --local without 'gtk vscode tui'
           bundle install --jobs 4
 
