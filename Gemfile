@@ -18,7 +18,7 @@ group :gtk do
   gem "gtk3", ">= 4.3"
 end
 
-group :tui do
+group :profanity do
   gem "curses"
 end
 
