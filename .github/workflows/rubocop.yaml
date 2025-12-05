@@ -18,6 +18,8 @@ on:
 jobs:
   rubocop:
     runs-on: ubuntu-latest
+    env:
+      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     strategy:
       matrix:
         ruby: ['3.4']
@@ -31,8 +33,6 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-        env:
-          BUNDLE_WITHOUT: 'gtk:vscode:profanity'
 
       - name: Rubocop
         run: |
