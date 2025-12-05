@@ -23,7 +23,7 @@ module Lich
       attr_accessor :noun, :name, :before_name, :after_name
 
       def initialize(id, noun, name, before = nil, after = nil)
-        @id = id
+        @id = id.to_s
         @noun = noun
         @noun = 'lapis' if @noun == 'lapis lazuli'
         @noun = 'hammer' if @noun == "Hammer of Kai"
