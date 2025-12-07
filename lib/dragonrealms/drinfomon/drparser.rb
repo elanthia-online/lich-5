@@ -90,6 +90,7 @@ module Lich
 
               # Reconstruct the full item description from the <d> tag and any trailing text.
               # e.g., for "<d>an apple</d> with a worm in it", this becomes "an apple with a worm in it"
+              full_description = "#{d_element.text}#{document.root.text}"
 
               # Store the parsed item information.
               # DRItems.update_item(item, id, cmd, full_description)
@@ -104,6 +105,7 @@ module Lich
         end
         server_string
       end
+      
 
       def self.check_exp_mods(server_string)
         # This method parses the output from `exp mods` command
@@ -325,7 +327,6 @@ module Lich
           case line
           when Pattern::InventoryGetStart
             @parsing_inventory_get = true
-            DRItems.reset
           when Pattern::GenderAgeCircle
             DRStats.gender = Regexp.last_match[:gender]
             DRStats.age = Regexp.last_match[:age].to_i
@@ -431,6 +432,7 @@ module Lich
           else
             :noop
           end
+
 
           populate_inventory_get(line) if @parsing_inventory_get
           check_exp_mods(line) if @parsing_exp_mods_output
