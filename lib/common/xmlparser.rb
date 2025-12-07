@@ -748,6 +748,7 @@ module Lich
               if @active_tags.include?('a')
                 if @bold
                   GameObj.new_npc(@obj_exist, @obj_noun, text_string)
+                  Creature.register(text_string, @obj_exist, @obj_noun) if XMLData.current_target_ids.include?(@obj_exist)
                 else
                   GameObj.new_loot(@obj_exist, @obj_noun, text_string)
                 end
