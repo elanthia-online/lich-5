@@ -13,7 +13,6 @@ module Lich
       require_relative 'drinfomon/drstats'
       require_relative 'drinfomon/drroom'
       require_relative 'drinfomon/drspells'
-      require_relative 'drinfomon/dritems'
       require_relative 'drinfomon/events'
     end
   end
