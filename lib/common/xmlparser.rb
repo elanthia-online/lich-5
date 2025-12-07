@@ -325,7 +325,9 @@ module Lich
           if name == 'pushStream'
             @in_stream = true
             @current_stream = attributes['id'].to_s
-            GameObj.clear_inv if attributes['id'].to_s == 'inv'
+            if XMLData.game =~ /^GS/
+              GameObj.clear_inv if attributes['id'].to_s == 'inv'
+            end
           end
           if name == 'popStream'
             if attributes['id'] == 'room'
@@ -746,6 +748,7 @@ module Lich
               if @active_tags.include?('a')
                 if @bold
                   GameObj.new_npc(@obj_exist, @obj_noun, text_string)
+                  Creature.register(text_string, @obj_exist, @obj_noun) if XMLData.current_target_ids.include?(@obj_exist)
                 else
                   GameObj.new_loot(@obj_exist, @obj_noun, text_string)
                 end
