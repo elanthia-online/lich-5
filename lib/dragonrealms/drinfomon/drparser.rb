@@ -88,12 +88,9 @@ module Lich
               before = cmd
               after = nil
 
-              # Reconstruct the full item description from the <d> tag and any trailing text.
-              # e.g., for "<d>an apple</d> with a worm in it", this becomes "an apple with a worm in it"
-              full_description = "#{d_element.text}#{document.root.text}"
-
               # Store the parsed item information.
               # DRItems.update_item(item, id, cmd, full_description)
+              Lich.log("DRParser: Adding inventory item - ID: #{id}, Noun: #{noun}, Name: #{name}, Container: #{container}, Before: #{before}, After: #{after}")
               GameObj.new_inv(id, noun, name, container, before, after)
               if container2
                 before = cmd.sub(/get \#\d+ in/, "get")
@@ -432,6 +429,7 @@ module Lich
           else
             :noop
           end
+
 
           populate_inventory_get(line) if @parsing_inventory_get
           check_exp_mods(line) if @parsing_exp_mods_output
