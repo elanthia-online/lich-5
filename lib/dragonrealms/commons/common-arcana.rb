@@ -185,7 +185,7 @@ module Lich
 
       def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep = nil)
         return false unless abbrev
-        spell_prep_messages = !custom_prep ? get_data('spells').prep_messages : (get_data('spells').prep_messages << custom_prep)
+        spell_prep_messages = !custom_prep ? get_data('spells').prep_messages : (get_data('spells').prep_messages + [custom_prep])
 
         DRC.bput('prepare symbiosis', 'You recall the exact details of the', 'But you\'ve already prepared', 'Please don\'t do that here') if symbiosis
         if runestone_name.nil?
