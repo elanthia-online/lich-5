@@ -102,7 +102,6 @@ module Lich
         end
         server_string
       end
-      
 
       def self.check_exp_mods(server_string)
         # This method parses the output from `exp mods` command
@@ -429,7 +428,6 @@ module Lich
           else
             :noop
           end
-
 
           populate_inventory_get(line) if @parsing_inventory_get
           check_exp_mods(line) if @parsing_exp_mods_output
