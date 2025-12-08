@@ -52,7 +52,7 @@ module Lich
         elsif DRStats.warrior_mage?
           shape_failures = ['You lack the elemental charge', 'You reach out', 'You fumble around', "You don't know how to manipulate your weapon in that way"]
           get_ingot(ingot, false)
-          case DRC.bput("shape my #{weapon_to_summon} to #{skill}", shape_failures << 'What type of weapon were you trying')
+          case DRC.bput("shape my #{weapon_to_summon} to #{skill}", shape_failures + ['What type of weapon were you trying'])
           when 'You lack the elemental charge'
             summon_admittance
             shape_summoned_weapon(skill, nil)
