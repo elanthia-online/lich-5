@@ -288,7 +288,8 @@ module Lich
           :cost       => { stamina: 9 },
           :regex      => Regexp.union(/You lunge forward and try to hamstring .+ with your .+!/,
                                       /The .+ is too unwieldy for that\./,
-                                      /You need to be holding a weapon capable of slashing to do that\./),
+                                      /You need to be holding a weapon capable of slashing to do that\./,
+                                      /is lying down \-\- attempting to hamstring .+ would be a rather awkward proposition\./),
           :usage      => "hamstring"
         },
         "haymaker"               => {
