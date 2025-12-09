@@ -81,8 +81,8 @@ module Lich
           return DRC.right_hand if DRCMM.is_moon_weapon?(DRC.right_hand)
           return DRC.left_hand  if DRCMM.is_moon_weapon?(DRC.left_hand)
         elsif DRStats.warrior_mage?
-          # match = DRC.bput("#{command} #{abbrev} #{mana}", get_data('spells').prep_messages)
-          weapon_regex = /^You tap (?:a|an|some)(?:[\w\s\-]+)((#{settings&.summoned_weapons_adjective}|stone|fiery|icy|electric) [\w\s\-]+) that you are holding.$/
+          custom_adjective = settings&.summoned_weapons_adjective ? (settings.summoned_weapons_adjective + '|') : ''
+          weapon_regex = /^You tap (?:a|an|some)(?:[\w\s\-]+)((#{custom_adjective}stone|fiery|icy|electric) [\w\s\-]+) that you are holding.$/
           # For a two-worded weapon like 'short sword' the only way to know
           # which element it was summoned with is by tapping it. That's the only
           # way we can infer if it's a summoned sword or a regular one.
