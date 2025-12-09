@@ -46,78 +46,31 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'eaccess.rb')
 
   if ARGV.include?('--login')
-    if File.exist?(File.join(DATA_DIR, "entry.dat"))
-      entry_data = File.open(File.join(DATA_DIR, "entry.dat"), 'r') { |blob|
-        begin
-          Marshal.load(blob.read.unpack('m').first)
-        rescue
-          Array.new
-        end
-      }
-    else
-      entry_data = Array.new
-    end
-    char_name = ARGV[ARGV.index('--login') + 1].capitalize
-    if ARGV.include?('--gemstone')
-      if ARGV.include?('--platinum')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSX') }
-      elsif ARGV.include?('--shattered')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
-      elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
-        data[:game_code] = 'GST'
-      else
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
-      end
-    elsif ARGV.include?('--shattered')
-      data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
-    elsif ARGV.include?('--dragonrealms')
-      if ARGV.include?('--platinum')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRX') }
-      elsif ARGV.include?('--fallen')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
-      elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
-        data[:game_code] = 'DRT'
-      else
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
-      end
-    elsif ARGV.include?('--fallen')
-      data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
-    else
-      data = entry_data.find { |d| (d[:char_name] == char_name) }
-    end
-    if data
-      Lich.log "info: using quick game entry settings for #{char_name}"
+    # CLI login flow: character authentication via saved entries
+    require File.join(LIB_DIR, 'common', 'cli', 'cli_login')
 
-      if ARGV.include?('--gst')
-        data[:game_code] = 'GST'
-      elsif ARGV.include?('--drt')
-        data[:game_code] = 'DRT'
-      end
+    # Extract character name from --login argument
+    requested_character = ARGV[ARGV.index('--login') + 1].capitalize
 
-      launch_data_hash = EAccess.auth(
-        account: data[:user_id],
-        password: data[:password],
-        character: data[:char_name],
-        game_code: data[:game_code]
-      )
+    # Parse game code and frontend from remaining arguments
+    modifiers = ARGV.dup
+    requested_instance, requested_fe = Lich::Util::LoginHelpers.resolve_login_args(modifiers)
 
-      @launch_data = launch_data_hash.map { |k, v| "#{k.upcase}=#{v}" }
-      if data[:frontend] == 'wizard'
-        @launch_data.collect! { |line| line.sub(/GAMEFILE=.+/, 'GAMEFILE=WIZARD.EXE').sub(/GAME=.+/, 'GAME=WIZ').sub(/FULLGAMENAME=.+/, 'FULLGAMENAME=Wizard Front End') }
-      elsif data[:frontend] == 'avalon'
-        @launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') }
-      end
-      if data[:custom_launch]
-        @launch_data.push "CUSTOMLAUNCH=#{data[:custom_launch]}"
-        if data[:custom_launch_dir]
-          @launch_data.push "CUSTOMLAUNCHDIR=#{data[:custom_launch_dir]}"
-        end
-      end
+    # Execute CLI login flow and get launch data
+    launch_data_array = Lich::Common::CLI::CLILogin.execute(
+      requested_character,
+      game_code: requested_instance,
+      frontend: requested_fe,
+      data_dir: DATA_DIR
+    )
+
+    if launch_data_array
+      Lich.log "info: CLI login successful for #{requested_character}"
+      @launch_data = launch_data_array
     else
-      $stdout.puts "error: failed to find login data for #{char_name}"
-      Lich.log "error: failed to find login data for #{char_name}"
+      $stdout.puts "error: failed to authenticate for #{requested_character}"
+      Lich.log "error: CLI login failed for #{requested_character}"
+      exit 1
     end
 
   ## GUI starts here
