@@ -17,20 +17,22 @@ module Lich
       def initialize
         @api_url = 'https://slack.com/api/'
 
-        unless Script.running?('lnet') && lnet_connected?
-          start_script('lnet') unless Script.running?('lnet')
-          wait_time = 30
-          start_time = Time.now
-          until lnet_connected?
-            if (Time.now - start_time) > wait_time
-              raise Error, "lnet did not connect within #{wait_time} seconds."
+        unless authed?(UserVars.slack_token)
+          unless Script.running?('lnet') && lnet_connected?
+            start_script('lnet') unless Script.running?('lnet')
+            wait_time = 30
+            start_time = Time.now
+            until lnet_connected?
+              if (Time.now - start_time) > wait_time
+                raise Error, "lnet did not connect within #{wait_time} seconds."
+              end
+              pause 1
             end
-            pause 1
           end
-        end
 
-        @lnet = (Script.running + Script.hidden).find { |val| val.name == 'lnet' }
-        find_token unless authed?(UserVars.slack_token)
+          @lnet = (Script.running + Script.hidden).find { |val| val.name == 'lnet' }
+          find_token
+        end
 
         begin
           @users_list = post('users.list', { 'token' => UserVars.slack_token })
@@ -91,6 +93,7 @@ module Lich
         lichbots = %w[Quilsilgas]
         echo 'Looking for a token...'
         pause until @lnet
+        # echo("@lnet found. is it authed? #{@lnet)}")
 
         return if lichbots.any? do |bot|
           token = request_token(bot)
