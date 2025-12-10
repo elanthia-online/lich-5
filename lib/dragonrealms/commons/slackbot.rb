@@ -19,7 +19,14 @@ module Lich
 
         unless Script.running?('lnet') && lnet_connected?
           start_script('lnet') unless Script.running?('lnet')
-          pause until lnet_connected?
+          wait_time = 30
+          start_time = Time.now
+          until lnet_connected?
+            if (Time.now - start_time) > wait_time
+              raise Error, "lnet did not connect within #{wait_time} seconds."
+            end
+            pause 1
+          end
         end
 
         @lnet = (Script.running + Script.hidden).find { |val| val.name == 'lnet' }
@@ -124,6 +131,9 @@ module Lich
           raise ApiError, "Failed to parse Slack API response: #{e.message}"
         rescue ThrottlingError => e
           delay = e.retry_after || (base_delay * (2**retries))
+          if delay > 120
+            raise ApiError, "Throttled by Slack API. Retry delay (#{delay}s) exceeds maximum."
+          end
           Lich.log "Throttled by Slack API. Retrying in #{delay} seconds..."
           sleep delay
           retries += 1
@@ -131,6 +141,9 @@ module Lich
         rescue Timeout::Error, Errno::EINVAL, Errno::ECONNRESET, EOFError,
                Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError, Net::ProtocolError, SocketError => e
           delay = base_delay * (2**retries)
+          if delay > 120
+            raise NetworkError, "Network error. Retry delay (#{delay}s) exceeds maximum."
+          end
           Lich.log "Network error: #{e.message}. Retrying in #{delay} seconds..."
           sleep delay
           retries += 1
