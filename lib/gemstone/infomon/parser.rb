@@ -406,7 +406,7 @@ module Lich
               Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i - essences_used).clamp(0, 5))
               :ok
             when Pattern::SacrificeChannel, Pattern::SacrificeInfest, Pattern::SacrificeFate, Pattern::SacrificeShift
-              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i - 1))
+              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i - 1).clamp(0, 5))
               :ok
             when Pattern::GigasArtifactFragments
               match = Regexp.last_match
