@@ -84,7 +84,6 @@ module Lich
         lichbots = %w[Quilsilgas]
         echo 'Looking for a token...'
         pause until @lnet
-        # echo("@lnet found. is it authed? #{@lnet)}")
 
         return if lichbots.any? do |bot|
           token = request_token(bot)
