@@ -52,7 +52,7 @@ module Lich
           ShadowEssence = /^Accumulated Shadow (?:E|e)ssence: (?<essence>\d)/.freeze
           ShadowEssenceGain = /^You violently shatter the bond on the soul of the .+\.  As you draw it into yourself, you manipulate the chaotic and broken life forces, forming shadow essence\./.freeze
           ShadowEssenceCap = /^You begin to sacrifice your victim but immediately sense that it would overwhelm you with shadow essence\./.freeze
-          SacrificeMana = /^You summon the shadow essence from the inner depths of your body, surrounding yourself in a dark halo of power\.  You will the shadows into the eddies and currents of the flows of essence around you, spreading through them like blackened veins of corruption\.  The surroundings glow with silent anguish\.  Everything around you becomes pale and enervated with discoloration, like the life has been drained out of the world\.  There is a flood of power as you feel (?<amount>120|180|240|300|360) mana surge into you!$/.freeze
+          SacrificeMana = /^You summon the shadow essence from the inner depths of your body, surrounding yourself in a dark halo of power\.  You will the shadows into the eddies and currents of the flows of essence around you, spreading through them like blackened veins of corruption\.  The surroundings glow with silent anguish\.  Everything around you becomes pale and enervated with discoloration, like the life has been drained out of the world\.  There is a flood of power as you feel (?<amount>\d+) mana surge into you!$/.freeze
           SacrificeChannel = /^Focusing on the bond to your animate, you force shadow essence into .+, leveraging its broken life forces\.  The backlash of sorcerous violence with the necrotic energy of the \w+ ends in the unnatural revitalization of its animate matter\.$/.freeze
           SacrificeInfest = /^Mastering the struggle against the frantic rush of stolen power, you unleash a dark haze of necrosis upon your unfortunate victim\.  With a small smirk, you force the sickly currents of shadow essence from your body, commanding them to seek and infest .+\.$/.freeze
           SacrificeFate = /^You close your eyes momentarily and visualize the strands of fate that tie together the firmament\.  Identifying a susceptible star, you compel the shadow essence within you to corrupt it\.$/.freeze
@@ -382,17 +382,28 @@ module Lich
               :ok
             when Pattern::ShadowEssence
               match = Regexp.last_match
-              Infomon.set('resources.shadow_essence', match[:essence].to_i)
+              Infomon.set('resources.shadow_essence', match[:essence].to_i.clamp(0, 5))
               :ok
             when Pattern::ShadowEssenceGain
-              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i + 1))
+              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i + 1).clamp(0, 5))
               :ok
             when Pattern::ShadowEssenceCap
               Infomon.set('resources.shadow_essence', 5)
               :ok
             when Pattern::SacrificeMana
               match = Regexp.last_match
-              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i - (match[:amount].to_i / 60 - 1)))
+              # Calculate effective mana control ranks
+              effective_mana_ranks = [Skills.elemental_mana_control, Skills.spirit_mana_control].max + [Skills.elemental_mana_control, Skills.spirit_mana_control].min / 2
+
+              # Base mana for first essence
+              base_mana = Char.level + 20
+
+              # Mana per essence after
+              mana_per_essence = (base_mana * (0.5 + effective_mana_ranks.clamp(0, 60) / 120))
+
+              # Estimate of essences used
+              essences_used = (((match[:amount].to_i - mana_per_essence) / (base_mana * 0.5))).round.clamp(1, 5)
+              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i - essences_used).clamp(0, 5))
               :ok
             when Pattern::SacrificeChannel, Pattern::SacrificeInfest, Pattern::SacrificeFate, Pattern::SacrificeShift
               Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i - 1))
