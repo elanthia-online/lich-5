@@ -45,7 +45,7 @@ module Lich
     #   TextStripper.strip("<p>Hello</p>", :html)
     #   # => "Hello"
     #
-    #   TextStripper.strip("**bold** text, :markdown)
+    #   TextStripper.strip("**bold** text", :markdown)
     #   # => "bold text"
     module TextStripper
       # Enumeration of stripping modes
