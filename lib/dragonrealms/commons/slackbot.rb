@@ -1,21 +1,73 @@
 module Lich
   module DragonRealms
     class SlackBot
+      class Error < StandardError; end
+      class NetworkError < Error; end
+      class ApiError < Error; end
+
+      class ThrottlingError < ApiError
+        attr_reader :retry_after
+
+        def initialize(msg, retry_after = nil)
+          super(msg)
+          @retry_after = retry_after
+        end
+      end
+
       def initialize
         @api_url = 'https://slack.com/api/'
-        @lnet = (Script.running + Script.hidden).find { |val| val.name == 'lnet' }
-        find_token unless authed?(UserVars.slack_token)
 
-        params = { 'token' => UserVars.slack_token }
-        res = post('users.list', params)
-        @users_list = JSON.parse(res.body)
+        unless authed?(UserVars.slack_token)
+          unless Script.running?('lnet') && lnet_connected?
+            start_script('lnet') unless Script.running?('lnet')
+            wait_time = 30
+            start_time = Time.now
+            until lnet_connected?
+              if (Time.now - start_time) > wait_time
+                raise Error, "lnet did not connect within #{wait_time} seconds."
+              end
+              pause 1
+            end
+          end
+
+          @lnet = (Script.running + Script.hidden).find { |val| val.name == 'lnet' }
+          find_token
+        end
+
+        begin
+          @users_list = post('users.list', { 'token' => UserVars.slack_token })
+        rescue ApiError => e
+          Lich.log "error fetching user list: #{e.message}"
+          @users_list = { 'members' => [] }
+        end
+      end
+
+      def lnet_connected?
+        return false unless defined?(LNet)
+        return false unless LNet.server
+        return false if LNet.server.closed?
+
+        begin
+          # Check if socket is still viable
+          ready = IO.select(nil, [LNet.server], nil, 0)
+          return false unless ready
+
+          # Check last activity
+          return false if (Time.now - LNet.last_recv) > 120
+
+          true
+        rescue IOError, Errno::EBADF, Errno::EPIPE
+          false
+        end
       end
 
       def authed?(token)
-        params = { 'token' => token }
-        res = post('auth.test', params)
-        body = JSON.parse(res.body)
-        body['ok']
+        return false unless token
+        begin
+          post('auth.test', { 'token' => token })['ok']
+        rescue ApiError, NetworkError
+          false
+        end
       end
 
       def request_token(lichbot)
@@ -40,37 +92,83 @@ module Lich
       def find_token
         lichbots = %w[Quilsilgas]
         echo 'Looking for a token...'
+        pause until @lnet
+        # echo("@lnet found. is it authed? #{@lnet)}")
+
         return if lichbots.any? do |bot|
           token = request_token(bot)
           authed = authed?(token) if token
-          UserVars.slack_token = token if authed
+          UserVars.slack_token = token if token && authed
           authed
         end
 
-        echo 'Unable to locate a token :['
-        exit
+        raise Error, 'Unable to locate a token :['
       end
 
       def post(method, params)
-        uri = URI.parse("#{@api_url}#{method}")
-        http = Net::HTTP.new(uri.host, uri.port)
-        http.use_ssl = true
-        http.verify_mode = OpenSSL::SSL::VERIFY_NONE
-        req = Net::HTTP::Post.new(uri.path)
-        req.set_form_data(params)
-        http.request(req)
+        retries = 0
+        base_delay = 30
+
+        begin
+          uri = URI.parse("#{@api_url}#{method}")
+          http = Net::HTTP.new(uri.host, uri.port)
+          http.use_ssl = true
+          http.verify_mode = OpenSSL::SSL::VERIFY_NONE # Consider using VERIFY_PEER and configuring certs
+          req = Net::HTTP::Post.new(uri.path)
+          req.set_form_data(params)
+
+          res = http.request(req)
+
+          if res.code == '429'
+            retry_after = res['Retry-After']&.to_i
+            raise ThrottlingError.new("Throttled by Slack API", retry_after)
+          end
+
+          raise NetworkError, "HTTP Error: #{res.code} #{res.message}" unless res.is_a?(Net::HTTPSuccess)
+
+          body = JSON.parse(res.body)
+          raise ApiError, "Slack API Error: #{body['error']}" unless body['ok']
+
+          return body
+        rescue JSON::ParserError => e
+          raise ApiError, "Failed to parse Slack API response: #{e.message}"
+        rescue ThrottlingError => e
+          delay = e.retry_after || (base_delay * (2**retries))
+          if delay > 120
+            raise ApiError, "Throttled by Slack API. Retry delay (#{delay}s) exceeds maximum."
+          end
+          Lich.log "Throttled by Slack API. Retrying in #{delay} seconds..."
+          sleep delay
+          retries += 1
+          retry
+        rescue Timeout::Error, Errno::EINVAL, Errno::ECONNRESET, EOFError,
+               Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError, Net::ProtocolError, SocketError => e
+          delay = base_delay * (2**retries)
+          if delay > 120
+            raise NetworkError, "Network error. Retry delay (#{delay}s) exceeds maximum."
+          end
+          Lich.log "Network error: #{e.message}. Retrying in #{delay} seconds..."
+          sleep delay
+          retries += 1
+          retry
+        end
       end
 
       def direct_message(username, message)
-        dm_channel = get_dm_channel(username)
+        begin
+          dm_channel = get_dm_channel(username)
+          raise Error, "Could not find DM channel for #{username}" unless dm_channel
 
-        params = { 'token' => UserVars.slack_token, 'channel' => dm_channel, 'text' => "#{checkname}: #{message}", 'as_user' => true }
-        post('chat.postMessage', params)
+          params = { 'token' => UserVars.slack_token, 'channel' => dm_channel, 'text' => "#{checkname}: #{message}", 'as_user' => true }
+          post('chat.postMessage', params)
+        rescue Error => e
+          Lich.log "Failed to send Slack message to #{username}: #{e.message}"
+        end
       end
 
       def get_dm_channel(username)
         user = @users_list['members'].find { |u| u['name'] == username }
-        user['id']
+        user ? user['id'] : nil
       end
     end
   end
