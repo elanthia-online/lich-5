@@ -1,5 +1,31 @@
 # Changelog
 
+## [5.13.0-beta.2](https://github.com/elanthia-online/lich-5/compare/v5.13.0-beta.1...v5.13.0-beta.2) (2025-12-16)
+
+
+### Features
+
+* **all:** Refocus Frontend ([#960](https://github.com/elanthia-online/lich-5/issues/960)) ([0d3e556](https://github.com/elanthia-online/lich-5/commit/0d3e55640ffeeb8b4b576760c6d7853cc61adffa))
+* **all:** socket configurator to better guard TCPSocket ([#976](https://github.com/elanthia-online/lich-5/issues/976)) ([b9ec080](https://github.com/elanthia-online/lich-5/commit/b9ec080786f9570035f235681b2bbda51c83f009))
+* **all:** TextStripper module support for XML, HTML, Markdown ([#1055](https://github.com/elanthia-online/lich-5/issues/1055)) ([242d831](https://github.com/elanthia-online/lich-5/commit/242d8313b34b238e8db9dd9ca365e6f2842c60ad))
+* **dr:** Add GameObj.inv support for DR items ([#1080](https://github.com/elanthia-online/lich-5/issues/1080)) ([2678d66](https://github.com/elanthia-online/lich-5/commit/2678d662557fb41d8c9ab913adb0e77fde2f80dd))
+* **dr:** DRCS allow custom adjective for summoned weapons ([#1088](https://github.com/elanthia-online/lich-5/issues/1088)) ([ea3c652](https://github.com/elanthia-online/lich-5/commit/ea3c652e77900d5a31e0d8a5c2c29719c1bd495b))
+
+
+### Bug Fixes
+
+* **all:** [lib][global-defs] - move update ([#1079](https://github.com/elanthia-online/lich-5/issues/1079)) ([5dc0715](https://github.com/elanthia-online/lich-5/commit/5dc07158d16373543c2543ef6cac2f59e5fb32e0))
+* **all:** ensure proxy path is set for non-destructive array write-th… ([#1073](https://github.com/elanthia-online/lich-5/issues/1073)) ([60b1fae](https://github.com/elanthia-online/lich-5/commit/60b1faea6e7edd63c8dc256d055de2221f3d7e8a))
+* **all:** GameObj force new objects ID to be string ([#1087](https://github.com/elanthia-online/lich-5/issues/1087)) ([4f9aa10](https://github.com/elanthia-online/lich-5/commit/4f9aa10ce307c347239aa812304e19abd079423b))
+* **dr:** DRCA allow custom spell prep messaging ([#1089](https://github.com/elanthia-online/lich-5/issues/1089)) ([383989b](https://github.com/elanthia-online/lich-5/commit/383989b600c634a04184a9654eaa5283476664f1))
+* **dr:** Update Slackbot error handling, and lnet management ([#1091](https://github.com/elanthia-online/lich-5/issues/1091)) ([c77bf2f](https://github.com/elanthia-online/lich-5/commit/c77bf2f840d8d8a969ffed4b22dd3d1600c81c9d))
+* **gs:** cman.rb add hamstring regex for already lying down target ([#1090](https://github.com/elanthia-online/lich-5/issues/1090)) ([448d0b4](https://github.com/elanthia-online/lich-5/commit/448d0b46f558512afab960e14fb88557893bf6f0))
+
+
+### Miscellaneous Chores
+
+* pin prerelease v5.13.0-beta.2 ([91af422](https://github.com/elanthia-online/lich-5/commit/91af4224440fe1b60615d4c759e7a69b57aace78))
+
 ## [5.13.0-beta.1](https://github.com/elanthia-online/lich-5/compare/v5.13.0-beta.0...v5.13.0-beta.1) (2025-12-03)
 
 
