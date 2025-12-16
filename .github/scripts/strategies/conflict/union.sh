@@ -50,7 +50,10 @@ parse_and_resolve_conflicts() {
       echo "$line" >> "$temp_audit"
 
       # Union merge: output ours, then theirs (removing duplicates)
-      local -A seen
+      # Force associative array type; prevents "bad array subscript" if `seen`
+      # exists elsewhere as an indexed array or scalar in this shell context.
+      unset -v seen
+      declare -A seen=()
 
       # Add ours lines
       for ours_line in "${ours_lines[@]}"; do
