@@ -127,6 +127,7 @@ require File.join(LIB_DIR, 'common', 'sharedbuffer.rb')
 
 require File.join(LIB_DIR, 'gemstone', 'spellranks.rb')
 
+require File.join(LIB_DIR, 'common', 'socketconfigurator.rb')
 require File.join(LIB_DIR, 'games.rb')
 require File.join(LIB_DIR, 'common', 'gameobj.rb')
 
