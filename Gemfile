@@ -1,3 +1,30 @@
+=begin
+When building Gemfile.lock file, please add additional platforms to the file via the following command:
+
+bundle lock \
+  --add-platform aarch64-linux \
+  --add-platform aarch64-linux-gnu \
+  --add-platform aarch64-linux-musl \
+  --add-platform arm-linux \
+  --add-platform arm-linux-gnu \
+  --add-platform arm-linux-musl \
+  --add-platform arm64-darwin \
+  --add-platform x64-mingw \
+  --add-platform x64-mingw-ucrt \
+  --add-platform x86-darwin \
+  --add-platform x86-linux \
+  --add-platform x86-linux-gnu \
+  --add-platform x86-linux-musl \
+  --add-platform x86-mingw \
+  --add-platform x86-mingw-ucrt \
+  --add-platform x86_64-darwin \
+  --add-platform x86_64-linux \
+  --add-platform x86_64-linux-gnu \
+  --add-platform x86_64-linux-musl
+
+This ensures that the lock file can be used by all platforms that are able to support it.
+=end
+
 source "https://rubygems.org"
 
 git_source(:github) { |repo_name| "https://github.com/#{repo_name}" }
