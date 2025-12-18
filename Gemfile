@@ -2,43 +2,6 @@ source "https://rubygems.org"
 
 git_source(:github) { |repo_name| "https://github.com/#{repo_name}" }
 
-# Windows 32-bit (legacy)
-lock_platform "x86-mingw"             # 32-bit Windows with MinGW (Ruby 2.4-3.0)
-lock_platform "x86-mingw-ucrt"        # 32-bit Windows with UCRT (Ruby 3.1+)
-
-# Windows 64-bit
-lock_platform "x64-mingw"             # 64-bit Windows with MinGW (Ruby 2.4-3.0)
-lock_platform "x64-mingw-ucrt"        # 64-bit Windows with UCRT (Ruby 3.1+, recommended)
-
-# macOS Intel 32-bit (legacy)
-lock_platform "x86-darwin"            # Old 32-bit Intel Macs (pre-2010, rarely used)
-
-# macOS Intel 64-bit
-lock_platform "x86_64-darwin"         # 64-bit Intel Macs (2006-2020)
-
-# macOS ARM64 (Apple Silicon)
-lock_platform "arm64-darwin"          # Apple M1/M2/M3/M4 Macs
-
-# Linux Intel/AMD 32-bit
-lock_platform "x86-linux"             # Generic 32-bit x86 Linux
-lock_platform "x86-linux-gnu"         # 32-bit x86 Linux with GNU libc
-lock_platform "x86-linux-musl"        # 32-bit x86 Linux with musl libc (Alpine)
-
-# Linux Intel/AMD 64-bit
-lock_platform "x86_64-linux"          # Generic 64-bit x86_64 Linux
-lock_platform "x86_64-linux-gnu"      # 64-bit x86_64 Linux with GNU libc (most common)
-lock_platform "x86_64-linux-musl"     # 64-bit x86_64 Linux with musl libc (Alpine, Docker)
-
-# Linux ARM 32-bit platforms
-lock_platform "arm-linux"             # Generic 32-bit ARM Linux (older Raspberry Pi, embedded)
-lock_platform "arm-linux-gnu"         # 32-bit ARM Linux with GNU libc
-lock_platform "arm-linux-musl"        # 32-bit ARM Linux with musl libc (Alpine)
-
-# Linux ARM64 platforms
-lock_platform "aarch64-linux"         # Generic ARM64 Linux (e.g., AWS Graviton, Raspberry Pi 4/5)
-lock_platform "aarch64-linux-gnu"     # ARM64 Linux with GNU libc (most standard Linux distros)
-lock_platform "aarch64-linux-musl"    # ARM64 Linux with musl libc (Alpine Linux, containers)
-
 group :development do
   gem "rspec"
   gem "rubocop"
