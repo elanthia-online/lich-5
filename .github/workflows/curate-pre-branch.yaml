@@ -118,6 +118,7 @@ jobs:
           retention-days: 14
           path: |
             **/*.union-merge
+            ${{ env.CONFLICT_LOG_FILE }}
             conflict-log*.md
             conflict-log*.txt
             .github/scripts/conflict-log*.md
