@@ -354,7 +354,9 @@ handle_cherry_pick_conflict() {
 
   if [[ "$USE_UNION" == "true" ]]; then
     log_warn "Resolving conflicts for $context"
-    resolve_conflicts_union "$context"
+    if ! resolve_conflicts_union "$context"; then
+      die "Union conflict resolver failed for $context"
+    fi
     check_union_merge_has_changes "cherry-pick"
   else
     cherry_pick_abort
@@ -367,7 +369,9 @@ handle_merge_conflict() {
 
   if [[ "$USE_UNION" == "true" ]]; then
     log_warn "Resolving merge conflicts for $context"
-    resolve_conflicts_union "$context"
+    if ! resolve_conflicts_union "$context"; then
+      die "Union conflict resolver failed for $context"
+    fi
 
     # After resolving conflicts in a squash merge, stage ALL modified files
     # git merge --squash doesn't stage anything when it fails with conflicts
