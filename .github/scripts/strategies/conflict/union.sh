@@ -50,22 +50,21 @@ parse_and_resolve_conflicts() {
       echo "$line" >> "$temp_audit"
 
       # Union merge: output ours, then theirs (removing duplicates)
-      # Force associative array type; prevents "bad array subscript" if `seen`
-      # exists elsewhere as an indexed array or scalar in this shell context.
-      unset -v seen
-      local -A seen=()
-
-      # Add ours lines
+      # Associative array fails on GH runner, so moving to membership check
       for ours_line in "${ours_lines[@]}"; do
         echo "$ours_line" >> "$temp_resolved"
-        seen["$ours_line"]=1
       done
-
-      # Add theirs lines (skip if duplicate)
+      
+      # Add theirs lines (skip if duplicate of any ours line)
       for theirs_line in "${theirs_lines[@]}"; do
-        if [[ -z "${seen[$theirs_line]:-}" ]]; then
-          echo "$theirs_line" >> "$temp_resolved"
-        fi
+        local dup=false
+        for ours_line in "${ours_lines[@]}"; do
+          if [[ "$theirs_line" == "$ours_line" ]]; then
+            dup=true
+            break
+          fi
+        done
+        [[ "$dup" == "true" ]] || echo "$theirs_line" >> "$temp_resolved"
       done
 
       # Reset state
@@ -175,6 +174,29 @@ resolve_conflicts_union() {
         git_show_stage 3 "$file"
         echo ">>>>>>> THEIRS"
       } > "${file}.union-merge"
+    fi
+
+    # If union produced Ruby, ensure it's syntactically valid. Union can easily create
+    # invalid Ruby (e.g., duplicated terminators in hashes/arrays/Regexp.union blocks).
+    # If syntax is invalid, fall back to 'theirs' for this file as a deterministic escape hatch.
+    if [[ "$file" =~ \.rb(w)?$ ]]; then
+      if ! ruby -c "$file" >/dev/null 2>&1; then
+        log_warn "Union merge produced invalid Ruby in $file; falling back to theirs"
+        log_warn "file=$file::Union merge invalid Ruby; fell back to theirs"
+        checkout_stage theirs "$file"
+
+        # Annotate audit trail with fallback reason (keep existing conflict context)
+        {
+          echo ""
+          echo "# NOTE: union output failed ruby -c; used theirs for this file"
+        } >> "${file}.union-merge"
+
+        # If theirs is also invalid, stop early with a clear error.
+        if ! ruby -c "$file" >/dev/null 2>&1; then
+          log_warn "Fallback to theirs still invalid Ruby for $file"
+          return 1
+        fi
+      fi
     fi
 
     # Stage the resolved file

@@ -108,3 +108,18 @@ jobs:
         run: |
           chmod +x .github/scripts/curate-pre-branch.sh
           .github/scripts/curate-pre-branch.sh
+
+      - name: Upload union merge audit artifacts
+        if: ${{ always() && (env.HAD_CONFLICTS == 'true' || failure()) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: union-merge-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            **/*.union-merge
+            ${{ env.CONFLICT_LOG_FILE }}
+            conflict-log*.md
+            conflict-log*.txt
+            .github/scripts/conflict-log*.md
+            .github/scripts/conflict-log*.txt
