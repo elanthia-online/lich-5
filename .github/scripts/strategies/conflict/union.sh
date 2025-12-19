@@ -50,22 +50,21 @@ parse_and_resolve_conflicts() {
       echo "$line" >> "$temp_audit"
 
       # Union merge: output ours, then theirs (removing duplicates)
-      # Force associative array type; prevents "bad array subscript" if `seen`
-      # exists elsewhere as an indexed array or scalar in this shell context.
-      unset -v seen
-      local -A seen=()
-
-      # Add ours lines
+      # Associative array fails on GH runner, so moving to membership check
       for ours_line in "${ours_lines[@]}"; do
         echo "$ours_line" >> "$temp_resolved"
-        seen["$ours_line"]=1
       done
-
-      # Add theirs lines (skip if duplicate)
+      
+      # Add theirs lines (skip if duplicate of any ours line)
       for theirs_line in "${theirs_lines[@]}"; do
-        if [[ -z "${seen[$theirs_line]:-}" ]]; then
-          echo "$theirs_line" >> "$temp_resolved"
-        fi
+        local dup=false
+        for ours_line in "${ours_lines[@]}"; do
+          if [[ "$theirs_line" == "$ours_line" ]]; then
+            dup=true
+            break
+          fi
+        done
+        [[ "$dup" == "true" ]] || echo "$theirs_line" >> "$temp_resolved"
       done
 
       # Reset state
