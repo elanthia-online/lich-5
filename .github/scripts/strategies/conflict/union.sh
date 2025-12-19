@@ -176,6 +176,29 @@ resolve_conflicts_union() {
       } > "${file}.union-merge"
     fi
 
+    # If union produced Ruby, ensure it's syntactically valid. Union can easily create
+    # invalid Ruby (e.g., duplicated terminators in hashes/arrays/Regexp.union blocks).
+    # If syntax is invalid, fall back to 'theirs' for this file as a deterministic escape hatch.
+    if [[ "$file" =~ \.rb(w)?$ ]]; then
+      if ! ruby -c "$file" >/dev/null 2>&1; then
+        log_warn "Union merge produced invalid Ruby in $file; falling back to theirs"
+        log_warn "file=$file::Union merge invalid Ruby; fell back to theirs"
+        checkout_stage theirs "$file"
+
+        # Annotate audit trail with fallback reason (keep existing conflict context)
+        {
+          echo ""
+          echo "# NOTE: union output failed ruby -c; used theirs for this file"
+        } >> "${file}.union-merge"
+
+        # If theirs is also invalid, stop early with a clear error.
+        if ! ruby -c "$file" >/dev/null 2>&1; then
+          log_warn "Fallback to theirs still invalid Ruby for $file"
+          return 1
+        fi
+      fi
+    fi
+
     # Stage the resolved file
     git add "$file"
 
