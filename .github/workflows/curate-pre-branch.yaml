@@ -117,7 +117,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
           path: |
-            **/*.union-merge
+            **/*.union-merge*
             ${{ env.CONFLICT_LOG_FILE }}
             conflict-log*.md
             conflict-log*.txt
