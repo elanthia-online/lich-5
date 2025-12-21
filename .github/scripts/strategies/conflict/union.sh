@@ -28,9 +28,6 @@ attempt_ruby_union_repair() {
   # Only run for Ruby-ish files
   [[ "$file" =~ \.rb(w)?$ ]] || return 1
 
-  local tmp
-  tmp="$(mktemp)"
-
   ruby -e '
     path = ARGV[0]
     lines = File.read(path, mode: "r:BOM|UTF-8").lines
