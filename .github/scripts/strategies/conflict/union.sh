@@ -16,6 +16,60 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../lib/core.sh"
 # shellcheck source=.github/scripts/lib/git-helpers.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../lib/git-helpers.sh"
 
+
+# Attempt a narrow, low-risk Ruby repair for common union-merge breakage:
+# duplicate standalone terminators like ")", "},", etc. This does NOT attempt
+# semantic merges; it only removes consecutive duplicate terminator-only lines.
+# Args: $1 = file path
+# Returns: 0 if repair produced valid Ruby, 1 otherwise
+attempt_ruby_union_repair() {
+  local file="$1"
+
+  # Only run for Ruby-ish files
+  [[ "$file" =~ \.rb(w)?$ ]] || return 1
+
+  ruby -e '
+    path = ARGV[0]
+    lines = File.read(path, mode: "r:BOM|UTF-8").lines
+
+    out = []
+    prev_term = nil
+
+    lines.each do |ln|
+      raw = ln
+      s = ln.strip
+
+      # "terminator-only" lines we are willing to de-dupe if repeated back-to-back
+      term = case s
+             when ")", "),"
+               s
+             when "}", "},"
+               s
+             else
+               nil
+             end
+
+      if term && prev_term == term
+        # drop consecutive duplicate terminator line
+        next
+      end
+
+      out << raw
+      prev_term = term
+    end
+
+    File.write(path, out.join)
+  ' "$file" > /dev/null 2>&1
+
+  # Validate Ruby syntax after the narrow repair
+  if ruby -c "$file" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  return 1
+}
+
+
 # Parse and intelligently resolve conflict markers with union strategy
 # Args: $1 = file path
 # Returns: 0 on success
@@ -144,6 +198,18 @@ resolve_conflicts_union() {
     # Annotate file in GitHub UI
     log_warn "file=$file::Conflict auto-resolved via union merge"
 
+    # Lossless evidence capture (when stages exist): dump BOTH sides verbatim.
+    # These are critical for reconstructing "what got clipped out" when we later
+    # fall back to theirs due to ruby -c failures.
+    if git_stage_exists 1 "$file"; then
+      {
+        git_show_stage 2 "$file" || true
+      } > "${file}.union-merge.stage2-ours"
+      {
+        git_show_stage 3 "$file" || true
+      } > "${file}.union-merge.stage3-theirs"
+    fi
+
     # Git already created the file with conflict markers
     # We parse those markers to find minimal conflict regions
     if git_stage_exists 1 "$file"; then
@@ -176,28 +242,46 @@ resolve_conflicts_union() {
       } > "${file}.union-merge"
     fi
 
+    # Snapshot the union result (or the immediate post-parse state) before any
+    # Ruby repair/fallback logic mutates the file again.
+    cp "$file" "${file}.union-merge.union-result" 2>/dev/null || true
+
     # If union produced Ruby, ensure it's syntactically valid. Union can easily create
     # invalid Ruby (e.g., duplicated terminators in hashes/arrays/Regexp.union blocks).
     # If syntax is invalid, fall back to 'theirs' for this file as a deterministic escape hatch.
     if [[ "$file" =~ \.rb(w)?$ ]]; then
       if ! ruby -c "$file" >/dev/null 2>&1; then
-        log_warn "Union merge produced invalid Ruby in $file; falling back to theirs"
-        log_warn "file=$file::Union merge invalid Ruby; fell back to theirs"
-        checkout_stage theirs "$file"
-
-        # Annotate audit trail with fallback reason (keep existing conflict context)
-        {
-          echo ""
-          echo "# NOTE: union output failed ruby -c; used theirs for this file"
-        } >> "${file}.union-merge"
-
-        # If theirs is also invalid, stop early with a clear error.
-        if ! ruby -c "$file" >/dev/null 2>&1; then
-          log_warn "Fallback to theirs still invalid Ruby for $file"
-          return 1
+        # Try a narrow, low-risk repair first (keeps both sides, just de-dupes
+        # consecutive terminator-only lines). If it works, keep the repaired file.
+        if attempt_ruby_union_repair "$file"; then
+          log_warn "Union merge produced invalid Ruby in $file; repaired common terminators and kept union result"
+          log_warn "file=$file::Union merge invalid Ruby; repaired terminators; kept union result"
+          {
+            echo ""
+            echo "# NOTE: union output failed ruby -c; applied terminator de-dupe repair; kept union result"
+          } >> "${file}.union-merge"
+        else
+          log_warn "Union merge produced invalid Ruby in $file; falling back to theirs"
+          log_warn "file=$file::Union merge invalid Ruby; fell back to theirs"
+          checkout_stage theirs "$file"
+  
+          # Annotate audit trail with fallback reason (keep existing conflict context)
+          {
+            echo ""
+            echo "# NOTE: union output failed ruby -c; used theirs for this file"
+          } >> "${file}.union-merge"
+  
+          # If theirs is also invalid, stop early with a clear error.
+          if ! ruby -c "$file" >/dev/null 2>&1; then
+            log_warn "Fallback to theirs still invalid Ruby for $file"
+            return 1
+          fi
         fi
       fi
     fi
+
+    # Snapshot the final file we actually chose (union, repaired-union, or theirs).
+    cp "$file" "${file}.union-merge.final" 2>/dev/null || true
 
     # Stage the resolved file
     git add "$file"
