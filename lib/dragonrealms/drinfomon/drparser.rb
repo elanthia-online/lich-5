@@ -30,9 +30,11 @@ module Lich
         PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium|Platinum)/.freeze
         LastLogoff = /^\s+Logoff :  (?<weekday>[A-Z][a-z]{2}) (?<month>[A-Z][a-z]{2}) (?<day>[\s\d]{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2}) ET (?<year>\d{4})/.freeze
         RoomIDOff = /^You will no longer see room IDs when LOOKing in the game and room windows\./.freeze
+        InventoryGetStart = %r{You rummage about your person, looking for}.freeze
       end
 
       @parsing_exp_mods_output = false
+      @parsing_inventory_get = false
 
       def self.check_events(server_string)
         Flags.matchers.each do |key, regexes|
@@ -40,6 +42,61 @@ module Lich
             if (matches = server_string.match(regex))
               Flags.flags[key] = matches
               break
+            end
+          end
+        end
+        server_string
+      end
+
+      def self.populate_inventory_get(server_string)
+        case server_string
+        when %r{^<output class=""/>}
+          if @parsing_inventory_get
+            @parsing_inventory_get = false
+          end
+        else
+          # This block parses a single line from the output of the `inv search <string>` verb,
+          # which lists items on your character. Each line is an XML-like string.
+          # Example: <d cmd='get #12345'>a small pouch</d>
+          if @parsing_inventory_get && server_string.strip.start_with?('<d cmd=')
+            # The server string is an XML fragment, so we wrap it in a root element to make it parsable.
+            document = REXML::Document.new("<root>#{server_string.strip}</root>")
+            d_element = document.root.elements["d"]
+
+            return unless d_element
+
+            # Extract the item name from the text inside the <d> tag.
+            # Normalize it by lowercasing and removing leading articles ('a', 'an', 'some').
+            item_name = d_element.text.sub(/^(?:a|an|some)\s/, '').strip
+
+            # Extract the command and the unique item ID from the 'cmd' attribute.
+            cmd = d_element.attributes["cmd"].downcase.strip
+            id_match = /get (?<itemID>#\d+)(?: in (?<container1>#\d+|[^']+))?(?: in (?<container2>#\d+|[^']+))?/.match(cmd)
+            # <!-- Regex to capture item and container IDs: cmd='get (?<itemID>#\d+)(?: in (?<container1>#\d+|[^']+))?(?: in (?<container2>#\d+|[^']+))?' -->
+            # <d cmd='get #8286821 in #8286816 in #8286762'>A papyrus parchment</d> is in a black winter cloak crafted from thick cashmere, which is in a scuffed traveler's pack.
+            # <d cmd='get #8735861 in #8735860 in watery portal'>Some arzumodine cloth</d> is in a lumpy canvas sack, which is in an effervescent eddy of honey-hued light captured by a sungold frame.
+            # <d cmd='get #8761784'>A seagull feather quill with dyed snowy white barbs</d> is lying at your feet.
+            # <d cmd='get #8761784'>A seagull feather quill with dyed snowy white barbs</d> is in your right hand.
+
+            if id_match
+              id = id_match[:itemID].strip.delete('#').to_s
+              noun = nil # This isn't exposed in the DR XML stream
+              name = item_name
+              container1 = id_match[:container1].strip.delete('#') if id_match[:container1]
+              container2 = id_match[:container2].strip.delete('#') if id_match[:container2]
+              container = container1 || nil
+              before = cmd
+              after = nil
+
+              # Store the parsed item information.
+              # DRItems.update_item(item, id, cmd, full_description)
+              Lich.log("DRParser: Adding inventory item - ID: #{id}, Noun: #{noun}, Name: #{name}, Container: #{container}, Before: #{before}, After: #{after}")
+              GameObj.new_inv(id, noun, name, container, before, after)
+              if container2
+                before = cmd.sub(/get \#\d+ in/, "get")
+                name = nil # We don't know the name of the item in container2
+                GameObj.new_inv(container1, noun, name, container2, before, after)
+              end
             end
           end
         end
@@ -264,6 +321,8 @@ module Lich
         check_events(line)
         begin
           case line
+          when Pattern::InventoryGetStart
+            @parsing_inventory_get = true
           when Pattern::GenderAgeCircle
             DRStats.gender = Regexp.last_match[:gender]
             DRStats.age = Regexp.last_match[:age].to_i
@@ -370,6 +429,7 @@ module Lich
             :noop
           end
 
+          populate_inventory_get(line) if @parsing_inventory_get
           check_exp_mods(line) if @parsing_exp_mods_output
           check_known_barbarian_abilities(line) if DRSpells.check_known_barbarian_abilities
           check_known_thief_khri(line) if DRSpells.grabbing_known_khri
