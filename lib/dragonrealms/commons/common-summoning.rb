@@ -61,7 +61,7 @@ module Lich
             # aren't recognized for shaping summoned elemental weapons, and the error message itself is misleading
             # thankfully breaking, turning, pulling, pushing work fine with custom adj
             unless summoned_weapon.nil?
-              case DRC.bput("shape my #{summoned_weapon.sub(settings&.summoned_weapons_adjective || '','')} to #{skill}", shape_failures)
+              case DRC.bput("shape my #{summoned_weapon.sub(settings&.summoned_weapons_adjective || '', '')} to #{skill}", shape_failures)
               when 'You lack the elemental charge'
                 summon_admittance
                 shape_summoned_weapon(skill, nil, settings)
