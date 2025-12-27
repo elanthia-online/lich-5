@@ -41,29 +41,31 @@ module Lich
         DRC.bput("break my #{item}", 'Focusing your will', 'disrupting its matrix', "You can't break", "Break what")
       end
 
-      def shape_summoned_weapon(skill, ingot = nil)
-        weapon_to_summon = identify_summoned_weapon
+      def shape_summoned_weapon(skill, ingot = nil, settings = nil)
+        summoned_weapon = identify_summoned_weapon(settings)
         if DRStats.moon_mage?
           skill_to_shape = { 'Staves' => 'blunt', 'Twohanded Edged' => 'huge', 'Large Edged' => 'heavy', 'Small Edged' => 'normal' }
           shape = skill_to_shape[skill]
           if DRCMM.hold_moon_weapon?
-            DRC.bput("shape #{weapon_to_summon} to #{shape}", 'you adjust the magic that defines its shape', 'already has', 'You fumble around')
+            DRC.bput("shape #{summoned_weapon} to #{shape}", 'you adjust the magic that defines its shape', 'already has', 'You fumble around')
           end
         elsif DRStats.warrior_mage?
           shape_failures = ['You lack the elemental charge', 'You reach out', 'You fumble around', "You don't know how to manipulate your weapon in that way"]
           get_ingot(ingot, false)
-          case DRC.bput("shape my #{weapon_to_summon} to #{skill}", shape_failures + ['What type of weapon were you trying'])
+          case DRC.bput("shape my #{summoned_weapon} to #{skill}", shape_failures + ['What type of weapon were you trying'])
           when 'You lack the elemental charge'
             summon_admittance
-            shape_summoned_weapon(skill, nil)
+            shape_summoned_weapon(skill, nil, settings)
           when 'What type of weapon were you trying'
             # currently custom adjectives from https://elanthipedia.play.net/Books_of_Binding tomes
             # aren't recognized for shaping summoned elemental weapons, and the error message itself is misleading
             # thankfully breaking, turning, pulling, pushing work fine with custom adj
-            case DRC.bput("shape my #{weapon_to_summon.split(' ').last} to #{skill}", shape_failures)
-            when 'You lack the elemental charge'
-              summon_admittance
-              shape_summoned_weapon(skill, nil)
+            unless summoned_weapon.nil?
+              case DRC.bput("shape my #{summoned_weapon.sub(settings&.summoned_weapons_adjective || '', '')} to #{skill}", shape_failures)
+              when 'You lack the elemental charge'
+                summon_admittance
+                shape_summoned_weapon(skill, nil, settings)
+              end
             end
           end
           stow_ingot(ingot)
