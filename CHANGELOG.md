@@ -1,5 +1,24 @@
 # Changelog
 
+## [5.13.0-beta.3](https://github.com/elanthia-online/lich-5/compare/v5.13.0-beta.2...v5.13.0-beta.3) (2025-12-28)
+
+
+### Features
+
+* **all:** Login modernization and refactor to yaml ([#1063](https://github.com/elanthia-online/lich-5/issues/1063)) ([36511a5](https://github.com/elanthia-online/lich-5/commit/36511a5b8172b39649d138aa869acd1248e244a5))
+
+
+### Bug Fixes
+
+* **all:** GameObj force new objects ID to be string ([#1087](https://github.com/elanthia-online/lich-5/issues/1087)) ([b39d25b](https://github.com/elanthia-online/lich-5/commit/b39d25bb7465c91466d1b2930b756d3301c9b441))
+* **gs:** Resource tracking for sorcerer shadow essence ([#1085](https://github.com/elanthia-online/lich-5/issues/1085)) ([39e954c](https://github.com/elanthia-online/lich-5/commit/39e954c64b82964828aeeb794a806850763fdd93))
+
+
+### Miscellaneous Chores
+
+* pin prerelease v5.13.0-beta.3 ([ff25e0a](https://github.com/elanthia-online/lich-5/commit/ff25e0a523a12c41ae05cc34b271422deee64428))
+* pin prerelease v5.13.0-beta.3 ([a3a3540](https://github.com/elanthia-online/lich-5/commit/a3a3540fb8d1ee3a4267e122279f45039f639f19))
+
 ## [5.13.0-beta.2](https://github.com/elanthia-online/lich-5/compare/v5.13.0-beta.1...v5.13.0-beta.2) (2025-12-16)
 
 
