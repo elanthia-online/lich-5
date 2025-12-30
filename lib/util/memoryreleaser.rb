@@ -29,6 +29,73 @@ module Lich
     #   MemoryReleaser.benchmark
     #
     module MemoryReleaser
+      # Persistent command queue and launcher thread created at module load time.
+      # This launcher thread exists at the main engine level and survives script termination,
+      # which is critical for Windows/Lich compatibility where script-spawned threads are
+      # killed when the script exits.
+      @command_queue = Queue.new
+      @launcher_thread = Thread.new do
+        Thread.current.abort_on_exception = false
+        Thread.current.name = "MemoryReleaser-Launcher"
+        
+        loop do
+          begin
+            command = @command_queue.pop
+            break if command[:action] == :shutdown
+            
+            case command[:action]
+            when :start_worker
+              # Kill any existing worker
+              if @worker_thread&.alive?
+                @worker_thread.kill rescue nil
+              end
+              
+              # Create new worker thread from launcher context
+              @worker_thread = Thread.new do
+                Thread.current.abort_on_exception = false
+                Thread.current.name = "MemoryReleaser-Worker"
+                
+                interval = command[:interval]
+                verbose = command[:verbose]
+                manager = command[:manager]
+                
+                respond "[MemoryReleaser] Memory releaser started (interval: #{interval}s)" if verbose
+                
+                loop do
+                  break unless manager.enabled
+                  
+                  # Sleep in small chunks to be more responsive
+                  elapsed = 0
+                  while elapsed < interval && manager.enabled
+                    sleep(1)
+                    elapsed += 1
+                  end
+                  
+                  break unless manager.enabled
+                  
+                  begin
+                    manager.release
+                  rescue => e
+                    respond "[MemoryReleaser] Error: #{e.message}"
+                    respond e.backtrace.first(5).join("\n") if verbose
+                  end
+                end
+                
+                respond "[MemoryReleaser] Memory releaser stopped" if verbose
+              end
+              
+            when :stop_worker
+              if @worker_thread&.alive?
+                @worker_thread.kill rescue nil
+              end
+              @worker_thread = nil
+            end
+          rescue => e
+            respond "[MemoryReleaser] Launcher error: #{e.message}"
+          end
+        end
+      end
+      
       # Core manager class that handles memory release operations and background thread management
       class Manager
         # @return [Boolean] whether the memory releaser is enabled
@@ -47,10 +114,6 @@ module Lich
           @enabled = true
           @interval = 900 # 15 minutes default
           @verbose = false
-          @thread = nil
-          @restart_queue = Queue.new
-          @restart_handler = nil
-          setup_restart_handler
         end
 
         # Perform a complete memory release cycle
@@ -71,13 +134,14 @@ module Lich
         # Stops any existing thread before starting a new one. The thread will
         # sleep for the specified interval between memory release cycles.
         #
-        # This method uses a restart queue mechanism to ensure threads started
-        # from within Lich scripts persist at the main Lich engine level rather
-        # than being tied to the calling script's lifecycle.
+        # This method uses a persistent launcher thread pattern to ensure threads
+        # survive script termination in environments like Lich where script-spawned
+        # threads are killed when the script exits. The launcher thread is created
+        # at module load time and persists at the main engine level.
         #
         # @param interval [Integer] time in seconds between memory releases (default: 900)
         # @param verbose [Boolean] whether to enable verbose logging (default: false)
-        # @return [Thread] the background thread
+        # @return [Thread, nil] the background thread, or nil if failed to start
         #
         # @example Start with default settings (15 minutes, silent)
         #   MemoryReleaser.start
@@ -91,31 +155,43 @@ module Lich
           @verbose = verbose
           @enabled = true
 
-          # Queue the restart request to be handled by the persistent restart handler
-          @restart_queue << { interval: interval, verbose: verbose }
+          # Send command to persistent launcher thread
+          MemoryReleaser.instance_variable_get(:@command_queue) << {
+            action: :start_worker,
+            interval: interval,
+            verbose: verbose,
+            manager: self
+          }
 
-          # Wait for thread to start
-          sleep 0.1 until @thread&.alive?
+          # Wait for worker to start
+          timeout = 0
+          until running?
+            sleep 0.1
+            timeout += 1
+            if timeout > 50
+              respond "[MemoryReleaser] ERROR: Worker thread failed to start"
+              return nil
+            end
+          end
 
-          @thread
+          MemoryReleaser.instance_variable_get(:@worker_thread)
         end
 
         # Stop the background memory release thread
         #
-        # Attempts a graceful shutdown by waiting up to 5 seconds for the thread
-        # to finish. If the thread is still running after 5 seconds, it will be
-        # forcefully terminated.
+        # Sends a stop command to the launcher thread which will kill the worker
+        # thread. This is a graceful shutdown that respects the launcher thread
+        # architecture.
         #
         # @return [void]
         def stop
           @enabled = false
-
-          if @thread&.alive?
-            @thread.join(5) # Wait up to 5 seconds
-            @thread.kill if @thread.alive? # Force kill if still running
-          end
-
-          @thread = nil
+          
+          MemoryReleaser.instance_variable_get(:@command_queue) << {
+            action: :stop_worker
+          }
+          
+          sleep 0.2
           log "Memory releaser stopped"
         end
 
@@ -123,7 +199,8 @@ module Lich
         #
         # @return [Boolean] true if the background thread is alive, false otherwise
         def running?
-          @thread&.alive? || false
+          worker = MemoryReleaser.instance_variable_get(:@worker_thread)
+          worker&.alive? || false
         end
 
         # Get the current status of the memory releaser
@@ -186,60 +263,6 @@ module Lich
         end
 
         private
-
-        # Set up the persistent restart handler thread
-        #
-        # This thread runs at the main Lich engine level and handles restart
-        # requests from scripts. This ensures that worker threads created after
-        # a stop/start cycle persist beyond individual script lifecycles.
-        #
-        # @return [void]
-        # @api private
-        def setup_restart_handler
-          return if @restart_handler&.alive?
-
-          @restart_handler = Thread.new do
-            loop do
-              config = @restart_queue.pop
-              break if config == :stop
-
-              # Create the worker thread in this persistent handler's context
-              start_worker_thread(config[:interval], config[:verbose])
-            end
-          end
-        end
-
-        # Start the actual worker thread that performs memory releases
-        #
-        # This method is called by the restart handler and creates the worker
-        # thread in the handler's context, ensuring it persists at the main
-        # Lich engine level.
-        #
-        # @param interval [Integer] time in seconds between memory releases
-        # @param verbose [Boolean] whether to enable verbose logging
-        # @return [void]
-        # @api private
-        def start_worker_thread(interval, verbose)
-          @thread = Thread.new do
-            log "Memory releaser started (interval: #{interval}s)"
-
-            loop do
-              break unless @enabled
-
-              sleep(interval)
-              break unless @enabled
-
-              begin
-                release
-              rescue => e
-                warn "Memory releaser error: #{e.message}"
-                warn e.backtrace.first(5).join("\n") if verbose
-              end
-            end
-
-            log "Memory releaser stopped"
-          end
-        end
 
         # Log a message if verbose mode is enabled
         #
@@ -376,6 +399,7 @@ module Lich
           end
 
           respond "Could not find compatible method for Windows memory release"
+          nil
         end
 
         # Print current memory statistics
@@ -602,7 +626,7 @@ module Lich
         #
         # @param interval [Integer] time in seconds between memory releases (default: 900)
         # @param verbose [Boolean] whether to enable verbose logging (default: false)
-        # @return [Thread] the background thread
+        # @return [Thread, nil] the background thread, or nil if failed to start
         # @see Manager#start
         def start(interval: 900, verbose: false)
           instance.start(interval: interval, verbose: verbose)
