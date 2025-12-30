@@ -34,6 +34,7 @@ module Lich
       # which is critical for Windows/Lich compatibility where script-spawned threads are
       # killed when the script exits.
       @command_queue = Queue.new
+      @worker_thread = nil
       @launcher_thread = Thread.new do
         Thread.current.abort_on_exception = false
         Thread.current.name = "MemoryReleaser-Launcher"
@@ -156,7 +157,7 @@ module Lich
           @enabled = true
 
           # Send command to persistent launcher thread
-          MemoryReleaser.instance_variable_get(:@command_queue) << {
+          MemoryReleaser.command_queue << {
             action: :start_worker,
             interval: interval,
             verbose: verbose,
@@ -174,7 +175,7 @@ module Lich
             end
           end
 
-          MemoryReleaser.instance_variable_get(:@worker_thread)
+          MemoryReleaser.worker_thread
         end
 
         # Stop the background memory release thread
@@ -187,7 +188,7 @@ module Lich
         def stop
           @enabled = false
 
-          MemoryReleaser.instance_variable_get(:@command_queue) << {
+          MemoryReleaser.command_queue << {
             action: :stop_worker
           }
 
@@ -199,7 +200,7 @@ module Lich
         #
         # @return [Boolean] true if the background thread is alive, false otherwise
         def running?
-          worker = MemoryReleaser.instance_variable_get(:@worker_thread)
+          worker = MemoryReleaser.worker_thread
           worker&.alive? || false
         end
 
@@ -615,6 +616,14 @@ module Lich
       @instance = nil
 
       class << self
+        # @api private
+        # @return [Queue] the command queue for communicating with the launcher thread
+        attr_reader :command_queue
+
+        # @api private
+        # @return [Thread, nil] the current worker thread
+        attr_reader :worker_thread
+
         # Get or create the singleton Manager instance
         #
         # @return [Manager] the singleton manager instance
