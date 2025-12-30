@@ -37,42 +37,42 @@ module Lich
       @launcher_thread = Thread.new do
         Thread.current.abort_on_exception = false
         Thread.current.name = "MemoryReleaser-Launcher"
-        
+
         loop do
           begin
             command = @command_queue.pop
             break if command[:action] == :shutdown
-            
+
             case command[:action]
             when :start_worker
               # Kill any existing worker
               if @worker_thread&.alive?
                 @worker_thread.kill rescue nil
               end
-              
+
               # Create new worker thread from launcher context
               @worker_thread = Thread.new do
                 Thread.current.abort_on_exception = false
                 Thread.current.name = "MemoryReleaser-Worker"
-                
+
                 interval = command[:interval]
                 verbose = command[:verbose]
                 manager = command[:manager]
-                
+
                 respond "[MemoryReleaser] Memory releaser started (interval: #{interval}s)" if verbose
-                
+
                 loop do
                   break unless manager.enabled
-                  
+
                   # Sleep in small chunks to be more responsive
                   elapsed = 0
                   while elapsed < interval && manager.enabled
                     sleep(1)
                     elapsed += 1
                   end
-                  
+
                   break unless manager.enabled
-                  
+
                   begin
                     manager.release
                   rescue => e
@@ -80,10 +80,10 @@ module Lich
                     respond e.backtrace.first(5).join("\n") if verbose
                   end
                 end
-                
+
                 respond "[MemoryReleaser] Memory releaser stopped" if verbose
               end
-              
+
             when :stop_worker
               if @worker_thread&.alive?
                 @worker_thread.kill rescue nil
@@ -95,7 +95,7 @@ module Lich
           end
         end
       end
-      
+
       # Core manager class that handles memory release operations and background thread management
       class Manager
         # @return [Boolean] whether the memory releaser is enabled
@@ -186,11 +186,11 @@ module Lich
         # @return [void]
         def stop
           @enabled = false
-          
+
           MemoryReleaser.instance_variable_get(:@command_queue) << {
             action: :stop_worker
           }
-          
+
           sleep 0.2
           log "Memory releaser stopped"
         end
