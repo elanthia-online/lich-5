@@ -3,7 +3,7 @@
 ; to support the Lich scripting environment for Simutronics games
 
 #define MyAppName "Ruby4Lich5"
-#define MyAppVersion "5.12.12" ; x-release-please-version
+#define MyAppVersion "5.13.0" ; x-release-please-version
 #define RubyVersion "3.4.5"
 #define MyAppPublisher "Elanthia-Online"
 #define MyAppURL "https://github.com/elanthia-online/lich-5/"

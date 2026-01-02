@@ -1,5 +1,21 @@
 # Changelog
 
+## [5.13.0](https://github.com/elanthia-online/lich-5/compare/v5.12.12...v5.13.0) (2026-01-02)
+
+
+### Features
+
+* **dr:** DRCS allow custom adjective for summoned weapons ([#1088](https://github.com/elanthia-online/lich-5/issues/1088)) ([2790d8c](https://github.com/elanthia-online/lich-5/commit/2790d8c2dbc1001306d0f3711af2ae5e5800feb2))
+* **dr:** support meta:trashcan tag for DRCI.dispose_trash ([#966](https://github.com/elanthia-online/lich-5/issues/966)) ([d6a08ed](https://github.com/elanthia-online/lich-5/commit/d6a08ed730206750e9c978a5763476a842644874))
+
+
+### Bug Fixes
+
+* **all:** update.rb keep script/data file incase of error on update ([#1070](https://github.com/elanthia-online/lich-5/issues/1070)) ([2f09881](https://github.com/elanthia-online/lich-5/commit/2f09881dd7df27c84abb07c1daff6fbdab04d087))
+* **dr:** DRCA allow custom spell prep messaging ([#1089](https://github.com/elanthia-online/lich-5/issues/1089)) ([42f5025](https://github.com/elanthia-online/lich-5/commit/42f502575a7a45abcad76aab41b2ef133712e586))
+* **dr:** Fix exp mods parsing for DR ([#1102](https://github.com/elanthia-online/lich-5/issues/1102)) ([dbb50ed](https://github.com/elanthia-online/lich-5/commit/dbb50ed6bff5aa7e3f46e44ed08d660cee09591a))
+* **gs:** Infomon additional CHE resign regex ([#1067](https://github.com/elanthia-online/lich-5/issues/1067)) ([94108ef](https://github.com/elanthia-online/lich-5/commit/94108ef5ecb19ea86eafd711d6fb33ef5f3f2f15))
+
 ## [5.12.12](https://github.com/elanthia-online/lich-5/compare/v5.12.11...v5.12.12) (2025-11-09)
 
 
