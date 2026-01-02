@@ -16,7 +16,8 @@ module Lich
           /the sentry just outside (?<town>Kraken's Fall)/,
           /the purser of (?<town>River's Rest)/,
           /the tavernkeeper at Rawknuckle's Common House/,
-          /the captain of the (?<town>Contempt)/
+          /the captain of the (?<town>Contempt)/,
+          /the elderly guard in the East Guardtower/
         )
         CONCOCTION_REGEX = /is working on a concoction that requires (?:an?|some|several) (?<herb>[^.]+?) found [oi]n (?:the\s+)?(?<area>[^.]+?)(?:\s+(?:near|under|between) [^.]+)?\.  These samples must be in pristine condition\.  You have been tasked to retrieve (?<number>\d+) (?:more\s+)?samples?\./
         TASK_MAYBE_REGEX = /^(?:The taskmaster told you:  ")/
@@ -140,6 +141,8 @@ module Lich
             "Kraken's Fall"
           elsif description =~ /the tavernkeeper at Rawknuckle's Common House\.$/
             "Cold River"
+          elsif description =~ /the elderly guard in the East Guardtower\.$/
+            "Mist Harbor"
           elsif description =~ /\b(?:Captain|Reiya|Ataum|Galeb)\b/ || description =~ /gem dealer in has received/
             # the latter is a temporary workaround because of an actual typo in the messaging
             # that should be removed if it is ever actually fixed
