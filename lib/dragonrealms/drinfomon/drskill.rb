@@ -6,8 +6,8 @@ module Lich
       @@start_time ||= Time.now
       @@list ||= []
       @@exp_modifiers ||= {}
-      # stored in seconds for easier manipulation with Time objects.  values will 
-      #   always be divisible by 60 as we don't get any further precision then that, 
+      # stored in seconds for easier manipulation with Time objects.  values will
+      #   always be divisible by 60 as we don't get any further precision then that,
       #   and heuristically getting finer precision isn't worth the effort
       @@rexp_stored ||= 0
       @@rexp_usable ||= 0
@@ -107,11 +107,11 @@ module Lich
       def self.rested_exp_stored
         @@rexp_stored
       end
-    
+
       def self.rested_exp_usable
         @@rexp_usable
       end
-    
+
       def self.rested_exp_refresh
         @@rexp_refresh
       end
@@ -163,30 +163,30 @@ module Lich
       def self.convert_rexp_str_to_seconds(time_string)
         # Handle empty, nil, or specific "zero" cases (less than a minute is zero because it can get stuck there)
         return 0 if time_string.nil? ||
-                    time_string.to_s.strip.empty? || 
-                    time_string.include?("none") || 
+                    time_string.to_s.strip.empty? ||
+                    time_string.include?("none") ||
                     time_string.include?("less than a minute")
-    
+
         total_seconds = 0
-    
+
         # Extract hours and optional minutes (e.g., "4:38 hours" or "6 hour")
         # Ruby's match returns a MatchData object or nil
         if (hour_match = time_string.match(/(\d+):?(\d+)?\s*hour/))
           hours = hour_match[1].to_i
           total_seconds += hours * 60 * 60
-    
+
           # Handle the minutes part of a "4:38" format
           if hour_match[2]
             total_seconds += hour_match[2].to_i * 60
             return total_seconds
           end
         end
-    
+
         # Extract standalone minutes (e.g., "38 minutes")
         if (minute_match = time_string.match(/(\d+)\s*minute/))
           total_seconds += minute_match[1].to_i * 60
         end
-    
+
         total_seconds
       end
 
