@@ -9,6 +9,14 @@ module Lich
     # This module uses a singleton pattern to manage a background thread that periodically
     # releases memory back to the operating system after running Ruby's garbage collector.
     #
+    # Settings are persisted per-character using Lich::Common::DB_Store and include:
+    # - auto_start: automatically start the memory releaser on module load
+    # - interval: time in seconds between memory releases
+    # - verbose: enable detailed logging
+    #
+    # @example Enable auto-start
+    #   MemoryReleaser.auto_start!
+    #
     # @example Basic usage
     #   MemoryReleaser.start
     #   # ... application runs ...
@@ -17,18 +25,30 @@ module Lich
     # @example With custom interval and verbose logging
     #   MemoryReleaser.start(interval: 600, verbose: true)
     #
+    # @example Change settings
+    #   MemoryReleaser.interval!(1200)  # Change to 20 minutes
+    #   MemoryReleaser.verbose!(true)   # Enable verbose logging
+    #
     # @example Manual memory release
     #   MemoryReleaser.release
     #
     # @example Check status
     #   status = MemoryReleaser.status
     #   puts "Running: #{status[:running]}"
+    #   puts "Auto-start: #{status[:auto_start]}"
     #   puts "Platform: #{status[:platform]}"
     #
     # @example Run benchmark
     #   MemoryReleaser.benchmark
     #
     module MemoryReleaser
+      # Default settings for memory releaser
+      DEFAULT_SETTINGS = {
+        auto_start: false, # Disabled by default, user must enable
+        interval: 900, # default of 15 minutes
+        verbose: false,
+      }.freeze
+
       # Persistent command queue and launcher thread created at module load time.
       # This launcher thread exists at the main engine level and survives script termination,
       # which is critical for Windows/Lich compatibility where script-spawned threads are
@@ -108,13 +128,123 @@ module Lich
         # @return [Boolean] whether to output verbose logging
         attr_accessor :verbose
 
+        # @return [Hash] current settings
+        attr_reader :settings
+
         # Initialize a new Manager instance
+        #
+        # Loads settings from persistent storage if available, otherwise uses defaults.
         #
         # @return [Manager] a new manager instance
         def initialize
+          load_settings
           @enabled = true
-          @interval = 900 # 15 minutes default
-          @verbose = false
+        end
+
+        # Load settings from persistent storage
+        #
+        # Settings are stored per-character using the format "game:character_name".
+        # If no stored settings exist, defaults are used.
+        #
+        # @return [Hash] the loaded settings
+        def load_settings
+          # Load from DB_Store with per-character scope
+          scope = "#{XMLData.game}:#{XMLData.name}"
+          stored_settings = Lich::Common::DB_Store.read(scope, 'lich_memory_releaser') || {}
+          @settings = DEFAULT_SETTINGS.merge(stored_settings)
+          
+          # Apply loaded settings to instance variables
+          @interval = @settings[:interval]
+          @verbose = @settings[:verbose]
+          
+          @settings
+        rescue => e
+          # If there's an error loading settings, use defaults
+          respond "[MemoryReleaser] Error loading settings: #{e.message}, using defaults"
+          @settings = DEFAULT_SETTINGS.dup
+          @interval = @settings[:interval]
+          @verbose = @settings[:verbose]
+          @settings
+        end
+
+        # Save current settings to persistent storage
+        #
+        # Settings are stored per-character using the format "game:character_name".
+        #
+        # @return [Hash] the saved settings
+        def save_settings
+          # Save current settings to DB_Store with per-character scope
+          scope = "#{XMLData.game}:#{XMLData.name}"
+          Lich::Common::DB_Store.save(scope, 'lich_memory_releaser', @settings)
+          @settings
+        rescue => e
+          respond "[MemoryReleaser] Error saving settings: #{e.message}"
+          @settings
+        end
+
+        # Enable auto-start and start the memory releaser
+        #
+        # This method enables the auto_start setting, saves it, and immediately
+        # starts the memory releaser with the current interval and verbose settings.
+        #
+        # @return [Thread, nil] the background thread, or nil if failed to start
+        #
+        # @example
+        #   MemoryReleaser.auto_start!
+        def auto_start!
+          @settings[:auto_start] = true
+          save_settings
+          start
+        end
+
+        # Disable auto-start and stop the memory releaser
+        #
+        # This method disables the auto_start setting, saves it, and immediately
+        # stops the memory releaser if it's running.
+        #
+        # @return [void]
+        #
+        # @example
+        #   MemoryReleaser.auto_disable!
+        def auto_disable!
+          @settings[:auto_start] = false
+          save_settings
+          stop if running?
+        end
+
+        # Update the interval setting
+        #
+        # @param seconds [Integer] the new interval in seconds
+        # @return [Integer] the new interval value
+        #
+        # @example
+        #   MemoryReleaser.interval!(600) # Set to 10 minutes
+        def interval!(seconds)
+          @settings[:interval] = seconds
+          @interval = seconds
+          save_settings
+          
+          # If currently running, restart with new interval
+          if running?
+            log "Restarting with new interval: #{seconds}s"
+            start
+          end
+          
+          seconds
+        end
+
+        # Update the verbose setting
+        #
+        # @param enabled [Boolean] whether to enable verbose logging
+        # @return [Boolean] the new verbose value
+        #
+        # @example
+        #   MemoryReleaser.verbose!(true)
+        def verbose!(enabled)
+          @settings[:verbose] = enabled
+          @verbose = enabled
+          save_settings
+          enabled
         end
 
         # Perform a complete memory release cycle
@@ -140,27 +270,33 @@ module Lich
         # threads are killed when the script exits. The launcher thread is created
         # at module load time and persists at the main engine level.
         #
-        # @param interval [Integer] time in seconds between memory releases (default: 900)
-        # @param verbose [Boolean] whether to enable verbose logging (default: false)
+        # @param interval [Integer, nil] time in seconds between memory releases (default: uses saved setting)
+        # @param verbose [Boolean, nil] whether to enable verbose logging (default: uses saved setting)
         # @return [Thread, nil] the background thread, or nil if failed to start
         #
-        # @example Start with default settings (15 minutes, silent)
+        # @example Start with saved settings
         #   MemoryReleaser.start
         #
         # @example Start with custom interval and verbose output
         #   MemoryReleaser.start(interval: 600, verbose: true)
-        def start(interval: 900, verbose: false)
+        def start(interval: nil, verbose: nil)
           stop if running?
 
-          @interval = interval
-          @verbose = verbose
+          # Use provided values or fall back to settings
+          @interval = interval || @settings[:interval]
+          @verbose = verbose.nil? ? @settings[:verbose] : verbose
           @enabled = true
+          
+          # Update settings with current values
+          @settings[:interval] = @interval
+          @settings[:verbose] = @verbose
+          save_settings
 
           # Send command to persistent launcher thread
           MemoryReleaser.command_queue << {
             action: :start_worker,
-            interval: interval,
-            verbose: verbose,
+            interval: @interval,
+            verbose: @verbose,
             manager: self
           }
 
@@ -209,6 +345,7 @@ module Lich
         # @return [Hash] status information
         # @option return [Boolean] :running whether the background thread is running
         # @option return [Boolean] :enabled whether the memory releaser is enabled
+        # @option return [Boolean] :auto_start whether auto-start is enabled
         # @option return [Integer] :interval the current interval in seconds
         # @option return [Boolean] :verbose whether verbose logging is enabled
         # @option return [String] :platform the current platform/OS
@@ -216,12 +353,14 @@ module Lich
         # @example
         #   status = MemoryReleaser.status
         #   puts "Running: #{status[:running]}"
+        #   puts "Auto-start: #{status[:auto_start]}"
         #   puts "Interval: #{status[:interval]} seconds"
         #   puts "Platform: #{status[:platform]}"
         def status
           {
             running: running?,
             enabled: @enabled,
+            auto_start: @settings[:auto_start],
             interval: @interval,
             verbose: @verbose,
             platform: RbConfig::CONFIG['host_os']
@@ -626,18 +765,29 @@ module Lich
 
         # Get or create the singleton Manager instance
         #
+        # If auto_start is enabled in settings, automatically starts the memory releaser.
+        #
         # @return [Manager] the singleton manager instance
         def instance
-          @instance ||= Manager.new
+          @instance ||= begin
+            manager = Manager.new
+            
+            # Auto-start if enabled in settings
+            if manager.settings[:auto_start]
+              manager.start
+            end
+            
+            manager
+          end
         end
 
         # Start the background memory release thread
         #
-        # @param interval [Integer] time in seconds between memory releases (default: 900)
-        # @param verbose [Boolean] whether to enable verbose logging (default: false)
+        # @param interval [Integer, nil] time in seconds between memory releases (default: uses saved setting)
+        # @param verbose [Boolean, nil] whether to enable verbose logging (default: uses saved setting)
         # @return [Thread, nil] the background thread, or nil if failed to start
         # @see Manager#start
-        def start(interval: 900, verbose: false)
+        def start(interval: nil, verbose: nil)
           instance.start(interval: interval, verbose: verbose)
         end
 
@@ -647,6 +797,40 @@ module Lich
         # @see Manager#stop
         def stop
           instance.stop
+        end
+
+        # Enable auto-start and start the memory releaser
+        #
+        # @return [Thread, nil] the background thread, or nil if failed to start
+        # @see Manager#auto_start!
+        def auto_start!
+          instance.auto_start!
+        end
+
+        # Disable auto-start and stop the memory releaser
+        #
+        # @return [void]
+        # @see Manager#auto_disable!
+        def auto_disable!
+          instance.auto_disable!
+        end
+
+        # Update the interval setting
+        #
+        # @param seconds [Integer] the new interval in seconds
+        # @return [Integer] the new interval value
+        # @see Manager#interval!
+        def interval!(seconds)
+          instance.interval!(seconds)
+        end
+
+        # Update the verbose setting
+        #
+        # @param enabled [Boolean] whether to enable verbose logging
+        # @return [Boolean] the new verbose value
+        # @see Manager#verbose!
+        def verbose!(enabled)
+          instance.verbose!(enabled)
         end
 
         # Perform a manual memory release
@@ -698,11 +882,23 @@ end
 
 # Usage examples:
 #
-# Start background thread (15 minutes, silent):
+# Enable auto-start (automatically starts the releaser):
+#   MemoryReleaser.auto_start!
+#
+# Disable auto-start and stop the releaser:
+#   MemoryReleaser.auto_disable!
+#
+# Start background thread with saved settings:
 #   MemoryReleaser.start
 #
 # Start with custom interval and verbose output:
 #   MemoryReleaser.start(interval: 600, verbose: true)
+#
+# Change interval (restarts if running):
+#   MemoryReleaser.interval!(1200) # 20 minutes
+#
+# Change verbose setting:
+#   MemoryReleaser.verbose!(true)
 #
 # Manual release:
 #   MemoryReleaser.release
@@ -719,6 +915,10 @@ end
 # Run benchmark:
 #   MemoryReleaser.benchmark
 #
-# For Lich5 integration:
+# For Lich5 integration with auto-start:
+#   MemoryReleaser.auto_start!
+#   before_dying { MemoryReleaser.stop }
+#
+# For Lich5 integration without auto-start:
 #   MemoryReleaser.start(interval: 900, verbose: true)
 #   before_dying { MemoryReleaser.stop }
