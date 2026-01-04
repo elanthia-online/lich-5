@@ -162,7 +162,7 @@ module Lich
 
       def self.convert_rexp_str_to_seconds(time_string)
         # Handle empty, nil, or specific "zero" cases (less than a minute is zero because it can get stuck there)
-        return 0 if time_string.nil? 
+        return 0 if time_string.nil? ||
                     time_string.to_s.strip.empty? || 
                     time_string.include?("none") || 
                     time_string.include?("less than a minute")
