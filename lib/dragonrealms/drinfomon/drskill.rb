@@ -6,6 +6,12 @@ module Lich
       @@start_time ||= Time.now
       @@list ||= []
       @@exp_modifiers ||= {}
+      # stored in seconds for easier manipulation with Time objects.  values will 
+      #   always be divisible by 60 as we don't get any further precision then that, 
+      #   and heuristically getting finer precision isn't worth the effort
+      @@rexp_stored ||= 0
+      @@rexp_usable ||= 0
+      @@rexp_refresh ||= 0
 
       attr_reader :name, :skillset
       attr_accessor :rank, :exp, :percent, :current, :baseline
@@ -88,8 +94,26 @@ module Lich
         self.exp_modifiers[self.lookup_alias(name)] = rank.to_i
       end
 
+      def self.update_rested_exp(stored, usable, refresh)
+        @@rexp_stored = self.convert_rexp_str_to_seconds(stored)
+        @@rexp_usable = self.convert_rexp_str_to_seconds(usable)
+        @@rexp_refresh = self.convert_rexp_str_to_seconds(refresh)
+      end
+
       def self.exp_modifiers
         @@exp_modifiers
+      end
+
+      def self.rested_exp_stored
+        @@rexp_stored
+      end
+    
+      def self.rested_exp_usable
+        @@rexp_usable
+      end
+    
+      def self.rested_exp_refresh
+        @@rexp_refresh
       end
 
       def self.clear_mind(val)
@@ -134,6 +158,36 @@ module Lich
 
       def self.find_skill(val)
         @@list.find { |data| data.name == self.lookup_alias(val) }
+      end
+
+      def self.convert_rexp_str_to_seconds(time_string)
+        # Handle empty, nil, or specific "zero" cases (less than a minute is zero because it can get stuck there)
+        return 0 if time_string.nil? 
+                    time_string.to_s.strip.empty? || 
+                    time_string.include?("none") || 
+                    time_string.include?("less than a minute")
+    
+        total_seconds = 0
+    
+        # Extract hours and optional minutes (e.g., "4:38 hours" or "6 hour")
+        # Ruby's match returns a MatchData object or nil
+        if (hour_match = time_string.match(/(\d+):?(\d+)?\s*hour/))
+          hours = hour_match[1].to_i
+          total_seconds += hours * 60 * 60
+    
+          # Handle the minutes part of a "4:38" format
+          if hour_match[2]
+            total_seconds += hour_match[2].to_i * 60
+            return total_seconds
+          end
+        end
+    
+        # Extract standalone minutes (e.g., "38 minutes")
+        if (minute_match = time_string.match(/(\d+)\s*minute/))
+          total_seconds += minute_match[1].to_i * 60
+        end
+    
+        total_seconds
       end
 
       # Some guilds rename skills, like Barbarians call "Primary Magic" as "Inner Fire".
