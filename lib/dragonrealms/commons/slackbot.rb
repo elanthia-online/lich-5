@@ -16,13 +16,26 @@ module Lich
 
       attr_reader :error_message
 
+      LNET_CONNECTION_TIMEOUT = 30
+
+      # Consider lnet connection stale if no activity for 2 minutes
+      LNET_ACTIVITY_TIMEOUT = 120
+
+      # Base delay for exponential backoff on API retries.
+      # Slack recommends waiting at least 30 seconds before retrying after rate limits.
+      # See: https://api.slack.com/docs/rate-limits
+      BASE_RETRY_DELAY_SECONDS = 30
+
+      # Maximum delay before giving up on retries (2 minutes)
+      MAX_RETRY_DELAY_SECONDS = 120
+
       def initialize
         @api_url = 'https://slack.com/api/'
         @initialized = false
         @error_message = nil
 
         unless authed?(UserVars.slack_token)
-          unless Script.running?('lnet') && lnet_connected?
+          unless lnet_connected?
             unless Script.running?('lnet')
               unless Script.exists?('lnet')
                 @error_message = "lnet.lic not found - cannot retrieve Slack token"
@@ -30,11 +43,10 @@ module Lich
               end
               start_script('lnet')
             end
-            wait_time = 30
             start_time = Time.now
             until lnet_connected?
-              if (Time.now - start_time) > wait_time
-                @error_message = "lnet did not connect within #{wait_time} seconds."
+              if (Time.now - start_time) > LNET_CONNECTION_TIMEOUT
+                @error_message = "lnet did not connect within #{LNET_CONNECTION_TIMEOUT} seconds."
                 return
               end
               pause 1
@@ -67,20 +79,14 @@ module Lich
         return false unless LNet.server
         return false if LNet.server.closed?
 
-        begin
-          # Check if socket is still viable
-          ready = IO.select(nil, [LNet.server], nil, 0)
-          return false unless ready
-
-          # Check last activity if method exists
-          if LNet.respond_to?(:last_recv) && LNet.last_recv
-            return false if (Time.now - LNet.last_recv) > 120
-          end
-
-          true
-        rescue IOError, Errno::EBADF, Errno::EPIPE, NoMethodError
-          false
+        # Check last activity if method exists
+        if LNet.respond_to?(:last_recv) && LNet.last_recv
+          return false if (Time.now - LNet.last_recv) > LNET_ACTIVITY_TIMEOUT
         end
+
+        true
+      rescue IOError, Errno::EBADF, Errno::EPIPE, NoMethodError
+        false
       end
 
       def authed?(token)
@@ -126,13 +132,13 @@ module Lich
 
       def post(method, params)
         retries = 0
-        base_delay = 30
+        max_retries = 5
 
         begin
           uri = URI.parse("#{@api_url}#{method}")
           http = Net::HTTP.new(uri.host, uri.port)
           http.use_ssl = true
-          http.verify_mode = OpenSSL::SSL::VERIFY_NONE # Consider using VERIFY_PEER and configuring certs
+          http.verify_mode = OpenSSL::SSL::VERIFY_PEER
           req = Net::HTTP::Post.new(uri.path)
           req.set_form_data(params)
 
@@ -152,8 +158,9 @@ module Lich
         rescue JSON::ParserError => e
           raise ApiError, "Failed to parse Slack API response: #{e.message}"
         rescue ThrottlingError => e
-          delay = e.retry_after || (base_delay * (2**retries))
-          if delay > 120
+          raise ApiError, "Throttled by Slack API. Max retries (#{max_retries}) exceeded." if retries >= max_retries
+          delay = e.retry_after || (BASE_RETRY_DELAY_SECONDS * (2**retries))
+          if delay > MAX_RETRY_DELAY_SECONDS
             raise ApiError, "Throttled by Slack API. Retry delay (#{delay}s) exceeds maximum."
           end
           Lich.log "Throttled by Slack API. Retrying in #{delay} seconds..."
@@ -162,8 +169,9 @@ module Lich
           retry
         rescue Timeout::Error, Errno::EINVAL, Errno::ECONNRESET, EOFError,
                Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError, Net::ProtocolError, SocketError => e
-          delay = base_delay * (2**retries)
-          if delay > 120
+          raise NetworkError, "Network error. Max retries (#{max_retries}) exceeded." if retries >= max_retries
+          delay = BASE_RETRY_DELAY_SECONDS * (2**retries)
+          if delay > MAX_RETRY_DELAY_SECONDS
             raise NetworkError, "Network error. Retry delay (#{delay}s) exceeds maximum."
           end
           Lich.log "Network error: #{e.message}. Retrying in #{delay} seconds..."
