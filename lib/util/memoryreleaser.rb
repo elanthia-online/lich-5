@@ -152,11 +152,11 @@ module Lich
           scope = "#{XMLData.game}:#{XMLData.name}"
           stored_settings = Lich::Common::DB_Store.read(scope, 'lich_memory_releaser') || {}
           @settings = DEFAULT_SETTINGS.merge(stored_settings)
-          
+
           # Apply loaded settings to instance variables
           @interval = @settings[:interval]
           @verbose = @settings[:verbose]
-          
+
           @settings
         rescue => e
           # If there's an error loading settings, use defaults
@@ -223,13 +223,13 @@ module Lich
           @settings[:interval] = seconds
           @interval = seconds
           save_settings
-          
+
           # If currently running, restart with new interval
           if running?
             log "Restarting with new interval: #{seconds}s"
             start
           end
-          
+
           seconds
         end
 
@@ -286,7 +286,7 @@ module Lich
           @interval = interval || @settings[:interval]
           @verbose = verbose.nil? ? @settings[:verbose] : verbose
           @enabled = true
-          
+
           # Update settings with current values
           @settings[:interval] = @interval
           @settings[:verbose] = @verbose
@@ -771,12 +771,12 @@ module Lich
         def instance
           @instance ||= begin
             manager = Manager.new
-            
+
             # Auto-start if enabled in settings
             if manager.settings[:auto_start]
               manager.start
             end
-            
+
             manager
           end
         end
