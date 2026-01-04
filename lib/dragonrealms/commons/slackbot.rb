@@ -14,24 +14,38 @@ module Lich
         end
       end
 
+      attr_reader :error_message
+
       def initialize
         @api_url = 'https://slack.com/api/'
+        @initialized = false
+        @error_message = nil
 
         unless authed?(UserVars.slack_token)
           unless Script.running?('lnet') && lnet_connected?
-            start_script('lnet') unless Script.running?('lnet')
+            unless Script.running?('lnet')
+              unless Script.exists?('lnet')
+                @error_message = "lnet.lic not found - cannot retrieve Slack token"
+                return
+              end
+              start_script('lnet')
+            end
             wait_time = 30
             start_time = Time.now
             until lnet_connected?
               if (Time.now - start_time) > wait_time
-                raise Error, "lnet did not connect within #{wait_time} seconds."
+                @error_message = "lnet did not connect within #{wait_time} seconds."
+                return
               end
               pause 1
             end
           end
 
           @lnet = (Script.running + Script.hidden).find { |val| val.name == 'lnet' }
-          find_token
+          unless find_token
+            @error_message = "Unable to locate a Slack token"
+            return
+          end
         end
 
         begin
@@ -40,6 +54,12 @@ module Lich
           Lich.log "error fetching user list: #{e.message}"
           @users_list = { 'members' => [] }
         end
+
+        @initialized = true
+      end
+
+      def initialized?
+        @initialized
       end
 
       def lnet_connected?
@@ -52,11 +72,13 @@ module Lich
           ready = IO.select(nil, [LNet.server], nil, 0)
           return false unless ready
 
-          # Check last activity
-          return false if (Time.now - LNet.last_recv) > 120
+          # Check last activity if method exists
+          if LNet.respond_to?(:last_recv) && LNet.last_recv
+            return false if (Time.now - LNet.last_recv) > 120
+          end
 
           true
-        rescue IOError, Errno::EBADF, Errno::EPIPE
+        rescue IOError, Errno::EBADF, Errno::EPIPE, NoMethodError
           false
         end
       end
@@ -93,16 +115,13 @@ module Lich
         lichbots = %w[Quilsilgas]
         echo 'Looking for a token...'
         pause until @lnet
-        # echo("@lnet found. is it authed? #{@lnet)}")
 
-        return if lichbots.any? do |bot|
+        lichbots.any? do |bot|
           token = request_token(bot)
           authed = authed?(token) if token
           UserVars.slack_token = token if token && authed
           authed
         end
-
-        raise Error, 'Unable to locate a token :['
       end
 
       def post(method, params)
