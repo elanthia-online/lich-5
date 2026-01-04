@@ -380,7 +380,7 @@ module Lich
           when Pattern::TDPValue_XPWindow
             matches = Regexp.last_match
             DRStats.tdps = matches[:tdp].to_i
-          when Pattern::FavorValue_XPWindow = 
+          when Pattern::FavorValue_XPWindow
             matches = Regexp.last_match
             DRStats.favors = matches[:favor].to_i
           else
