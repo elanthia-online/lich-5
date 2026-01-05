@@ -4,7 +4,6 @@ module Lich
       class Error < StandardError; end
       class NetworkError < Error; end
       class ApiError < Error; end
-
       class ThrottlingError < ApiError
         attr_reader :retry_after
 
