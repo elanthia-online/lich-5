@@ -373,7 +373,7 @@ module Lich
                 "#{type}=#{val}"
               end
             end.join(", ")
-            lines << "% -18s: %s" % ["damage_types", damage_str]
+            lines << "%-18s: %s" % ["damage_types", damage_str]
           end
 
           # damage_factor inline
