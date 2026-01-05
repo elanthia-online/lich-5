@@ -116,6 +116,10 @@ module Lich
         @@rexp_refresh
       end
 
+      def self.rested_active?
+        @@rexp_stored > 0 && @@rexp_usable > 0
+      end
+
       def self.clear_mind(val)
         self.find_skill(val).exp = 0
       end
