@@ -165,15 +165,6 @@ PLATFORMS
   arm64-darwin
   x64-mingw
   x64-mingw-ucrt
-  x86-darwin
-  x86-linux
-  x86-linux-gnu
-  x86-linux-musl
-  x86-mingw
-  x86-mingw-ucrt
-  x86_64-darwin
-  x86_64-linux
-  x86_64-linux-gnu
   x86_64-linux-musl
 
 DEPENDENCIES
