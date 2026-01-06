@@ -7,7 +7,7 @@ GEM
       glib2 (= 4.3.4)
       rake
     benchmark (0.5.0)
-    bigdecimal (3.3.1)
+    bigdecimal (4.0.1)
     cairo (1.18.4)
       native-package-installer (>= 1.0.3)
       pkg-config (>= 1.2.2)
@@ -15,25 +15,15 @@ GEM
     cairo-gobject (4.3.4)
       cairo (>= 1.16.2)
       glib2 (= 4.3.4)
-    concurrent-ruby (1.3.5)
-    connection_pool (3.0.1)
+    concurrent-ruby (1.3.6)
+    connection_pool (3.0.2)
     curses (1.5.3)
-    date (3.5.0)
+    date (3.5.1)
     diff-lcs (1.6.2)
     digest (3.2.1)
     drb (2.2.3)
-    ffi (1.17.2)
-    ffi (1.17.2-aarch64-linux-gnu)
-    ffi (1.17.2-aarch64-linux-musl)
-    ffi (1.17.2-arm-linux-gnu)
-    ffi (1.17.2-arm-linux-musl)
-    ffi (1.17.2-arm64-darwin)
-    ffi (1.17.2-x64-mingw-ucrt)
-    ffi (1.17.2-x86-linux-gnu)
-    ffi (1.17.2-x86-linux-musl)
-    ffi (1.17.2-x86_64-darwin)
-    ffi (1.17.2-x86_64-linux-gnu)
-    ffi (1.17.2-x86_64-linux-musl)
+    ffi (1.17.3-x64-mingw-ucrt)
+    ffi (1.17.3-x86_64-linux-musl)
     fiddle (1.1.8)
     fileutils (1.8.0)
     gdk3 (4.3.4)
@@ -55,7 +45,7 @@ GEM
     gtk3 (4.3.4)
       atk (= 4.3.4)
       gdk3 (= 4.3.4)
-    json (2.17.1)
+    json (2.18.0)
     kramdown (2.5.1)
       rexml (>= 3.3.9)
     language_server-protocol (3.17.0.5)
@@ -68,7 +58,7 @@ GEM
       stringio
       time
       uri
-    openssl (3.3.2)
+    openssl (4.0.0)
     os (1.1.4)
     ostruct (0.6.3)
     pango (4.3.4)
@@ -79,21 +69,21 @@ GEM
       ast (~> 2.4.1)
       racc
     pkg-config (1.6.5)
-    prism (1.6.0)
+    prism (1.7.0)
     racc (1.8.1)
     rainbow (3.1.1)
     rake (13.3.1)
-    rbs (3.9.5)
+    rbs (3.10.0)
       logger
     red-colors (0.4.0)
       json
       matrix
     redis (5.4.1)
       redis-client (>= 0.22.0)
-    redis-client (0.26.1)
+    redis-client (0.26.2)
       connection_pool
     regexp_parser (2.11.3)
-    resolv (0.6.3)
+    resolv (0.7.0)
     rexml (3.4.4)
     rspec (3.13.2)
       rspec-core (~> 3.13.0)
@@ -108,7 +98,7 @@ GEM
       diff-lcs (>= 1.2.0, < 2.0)
       rspec-support (~> 3.13.0)
     rspec-support (3.13.6)
-    rubocop (1.81.7)
+    rubocop (1.82.1)
       json (~> 2.3)
       language_server-protocol (~> 3.17.0.2)
       lint_roller (~> 1.1.0)
@@ -116,12 +106,12 @@ GEM
       parser (>= 3.3.0.2)
       rainbow (>= 2.2.2, < 4.0)
       regexp_parser (>= 2.9.3, < 3.0)
-      rubocop-ast (>= 1.47.1, < 2.0)
+      rubocop-ast (>= 1.48.0, < 2.0)
       ruby-progressbar (~> 1.7)
       unicode-display_width (>= 2.4.0, < 4.0)
-    rubocop-ast (1.48.0)
+    rubocop-ast (1.49.0)
       parser (>= 3.3.7.2)
-      prism (~> 1.4)
+      prism (~> 1.7)
     ruby-lsp (0.26.4)
       language_server-protocol (~> 3.17.0)
       prism (>= 1.2, < 2.0)
@@ -130,34 +120,24 @@ GEM
     sequel (5.99.0)
       bigdecimal
     set (1.1.2)
-    sorbet-runtime (0.6.12812)
-    sqlite3 (2.8.1)
+    sorbet-runtime (0.6.12872)
+    sqlite3 (2.9.0)
       mini_portile2 (~> 2.8.0)
-    sqlite3 (2.8.1-aarch64-linux-gnu)
-    sqlite3 (2.8.1-aarch64-linux-musl)
-    sqlite3 (2.8.1-arm-linux-gnu)
-    sqlite3 (2.8.1-arm-linux-musl)
-    sqlite3 (2.8.1-arm64-darwin)
-    sqlite3 (2.8.1-x86-linux-gnu)
-    sqlite3 (2.8.1-x86-linux-musl)
-    sqlite3 (2.8.1-x86_64-darwin)
-    sqlite3 (2.8.1-x86_64-linux-gnu)
-    sqlite3 (2.8.1-x86_64-linux-musl)
-    stringio (3.1.9)
+    stringio (3.2.0)
     tempfile (0.3.1)
     terminal-table (4.0.0)
       unicode-display_width (>= 1.1.1, < 4)
-    time (0.4.1)
+    time (0.4.2)
       date
     tmpdir (0.3.1)
       fileutils
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
-    tzinfo-data (1.2025.2)
+    tzinfo-data (1.2025.3)
       tzinfo (>= 1.0.0)
     unicode-display_width (3.2.0)
       unicode-emoji (~> 4.1)
-    unicode-emoji (4.1.0)
+    unicode-emoji (4.2.0)
     uri (1.1.1)
     webrick (1.9.2)
     win32ole (1.9.2)
@@ -165,67 +145,130 @@ GEM
     zlib (3.2.2)
 
 PLATFORMS
-  aarch64-linux
-  aarch64-linux-gnu
-  aarch64-linux-musl
-  arm-linux
-  arm-linux-gnu
-  arm-linux-musl
-  arm64-darwin
-  x64-mingw
   x64-mingw-ucrt
-  x86-darwin
-  x86-linux
-  x86-linux-gnu
-  x86-linux-musl
-  x86-mingw
-  x86-mingw-ucrt
-  x86_64-darwin
-  x86_64-linux
-  x86_64-linux-gnu
   x86_64-linux-musl
 
 DEPENDENCIES
-  ascii_charts (>= 0.9)
-  benchmark (>= 0.4)
-  concurrent-ruby (>= 1.2)
+  ascii_charts
+  benchmark
+  concurrent-ruby
   curses
-  digest (>= 3.2)
-  drb (>= 2.2)
-  ffi (>= 1.17)
-  fiddle (>= 1.1)
-  fileutils (>= 1.7)
-  gtk3 (>= 4.3)
-  json (>= 2.9)
-  kramdown (>= 2.5)
-  logger (>= 1.6)
-  open-uri (>= 0.5)
-  openssl (>= 3.3)
-  os (>= 1.1)
-  ostruct (>= 0.6)
+  digest
+  drb
+  ffi
+  fiddle
+  fileutils
+  gtk3
+  json
+  kramdown
+  logger
+  open-uri
+  openssl
+  os
+  ostruct
   prism
-  rake (>= 13.2)
+  rake
   rbs
-  redis (>= 5.4)
-  resolv (>= 0.6)
-  rexml (>= 3.4)
+  redis
+  resolv
+  rexml
   rspec
   rubocop
   ruby-lsp
-  sequel (>= 5.66)
-  set (>= 1.1)
+  sequel
+  set
   sorbet-runtime
-  sqlite3 (>= 1.6)
-  tempfile (>= 0.3)
-  terminal-table (>= 3.0)
-  time (>= 0.4)
-  tmpdir (>= 0.3)
-  tzinfo (>= 2.0)
-  tzinfo-data (>= 1.2025)
-  webrick (>= 1.9)
-  win32ole (>= 1.9)
-  yaml (>= 0.4)
-  zlib (>= 3.2)
+  sqlite3
+  tempfile
+  terminal-table
+  time
+  tmpdir
+  tzinfo
+  tzinfo-data
+  webrick
+  win32ole
+  yaml
+  zlib
+
+CHECKSUMS
+  ascii_charts (0.9.1) sha256=30441622538f01b1846665fd9e63471a2ce14bec3e0f5db3cd8073d70d74cbbe
+  ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
+  atk (4.3.4) sha256=e9a6f2701f11858d69e017ed3304fce441f81603185ce601af9205752738ff32
+  benchmark (0.5.0) sha256=465df122341aedcb81a2a24b4d3bd19b6c67c1530713fd533f3ff034e419236c
+  bigdecimal (4.0.1) sha256=8b07d3d065a9f921c80ceaea7c9d4ae596697295b584c296fe599dd0ad01c4a7
+  cairo (1.18.4) sha256=9a07667d9aef12421d0cdceaa6287f5efbc1e8ad581a4fd07696e0f9dd472d0b
+  cairo-gobject (4.3.4) sha256=c3798a830b6455c91b80e153802ecdd065af94311b4858bccd505f4199be83ca
+  concurrent-ruby (1.3.6) sha256=6b56837e1e7e5292f9864f34b69c5a2cbc75c0cf5338f1ce9903d10fa762d5ab
+  connection_pool (3.0.2) sha256=33fff5ba71a12d2aa26cb72b1db8bba2a1a01823559fb01d29eb74c286e62e0a
+  curses (1.5.3) sha256=86d219442e7fe78e68c609e6884f08b439b7508cf3f9d5b914f75c106e77bf7c
+  date (3.5.1) sha256=750d06384d7b9c15d562c76291407d89e368dda4d4fff957eb94962d325a0dc0
+  diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
+  digest (3.2.1) sha256=ab3312b4e272d7d5dc41c564c86a25861a1f34ac5153374199a0b74861395947
+  drb (2.2.3) sha256=0b00d6fdb50995fe4a45dea13663493c841112e4068656854646f418fda13373
+  ffi (1.17.3-x64-mingw-ucrt) sha256=5f1d7d067a9a1058ad183dba25b05557cd51c85fc1768c49338eabc1cf242d7c
+  ffi (1.17.3-x86_64-linux-musl) sha256=086b221c3a68320b7564066f46fed23449a44f7a1935f1fe5a245bd89d9aea56
+  fiddle (1.1.8) sha256=7fa8ee3627271497f3add5503acdbc3f40b32f610fc1cf49634f083ef3f32eee
+  fileutils (1.8.0) sha256=8c6b1df54e2540bdb2f39258f08af78853aa70bad52b4d394bbc6424593c6e02
+  gdk3 (4.3.4) sha256=7a7a86a6741771a4dd8892848b652068c5d106fcf61c31150e6cfb94064e4768
+  gdk_pixbuf2 (4.3.4) sha256=ad63068a69abf2f5820418ec7a24f63287996f62541bdf35784259fd5dd115a5
+  gio2 (4.3.4) sha256=3707496e04c4f7002511c94f3cb508d19b6c95a67e08976e9b5570225abcee25
+  glib2 (4.3.4) sha256=fb809195f0fdabdab81fea40cd316895743b948eb9ac8a209e60c4b7eb1ec2ff
+  gobject-introspection (4.3.4) sha256=78ba5f193280beccae9d1b406d521355abcec7d9e44b57c9dae3d23b7bd547a8
+  gtk3 (4.3.4) sha256=d0560a076f0e73c6b1343a415b9f53105a1daeca72c2443fdc50f43fb637fdb3
+  json (2.18.0) sha256=b10506aee4183f5cf49e0efc48073d7b75843ce3782c68dbeb763351c08fd505
+  kramdown (2.5.1) sha256=87bbb6abd9d3cebe4fc1f33e367c392b4500e6f8fa19dd61c0972cf4afe7368c
+  language_server-protocol (3.17.0.5) sha256=fd1e39a51a28bf3eec959379985a72e296e9f9acfce46f6a79d31ca8760803cc
+  lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
+  logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
+  matrix (0.4.3) sha256=a0d5ab7ddcc1973ff690ab361b67f359acbb16958d1dc072b8b956a286564c5b
+  mini_portile2 (2.8.9) sha256=0cd7c7f824e010c072e33f68bc02d85a00aeb6fce05bb4819c03dfd3c140c289
+  native-package-installer (1.1.9) sha256=fbb41b6b22750791a4304f0a0aeea3dd837668892117f49c4caf2e8e0f4e792f
+  open-uri (0.5.0) sha256=7b4f06fdac39e6946aed15a8da82531580882fbbec80438adcb7c30d388887ca
+  openssl (4.0.0) sha256=185711ed93d4e9c9a9db6efea7edb202dfe04f7d3692fbab988e3d84e498ee91
+  os (1.1.4) sha256=57816d6a334e7bd6aed048f4b0308226c5fb027433b67d90a9ab435f35108d3f
+  ostruct (0.6.3) sha256=95a2ed4a4bd1d190784e666b47b2d3f078e4a9efda2fccf18f84ddc6538ed912
+  pango (4.3.4) sha256=c7d57383b0a547fa16ad1b51b5edf4102595c4631d53b2285619e2db06b57223
+  parallel (1.27.0) sha256=4ac151e1806b755fb4e2dc2332cbf0e54f2e24ba821ff2d3dcf86bf6dc4ae130
+  parser (3.3.10.0) sha256=ce3587fa5cc55a88c4ba5b2b37621b3329aadf5728f9eafa36bbd121462aabd6
+  pkg-config (1.6.5) sha256=33f9f81c5322983d22b439b8b672f27777b406fea23bfec74ff14bbeb42ec733
+  prism (1.7.0) sha256=10062f734bf7985c8424c44fac382ac04a58124ea3d220ec3ba9fe4f2da65103
+  racc (1.8.1) sha256=4a7f6929691dbec8b5209a0b373bc2614882b55fc5d2e447a21aaa691303d62f
+  rainbow (3.1.1) sha256=039491aa3a89f42efa1d6dec2fc4e62ede96eb6acd95e52f1ad581182b79bc6a
+  rake (13.3.1) sha256=8c9e89d09f66a26a01264e7e3480ec0607f0c497a861ef16063604b1b08eb19c
+  rbs (3.10.0) sha256=e75b5f1313c71c9ee0fcea68bf97d3e5fe8ec7a641d4b5cd18bbc28c94ddf298
+  red-colors (0.4.0) sha256=2356eba0782ca6c44caa47645fbf942a2b16d85905c35c6e3f80d5ff0c04929a
+  redis (5.4.1) sha256=b5e675b57ad22b15c9bcc765d5ac26f60b675408af916d31527af9bd5a81faae
+  redis-client (0.26.2) sha256=1336fb5a7202d398b719531853c184b7c9cbdcace1f00f8356062b9dfba6779b
+  regexp_parser (2.11.3) sha256=ca13f381a173b7a93450e53459075c9b76a10433caadcb2f1180f2c741fc55a4
+  resolv (0.7.0) sha256=e20ce2c00d1e1d1bd13aa98f52d9b5166509f80f50673084ae54dd26a0b083ad
+  rexml (3.4.4) sha256=19e0a2c3425dfbf2d4fc1189747bdb2f849b6c5e74180401b15734bc97b5d142
+  rspec (3.13.2) sha256=206284a08ad798e61f86d7ca3e376718d52c0bc944626b2349266f239f820587
+  rspec-core (3.13.6) sha256=a8823c6411667b60a8bca135364351dda34cd55e44ff94c4be4633b37d828b2d
+  rspec-expectations (3.13.5) sha256=33a4d3a1d95060aea4c94e9f237030a8f9eae5615e9bd85718fe3a09e4b58836
+  rspec-mocks (3.13.7) sha256=0979034e64b1d7a838aaaddf12bf065ea4dc40ef3d4c39f01f93ae2c66c62b1c
+  rspec-support (3.13.6) sha256=2e8de3702427eab064c9352fe74488cc12a1bfae887ad8b91cba480ec9f8afb2
+  rubocop (1.82.1) sha256=09f1a6a654a960eda767aebea33e47603080f8e9c9a3f019bf9b94c9cab5e273
+  rubocop-ast (1.49.0) sha256=49c3676d3123a0923d333e20c6c2dbaaae2d2287b475273fddee0c61da9f71fd
+  ruby-lsp (0.26.4) sha256=1cb3046a066c8f1983dfe5f0cd3baa76034d6ba156e8ab460b15ab129d37a9f7
+  ruby-progressbar (1.13.0) sha256=80fc9c47a9b640d6834e0dc7b3c94c9df37f08cb072b7761e4a71e22cff29b33
+  sequel (5.99.0) sha256=a4613a1961a47a0eb6acdcc0351fe819bf24876a88fc06172a9cee5db370ea42
+  set (1.1.2) sha256=ca33a60d202e788041d94a5d4c12315b1639875576f1a266f3a10913646d8ef1
+  sorbet-runtime (0.6.12872) sha256=e91b6457fd7a75a40c3e821c832d81004a873b22f7f46e4fcc40287a655e4b51
+  sqlite3 (2.9.0) sha256=ece9c00b32ec5f550d3a4a35c41ea8d738563589f090b9dfd0d510b7ae5f296c
+  stringio (3.2.0) sha256=c37cb2e58b4ffbd33fe5cd948c05934af997b36e0b6ca6fdf43afa234cf222e1
+  tempfile (0.3.1) sha256=0bb53ab646744e505eb3102147e22ae130a626a15563e882428c1ec973fed76a
+  terminal-table (4.0.0) sha256=f504793203f8251b2ea7c7068333053f0beeea26093ec9962e62ea79f94301d2
+  time (0.4.2) sha256=f324e498c3bde9471d45a7d18f874c27980e9867aa5cfca61bebf52262bc3dab
+  tmpdir (0.3.1) sha256=908e9729bb31ce104ba27fc03cfc8293a7f858a8dc9e3a1d7cfd112919a3513d
+  tzinfo (2.0.6) sha256=8daf828cc77bcf7d63b0e3bdb6caa47e2272dcfaf4fbfe46f8c3a9df087a829b
+  tzinfo-data (1.2025.3) sha256=b546e2f1e5e5c40a0c619aafb24e30d3d6a128c2f689278f721b7286dd499562
+  unicode-display_width (3.2.0) sha256=0cdd96b5681a5949cdbc2c55e7b420facae74c4aaf9a9815eee1087cb1853c42
+  unicode-emoji (4.2.0) sha256=519e69150f75652e40bf736106cfbc8f0f73aa3fb6a65afe62fefa7f80b0f80f
+  uri (1.1.1) sha256=379fa58d27ffb1387eaada68c749d1426738bd0f654d812fcc07e7568f5c57c6
+  webrick (1.9.2) sha256=beb4a15fc474defed24a3bda4ffd88a490d517c9e4e6118c3edce59e45864131
+  win32ole (1.9.2) sha256=99612fe2c6cb397c0910680f7d1ba6366f08e37aeac83ebaeab9e72ee823e0f5
+  yaml (0.4.0) sha256=240e69d1e6ce3584d6085978719a0faa6218ae426e034d8f9b02fb54d3471942
+  zlib (3.2.2) sha256=908e61263f99c1371b5422581e2d6663bd37c6b04ae13b5f8cb10b0d09379f40
 
 BUNDLED WITH
-   2.7.2
+  4.0.3
