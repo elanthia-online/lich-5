@@ -59,6 +59,8 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     strategy:
       matrix:
         ruby: ['3.4']
