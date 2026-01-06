@@ -469,7 +469,7 @@ jobs:
           PKG_CONFIG: pkg-config
         run: |
           gem install sqlite3 --platform ruby -- --enable-system-libraries --with-sqlite3-include=${env:MSYS2_ROOT}/ucrt64/include --with-sqlite3-lib=${env:MSYS2_ROOT}/ucrt64/lib
-          gem install ascii_charts gtk3 json logger os ostruct redis sequel terminal-table tzinfo tzinfo-data webrick --no-document
+          gem install ascii_charts ffi gtk3 json kramdown logger os ostruct redis sequel terminal-table tzinfo tzinfo-data webrick --no-document
 
       # Optional experiment: validate Ruby actually initializes GTK (not just require)
       - name: Validate Ruby GTK/sqlite3 runtime

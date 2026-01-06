@@ -299,7 +299,7 @@ module Lich
         {
           worn: {
             verb: 'remove',
-            matches: [/^You .*#{item.short_regex}/, /^You (get|sling|pull|work|loosen|slide|remove|yank|unbuckle).*#{item.name}/, 'you tug', 'Remove what', "You aren't wearing that", 'slide themselves off of your', 'you manage to loosen', /^A brisk chill leaves you as you/],
+            matches: [/^You .*#{item.short_regex}/, /^You (get|sling|pull|work|loosen|slide|remove|yank|unbuckle).*#{item.name}/, 'you tug', 'Remove what', "You aren't wearing that", 'slide themselves off of your', 'you manage to loosen', 'you ready the', /^A brisk chill leaves you as you/],
             failures: [/^You (get|sling|pull|work|slide|remove|yank|unbuckle) $/],
             failure_recovery: proc { |noun| DRC.bput("wear my #{noun}", '^You ') },
             exhausted: ['Remove what', "You aren't wearing that"]
