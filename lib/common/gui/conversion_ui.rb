@@ -37,6 +37,7 @@ module Lich
             parent: parent,
             flags: :modal,
             buttons: [
+              ["Cancel", Gtk::ResponseType::CANCEL],
               ["Convert Data", Gtk::ResponseType::APPLY]
             ]
           )
@@ -275,7 +276,7 @@ module Lich
                   end
                 end
               end
-            elsif response == Gtk::ResponseType::CANCEL
+            elsif response == Gtk::ResponseType::CANCEL || response == Gtk::ResponseType::DELETE_EVENT
               # user opted not to use new YAML / account management
               # too harsh?
               dlg.destroy
