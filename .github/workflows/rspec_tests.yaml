@@ -63,7 +63,7 @@ jobs:
       BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     strategy:
       matrix:
-        ruby: ['3.4']
+        ruby: ['4.0']
     name: Run tests on Ruby ${{ matrix.ruby }}
     steps:
       - name: Classify changed files (preflight)
