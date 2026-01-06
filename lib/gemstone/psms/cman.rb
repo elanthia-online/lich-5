@@ -290,6 +290,7 @@ module Lich
                                       /The .+ is too unwieldy for that\./,
                                       /You need to be holding a weapon capable of slashing to do that\./,
                                       /You cannot hamstring .+\./),
+                                      /is lying down \-\- attempting to hamstring .+ would be a rather awkward proposition\./),
           :usage      => "hamstring"
         },
         "haymaker"               => {

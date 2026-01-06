@@ -49,20 +49,21 @@ module Lich
       def self.check_exp_mods(server_string)
         # This method parses the output from `exp mods` command
         # and updates the DRSkill.exp_modifiers hash with the skill and value.
-        # This is primarily used by the `skill-recorder` script.
-        #
         # Example output without any modifiers:
-        #     The following skills are currently under the influence of a modifier:
-        #     <output class="mono"/>
-        #       None
-        #     <output class=""/>
+        # The following skills are currently under the influence of a modifier:
+        # <output class="mono"/>
+        #   None
+        # <output class=""/>
+        # <prompt time="1767298457">&gt;</prompt>
         #
         # Example output with modifiers:
-        #     The following skills are currently under the influence of a modifier:
-        #     <output class="mono"/>
-        #     +75 Athletics
-        #     -10 Evasion
-        #     <output class=""/>
+        # The following skills are currently under the influence of a modifier:
+        # <output class="mono"/>
+        # <preset id="speech">+79 Attunement</preset>
+        # <preset id="speech">+350 Evasion</preset>
+        # <preset id="speech">+350 Perception</preset>
+        # <output class=""/>
+        # <prompt time="1767296999">&gt;</prompt>
         #
         # Zero or more skills may be listed between the <output> tags
         # but exactly one skill and its skill modifier are listed per line.
@@ -75,8 +76,8 @@ module Lich
           end
         else
           if @parsing_exp_mods_output
-            # https://regex101.com/r/5ZE8lq/1
-            match = /^(?<sign>[+-])(?<value>\d+)\s+(?<skill>[\w\s]+)$/.match(server_string)
+            # https://rubular.com/r/hg7SFvVNUtdLdh
+            match = /^(?:<preset id="speech">)?(?<sign>[+-])(?<value>\d+)\s+(?<skill>[\w\s]+)(?:<\/preset>)?$/.match(server_string.strip)
             if match
               skill = match[:skill].strip
               sign = match[:sign]
