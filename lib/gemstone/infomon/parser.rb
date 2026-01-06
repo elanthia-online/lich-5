@@ -49,14 +49,14 @@ module Lich
           Suffused = /^Suffused (?<type>(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck Inspiration|Guile|Vitality)): (?<suffused>[0-9,]+)$/.freeze
           VolnFavor = /^Voln Favor: (?<favor>[-\d,]+)$/.freeze
           CovertArtsCharges = /^Covert Arts Charges: (?<charges>[-\d,]+)\/200$/.freeze
-          GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments\.$/.freeze
-          RedsteelMarks = /^(?:\s* Redsteel Marks:           |You are carrying) (?<redsteel_marks>[\d,]+)(?: redsteel marks\.)?$/.freeze
-          GemstoneDust = /^You are carrying (?<gemstone_dust>[\d,]+) Dust in your reserves\.$/.freeze
-          TicketGeneral = /^\s*General - (?<tickets>[\d,]+) tickets\.$/.freeze
+          GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments?\.$/.freeze
+          RedsteelMarks = /^(?:\s* Redsteel Marks:           |You are carrying) (?<redsteel_marks>[\d,]+)(?: redsteel marks?\.)?$/.freeze
+          GemstoneDust = /^You are carrying (?<gemstone_dust>[\d,]+) Dust in your reserves?\.$/.freeze
+          TicketGeneral = /^\s*General - (?<tickets>[\d,]+) tickets?\.$/.freeze
           TicketBlackscrip = /^\s*Troubled Waters - (?<blackscrip>[\d,]+) blackscrip\.$/.freeze
           TicketBloodscrip = /^\s*Duskruin Arena - (?<bloodscrip>[\d,]+) bloodscrip\.$/.freeze
           TicketEtherealScrip = /^\s*Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
-          TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards\.$/.freeze
+          TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards?\.$/.freeze
           TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
           WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
           WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
@@ -65,7 +65,8 @@ module Lich
           ProfileStart = /^PERSONAL INFORMATION$/.freeze
           ProfileName = /^Name: (?<name>[\w\s]+)$/.freeze
           ProfileHouseCHE = /^[A-Za-z\- ]+? (?:of House of the |of House of |of House |of )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?$|^(?<none>No House affiliation)$/.freeze
-          ResignCHE = /^(?:Once you have resigned from your House, you will be unable to rejoin without being inducted again by the |If you wish to renounce your membership in the |Before you can resign from the )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?|^(?<none>The RESIGN command is for resigning your membership in a House, but you don't currently belong to any of the Cooperative Houses of Elanthia)\.$/.freeze
+          ResignCHE = /^(?:Once you have resigned from your House, you will be unable to rejoin without being inducted again by the |If you wish to renounce your membership in the |Before you can resign from the )(?:House |of House of the |of House of |of House |of )?(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?|^(?<none>The RESIGN command is for resigning your membership in a House, but you don't currently belong to any of the Cooperative Houses of Elanthia)\.$/.freeze
+          ResignConfirmCHE = /^\[You have resigned from the (?:House |of House of the |of House of |of House |of )?(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?\.\]$/.freeze
 
           # TODO: refactor / streamline?
           SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$|^That is impossible to do while unconscious$/.freeze
@@ -98,7 +99,8 @@ module Lich
                              TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
                              WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
                              ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
-                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, GemstoneDust)
+                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE,
+                             ResignConfirmCHE, GemstoneDust)
         end
 
         module State
@@ -461,6 +463,9 @@ module Lich
             when Pattern::ResignCHE
               match = Regexp.last_match
               Infomon.set('che', (match[:none] ? 'none' : Lich::Util.normalize_name(match[:house])))
+              :ok
+            when Pattern::ResignConfirmCHE
+              Infomon.set('che', 'none')
               :ok
 
             # TODO: refactor / streamline?

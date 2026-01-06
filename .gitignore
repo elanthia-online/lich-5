@@ -5,6 +5,7 @@ dist/
 logs/
 maps/
 scripts/
+!.github/scripts/
 temp/
 jinxp
 .pre-commit-config.yaml
@@ -19,3 +20,5 @@ R4LGTK3.iss
 data
 scripts
 .vscode
+.claude
+*.md

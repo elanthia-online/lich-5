@@ -1,4 +1,113 @@
+require 'time'
 module Lich
+  # --- Minimal DB maintenance helpers (simple + safe) ---
+  # Stores last maintenance timestamp and summary in lich_settings.
+  # Uses an advisory OS file lock so only one Lich instance attempts VACUUM.
+  def Lich.db_maint_lock_path
+    File.join(DATA_DIR, 'lich.db3.maint.lock')
+  end
+
+  def Lich.db_maint_last_at
+    ts = nil
+    begin
+      ts = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='db_maint_last_at';")
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    rescue => e
+      Lich.log "db_maint_last_at error: #{e}"
+    end
+    ts
+  end
+
+  def Lich.db_maint_set!(iso_utc, note = '')
+    begin
+      Lich.db.execute("CREATE TABLE IF NOT EXISTS lich_settings (name TEXT NOT NULL, value TEXT, PRIMARY KEY(name));")
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name, value) VALUES('db_maint_last_at', ?);", [iso_utc])
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name, value) VALUES('db_maint_last_note', ?);", [note.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    rescue => e
+      Lich.log "db_maint_set! error: #{e}"
+    end
+  end
+
+  def Lich.db_maint_due?(months = 6)
+    last = Lich.db_maint_last_at
+    return true if last.nil? || last.empty?
+    begin
+      cutoff = Time.now.utc - (months * 30 * 24 * 60 * 60)
+      last_t = Time.parse(last) rescue nil
+      return true if last_t.nil?
+      last_t < cutoff
+    rescue => e
+      Lich.log "db_maint_due? parse error: #{e}"
+      true
+    end
+  end
+
+  # Try VACUUM if due. If the DB is busy (another process), skip and try next run.
+  def Lich.db_vacuum_if_due!(months: 6, lock_timeout_s: 0.5)
+    return :skipped_recent unless Lich.db_maint_due?(months)
+
+    lock_path = Lich.db_maint_lock_path
+    File.open(lock_path, File::RDWR | File::CREAT, 0o644) do |f|
+      start = Time.now
+      got = false
+      begin
+        got = f.flock(File::LOCK_EX | File::LOCK_NB)
+      rescue => e
+        Lich.log "db_maint flock error: #{e}"
+      end
+      unless got
+        while (Time.now - start) < lock_timeout_s && !got
+          sleep 0.1
+          begin
+            got = f.flock(File::LOCK_EX | File::LOCK_NB)
+          rescue SystemCallError, IOError
+            # Transient error acquiring lock on some filesystems; back off and retry.
+            sleep 0.05
+          end
+        end
+      end
+      return :skipped_lock_held unless got
+
+      begin
+        page_count_before     = Lich.db.get_first_value('PRAGMA page_count;').to_i
+        freelist_count_before = Lich.db.get_first_value('PRAGMA freelist_count;').to_i
+      rescue SQLite3::BusyException
+        Lich.log "db_maint: busy reading stats; skipping"
+        return :skipped_busy
+      end
+
+      begin
+        mode = Lich.db.get_first_value('PRAGMA journal_mode;')
+        if mode && mode.to_s.strip.upcase == 'WAL'
+          Lich.db.execute('PRAGMA wal_checkpoint(TRUNCATE);')
+        end
+      rescue SQLite3::SQLException => e
+        Lich.log "db_maint: checkpoint skipped (#{e.class}: #{e.message})"
+      end
+
+      begin
+        Lich.db.execute('VACUUM;')
+      rescue SQLite3::BusyException => e
+        Lich.log "db_maint: VACUUM busy; skipping (#{e.message})"
+        return :skipped_busy
+      rescue => e
+        Lich.log "db_maint: VACUUM error: #{e}"
+        return :error
+      end
+
+      page_count_after     = Lich.db.get_first_value('PRAGMA page_count;').to_i rescue 0
+      freelist_count_after = Lich.db.get_first_value('PRAGMA freelist_count;').to_i rescue 0
+      note = "VACUUM ok pages #{page_count_before}->#{page_count_after}, free #{freelist_count_before}->#{freelist_count_after}"
+      Lich.db_maint_set!(Time.now.utc.iso8601, note)
+      :vacuum_ok
+    end
+  end
+
   @@hosts_file           = nil
   @@lich_db              = nil
   @@last_warn_deprecated = 0
@@ -628,7 +737,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.display_lichid
@@ -653,7 +761,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.hide_uid_flag
@@ -678,7 +785,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.core_updated_with_lich_version
@@ -698,7 +804,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.display_uid
@@ -723,7 +828,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.display_exits
@@ -748,7 +852,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.display_stringprocs
@@ -773,7 +876,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.track_autosort_state
@@ -797,7 +899,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.track_dark_mode
@@ -821,7 +922,6 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 
   def Lich.track_layout_state
@@ -845,6 +945,5 @@ module Lich
       sleep 0.1
       retry
     end
-    return nil
   end
 end
