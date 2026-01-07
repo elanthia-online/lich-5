@@ -30,6 +30,10 @@ module Lich
         PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium|Platinum)/.freeze
         LastLogoff = /^\s+Logoff :  (?<weekday>[A-Z][a-z]{2}) (?<month>[A-Z][a-z]{2}) (?<day>[\s\d]{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2}) ET (?<year>\d{4})/.freeze
         RoomIDOff = /^You will no longer see room IDs when LOOKing in the game and room windows\./.freeze
+        Rested_EXP = %r{^<component id='exp rexp'>Rested EXP Stored:\s*(?<stored>.*?)\s*Usable This Cycle:\s*(?<usable>.*?)\s*Cycle Refreshes:\s*(?<refresh>.*)</component>}.freeze
+        Rested_EXP_F2P = %r{^<component id='exp rexp'>\[Unlock Rested Experience}.freeze
+        TDPValue_XPWindow = %r{^<component id='exp tdp'>\s*TDPs:\s*(?<tdp>\d+)</component>}.freeze
+        FavorValue_XPWindow = %r{^<component id='exp favor'>\s*Favors:\s*(?<favor>\d+)</component>}.freeze
       end
 
       @parsing_exp_mods_output = false
@@ -367,6 +371,18 @@ module Lich
             put("flag showroomid on")
             respond("Lich requires ShowRoomID to be ON for mapping to work, please do not turn this off.")
             respond("If you wish to hide the Real ID#, you can toggle it off by doing ;display flaguid")
+          when Pattern::Rested_EXP
+            matches = Regexp.last_match
+            DRSkill.update_rested_exp(matches[:stored].strip, matches[:usable].strip, matches[:refresh].strip)
+          when Pattern::Rested_EXP_F2P
+            # f2p characters without brain boost don't get rested exp
+            DRSkill.update_rested_exp('none', 'none', 'none')
+          when Pattern::TDPValue_XPWindow
+            matches = Regexp.last_match
+            DRStats.tdps = matches[:tdp].to_i
+          when Pattern::FavorValue_XPWindow
+            matches = Regexp.last_match
+            DRStats.favors = matches[:favor].to_i
           else
             :noop
           end
