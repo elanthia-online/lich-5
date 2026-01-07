@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require 'openssl'
-require 'securerandom'
-require 'base64'
-require 'os'
-require 'shellwords'
+require 'openssl' # default gem, but upgrade via RubyGems available
+require 'securerandom' # default gem
+require 'base64' # bundled gem Ruby >= 3.4, default gem Ruby < 3.4
+Lich::Util.install_gem_requirements({ 'os' => true })
+require 'shellwords' # default gem
 require_relative 'windows_credential_manager'
 
 module Lich
