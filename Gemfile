@@ -1,28 +1,88 @@
+=begin
+When building Gemfile.lock file, please add additional platforms to the file via the following command:
+
+bundle lock \
+  --add-platform aarch64-linux \
+  --add-platform aarch64-linux-gnu \
+  --add-platform aarch64-linux-musl \
+  --add-platform arm-linux \
+  --add-platform arm-linux-gnu \
+  --add-platform arm-linux-musl \
+  --add-platform arm64-darwin \
+  --add-platform x64-mingw \
+  --add-platform x64-mingw-ucrt \
+  --add-platform x86-darwin \
+  --add-platform x86-linux \
+  --add-platform x86-linux-gnu \
+  --add-platform x86-linux-musl \
+  --add-platform x86-mingw \
+  --add-platform x86-mingw-ucrt \
+  --add-platform x86_64-darwin \
+  --add-platform x86_64-linux \
+  --add-platform x86_64-linux-gnu \
+  --add-platform x86_64-linux-musl
+
+This ensures that the lock file can be used by all platforms that are able to support it.
+=end
+
 source "https://rubygems.org"
 
 git_source(:github) { |repo_name| "https://github.com/#{repo_name}" }
 
 group :development do
   gem "rspec"
-  gem 'rubocop'
+  gem "rubocop"
 end
 
-gem "ascii_charts", ">= 0.9.1"
+group :vscode do
+  gem "rbs"
+  gem "prism"
+  gem "sorbet-runtime"
+  gem "ruby-lsp"
+end
 
-gem "concurrent-ruby", ">= 1.2"
+group :gtk do
+  gem "gtk3"
+end
 
-gem "ffi", ">= 1.17"
+group :profanity do
+  gem "curses"
+end
 
-gem "logger", ">= 1.6.4"
+gem "ascii_charts"
+gem "benchmark"
+gem "concurrent-ruby"
+gem "digest"
+gem "drb"
+gem "ffi"
+gem "fiddle"
+gem "fileutils"
+gem "json"
+gem "kramdown"
+gem "logger"
+gem "openssl"
+gem "open-uri"
+gem "os"
+gem "ostruct"
+gem "rake"
+gem "redis"
+gem "resolv"
+gem "rexml"
+gem "sequel"
+gem "set"
+gem "tempfile"
+gem "terminal-table"
+gem "time"
+gem "tmpdir"
+gem "tzinfo"
+gem "tzinfo-data"
+gem "webrick"
+gem "win32ole", platforms: :windows
+gem "yaml"
+gem "zlib"
 
-gem "os", ">= 1.1"
-
-gem "ostruct", ">= 0.6.1"
-
-gem "rexml", ">= 3.3.1"
-
-gem "sequel", ">= 5.66"
-
-gem "sqlite3", ">= 1.6"
-
-gem "terminal-table", ">= 3.0"
+if Gem.win_platform?
+  gem "sqlite3", platforms: :windows, force_ruby_platform: true
+else
+  gem "sqlite3"
+end

@@ -7,6 +7,7 @@ module Lich
         require File.join(LIB_DIR, 'common', 'log.rb')
         require File.join(LIB_DIR, 'common', 'spell.rb')
         require File.join(LIB_DIR, 'util', 'util.rb')
+        require File.join(LIB_DIR, 'util', 'textstripper.rb')
         require File.join(LIB_DIR, 'common', 'hmr.rb')
       end
 
@@ -33,11 +34,15 @@ module Lich
         # require File.join(LIB_DIR, 'gemstone', 'character', 'disk.rb') # dup
         require File.join(LIB_DIR, 'gemstone', 'group.rb')
         require File.join(LIB_DIR, 'gemstone', 'critranks')
+        require File.join(LIB_DIR, 'gemstone', 'injured')
         require File.join(LIB_DIR, 'gemstone', 'wounds.rb')
         require File.join(LIB_DIR, 'gemstone', 'scars.rb')
         require File.join(LIB_DIR, 'gemstone', 'gift.rb')
+        # require File.join(LIB_DIR, 'gemstone', 'creature.rb') # combat tracker below loads this so not needed to preload
+        require File.join(LIB_DIR, 'gemstone', 'combat', 'tracker.rb')
         require File.join(LIB_DIR, 'gemstone', 'readylist.rb')
         require File.join(LIB_DIR, 'gemstone', 'stowlist.rb')
+        require File.join(LIB_DIR, 'gemstone', 'armaments.rb')
         ActiveSpell.watch!
         self.common_after
       end

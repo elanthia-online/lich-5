@@ -748,6 +748,7 @@ module Lich
               if @active_tags.include?('a')
                 if @bold
                   GameObj.new_npc(@obj_exist, @obj_noun, text_string)
+                  Creature.register(text_string, @obj_exist, @obj_noun) if XMLData.current_target_ids.include?(@obj_exist)
                 else
                   GameObj.new_loot(@obj_exist, @obj_noun, text_string)
                 end
@@ -928,10 +929,12 @@ module Lich
             end
             @room_description = @room_description.strip
             @room_exits_string.concat " #{@room_exits.join(', ')}" unless @room_exits.empty?
-            gsl_exits = String.new
-            @room_exits.each { |exit| gsl_exits.concat(DIRMAP[SHORTDIR[exit]].to_s) }
-            $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
-            gsl_exits = nil
+            if @send_fake_tags
+              gsl_exits = String.new
+              @room_exits.each { |exit| gsl_exits.concat(DIRMAP[SHORTDIR[exit]].to_s) }
+              $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
+              gsl_exits = nil
+            end
             @room_count += 1
             $room_count += 1
           end

@@ -49,6 +49,14 @@ module Lich
           Suffused = /^Suffused (?<type>(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck Inspiration|Guile|Vitality)): (?<suffused>[0-9,]+)$/.freeze
           VolnFavor = /^Voln Favor: (?<favor>[-\d,]+)$/.freeze
           CovertArtsCharges = /^Covert Arts Charges: (?<charges>[-\d,]+)\/200$/.freeze
+          ShadowEssence = /^Accumulated Shadow (?:E|e)ssence: (?<essence>\d)/.freeze
+          ShadowEssenceGain = /^You violently shatter the bond on the soul of the .+\.  As you draw it into yourself, you manipulate the chaotic and broken life forces, forming shadow essence\./.freeze
+          ShadowEssenceCap = /^You begin to sacrifice your victim but immediately sense that it would overwhelm you with shadow essence\./.freeze
+          SacrificeMana = /^You summon the shadow essence from the inner depths of your body, surrounding yourself in a dark halo of power\.  You will the shadows into the eddies and currents of the flows of essence around you, spreading through them like blackened veins of corruption\.  The surroundings glow with silent anguish\.  Everything around you becomes pale and enervated with discoloration, like the life has been drained out of the world\.  There is a flood of power as you feel (?<amount>\d+) mana surge into you!$/.freeze
+          SacrificeChannel = /^Focusing on the bond to your animate, you force shadow essence into .+, leveraging its broken life forces\.  The backlash of sorcerous violence with the necrotic energy of the \w+ ends in the unnatural revitalization of its animate matter\.$/.freeze
+          SacrificeInfest = /^Mastering the struggle against the frantic rush of stolen power, you unleash a dark haze of necrosis upon your unfortunate victim\.  With a small smirk, you force the sickly currents of shadow essence from your body, commanding them to seek and infest .+\.$/.freeze
+          SacrificeFate = /^You close your eyes momentarily and visualize the strands of fate that tie together the firmament\.  Identifying a susceptible star, you compel the shadow essence within you to corrupt it\.$/.freeze
+          SacrificeShift = /^Summoning the shadow essence within yourself, you will it to bleed through the veil, exposing your mind to the vast abyss of cosmic horror\.  Countless possible gateways reveal themselves, with runes hidden in the fabric of reality\.$/.freeze
           GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments?\.$/.freeze
           RedsteelMarks = /^(?:\s* Redsteel Marks:           |You are carrying) (?<redsteel_marks>[\d,]+)(?: redsteel marks?\.)?$/.freeze
           GemstoneDust = /^You are carrying (?<gemstone_dust>[\d,]+) Dust in your reserves?\.$/.freeze
@@ -65,7 +73,8 @@ module Lich
           ProfileStart = /^PERSONAL INFORMATION$/.freeze
           ProfileName = /^Name: (?<name>[\w\s]+)$/.freeze
           ProfileHouseCHE = /^[A-Za-z\- ]+? (?:of House of the |of House of |of House |of )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?$|^(?<none>No House affiliation)$/.freeze
-          ResignCHE = /^(?:Once you have resigned from your House, you will be unable to rejoin without being inducted again by the |If you wish to renounce your membership in the |Before you can resign from the )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?|^(?<none>The RESIGN command is for resigning your membership in a House, but you don't currently belong to any of the Cooperative Houses of Elanthia)\.$/.freeze
+          ResignCHE = /^(?:Once you have resigned from your House, you will be unable to rejoin without being inducted again by the |If you wish to renounce your membership in the |Before you can resign from the )(?:House |of House of the |of House of |of House |of )?(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?|^(?<none>The RESIGN command is for resigning your membership in a House, but you don't currently belong to any of the Cooperative Houses of Elanthia)\.$/.freeze
+          ResignConfirmCHE = /^\[You have resigned from the (?:House |of House of the |of House of |of House |of )?(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?\.\]$/.freeze
 
           # TODO: refactor / streamline?
           SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$|^That is impossible to do while unconscious$/.freeze
@@ -98,7 +107,9 @@ module Lich
                              TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
                              WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
                              ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
-                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, GemstoneDust)
+                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, ResignConfirmCHE,
+                             ShadowEssence, ShadowEssenceGain, ShadowEssenceCap, SacrificeMana, SacrificeChannel, SacrificeInfest,
+                             SacrificeFate, SacrificeShift, GemstoneDust)
         end
 
         module State
@@ -370,6 +381,34 @@ module Lich
               match = Regexp.last_match
               Infomon.set('resources.covert_arts_charges', match[:charges].delete(',').to_i)
               :ok
+            when Pattern::ShadowEssence
+              match = Regexp.last_match
+              Infomon.set('resources.shadow_essence', match[:essence].to_i.clamp(0, 5))
+              :ok
+            when Pattern::ShadowEssenceGain
+              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i + 1).clamp(0, 5))
+              :ok
+            when Pattern::ShadowEssenceCap
+              Infomon.set('resources.shadow_essence', 5)
+              :ok
+            when Pattern::SacrificeMana
+              match = Regexp.last_match
+              # Calculate effective mana control ranks
+              effective_mana_ranks = [Skills.elemental_mana_control, Skills.spirit_mana_control].max + [Skills.elemental_mana_control, Skills.spirit_mana_control].min / 2
+
+              # Base mana for first essence
+              base_mana = Char.level + 20
+
+              # Mana per essence after
+              mana_per_essence = (base_mana * (0.5 + effective_mana_ranks.clamp(0, 60) / 120))
+
+              # Estimate of essences used
+              essences_used = (((match[:amount].to_i - mana_per_essence) / (base_mana * 0.5))).round.clamp(1, 5)
+              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i - essences_used).clamp(0, 5))
+              :ok
+            when Pattern::SacrificeChannel, Pattern::SacrificeInfest, Pattern::SacrificeFate, Pattern::SacrificeShift
+              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i - 1).clamp(0, 5))
+              :ok
             when Pattern::GigasArtifactFragments
               match = Regexp.last_match
               Infomon.set('currency.gigas_artifact_fragments', match[:gigas_artifact_fragments].delete(',').to_i)
@@ -461,6 +500,9 @@ module Lich
             when Pattern::ResignCHE
               match = Regexp.last_match
               Infomon.set('che', (match[:none] ? 'none' : Lich::Util.normalize_name(match[:house])))
+              :ok
+            when Pattern::ResignConfirmCHE
+              Infomon.set('che', 'none')
               :ok
 
             # TODO: refactor / streamline?
