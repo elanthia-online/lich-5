@@ -103,12 +103,12 @@ module Lich
           fail StandardError, response unless response =~ /^L\t/
           # pp "L:response=%s" % response
           conn.close unless conn.closed?
-          login_info = Hash[response.sub(/^L\tOK\t/, '')
-                                    .split("\t")
-                                    .map { |kv|
-                                      k, v = kv.split("=")
-                                      [k.downcase, v]
-                            }]
+          login_info = response.sub(/^L\tOK\t/, '')
+                               .split("\t")
+                               .map { |kv|
+                                 k, v = kv.split("=")
+                                 [k.downcase, v]
+                               }.to_h
         else
           login_info = Array.new
           for game in response.sub(/^M\t/, '').scan(/[^\t]+\t[^\t^\n]+/)
