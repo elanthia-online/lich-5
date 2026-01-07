@@ -4,7 +4,7 @@
 
 #define MyAppName "Ruby4Lich5"
 #define MyAppVersion "5.12.12" ; x-release-please-version
-#define RubyVersion "3.4.5"
+#define RubyVersion "4.0.0"
 #define MyAppPublisher "Elanthia-Online"
 #define MyAppURL "https://github.com/elanthia-online/lich-5/"
 #define MyAppExeName "Ruby4Lich5.exe"

@@ -108,8 +108,8 @@ module Lich
           login_info = Hash[response.sub(/^L\tOK\t/, '')
                                     .split("\t")
                                     .map { |kv|
-                              k, v = kv.split("=")
-                              [k.downcase, v]
+                                      k, v = kv.split("=")
+                                      [k.downcase, v]
                             }]
         else
           login_info = Array.new

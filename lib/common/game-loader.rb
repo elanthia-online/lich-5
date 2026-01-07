@@ -7,6 +7,7 @@ module Lich
         require File.join(LIB_DIR, 'common', 'log.rb')
         require File.join(LIB_DIR, 'common', 'spell.rb')
         require File.join(LIB_DIR, 'util', 'util.rb')
+        require File.join(LIB_DIR, 'util', 'textstripper.rb')
         require File.join(LIB_DIR, 'common', 'hmr.rb')
       end
 
