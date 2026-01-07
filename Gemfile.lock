@@ -6,7 +6,6 @@ GEM
     atk (4.3.4)
       glib2 (= 4.3.4)
       rake
-    base64 (0.3.0)
     benchmark (0.5.0)
     bigdecimal (4.0.1)
     cairo (1.18.4)
