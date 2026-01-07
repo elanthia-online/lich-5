@@ -68,7 +68,14 @@ module Lich
             when :start_worker
               # Kill any existing worker
               if @worker_thread&.alive?
-                @worker_thread.kill rescue nil
+                command[:manager].enabled = false  # Signal graceful stop
+                deadline = Time.now + 2
+                while @worker_thread.alive? && Time.now < deadline
+                  sleep 0.1
+                end
+                if @worker_thread.alive?  # Last resort
+                  @worker_thread.kill rescue nil
+                end
               end
 
               # Create new worker thread from launcher context
@@ -107,7 +114,15 @@ module Lich
 
             when :stop_worker
               if @worker_thread&.alive?
-                @worker_thread.kill rescue nil
+                # Give worker up to 2 seconds to exit gracefully
+                deadline = Time.now + 2
+                while @worker_thread.alive? && Time.now < deadline
+                  sleep 0.1
+                end
+                # Last resort only
+                if @worker_thread.alive?
+                  @worker_thread.kill rescue nil
+                end
               end
               @worker_thread = nil
             end
@@ -220,6 +235,7 @@ module Lich
         # @example
         #   MemoryReleaser.interval!(600) # Set to 10 minutes
         def interval!(seconds)
+          seconds = [seconds, 60].max  # Minimum 60 seconds
           @settings[:interval] = seconds
           @interval = seconds
           save_settings
@@ -769,16 +785,19 @@ module Lich
         #
         # @return [Manager] the singleton manager instance
         def instance
-          @instance ||= begin
-            manager = Manager.new
+          @mutex ||= Mutex.new
+          @mutex.synchronize {
+            @instance ||= begin
+              manager = Manager.new
 
-            # Auto-start if enabled in settings
-            if manager.settings[:auto_start]
-              manager.start
+              # Auto-start if enabled in settings
+              if manager.settings[:auto_start]
+                manager.start
+              end
+
+              manager
             end
-
-            manager
-          end
+          }
         end
 
         # Start the background memory release thread
