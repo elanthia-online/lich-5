@@ -66,6 +66,7 @@ module Lich
           TicketEtherealScrip = /^\s*Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
           TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards?\.$/.freeze
           TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
+          TicketGold = /^\s*Gold - (?<gold>[\d,]+) gold\.$/.freeze
           WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
           WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
           AccountName = /^Account Name:     (?<name>[\w\d\-\_]+)$/.freeze
@@ -103,7 +104,7 @@ module Lich
                              BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
                              CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
                              SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
-                             Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral,
+                             Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketGold,
                              TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
                              WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
                              ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
@@ -440,6 +441,10 @@ module Lich
             when Pattern::TicketSoulShards
               match = Regexp.last_match
               Infomon.set('currency.soul_shards', match[:soul_shards].delete(',').to_i)
+              :ok
+            when Pattern::TicketGold
+              match = Regexp.last_match
+              Infomon.set('currency.gold', match[:gold].delete(',').to_i)
               :ok
             when Pattern::TicketRaikhen
               match = Regexp.last_match
