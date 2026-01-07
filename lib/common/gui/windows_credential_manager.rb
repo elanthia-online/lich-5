@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'ffi'
+Lich::Util.install_gem_requirements({ 'ffi' => true })
 
 module Lich
   module Common
