@@ -251,6 +251,37 @@ unless defined?(FFI)
   end
 end
 
+# This block ensures that the OS module is defined, even if the os gem is not loaded.
+# This prevents NameError when `OS.windows?` or other OS methods are called in a test environment
+# where the gem might not be available.
+unless defined?(OS)
+  module OS
+    # Define dummy methods that the OS gem would normally provide.
+    # These methods can then be stubbed or mocked by RSpec as needed.
+    # Initially setting to true, but should probably be set to false and
+    # specs crafted to receive(:stub).and_return(value) rather than forcing all true
+    def self.windows?
+      true
+    end
+
+    def self.linux?
+      true
+    end
+
+    def self.mac?
+      true
+    end
+
+    def self.posix?
+      true
+    end
+
+    def self.bits
+      64 # Default to 64-bit, can be stubbed in tests
+    end
+  end
+end
+
 # Add lib directory to load path
 $LOAD_PATH.unshift(File.expand_path('../lib', __FILE__))
 
