@@ -68,12 +68,12 @@ module Lich
             when :start_worker
               # Kill any existing worker
               if @worker_thread&.alive?
-                command[:manager].enabled = false  # Signal graceful stop
+                command[:manager].enabled = false # Signal graceful stop
                 deadline = Time.now + 2
                 while @worker_thread.alive? && Time.now < deadline
                   sleep 0.1
                 end
-                if @worker_thread.alive?  # Last resort
+                if @worker_thread.alive? # Last resort
                   @worker_thread.kill rescue nil
                 end
               end
@@ -235,7 +235,7 @@ module Lich
         # @example
         #   MemoryReleaser.interval!(600) # Set to 10 minutes
         def interval!(seconds)
-          seconds = [seconds, 60].max  # Minimum 60 seconds
+          seconds = [seconds, 60].max # Minimum 60 seconds
           @settings[:interval] = seconds
           @interval = seconds
           save_settings
