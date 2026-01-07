@@ -119,6 +119,7 @@ require File.join(LIB_DIR, 'common', 'watchfor.rb')
 
 require File.join(LIB_DIR, 'util', 'util.rb')
 require File.join(LIB_DIR, 'util', 'opts.rb')
+require File.join(LIB_DIR, 'util', 'memoryreleaser.rb')
 require File.join(LIB_DIR, 'messaging.rb')
 require File.join(LIB_DIR, 'global_defs.rb')
 require File.join(LIB_DIR, 'common', 'buffer.rb')
