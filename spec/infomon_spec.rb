@@ -184,7 +184,7 @@ require "games"
 require "gemstone/infomon"
 require "attributes/stats"
 require "attributes/resources"
-require "gemstone/infomon/currency"
+require "gemstone/currency"
 require "gemstone/infomon/status"
 require "gemstone/experience"
 require "util/util"
@@ -396,9 +396,9 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get("currency.silver")).to eq(5585)
       expect(Lich::Gemstone::Infomon.get("currency.silver_container")).to eq(6112)
       expect(Lich::Gemstone::Infomon.get("currency.gigas_artifact_fragments")).to eq(16)
-      expect(Lich::Currency.silver).to eq(5585)
-      expect(Lich::Currency.silver_container).to eq(6112)
-      expect(Lich::Currency.gigas_artifact_fragments).to eq(16)
+      expect(Lich::Gemstone::Currency.silver).to eq(5585)
+      expect(Lich::Gemstone::Currency.silver_container).to eq(6112)
+      expect(Lich::Gemstone::Currency.gigas_artifact_fragments).to eq(16)
     end
 
     it "handles ticket balance info" do
@@ -418,12 +418,12 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get("currency.ethereal_scrip")).to eq(295702)
       expect(Lich::Gemstone::Infomon.get("currency.soul_shards")).to eq(53058)
       expect(Lich::Gemstone::Infomon.get("currency.raikhen")).to eq(38847)
-      expect(Lich::Currency.tickets).to eq(1417)
-      expect(Lich::Currency.blackscrip).to eq(95)
-      expect(Lich::Currency.bloodscrip).to eq(78634)
-      expect(Lich::Currency.ethereal_scrip).to eq(295702)
-      expect(Lich::Currency.soul_shards).to eq(53058)
-      expect(Lich::Currency.raikhen).to eq(38847)
+      expect(Lich::Gemstone::Currency.tickets).to eq(1417)
+      expect(Lich::Gemstone::Currency.blackscrip).to eq(95)
+      expect(Lich::Gemstone::Currency.bloodscrip).to eq(78634)
+      expect(Lich::Gemstone::Currency.ethereal_scrip).to eq(295702)
+      expect(Lich::Gemstone::Currency.soul_shards).to eq(53058)
+      expect(Lich::Gemstone::Currency.raikhen).to eq(38847)
     end
 
     it "handles beast status info" do
@@ -442,7 +442,7 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       output.split("\n").map { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
 
       expect(Lich::Gemstone::Infomon.get("currency.redsteel_marks")).to eq(3441)
-      expect(Lich::Currency.redsteel_marks).to eq(3441)
+      expect(Lich::Gemstone::Currency.redsteel_marks).to eq(3441)
     end
   end
 
