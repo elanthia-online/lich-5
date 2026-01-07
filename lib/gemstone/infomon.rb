@@ -116,7 +116,7 @@ module Lich
       def self.cache_load
         sleep(0.01) if XMLData.name.empty?
         dataset = Infomon.table
-        h = Hash[dataset.map(:key).zip(dataset.map(:value))]
+        h = dataset.map(:key).zip(dataset.map(:value)).to_h
         self.cache.merge!(h)
         @cache_loaded = true
       end
