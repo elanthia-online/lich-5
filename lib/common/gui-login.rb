@@ -587,7 +587,7 @@ module Lich
     def return_launch_data_or_exit
       if @launch_data.nil?
         Gtk.queue { Gtk.main_quit }
-        # exit
+        exit
       end
 
       @launch_data
