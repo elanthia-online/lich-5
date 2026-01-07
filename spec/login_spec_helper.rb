@@ -63,6 +63,11 @@ module Lich
     # Mock implementation for testing
     false
   end
+
+  module Util
+    self.install_gem_requirements(gems_to_install)
+    true
+  end
 end
 
 # Override EAccess mock in the correct namespace after requires
