@@ -25,6 +25,29 @@ RSpec.configure do |config|
   # Seed global randomization in this process using the `--seed` CLI option
   Kernel.srand config.seed
 
+  # Add specific stubs that may be required during testing
+  config.before(:each) do
+    # Ensure that the FFI::Library module is available for extension.
+    # If the real FFI gem is loaded, this block does nothing.
+    # If not, our dummy FFI::Library is used.
+
+    # Stub the `extend` method on the module under test to control what happens
+    # when it tries to extend FFI::Library.
+    allow(Lich::Common::GUI::WindowsCredentialManager).to receive(:extend).and_wrap_original do |original_method, *args|
+      if args.include?(FFI::Library)
+        # When FFI::Library is extended, we can specifically mock its methods.
+        # Here, we ensure ffi_lib and attach_function are available for mocking.
+        # This is where you would define specific test doubles for these methods.
+        allow(Lich::Common::GUI::WindowsCredentialManager).to receive(:ffi_lib)
+        allow(Lich::Common::GUI::WindowsCredentialManager).to receive(:attach_function)
+        # You can also allow the original extend call to happen if you want the dummy methods to be added.
+        original_method.call(*args)
+      else
+        original_method.call(*args)
+      end
+    end
+  end
+
   # Clean up test directories after each test
   config.after(:each) do
     # Add any cleanup code here if needed
@@ -195,6 +218,35 @@ module Gdk
     def self.parse(_color_string)
       # Mock implementation for testing
       new
+    end
+  end
+end
+
+# This block ensures that FFI and FFI::Library are defined, even if the ffi gem is not loaded.
+# This prevents NameError when `extend FFI::Library` is called in a test environment
+# where the gem might not be available.
+unless defined?(FFI)
+  module FFI
+    module Library
+      # Define dummy methods that FFI::Library would normally provide.
+      # These methods can then be stubbed or mocked by RSpec as needed.
+      def ffi_lib(*_args)
+        # In a test, you might want to return a mock object or simply do nothing.
+        # For now, we'll just return self to allow chaining if necessary.
+        self
+      end
+
+      def attach_function(*_args)
+        # Similarly, return a mock or do nothing.
+        # This allows RSpec to expect calls to attach_function.
+        nil
+      end
+
+      # Add other commonly used FFI::Library methods here if your code uses them,
+      # e.g., typedef, callback, attach_variable, etc.
+      def typedef(*_args); end
+      def callback(*_args); end
+      def attach_variable(*_args); end
     end
   end
 end
