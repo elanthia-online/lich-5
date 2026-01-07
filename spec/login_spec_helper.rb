@@ -4,18 +4,6 @@ require 'fileutils'
 # This file is copied to spec/ when you run 'rspec' from the command line.
 # It loads the code needed for testing and configures RSpec.
 
-# Add lib directory to load path
-$LOAD_PATH.unshift(File.expand_path('../lib', __FILE__))
-
-# Define LIB_DIR for code that references it
-LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
-
-# Require the code to be tested
-require 'common/gui-login'
-require 'common/gui/account_manager'
-require 'common/gui/yaml_state'
-require 'common/gui/authentication'
-
 # Configure RSpec
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
@@ -210,3 +198,15 @@ module Gdk
     end
   end
 end
+
+# Add lib directory to load path
+$LOAD_PATH.unshift(File.expand_path('../lib', __FILE__))
+
+# Define LIB_DIR for code that references it
+LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
+
+# Require the code to be tested
+require 'common/gui-login'
+require 'common/gui/account_manager'
+require 'common/gui/yaml_state'
+require 'common/gui/authentication'
