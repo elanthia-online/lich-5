@@ -264,7 +264,8 @@ reconnect_if_wanted = proc {
           Dir.chdir(custom_launch_dir)
         end
 
-        spawn launcher_cmd
+        frontend_pid = spawn(launcher_cmd)
+        Lich::Common::Frontend.pid = frontend_pid if defined?(Lich::Common::Frontend)
       rescue
         Lich.log "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}\n\t#{$!.backtrace.join("\n\t")}"
         Lich.msgbox(:message => "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}", :icon => :error)
@@ -706,6 +707,11 @@ reconnect_if_wanted = proc {
               }
             end
             while (client_string = $_DETACHABLE_CLIENT_.gets)
+              # Profanity handshake:  SET_FRONTEND_PID <pid>
+              if client_string =~ /^SET_FRONTEND_PID\s+(\d+)\s*$/
+                Frontend.set_from_client($1.to_i) if defined?(Frontend)
+                next # swallow the control line; don't pass it to do_client
+              end
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
               begin
                 $_IDLETIMESTAMP_ = Time.now

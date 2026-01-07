@@ -315,6 +315,10 @@ module Lich
           @game_host, @game_port = ARGV[ARGV.index(arg) + 1].split(':')
           @game_port = @game_port.to_i
           $frontend = determine_frontend
+          # Initialize frontend from parent process unless using detachable client
+          unless ARGV.any? { |a| a =~ /^--detachable-client/ }
+            Lich::Common::Frontend.init_from_parent(Process.ppid)
+          end
         end
 
         def self.handle_gemstone_connection

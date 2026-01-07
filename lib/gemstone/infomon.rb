@@ -93,9 +93,21 @@ module Lich
 
       def self.setup!
         self.mutex_lock
+
+        # Check if table exists but missing updated_at column
+        if @db.table_exists?(self.table_name)
+          columns = @db.schema(self.table_name).map { |col| col[0] }
+          unless columns.include?(:updated_at)
+            self.mutex_unlock
+            self.reset!
+            return
+          end
+        end
+
         @db.create_table?(self.table_name) do
           text :key, primary_key: true
           any :value
+          float :updated_at
         end
         self.mutex_unlock
         @_table = @db[self.table_name]
@@ -162,6 +174,24 @@ module Lich
           return true
         else
           return false
+        end
+      end
+
+      def self.get_updated_at(key)
+        key = self._key(key)
+        begin
+          self.mutex.synchronize do
+            db_result = self.table[key: key]
+            if db_result
+              db_result[:updated_at]
+            else
+              nil
+            end
+          end
+        rescue StandardError
+          respond "--- Lich: error: Infomon.get_updated_at(#{key}): #{$!}"
+          Lich.log "error: Infomon.get_updated_at(#{key}): #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          nil
         end
       end
 

@@ -289,12 +289,35 @@ module Lich
       end
 
       # Minimal change: keep path (not []), and tag view proxies as detached.
+      # NEW: when a non-destructive method like `find` / `detect` on an Array
+      # returns an element that is itself a container (e.g., a Hash),
+      # return a proxy whose path includes the array index so that mutations
+      # save back to that element instead of clobbering the entire array.
       def handle_non_destructive_result(method, result)
         @settings_module.reset_path_and_return(
           if @settings_module.container?(result)
-            is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
-            SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view)
+            if @target.is_a?(Array) && [:find, :detect].include?(method)
+              # For Array#find / Array#detect, identify the element index in the
+              # original array and create a proxy that points to that element.
+              idx = @target.index(result)
+
+              if !idx.nil?
+                element_path = @path.dup
+                element_path << idx
+                SettingsProxy.new(@settings_module, @scope, element_path, result)
+              else
+                # Fallback: if we somehow can't locate the element, preserve
+                # the old behavior (path == @path, no index).
+                is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
+                SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view)
+              end
+            else
+              # Existing behavior for all other non-destructive container methods
+              is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
+              SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view)
+            end
           else
+            # Non-container results (e.g., Hash#keys) stay as plain values
             result
           end
         )
