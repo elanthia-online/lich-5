@@ -34,17 +34,6 @@ group :development do
   gem "rubocop"
 end
 
-gem "ascii_charts", ">= 0.9.1"
-
-gem "base64", ">= 0.1.0"
-
-gem "concurrent-ruby", ">= 1.2"
-
-gem "ffi", ">= 1.17"
-
-gem "logger", ">= 1.6.4"
-
-gem "os", ">= 1.1"
 group :vscode do
   gem "rbs"
   gem "prism"
@@ -71,6 +60,7 @@ gem "tzinfo-data", ">= 1.2025"
 
 # Stdlib gems - version constraints often unnecessary
 gem "ascii_charts", ">= 0.9"
+gem "base64", ">= 0.1.0"
 gem "benchmark", ">= 0.4"
 gem "digest", ">= 3.2"
 gem "drb", ">= 2.2"
