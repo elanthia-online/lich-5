@@ -179,6 +179,7 @@ PLATFORMS
 
 DEPENDENCIES
   ascii_charts
+  base64
   benchmark
   concurrent-ruby
   curses
