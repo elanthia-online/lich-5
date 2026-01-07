@@ -63,9 +63,9 @@ module Lich
     # Mock implementation for testing
     false
   end
-  
+
   module Util
-    def self.install_gem_requirements(gems_to_install)
+    def self.install_gem_requirements(*)
       # Mock implementation for testing
       true
     end
