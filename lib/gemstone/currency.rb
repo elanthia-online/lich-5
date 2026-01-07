@@ -41,6 +41,10 @@ module Lich
         Lich::Gemstone::Infomon.get('currency.soul_shards')
       end
 
+      def self.gold
+        Lich::Gemstone::Infomon.get('currency.gold')
+      end
+
       def self.gigas_artifact_fragments
         Lich::Gemstone::Infomon.get('currency.gigas_artifact_fragments')
       end
