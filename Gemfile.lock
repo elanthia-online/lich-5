@@ -6,6 +6,7 @@ GEM
     atk (4.3.4)
       glib2 (= 4.3.4)
       rake
+    base64 (0.3.0)
     benchmark (0.5.0)
     bigdecimal (4.0.1)
     cairo (1.18.4)
@@ -222,6 +223,7 @@ CHECKSUMS
   ascii_charts (0.9.1) sha256=30441622538f01b1846665fd9e63471a2ce14bec3e0f5db3cd8073d70d74cbbe
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   atk (4.3.4) sha256=e9a6f2701f11858d69e017ed3304fce441f81603185ce601af9205752738ff32
+  base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
   benchmark (0.5.0) sha256=465df122341aedcb81a2a24b4d3bd19b6c67c1530713fd533f3ff034e419236c
   bigdecimal (4.0.1) sha256=8b07d3d065a9f921c80ceaea7c9d4ae596697295b584c296fe599dd0ad01c4a7
   cairo (1.18.4) sha256=9a07667d9aef12421d0cdceaa6287f5efbc1e8ad581a4fd07696e0f9dd472d0b
