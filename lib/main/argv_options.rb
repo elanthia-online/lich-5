@@ -225,8 +225,9 @@ module Lich
       module SideEffects
         def self.execute(argv_options)
           handle_hosts_dir(argv_options)
-          handle_detachable_client
+          handle_detachable_client(argv_options)
           handle_sal_launch(argv_options)
+          argv_options
         end
 
         def self.handle_hosts_dir(argv_options)
@@ -245,13 +246,13 @@ module Lich
           end
         end
 
-        def self.handle_detachable_client
-          @detachable_client_host = '127.0.0.1'
-          @detachable_client_port = nil
+        def self.handle_detachable_client(argv_options)
+          argv_options[:detachable_client_host] = '127.0.0.1'
+          argv_options[:detachable_client_port] = nil
           if (arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=[0-9]+$/ })
-            @detachable_client_port = /^\-\-detachable\-client=([0-9]+)$/.match(arg).captures.first
+            argv_options[:detachable_client_port] = /^\-\-detachable\-client=([0-9]+)$/.match(arg).captures.first.to_i
           elsif (arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/ })
-            @detachable_client_host, @detachable_client_port = /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/.match(arg).captures
+            argv_options[:detachable_client_host], argv_options[:detachable_client_port] = /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/.match(arg).captures
           end
         end
 
@@ -443,19 +444,19 @@ module Lich
         Lich::Common::CLI::CLIOrchestration.execute
 
         # Step 3: Parse normal options and build @argv_options
-        @argv_options = ArgvOptions::OptionParser.execute
+        processed_options = ArgvOptions::OptionParser.execute
 
         # Step 4: Apply side effects and handle special cases
-        ArgvOptions::SideEffects.execute(@argv_options)
+        processed_options = ArgvOptions::SideEffects.execute(processed_options)
 
         # Step 5: Handle game connection configuration
         ArgvOptions::GameConnection.execute
 
-        @argv_options
+        processed_options
       end
     end
   end
 end
 
 # Execute ARGV processing
-Lich::Main::ArgvOptions.process_argv
+@argv_options = Lich::Main::ArgvOptions.process_argv
