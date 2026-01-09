@@ -153,7 +153,7 @@ module Lich
         private_class_method def self.store_linux_keychain(password)
           # Delete existing entry (ignore result) to ensure a clean update
           system("secret-tool clear service #{KEYCHAIN_SERVICE.shellescape} user lich5 >/dev/null 2>&1")
-          
+
           # Add new entry using a pipe to avoid shell escaping issues
           # This ensures the raw password is sent directly to secret-tool's stdin
           IO.popen(["secret-tool", "store", "--label=Lich 5 Master", "service", KEYCHAIN_SERVICE, "user", "lich5"], "w") do |io|
