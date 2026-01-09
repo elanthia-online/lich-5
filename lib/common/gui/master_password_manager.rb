@@ -151,11 +151,15 @@ module Lich
         end
 
         private_class_method def self.store_linux_keychain(password)
-          escaped = password.shellescape
-          # Delete existing entry (ignore result)
-          system("secret-tool clear service #{KEYCHAIN_SERVICE.shellescape} user lich5 2>/dev/null")
-          # Add new entry and return actual result
-          system("secret-tool store --label='Lich 5 Master' service #{KEYCHAIN_SERVICE.shellescape} user lich5 <<< #{escaped}")
+          # Delete existing entry (ignore result) to ensure a clean update
+          system("secret-tool clear service #{KEYCHAIN_SERVICE.shellescape} user lich5 >/dev/null 2>&1")
+          
+          # Add new entry using a pipe to avoid shell escaping issues
+          # This ensures the raw password is sent directly to secret-tool's stdin
+          IO.popen(["secret-tool", "store", "--label=Lich 5 Master", "service", KEYCHAIN_SERVICE, "user", "lich5"], "w") do |io|
+            io.write(password)
+          end
+          $?.success?
         end
 
         private_class_method def self.retrieve_linux_keychain
