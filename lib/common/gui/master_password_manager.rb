@@ -147,7 +147,9 @@ module Lich
         end
 
         private_class_method def self.linux_keychain_available?
-          system('which secret-tool >/dev/null 2>&1')
+          response = system('command -v secret-tool >/dev/null 2>&1')
+          Lich.log "debug: secret-tool command not found; Linux keychain unavailable" if response == false
+          response
         end
 
         private_class_method def self.store_linux_keychain(password)
