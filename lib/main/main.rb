@@ -340,16 +340,16 @@ reconnect_if_wanted = proc {
       end
     end
     Lich.log 'info: connected'
-  elsif @game_host and @game_port
+  elsif @argv_options[:game_host] and @argv_options[:game_port]
     unless Lich.hosts_file
       Lich.log "error: cannot find hosts file"
       $stdout.puts "error: cannot find hosts file"
       exit
     end
-    IPSocket.getaddress(@game_host)
+    IPSocket.getaddress(@argv_options[:game_host])
     error_count = 0
     begin
-      listener = TCPServer.new('127.0.0.1', @game_port)
+      listener = TCPServer.new('127.0.0.1', @argv_options[:game_port])
       begin
         listener.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, 1)
       rescue
@@ -365,13 +365,13 @@ reconnect_if_wanted = proc {
         retry
       end
     end
-    Lich.modify_hosts(@game_host)
+    Lich.modify_hosts(@argv_options[:game_host])
 
-    $stdout.puts "Pretending to be #{@game_host}"
-    $stdout.puts "Listening on port #{@game_port}"
+    $stdout.puts "Pretending to be #{@argv_options[:game_host]}"
+    $stdout.puts "Listening on port #{@argv_options[:game_port]}"
     $stdout.puts "Waiting for the client to connect..."
-    Lich.log "info: pretending to be #{@game_host}"
-    Lich.log "info: listening on port #{@game_port}"
+    Lich.log "info: pretending to be #{@argv_options[:game_host]}"
+    Lich.log "info: listening on port #{@argv_options[:game_port]}"
     Lich.log "info: waiting for the client to connect..."
 
     timeout_thread = Thread.new {
@@ -394,18 +394,18 @@ reconnect_if_wanted = proc {
       $_CLIENT_.puts "Running in test mode: host socket set to stdin."
     else
       Lich.log 'info: connecting to the real game host...'
-      @game_host, @game_port = Lich.fix_game_host_port(@game_host, @game_port)
+      @argv_options[:game_host], @argv_options[:game_port] = Lich.fix_game_host_port(@argv_options[:game_host], @argv_options[:game_port])
       begin
         timeout_thread = Thread.new {
           sleep 30
-          Lich.log "error: timed out connecting to #{@game_host}:#{@game_port}"
-          $stdout.puts "error: timed out connecting to #{@game_host}:#{@game_port}"
+          Lich.log "error: timed out connecting to #{@argv_options[:game_host]}:#{@argv_options[:game_port]}"
+          $stdout.puts "error: timed out connecting to #{@argv_options[:game_host]}:#{@argv_options[:game_port]}"
           exit
         }
         begin
-          include Lich::Gemstone if @game_host =~ /gs/i
-          include Lich::DragonRealms if @game_host =~ /dr/i
-          Game.open(@game_host, @game_port)
+          include Lich::Gemstone if @argv_options[:game_host] =~ /gs/i
+          include Lich::DragonRealms if @argv_options[:game_host] =~ /dr/i
+          Game.open(@argv_options[:game_host], @argv_options[:game_port])
         rescue
           Lich.log "error: #{$!}"
           $stdout.puts "error: #{$!}"
