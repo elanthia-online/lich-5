@@ -294,27 +294,28 @@ module Lich
 
       # Handle game connection configuration
       module GameConnection
-        def self.execute
+        def self.execute(processed_options)
           if (arg = ARGV.find { |a| a == '-g' || a == '--game' })
-            handle_explicit_game_connection(arg)
-          elsif ARGV.include?('--gemstone')
-            handle_gemstone_connection
+            handle_explicit_game_connection(arg, processed_options)
           elsif ARGV.include?('--shattered')
-            handle_shattered_connection
+            handle_shattered_connection(processed_options)
           elsif ARGV.include?('--fallen')
-            handle_fallen_connection
+            handle_fallen_connection(processed_options)
+          elsif ARGV.include?('--gemstone')
+            handle_gemstone_connection(processed_options)
           elsif ARGV.include?('--dragonrealms')
-            handle_dragonrealms_connection
+            handle_dragonrealms_connection(processed_options)
           else
-            @game_host = nil
-            @game_port = nil
+            processed_options[:game_host] = nil
+            processed_options[:game_port] = nil
             Lich.log 'info: no force-mode info given'
           end
+          processed_options
         end
 
-        def self.handle_explicit_game_connection(arg)
-          @game_host, @game_port = ARGV[ARGV.index(arg) + 1].split(':')
-          @game_port = @game_port.to_i
+        def self.handle_explicit_game_connection(arg, processed_options)
+          processed_options[:game_host], processed_options[:game_port] = ARGV[ARGV.index(arg) + 1].split(':')
+          processed_options[:game_port] = processed_options[:game_port].to_i
           $frontend = determine_frontend
           # Initialize frontend from parent process unless using detachable client
           unless ARGV.any? { |a| a =~ /^--detachable-client/ }
@@ -322,99 +323,91 @@ module Lich
           end
         end
 
-        def self.handle_gemstone_connection
+        def self.handle_gemstone_connection(processed_options)
           if ARGV.include?('--platinum')
             $platinum = true
             if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
-              @game_host = 'storm.gs4.game.play.net'
-              @game_port = 10124
+              processed_options[:game_host] = 'storm.gs4.game.play.net'
+              processed_options[:game_port] = 10124
               $frontend = 'stormfront'
             else
-              @game_host = 'gs-plat.simutronics.net'
-              @game_port = 10121
+              processed_options[:game_host] = 'storm.gs4.game.play.net'
+              processed_options[:game_port] = 10124
               $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : 'wizard'
             end
           else
             $platinum = false
             if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
-              @game_host = 'storm.gs4.game.play.net'
-              @game_port = 10024
+              processed_options[:game_host] = 'storm.gs4.game.play.net'
+              processed_options[:game_port] = ARGV.include?('--test') ? 10624 : 10024
               $frontend = 'stormfront'
             else
-              @game_host = 'gs3.simutronics.net'
-              @game_port = 4900
+              processed_options[:game_host] = 'storm.gs4.game.play.net'
+              processed_options[:game_port] = ARGV.include?('--test') ? 10624 : 10024
               $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : 'wizard'
             end
           end
         end
 
-        def self.handle_shattered_connection
+        def self.handle_shattered_connection(processed_options)
           $platinum = false
           if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
-            @game_host = 'storm.gs4.game.play.net'
-            @game_port = 10324
+            processed_options[:game_host] = 'storm.gs4.game.play.net'
+            processed_options[:game_port] = 10324
             $frontend = 'stormfront'
           else
-            @game_host = 'gs4.simutronics.net'
-            @game_port = 10321
+            processed_options[:game_host] = 'storm.gs4.game.play.net'
+            processed_options[:game_port] = 10324
             $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : 'wizard'
           end
         end
 
-        def self.handle_fallen_connection
+        def self.handle_fallen_connection(processed_options)
           $platinum = false
           if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
+            processed_options[:game_host] = 'dr.simutronics.net'
+            processed_options[:game_port] = 11324
             $frontend = 'stormfront'
-            $stdout.puts 'fixme'
-            Lich.log 'fixme'
-            exit
           elsif ARGV.grep(/--genie/).any?
-            @game_host = 'dr.simutronics.net'
-            @game_port = 11324
+            processed_options[:game_host] = 'dr.simutronics.net'
+            processed_options[:game_port] = 11324
             $frontend = 'genie'
           else
-            $stdout.puts 'fixme'
-            Lich.log 'fixme'
-            exit
+            processed_options[:game_host] = 'dr.simutronics.net'
+            processed_options[:game_port] = 11324
+            $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : 'wizard'
           end
         end
 
-        def self.handle_dragonrealms_connection
+        def self.handle_dragonrealms_connection(processed_options)
           if ARGV.include?('--platinum')
             $platinum = true
             if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
+              processed_options[:game_host] = 'dr.simutronics.net'
+              processed_options[:game_port] = 11124
               $frontend = 'stormfront'
-              $stdout.puts 'fixme'
-              Lich.log 'fixme'
-              exit
             elsif ARGV.grep(/--genie/).any?
-              @game_host = 'dr.simutronics.net'
-              @game_port = 11124
+              processed_options[:game_host] = 'dr.simutronics.net'
+              processed_options[:game_port] = 11124
               $frontend = 'genie'
-            elsif ARGV.grep(/--frostbite/).any?
-              @game_host = 'dr.simutronics.net'
-              @game_port = 11124
-              $frontend = 'frostbite'
             else
-              $frontend = 'wizard'
-              $stdout.puts 'fixme'
-              Lich.log 'fixme'
-              exit
+              processed_options[:game_host] = 'dr.simutronics.net'
+              processed_options[:game_port] = 11124
+              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : 'wizard'
             end
           else
             $platinum = false
             if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
+              processed_options[:game_host] = 'dr.simutronics.net'
+              processed_options[:game_port] = ARGV.include?('--test') ? 11624 : 11024
               $frontend = 'stormfront'
-              $stdout.puts 'fixme'
-              Lich.log 'fixme'
-              exit
             elsif ARGV.grep(/--genie/).any?
-              @game_host = 'dr.simutronics.net'
-              @game_port = ARGV.include?('--test') ? 11624 : 11024
+              processed_options[:game_host] = 'dr.simutronics.net'
+              processed_options[:game_port] = ARGV.include?('--test') ? 11624 : 11024
               $frontend = 'genie'
             else
-              @game_host = 'dr.simutronics.net'
-              @game_port = ARGV.include?('--test') ? 11624 : 11024
+              processed_options[:game_host] = 'dr.simutronics.net'
+              processed_options[:game_port] = ARGV.include?('--test') ? 11624 : 11024
               $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : 'wizard'
             end
           end
@@ -450,7 +443,7 @@ module Lich
         processed_options = ArgvOptions::SideEffects.execute(processed_options)
 
         # Step 5: Handle game connection configuration
-        ArgvOptions::GameConnection.execute
+        processed_options = ArgvOptions::GameConnection.execute(processed_options)
 
         processed_options
       end
