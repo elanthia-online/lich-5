@@ -110,7 +110,7 @@ module Lich
           # Disable/hide modes if keychain not available
           unless MasterPasswordManager.keychain_available?
             enhanced_radio.sensitive = false
-            enhanced_radio.visible = false if OS.windows? # Hide on Windows if unavailable
+            enhanced_radio.visible = false # Hide if unavailable
             Lich.log "info: Enhanced encryption mode disabled - Keychain tools not available on this system"
           end
 
