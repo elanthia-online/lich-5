@@ -375,12 +375,6 @@ module Lich
             rate    = Regexp.last_match[:rate].to_i > 0 ? Regexp.last_match[:rate] : DR_LEARNING_RATES.index(Regexp.last_match[:rate])
             percent = Regexp.last_match[:percent]
             DRSkill.update(skill, rank, rate, percent)
-
-            # Inline display of cumulative gained experience (from DRExpMonitor)
-            if Pattern::BriefExpOn.match?(line) && DRExpMonitor.active?
-              gained = DRSkill.gained_exp(skill) || 0.00
-              line.sub!(/(....).(..)%..\[(..)\/34\]/, "\\1.\\2 ~\\3 #{sprintf('%0.2f', gained)}")
-            end
           when Pattern::ExpClearMindstate
             skill = Regexp.last_match[:skill]
             DRSkill.clear_mind(skill)
