@@ -371,7 +371,7 @@ module Lich
           # Load game-specific modules if needed
           unless (XMLData.game.nil? || XMLData.game.empty?)
             unless Module.const_defined?(:GameLoader)
-              require_relative 'common/game-loader'
+              require_relative 'common/gameloader'
               GameLoader.load!
             end
           end
