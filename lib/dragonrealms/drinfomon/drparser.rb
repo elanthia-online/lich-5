@@ -102,7 +102,6 @@ module Lich
         end
         server_string
       end
-      
 
       def self.check_exp_mods(server_string)
         # This method parses the output from `exp mods` command
@@ -372,7 +371,7 @@ module Lich
             rate    = Regexp.last_match[:rate].to_i > 0 ? Regexp.last_match[:rate] : DR_LEARNING_RATES.index(Regexp.last_match[:rate])
             percent = Regexp.last_match[:percent]
             DRSkill.update(skill, rank, rate, percent)
-            
+
             # Inline display of cumulative gained experience (from DRExpMonitor)
             if Pattern::BriefExpOn.match?(line) && DRExpMonitor.active?
               gained = DRSkill.gained_exp(skill) || 0.00
@@ -438,7 +437,6 @@ module Lich
           else
             :noop
           end
-
 
           populate_inventory_get(line) if @parsing_inventory_get
           check_exp_mods(line) if @parsing_exp_mods_output
