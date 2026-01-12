@@ -104,17 +104,15 @@ module Lich
           # Radio buttons for mode selection
           plaintext_radio = Gtk::RadioButton.new(label: "Plaintext (no encryption - least secure)")
           standard_radio = Gtk::RadioButton.new(member: plaintext_radio, label: "Standard Encryption (basic encryption)")
-          enhanced_radio = Gtk::RadioButton.new(member: plaintext_radio, label: "Enhanced Encryption (recommended)")
+          unless has_keychain # Disable if keychain not present on system
+            enhanced_radio = Gtk::RadioButton.new(member: plaintext_radio, label: "Enhanced Encryption (Unavailable: No secure keychain found.)")
+            Lich.log "info: Enhanced encryption mode disabled - Keychain tools not available on this system"
+          else
+            enhanced_radio = Gtk::RadioButton.new(member: plaintext_radio, label: "Enhanced Encryption (recommended)")
+          end
 
           # Set standard encryption as default
           standard_radio.active = true
-
-          # Disable/hide modes if keychain not available
-          unless MasterPasswordManager.keychain_available?
-            enhanced_radio.sensitive = false
-            enhanced_radio.label = "Enhanced (Unavailable: No secure keychain found.)" 
-            Lich.log "info: Enhanced encryption mode disabled - Keychain tools not available on this system"
-          end
 
           # Set accessible properties
           Accessibility.make_accessible(
