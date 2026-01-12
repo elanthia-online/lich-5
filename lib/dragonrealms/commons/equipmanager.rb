@@ -352,6 +352,13 @@ module Lich
         waitrt?
         response = DRC.bput("#{data[:verb]} my #{item.short_name}", *data[:matches])
         waitrt?
+
+        # Handle empty/nil response (bput timeout) as failure
+        if response.nil? || response.empty?
+          DRC.message("*** No response from game for '#{data[:verb]} my #{item.short_name}' - command may have been lost ***")
+          return false
+        end
+
         case response
         when 'You are already holding'
           return true
@@ -360,7 +367,13 @@ module Lich
         when *data[:failures]
           data[:failure_recovery].call(item.name, item, response)
         else
-          pause 0.05 while snapshot == [DRC.left_hand, DRC.right_hand]
+          # Wait for hands to change with a timeout to prevent infinite loop
+          timeout = Time.now + 5
+          pause 0.05 while snapshot == [DRC.left_hand, DRC.right_hand] && Time.now < timeout
+          if snapshot == [DRC.left_hand, DRC.right_hand]
+            DRC.message("*** Hands did not change after '#{data[:verb]} my #{item.short_name}' - item may not have been retrieved ***")
+            return false
+          end
           return true
         end
       end
