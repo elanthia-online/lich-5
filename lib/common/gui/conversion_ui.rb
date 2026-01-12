@@ -31,6 +31,8 @@ module Lich
         # @param on_conversion_complete [Proc] Callback to execute when conversion is complete
         # @return [void]
         def self.show_conversion_dialog(parent, data_dir, on_conversion_complete)
+          has_keychain = MasterPasswordManager.keychain_available?
+
           # Create dialog
           dialog = Gtk::Dialog.new(
             title: "Data Conversion Required",
@@ -110,7 +112,7 @@ module Lich
           # Disable/hide modes if keychain not available
           unless MasterPasswordManager.keychain_available?
             enhanced_radio.sensitive = false
-            enhanced_radio.visible = false # Hide if unavailable
+            enhanced_radio.label = "Enhanced (Unavailable: No secure keychain found.)" 
             Lich.log "info: Enhanced encryption mode disabled - Keychain tools not available on this system"
           end
 
