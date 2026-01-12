@@ -69,9 +69,9 @@ module Lich
           info_text = "<span size='large'>Your existing saved entries data will be converted to a new format. This is a one-time process and your original saved entries data will be retained unmodified."
 
           # Only show entry.dat file info if conversion hasn't happened yet
-          unless File.exist?(Lich::Common::GUI::YamlState.yaml_file_path(LIB_DIR))
-            info_text += "\n\nExisting:\t\t#{LIB_DIR}/entry.dat\n" +
-                         "Converted:\t#{LIB_DIR}/entry.yaml\n\n" +
+          unless File.exist?(Lich::Common::GUI::YamlState.yaml_file_path(DATA_DIR))
+            info_text += "\n\nExisting:\t\t#{DATA_DIR}/entry.dat\n" +
+                         "Converted:\t#{DATA_DIR}/entry.yaml\n\n" +
                          "entry.dat will no longer be used, and may be deleted at your convenience"
           end
 
