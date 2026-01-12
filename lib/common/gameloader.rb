@@ -30,7 +30,7 @@ module Lich
         require File.join(LIB_DIR, 'gemstone', 'infomon', 'activespell.rb')
         require File.join(LIB_DIR, 'gemstone', 'psms.rb')
         require File.join(LIB_DIR, 'attributes', 'char.rb')
-        require File.join(LIB_DIR, 'gemstone', 'infomon', 'currency.rb')
+        require File.join(LIB_DIR, 'gemstone', 'currency.rb')
         # require File.join(LIB_DIR, 'gemstone', 'character', 'disk.rb') # dup
         require File.join(LIB_DIR, 'gemstone', 'group.rb')
         require File.join(LIB_DIR, 'gemstone', 'critranks')
