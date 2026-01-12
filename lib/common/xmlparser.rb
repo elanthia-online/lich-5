@@ -325,7 +325,9 @@ module Lich
           if name == 'pushStream'
             @in_stream = true
             @current_stream = attributes['id'].to_s
-            GameObj.clear_inv if attributes['id'].to_s == 'inv'
+            if XMLData.game =~ /^GS/
+              GameObj.clear_inv if attributes['id'].to_s == 'inv'
+            end
           end
           if name == 'popStream'
             if attributes['id'] == 'room'
