@@ -31,10 +31,6 @@ module Lich
         LastLogoff = /^\s+Logoff :  (?<weekday>[A-Z][a-z]{2}) (?<month>[A-Z][a-z]{2}) (?<day>[\s\d]{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2}) ET (?<year>\d{4})/.freeze
         RoomIDOff = /^You will no longer see room IDs when LOOKing in the game and room windows\./.freeze
         InventoryGetStart = %r{You rummage about your person, looking for}.freeze
-        Rested_EXP = %r{^<component id='exp rexp'>Rested EXP Stored:\s*(?<stored>.*?)\s*Usable This Cycle:\s*(?<usable>.*?)\s*Cycle Refreshes:\s*(?<refresh>.*)</component>}.freeze
-        Rested_EXP_F2P = %r{^<component id='exp rexp'>\[Unlock Rested Experience}.freeze
-        TDPValue_XPWindow = %r{^<component id='exp tdp'>\s*TDPs:\s*(?<tdp>\d+)</component>}.freeze
-        FavorValue_XPWindow = %r{^<component id='exp favor'>\s*Favors:\s*(?<favor>\d+)</component>}.freeze
       end
 
       @parsing_exp_mods_output = false
@@ -106,25 +102,25 @@ module Lich
         end
         server_string
       end
+      
 
       def self.check_exp_mods(server_string)
         # This method parses the output from `exp mods` command
         # and updates the DRSkill.exp_modifiers hash with the skill and value.
+        # This is primarily used by the `skill-recorder` script.
+        #
         # Example output without any modifiers:
-        # The following skills are currently under the influence of a modifier:
-        # <output class="mono"/>
-        #   None
-        # <output class=""/>
-        # <prompt time="1767298457">&gt;</prompt>
+        #     The following skills are currently under the influence of a modifier:
+        #     <output class="mono"/>
+        #       None
+        #     <output class=""/>
         #
         # Example output with modifiers:
-        # The following skills are currently under the influence of a modifier:
-        # <output class="mono"/>
-        # <preset id="speech">+79 Attunement</preset>
-        # <preset id="speech">+350 Evasion</preset>
-        # <preset id="speech">+350 Perception</preset>
-        # <output class=""/>
-        # <prompt time="1767296999">&gt;</prompt>
+        #     The following skills are currently under the influence of a modifier:
+        #     <output class="mono"/>
+        #     +75 Athletics
+        #     -10 Evasion
+        #     <output class=""/>
         #
         # Zero or more skills may be listed between the <output> tags
         # but exactly one skill and its skill modifier are listed per line.
@@ -138,6 +134,8 @@ module Lich
         else
           if @parsing_exp_mods_output
             # https://rubular.com/r/hg7SFvVNUtdLdh
+            # Sample line
+            # <preset id="speech">+79 Attunement</preset>
             match = /^(?:<preset id="speech">)?(?<sign>[+-])(?<value>\d+)\s+(?<skill>[\w\s]+)(?:<\/preset>)?$/.match(server_string.strip)
             if match
               skill = match[:skill].strip
@@ -327,6 +325,7 @@ module Lich
         begin
           case line
           when Pattern::InventoryGetStart
+            GameObj.clear_inv
             @parsing_inventory_get = true
           when Pattern::GenderAgeCircle
             DRStats.gender = Regexp.last_match[:gender]
@@ -373,6 +372,12 @@ module Lich
             rate    = Regexp.last_match[:rate].to_i > 0 ? Regexp.last_match[:rate] : DR_LEARNING_RATES.index(Regexp.last_match[:rate])
             percent = Regexp.last_match[:percent]
             DRSkill.update(skill, rank, rate, percent)
+            
+            # Inline display of cumulative gained experience (from DRExpMonitor)
+            if Pattern::BriefExpOn.match?(line) && DRExpMonitor.active?
+              gained = DRSkill.gained_exp(skill) || 0.00
+              line.sub!(/(....).(..)%..\[(..)\/34\]/, "\\1.\\2 ~\\3 #{sprintf('%0.2f', gained)}")
+            end
           when Pattern::ExpClearMindstate
             skill = Regexp.last_match[:skill]
             DRSkill.clear_mind(skill)
@@ -430,21 +435,10 @@ module Lich
             put("flag showroomid on")
             respond("Lich requires ShowRoomID to be ON for mapping to work, please do not turn this off.")
             respond("If you wish to hide the Real ID#, you can toggle it off by doing ;display flaguid")
-          when Pattern::Rested_EXP
-            matches = Regexp.last_match
-            DRSkill.update_rested_exp(matches[:stored].strip, matches[:usable].strip, matches[:refresh].strip)
-          when Pattern::Rested_EXP_F2P
-            # f2p characters without brain boost don't get rested exp
-            DRSkill.update_rested_exp('none', 'none', 'none')
-          when Pattern::TDPValue_XPWindow
-            matches = Regexp.last_match
-            DRStats.tdps = matches[:tdp].to_i
-          when Pattern::FavorValue_XPWindow
-            matches = Regexp.last_match
-            DRStats.favors = matches[:favor].to_i
           else
             :noop
           end
+
 
           populate_inventory_get(line) if @parsing_inventory_get
           check_exp_mods(line) if @parsing_exp_mods_output
