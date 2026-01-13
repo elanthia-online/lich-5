@@ -531,7 +531,7 @@ describe Lich::Gemstone::QStrike do
       defaults = Lich::Gemstone::QStrike.defaults
       expect(defaults).to be_a(Hash)
       expect(defaults).to have_key(:reserve)
-      expect(defaults).to have_key(:force)
+      expect(defaults).to have_key(:adaptive)
     end
 
     it "allows setting defaults" do
@@ -544,7 +544,7 @@ describe Lich::Gemstone::QStrike do
     it "returns factory defaults initially" do
       Lich::Gemstone::QStrike.reset_defaults
       expect(Lich::Gemstone::QStrike.default(:reserve)).to eq(1)
-      expect(Lich::Gemstone::QStrike.default(:force)).to eq(false)
+      expect(Lich::Gemstone::QStrike.default(:adaptive)).to eq(false)
     end
 
     it "uses defaults in calculate when reserve not specified" do

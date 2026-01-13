@@ -23,7 +23,7 @@ module Lich
     #
     # @example Set defaults
     #   QStrike.set_default(:reserve, 5)
-    #   QStrike.set_default(:force, true)
+    #   QStrike.set_default(:adaptive, true)
     #
     module QStrike
       # Speed multipliers by weapon category
@@ -60,7 +60,7 @@ module Lich
       # Default settings
       DEFAULT_SETTINGS = {
         reserve: 1,
-        force: false
+        adaptive: false
       }.freeze
 
       # === DEFAULTS MANAGEMENT (Persisted via DB_Store) ===
@@ -71,7 +71,7 @@ module Lich
         load_settings
         {
           reserve: @settings[:reserve],
-          force: @settings[:force]
+          adaptive: @settings[:adaptive]
         }
       end
 
@@ -84,7 +84,7 @@ module Lich
       end
 
       # Set a single default value (persists to DB_Store for per-character storage)
-      # @param key [Symbol] Setting name (:reserve, :force)
+      # @param key [Symbol] Setting name (:reserve, :adaptive)
       # @param value [Object] New value
       def self.set_default(key, value)
         load_settings
@@ -241,7 +241,7 @@ module Lich
       # @param attack [String, Symbol] Attack to perform (e.g., "cripple", "attack", "mstrike")
       # @param target [String, nil] Target for the attack (optional)
       # @param reserve [Integer, nil] Stamina to reserve (uses default if nil)
-      # @param force [Boolean, nil] If true, use reduced RT when can't afford full (uses default if nil)
+      # @param adaptive [Boolean, nil] If true, use max affordable when can't afford requested (uses default if nil)
       # @return [Hash] Result with :success, :reduction_used, :reason, etc.
       #
       # @example Reduce RT by 3 seconds
@@ -253,9 +253,9 @@ module Lich
       # @example Use maximum affordable reduction
       #   QStrike.use(reduction: :max, attack: "mstrike")
       #
-      def self.use(reduction:, attack:, target: nil, reserve: nil, force: nil)
+      def self.use(reduction:, attack:, target: nil, reserve: nil, adaptive: nil)
         reserve ||= default(:reserve)
-        force = default(:force) if force.nil?
+        adaptive = default(:adaptive) if adaptive.nil?
 
         attack_name = normalize_attack_name(attack)
         attack_cost = lookup_attack_cost(attack_name)
@@ -279,7 +279,7 @@ module Lich
         available = Char.stamina - reserve - attack_cost
 
         if qstrike_cost > available
-          if force
+          if adaptive
             # Calculate what we can actually afford
             max_affordable = calculate(reserve: reserve, attack_cost: attack_cost)[:seconds]
             if max_affordable.positive?
