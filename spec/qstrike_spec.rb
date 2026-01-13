@@ -60,75 +60,132 @@ class MockGameObj
   end
 end
 
-# Mock GameObj class
-module GameObj
-  @right_hand = MockGameObj.new
-  @left_hand = MockGameObj.new
+# Mock GameObj - add to Lich::Gemstone::GameObj for compatibility with other specs
+module Lich
+  module Gemstone
+    class GameObj
+      @right_hand = MockGameObj.new
+      @left_hand = MockGameObj.new
 
-  def self.right_hand
-    @right_hand
-  end
+      def self.right_hand
+        @right_hand
+      end
 
-  def self.left_hand
-    @left_hand
-  end
+      def self.left_hand
+        @left_hand
+      end
 
-  def self.set_right_hand(obj)
-    @right_hand = obj
-  end
+      def self.set_right_hand(obj)
+        @right_hand = obj
+      end
 
-  def self.set_left_hand(obj)
-    @left_hand = obj
-  end
+      def self.set_left_hand(obj)
+        @left_hand = obj
+      end
 
-  def self.clear_hands
-    @right_hand = MockGameObj.new
-    @left_hand = MockGameObj.new
+      def self.clear_hands
+        @right_hand = MockGameObj.new
+        @left_hand = MockGameObj.new
+      end
+    end
   end
 end
 
-# Mock Effects::Buffs for Striking Asp detection
-module Effects
-  class MockRegistry
-    def initialize
-      @effects = {}
+# Top-level alias for GameObj (as used by the main codebase)
+GameObj = Lich::Gemstone::GameObj unless defined?(GameObj)
+
+# Effects module - only define if not already defined by infomon_spec
+unless defined?(Effects::Buffs)
+  module Effects
+    class MockRegistry
+      def initialize
+        @effects = {}
+      end
+
+      def active?(effect)
+        @effects[effect] == true
+      end
+
+      def set_active(effect, active)
+        @effects[effect] = active
+      end
+
+      def clear
+        @effects.clear
+      end
     end
 
-    def active?(effect)
-      @effects[effect] == true
-    end
+    Buffs = MockRegistry.new
+  end
+end
 
-    def set_active(effect, active)
-      @effects[effect] = active
-    end
-
-    def clear
-      @effects.clear
+# Helper module to set Effects::Buffs state for testing
+# Works with both standalone MockRegistry and infomon_spec's Registry
+module QStrikeTestHelper
+  def self.set_buff_active(effect, active)
+    if Effects::Buffs.respond_to?(:set_active)
+      # Standalone MockRegistry
+      Effects::Buffs.set_active(effect, active)
+    else
+      # infomon_spec's Registry - uses XMLData.dialogs
+      if active
+        XMLData.save_dialogs("Buffs", { effect => Time.now.to_f + 3600 })
+      else
+        XMLData.save_dialogs("Buffs", {})
+      end
     end
   end
 
-  Buffs = MockRegistry.new
+  def self.clear_buffs
+    if Effects::Buffs.respond_to?(:clear)
+      Effects::Buffs.clear
+    else
+      XMLData.save_dialogs("Buffs", {})
+    end
+  end
 end
 
 # Mock CMan module for attack cost and rank lookups
-module CMan
-  @@combat_mans = {
-    "tackle"       => { short_name: "tackle", cost: { stamina: 7 } },
-    "striking_asp" => { short_name: "striking_asp", cost: { stamina: 0 } },
-  }.freeze
-  @@cman_data = { "striking_asp" => 2 }
+# When running with other specs, Lich::Gemstone::CMan may already be defined
+# We need to ensure our test data is accessible
+QSTRIKE_TEST_CMAN_DATA = {
+  "tackle"       => { short_name: "tackle", cost: { stamina: 7 } },
+  "striking_asp" => { short_name: "striking_asp", cost: { stamina: 0 } },
+}.freeze
+QSTRIKE_TEST_CMAN_RANKS = { "striking_asp" => 2 }.freeze
 
-  def self.class_variable_get(name)
-    case name
-    when :@@combat_mans then @@combat_mans
-    else {}
+if defined?(Lich::Gemstone::CMan)
+  # Real CMan is loaded - override its methods for testing
+  module Lich::Gemstone::CMan
+    class << self
+      alias_method :original_bracket, :[] if method_defined?(:[]) && !method_defined?(:original_bracket)
+
+      def [](name)
+        QSTRIKE_TEST_CMAN_RANKS[name.to_s] || 0
+      end
     end
   end
+else
+  # Define standalone mock
+  module CMan
+    @@combat_mans = QSTRIKE_TEST_CMAN_DATA
+    @@cman_data = QSTRIKE_TEST_CMAN_RANKS
 
-  def self.[](name)
-    @@cman_data[name.to_s] || 0
+    def self.class_variable_get(name)
+      case name
+      when :@@combat_mans then @@combat_mans
+      else {}
+      end
+    end
+
+    def self.[](name)
+      @@cman_data[name.to_s] || 0
+    end
   end
 end
+
+# Ensure CMan constant is available at top level
+CMan = Lich::Gemstone::CMan if defined?(Lich::Gemstone::CMan) && !defined?(CMan)
 
 LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 
@@ -143,7 +200,7 @@ describe Lich::Gemstone::QStrike do
   before(:each) do
     GameObj.clear_hands
     Char.set_stamina(100)
-    Effects::Buffs.clear
+    QStrikeTestHelper.clear_buffs
     Lich::Gemstone::QStrike.clear_cache
   end
 
@@ -323,7 +380,7 @@ describe Lich::Gemstone::QStrike do
     end
 
     it "returns true when stance is active" do
-      Effects::Buffs.set_active('Striking Asp', true)
+      QStrikeTestHelper.set_buff_active('Striking Asp', true)
       expect(Lich::Gemstone::QStrike.striking_asp_active?).to be true
     end
   end
@@ -334,7 +391,7 @@ describe Lich::Gemstone::QStrike do
     end
 
     it "returns correct multiplier based on rank when active" do
-      Effects::Buffs.set_active('Striking Asp', true)
+      QStrikeTestHelper.set_buff_active('Striking Asp', true)
       # CMan mock returns rank 2 for striking_asp
       expect(Lich::Gemstone::QStrike.striking_asp_multiplier).to eq(0.5)
     end
@@ -406,7 +463,7 @@ describe Lich::Gemstone::QStrike do
     end
 
     it "applies Striking Asp discount when active" do
-      Effects::Buffs.set_active('Striking Asp', true)
+      QStrikeTestHelper.set_buff_active('Striking Asp', true)
       Lich::Gemstone::QStrike.clear_cache
 
       result = Lich::Gemstone::QStrike.calculate(reserve: 1)
