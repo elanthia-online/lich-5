@@ -274,6 +274,53 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Stats.enhanced_log).to eq([118, 34])
     end
 
+    it "handles info full with base stats" do
+      test_stats = <<~Stuffed
+        Name: Nisugi Race: Half-Elf  Profession: Ranger (shown as: Hero)
+        Gender: Male    Age: 35    Expr: 43,904,921    Level:  100
+                          Normal (Bonus)  ...  Ascended (Bonus)  ...  Enhanced (Bonus)
+            Strength (STR):   100 (25)    ...  115 (32)          ...  155 (52)
+        Constitution (CON):    97 (23)    ...   97 (23)          ...  134 (42)
+           Dexterity (DEX):   100 (30)    ...  116 (38)          ...  156 (58)
+             Agility (AGI):    98 (34)    ...  102 (36)          ...  142 (56)
+          Discipline (DIS):    98 (19)    ...   98 (19)          ...  138 (39)
+                Aura (AUR):    98 (24)    ...   98 (24)          ...  104 (27)
+               Logic (LOG):    95 (22)    ...   95 (22)          ...  115 (32)
+           Intuition (INT):    98 (24)    ...   98 (24)          ...  133 (41)
+              Wisdom (WIS):   100 (25)    ...  114 (32)          ...  154 (52)
+           Influence (INF):    90 (25)    ...   90 (25)          ...   90 (25)
+        Mana:  431   Silver: 0
+      Stuffed
+      test_stats.split("\n").each { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
+
+      # Base stats (from 'info full')
+      expect(Lich::Gemstone::Infomon.get("stat.Strength.base")).to eq(100)
+      expect(Lich::Gemstone::Infomon.get("stat.Strength.base_bonus")).to eq(25)
+      expect(Lich::Gemstone::Infomon.get("stat.Aura.base")).to eq(98)
+      expect(Lich::Gemstone::Infomon.get("stat.Aura.base_bonus")).to eq(24)
+
+      # Ascended stats (value/bonus)
+      expect(Lich::Gemstone::Infomon.get("stat.Strength")).to eq(115)
+      expect(Lich::Gemstone::Infomon.get("stat.Strength_bonus")).to eq(32)
+
+      # Enhanced stats
+      expect(Lich::Gemstone::Infomon.get("stat.Strength.enhanced")).to eq(155)
+      expect(Lich::Gemstone::Infomon.get("stat.Strength.enhanced_bonus")).to eq(52)
+
+      # Stats module accessors
+      expect(Lich::Gemstone::Stats.strength.base.value).to eq(100)
+      expect(Lich::Gemstone::Stats.strength.base.bonus).to eq(25)
+      expect(Lich::Gemstone::Stats.strength.value).to eq(115)
+      expect(Lich::Gemstone::Stats.strength.bonus).to eq(32)
+      expect(Lich::Gemstone::Stats.strength.enhanced.value).to eq(155)
+      expect(Lich::Gemstone::Stats.strength.enhanced.bonus).to eq(52)
+
+      # Shorthand accessors
+      expect(Lich::Gemstone::Stats.base_str).to eq([100, 25])
+      expect(Lich::Gemstone::Stats.str).to eq([115, 32])
+      expect(Lich::Gemstone::Stats.enhanced_str).to eq([155, 52])
+    end
+
     it "handles levelup" do
       levelup = <<-Levelup
             Strength (STR) :  65   +1  ...      7    +1

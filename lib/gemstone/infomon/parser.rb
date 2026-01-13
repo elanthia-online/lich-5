@@ -9,7 +9,9 @@ module Lich
           # Regex patterns grouped for Info, Exp, Skill and PSM parsing - calls upsert_batch to reduce db impact
           CharRaceProf = /^Name:\s+(?<name>[A-z\s'-]+)\s+Race:\s+(?<race>[A-z]+|[A-z]+(?: |-)[A-z]+)\s+Profession:\s+(?<profession>[-A-z]+)/.freeze
           CharGenderAgeExpLevel = /^Gender:\s+(?<gender>[A-z]+)\s+Age:\s+(?<age>[,0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)/.freeze
-          Stat = /^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)/.freeze
+          # Matches both 'info' (2 columns) and 'info full' (3 columns with base stats)
+          # Base stats are optional - only present in 'info full' output
+          Stat = /^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):(?:\s+(?<base_value>\d+)\s+\((?<base_bonus>-?\d+)\)\s+[.]{3})?\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)/.freeze
           StatEnd = /^Mana:\s+-?\d+\s+Silver:\s(?<silver>-?[\d,]+)$/.freeze
           Fame = /^\s+Level: \d+\s+Fame: (?<fame>-?[\d,]+)$/.freeze # serves as ExprStart
           RealExp = %r{^\s+Experience: [\d,]+\s+Field Exp: (?<fxp_current>[\d,]+)/(?<fxp_max>[\d,]+)$}.freeze
@@ -180,6 +182,11 @@ module Lich
                               ['stat.%s_bonus' % match[:stat], match[:bonus].to_i],
                               ['stat.%s.enhanced' % match[:stat], match[:enhanced_value].to_i],
                               ['stat.%s.enhanced_bonus' % match[:stat], match[:enhanced_bonus].to_i])
+              # Store base stats if present (from 'info full' command)
+              if match[:base_value]
+                @stat_hold.push(['stat.%s.base' % match[:stat], match[:base_value].to_i],
+                                ['stat.%s.base_bonus' % match[:stat], match[:base_bonus].to_i])
+              end
               :ok
             when Pattern::StatEnd
               match = Regexp.last_match
