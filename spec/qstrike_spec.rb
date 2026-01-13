@@ -156,12 +156,18 @@ QSTRIKE_TEST_CMAN_RANKS = { "striking_asp" => 2 }.freeze
 
 if defined?(Lich::Gemstone::CMan)
   # Real CMan is loaded - override its methods for testing
+  # Only intercept our test data, fall back to original for everything else
   module Lich::Gemstone::CMan
     class << self
       alias_method :original_bracket, :[] if method_defined?(:[]) && !method_defined?(:original_bracket)
 
       def [](name)
-        QSTRIKE_TEST_CMAN_RANKS[name.to_s] || 0
+        key = name.to_s
+        if QSTRIKE_TEST_CMAN_RANKS.key?(key)
+          QSTRIKE_TEST_CMAN_RANKS[key]
+        else
+          original_bracket(name)
+        end
       end
     end
   end
