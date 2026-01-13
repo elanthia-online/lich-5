@@ -114,7 +114,7 @@ module Lich
 
           # Enhancive active state tracking (on/off)
           EnhanciveOn = /^You are (?:now|already|currently) accepting the benefits of (?:your|any and all) enhancive (?:inventory )?items(?: in your inventory)?\./.freeze
-          EnhanciveOff = /^You (?:are no longer|already are not|are(?:<pushBold\/>)? not(?:<popBold\/>)? currently) accepting the benefit(?:s)? of (?:your|any) enhancive (?:inventory )?items(?: in your inventory)?\./.freeze
+          EnhanciveOff = /^You (?:are no longer|already are not|are not currently) accepting the benefit(?:s)? of (?:your|any) enhancive (?:inventory )?items(?: in your inventory)?\./.freeze
           EnhancivePauses = /^You currently have (?<pauses>\d+) enhancive pauses? available\.$/.freeze
 
           All = Regexp.union(CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
