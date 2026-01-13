@@ -76,7 +76,7 @@ reconnect_if_wanted = proc {
   ## GUI starts here
 
   elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
-    require File.join(LIB_DIR, 'common', 'gui-login.rb')
+    require File.join(LIB_DIR, 'common', 'gui_login.rb')
     gui_login
   end
 

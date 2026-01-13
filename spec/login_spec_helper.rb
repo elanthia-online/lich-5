@@ -208,7 +208,7 @@ $LOAD_PATH.unshift(File.expand_path('../lib', __FILE__))
 LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 
 # Require the code to be tested
-require 'common/gui-login'
+require 'common/gui_login'
 require 'common/gui/account_manager'
 require 'common/gui/yaml_state'
 require 'common/gui/authentication'
