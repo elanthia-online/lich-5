@@ -113,8 +113,8 @@ end
 # Mock CMan module for attack cost and rank lookups
 module CMan
   @@combat_mans = {
-    "tackle" => { short_name: "tackle", cost: { stamina: 7 } },
-    "striking_asp" => { short_name: "striking_asp", cost: { stamina: 0 } }
+    "tackle"       => { short_name: "tackle", cost: { stamina: 7 } },
+    "striking_asp" => { short_name: "striking_asp", cost: { stamina: 0 } },
   }.freeze
   @@cman_data = { "striking_asp" => 2 }
 

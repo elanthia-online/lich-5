@@ -30,8 +30,8 @@ module Lich
       # Applied per-weapon to calculate Equipment Speed
       SPEED_MULTIPLIERS = {
         two_handed: 1.5,
-        polearm:    1.5,
-        ranged:     2.5,
+        polearm: 1.5,
+        ranged: 2.5,
         # All others default to 1.0
       }.freeze
       DEFAULT_MULTIPLIER = 1.0
@@ -535,7 +535,7 @@ module Lich
 
         # Striking Asp
         asp_mult = striking_asp_multiplier
-        if asp_mult != 1.0
+        if (asp_mult - 1.0).abs > Float::EPSILON
           respond "Striking Asp multiplier: #{asp_mult}"
           final_cost = (base_cost * asp_mult).to_i
           respond "Final cost (with Asp): #{base_cost} * #{asp_mult} = #{final_cost}"
@@ -623,6 +623,13 @@ module Lich
 
       # === ATTACK COST LOOKUP ===
 
+      # Module lookup configuration: [Module, class_var, type_symbol]
+      TECHNIQUE_MODULES = [
+        [:CMan, :@@combat_mans, :cman],
+        [:Weapon, :@@weapon_techniques, :weapon],
+        [:Shield, :@@shield_techniques, :shield],
+      ].freeze
+
       # Look up stamina cost for a CMan or Weapon technique
       #
       # @param name [String, Symbol] Attack name
@@ -631,64 +638,43 @@ module Lich
         name = name.to_s.downcase.gsub(/[\s-]+/, '_')
 
         # Handle explicit type prefixes for disambiguation
-        # e.g., "weapon_flurry" vs "cman_flurry" (both have short_name "flurry")
-        if name.start_with?('weapon_')
-          return lookup_weapon_cost(name.sub('weapon_', ''))
-        elsif name.start_with?('cman_')
-          return lookup_cman_cost(name.sub('cman_', ''))
-        elsif name.start_with?('shield_')
-          return lookup_shield_cost(name.sub('shield_', ''))
+        TECHNIQUE_MODULES.each do |_, _, type|
+          prefix = "#{type}_"
+          return lookup_technique_cost(name.sub(prefix, ''), type) if name.start_with?(prefix)
         end
 
-        # Try CMan lookup first
-        cost = lookup_cman_cost(name)
-        return cost if cost.positive?
+        # Try each module in order until we find a cost
+        TECHNIQUE_MODULES.each do |_, _, type|
+          cost = lookup_technique_cost(name, type)
+          return cost if cost.positive?
+        end
 
-        # Try Weapon technique lookup
-        cost = lookup_weapon_cost(name)
-        return cost if cost.positive?
-
-        # Try Shield technique lookup
-        lookup_shield_cost(name)
+        0
       end
 
-      # Look up CMan stamina cost
+      # Generic technique cost lookup
       # @param name [String] Normalized attack name
+      # @param type [Symbol] Technique type (:cman, :weapon, :shield)
       # @return [Integer] Stamina cost, or 0 if not found
-      def self.lookup_cman_cost(name)
-        return 0 unless defined?(CMan)
+      def self.lookup_technique_cost(name, type)
+        mod_name, class_var, = TECHNIQUE_MODULES.find { |_, _, t| t == type }
+        return 0 unless mod_name && defined_module?(mod_name)
 
-        cman_data = CMan.class_variable_get(:@@combat_mans)
-        cman_entry = cman_data[name] || cman_data.values.find { |v| v[:short_name] == name }
-        cman_entry&.dig(:cost, :stamina).to_i
+        mod = Object.const_get(mod_name)
+        data = mod.class_variable_get(class_var)
+        entry = data[name] || data.values.find { |v| v[:short_name] == name }
+        entry&.dig(:cost, :stamina).to_i
       rescue StandardError
         0
       end
 
-      # Look up Weapon technique stamina cost
-      # @param name [String] Normalized attack name
-      # @return [Integer] Stamina cost, or 0 if not found
-      def self.lookup_weapon_cost(name)
-        return 0 unless defined?(Weapon)
-
-        weapon_data = Weapon.class_variable_get(:@@weapon_techniques)
-        weapon_entry = weapon_data[name] || weapon_data.values.find { |v| v[:short_name] == name }
-        weapon_entry&.dig(:cost, :stamina).to_i
+      # Check if a module is defined
+      # @param mod_name [Symbol] Module name
+      # @return [Boolean]
+      def self.defined_module?(mod_name)
+        Object.const_defined?(mod_name)
       rescue StandardError
-        0
-      end
-
-      # Look up Shield technique stamina cost
-      # @param name [String] Normalized attack name
-      # @return [Integer] Stamina cost, or 0 if not found
-      def self.lookup_shield_cost(name)
-        return 0 unless defined?(Shield)
-
-        shield_data = Shield.class_variable_get(:@@shield_techniques)
-        shield_entry = shield_data[name] || shield_data.values.find { |v| v[:short_name] == name }
-        shield_entry&.dig(:cost, :stamina).to_i
-      rescue StandardError
-        0
+        false
       end
 
       # Find maximum seconds of reduction affordable
@@ -792,33 +778,15 @@ module Lich
       # @param name [String] Normalized attack name
       # @return [Symbol] :cman, :weapon, :shield, or :basic
       def self.detect_attack_type(name)
-        # Check CMan first
-        if defined?(CMan)
-          begin
-            cman_data = CMan.class_variable_get(:@@combat_mans)
-            return :cman if cman_data.key?(name) || cman_data.values.any? { |v| v[:short_name] == name }
-          rescue StandardError
-            # Ignore
-          end
-        end
+        TECHNIQUE_MODULES.each do |mod_name, class_var, type|
+          next unless defined_module?(mod_name)
 
-        # Check Weapon techniques
-        if defined?(Weapon)
           begin
-            weapon_data = Weapon.class_variable_get(:@@weapon_techniques)
-            return :weapon if weapon_data.key?(name) || weapon_data.values.any? { |v| v[:short_name] == name }
+            mod = Object.const_get(mod_name)
+            data = mod.class_variable_get(class_var)
+            return type if data.key?(name) || data.values.any? { |v| v[:short_name] == name }
           rescue StandardError
-            # Ignore
-          end
-        end
-
-        # Check Shield techniques
-        if defined?(Shield)
-          begin
-            shield_data = Shield.class_variable_get(:@@shield_techniques)
-            return :shield if shield_data.key?(name) || shield_data.values.any? { |v| v[:short_name] == name }
-          rescue StandardError
-            # Ignore
+            next
           end
         end
 
