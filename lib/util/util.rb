@@ -250,21 +250,36 @@ module Lich
         begin
           unless installed_gems.include?(gem_name)
             respond("--- Lich: Installing missing ruby gem '#{gem_name}' now, please wait!")
-            installer.install(gem_name)
-            respond("--- Lich: Done installing '#{gem_name}' gem!")
+            Lich.log("--- Lich: Installing missing ruby gem '#{gem_name}' now, please wait!")
+            result = installer.install(gem_name)
+            Gem.clear_paths
+            Lich.log("RubyGem Installer Result: #{result.inspect}")
           end
           Gem.clear_paths
+          unless Gem::Specification.map { |gem| gem.name }.sort.uniq.include?(gem_name)
+            Lich.log("RubyGems failed, attempting system method instead!")
+            result = system(File.join(RbConfig::CONFIG['bindir'], 'gem'), 'install', gem_name)
+            Lich.log("SYSTEM Call Result: #{result.inspect}")
+            Gem.clear_paths
+          end
+          respond("--- Lich: Done installing '#{gem_name}' gem!")
+          Lich.log("--- Lich: Done installing '#{gem_name}' gem!")
           require gem_name if should_require
-        rescue StandardError
-          respond("--- Lich: error: Failed to install Ruby gem: #{gem_name}")
+        rescue LoadError, StandardError
+          respond("--- Lich: error: Failed to install/require Ruby gem: #{gem_name}")
           respond("--- Lich: error: #{$!}")
-          Lich.log("error: Failed to install Ruby gem: #{gem_name}")
+          Lich.log("installed_gems.include?(#{gem_name}): #{installed_gems.include?(gem_name)} - #{installed_gems.find_all { |gem| gem == gem_name }.inspect}")
+          Lich.log("error: Failed to install/require Ruby gem: #{gem_name}")
           Lich.log("error: #{$!}")
           failed_gems.push(gem_name)
         end
       end
       unless failed_gems.empty?
-        raise("Please install the failed gems: #{failed_gems.join(', ')} to run #{$lich_char}#{Script.current.name}")
+        if defined?(Script.current.name) && Script.current.name != "unknown"
+          raise("Please install the failed gems: #{failed_gems.join(', ')} manually to run #{$lich_char}#{Script.current.name}")
+        else
+          raise("Please install the failed gems: #{failed_gems.join(', ')} manually to continue.")
+        end
       end
     end
 
