@@ -235,11 +235,11 @@ module Lich
     # This method will attempt to install any gems that are not already installed.
     # If a gem is installed and its value is true, it will be required.
     # If installation fails for any gem, an error will be raised listing all failed gems.
-    def self.install_gem_requirements(gems_to_install)
+    def self.install_gem_requirements(gems_to_install, user_install: false)
       raise ArgumentError, "install_gem_requirements must be passed a Hash" unless gems_to_install.is_a?(Hash)
       require "rubygems"
       require "rubygems/dependency_installer"
-      installer = Gem::DependencyInstaller.new({ :user_install => true, :document => nil })
+      installer = Gem::DependencyInstaller.new({ :user_install => user_install, :document => nil })
       installed_gems = Gem::Specification.map { |gem| gem.name }.sort.uniq
       failed_gems = []
 
