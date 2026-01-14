@@ -127,7 +127,7 @@ module Lich
           # Select passphrase based on mode
           passphrase = case mode
                        when :standard
-                         account_name
+                         account_name.upcase
                        when :enhanced
                          master_password
                        end
