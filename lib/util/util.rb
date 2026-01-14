@@ -255,7 +255,7 @@ module Lich
           end
           Gem.clear_paths
           unless Gem::Specification.map { |gem| gem.name }.sort.uniq.include?(gem_name)
-            system("#{File.join(RbConfig::CONFIG['bindir'], 'gem')} install #{gem_name}")
+            system(File.join(RbConfig::CONFIG['bindir'], 'gem'), 'install', gem_name)
             Gem.clear_paths
           end
           require gem_name if should_require
