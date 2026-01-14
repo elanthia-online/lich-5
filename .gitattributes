@@ -5,7 +5,7 @@
 .git*            export-ignore
 .claude*         export-ignore
 .ruby-version    export-ignore
-Gemfile*         export-ignore
+Gemfile.lock     export-ignore
 /*.adoc          export-ignore
 /*.toml          export-ignore
 /*.yml           export-ignore
