@@ -1008,7 +1008,7 @@ module Lich
           # Load saved sort state
           sort_state = load_sort_state
 
-          if sort_state[:column] && sort_state[:order]
+          if sort_state[:column].is_a?(Integer) && sort_state[:order]
             # Convert symbol to GTK constant
             gtk_order = symbol_to_gtk_sort_type(sort_state[:order])
             store.set_sort_column_id(sort_state[:column], gtk_order) if gtk_order
@@ -1016,8 +1016,8 @@ module Lich
 
           # Save sort state when it changes
           store.signal_connect('sort-column-changed') do
-            column_id, order = store.sort_column_id
-            if column_id && order
+            has_sort, column_id, order = store.sort_column_id
+            if has_sort && column_id && order
               # Convert GTK constant to symbol for storage
               symbol_order = gtk_sort_type_to_symbol(order)
               save_sort_state(column_id, symbol_order) if symbol_order
