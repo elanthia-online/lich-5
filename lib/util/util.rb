@@ -254,11 +254,15 @@ module Lich
             respond("--- Lich: Done installing '#{gem_name}' gem!")
           end
           Gem.clear_paths
+          unless Gem::Specification.map { |gem| gem.name }.sort.uniq.include?(gem_name)
+            system("#{File.join(RbConfig::CONFIG['bindir'], 'gem')} install #{gem_name}")
+            Gem.clear_paths
+          end
           require gem_name if should_require
-        rescue StandardError
-          respond("--- Lich: error: Failed to install Ruby gem: #{gem_name}")
+        rescue LoadError, StandardError
+          respond("--- Lich: error: Failed to install/require Ruby gem: #{gem_name}")
           respond("--- Lich: error: #{$!}")
-          Lich.log("error: Failed to install Ruby gem: #{gem_name}")
+          Lich.log("error: Failed to install/require Ruby gem: #{gem_name}")
           Lich.log("error: #{$!}")
           failed_gems.push(gem_name)
         end
