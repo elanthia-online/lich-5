@@ -18,6 +18,7 @@ require_relative 'gui/theme_utils'
 require_relative 'gui/utilities'
 require_relative 'gui/yaml_state'
 require_relative 'gui/tab_communicator'
+require_relative 'gui/window_settings'
 
 module Lich
   module Common
@@ -483,7 +484,15 @@ module Lich
       @window.title = "Lich v#{LICH_VERSION}"
       @window.border_width = 5
       @window.add(@notebook)
+
+      # Load and apply saved window settings
+      window_settings = Lich::Common::GUI::WindowSettings.load(DATA_DIR)
+      Lich::Common::GUI::WindowSettings.apply_to_window(@window, window_settings)
+
       @window.signal_connect('delete_event') {
+        # Save window geometry before destruction
+        save_window_geometry
+
         # Clean up cross-tab communication
         @tab_communicator.clear_callbacks if @tab_communicator
         @window.destroy
@@ -518,6 +527,22 @@ module Lich
           refresh_window_after_conversion
         })
       end
+    end
+
+    # Saves current window geometry to settings file
+    #
+    # Captures window position and dimensions and persists them
+    # for restoration on next launch.
+    #
+    # @return [void]
+    def save_window_geometry
+      geometry = Lich::Common::GUI::WindowSettings.capture_geometry(@window)
+      Lich::Common::GUI::WindowSettings.save(
+        DATA_DIR,
+        width: geometry[:width],
+        height: geometry[:height],
+        position: geometry[:position]
+      )
     end
 
     # Applies button style for light mode
