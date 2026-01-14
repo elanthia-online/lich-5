@@ -255,6 +255,7 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml   > Lich5/data/effect-list.xml
 
           cp lich.rbw Lich5/
+          cp Gemfile Lich5/
           cp -r lib Lich5/
 
           tar -czvf lich-5.tar.gz Lich5/
