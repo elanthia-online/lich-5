@@ -268,7 +268,11 @@ module Lich
         end
       end
       unless failed_gems.empty?
-        raise("Please install the failed gems: #{failed_gems.join(', ')} to run #{$lich_char}#{Script.current.name}")
+        if defined?(Script.current.name) && Script.current.name != "unknown"
+          raise("Please install the failed gems: #{failed_gems.join(', ')} manually to run #{$lich_char}#{Script.current.name}")
+        else
+          raise("Please install the failed gems: #{failed_gems.join(', ')} manually to continue.")
+        end
       end
     end
 
