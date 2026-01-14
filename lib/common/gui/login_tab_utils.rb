@@ -16,6 +16,16 @@ module Lich
           css
         end
 
+        # Creates a compact button CSS provider for tighter list layouts
+        #
+        # @param font_size [Integer] Font size for the button
+        # @return [Gtk::CssProvider] CSS provider for compact button styling
+        def self.create_compact_button_css_provider(font_size: 11)
+          css = Gtk::CssProvider.new
+          css.load_from_data("button {border-radius: 3px; font-size: #{font_size}px; padding: 2px 6px; min-height: 0; min-width: 0;}")
+          css
+        end
+
         # Creates a toggle button CSS provider for styling toggle buttons
         #
         # @return [Gtk::CssProvider] CSS provider for toggle button styling
