@@ -453,7 +453,7 @@ module Lich
             # Add account header if this is a new account
             if login_params.user_id.downcase != last_user_id
               last_user_id = login_params.user_id.downcase
-              quick_box.pack_start(Gtk::Label.new("Account: " + last_user_id), expand: false, fill: false, padding: 6)
+              quick_box.pack_start(Gtk::Label.new("Account: " + last_user_id), expand: false, fill: false, padding: 2)
             end
 
             # Create character entry with play and remove buttons
@@ -468,7 +468,7 @@ module Lich
             remove_button = Components.create_button(label: 'X')
 
             # Apply button styling
-            @button_provider = LoginTabUtils.create_button_css_provider
+            @button_provider = LoginTabUtils.create_compact_button_css_provider
             remove_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
             play_button.style_context.add_provider(@button_provider, Gtk::StyleProvider::PRIORITY_USER)
 
