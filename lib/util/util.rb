@@ -253,7 +253,10 @@ module Lich
             installer.install(gem_name)
             respond("--- Lich: Done installing '#{gem_name}' gem!")
           end
-          require gem_name if should_require
+          if should_require
+            Gem.clear_paths
+            require gem_name 
+          end
         rescue StandardError
           respond("--- Lich: error: Failed to install Ruby gem: #{gem_name}")
           respond("--- Lich: error: #{$!}")
