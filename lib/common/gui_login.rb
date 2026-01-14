@@ -290,7 +290,7 @@ module Lich
           @launch_data = launch_data
           # Wrap window destruction in Gtk.queue to ensure it runs on the GTK main thread
           Gtk.queue {
-            @window.destroy
+            @window.destroy unless @window.destroyed?
             @done = true
           }
         },
@@ -364,7 +364,7 @@ module Lich
           @launch_data = launch_data
           # Wrap window destruction in Gtk.queue to ensure it runs on the GTK main thread
           Gtk.queue {
-            @window.destroy
+            @window.destroy unless @window.destroyed?
             @done = true
           }
         },
@@ -495,7 +495,7 @@ module Lich
 
         # Clean up cross-tab communication
         @tab_communicator.clear_callbacks if @tab_communicator
-        @window.destroy
+        @window.destroy unless @window.destroyed?
         @done = true
       }
 
