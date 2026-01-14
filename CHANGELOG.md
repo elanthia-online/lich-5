@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.13.1](https://github.com/elanthia-online/lich-5/compare/v5.13.0...v5.13.1) (2026-01-14)
+
+
+### Bug Fixes
+
+* **all:** password_cipher.rb upcase account_name for key ([#1118](https://github.com/elanthia-online/lich-5/issues/1118)) ([e4d41dc](https://github.com/elanthia-online/lich-5/commit/e4d41dc9e15d4bd0effd4b520d8a3dfc0479eb0d))
+* **dr:** validator.rb change sleep to should_sleep named param ([#1116](https://github.com/elanthia-online/lich-5/issues/1116)) ([58e9168](https://github.com/elanthia-online/lich-5/commit/58e9168bde5c36f91f683a5e7cb305320cc7fc05))
+* **gs:** add base stats capture from 'info full' command ([#1115](https://github.com/elanthia-online/lich-5/issues/1115)) ([1086093](https://github.com/elanthia-online/lich-5/commit/1086093608914555f664f0eea462c3881ab2419e))
+
 ## [5.13.0](https://github.com/elanthia-online/lich-5/compare/v5.12.12...v5.13.0) (2026-01-13)
 
 
