@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.13.2](https://github.com/elanthia-online/lich-5/compare/v5.13.1...v5.13.2) (2026-01-14)
+
+
+### Bug Fixes
+
+* **all:** install_gem_requirements update available gems after install ([#1120](https://github.com/elanthia-online/lich-5/issues/1120)) ([782b00b](https://github.com/elanthia-online/lich-5/commit/782b00bcabb014558340fd006df16d4dea765742))
+
 ## [5.13.1](https://github.com/elanthia-online/lich-5/compare/v5.13.0...v5.13.1) (2026-01-14)
 
 
