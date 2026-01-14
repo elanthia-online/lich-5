@@ -28,7 +28,7 @@ module Lich
             settings_file = File.join(data_dir, SETTINGS_FILE)
             return {} unless File.exist?(settings_file)
 
-            settings = YAML.load_file(settings_file)
+            settings = YAML.safe_load(File.read(settings_file), permitted_classes: [Symbol], symbolize_names: true)
             validate_settings(settings) ? settings : {}
           rescue StandardError => e
             Lich.log "warning: Could not load window settings: #{e.message}"
