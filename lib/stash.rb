@@ -30,16 +30,24 @@ module Lich
     end
 
     def self.try_or_fail(seconds: 2, command: nil)
-      fput(command)
+      result = fput(command)
       expiry = Time.now + seconds
-      wait_until do yield or Time.now > expiry end
+      wait_until do yield(result) or Time.now > expiry end
       fail "Error[command: #{command}, seconds: #{seconds}]" if Time.now > expiry
     end
 
     def self.add_to_bag(bag, item)
+      @bandolier_weapon ||= {}
       bag = container(bag)
-      try_or_fail(command: "_drag ##{item.id} ##{bag.id}") do
+      try_or_fail(command: "_drag ##{item.id} ##{bag.id}") do |result|
+        # Check for vapor message first (bandolier)
+        if result =~ /As you drop .+ it dissolves into vapor\./
+          @bandolier_weapon[item.name] = true
+          return true
+        end
+        
         20.times {
+          return true if @bandolier_weapon[item.name]
           return true if ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) && @weapon_displayer.include?(bag.id)
           return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) and bag.contents.to_a.map(&:id).include?(item.id))
           return true if item.name =~ /^ethereal \w+$/ && ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id)
@@ -152,6 +160,9 @@ module Lich
             if left_hand.name =~ /^ethereal \w+$/
               fput "rub #{left_hand.noun} tattoo"
               20.times { break if (GameObj.left_hand.name == left_hand.name) or (GameObj.right_hand.name == left_hand.name); sleep 0.1 }
+            elsif @bandolier_weapon[left_hand.name]
+              fput "rub ##{GameObj.inv.find{ |item| item.noun == "bandolier" }.id}"
+              20.times { break if (GameObj.left_hand.name == left_hand.name) or (GameObj.right_hand.name == left_hand.name); sleep 0.1 }
             else
               fput "get ##{left_hand.id}"
               20.times { break if (GameObj.left_hand.id == left_hand.id) or (GameObj.right_hand.id == left_hand.id); sleep 0.1 }
@@ -183,6 +194,9 @@ module Lich
         actions.unshift proc {
           if right_hand.name =~ /^ethereal \w+$/
             fput "rub #{right_hand.noun} tattoo"
+            20.times { break if GameObj.left_hand.name == right_hand.name or GameObj.right_hand.name == right_hand.name; sleep 0.1 }
+          elsif @bandolier_weapon[right_hand.name]
+            fput "rub ##{GameObj.inv.find{ |item| item.noun == "bandolier" }.id}"
             20.times { break if GameObj.left_hand.name == right_hand.name or GameObj.right_hand.name == right_hand.name; sleep 0.1 }
           else
             fput "get ##{right_hand.id}"
