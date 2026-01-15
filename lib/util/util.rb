@@ -254,16 +254,15 @@ module Lich
             result = installer.install(gem_name)
             Gem.clear_paths
             Lich.log("RubyGem Installer Result: #{result.inspect}")
+            unless Gem::Specification.map { |gem| gem.name }.sort.uniq.include?(gem_name)
+              Lich.log("RubyGems failed, attempting system method instead!")
+              result = system(File.join(RbConfig::CONFIG['bindir'], 'gem'), 'install', gem_name)
+              Lich.log("SYSTEM Call Result: #{result.inspect}")
+              Gem.clear_paths
+            end
+            respond("--- Lich: Done installing '#{gem_name}' gem!")
+            Lich.log("--- Lich: Done installing '#{gem_name}' gem!")
           end
-          Gem.clear_paths
-          unless Gem::Specification.map { |gem| gem.name }.sort.uniq.include?(gem_name)
-            Lich.log("RubyGems failed, attempting system method instead!")
-            result = system(File.join(RbConfig::CONFIG['bindir'], 'gem'), 'install', gem_name)
-            Lich.log("SYSTEM Call Result: #{result.inspect}")
-            Gem.clear_paths
-          end
-          respond("--- Lich: Done installing '#{gem_name}' gem!")
-          Lich.log("--- Lich: Done installing '#{gem_name}' gem!")
           require gem_name if should_require
         rescue LoadError, StandardError
           respond("--- Lich: error: Failed to install/require Ruby gem: #{gem_name}")
