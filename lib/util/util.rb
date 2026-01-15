@@ -253,12 +253,16 @@ module Lich
             Lich.log("--- Lich: Installing missing ruby gem '#{gem_name}' now, please wait!")
             result = installer.install(gem_name)
             Gem.clear_paths
+            Gem::Specification.reset
+            Gem::Specification.find_by_name(gem_name).activate
             Lich.log("RubyGem Installer Result: #{result.inspect}")
             unless Gem::Specification.map { |gem| gem.name }.sort.uniq.include?(gem_name)
               Lich.log("RubyGems failed, attempting system method instead!")
               result = system(File.join(RbConfig::CONFIG['bindir'], 'gem'), 'install', gem_name)
               Lich.log("SYSTEM Call Result: #{result.inspect}")
               Gem.clear_paths
+              Gem::Specification.reset
+              Gem::Specification.find_by_name(gem_name).activate
             end
             respond("--- Lich: Done installing '#{gem_name}' gem!") if defined?(Lich::Common::Script)
             Lich.log("--- Lich: Done installing '#{gem_name}' gem!")
