@@ -249,7 +249,7 @@ module Lich
         end
         begin
           unless installed_gems.include?(gem_name)
-            respond("--- Lich: Installing missing ruby gem '#{gem_name}' now, please wait!")
+            respond("--- Lich: Installing missing ruby gem '#{gem_name}' now, please wait!") if defined?(Lich::Common::Script)
             Lich.log("--- Lich: Installing missing ruby gem '#{gem_name}' now, please wait!")
             result = installer.install(gem_name)
             Gem.clear_paths
@@ -260,13 +260,13 @@ module Lich
               Lich.log("SYSTEM Call Result: #{result.inspect}")
               Gem.clear_paths
             end
-            respond("--- Lich: Done installing '#{gem_name}' gem!")
+            respond("--- Lich: Done installing '#{gem_name}' gem!") if defined?(Lich::Common::Script)
             Lich.log("--- Lich: Done installing '#{gem_name}' gem!")
           end
           require gem_name if should_require
         rescue LoadError, StandardError
-          respond("--- Lich: error: Failed to install/require Ruby gem: #{gem_name}")
-          respond("--- Lich: error: #{$!}")
+          respond("--- Lich: error: Failed to install/require Ruby gem: #{gem_name}") if defined?(Lich::Common::Script)
+          respond("--- Lich: error: #{$!}") if defined?(Lich::Common::Script)
           Lich.log("installed_gems.include?(#{gem_name}): #{installed_gems.include?(gem_name)} - #{installed_gems.find_all { |gem| gem == gem_name }.inspect}")
           Lich.log("error: Failed to install/require Ruby gem: #{gem_name}")
           Lich.log("error: #{$!}")
