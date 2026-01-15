@@ -45,7 +45,7 @@ module Lich
           @bandolier_weapon[item.name] = true
           return true
         end
-        
+
         20.times {
           return true if @bandolier_weapon[item.name]
           return true if ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) && @weapon_displayer.include?(bag.id)
@@ -161,7 +161,7 @@ module Lich
               fput "rub #{left_hand.noun} tattoo"
               20.times { break if (GameObj.left_hand.name == left_hand.name) or (GameObj.right_hand.name == left_hand.name); sleep 0.1 }
             elsif @bandolier_weapon[left_hand.name]
-              fput "rub ##{GameObj.inv.find{ |item| item.noun == "bandolier" }.id}"
+              fput "rub ##{GameObj.inv.find { |item| item.noun == "bandolier" }.id}"
               20.times { break if (GameObj.left_hand.name == left_hand.name) or (GameObj.right_hand.name == left_hand.name); sleep 0.1 }
             else
               fput "get ##{left_hand.id}"
@@ -196,7 +196,7 @@ module Lich
             fput "rub #{right_hand.noun} tattoo"
             20.times { break if GameObj.left_hand.name == right_hand.name or GameObj.right_hand.name == right_hand.name; sleep 0.1 }
           elsif @bandolier_weapon[right_hand.name]
-            fput "rub ##{GameObj.inv.find{ |item| item.noun == "bandolier" }.id}"
+            fput "rub ##{GameObj.inv.find { |item| item.noun == "bandolier" }.id}"
             20.times { break if GameObj.left_hand.name == right_hand.name or GameObj.right_hand.name == right_hand.name; sleep 0.1 }
           else
             fput "get ##{right_hand.id}"
