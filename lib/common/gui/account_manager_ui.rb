@@ -35,6 +35,7 @@ module Lich
           @data_change_callback = nil
           @tab_communicator = nil
           @notifications_registered = false
+          @tab_indices = {}
         end
 
         # Sets the data change callback for cross-tab communication
