@@ -144,9 +144,10 @@ module Lich
           puts '        --gui             Enable GUI (default).'
           puts '        --no-gui          Run without GUI (headless mode).'
           puts '        --dark-mode       Enable/disable dark mode (true|false|on|off). See example below.'
-          puts '        --gemstone        Connect to the Gemstone IV Prime server (default).'
+          puts '        --gemstone, --gs  Connect to the Gemstone IV Prime server (default).'
           puts '        --shattered       Connect to the Gemstone IV Shattered server.'
-          puts '        --dragonrealms    Connect to the DragonRealms server.'
+          puts '        --dragonrealms, --dr'
+          puts '                          Connect to the DragonRealms server.'
           puts '        --fallen          Connect to the DragonRealms Fallen server.'
           puts '        --platinum        Connect to the Gemstone IV/DragonRealms Platinum server.'
           puts '        --test            Connect to the test instance of the selected game server.'
@@ -301,9 +302,9 @@ module Lich
             handle_shattered_connection(processed_options)
           elsif ARGV.include?('--fallen')
             handle_fallen_connection(processed_options)
-          elsif ARGV.include?('--gemstone')
+          elsif Lich::Util::LoginHelpers.gemstone_flag?(ARGV)
             handle_gemstone_connection(processed_options)
-          elsif ARGV.include?('--dragonrealms')
+          elsif Lich::Util::LoginHelpers.dragonrealms_flag?(ARGV)
             handle_dragonrealms_connection(processed_options)
           else
             processed_options[:game_host] = nil

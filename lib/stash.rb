@@ -6,6 +6,10 @@ stash.rb: Core lich file for extending free_hands, empty_hands functions in
 
 module Lich
   module Stash
+    @weapon_displayer ||= []
+    @bandolier_weapon ||= {}
+    @worn_items ||= {}
+
     def self.find_container(param, loud_fail: true)
       param = param.name if param.is_a?(GameObj) # (Lich::Gemstone::GameObj)
       found_container = GameObj.inv.find do |container|
@@ -19,7 +23,6 @@ module Lich
     end
 
     def self.container(param)
-      @weapon_displayer ||= []
       container_to_check = find_container(param)
       unless @weapon_displayer.include?(container_to_check.id)
         result = Lich::Util.issue_command("look in ##{container_to_check.id}", /In the .*$|That is closed\.|^You glance at/, silent: true, quiet: true) if container_to_check.contents.nil?
@@ -30,18 +33,25 @@ module Lich
     end
 
     def self.try_or_fail(seconds: 2, command: nil)
-      fput(command)
+      result = fput(command)
       expiry = Time.now + seconds
-      wait_until do yield or Time.now > expiry end
+      wait_until do yield(result) || Time.now > expiry end
       fail "Error[command: #{command}, seconds: #{seconds}]" if Time.now > expiry
     end
 
     def self.add_to_bag(bag, item)
       bag = container(bag)
-      try_or_fail(command: "_drag ##{item.id} ##{bag.id}") do
+      try_or_fail(command: "_drag ##{item.id} ##{bag.id}") do |result|
+        # Check for vapor message first (bandolier)
+        if result =~ /As you drop .+ it dissolves into vapor\./
+          @bandolier_weapon[item.name] = "unknown"
+          return true
+        end
+
         20.times {
+          return true if @bandolier_weapon[item.name]
           return true if ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) && @weapon_displayer.include?(bag.id)
-          return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) and bag.contents.to_a.map(&:id).include?(item.id))
+          return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) && bag.contents.to_a.map(&:id).include?(item.id))
           return true if item.name =~ /^ethereal \w+$/ && ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id)
           sleep 0.1
         }
@@ -50,14 +60,64 @@ module Lich
     end
 
     def self.wear_to_inv(item)
-      try_or_fail(command: "wear ##{item.id}") do
+      try_or_fail(command: "wear ##{item.id}") do |result|
         20.times {
-          return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) and GameObj.inv.to_a.map(&:id).include?(item.id))
+          return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) && GameObj.inv.to_a.map(&:id).include?(item.id))
           return true if item.name =~ /^ethereal \w+$/ && ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id)
           sleep 0.1
-        }
-        return false
+        } unless result =~ /You can only wear two items in that location\./
+
+        return @worn_items[item.name] = false
       end
+    end
+
+    def self.find_bandolier_bag(item)
+      # Return cached value if valid and item exists in inventory
+      cached_id = @bandolier_weapon[item.name]
+      return cached_id if cached_id && cached_id != "unknown" &&
+                          GameObj.inv.any? { |inv_item| inv_item.id == cached_id }
+
+      # Regex patterns for parsing
+      look_in_regex = Regexp.union(
+        /^I could not find what you were referring to./,
+        /^Surrounded by some swirling mist is /,
+        /^In the /,
+        /contains (?:DOSE|TINCTURE)s of the following /,
+        /There is nothing in there\./,
+        /<exposeContainer/,
+        /<dialogData/,
+        /<container/,
+        /you glance/,
+        /That is closed\./
+      )
+
+      item_regex = %r{<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)</a>}
+
+      # Collect all containers from inventory
+      waitrt?
+      results = Lich::Util.issue_command("inventory containers", /^You are holding /, timeout: 3, silent: true, quiet: true)
+      containers = results.flat_map { |line|
+        line.scan(item_regex).map { |id, _noun, _name| GameObj[id] }
+      }.compact
+
+      # Find container with the item using mist indicator
+      item_noun_regex = /\b#{Regexp.escape(item.noun)}\b/
+      found_container = containers.find do |container|
+        waitrt?
+        results = Lich::Util.issue_command(
+          "look in ##{container.id}",
+          look_in_regex,
+          timeout: 2,
+          silent: true,
+          quiet: true
+        )
+
+        results.any? { |line|
+          line.include?("Surrounded by some swirling mist is") && line.match?(item_noun_regex)
+        }
+      end
+
+      @bandolier_weapon[item.name] = found_container&.id || "unknown"
     end
 
     def self.sheath_bags
@@ -117,7 +177,7 @@ module Lich
         sheath = second_sheath = nil
       end
       # weaponsack for both hands
-      if UserVars.weapon.is_a?(String) and UserVars.weaponsack.is_a?(String) and not UserVars.weapon.empty? and not UserVars.weaponsack.empty? and (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i or right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
+      if UserVars.weapon.is_a?(String) && UserVars.weaponsack.is_a?(String) && !UserVars.weapon.empty? && !UserVars.weaponsack.empty? && (right_hand.name =~ /#{Regexp.escape(UserVars.weapon.strip)}/i || right_hand.name =~ /#{Regexp.escape(UserVars.weapon).sub(' ', ' .*')}/i)
         weaponsack = nil unless (weaponsack = find_container(UserVars.weaponsack, loud_fail: false)).is_a?(GameObj) # (Lich::Gemstone::GameObj)
       end
       # lootsack for both hands
@@ -137,11 +197,10 @@ module Lich
 
       if (left || both) && left_hand.id
         waitrt?
-        if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/)\
-          and Lich::Stash::wear_to_inv(left_hand)
+        if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/) && @worn_items[left_hand.name] != false && Lich::Stash::wear_to_inv(left_hand)
           actions.unshift proc {
             fput "remove ##{left_hand.id}"
-            20.times { break if GameObj.left_hand.id == left_hand.id or GameObj.right_hand.id == left_hand.id; sleep 0.1 }
+            20.times { break if GameObj.left_hand.id == left_hand.id || GameObj.right_hand.id == left_hand.id; sleep 0.1 }
 
             if GameObj.right_hand.id == left_hand.id
               dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
@@ -151,13 +210,16 @@ module Lich
           actions.unshift proc {
             if left_hand.name =~ /^ethereal \w+$/
               fput "rub #{left_hand.noun} tattoo"
-              20.times { break if (GameObj.left_hand.name == left_hand.name) or (GameObj.right_hand.name == left_hand.name); sleep 0.1 }
+              20.times { break if (GameObj.left_hand.name == left_hand.name) || (GameObj.right_hand.name == left_hand.name); sleep 0.1 }
+            elsif @bandolier_weapon[left_hand.name]
+              fput "rub ##{find_bandolier_bag(left_hand)}"
+              20.times { break if (GameObj.left_hand.name == left_hand.name) || (GameObj.right_hand.name == left_hand.name); sleep 0.1 }
             else
               fput "get ##{left_hand.id}"
-              20.times { break if (GameObj.left_hand.id == left_hand.id) or (GameObj.right_hand.id == left_hand.id); sleep 0.1 }
+              20.times { break if (GameObj.left_hand.id == left_hand.id) || (GameObj.right_hand.id == left_hand.id); sleep 0.1 }
             end
 
-            if GameObj.right_hand.id == left_hand.id or (GameObj.right_hand.name == left_hand.name && left_hand.name =~ /^ethereal \w+$/)
+            if GameObj.right_hand.id == left_hand.id || (GameObj.right_hand.name == left_hand.name && left_hand.name =~ /^ethereal \w+$/)
               dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
             end
           }
@@ -170,7 +232,7 @@ module Lich
           else
             result = nil
           end
-          if result.nil? or !result
+          if result.nil? || !result
             for container in other_containers.call
               result = Lich::Stash::add_to_bag(container, GameObj.left_hand)
               break if result
@@ -183,13 +245,16 @@ module Lich
         actions.unshift proc {
           if right_hand.name =~ /^ethereal \w+$/
             fput "rub #{right_hand.noun} tattoo"
-            20.times { break if GameObj.left_hand.name == right_hand.name or GameObj.right_hand.name == right_hand.name; sleep 0.1 }
+            20.times { break if GameObj.left_hand.name == right_hand.name || GameObj.right_hand.name == right_hand.name; sleep 0.1 }
+          elsif @bandolier_weapon[right_hand.name]
+            fput "rub ##{find_bandolier_bag(right_hand)}"
+            20.times { break if GameObj.left_hand.name == right_hand.name || GameObj.right_hand.name == right_hand.name; sleep 0.1 }
           else
             fput "get ##{right_hand.id}"
-            20.times { break if GameObj.left_hand.id == right_hand.id or GameObj.right_hand.id == right_hand.id; sleep 0.1 }
+            20.times { break if GameObj.left_hand.id == right_hand.id || GameObj.right_hand.id == right_hand.id; sleep 0.1 }
           end
 
-          if GameObj.left_hand.id == right_hand.id or (GameObj.left_hand.name == right_hand.name && right_hand.name =~ /^ethereal \w+$/)
+          if GameObj.left_hand.id == right_hand.id || (GameObj.left_hand.name == right_hand.name && right_hand.name =~ /^ethereal \w+$/)
             dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
           end
         }
@@ -204,7 +269,7 @@ module Lich
           result = nil
         end
         sleep 0.1
-        if result.nil? or !result
+        if result.nil? || !result
           for container in other_containers.call
             result = Lich::Stash::add_to_bag(container, GameObj.right_hand)
             break if result

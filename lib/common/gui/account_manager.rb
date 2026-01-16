@@ -21,7 +21,7 @@ module Lich
         #   - Password is always updated
         #   - Characters are merged (existing preserved, new ones added if not duplicates)
         #   - Existing character metadata (favorites, custom settings) is preserved
-        #   - Duplicate detection uses normalized char_name + game_code + frontend
+        #   - Duplicate detection uses normalized char_name + game_code + frontend + custom_launch
         # @note For new accounts:
         #   - Account created with normalized username (UPCASE)
         #   - Characters added with normalized names (Title case)

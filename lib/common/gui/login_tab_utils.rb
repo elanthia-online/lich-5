@@ -255,6 +255,9 @@ module Lich
           custom_launch_entry.child.set_placeholder_text("(enter custom launch command)")
           custom_launch_entry.append_text("Wizard.Exe /GGS /H127.0.0.1 /P%port% /K%key%")
           custom_launch_entry.append_text("Stormfront.exe /GGS /Hlocalhost /P%port% /K%key%")
+          custom_launch_entry.append_text("/Applications/Warlock.app/Contents/MacOS/Warlock --host localhost --port %port% --key %key%") if OS.mac?
+          custom_launch_entry.append_text("warlock --host localhost --port %port% --key %key%") if OS.windows?
+          custom_launch_entry.append_text("/usr/bin/warlock --host localhost --port %port% --key %key%") if OS.linux?
           custom_launch_entry
         end
 
