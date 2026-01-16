@@ -1328,7 +1328,6 @@ module Lich
 
           # Create notebook for tabs (store as instance variable for tab recreation)
           @notebook = Gtk::Notebook.new
-          @tab_indices = {} # Registry for tab indices to avoid hardcoding page numbers
 
           # Create tabs
           create_accounts_tab(@notebook)
