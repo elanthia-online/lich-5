@@ -67,7 +67,7 @@ module Lich
           sleep 0.1
         } unless result =~ /You can only wear two items in that location\./
 
-        return @wear_items[item.name] = false
+        return @worn_items[item.name] = false
       end
     end
 
@@ -111,8 +111,8 @@ module Lich
           unless found_container.nil?
             @sheath.store(sheath_type.to_sym, found_container)
           else
-            respond("Lich::Stash.sheath_bags Error: Could not find sheath(#{sheath_obj}) in inventory. Not using, possibly hidden, tucked, || missing.")
-            Lich.log("Lich::Stash.sheath_bags Error: Could not find sheath(#{sheath_obj}) in inventory. Not using, possibly hidden, tucked, || missing.")
+            respond("Lich::Stash.sheath_bags Error: Could not find sheath(#{sheath_obj}) in inventory. Not using, possibly hidden, tucked, or missing.")
+            Lich.log("Lich::Stash.sheath_bags Error: Could not find sheath(#{sheath_obj}) in inventory. Not using, possibly hidden, tucked, or missing.")
           end
         end
       }
@@ -173,7 +173,7 @@ module Lich
 
       if (left || both) && left_hand.id
         waitrt?
-        if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/) && @wear_items[left_hand.name] != false && Lich::Stash::wear_to_inv(left_hand)
+        if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/) && @worn_items[left_hand.name] != false && Lich::Stash::wear_to_inv(left_hand)
           actions.unshift proc {
             fput "remove ##{left_hand.id}"
             20.times { break if GameObj.left_hand.id == left_hand.id || GameObj.right_hand.id == left_hand.id; sleep 0.1 }
