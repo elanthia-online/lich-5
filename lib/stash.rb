@@ -95,7 +95,7 @@ module Lich
 
       # Collect all containers from inventory
       waitrt?
-      results = Lich::Util.issue_command("inventory containers", /^You are holding /)
+      results = Lich::Util.issue_command("inventory containers", /^You are holding /, timeout: 3, silent: true, quiet: true)
       containers = results.flat_map { |line|
         line.scan(item_regex).map { |id, _noun, _name| GameObj[id] }
       }.compact
