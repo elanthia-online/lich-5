@@ -46,7 +46,7 @@ module Lich
               entries = convert_yaml_to_legacy_format(yaml_data)
 
               # Apply sorting with favorites priority if enabled
-              sort_entries_with_favorites(entries, autosort_state)
+              entries = sort_entries_with_favorites(entries, autosort_state)
 
               entries
             rescue StandardError => e
@@ -66,6 +66,7 @@ module Lich
         # Saves entry data to YAML file
         # Converts and serializes entry data to the entry.yaml file with encryption support
         # Preserves master_password_validation_test from existing YAML during round-trip conversion
+        # Encrypts passwords based on the file's encryption_mode before writing
         #
         # @param data_dir [String] Directory to save entry data
         # @param entry_data [Array] Array of entry data in legacy format
@@ -73,12 +74,16 @@ module Lich
         def self.save_entries(data_dir, entry_data)
           yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
 
-          # Preserve validation test from existing YAML if it exists
+          # Preserve validation test and encryption_mode from existing YAML if it exists
           original_validation_test = nil
+          original_encryption_mode = :plaintext
           if File.exist?(yaml_file)
             begin
               original_data = YAML.load_file(yaml_file)
-              original_validation_test = original_data['master_password_validation_test'] if original_data.is_a?(Hash)
+              if original_data.is_a?(Hash)
+                original_validation_test = original_data['master_password_validation_test']
+                original_encryption_mode = (original_data['encryption_mode'] || 'plaintext').to_sym
+              end
             rescue StandardError => e
               Lich.log "warning: Could not load existing YAML to preserve validation test: #{e.message}"
             end
@@ -86,6 +91,30 @@ module Lich
 
           # Convert legacy format to YAML structure, passing validation test to preserve it
           yaml_data = convert_legacy_to_yaml_format(entry_data, original_validation_test)
+
+          # Encrypt passwords based on original file's encryption mode
+          # entry_data contains plaintext passwords (decrypted on load or from user input)
+          if original_encryption_mode != :plaintext
+            master_password = nil
+            if original_encryption_mode == :enhanced
+              master_password = MasterPasswordManager.retrieve_master_password
+              if master_password.nil?
+                Lich.log "error: Enhanced mode enabled but master password not found in Keychain"
+                return false
+              end
+            end
+
+            yaml_data['accounts'].each do |account_name, account_data|
+              next unless account_data['password']
+
+              account_data['password'] = encrypt_password(
+                account_data['password'],
+                mode: original_encryption_mode,
+                account_name: account_name,
+                master_password: master_password
+              )
+            end
+          end
 
           # Create backup of existing file if it exists
           if File.exist?(yaml_file)
@@ -738,10 +767,12 @@ module Lich
             end
 
             # Check for duplicate character using precision matching (account/character/game_code/frontend)
+            # Including custom_launch allows multiple entries for the same character with different launch configurations
             existing_character = yaml_data['accounts'][normalized_username]['characters'].find do |char|
               char['char_name'] == character_data['char_name'] &&
                 char['game_code'] == character_data['game_code'] &&
-                char['frontend'] == character_data['frontend']
+                char['frontend'] == character_data['frontend'] &&
+                char['custom_launch'] == character_data['custom_launch']
             end
 
             # Only add if no exact match exists

@@ -516,14 +516,19 @@ module Lich
 
               # Save quick entry if selected
               if @make_quick_option.active?
-                entry_data = { :char_name => normalized_character, :game_code => selected_iter[0], :game_name => selected_iter[1], :user_id => normalized_account, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir }
+                # Preserve encryption_mode from existing entries to prevent silent downgrade
+                existing_encryption_mode = @entry_data.first&.[](:encryption_mode) || :plaintext
+                entry_data = { :char_name => normalized_character, :game_code => selected_iter[0], :game_name => selected_iter[1], :user_id => normalized_account, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir, :encryption_mode => existing_encryption_mode }
 
-                # Check for duplicate entries using normalized comparison for consistent matching
+                # Check for duplicate entries using normalized comparison for consistent matching.
+                # Uniqueness key includes custom_launch to allow multiple custom frontend entries
+                # for the same character (e.g., Wrayth + Custom, or multiple Custom variants).
                 existing_entry = @entry_data.find do |entry|
                   entry[:char_name].to_s.capitalize == entry_data[:char_name] &&
                     entry[:game_code] == entry_data[:game_code] &&
                     entry[:user_id].to_s.upcase == entry_data[:user_id] &&
-                    entry[:frontend] == entry_data[:frontend]
+                    entry[:frontend] == entry_data[:frontend] &&
+                    entry[:custom_launch] == entry_data[:custom_launch]
                 end
 
                 if existing_entry
