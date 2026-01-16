@@ -35,6 +35,7 @@ module Lich
           @data_change_callback = nil
           @tab_communicator = nil
           @notifications_registered = false
+          @tab_indices = {}
         end
 
         # Sets the data change callback for cross-tab communication
@@ -195,11 +196,11 @@ module Lich
 
           # Create add account button
           add_account_button = Gtk::Button.new(label: "Add Account")
-          button_box.pack_start(add_account_button, expand: false, fill: false, padding: 0)
+          # button_box.pack_start(add_account_button, expand: false, fill: false, padding: 0)
 
           # Create add character button
           add_character_button = Gtk::Button.new(label: "Add Character")
-          button_box.pack_start(add_character_button, expand: false, fill: false, padding: 0)
+          # button_box.pack_start(add_character_button, expand: false, fill: false, padding: 0)
 
           # Create change password button
           change_password_button = Gtk::Button.new(label: "Change Password")
@@ -1327,7 +1328,6 @@ module Lich
 
           # Create notebook for tabs (store as instance variable for tab recreation)
           @notebook = Gtk::Notebook.new
-          @tab_indices = {} # Registry for tab indices to avoid hardcoding page numbers
 
           # Create tabs
           create_accounts_tab(@notebook)
