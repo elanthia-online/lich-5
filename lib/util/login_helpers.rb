@@ -16,6 +16,12 @@ module Lich
       # Valid realms for elogin support
       VALID_REALMS = %w[prime platinum shattered test].freeze
 
+      # Gemstone game flag aliases for CLI shorthand (--gs is alias for --gemstone)
+      GEMSTONE_FLAGS = %w[--gemstone --gs].freeze
+
+      # DragonRealms game flag aliases for CLI shorthand (--dr is alias for --dragonrealms)
+      DRAGONREALMS_FLAGS = %w[--dragonrealms --dr].freeze
+
       # Frontend pattern for regex matching
       FRONTEND_PATTERN = /^--(?<fe>avalon|stormfront|wizard)$/i.freeze
       INSTANCE_PATTERN = /^--(?<inst>GS.?$|DR.?$)/i.freeze
@@ -336,12 +342,16 @@ module Lich
       # Resolves the game instance from command line arguments
       # @param argv [Array<String>] command line arguments
       # @return [String, nil] game instance code or nil if no valid pattern found
+      #
+      # Supports shorthand aliases:
+      #   --gs  → equivalent to --gemstone
+      #   --dr  → equivalent to --dragonrealms
       def self.resolve_instance(argv)
         instance_flags_seen = false
         resolved_instance = nil
 
-        # Check for --gemstone with variants
-        if argv.include?('--gemstone')
+        # Check for --gemstone (or --gs alias) with variants
+        if gemstone_flag?(argv)
           instance_flags_seen = true
           resolved_instance ||= 'GST' if argv.include?('--test')
           resolved_instance ||= 'GSX' if argv.include?('--platinum')
@@ -349,7 +359,8 @@ module Lich
           resolved_instance ||= 'GS3' # default gemstone
         end
 
-        if argv.include?('--dragonrealms')
+        # Check for --dragonrealms (or --dr alias) with variants
+        if dragonrealms_flag?(argv)
           instance_flags_seen = true
           resolved_instance ||= 'DRT' if argv.include?('--test')
           resolved_instance ||= 'DRX' if argv.include?('--platinum')
@@ -391,6 +402,22 @@ module Lich
         return resolved_instance unless resolved_instance.nil?
         return :__unset unless instance_flags_seen
         nil
+      end
+
+      # Checks if any Gemstone game flag (including aliases) is present in argv
+      #
+      # @param argv [Array<String>] command line arguments
+      # @return [Boolean] true if --gemstone or --gs is present
+      def self.gemstone_flag?(argv)
+        GEMSTONE_FLAGS.any? { |flag| argv.include?(flag) }
+      end
+
+      # Checks if any DragonRealms game flag (including aliases) is present in argv
+      #
+      # @param argv [Array<String>] command line arguments
+      # @return [Boolean] true if --dragonrealms or --dr is present
+      def self.dragonrealms_flag?(argv)
+        DRAGONREALMS_FLAGS.any? { |flag| argv.include?(flag) }
       end
 
       # Parses Lich CLI args to determine game instance and frontend.
