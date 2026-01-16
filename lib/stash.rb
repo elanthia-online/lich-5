@@ -72,9 +72,13 @@ module Lich
     end
 
     def self.find_bandolier_bag(item)
-      return @bandolier_weapon[item.name] if @bandolier_weapon[item.name] != "unknown" && GameObj.inv.any? { |inventory_item| inventory_item.id == @bandolier_weapon[item.name] }
+      # Return cached value if valid and item exists in inventory
+      cached_id = @bandolier_weapon[item.name]
+      return cached_id if cached_id && cached_id != "unknown" &&
+                          GameObj.inv.any? { |inv_item| inv_item.id == cached_id }
 
-      regex_look_in = Regexp.union(
+      # Regex patterns for parsing
+      look_in_regex = Regexp.union(
         /^I could not find what you were referring to./,
         /^Surrounded by some swirling mist is /,
         /^In the /,
@@ -84,16 +88,36 @@ module Lich
         /<dialogData/,
         /<container/,
         /you glance/,
+        /That is closed\./
       )
-      GameObj.inv.each do |inventory_item|
-        next unless ["bandolier", "sheath", "scabbard", "sling"].include?(inventory_item.noun)
-        results = Lich::Util.issue_command("look in ##{inventory_item.id}", regex_look_in, timeout: 2, silent: true, quiet: true)
-        if results.any? { |line| line =~ /Surrounded by some swirling mist is / && line =~ /\b#{item.noun}\b/ }
-          @bandolier_weapon[item.name] = inventory_item.id
-          break
-        end
+
+      item_regex = %r{<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)</a>}
+
+      # Collect all containers from inventory
+      waitrt?
+      results = Lich::Util.issue_command("inventory containers", /^You are holding /)
+      containers = results.flat_map { |line|
+        line.scan(item_regex).map { |id, _noun, _name| GameObj[id] }
+      }.compact
+
+      # Find container with the item using mist indicator
+      item_noun_regex = /\b#{Regexp.escape(item.noun)}\b/
+      found_container = containers.find do |container|
+        waitrt?
+        results = Lich::Util.issue_command(
+          "look in ##{container.id}",
+          look_in_regex,
+          timeout: 2,
+          silent: true,
+          quiet: true
+        )
+
+        results.any? { |line|
+          line.include?("Surrounded by some swirling mist is") && line.match?(item_noun_regex)
+        }
       end
-      return @bandolier_weapon[item.name]
+
+      @bandolier_weapon[item.name] = found_container&.id || "unknown"
     end
 
     def self.sheath_bags
