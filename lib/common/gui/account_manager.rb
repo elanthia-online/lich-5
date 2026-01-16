@@ -91,11 +91,13 @@ module Lich
               characters.each do |new_char|
                 normalized_new_char_name = new_char[:char_name].to_s.capitalize
 
-                # Check if character already exists (by char_name, game_code, frontend)
+                # Check if character already exists (by char_name, game_code, frontend, custom_launch)
+                # Including custom_launch allows multiple entries for same character with different launch configurations
                 existing_char = existing_characters.find do |existing|
                   existing['char_name'] == normalized_new_char_name &&
                     existing['game_code'] == new_char[:game_code] &&
-                    existing['frontend'] == new_char[:frontend]
+                    existing['frontend'] == new_char[:frontend] &&
+                    existing['custom_launch'] == new_char[:custom_launch]
                 end
 
                 # Only add if character doesn't already exist
@@ -205,17 +207,19 @@ module Lich
             yaml_data['accounts'][normalized_username]['characters'] ||= []
 
             # Check for duplicate character using normalized comparison
+            # Including custom_launch allows multiple entries for same character with different launch configurations
             existing_character = yaml_data['accounts'][normalized_username]['characters'].find do |char|
               char['char_name'] == normalized_char_name &&
                 char['game_code'] == character_data[:game_code] &&
-                char['frontend'] == character_data[:frontend]
+                char['frontend'] == character_data[:frontend] &&
+                char['custom_launch'] == character_data[:custom_launch]
             end
 
             # Return specific message if character already exists
             if existing_character
               return {
                 success: false,
-                message: "Character '#{normalized_char_name}' already exists for #{character_data[:game_code]} (#{character_data[:frontend]}). Duplicates are not allowed."
+                message: "Character '#{normalized_char_name}' already exists for #{character_data[:game_code]} (#{character_data[:frontend]}) with this launch configuration. Duplicates are not allowed."
               }
             end
 

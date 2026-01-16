@@ -78,6 +78,36 @@ module Lich
             exit 1
           end
 
+          # Check if YAML file exists; if not, check for DAT and auto-convert to plaintext
+          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(DATA_DIR)
+          unless File.exist?(yaml_file)
+            if Lich::Common::CLI::CLIConversion.conversion_needed?(DATA_DIR)
+              $stdout.puts ''
+              $stdout.puts '=' * 80
+              $stdout.puts 'WARNING: No YAML entry file found. Legacy entry.dat detected.'
+              $stdout.puts 'Creating plaintext YAML file to support this operation.'
+              $stdout.puts '=' * 80
+              $stdout.puts ''
+              $stdout.puts 'SECURITY NOTICE: Plaintext storage is not recommended except for'
+              $stdout.puts 'accessibility requirements. Passwords will be stored in clear text.'
+              $stdout.puts ''
+              $stdout.puts 'To upgrade encryption later, use:'
+              $stdout.puts "  ruby #{File.join(LICH_DIR, 'lich.rbw')} --change-encryption-mode enhanced"
+              $stdout.puts '  or: -cem enhanced'
+              $stdout.puts '=' * 80
+              $stdout.puts ''
+
+              # Perform plaintext conversion
+              success = Lich::Common::CLI::CLIConversion.convert(DATA_DIR, :plaintext)
+              unless success
+                $stdout.puts 'error: Failed to create YAML file from legacy data.'
+                exit 1
+              end
+              # Continue with add-account operation below
+            end
+            # No DAT file either - PasswordManager.add_account will create new YAML
+          end
+
           frontend = ARGV[ARGV.index('--frontend') + 1] if ARGV.include?('--frontend')
           exit Lich::Common::CLI::PasswordManager.add_account(account, password, frontend)
         end
