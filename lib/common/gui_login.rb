@@ -382,7 +382,8 @@ module Lich
           # Only refresh cache if we don't already have the latest data
           # This prevents redundant file I/O operations
           @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(DATA_DIR, @autosort_state)
-          @save_entry_data = true
+          # commenting out to assess impact, remove when cleared
+          # @save_entry_data = true
 
           # Notify other tabs of data change
           @tab_communicator.notify_data_changed(:entry_added, { entry: launch_data })
