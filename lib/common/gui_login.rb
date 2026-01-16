@@ -265,7 +265,13 @@ module Lich
           @manual_login_tab.refresh_entry_data
         end
 
-        Lich.log "info: Data change notification (cache and UI refreshed): #{change_type} - #{data}"
+        # Sanitize data before logging to prevent password exposure
+        sanitized_data = data.dup
+        if sanitized_data[:entry].is_a?(Hash)
+          sanitized_data[:entry] = sanitized_data[:entry].dup
+          sanitized_data[:entry].delete(:password)
+        end
+        Lich.log "info: Data change notification (cache and UI refreshed): #{change_type} - #{sanitized_data}"
       })
 
       # Set up account manager to notify of data changes
