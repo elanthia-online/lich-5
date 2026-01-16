@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.13.5](https://github.com/elanthia-online/lich-5/compare/v5.13.4...v5.13.5) (2026-01-16)
+
+
+### Bug Fixes
+
+* **all:** add --gs and --dr, refactor argv_options to helpers ([#1133](https://github.com/elanthia-online/lich-5/issues/1133)) ([a809a26](https://github.com/elanthia-online/lich-5/commit/a809a26cb9694fa699855dd91de6888aa906c514))
+* **all:** fix multiple custom entries, improvements to yaml save ([#1134](https://github.com/elanthia-online/lich-5/issues/1134)) ([86e69a3](https://github.com/elanthia-online/lich-5/commit/86e69a353ca323cc922fc06abddca3b61f62c0ff))
+* **all:** login_tab_utils.rb expand helper text show Warlock ([#1135](https://github.com/elanthia-online/lich-5/issues/1135)) ([1b43e0d](https://github.com/elanthia-online/lich-5/commit/1b43e0d12b5afa88207ac017b03d790519c260d3))
+* **all:** reduce minimum GUI window footprint for non-tabbed view ([#1138](https://github.com/elanthia-online/lich-5/issues/1138)) ([79b18ed](https://github.com/elanthia-online/lich-5/commit/79b18ed2d70d5ae56bd01477ec859acb4508e220))
+* **all:** remove double save in YAML to preserve yaml.bak integrity ([#1139](https://github.com/elanthia-online/lich-5/issues/1139)) ([0c26110](https://github.com/elanthia-online/lich-5/commit/0c2611081c37a4167a5a729d7da1b1b34e5aa96f))
+* **all:** remove password parameter from debug logging in all cases ([#1137](https://github.com/elanthia-online/lich-5/issues/1137)) ([fe21beb](https://github.com/elanthia-online/lich-5/commit/fe21beb7bdd8ddaa8b7c7ec6254165587bbc2162))
+* **all:** update CLI for YAML security signature, add auto-convert fo… ([#1136](https://github.com/elanthia-online/lich-5/issues/1136)) ([b1c690a](https://github.com/elanthia-online/lich-5/commit/b1c690af39b2ac045b8413a3f83b57defa264b70))
+* **all:** util.rb only show gem installing debug messaging if gem mis… ([#1131](https://github.com/elanthia-online/lich-5/issues/1131)) ([dd55334](https://github.com/elanthia-online/lich-5/commit/dd55334351715dda9feea214ed91bf59563ef754))
+* **gs:** stash.rb additional improvements ([#1132](https://github.com/elanthia-online/lich-5/issues/1132)) ([8a8d906](https://github.com/elanthia-online/lich-5/commit/8a8d906a4da56e2719789e0679e70bb88bae45b4))
+
 ## [5.13.4](https://github.com/elanthia-online/lich-5/compare/v5.13.3...v5.13.4) (2026-01-14)
 
 
