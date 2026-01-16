@@ -92,7 +92,7 @@ module Lich
                 normalized_new_char_name = new_char[:char_name].to_s.capitalize
 
                 # Check if character already exists (by char_name, game_code, frontend, custom_launch)
-                # Including custom_launch allows multiple entries with different launch configurations
+                # Including custom_launch allows multiple entries for same character with different launch configurations
                 existing_char = existing_characters.find do |existing|
                   existing['char_name'] == normalized_new_char_name &&
                     existing['game_code'] == new_char[:game_code] &&
@@ -206,8 +206,8 @@ module Lich
             # Initialize characters array if not present
             yaml_data['accounts'][normalized_username]['characters'] ||= []
 
-            # Check for duplicate character using normalized comparison.
-            # Including custom_launch allows multiple entries with different launch configurations.
+            # Check for duplicate character using normalized comparison
+            # Including custom_launch allows multiple entries for same character with different launch configurations
             existing_character = yaml_data['accounts'][normalized_username]['characters'].find do |char|
               char['char_name'] == normalized_char_name &&
                 char['game_code'] == character_data[:game_code] &&
@@ -219,7 +219,7 @@ module Lich
             if existing_character
               return {
                 success: false,
-                message: "Character '#{normalized_char_name}' already exists for #{character_data[:game_code]} (#{character_data[:frontend]}). Duplicates are not allowed."
+                message: "Character '#{normalized_char_name}' already exists for #{character_data[:game_code]} (#{character_data[:frontend]}) with this launch configuration. Duplicates are not allowed."
               }
             end
 
