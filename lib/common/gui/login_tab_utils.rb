@@ -184,15 +184,23 @@ module Lich
           sort_select.set_active(true) if autosort_state == true
 
           # Add switches to slider box
-          slider_box.pack_start(theme_select, expand: true, fill: false, padding: 0)
-          slider_box.pack_start(theme_select_label, expand: true, fill: false, padding: 0)
-          slider_box.pack_start(tab_select, expand: true, fill: false, padding: 0)
-          slider_box.pack_start(tab_select_label, expand: true, fill: false, padding: 0)
-          slider_box.pack_start(sort_select, expand: true, fill: false, padding: 0)
-          slider_box.pack_start(sort_select_label, expand: true, fill: false, padding: 0)
+          # slider_box = Gtk::Box.new(:vertical, 5)
+
+          row1 = Gtk::Box.new(:horizontal, 10)
+          row1.pack_start(theme_select, expand: false, fill: false, padding: 0)
+          row1.pack_start(theme_select_label, expand: false, fill: false, padding: 0)
+          row1.pack_start(tab_select, expand: false, fill: false, padding: 0)
+          row1.pack_start(tab_select_label, expand: false, fill: false, padding: 0)
+
+          # row2 = Gtk::Box.new(:horizontal, 10)
+          row1.pack_start(sort_select, expand: false, fill: false, padding: 0)
+          row1.pack_start(sort_select_label, expand: false, fill: false, padding: 0)
+
+          slider_box.pack_start(row1, expand: false, fill: false, padding: 0)
+          # slider_box.pack_start(row2, expand: false, fill: false, padding: 0)
 
           # Settings toggle button
-          settings_option = Gtk::ToggleButton.new(label: 'Change global GUI settings')
+          settings_option = Gtk::ToggleButton.new(label: 'GUI Settings')
           settings_option.style_context.add_provider(togglebutton_provider, Gtk::StyleProvider::PRIORITY_USER)
           parent_container.pack_start(settings_option, expand: false, fill: false, padding: 5)
           parent_container.pack_start(slider_box, expand: false, fill: false, padding: 5)
