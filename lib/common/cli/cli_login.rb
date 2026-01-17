@@ -20,13 +20,14 @@ module Lich
         # @param character_name [String] Character name to login with
         # @param game_code [String, nil] Game code/instance (GS3, GS4, DR, etc.)
         # @param frontend [String, nil] Frontend type (stormfront, avalon, wizard)
+        # @param custom_launch [String, nil] Custom launch filter (if provided, frontend is ignored for matching)
         # @param data_dir [String] Directory containing saved login entries
         # @return [Array<String>, nil] Launch data strings if successful, nil if login fails
         #
         # @example
         #   launch_data = CLILogin.execute('MyCharacter', 'GS3', 'stormfront', '/path/to/data')
         #   # => ["GAME=GS3", "GAMEHOST=eaccess.play.net", ...]
-        def self.execute(character_name, game_code: nil, frontend: nil, data_dir: nil)
+        def self.execute(character_name, game_code: nil, frontend: nil, custom_launch: nil, data_dir: nil)
           data_dir ||= DATA_DIR
 
           # Validate inputs
@@ -61,7 +62,8 @@ module Lich
             entry_data,
             character_name,
             game_code,
-            frontend
+            frontend,
+            custom_launch
           )
 
           if matching_entries.nil? || matching_entries.empty?

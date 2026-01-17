@@ -52,15 +52,16 @@ reconnect_if_wanted = proc {
     # Extract character name from --login argument
     requested_character = ARGV[ARGV.index('--login') + 1].capitalize
 
-    # Parse game code and frontend from remaining arguments
+    # Parse game code, frontend, and custom_launch from remaining arguments
     modifiers = ARGV.dup
-    requested_instance, requested_fe = Lich::Util::LoginHelpers.resolve_login_args(modifiers)
+    requested_instance, requested_fe, requested_custom_launch = Lich::Util::LoginHelpers.resolve_login_args(modifiers)
 
     # Execute CLI login flow and get launch data
     launch_data_array = Lich::Common::CLI::CLILogin.execute(
       requested_character,
       game_code: requested_instance,
       frontend: requested_fe,
+      custom_launch: requested_custom_launch,
       data_dir: DATA_DIR
     )
 

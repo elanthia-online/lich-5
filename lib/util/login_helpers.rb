@@ -26,6 +26,9 @@ module Lich
       FRONTEND_PATTERN = /^--(?<fe>avalon|stormfront|wizard)$/i.freeze
       INSTANCE_PATTERN = /^--(?<inst>GS.?$|DR.?$)/i.freeze
 
+      # Custom launch pattern for regex matching
+      CUSTOM_LAUNCH_PATTERN = /^--custom-launch=(?<cl>.+)$/i.freeze
+
       # Game code to realm mappings
       GAME_CODE_TO_REALM = {
         'GSX' => 'platinum',
@@ -140,7 +143,8 @@ module Lich
       # - If `game_code` is provided, it must match exactly OR fall back to a substitute:
       #     - 'GST' falls back to 'GS3'
       #     - 'DRT' falls back to 'DR'
-      # - If `frontend` is provided, it must match exactly.
+      # - If `custom_launch` is provided, it must match (partial, case-insensitive) and frontend is ignored.
+      # - If `frontend` is provided (and custom_launch is not), it must match exactly and custom_launch must be nil.
       #
       # All parameters are optional except `symbolized_data` and character name. If no
       # other parameters are provided, multiple character records may be returned.
@@ -149,8 +153,9 @@ module Lich
       # @param char_name [String] The character name to match against `:char_name`. If nil, all names are considered.
       # @param game_code [String, Symbol, nil] The desired game instance (`:__unset` by default). Supports fallbacks for 'GST' and 'DRT'.
       # @param frontend [String, Symbol, nil] The frontend to match against `:frontend`. If nil, all frontends are considered.
+      # @param custom_launch [String, Symbol, nil] The custom launch filter. If provided, frontend filter is ignored.
       # @return [Array<Hash>] An array of character result hashes matching the provided criteria.
-      def self.find_character_by_attributes(symbolized_data, char_name: nil, game_code: :__unset, frontend: :__unset)
+      def self.find_character_by_attributes(symbolized_data, char_name: nil, game_code: :__unset, frontend: :__unset, custom_launch: :__unset)
         candidates = extract_candidate_characters_with_accounts(symbolized_data)
 
         # Step 1: Try to find exact matches only
@@ -161,6 +166,15 @@ module Lich
 
           next unless character[:char_name].casecmp?(char_name)
           next unless game_code == :__unset || character[:game_code].to_s.casecmp?(game_code.to_s)
+
+          # Custom launch filter (if specified, ignore frontend filter)
+          if custom_launch != :__unset && !custom_launch.nil?
+            next unless character[:custom_launch].to_s.downcase.include?(custom_launch.to_s.downcase)
+          elsif frontend != :__unset && !frontend.nil?
+            # For standard entries, ensure custom_launch is nil to avoid matching custom entries
+            next unless character[:custom_launch].nil? || character[:custom_launch].to_s.empty?
+            next unless character[:frontend].to_s.casecmp?(frontend.to_s)
+          end
 
           build_character_result(account_name, account_data, character)
         end
@@ -193,8 +207,12 @@ module Lich
           character = character.dup
           character[:_requested_game_code] = game_code
 
-          # Frontend filter
-          if frontend != :__unset && !frontend.nil?
+          # Custom launch filter (if specified, ignore frontend filter)
+          if custom_launch != :__unset && !custom_launch.nil?
+            next unless character[:custom_launch].to_s.downcase.include?(custom_launch.to_s.downcase)
+          elsif frontend != :__unset && !frontend.nil?
+            # For standard entries, ensure custom_launch is nil to avoid matching custom entries
+            next unless character[:custom_launch].nil? || character[:custom_launch].to_s.empty?
             next unless character[:frontend].to_s == frontend.to_s
           end
 
@@ -264,18 +282,20 @@ module Lich
         find_character_by_attributes(symbolized_data, char_name: char_name, game_code: game_code)
       end
 
-      # Finds characters matching all three criteria: name, game code, and frontend.
+      # Finds characters matching name, game code, frontend, and optionally custom_launch.
       #
       # This method provides the most specific search, useful when you need to find
-      # a character with exact specifications across all three dimensions.
+      # a character with exact specifications. When custom_launch is provided, the
+      # frontend filter is ignored for matching purposes.
       #
       # @param symbolized_data [Hash] The symbolized YAML data structure
       # @param char_name [String] The character name to search for
       # @param game_code [String] The game code/instance to filter by
-      # @param frontend [String] The frontend type to filter by
-      # @return [Array<Hash>] Array of characters matching all three criteria
-      def self.find_character_by_name_game_and_frontend(symbolized_data, char_name, game_code, frontend)
-        find_character_by_attributes(symbolized_data, char_name: char_name, game_code: game_code, frontend: frontend)
+      # @param frontend [String] The frontend type to filter by (ignored if custom_launch provided)
+      # @param custom_launch [String, nil] The custom launch filter (if provided, frontend is ignored)
+      # @return [Array<Hash>] Array of characters matching criteria
+      def self.find_character_by_name_game_and_frontend(symbolized_data, char_name, game_code, frontend, custom_launch = :__unset)
+        find_character_by_attributes(symbolized_data, char_name: char_name, game_code: game_code, frontend: frontend, custom_launch: custom_launch)
       end
 
       # Selects the best matching character data hash from an array based on weighted criteria.
@@ -391,7 +411,7 @@ module Lich
               break
             elsif VALID_FRONTENDS.include?(flag) # ignore anything else that isn't a valid game code
               next
-            elsif flag =~ /^(?:start-scripts|login)$/
+            elsif flag =~ /^(?:start-scripts|login|custom-launch)=/
               next
             else
               instance_flags_seen = true # set to true so that we fall through to returning nil
@@ -420,37 +440,40 @@ module Lich
         DRAGONREALMS_FLAGS.any? { |flag| argv.include?(flag) }
       end
 
-      # Parses Lich CLI args to determine game instance and frontend.
+      # Parses Lich CLI args to determine game instance, frontend, and custom launch filter.
       #
-      # Returns [instance, frontend] (both may be nil). Invalid game codes are not rejected here;
-      # call site can choose to validate against VALID_GAME_CODES.
+      # Returns [instance, frontend, custom_launch] (all may be nil or :__unset).
+      # Invalid game codes are not rejected here; call site can choose to validate
+      # against VALID_GAME_CODES.
       #
       # Examples:
-      #   --gemstone --platinum   → ['GSX', nil]
-      #   --dragonrealms --fallen → ['DRF', nil]
-      #   --GS4 --wizard          → ['GS3', 'wizard']
+      #   --gemstone --platinum        → ['GSX', :__unset, :__unset]
+      #   --dragonrealms --fallen      → ['DRF', :__unset, :__unset]
+      #   --GS4 --wizard               → ['GS3', 'wizard', :__unset]
+      #   --GS3 --custom-launch=warlock → ['GS3', :__unset, 'warlock']
       #
       # @param argv [Array<String>] e.g. ARGV
-      # @return [Array(String, String)] [game_code, frontend]
+      # @return [Array(String, String, String)] [game_code, frontend, custom_launch]
       def self.resolve_login_args(argv)
         frontend = :__unset
+        custom_launch = :__unset
         instance = resolve_instance(argv)
 
         argv.each do |arg|
           case arg
           when FRONTEND_PATTERN
             frontend = Regexp.last_match[:fe].downcase
+          when CUSTOM_LAUNCH_PATTERN
+            custom_launch = Regexp.last_match[:cl]
           end
         end
 
         Lich::Messaging.msg('debug', "Login arguments from CLI login -> #{argv.inspect}")
-        Lich::Messaging.msg('debug', "Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}")
+        Lich::Messaging.msg('debug', "Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}")
         Lich.log "debug: Login arguments from CLI login -> #{argv.inspect}"
-        Lich.log "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}"
-        # $stdout.puts "[DEBUG] ARGV: #{argv.inspect}"
-        # $stdout.puts "[DEBUG] Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}"
+        Lich.log "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}"
 
-        [instance, frontend]
+        [instance, frontend, custom_launch]
       end
 
       # Formats the game instance launch flag for Lich based on version.
@@ -487,8 +510,9 @@ module Lich
       # @param startup_scripts [Array<String>] optional scripts to autostart post-login
       # @param instance_override [String, Symbol, nil] optional instance override (e.g., 'GST', 'GSX')
       # @param frontend_override [String, nil] optional frontend (e.g., 'avalon', 'wizard')
+      # @param custom_launch_filter [String, nil] optional custom launch filter for entry selection
       # @return [Process::Waiter, nil] detached process handle if successful, nil otherwise
-      def self.spawn_login(entry, lich_path: nil, startup_scripts: [], instance_override: nil, frontend_override: nil)
+      def self.spawn_login(entry, lich_path: nil, startup_scripts: [], instance_override: nil, frontend_override: nil, custom_launch_filter: nil)
         ruby_path = OS.windows? ? RbConfig.ruby.sub('ruby', 'rubyw') : RbConfig.ruby
         lich_path ||= File.join(LICH_DIR, 'lich.rbw')
 
@@ -502,6 +526,7 @@ module Lich
           spawn_cmd << flag if flag
         end
         spawn_cmd << "--#{frontend_override}" unless frontend_override.nil?
+        spawn_cmd << "--custom-launch=#{custom_launch_filter}" if custom_launch_filter
         spawn_cmd << "--start-scripts=#{startup_scripts.join(',')}" if startup_scripts.any?
 
         Lich::Messaging.msg('info', "Spawning login: #{spawn_cmd}")
