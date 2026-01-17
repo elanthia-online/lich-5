@@ -504,7 +504,7 @@ RSpec.describe Lich::Common::CLI::PasswordManager do
 
       expect(Lich).not_to receive(:log).with(/password123|secretpass/)
 
-      Lich::Common::CLI::PasswordManager.add_account('DOUG', 'password123')
+      Lich::Common::CLI::PasswordManager.add_account('DOUG', 'password123', 'stormfront')
     end
 
     it 'saves YAML with 0600 permissions in add_account' do
@@ -513,7 +513,7 @@ RSpec.describe Lich::Common::CLI::PasswordManager do
       allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
         .and_return(true)
 
-      Lich::Common::CLI::PasswordManager.add_account('DOUG', 'password')
+      Lich::Common::CLI::PasswordManager.add_account('DOUG', 'password', 'stormfront')
 
       # AccountManager should handle permissions, but verify
     end

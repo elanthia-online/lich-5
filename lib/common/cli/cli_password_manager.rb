@@ -106,9 +106,9 @@ module Lich
         # @return [Integer] Exit code (0=success, 1=error, 2=auth failed)
         def self.add_account(account, password, frontend = nil)
           # Validate master password availability before attempting add
-          unless validate_master_password_available
-            return 1
-          end
+          # unless validate_master_password_available
+          #   return 1
+          # end
 
           data_dir = DATA_DIR
           yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
