@@ -13,12 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: 8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.2
         with:
           fetch-depth: 0
       - name: Build changelog
         id: build_changelog
-        uses: mikepenz/release-changelog-builder-action@d702b5bb7c23735c8afc130dac9c4c8b8eb669e8 # v6.0.0
+        uses: mikepenz/release-changelog-builder-action@439f79b5b5428107c7688c1d2b0e8bacc9b8792c # v6.0.1
         with:
           configuration: 'release-changelog-builder-config.json'
         env:
@@ -47,7 +47,7 @@ jobs:
           tar -czvf lich-5.tar.gz lich5/
           zip -r lich-5.zip lich5/
       - name: Release
-        uses: softprops/action-gh-release@6da8fa9354ddfdc4aeace5fc48d7f679b5214090 #v2.4.1
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           body: ${{steps.build_changelog.outputs.changelog}}
           token: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
