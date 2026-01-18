@@ -206,8 +206,8 @@ module Lich
         value = self._validate!(key, value)
         return :noop if self.cache.get(key) == value
         self.cache.put(key, value)
-        self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`) VALUES (%s, %s)
-      on conflict(`key`) do update set value = excluded.value;" % [self.db.literal(self.table_name), self.db.literal(key), self.db.literal(value)]
+        self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`, `updated_at`) VALUES (%s, %s, %s)
+      on conflict(`key`) do update set value = excluded.value, updated_at = excluded.updated_at;" % [self.db.literal(self.table_name), self.db.literal(key), self.db.literal(value), Time.now.to_f]
       end
 
       def self.delete!(key)
@@ -219,15 +219,16 @@ module Lich
       def self.upsert_batch(*blob)
         updated = (blob.first.map { |k, v| [self._key(k), self._validate!(k, v)] } - self.cache.to_a)
         return :noop if updated.empty?
+        now = Time.now.to_f
         pairs = updated.map { |key, value|
           (value.is_a?(Integer) or value.is_a?(String)) or fail "upsert_batch only works with Integer or String types"
           # add the value to the cache
           self.cache.put(key, value)
-          %[(%s, %s)] % [self.db.literal(key), self.db.literal(value)]
+          %[(%s, %s, %s)] % [self.db.literal(key), self.db.literal(value), now]
         }.join(", ")
         # queue sql statement to run async
-        self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`) VALUES %s
-      on conflict(`key`) do update set value = excluded.value;" % [self.db.literal(self.table_name), pairs]
+        self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`, `updated_at`) VALUES %s
+      on conflict(`key`) do update set value = excluded.value, updated_at = excluded.updated_at;" % [self.db.literal(self.table_name), pairs]
       end
 
       Thread.new do
