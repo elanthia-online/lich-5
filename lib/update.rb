@@ -357,7 +357,7 @@ module Lich
           version_file_path = File.join(TEMP_DIR, filename, "lib", "version.rb")
           if File.exist?(version_file_path)
             version_file_content = File.read(version_file_path)
-            if match = version_file_content.match(/REQUIRED_RUBY\s*=\s*["']([^"']+)["']/)
+            if (match = version_file_content.match(/REQUIRED_RUBY\s*=\s*["']([^"']+)["']/))
               required_ruby_version = match[1]
               current_ruby_version = RUBY_VERSION
               if Gem::Version.new(current_ruby_version) < Gem::Version.new(required_ruby_version)
