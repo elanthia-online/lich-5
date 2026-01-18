@@ -353,6 +353,33 @@ module Lich
           FileUtils.remove_dir(File.join(TEMP_DIR, filename))
           FileUtils.mv(File.join(TEMP_DIR, new_target[0]), File.join(TEMP_DIR, filename))
 
+          # check Ruby version compatibility before updating
+          version_file_path = File.join(TEMP_DIR, filename, "lib", "version.rb")
+          if File.exist?(version_file_path)
+            version_file_content = File.read(version_file_path)
+            if version_file_content =~ /REQUIRED_RUBY\s*=\s*["']([^"']+)["']/
+              required_ruby_version = $1
+              current_ruby_version = RUBY_VERSION
+              if Gem::Version.new(current_ruby_version) < Gem::Version.new(required_ruby_version)
+                respond
+                respond "*** UPDATE ABORTED ***"
+                respond
+                respond "Lich version #{@update_to} requires Ruby #{required_ruby_version} or higher."
+                respond "Your current Ruby version is #{current_ruby_version}."
+                respond
+                respond "Please update your Ruby installation before updating Lich."
+                respond
+                respond "DragonRealms - https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich"
+                respond "Gemstone IV  - https://gswiki.play.net/Lich:Software/Installation"
+                respond
+                # clean up downloaded files
+                FileUtils.remove_dir(File.join(TEMP_DIR, filename)) if File.directory?(File.join(TEMP_DIR, filename))
+                FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
+                return
+              end
+            end
+          end
+
           # delete all existing lib files to not leave old ones behind
           FileUtils.rm_rf(Dir.glob(File.join(LIB_DIR, "*")))
 
