@@ -68,6 +68,10 @@ module Lich
         @sql_queue
       end
 
+      def self.current_timestamp
+        Time.now.utc.to_f
+      end
+
       def self.context!
         return unless XMLData.name.empty? or XMLData.name.nil?
         puts Exception.new.backtrace
@@ -207,7 +211,7 @@ module Lich
         return :noop if self.cache.get(key) == value
         self.cache.put(key, value)
         self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`, `updated_at`) VALUES (%s, %s, %s)
-      on conflict(`key`) do update set value = excluded.value, updated_at = excluded.updated_at;" % [self.db.literal(self.table_name), self.db.literal(key), self.db.literal(value), Time.now.to_f]
+      on conflict(`key`) do update set value = excluded.value, updated_at = excluded.updated_at;" % [self.db.literal(self.table_name), self.db.literal(key), self.db.literal(value), current_timestamp]
       end
 
       def self.delete!(key)
@@ -219,7 +223,7 @@ module Lich
       def self.upsert_batch(*blob)
         updated = (blob.first.map { |k, v| [self._key(k), self._validate!(k, v)] } - self.cache.to_a)
         return :noop if updated.empty?
-        now = Time.now.to_f
+        now = current_timestamp
         pairs = updated.map { |key, value|
           (value.is_a?(Integer) or value.is_a?(String)) or fail "upsert_batch only works with Integer or String types"
           # add the value to the cache
