@@ -384,7 +384,6 @@ module Lich
           # Clean server string based on game type
           if @game_instance
             server_string = @game_instance.clean_serverstring(server_string)
-            return if server_string.nil? # Buffering split component, wait for next line
           end
 
           # Debug output if needed
