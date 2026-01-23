@@ -42,6 +42,7 @@ module Lich
           @atmospherics = false
           @combat_count = 0
           @end_combat_tags = ["<prompt", "<clearStream", "<component", "<pushStream id=\"percWindow"]
+          @pending_room_objs = nil
         end
 
         def clean_serverstring(server_string)
@@ -82,6 +83,31 @@ module Lich
 
         def atmospherics=(value)
           @atmospherics = value
+        end
+
+        # Buffer split <component id='room objs'> when server sends "...wait 1 seconds." on separate line
+        # Returns [should_skip, server_string]
+        def buffer_room_objs(server_string)
+          if @pending_room_objs
+            if server_string.include?("</component>")
+              combined = @pending_room_objs + server_string.sub(/\r\n$/, '')
+              Lich.log "Combined split room objs component: #{combined.inspect}"
+              @pending_room_objs = nil
+              return [false, combined]
+            else
+              @pending_room_objs = @pending_room_objs + server_string.sub(/\r\n$/, '')
+              return [true, nil]
+            end
+          end
+
+          if server_string =~ /^<component id='room objs'>.*\.\.\.wait \d+ seconds?\.\r\n$/ && !server_string.include?("</component>")
+            Lich.log "Open-ended room objs component tag, buffering: #{server_string.inspect}"
+            # Strip the "...wait N seconds.\r\n" part, keep the opening tag and any content before it
+            @pending_room_objs = server_string.sub(/\.\.\.wait \d+ seconds?\.\r\n$/, '')
+            return [true, nil]
+          end
+
+          [false, server_string]
         end
 
         protected
@@ -384,6 +410,7 @@ module Lich
           # Clean server string based on game type
           if @game_instance
             server_string = @game_instance.clean_serverstring(server_string)
+            return if server_string.nil? # Buffering split component, wait for next line
           end
 
           # Debug output if needed
@@ -794,6 +821,10 @@ module Lich
     # DragonRealms-specific game instance
     class GameInstance < GameBase::GameInstance::Base
       def clean_serverstring(server_string)
+        # Buffer split room objs components (server sends "...wait N seconds." separately)
+        should_skip, server_string = buffer_room_objs(server_string)
+        return nil if should_skip
+
         # Clear out superfluous tags
         server_string = server_string.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />", "")
         server_string = server_string.gsub("<popStream id=\"combat\" /><pushStream id=\"combat\" />", "")
