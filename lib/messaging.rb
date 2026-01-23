@@ -7,7 +7,7 @@ module Lich
   module Messaging
     def self.xml_encode(msg)
       if $frontend =~ /^(wizard|avalon)$/i
-        sf_to_wiz(msg.encode(:xml => :text), bypass_multiline: true)
+        sf_to_wiz(msg.encode(:xml => :text), bypass_multiline: true) || "" # sf_to_wiz returns nil when blank/new line only, which causes issue for messaging, always return string if nil
       else
         msg.encode(:xml => :text)
       end
