@@ -34,6 +34,7 @@ require_relative('./psms/shield.rb')
 require_relative('./psms/weapon.rb')
 require_relative('./psms/warcry.rb')
 require_relative('./psms/ascension.rb')
+require_relative('./psms/qstrike.rb')
 
 module Lich
   module Gemstone
