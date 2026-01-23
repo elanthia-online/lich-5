@@ -782,8 +782,8 @@ module Lich
         end
       end
 
-      # Initialize the class
-      initialize
+      # Initialize the class only if not already connected
+      initialize if @socket.nil?
     end
   end
 
@@ -928,8 +928,8 @@ module Lich
         end
       end
 
-      # Initialize the class
-      initialize
+      # Initialize the class only if not already connected
+      initialize if @socket.nil?
     end
   end
 end
