@@ -82,13 +82,13 @@ module Lich
 
         def check(silent: false, quiet: false)
           if quiet
-            start_pattern = /<output class="mono"\/>/
+            start_pattern = /<output class="mono"\/>|^You are a ghost!/
           else
-            start_pattern = /Your current settings are:/
+            start_pattern = /Your current settings are:|^You are a ghost!/
           end
           waitrt?
-          Lich::Util.issue_command("ready list", start_pattern, silent: silent, quiet: quiet)
-          @checked = true
+          results = Lich::Util.issue_command("ready list", start_pattern, silent: silent, quiet: quiet)
+          @checked = results.any? { |line| line.match?(/Your current settings are:/) }
         end
       end
     end
