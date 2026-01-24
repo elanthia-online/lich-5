@@ -540,7 +540,7 @@ module Lich
             # Handle specific XML errors
             if server_string =~ /<settingsInfo .*?space not found /
               Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
-              server_string.sub!(' space not found ', '').strip!
+              server_string.sub!(/\s\bspace not found\b\s/, '').strip!
               Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
               return process_xml_data(server_string) # Return to retry with fixed string
             end
