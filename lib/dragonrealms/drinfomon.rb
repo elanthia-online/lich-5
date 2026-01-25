@@ -14,7 +14,6 @@ module Lich
       require_relative 'drinfomon/drroom'
       require_relative 'drinfomon/drspells'
       require_relative 'drinfomon/events'
-      require_relative 'drinfomon/drtime'
       require_relative 'drinfomon/drexpmonitor'
       
       # Auto-start DRExpMonitor for non-Genie frontends (Genie has built-in exp tracking)
