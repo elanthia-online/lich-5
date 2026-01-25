@@ -85,13 +85,13 @@ module Lich
           @atmospherics = value
         end
 
-        # Buffer split <component id='room objs'> when server sends "...wait 1 seconds." on separate line
+        # Buffer split <component id='room objs'> or <component id='room players'> when server sends "...wait N seconds." on separate line
         # Returns [should_skip, server_string]
         def buffer_room_objs(server_string)
           if @pending_room_objs
             if server_string.include?("</component>")
               combined = @pending_room_objs + server_string.sub(/\r\n$/, '')
-              Lich.log "Combined split room objs component: #{combined.inspect}"
+              Lich.log "Combined split room component: #{combined.inspect}"
               @pending_room_objs = nil
               return [false, combined]
             else
@@ -100,8 +100,8 @@ module Lich
             end
           end
 
-          if server_string =~ /^<component id='room objs'>.*\.\.\.wait \d+ seconds?\.\r\n$/ && !server_string.include?("</component>")
-            Lich.log "Open-ended room objs component tag, buffering: #{server_string.inspect}"
+          if server_string =~ /^<component id='room (?:objs|players)'>.*\.\.\.wait \d+ seconds?\.\r\n$/ && !server_string.include?("</component>")
+            Lich.log "Open-ended room component tag, buffering: #{server_string.inspect}"
             # Strip the "...wait N seconds.\r\n" part, keep the opening tag and any content before it
             @pending_room_objs = server_string.sub(/\.\.\.wait \d+ seconds?\.\r\n$/, '')
             return [true, nil]
@@ -540,7 +540,7 @@ module Lich
             # Handle specific XML errors
             if server_string =~ /<settingsInfo .*?space not found /
               Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
-              server_string.sub!('space not found', '')
+              server_string.sub!(/\s\bspace not found\b\s/, '').strip!
               Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
               return process_xml_data(server_string) # Return to retry with fixed string
             end
