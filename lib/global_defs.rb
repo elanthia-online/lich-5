@@ -2365,13 +2365,13 @@ def do_client(client_string)
       end
       respond "Changing Lich to display Room Exits of StringProcs to #{new_value}"
       Lich.display_stringprocs = new_value
-    elsif XMLData.game =~ /^DR/ && cmd =~ /^display expgains?(?: (true|false|on|off))?$/i
+    elsif XMLData.game =~ /^DR/ && (expgains_match = cmd.match(/^display expgains?(?: (?<toggle>true|false|on|off))?$/i))
       if running?('exp-monitor')
         respond "Error: exp-monitor.lic script is currently running"
         respond "Stop it first with: #{$clean_lich_char}kill exp-monitor"
       else
         new_value = !(DRExpMonitor.active?)
-        case Regexp.last_match(1)
+        case expgains_match[:toggle]
         when 'true', 'on'
           new_value = true
         when 'false', 'off'
