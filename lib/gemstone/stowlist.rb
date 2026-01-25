@@ -64,13 +64,13 @@ module Lich
 
         def check(silent: false, quiet: false)
           if quiet
-            start_pattern = /<output class="mono"\/>/
+            start_pattern = /<output class="mono"\/>|^You are a ghost!/
           else
-            start_pattern = /You have the following containers set as stow targets:/
+            start_pattern = /You have the following containers set as stow targets:|^You are a ghost!/
           end
           waitrt?
-          Lich::Util.issue_command("stow list", start_pattern, silent: silent, quiet: quiet)
-          @checked = true
+          results = Lich::Util.issue_command("stow list", start_pattern, silent: silent, quiet: quiet)
+          @checked = results.any? { |line| line.match?(/You have the following containers set as stow targets/) }
         end
       end
     end
