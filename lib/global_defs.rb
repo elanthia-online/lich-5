@@ -2365,26 +2365,6 @@ def do_client(client_string)
       end
       respond "Changing Lich to display Room Exits of StringProcs to #{new_value}"
       Lich.display_stringprocs = new_value
-    elsif XMLData.game =~ /^DR/ && (expgains_match = cmd.match(/^display expgains?(?: (?<toggle>true|false|on|off))?$/i))
-      if running?('exp-monitor')
-        respond "Error: exp-monitor.lic script is currently running"
-        respond "Stop it first with: #{$clean_lich_char}kill exp-monitor"
-      else
-        new_value = !(DRExpMonitor.active?)
-        case expgains_match[:toggle]
-        when 'true', 'on'
-          new_value = true
-        when 'false', 'off'
-          new_value = false
-        end
-        if new_value
-          respond "Enabling real-time experience gain reporting"
-          DRExpMonitor.start
-        else
-          respond "Disabling real-time experience gain reporting"
-          DRExpMonitor.stop
-        end
-      end
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
       Lich::Util::Update.request("#{update_parameter}")
@@ -2459,9 +2439,6 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"
       respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
       respond "   #{$clean_lich_char}display stringprocs       toggle display of StringProc exits known for room in mapdb if timeto is valid"
-      if XMLData.game =~ /^DR/
-        respond "   #{$clean_lich_char}display expgains          toggle real-time experience gain reporting (DragonRealms only)"
-      end
       respond
       respond 'If you liked this help message, you might also enjoy:'
       respond "   #{$clean_lich_char}lnet help" if defined?(LNet)
