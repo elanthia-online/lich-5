@@ -120,6 +120,18 @@ module Lich
         ''
       end
 
+      def verify_script(script_names)
+        script_names = [script_names] unless script_names.is_a?(Array)
+        state = true
+        script_names
+          .reject { |name| Script.exists?(name) }
+          .each do |name|
+            echo "Failed to find a script named '#{name}'"
+            state = false
+          end
+        state
+      end
+
       def wait_for_script_to_complete(name, args = [], flags = {})
         verify_script(name)
         script_handle = start_script(name, args.map { |arg| arg.to_s =~ /\s/ ? "\"#{arg}\"" : arg }, flags)
