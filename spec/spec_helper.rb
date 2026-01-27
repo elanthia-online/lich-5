@@ -193,8 +193,8 @@ RSpec.configure do |config|
   # Focus on specific tests with :focus tag
   config.filter_run_when_matching :focus
 
-  # Disable monkey patching to keep tests clean
-  config.disable_monkey_patching!
+  # NOTE: Do NOT use config.disable_monkey_patching! here
+  # Other spec files rely on top-level describe/shared_examples
 
   # Enable warnings
   config.warnings = true
