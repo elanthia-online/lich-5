@@ -887,7 +887,11 @@ module Lich
         sleep 0.1
         retry
       end
-      val = false if val.nil? && XMLData.game != "" # default false
+      # Default to true for non-Genie frontends (Genie has built-in exp tracking)
+      # Once explicitly set, the persisted value takes precedence
+      if val.nil? && XMLData.game != ""
+        val = ($frontend == 'genie') ? 'false' : 'true'
+      end
       @@display_expgains = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?
     end
     @@display_expgains

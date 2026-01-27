@@ -83,7 +83,14 @@ module Lich
         @@running
       end
 
-      # Check if inline display is enabled (lazy-loaded from DB, defaults to true)
+      # Reset state (for testing)
+      def self.reset!
+        @@inline_display = nil
+        @@running = false
+        @@reporter_thread = nil
+      end
+
+      # Check if inline display is enabled (lazy-loaded from DB, defaults to false)
       def self.inline_display?
         if @@inline_display.nil?
           begin
@@ -92,8 +99,9 @@ module Lich
             sleep 0.1
             retry
           end
-          # Default to true if not set (matches original UserVars.track_exp behavior)
-          @@inline_display = val.nil? ? true : (val.to_s =~ /on|true|yes/ ? true : false)
+          # Default to false - inline display must be explicitly enabled
+          # Once enabled, the persisted value takes precedence
+          @@inline_display = val.nil? ? false : (val.to_s =~ /on|true|yes/ ? true : false)
         end
         @@inline_display
       end
