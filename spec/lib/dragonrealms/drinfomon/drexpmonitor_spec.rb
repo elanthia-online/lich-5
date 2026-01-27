@@ -2,6 +2,30 @@
 
 require_relative '../../../spec_helper'
 
+# Ensure test helpers exist on Lich::Messaging (may be defined elsewhere in full suite)
+module Lich
+  module Messaging
+    @messages ||= []
+
+    class << self
+      def messages
+        @messages ||= []
+      end
+
+      def clear_messages!
+        @messages = []
+      end
+
+      # Ensure msg method captures messages for testing
+      alias_method :original_msg, :msg if method_defined?(:msg) && !method_defined?(:original_msg)
+      def msg(type, message)
+        @messages ||= []
+        @messages << { type: type, message: message }
+      end
+    end
+  end
+end
+
 # Load the real DRSkill first (if not already loaded by drskill_spec)
 require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
 
@@ -19,9 +43,9 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
     DRExpMonitor.reset!
     DRSkill.class_variable_set(:@@gained_skills, [])
     Lich::Messaging.clear_messages!
-    Lich.db.reset!
-    Lich.reset_display_expgains!
-    Script.clear_running!
+    Lich.db.reset! if Lich.db.respond_to?(:reset!)
+    Lich.reset_display_expgains! if Lich.respond_to?(:reset_display_expgains!)
+    Script.clear_running! if Script.respond_to?(:clear_running!)
   end
 
   after(:each) do
@@ -44,7 +68,7 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
     end
 
     it 'does not start if exp-monitor script is running' do
-      Script.set_running('exp-monitor')
+      Script.set_running('exp-monitor') if Script.respond_to?(:set_running)
 
       DRExpMonitor.start
 
