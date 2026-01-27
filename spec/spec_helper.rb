@@ -148,23 +148,23 @@ DR_LONGEST_LEARNING_RATE_LENGTH = 13 unless defined?(DR_LONGEST_LEARNING_RATE_LE
 
 DR_SKILLS_DATA = {
   skillsets: {
-    'Armor' => ['Shield Usage', 'Light Armor', 'Chain Armor', 'Brigandine', 'Plate Armor', 'Defending'],
-    'Weapon' => ['Parry Ability', 'Small Edged', 'Large Edged', 'Twohanded Edged', 'Small Blunt', 'Large Blunt', 'Twohanded Blunt', 'Slings', 'Bow', 'Crossbow', 'Staves', 'Polearms', 'Light Thrown', 'Heavy Thrown', 'Brawling', 'Offhand Weapon', 'Melee Mastery', 'Missile Mastery'],
-    'Magic' => ['Attunement', 'Arcana', 'Targeted Magic', 'Augmentation', 'Debilitation', 'Utility', 'Warding', 'Sorcery', 'Theurgy', 'Inner Magic', 'Inner Fire', 'Elemental Magic', 'Holy Magic', 'Life Magic', 'Lunar Magic', 'Arcane Magic', 'Primary Magic'],
+    'Armor'    => ['Shield Usage', 'Light Armor', 'Chain Armor', 'Brigandine', 'Plate Armor', 'Defending'],
+    'Weapon'   => ['Parry Ability', 'Small Edged', 'Large Edged', 'Twohanded Edged', 'Small Blunt', 'Large Blunt', 'Twohanded Blunt', 'Slings', 'Bow', 'Crossbow', 'Staves', 'Polearms', 'Light Thrown', 'Heavy Thrown', 'Brawling', 'Offhand Weapon', 'Melee Mastery', 'Missile Mastery'],
+    'Magic'    => ['Attunement', 'Arcana', 'Targeted Magic', 'Augmentation', 'Debilitation', 'Utility', 'Warding', 'Sorcery', 'Theurgy', 'Inner Magic', 'Inner Fire', 'Elemental Magic', 'Holy Magic', 'Life Magic', 'Lunar Magic', 'Arcane Magic', 'Primary Magic'],
     'Survival' => ['Evasion', 'Athletics', 'Perception', 'Stealth', 'Locksmithing', 'Thievery', 'First Aid', 'Outdoorsmanship', 'Skinning', 'Backstab', 'Thanatology'],
-    'Lore' => ['Forging', 'Engineering', 'Outfitting', 'Alchemy', 'Enchanting', 'Scholarship', 'Appraisal', 'Performance', 'Tactics', 'Empathy', 'Trading', 'Bardic Lore', 'Mechanical Lore']
+    'Lore'     => ['Forging', 'Engineering', 'Outfitting', 'Alchemy', 'Enchanting', 'Scholarship', 'Appraisal', 'Performance', 'Tactics', 'Empathy', 'Trading', 'Bardic Lore', 'Mechanical Lore']
   },
   guild_skill_aliases: {
-    'Barbarian' => { 'Primary Magic' => 'Inner Fire' },
-    'Bard' => {},
-    'Cleric' => {},
-    'Empath' => {},
-    'Moon Mage' => {},
-    'Necromancer' => {},
-    'Paladin' => {},
-    'Ranger' => {},
-    'Thief' => {},
-    'Trader' => {},
+    'Barbarian'    => { 'Primary Magic' => 'Inner Fire' },
+    'Bard'         => {},
+    'Cleric'       => {},
+    'Empath'       => {},
+    'Moon Mage'    => {},
+    'Necromancer'  => {},
+    'Paladin'      => {},
+    'Ranger'       => {},
+    'Thief'        => {},
+    'Trader'       => {},
     'Warrior Mage' => {}
   }
 } unless defined?(DR_SKILLS_DATA)
