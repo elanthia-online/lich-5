@@ -2,6 +2,25 @@
 
 require_relative '../../../spec_helper'
 
+# Ensure Script has required test methods (may be defined as class elsewhere in full suite)
+class Script
+  class << self
+    def running?(name)
+      @running_scripts ||= []
+      @running_scripts.include?(name)
+    end
+
+    def set_running(name)
+      @running_scripts ||= []
+      @running_scripts << name
+    end
+
+    def clear_running!
+      @running_scripts = []
+    end
+  end
+end
+
 # Ensure test helpers exist on Lich::Messaging (may be defined elsewhere in full suite)
 module Lich
   module Messaging
