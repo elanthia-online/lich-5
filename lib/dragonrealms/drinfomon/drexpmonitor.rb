@@ -13,9 +13,13 @@
         Use ";kill exp-monitor" first if needed.
 
   Public API:
-    DRExpMonitor.start         # Start the background reporter
-    DRExpMonitor.stop          # Stop the background reporter
-    DRExpMonitor.active?       # Check if reporter is running
+    DRExpMonitor.start              # Start the background reporter
+    DRExpMonitor.stop               # Stop the background reporter
+    DRExpMonitor.active?            # Check if reporter is running
+    DRExpMonitor.inline_display?    # Check if inline exp display is enabled
+    DRExpMonitor.inline_display=    # Enable/disable inline exp display
+    DRExpMonitor.format_briefexp_on(line, skill)   # Format BRIEFEXP ON line with gained exp
+    DRExpMonitor.format_briefexp_off(line, skill, rate_word)  # Format BRIEFEXP OFF line with gained exp
 =end
 
 module Lich
@@ -24,6 +28,7 @@ module Lich
       @@reporter_thread = nil
       @@running = false
       @@report_interval = 1 # Hard-coded 1 second for real-time reporting
+      @@inline_display = nil # Lazy-loaded from DB, defaults to true
 
       # Start the background reporter thread
       def self.start
@@ -76,6 +81,54 @@ module Lich
       # Check if reporter is running
       def self.active?
         @@running
+      end
+
+      # Check if inline display is enabled (lazy-loaded from DB, defaults to true)
+      def self.inline_display?
+        if @@inline_display.nil?
+          begin
+            val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_inline_exp';")
+          rescue SQLite3::BusyException
+            sleep 0.1
+            retry
+          end
+          # Default to true if not set (matches original UserVars.track_exp behavior)
+          @@inline_display = val.nil? ? true : (val.to_s =~ /on|true|yes/ ? true : false)
+        end
+        @@inline_display
+      end
+
+      # Enable/disable inline display (persisted to DB)
+      def self.inline_display=(value)
+        @@inline_display = (value.to_s =~ /on|true|yes/ ? true : false)
+        begin
+          Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_inline_exp',?);", [@@inline_display.to_s.encode('UTF-8')])
+        rescue SQLite3::BusyException
+          sleep 0.1
+          retry
+        end
+        @@inline_display
+      end
+
+      # Format BRIEFEXP ON line to include cumulative gained experience
+      # Original format: "     Aug:  565 39%  [ 2/34]"
+      # Modified format: "     Aug:  565 39%  [ 2/34] 0.12"
+      def self.format_briefexp_on(line, skill)
+        return line unless @@inline_display
+
+        gained = DRSkill.gained_exp(skill) || 0.00
+        line.sub(/(\/34\])/, "\\1 #{sprintf('%0.2f', gained)}")
+      end
+
+      # Format BRIEFEXP OFF line to include cumulative gained experience
+      # Original format: "    Augmentation:  565 39% learning     "
+      # Modified format: "    Augmentation:  565 39% learning      0.12"
+      def self.format_briefexp_off(line, skill, rate_word)
+        return line unless @@inline_display
+
+        gained = DRSkill.gained_exp(skill) || 0.00
+        padded_rate = rate_word.ljust(DR_LONGEST_LEARNING_RATE_LENGTH)
+        line.sub(/(%\s+)(#{Regexp.escape(rate_word)})/, "\\1#{padded_rate} #{sprintf('%0.2f', gained)}")
       end
 
       # Format skill gains array to display strings

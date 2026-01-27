@@ -2370,13 +2370,14 @@ def do_client(client_string)
         respond "Error: exp-monitor.lic script is currently running"
         respond "Stop it first with: #{$clean_lich_char}kill exp-monitor"
       else
-        new_value = !(DRExpMonitor.active?)
+        new_value = !Lich.display_expgains
         case expgains_match[:toggle]
         when 'true', 'on'
           new_value = true
         when 'false', 'off'
           new_value = false
         end
+        Lich.display_expgains = new_value
         if new_value
           respond "Enabling real-time experience gain reporting"
           DRExpMonitor.start
@@ -2384,6 +2385,20 @@ def do_client(client_string)
           respond "Disabling real-time experience gain reporting"
           DRExpMonitor.stop
         end
+      end
+    elsif XMLData.game =~ /^DR/ && (inlineexp_match = cmd.match(/^display inlineexp(?: (?<toggle>true|false|on|off))?$/i))
+      new_value = !DRExpMonitor.inline_display?
+      case inlineexp_match[:toggle]
+      when 'true', 'on'
+        new_value = true
+      when 'false', 'off'
+        new_value = false
+      end
+      DRExpMonitor.inline_display = new_value
+      if new_value
+        respond "Enabling inline experience display (gained ranks shown in exp window)"
+      else
+        respond "Disabling inline experience display"
       end
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
@@ -2535,7 +2550,7 @@ end
 
 ## Alias block from Lich (needs further cleanup)
 
-undef :abort
+undef :abort if respond_to?(:abort)
 alias :mana :checkmana
 alias :mana? :checkmana
 alias :max_mana :maxmana

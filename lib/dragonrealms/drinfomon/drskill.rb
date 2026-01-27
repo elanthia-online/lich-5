@@ -64,7 +64,7 @@ module Lich
       # Updates DRStats.gained_skills if the learning rate increased.
       # The original consumer of this data is the `exp-monitor` script.
       def self.handle_exp_change(name, new_exp)
-        return unless DRExpMonitor.active?
+        return unless Lich.display_expgains
 
         old_exp = DRSkill.getxp(name)
         change = new_exp.to_i - old_exp.to_i
