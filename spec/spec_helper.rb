@@ -169,47 +169,5 @@ DR_SKILLS_DATA = {
   }
 } unless defined?(DR_SKILLS_DATA)
 
-# RSpec configuration
-RSpec.configure do |config|
-  # Enable flags like --only-failures and --next-failure
-  config.example_status_persistence_file_path = 'spec/.rspec_status'
-
-  # Expectations configuration
-  config.expect_with :rspec do |expectations|
-    expectations.include_chain_clauses_in_custom_matcher_descriptions = true
-  end
-
-  # Mocking configuration
-  config.mock_with :rspec do |mocks|
-    mocks.verify_partial_doubles = true
-  end
-
-  # Use documentation formatter
-  config.formatter = :documentation
-
-  # Shared context configuration
-  config.shared_context_metadata_behavior = :apply_to_host_groups
-
-  # Focus on specific tests with :focus tag
-  config.filter_run_when_matching :focus
-
-  # NOTE: Do NOT use config.disable_monkey_patching! here
-  # Other spec files rely on top-level describe/shared_examples
-
-  # Enable warnings
-  config.warnings = true
-
-  # Use doc formatter for single file runs
-  config.default_formatter = 'doc' if config.files_to_run.one?
-
-  # Randomize test order
-  config.order = :random
-  Kernel.srand config.seed
-
-  # Clean up after each test
-  config.after(:each) do
-    # Reset mocks and stubs
-    Lich.clear_logs
-    Lich::Messaging.clear_messages! if defined?(Lich::Messaging)
-  end
-end
+# NOTE: No RSpec.configure block here to avoid affecting other specs in the test suite.
+# This file only provides mock objects and constants needed by drexpmonitor and drskill specs.
