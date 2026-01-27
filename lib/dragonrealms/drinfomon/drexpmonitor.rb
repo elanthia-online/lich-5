@@ -107,7 +107,6 @@ module Lich
           sleep 0.1
           retry
         end
-        @@inline_display
       end
 
       # Format BRIEFEXP ON line to include cumulative gained experience
