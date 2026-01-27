@@ -66,10 +66,15 @@ module Lich
       def self.handle_exp_change(name, new_exp)
         return unless Lich.display_expgains
 
-        old_exp = DRSkill.getxp(name)
-        change = new_exp.to_i - old_exp.to_i
+        # Only track gains for skills that already exist
+        # (skip initial skill discovery on login)
+        skill = find_skill(name)
+        return unless skill
+
+        old_exp = skill.exp.to_i
+        change = new_exp.to_i - old_exp
         if change > 0
-          DRSkill.gained_skills << { skill: name, change: change }
+          @@gained_skills << { skill: name, change: change }
         end
       end
 
@@ -139,6 +144,8 @@ module Lich
 
       def self.getxp(val)
         skill = self.find_skill(val)
+        return 0 unless skill
+
         skill.exp.to_i
       end
 
