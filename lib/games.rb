@@ -434,7 +434,7 @@ module Lich
           end
 
           # Process XML data
-          process_xml_data(server_string) unless server_string =~ /^<settings /
+          process_xml_data(server_string) unless server_string =~ /^<settings(?:Info)? /
 
           # Run downstream hooks
           process_downstream_hooks(server_string)
