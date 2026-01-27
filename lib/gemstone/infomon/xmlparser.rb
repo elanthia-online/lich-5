@@ -78,6 +78,7 @@ module Lich
             /rumbles in agony as .*? teeters for a moment, then tumbles to the ground with a thundering crash/,
             /sinks to the ground, the fell light in (?:his|her) eyes guttering before going out entirely/,
             /is sliced neatly in two/,
+            /falls back and dies/,
           )
           NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? #{NpcDeathPostfix}[\.!]\r?\n?$/
 
