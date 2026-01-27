@@ -15,7 +15,7 @@ module Lich
       require_relative 'drinfomon/drspells'
       require_relative 'drinfomon/events'
       require_relative 'drinfomon/drexpmonitor'
-      
+
       # Auto-start DRExpMonitor based on Lich.display_expgains setting
       # - Defaults to ON for non-Genie frontends (Genie has built-in exp tracking)
       # - Persisted: if user toggles it off, stays off across sessions
