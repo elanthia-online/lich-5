@@ -15,7 +15,7 @@ module Lich
       require_relative 'drinfomon/drspells'
       require_relative 'drinfomon/events'
       require_relative 'drinfomon/drexpmonitor'
-      
+
       # Auto-start DRExpMonitor if previously enabled (persisted in Lich.display_expgains)
       # Use ";display expgains" command to toggle on/off manually
       # Or run exp-monitor.lic for the legacy script version
