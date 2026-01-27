@@ -126,8 +126,8 @@ class MockDB
   end
 end
 
-# Mock Script module
-module Script
+# Mock Script class (must be class, not module, to match existing test suite)
+class Script
   def self.running?(name)
     @running_scripts ||= []
     @running_scripts.include?(name)
@@ -141,7 +141,7 @@ module Script
   def self.clear_running!
     @running_scripts = []
   end
-end
+end unless defined?(Script)
 
 # DragonRealms-specific constants
 DR_LONGEST_LEARNING_RATE_LENGTH = 13 unless defined?(DR_LONGEST_LEARNING_RATE_LENGTH)
