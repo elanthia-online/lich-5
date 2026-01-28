@@ -38,6 +38,9 @@ module Lich
       'mind lock'
     ]
 
+    # Length of the longest learning rate name, used for padding in exp display
+    DR_LONGEST_LEARNING_RATE_LENGTH = DR_LEARNING_RATES.max_by(&:length).length
+
     DR_BALANCE_VALUES = [
       'completely',
       'hopelessly',
