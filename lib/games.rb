@@ -211,6 +211,7 @@ module Lich
           @autostarted = false
           @cli_scripts = false
           @infomon_loaded = false
+          @dr_startup_done = false
           @room_number_after_ready = false
           @last_id_shown_room_window = 0
           @game_instance = nil
@@ -426,6 +427,13 @@ module Lich
           if !@infomon_loaded && (defined?(Infomon) || !$DRINFOMON_VERSION.nil?) && !XMLData.name.nil? && !XMLData.name.empty? && !XMLData.dialogs.empty?
             ExecScript.start("Infomon.redo!", { quiet: true, name: "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
             @infomon_loaded = true
+          end
+
+          # Populate initial DR game state (stats, skills, spells, account)
+          # Cannot depend on @infomon_loaded because its dialogs condition is GS-specific.
+          if !@dr_startup_done && @autostarted && XMLData.game =~ /^DR/ && !XMLData.name.nil? && !XMLData.name.empty?
+            Lich::DragonRealms::DRInfomon.startup
+            @dr_startup_done = true
           end
 
           # Handle CLI scripts
@@ -889,8 +897,9 @@ module Lich
       end
 
       def process_game_specific_data(server_string)
-        infomon_serverstring = server_string.dup
-        DRParser.parse(infomon_serverstring)
+        # Parse directly to allow inline modifications (e.g., inline exp display)
+        # The parser modifies server_string in place via line.replace()
+        DRParser.parse(server_string)
       end
 
       def modify_room_display(alt_string)
