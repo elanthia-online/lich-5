@@ -1,5 +1,23 @@
 # Changelog
 
+## [5.13.6](https://github.com/elanthia-online/lich-5/compare/v5.13.5...v5.13.6) (2026-01-26)
+
+
+### Bug Fixes
+
+* **all:** allow --add-account to run without yaml and dat ([#1143](https://github.com/elanthia-online/lich-5/issues/1143)) ([ca48153](https://github.com/elanthia-online/lich-5/commit/ca48153f36c96d70728142d1e5621ed82b2e7750))
+* **all:** Allow hmr to work on global_defs.rb ([#1156](https://github.com/elanthia-online/lich-5/issues/1156)) ([b077c8a](https://github.com/elanthia-online/lich-5/commit/b077c8a6fca3cd6059606a834014b3b25b6cb3a3))
+* **all:** enable --login for multi-variable custom launch commands ([#1144](https://github.com/elanthia-online/lich-5/issues/1144)) ([0464b2d](https://github.com/elanthia-online/lich-5/commit/0464b2d2e781a4aed1e1d8469bbd54689272ca62))
+* **all:** messaging.rb return "" for xml_encode with Wizard ([#1147](https://github.com/elanthia-online/lich-5/issues/1147)) ([96a5a7f](https://github.com/elanthia-online/lich-5/commit/96a5a7f17b2f6d57ec456a2fcf798bf8c76a2a7c))
+* **all:** prevent closing connection on module reload ([#1148](https://github.com/elanthia-online/lich-5/issues/1148)) ([2540a14](https://github.com/elanthia-online/lich-5/commit/2540a1497fd301996be3e0d8466b1b065979b733))
+* **all:** update.rb pervent update if MIN_RUBY not met ([#1146](https://github.com/elanthia-online/lich-5/issues/1146)) ([24b5173](https://github.com/elanthia-online/lich-5/commit/24b5173a55400f4fff78d7f3677a85912de239cf))
+* **dr:** add buffering for multiline room players ([#1151](https://github.com/elanthia-online/lich-5/issues/1151)) ([c7c2cc7](https://github.com/elanthia-online/lich-5/commit/c7c2cc78459e01b1507f0469dbca43eb631bc0de))
+* **dr:** add verify_script def here instead of depending on dependency ([#1155](https://github.com/elanthia-online/lich-5/issues/1155)) ([21560de](https://github.com/elanthia-online/lich-5/commit/21560de0c7ccebb3cd1c6259c78de3eea7e801b4))
+* **dr:** buffer split room obj lines and merge instead of appending closing tag to broken line ([#1149](https://github.com/elanthia-online/lich-5/issues/1149)) ([b8dd4a2](https://github.com/elanthia-online/lich-5/commit/b8dd4a2f3d25f45d89843eb58624db4e07f246d6))
+* **gs:** infomon.rb added updated_at field to upsert_batch ([#1145](https://github.com/elanthia-online/lich-5/issues/1145)) ([ff2b4b5](https://github.com/elanthia-online/lich-5/commit/ff2b4b551e4f9438c9a28c74fd98ed1c15c6a9e2))
+* **gs:** readylist.rb check method fix when dead ([#1153](https://github.com/elanthia-online/lich-5/issues/1153)) ([29729f4](https://github.com/elanthia-online/lich-5/commit/29729f45fa731af2a74d21bc48daa45fd0988f48))
+* **gs:** stowlist.rb check method fix when dead ([#1152](https://github.com/elanthia-online/lich-5/issues/1152)) ([ddf3a12](https://github.com/elanthia-online/lich-5/commit/ddf3a12472ab026ab8fb74e1610a3bb50f38c220))
+
 ## [5.13.5](https://github.com/elanthia-online/lich-5/compare/v5.13.4...v5.13.5) (2026-01-16)
 
 

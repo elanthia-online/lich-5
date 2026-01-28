@@ -25,7 +25,7 @@ module Lich
               load(file)
               self.msg "<b>[lich.hmr] reloaded %s</b>" % file
             rescue => exception
-              self.msg exception
+              self.msg exception.message
               self.msg exception.backtrace.join("\n")
             end
           }
