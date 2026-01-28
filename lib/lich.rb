@@ -120,6 +120,7 @@ module Lich
   @@display_uid          = nil # boolean
   @@display_exits        = nil # boolean
   @@display_stringprocs  = nil # boolean
+  @@display_expgains     = nil # boolean (DragonRealms only)
   @@hide_uid_flag        = nil # boolean
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
@@ -872,6 +873,34 @@ module Lich
     @@display_stringprocs = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_stringprocs',?);", [@@display_stringprocs.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+  end
+
+  def Lich.display_expgains
+    if @@display_expgains.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_expgains';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      # Default to true for non-Genie frontends (Genie has built-in exp tracking)
+      # Once explicitly set, the persisted value takes precedence
+      if val.nil? && XMLData.game != ""
+        val = ($frontend == 'genie') ? 'false' : 'true'
+      end
+      @@display_expgains = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?
+    end
+    @@display_expgains
+  end
+
+  def Lich.display_expgains=(val)
+    @@display_expgains = (val.to_s =~ /on|true|yes/ ? true : false)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_expgains',?);", [@@display_expgains.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry

@@ -889,8 +889,9 @@ module Lich
       end
 
       def process_game_specific_data(server_string)
-        infomon_serverstring = server_string.dup
-        DRParser.parse(infomon_serverstring)
+        # Parse directly to allow inline modifications (e.g., inline exp display)
+        # The parser modifies server_string in place via line.replace()
+        DRParser.parse(server_string)
       end
 
       def modify_room_display(alt_string)
