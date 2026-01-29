@@ -103,9 +103,9 @@ module Lich
         else
           chkre = /#{val.strip.sub(/\.$/, '').gsub(/\.(?:\.\.)?/, '|')}/i
           chk = /#{Regexp.escape(val.strip)}/i
-          @@list.find { |room| room.title.find { |title| title =~ chk } } ||
-            @@list.find { |room| room.description.find { |desc| desc =~ chk } } ||
-            @@list.find { |room| room.description.find { |desc| desc =~ chkre } }
+          @@list.find { |room| room&.title&.find { |title| title =~ chk } } ||
+            @@list.find { |room| room&.description&.find { |desc| desc =~ chk } } ||
+            @@list.find { |room| room&.description&.find { |desc| desc =~ chkre } }
         end
       end
 
@@ -296,7 +296,7 @@ module Lich
       def self.tags
         load unless @@loaded
         if @@tags.empty?
-          @@list.each do |r|
+          @@list.compact.each do |r|
             r.tags.each do |t|
               @@tags.push(t) unless @@tags.include?(t)
             end

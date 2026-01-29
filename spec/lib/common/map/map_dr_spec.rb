@@ -82,6 +82,11 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
   before(:each) do
     # Clear class state before each test
     map_class.clear rescue nil
+    # Reset additional class variables not handled by clear
+    map_class.class_variable_set(:@@uids, {})
+    map_class.class_variable_set(:@@previous_room_id, -1)
+    map_class.class_variable_set(:@@current_room_id, -1)
+    map_class.class_variable_set(:@@current_room_count, -1)
   end
 
   describe 'class structure' do
@@ -236,7 +241,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
     describe '.get_free_id' do
       before do
         # Manually mark loaded and add some rooms
-        map_class.instance_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true)
         map_class.new(1, ['A'], ['a'], ['path'])
         map_class.new(5, ['B'], ['b'], ['path'])
         map_class.new(3, ['C'], ['c'], ['path'])
@@ -249,7 +254,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.[]' do
       before do
-        map_class.instance_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true)
         map_class.new(1, ['Title A'], ['Description A'], ['path'])
         map_class.new(2, ['Title B'], ['Description B'], ['path'])
       end
@@ -265,7 +270,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
       end
 
       it 'retrieves room by uid with u prefix' do
-        map_class.instance_variable_get(:@@uids)[99999] = [1]
+        map_class.class_variable_get(:@@uids)[99999] = [1]
         room = map_class['u99999']
         expect(room.title).to eq(['Title A'])
       end
@@ -282,10 +287,10 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.previous' do
       before do
-        map_class.instance_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true)
         map_class.new(1, ['Room A'], ['desc'], ['path'])
         map_class.new(2, ['Room B'], ['desc'], ['path'])
-        map_class.instance_variable_set(:@@previous_room_id, 1)
+        map_class.class_variable_set(:@@previous_room_id, 1)
       end
 
       it 'returns previous room' do
@@ -294,6 +299,10 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
     end
 
     describe '.previous_uid' do
+      before do
+        XMLData.previous_nav_rm = 11111
+      end
+
       it 'returns XMLData.previous_nav_rm' do
         expect(map_class.previous_uid).to eq(11111)
       end
@@ -333,7 +342,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.tags' do
       before do
-        map_class.instance_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true)
         map_class.new(1, ['A'], ['a'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['tag1', 'tag2'])
         map_class.new(2, ['B'], ['b'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['tag2', 'tag3'])
       end
@@ -349,13 +358,14 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.clear' do
       before do
-        map_class.instance_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true)
         map_class.new(1, ['A'], ['a'], ['path'])
       end
 
       it 'clears the map list' do
         map_class.clear
-        expect(map_class.list).to be_empty
+        # Access @@list directly since list method would trigger load
+        expect(map_class.class_variable_get(:@@list)).to be_empty
       end
 
       it 'resets loaded flag' do

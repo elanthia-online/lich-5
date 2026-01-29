@@ -258,10 +258,19 @@ RSpec.describe 'Code sharing between DR and GS' do
   end
 
   describe 'common file operations' do
-    %w[load load_json load_dat load_xml save_xml].each do |method|
+    # Methods defined in game-specific files
+    %w[load load_json load_xml save_xml].each do |method|
       it "both define self.#{method}" do
         expect(dr_content).to include("def self.#{method}")
         expect(gs_content).to include("def self.#{method}")
+      end
+    end
+
+    # Methods moved to map_base.rb (shared via MapBase module)
+    %w[load_dat save save_json].each do |method|
+      it "base module defines #{method}" do
+        base_content = File.read(File.join(__dir__, '../../../../lib/common/map/map_base.rb'))
+        expect(base_content).to include("def #{method}")
       end
     end
   end

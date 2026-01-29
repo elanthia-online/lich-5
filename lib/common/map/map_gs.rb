@@ -494,7 +494,7 @@ module Lich
 
       def self.tags
         load unless @@loaded
-        @@tags = @@list.each_with_object({}) { |r, h| r.tags.each { |t| h[t] = nil unless h.key?(t) } }.keys if @@tags.empty?
+        @@tags = @@list.compact.each_with_object({}) { |r, h| r.tags.each { |t| h[t] = nil unless h.key?(t) } }.keys if @@tags.empty?
         @@tags.dup
       end
 
