@@ -18,7 +18,17 @@ rescue LoadError
 end
 
 # Mock global constants used throughout Lich
-XMLData = OpenStruct.new(game: 'DR', name: 'TestChar') unless defined?(XMLData)
+XMLData = OpenStruct.new(
+  game: 'DR',
+  name: 'TestChar',
+  room_id: 12345,
+  room_count: 1,
+  room_title: '[Test Room]',
+  room_description: 'A test room description.',
+  room_exits_string: 'Obvious paths: north, south',
+  room_window_disabled: false,
+  previous_nav_rm: 11111
+) unless defined?(XMLData)
 
 # Mock global variables
 $clean_lich_char = ';' unless defined?($clean_lich_char)
