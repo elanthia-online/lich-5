@@ -79,7 +79,7 @@ module Lich
       module ClassMethods
         # Get the next available room ID
         def get_free_id
-          load unless loaded?
+          self.load unless loaded?
           list.compact.max_by(&:id).id + 1
         end
 
@@ -87,7 +87,7 @@ module Lich
         # @param array [Array<Integer>] Array of room IDs representing the path
         # @return [Float] Total estimated time in seconds
         def estimate_time(array)
-          load unless loaded?
+          self.load unless loaded?
           unless array.is_a?(Array)
             raise Exception.exception('MapError'), 'Map.estimate_time was given something not an array!'
           end

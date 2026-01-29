@@ -63,7 +63,7 @@ module Lich
         end
 
         def list
-          load unless @@loaded
+          self.load unless @@loaded
           @@list
         end
 
@@ -89,12 +89,12 @@ module Lich
       end
 
       def self.get_free_id
-        load unless @@loaded
+        self.load unless @@loaded
         @@list.compact.max_by(&:id).id + 1
       end
 
       def self.[](val)
-        load unless @@loaded
+        self.load unless @@loaded
         if val.is_a?(Integer) || val =~ /^[0-9]+$/
           @@list[val.to_i]
         elsif val =~ /^u(-?\d+)$/i
@@ -118,7 +118,7 @@ module Lich
       end
 
       def self.current
-        load unless @@loaded
+        self.load unless @@loaded
         if Script.current
           return @@list[@@current_room_id] if XMLData.room_count == @@current_room_count && !@@current_room_id.nil?
         elsif XMLData.room_count == @@fuzzy_room_count && !@@current_room_id.nil?
@@ -252,7 +252,7 @@ module Lich
         @@current_room_count = -1
         @@fuzzy_room_count = -1
 
-        load unless @@loaded
+        self.load unless @@loaded
 
         id = current&.id
 
@@ -293,20 +293,8 @@ module Lich
         nil
       end
 
-      def self.tags
-        load unless @@loaded
-        if @@tags.empty?
-          @@list.compact.each do |r|
-            r.tags.each do |t|
-              @@tags.push(t) unless @@tags.include?(t)
-            end
-          end
-        end
-        @@tags.dup
-      end
-
       def self.load_uids
-        load unless @@loaded
+        self.load unless @@loaded
         @@uids.clear
         @@list.each do |r|
           r.uid.each do |u|
@@ -579,11 +567,11 @@ module Lich
               terrain = room.terrain ? " terrain=#{room.terrain.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }.inspect}" : ''
 
               file.write "   <room id=\"#{room.id}\"#{location}#{climate}#{terrain}>\n"
-              room.title.each { |title| file.write "      <title>#{title.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</title>\n" }
-              room.description.each { |desc| file.write "      <description>#{desc.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</description>\n" }
-              room.paths.each { |paths| file.write "      <paths>#{paths.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</paths>\n" }
-              room.tags.each { |tag| file.write "      <tag>#{tag.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</tag>\n" }
-              room.uid.each { |u| file.write "      <uid>#{u}</uid>\n" }
+              Array(room.title).each { |title| file.write "      <title>#{title.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</title>\n" }
+              Array(room.description).each { |desc| file.write "      <description>#{desc.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</description>\n" }
+              Array(room.paths).each { |paths| file.write "      <paths>#{paths.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</paths>\n" }
+              Array(room.tags).each { |tag| file.write "      <tag>#{tag.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</tag>\n" }
+              Array(room.uid).each { |u| file.write "      <uid>#{u}</uid>\n" }
               room.unique_loot.to_a.each { |loot| file.write "      <unique_loot>#{loot.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</unique_loot>\n" }
               room.room_objects.to_a.each { |obj| file.write "      <room_objects>#{obj.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</room_objects>\n" }
               file.write "      <image name=\"#{room.image.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}\" coords=\"#{room.image_coords.join(',')}\" />\n" if room.image && room.image_coords
