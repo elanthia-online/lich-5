@@ -335,9 +335,9 @@ module Lich
 
       def self.load(filename = nil)
         file_list = if filename.nil?
-                      Dir.entries("#{DATA_DIR}/#{XMLData.game}")
+                      Dir.entries(File.join(DATA_DIR, XMLData.game))
                          .find_all { |fn| fn =~ /^map-[0-9]+\.(?:dat|xml|json)$/i }
-                         .collect { |fn| "#{DATA_DIR}/#{XMLData.game}/#{fn}" }
+                         .collect { |fn| File.join(DATA_DIR, XMLData.game, fn) }
                          .sort
                          .reverse
                     else
@@ -368,9 +368,9 @@ module Lich
           file_list = if filename
                         [filename]
                       else
-                        Dir.entries("#{DATA_DIR}/#{XMLData.game}")
+                        Dir.entries(File.join(DATA_DIR, XMLData.game))
                            .find_all { |fn| fn =~ /^map-[0-9]+\.json$/i }
-                           .collect { |fn| "#{DATA_DIR}/#{XMLData.game}/#{fn}" }
+                           .collect { |fn| File.join(DATA_DIR, XMLData.game, fn) }
                            .sort
                            .reverse
                       end
@@ -414,7 +414,9 @@ module Lich
         end
       end
 
-      def self.load_xml(filename = "#{DATA_DIR}/#{XMLData.game}/map.xml")
+      # @deprecated Use load_json instead. XML format is deprecated and will be removed in a future version.
+      def self.load_xml(filename = File.join(DATA_DIR, XMLData.game, 'map.xml'))
+        respond '--- WARNING: Map.load_xml is deprecated. Use Map.load_json instead.'
         @@load_mutex.synchronize do
           return true if @@loaded
 
@@ -548,7 +550,9 @@ module Lich
         end
       end
 
-      def self.save_xml(filename = "#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.xml")
+      # @deprecated Use save_json instead. XML format is deprecated and will be removed in a future version.
+      def self.save_xml(filename = File.join(DATA_DIR, XMLData.game, "map-#{Time.now.to_i}.xml"))
+        respond '--- WARNING: Map.save_xml is deprecated. Use Map.save_json instead.'
         if File.exist?(filename)
           respond 'File exists!  Backing it up before proceeding...'
           begin

@@ -153,8 +153,10 @@ module Lich
         end
 
         # Save map as .dat file (Marshal format)
+        # @deprecated Use save_json instead. Marshal format is deprecated and will be removed in a future version.
         def save(filename = nil)
-          filename ||= "#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.dat"
+          respond '--- WARNING: Map.save (Marshal .dat format) is deprecated. Use Map.save_json instead.'
+          filename ||= File.join(DATA_DIR, XMLData.game, "map-#{Time.now.to_i}.dat")
           if File.exist?(filename)
             respond '--- Backing up map database'
             begin
@@ -178,7 +180,7 @@ module Lich
 
         # Save map as JSON file
         def save_json(filename = nil)
-          filename ||= "#{DATA_DIR}/#{XMLData.game}/map-#{Time.now.to_i}.json"
+          filename ||= File.join(DATA_DIR, XMLData.game, "map-#{Time.now.to_i}.json")
           if File.exist?(filename)
             respond 'File exists!  Backing it up before proceeding...'
             begin
@@ -197,14 +199,16 @@ module Lich
         end
 
         # Load map from .dat file (Marshal format)
+        # @deprecated Use load_json instead. Marshal format is deprecated and will be removed in a future version.
         def load_dat(filename = nil)
+          respond '--- WARNING: Map.load_dat (Marshal .dat format) is deprecated. Use Map.load_json instead.'
           synchronize_load do
             return true if loaded?
 
             file_list = if filename.nil?
-                          Dir.entries("#{DATA_DIR}/#{XMLData.game}")
+                          Dir.entries(File.join(DATA_DIR, XMLData.game))
                              .find_all { |fn| fn =~ /^map-[0-9]+\.dat$/ }
-                             .collect { |fn| "#{DATA_DIR}/#{XMLData.game}/#{fn}" }
+                             .collect { |fn| File.join(DATA_DIR, XMLData.game, fn) }
                              .sort
                              .reverse
                         else
@@ -362,7 +366,7 @@ module Lich
 
         # Find path from this room to destination
         # @param destination [Integer] Target room ID
-        # @return [Array<Integer>, nil] Array of room IDs or nil if no path
+        # @return [Array<Integer>, nil] Array of room IDs representing rooms to traverse (excluding source, including destination)
         def path_to(destination)
           self.class.load unless self.class.loaded?
           destination = destination.to_i
@@ -371,9 +375,7 @@ module Lich
 
           path = [destination]
           path.push(previous[path[-1]]) until previous[path[-1]] == @id
-          path.reverse!
-          path.pop
-          path
+          path.reverse
         end
 
         # Find nearest room with a specific tag
