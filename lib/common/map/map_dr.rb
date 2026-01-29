@@ -307,6 +307,12 @@ module Lich
         end
       end
 
+      def self.tags
+        self.load unless @@loaded
+        @@tags = @@list.compact.each_with_object({}) { |r, h| r.tags.each { |t| h[t] = nil unless h.key?(t) } }.keys if @@tags.empty?
+        @@tags.dup
+      end
+
       def self.ids_from_uid(n)
         @@uids[n].nil? || n.zero? ? [] : @@uids[n]
       end
