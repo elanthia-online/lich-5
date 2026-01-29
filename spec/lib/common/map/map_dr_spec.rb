@@ -299,12 +299,9 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
     end
 
     describe '.previous_uid' do
-      before do
-        XMLData.previous_nav_rm = 11111
-      end
-
       it 'returns XMLData.previous_nav_rm' do
-        expect(map_class.previous_uid).to eq(11111)
+        allow(XMLData).to receive(:previous_nav_rm).and_return(22222)
+        expect(map_class.previous_uid).to eq(22222)
       end
     end
 
