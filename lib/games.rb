@@ -274,12 +274,12 @@ module Lich
 
           @wrap_thread = Thread.new do
             @last_recv = Time.now
-            until @autostarted || (Time.now - @last_recv >= 6)
-              break if @autostarted
+            until @@autostarted || (Time.now - @last_recv >= 6)
+              break if @@autostarted
               sleep 0.2
             end
 
-            puts 'look' unless @autostarted
+            puts 'look' unless @@autostarted
           end
         end
 
@@ -423,10 +423,10 @@ module Lich
           $_SERVERBUFFER_.push(server_string)
 
           # Handle autostart
-          handle_autostart if !@autostarted && server_string =~ /<app char/
+          handle_autostart if !@@autostarted && server_string =~ /<app char/
 
           # Handle CLI scripts
-          if !@cli_scripts && @autostarted && !XMLData.name.nil? && !XMLData.name.empty?
+          if !@cli_scripts && @@autostarted && !XMLData.name.nil? && !XMLData.name.empty?
             start_cli_scripts
           end
 
