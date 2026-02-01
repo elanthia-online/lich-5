@@ -154,28 +154,8 @@ module Lich
 
         # Save map as .dat file (Marshal format)
         # @deprecated Use save_json instead. Marshal format is deprecated and will be removed in a future version.
-        def save(filename = nil)
+        def save(_filename = nil)
           respond '--- WARNING: Map.save (Marshal .dat format) is deprecated. Use Map.save_json instead.'
-          filename ||= File.join(DATA_DIR, XMLData.game, "map-#{Time.now.to_i}.dat")
-          if File.exist?(filename)
-            respond '--- Backing up map database'
-            begin
-              File.open(filename, 'rb') do |infile|
-                File.open("#{filename}.bak", 'wb') do |outfile|
-                  outfile.write(infile.read)
-                end
-              end
-            rescue StandardError => e
-              respond "--- Lich: error: #{e}"
-            end
-          end
-          begin
-            File.open(filename, 'wb') { |f| f.write(Marshal.dump(list)) }
-            clear_tags_cache
-            respond '--- Map database saved'
-          rescue StandardError => e
-            respond "--- Lich: error: #{e}"
-          end
         end
 
         # Save map as JSON file

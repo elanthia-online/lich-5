@@ -545,68 +545,8 @@ module Lich
       end
 
       # @deprecated Use save_json instead. XML format is deprecated and will be removed in a future version.
-      def self.save_xml(filename = File.join(DATA_DIR, XMLData.game, "map-#{Time.now.to_i}.xml"))
+      def self.save_xml(_filename = nil)
         respond '--- WARNING: Map.save_xml is deprecated. Use Map.save_json instead.'
-        if File.exist?(filename)
-          respond 'File exists!  Backing it up before proceeding...'
-          begin
-            File.open(filename, 'rb') do |infile|
-              File.open("#{filename}.bak", 'wb') do |outfile|
-                outfile.write(infile.read)
-              end
-            end
-          rescue StandardError => e
-            respond "--- Lich: error: #{e}\n\t#{e.backtrace[0..1].join("\n\t")}"
-            Lich.log "error: #{e}\n\t#{e.backtrace.join("\n\t")}"
-          end
-        end
-
-        begin
-          escape = { '<' => '&lt;', '>' => '&gt;', '"' => '&quot;', "'" => '&apos;', '&' => '&amp;' }
-          File.open(filename, 'w') do |file|
-            file.write "<map>\n"
-            @@list.each do |room|
-              next if room.nil?
-
-              location = room.location ? " location=#{room.location.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }.inspect}" : ''
-              climate = room.climate ? " climate=#{room.climate.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }.inspect}" : ''
-              terrain = room.terrain ? " terrain=#{room.terrain.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }.inspect}" : ''
-
-              file.write "   <room id=\"#{room.id}\"#{location}#{climate}#{terrain}>\n"
-              Array(room.title).each { |title| file.write "      <title>#{title.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</title>\n" }
-              Array(room.description).each { |desc| file.write "      <description>#{desc.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</description>\n" }
-              Array(room.paths).each { |paths| file.write "      <paths>#{paths.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</paths>\n" }
-              Array(room.tags).each { |tag| file.write "      <tag>#{tag.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</tag>\n" }
-              Array(room.uid).each { |u| file.write "      <uid>#{u}</uid>\n" }
-              room.unique_loot.to_a.each { |loot| file.write "      <unique_loot>#{loot.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</unique_loot>\n" }
-              room.room_objects.to_a.each { |obj| file.write "      <room_objects>#{obj.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</room_objects>\n" }
-              file.write "      <image name=\"#{room.image.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}\" coords=\"#{room.image_coords.join(',')}\" />\n" if room.image && room.image_coords
-
-              room.wayto.keys.each do |target|
-                cost = if room.timeto[target].is_a?(StringProc)
-                         " cost=\"#{room.timeto[target]._dump.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}\""
-                       elsif room.timeto[target]
-                         " cost=\"#{room.timeto[target]}\""
-                       else
-                         ''
-                       end
-
-                if room.wayto[target].is_a?(StringProc)
-                  file.write "      <exit target=\"#{target}\" type=\"Proc\"#{cost}>#{room.wayto[target]._dump.gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</exit>\n"
-                else
-                  file.write "      <exit target=\"#{target}\" type=\"#{room.wayto[target].class}\"#{cost}>#{room.wayto[target].gsub(/(<|>|"|'|&)/) { escape[::Regexp.last_match(1)] }}</exit>\n"
-                end
-              end
-              file.write "   </room>\n"
-            end
-            file.write "</map>\n"
-          end
-          @@tags.clear
-          respond "--- map database saved to: #{filename}"
-        rescue StandardError => e
-          respond e
-        end
-        GC.start
       end
     end
 
