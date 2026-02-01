@@ -75,12 +75,16 @@ RSpec.describe Lich::DragonRealms::DRInfomon do
       described_class.class_variable_set(:@@startup_complete, false)
 
       startup_called = false
+      autostarted = false
+      character_name = nil
 
-      # Mock GameBase::Game.autostarted? and XMLData to start false
-      allow(GameBase::Game).to receive(:autostarted?).and_return(false)
-      allow(XMLData).to receive(:name).and_return(nil)
+      # Mock GameBase::Game.autostarted? to reference our variable
+      allow(GameBase::Game).to receive(:autostarted?) { autostarted }
 
-      # Mock startup to track when it's called (only set up once)
+      # Mock XMLData.name to reference our variable
+      allow(XMLData).to receive(:name) { character_name }
+
+      # Mock startup to track when it's called
       allow(described_class).to receive(:startup) do
         startup_called = true
       end
@@ -95,9 +99,9 @@ RSpec.describe Lich::DragonRealms::DRInfomon do
       # Startup should not have been called yet (conditions not met)
       expect(startup_called).to be false
 
-      # Now simulate conditions being met
-      allow(GameBase::Game).to receive(:autostarted?).and_return(true)
-      allow(XMLData).to receive(:name).and_return('TestCharacter')
+      # Now simulate conditions being met by changing our variables
+      autostarted = true
+      character_name = 'TestCharacter'
 
       # Poll for startup to be called, with timeout
       # The thread checks every 0.1 seconds, so give it up to 2 seconds
