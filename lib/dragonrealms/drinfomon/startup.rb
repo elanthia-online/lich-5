@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
+require_relative '../../common/watchable'
+
 module Lich
   module DragonRealms
     module DRInfomon
+      extend Lich::Common::Watchable
       # Populates initial game state after login by issuing
       # game commands whose output is parsed by DRParser.
       #
@@ -22,8 +25,26 @@ module Lich
         @@startup_complete
       end
 
+      # Self-watching thread that triggers startup when ready
+      # Follows the ActiveSpell.watch! pattern for lifecycle management
+      def self.watch!
+        @startup_thread ||= Thread.new do
+          begin
+            # Wait for character to be ready
+            sleep 0.1 until GameBase::Game.autostarted? && XMLData.name && !XMLData.name.empty?
+
+            # Run startup once
+            startup
+          rescue StandardError => e
+            respond 'Error in DRInfomon startup thread'
+            respond e.inspect
+            respond e.backtrace.join("\n")
+          end
+        end
+      end
+
       def self.startup
-        ExecScript.start(startup_script, { quiet: false, name: "drinfomon_startup" })
+        ExecScript.start(startup_script, { quiet: true, name: "drinfomon_startup" })
       end
 
       def self.startup_script

@@ -200,6 +200,10 @@ module Lich
       class << self
         attr_reader :thread, :buffer, :_buffer, :game_instance
 
+        def autostarted?
+          @@autostarted
+        end
+
         def initialize_buffers
           @socket = nil
           @mutex = Mutex.new
@@ -208,10 +212,8 @@ module Lich
           @buffer = Lich::Common::SharedBuffer.new
           @_buffer = Lich::Common::SharedBuffer.new
           @_buffer.max_size = 1000
-          @autostarted = false
+          @@autostarted = false
           @cli_scripts = false
-          @infomon_loaded = false
-          @dr_startup_done = false
           @room_number_after_ready = false
           @last_id_shown_room_window = 0
           @game_instance = nil
@@ -423,19 +425,6 @@ module Lich
           # Handle autostart
           handle_autostart if !@autostarted && server_string =~ /<app char/
 
-          # Handle infomon loading
-          if !@infomon_loaded && (defined?(Infomon) || !$DRINFOMON_VERSION.nil?) && !XMLData.name.nil? && !XMLData.name.empty? && !XMLData.dialogs.empty?
-            ExecScript.start("Infomon.redo!", { quiet: true, name: "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
-            @infomon_loaded = true
-          end
-
-          # Populate initial DR game state (stats, skills, spells, account)
-          # Cannot depend on @infomon_loaded because its dialogs condition is GS-specific.
-          if !@dr_startup_done && @autostarted && XMLData.game =~ /^DR/ && !XMLData.name.nil? && !XMLData.name.empty?
-            Lich::DragonRealms::DRInfomon.startup
-            @dr_startup_done = true
-          end
-
           # Handle CLI scripts
           if !@cli_scripts && @autostarted && !XMLData.name.nil? && !XMLData.name.empty?
             start_cli_scripts
@@ -458,7 +447,7 @@ module Lich
           end
 
           Script.start('autostart') if defined?(Script) && Script.respond_to?(:exists?) && Script.exists?('autostart')
-          @autostarted = true
+          @@autostarted = true
 
           display_ruby_warning if defined?(RECOMMENDED_RUBY) && Gem::Version.new(RUBY_VERSION) < Gem::Version.new(RECOMMENDED_RUBY)
         end
