@@ -69,23 +69,18 @@ RSpec.describe Lich::DragonRealms::DRInfomon do
   end
 
   describe 'thread behavior', :integration do
-    before do
+    it 'waits for autostarted? to be true' do
       # Reset state
       described_class.instance_variable_set(:@startup_thread, nil)
       described_class.class_variable_set(:@@startup_complete, false)
+
+      startup_called = false
 
       # Mock GameBase::Game.autostarted? and XMLData to start false
       allow(GameBase::Game).to receive(:autostarted?).and_return(false)
       allow(XMLData).to receive(:name).and_return(nil)
 
-      # Mock startup to prevent actual execution
-      allow(described_class).to receive(:startup)
-    end
-
-    it 'waits for autostarted? to be true' do
-      startup_called = false
-
-      # Mock startup to track when it's called
+      # Mock startup to track when it's called (only set up once)
       allow(described_class).to receive(:startup) do
         startup_called = true
       end
