@@ -83,6 +83,13 @@ RSpec.describe Lich::DragonRealms::DRInfomon do
     end
 
     it 'waits for autostarted? to be true' do
+      startup_called = false
+
+      # Mock startup to track when it's called
+      allow(described_class).to receive(:startup) do
+        startup_called = true
+      end
+
       # Start the watch thread
       described_class.watch!
       thread = described_class.instance_variable_get(:@startup_thread)
@@ -91,17 +98,21 @@ RSpec.describe Lich::DragonRealms::DRInfomon do
       sleep 0.15
 
       # Startup should not have been called yet (conditions not met)
-      expect(described_class).not_to have_received(:startup)
+      expect(startup_called).to be false
 
       # Now simulate conditions being met
       allow(GameBase::Game).to receive(:autostarted?).and_return(true)
       allow(XMLData).to receive(:name).and_return('TestCharacter')
 
-      # Wait for thread to check again (it checks every 0.1 seconds)
-      # Give it 0.25 seconds to be safe
-      sleep 0.25
+      # Poll for startup to be called, with timeout
+      # The thread checks every 0.1 seconds, so give it up to 2 seconds
+      timeout = Time.now + 2
+      until startup_called || Time.now > timeout
+        sleep 0.05
+      end
 
       # Now startup should have been called
+      expect(startup_called).to be true
       expect(described_class).to have_received(:startup)
 
       # Clean up - kill thread if still running
