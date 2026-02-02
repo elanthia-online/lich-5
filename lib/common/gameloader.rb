@@ -59,7 +59,8 @@ module Lich
       end
 
       def self.common_after
-        # nil
+        require File.join(LIB_DIR, 'common', 'postload.rb')
+        PostLoad.watch!
       end
 
       def self.load!

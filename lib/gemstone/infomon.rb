@@ -268,6 +268,8 @@ module Lich
             if XMLData.game !~ /^DR/ && db_refresh_needed?
               ExecScript.start("Infomon.redo!", { quiet: true, name: "infomon_reset" })
             end
+
+            PostLoad.game_loaded! if defined?(PostLoad)
           rescue StandardError => e
             respond 'Error in Infomon initialization thread'
             respond e.inspect

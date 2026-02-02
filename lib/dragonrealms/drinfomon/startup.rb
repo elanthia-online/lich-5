@@ -71,6 +71,7 @@ module Lich
 
       def self.startup_completed!
         @@startup_complete = true
+        PostLoad.game_loaded! if defined?(PostLoad)
       end
     end
   end
