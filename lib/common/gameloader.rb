@@ -60,6 +60,16 @@ module Lich
 
       def self.common_after
         require File.join(LIB_DIR, 'common', 'postload.rb')
+        PostLoad.register("settings_init") do
+          # When the game server sends malformed <settingsInfo  space not found ...> XML,
+          # it means this character has never logged in with the Wrayth client.
+          # The reactive fix in handle_xml_error patches the XML and sets the flag.
+          # Here we send a dummy <db> command to seed a valid client record so
+          # the server sends properly formatted settingsInfo on future connects.
+          if GameBase::Game.settings_init_needed?
+            Game._puts("<db><settings client='1.0.1.28'></settings>")
+          end
+        end
         PostLoad.watch!
       end
 
