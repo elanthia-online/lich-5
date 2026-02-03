@@ -46,84 +46,38 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'eaccess.rb')
 
   if ARGV.include?('--login')
-    if File.exist?(File.join(DATA_DIR, "entry.dat"))
-      entry_data = File.open(File.join(DATA_DIR, "entry.dat"), 'r') { |blob|
-        begin
-          Marshal.load(blob.read.unpack('m').first)
-        rescue
-          Array.new
-        end
-      }
-    else
-      entry_data = Array.new
-    end
-    char_name = ARGV[ARGV.index('--login') + 1].capitalize
-    if ARGV.include?('--gemstone')
-      if ARGV.include?('--platinum')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSX') }
-      elsif ARGV.include?('--shattered')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
-      elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
-        data[:game_code] = 'GST'
-      else
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
-      end
-    elsif ARGV.include?('--shattered')
-      data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
-    elsif ARGV.include?('--dragonrealms')
-      if ARGV.include?('--platinum')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRX') }
-      elsif ARGV.include?('--fallen')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
-      elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
-        data[:game_code] = 'DRT'
-      else
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
-      end
-    elsif ARGV.include?('--fallen')
-      data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
-    else
-      data = entry_data.find { |d| (d[:char_name] == char_name) }
-    end
-    if data
-      Lich.log "info: using quick game entry settings for #{char_name}"
+    # CLI login flow: character authentication via saved entries
+    require File.join(LIB_DIR, 'common', 'cli', 'cli_login')
 
-      if ARGV.include?('--gst')
-        data[:game_code] = 'GST'
-      elsif ARGV.include?('--drt')
-        data[:game_code] = 'DRT'
-      end
+    # Extract character name from --login argument
+    requested_character = ARGV[ARGV.index('--login') + 1].capitalize
 
-      launch_data_hash = EAccess.auth(
-        account: data[:user_id],
-        password: data[:password],
-        character: data[:char_name],
-        game_code: data[:game_code]
-      )
+    # Parse game code, frontend, and custom_launch from remaining arguments
+    modifiers = ARGV.dup
+    requested_instance, requested_fe, requested_custom_launch = Lich::Util::LoginHelpers.resolve_login_args(modifiers)
 
-      @launch_data = launch_data_hash.map { |k, v| "#{k.upcase}=#{v}" }
-      if data[:frontend] == 'wizard'
-        @launch_data.collect! { |line| line.sub(/GAMEFILE=.+/, 'GAMEFILE=WIZARD.EXE').sub(/GAME=.+/, 'GAME=WIZ').sub(/FULLGAMENAME=.+/, 'FULLGAMENAME=Wizard Front End') }
-      elsif data[:frontend] == 'avalon'
-        @launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') }
-      end
-      if data[:custom_launch]
-        @launch_data.push "CUSTOMLAUNCH=#{data[:custom_launch]}"
-        if data[:custom_launch_dir]
-          @launch_data.push "CUSTOMLAUNCHDIR=#{data[:custom_launch_dir]}"
-        end
-      end
+    # Execute CLI login flow and get launch data
+    launch_data_array = Lich::Common::CLI::CLILogin.execute(
+      requested_character,
+      game_code: requested_instance,
+      frontend: requested_fe,
+      custom_launch: requested_custom_launch,
+      data_dir: DATA_DIR
+    )
+
+    if launch_data_array
+      Lich.log "info: CLI login successful for #{requested_character}"
+      @launch_data = launch_data_array
     else
-      $stdout.puts "error: failed to find login data for #{char_name}"
-      Lich.log "error: failed to find login data for #{char_name}"
+      $stdout.puts "error: failed to authenticate for #{requested_character}"
+      Lich.log "error: CLI login failed for #{requested_character}"
+      exit 1
     end
 
   ## GUI starts here
 
   elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
-    require File.join(LIB_DIR, 'common', 'gui-login.rb')
+    require File.join(LIB_DIR, 'common', 'gui_login.rb')
     gui_login
   end
 
@@ -387,16 +341,16 @@ reconnect_if_wanted = proc {
       end
     end
     Lich.log 'info: connected'
-  elsif @game_host and @game_port
+  elsif @argv_options[:game_host] and @argv_options[:game_port]
     unless Lich.hosts_file
       Lich.log "error: cannot find hosts file"
       $stdout.puts "error: cannot find hosts file"
       exit
     end
-    IPSocket.getaddress(@game_host)
+    IPSocket.getaddress(@argv_options[:game_host])
     error_count = 0
     begin
-      listener = TCPServer.new('127.0.0.1', @game_port)
+      listener = TCPServer.new('127.0.0.1', @argv_options[:game_port])
       begin
         listener.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, 1)
       rescue
@@ -412,13 +366,13 @@ reconnect_if_wanted = proc {
         retry
       end
     end
-    Lich.modify_hosts(@game_host)
+    Lich.modify_hosts(@argv_options[:game_host])
 
-    $stdout.puts "Pretending to be #{@game_host}"
-    $stdout.puts "Listening on port #{@game_port}"
+    $stdout.puts "Pretending to be #{@argv_options[:game_host]}"
+    $stdout.puts "Listening on port #{@argv_options[:game_port]}"
     $stdout.puts "Waiting for the client to connect..."
-    Lich.log "info: pretending to be #{@game_host}"
-    Lich.log "info: listening on port #{@game_port}"
+    Lich.log "info: pretending to be #{@argv_options[:game_host]}"
+    Lich.log "info: listening on port #{@argv_options[:game_port]}"
     Lich.log "info: waiting for the client to connect..."
 
     timeout_thread = Thread.new {
@@ -441,18 +395,18 @@ reconnect_if_wanted = proc {
       $_CLIENT_.puts "Running in test mode: host socket set to stdin."
     else
       Lich.log 'info: connecting to the real game host...'
-      @game_host, @game_port = Lich.fix_game_host_port(@game_host, @game_port)
+      @argv_options[:game_host], @argv_options[:game_port] = Lich.fix_game_host_port(@argv_options[:game_host], @argv_options[:game_port])
       begin
         timeout_thread = Thread.new {
           sleep 30
-          Lich.log "error: timed out connecting to #{@game_host}:#{@game_port}"
-          $stdout.puts "error: timed out connecting to #{@game_host}:#{@game_port}"
+          Lich.log "error: timed out connecting to #{@argv_options[:game_host]}:#{@argv_options[:game_port]}"
+          $stdout.puts "error: timed out connecting to #{@argv_options[:game_host]}:#{@argv_options[:game_port]}"
           exit
         }
         begin
-          include Lich::Gemstone if @game_host =~ /gs/i
-          include Lich::DragonRealms if @game_host =~ /dr/i
-          Game.open(@game_host, @game_port)
+          include Lich::Gemstone if @argv_options[:game_host] =~ /gs/i
+          include Lich::DragonRealms if @argv_options[:game_host] =~ /dr/i
+          Game.open(@argv_options[:game_host], @argv_options[:game_port])
         rescue
           Lich.log "error: #{$!}"
           $stdout.puts "error: #{$!}"
@@ -691,11 +645,11 @@ reconnect_if_wanted = proc {
     }
   end
 
-  unless @detachable_client_port.nil?
+  unless @argv_options[:detachable_client_port].nil?
     detachable_client_thread = Thread.new {
       loop {
         begin
-          server = TCPServer.new(@detachable_client_host, @detachable_client_port)
+          server = TCPServer.new(@argv_options[:detachable_client_host], @argv_options[:detachable_client_port])
           char_name = ARGV[ARGV.index('--login') + 1].capitalize
           Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
 

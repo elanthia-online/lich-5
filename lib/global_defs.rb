@@ -2512,7 +2512,7 @@ end
 
 ## Alias block from Lich (needs further cleanup)
 
-undef :abort
+undef :abort if respond_to?(:abort)
 alias :mana :checkmana
 alias :mana? :checkmana
 alias :max_mana :maxmana

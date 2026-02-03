@@ -15,10 +15,12 @@ require 'sequel'
 require 'tmpdir'
 require 'logger'
 require_relative 'infomon/cache'
+require_relative '../common/watchable'
 
 module Lich
   module Gemstone
     module Infomon
+      extend Lich::Common::Watchable
       $infomon_debug = ENV["DEBUG"]
       # use temp dir in ci context
       @root = defined?(DATA_DIR) ? DATA_DIR : Dir.tmpdir
@@ -66,6 +68,10 @@ module Lich
 
       def self.queue
         @sql_queue
+      end
+
+      def self.current_timestamp
+        Time.now.utc.to_f
       end
 
       def self.context!
@@ -206,8 +212,8 @@ module Lich
         value = self._validate!(key, value)
         return :noop if self.cache.get(key) == value
         self.cache.put(key, value)
-        self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`) VALUES (%s, %s)
-      on conflict(`key`) do update set value = excluded.value;" % [self.db.literal(self.table_name), self.db.literal(key), self.db.literal(value)]
+        self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`, `updated_at`) VALUES (%s, %s, %s)
+      on conflict(`key`) do update set value = excluded.value, updated_at = excluded.updated_at;" % [self.db.literal(self.table_name), self.db.literal(key), self.db.literal(value), current_timestamp]
       end
 
       def self.delete!(key)
@@ -219,15 +225,16 @@ module Lich
       def self.upsert_batch(*blob)
         updated = (blob.first.map { |k, v| [self._key(k), self._validate!(k, v)] } - self.cache.to_a)
         return :noop if updated.empty?
+        now = current_timestamp
         pairs = updated.map { |key, value|
           (value.is_a?(Integer) or value.is_a?(String)) or fail "upsert_batch only works with Integer or String types"
           # add the value to the cache
           self.cache.put(key, value)
-          %[(%s, %s)] % [self.db.literal(key), self.db.literal(value)]
+          %[(%s, %s, %s)] % [self.db.literal(key), self.db.literal(value), now]
         }.join(", ")
         # queue sql statement to run async
-        self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`) VALUES %s
-      on conflict(`key`) do update set value = excluded.value;" % [self.db.literal(self.table_name), pairs]
+        self.queue << "INSERT OR REPLACE INTO %s (`key`, `value`, `updated_at`) VALUES %s
+      on conflict(`key`) do update set value = excluded.value, updated_at = excluded.updated_at;" % [self.db.literal(self.table_name), pairs]
       end
 
       Thread.new do
@@ -244,6 +251,28 @@ module Lich
           rescue StandardError
             respond "--- Lich: error: Infomon ThreadQueue: #{$!}"
             Lich.log "error: Infomon ThreadQueue: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+          end
+        end
+      end
+
+      # Self-watching thread that triggers initialization when ready
+      # Follows the ActiveSpell.watch! pattern for lifecycle management
+      def self.watch!
+        @init_thread ||= Thread.new do
+          begin
+            # Wait for character to be ready and dialogs to load
+            sleep 0.1 until GameBase::Game.autostarted? && XMLData.name && !XMLData.name.empty? &&
+                            !XMLData.dialogs.empty?
+
+            # Run initial setup if needed (GS-specific only, skip for DR)
+            if XMLData.game !~ /^DR/ && db_refresh_needed?
+              ExecScript.start("Infomon.redo!", { quiet: true, name: "infomon_reset" })
+            end
+
+            PostLoad.game_loaded! if defined?(PostLoad)
+          rescue StandardError => e
+            respond 'Error in Infomon initialization thread'
+            respond e.inspect
           end
         end
       end

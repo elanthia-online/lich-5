@@ -1,9 +1,9 @@
 module Lich
   module DragonRealms
     class CharacterValidator
-      def initialize(announce, sleep, greet, name)
+      def initialize(announce, should_sleep, greet, name)
         waitrt?
-        fput('sleep') if sleep
+        fput('sleep') if should_sleep
 
         @lnet = (Script.running + Script.hidden).find { |val| val.name == 'lnet' }
         @validated_characters = []

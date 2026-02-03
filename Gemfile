@@ -50,6 +50,7 @@ group :profanity do
 end
 
 gem "ascii_charts"
+gem "base64"
 gem "benchmark"
 gem "concurrent-ruby"
 gem "digest"

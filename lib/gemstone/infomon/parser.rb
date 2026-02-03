@@ -9,7 +9,9 @@ module Lich
           # Regex patterns grouped for Info, Exp, Skill and PSM parsing - calls upsert_batch to reduce db impact
           CharRaceProf = /^Name:\s+(?<name>[A-z\s'-]+)\s+Race:\s+(?<race>[A-z]+|[A-z]+(?: |-)[A-z]+)\s+Profession:\s+(?<profession>[-A-z]+)/.freeze
           CharGenderAgeExpLevel = /^Gender:\s+(?<gender>[A-z]+)\s+Age:\s+(?<age>[,0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)/.freeze
-          Stat = /^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)/.freeze
+          # Matches both 'info' (2 columns) and 'info full' (3 columns with base stats)
+          # Base stats are optional - only present in 'info full' output
+          Stat = /^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):(?:\s+(?<base_value>\d+)\s+\((?<base_bonus>-?\d+)\)\s+[.]{3})?\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)/.freeze
           StatEnd = /^Mana:\s+-?\d+\s+Silver:\s(?<silver>-?[\d,]+)$/.freeze
           Fame = /^\s+Level: \d+\s+Fame: (?<fame>-?[\d,]+)$/.freeze # serves as ExprStart
           RealExp = %r{^\s+Experience: [\d,]+\s+Field Exp: (?<fxp_current>[\d,]+)/(?<fxp_max>[\d,]+)$}.freeze
@@ -66,6 +68,7 @@ module Lich
           TicketEtherealScrip = /^\s*Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
           TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards?\.$/.freeze
           TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
+          TicketGold = /^\s*Gold - (?<gold>[\d,]+) gold\.$/.freeze
           WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
           WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
           AccountName = /^Account Name:     (?<name>[\w\d\-\_]+)$/.freeze
@@ -125,7 +128,7 @@ module Lich
                              BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
                              CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
                              SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
-                             Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral,
+                             Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketGold,
                              TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
                              WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
                              ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
@@ -223,6 +226,11 @@ module Lich
                               ['stat.%s_bonus' % match[:stat], match[:bonus].to_i],
                               ['stat.%s.enhanced' % match[:stat], match[:enhanced_value].to_i],
                               ['stat.%s.enhanced_bonus' % match[:stat], match[:enhanced_bonus].to_i])
+              # Store base stats if present (from 'info full' command)
+              if match[:base_value]
+                @stat_hold.push(['stat.%s.base' % match[:stat], match[:base_value].to_i],
+                                ['stat.%s.base_bonus' % match[:stat], match[:base_bonus].to_i])
+              end
               :ok
             when Pattern::StatEnd
               match = Regexp.last_match
@@ -484,6 +492,10 @@ module Lich
             when Pattern::TicketSoulShards
               match = Regexp.last_match
               Infomon.set('currency.soul_shards', match[:soul_shards].delete(',').to_i)
+              :ok
+            when Pattern::TicketGold
+              match = Regexp.last_match
+              Infomon.set('currency.gold', match[:gold].delete(',').to_i)
               :ok
             when Pattern::TicketRaikhen
               match = Regexp.last_match

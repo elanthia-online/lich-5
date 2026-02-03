@@ -42,6 +42,7 @@ module Lich
           @atmospherics = false
           @combat_count = 0
           @end_combat_tags = ["<prompt", "<clearStream", "<component", "<pushStream id=\"percWindow"]
+          @pending_room_objs = nil
         end
 
         def clean_serverstring(server_string)
@@ -82,6 +83,31 @@ module Lich
 
         def atmospherics=(value)
           @atmospherics = value
+        end
+
+        # Buffer split <component id='room objs'> or <component id='room players'> when server sends "...wait N seconds." on separate line
+        # Returns [should_skip, server_string]
+        def buffer_room_objs(server_string)
+          if @pending_room_objs
+            if server_string.include?("</component>")
+              combined = @pending_room_objs + server_string.sub(/\r\n$/, '')
+              Lich.log "Combined split room component: #{combined.inspect}"
+              @pending_room_objs = nil
+              return [false, combined]
+            else
+              @pending_room_objs = @pending_room_objs + server_string.sub(/\r\n$/, '')
+              return [true, nil]
+            end
+          end
+
+          if server_string =~ /^<component id='room (?:objs|players)'>.*\.\.\.wait \d+ seconds?\.\r\n$/ && !server_string.include?("</component>")
+            Lich.log "Open-ended room component tag, buffering: #{server_string.inspect}"
+            # Strip the "...wait N seconds.\r\n" part, keep the opening tag and any content before it
+            @pending_room_objs = server_string.sub(/\.\.\.wait \d+ seconds?\.\r\n$/, '')
+            return [true, nil]
+          end
+
+          [false, server_string]
         end
 
         protected
@@ -174,6 +200,14 @@ module Lich
       class << self
         attr_reader :thread, :buffer, :_buffer, :game_instance
 
+        def autostarted?
+          @@autostarted
+        end
+
+        def settings_init_needed?
+          @@settings_init_needed
+        end
+
         def initialize_buffers
           @socket = nil
           @mutex = Mutex.new
@@ -182,9 +216,9 @@ module Lich
           @buffer = Lich::Common::SharedBuffer.new
           @_buffer = Lich::Common::SharedBuffer.new
           @_buffer.max_size = 1000
-          @autostarted = false
+          @@autostarted = false
+          @@settings_init_needed = false
           @cli_scripts = false
-          @infomon_loaded = false
           @room_number_after_ready = false
           @last_id_shown_room_window = 0
           @game_instance = nil
@@ -245,12 +279,12 @@ module Lich
 
           @wrap_thread = Thread.new do
             @last_recv = Time.now
-            until @autostarted || (Time.now - @last_recv >= 6)
-              break if @autostarted
+            until @@autostarted || (Time.now - @last_recv >= 6)
+              break if @@autostarted
               sleep 0.2
             end
 
-            puts 'look' unless @autostarted
+            puts 'look' unless @@autostarted
           end
         end
 
@@ -371,7 +405,7 @@ module Lich
           # Load game-specific modules if needed
           unless (XMLData.game.nil? || XMLData.game.empty?)
             unless Module.const_defined?(:GameLoader)
-              require_relative 'common/game-loader'
+              require_relative 'common/gameloader'
               GameLoader.load!
             end
           end
@@ -384,6 +418,7 @@ module Lich
           # Clean server string based on game type
           if @game_instance
             server_string = @game_instance.clean_serverstring(server_string)
+            return if server_string.nil? # Buffering split component, wait for next line
           end
 
           # Debug output if needed
@@ -393,16 +428,10 @@ module Lich
           $_SERVERBUFFER_.push(server_string)
 
           # Handle autostart
-          handle_autostart if !@autostarted && server_string =~ /<app char/
-
-          # Handle infomon loading
-          if !@infomon_loaded && (defined?(Infomon) || !$DRINFOMON_VERSION.nil?) && !XMLData.name.nil? && !XMLData.name.empty? && !XMLData.dialogs.empty?
-            ExecScript.start("Infomon.redo!", { quiet: true, name: "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
-            @infomon_loaded = true
-          end
+          handle_autostart if !@@autostarted && server_string =~ /<app char/
 
           # Handle CLI scripts
-          if !@cli_scripts && @autostarted && !XMLData.name.nil? && !XMLData.name.empty?
+          if !@cli_scripts && @@autostarted && !XMLData.name.nil? && !XMLData.name.empty?
             start_cli_scripts
           end
 
@@ -423,7 +452,7 @@ module Lich
           end
 
           Script.start('autostart') if defined?(Script) && Script.respond_to?(:exists?) && Script.exists?('autostart')
-          @autostarted = true
+          @@autostarted = true
 
           display_ruby_warning if defined?(RECOMMENDED_RUBY) && Gem::Version.new(RUBY_VERSION) < Gem::Version.new(RECOMMENDED_RUBY)
         end
@@ -513,8 +542,9 @@ module Lich
             # Handle specific XML errors
             if server_string =~ /<settingsInfo .*?space not found /
               Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
-              server_string.sub!('space not found', '')
+              server_string.sub!(/\s\bspace not found\b\s/, " client='1.0.1.28' ")
               Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
+              @@settings_init_needed = true
               return process_xml_data(server_string) # Return to retry with fixed string
             end
 
@@ -782,8 +812,8 @@ module Lich
         end
       end
 
-      # Initialize the class
-      initialize
+      # Initialize the class only if not already connected
+      initialize if @socket.nil?
     end
   end
 
@@ -794,6 +824,10 @@ module Lich
     # DragonRealms-specific game instance
     class GameInstance < GameBase::GameInstance::Base
       def clean_serverstring(server_string)
+        # Buffer split room objs components (server sends "...wait N seconds." separately)
+        should_skip, server_string = buffer_room_objs(server_string)
+        return nil if should_skip
+
         # Clear out superfluous tags
         server_string = server_string.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />", "")
         server_string = server_string.gsub("<popStream id=\"combat\" /><pushStream id=\"combat\" />", "")
@@ -858,8 +892,9 @@ module Lich
       end
 
       def process_game_specific_data(server_string)
-        infomon_serverstring = server_string.dup
-        DRParser.parse(infomon_serverstring)
+        # Parse directly to allow inline modifications (e.g., inline exp display)
+        # The parser modifies server_string in place via line.replace()
+        DRParser.parse(server_string)
       end
 
       def modify_room_display(alt_string)
@@ -928,8 +963,8 @@ module Lich
         end
       end
 
-      # Initialize the class
-      initialize
+      # Initialize the class only if not already connected
+      initialize if @socket.nil?
     end
   end
 end
