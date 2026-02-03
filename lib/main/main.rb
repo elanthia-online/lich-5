@@ -2,7 +2,7 @@
 # this needs work to break up and improve 2024-06-13
 
 reconnect_if_wanted = proc {
-  if ARGV.include?('--reconnect') and ARGV.include?('--login') and not $_CLIENTBUFFER_.any? { |cmd| cmd =~ /^(?:\[.*?\])?(?:<c>)?(?:quit|exit)/i }
+  if ARGV.include?('--reconnect') && ARGV.include?('--login') && !$_CLIENTBUFFER_.any? { |cmd| cmd =~ /^(?:\[.*?\])?(?:<c>)?(?:quit|exit)/i }
     if (reconnect_arg = ARGV.find { |arg| arg =~ /^\-\-reconnect\-delay=[0-9]+(?:\+[0-9]+)?$/ })
       reconnect_arg =~ /^\-\-reconnect\-delay=([0-9]+)(\+[0-9]+)?/
       reconnect_delay = $1.to_i
@@ -14,7 +14,7 @@ reconnect_if_wanted = proc {
     Lich.log "info: waiting #{reconnect_delay} seconds to reconnect..."
     sleep reconnect_delay
     Lich.log 'info: reconnecting...'
-    if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+    if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
       if $frontend == 'stormfront'
         system 'taskkill /FI "WINDOWTITLE eq [GSIV: ' + Char.name + '*"' # fixme: window title changing to Gemstone IV: Char.name # name optional
       end
@@ -76,7 +76,7 @@ reconnect_if_wanted = proc {
 
   ## GUI starts here
 
-  elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
+  elsif defined?(Gtk) && (ARGV.empty? || @argv_options[:gui])
     require File.join(LIB_DIR, 'common', 'gui_login.rb')
     gui_login
   end
@@ -134,7 +134,7 @@ reconnect_if_wanted = proc {
     if (custom_launch = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCH=/ })
       custom_launch.sub!(/^.*?\=/, '')
       Lich.log "info: using custom launch command: #{custom_launch}"
-    elsif (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+    elsif (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
       Lich.log("info: Working against a Windows Platform for FE Executable")
       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
         custom_launch = "Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
@@ -154,7 +154,7 @@ reconnect_if_wanted = proc {
     if (custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ })
       custom_launch_dir.sub!(/^.*?\=/, '')
       Lich.log "info: using working directory for custom launch command: #{custom_launch_dir}"
-    elsif (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+    elsif (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
       Lich.log "info: Working against a Windows Platform for FE Location"
       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
         custom_launch_dir = Lich.seek('wizard') # #HERE I AM
@@ -208,7 +208,7 @@ reconnect_if_wanted = proc {
     gamehost = gamehost.split('=').last
     game     = game.split('=').last
 
-    if (gameport == '10121') or (gameport == '10124')
+    if (gameport == '10121') || (gameport == '10124')
       $platinum = true
     else
       $platinum = false
@@ -258,7 +258,7 @@ reconnect_if_wanted = proc {
         end
         File.open(sal_filename, 'w') { |f| f.puts @launch_data }
         launcher_cmd = launcher_cmd.sub('%1', sal_filename)
-        launcher_cmd = launcher_cmd.tr('/', "\\") if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+        launcher_cmd = launcher_cmd.tr('/', "\\") if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
       end
       begin
         unless custom_launch_dir.nil? || custom_launch_dir.empty?
@@ -341,7 +341,7 @@ reconnect_if_wanted = proc {
       end
     end
     Lich.log 'info: connected'
-  elsif @argv_options[:game_host] and @argv_options[:game_port]
+  elsif @argv_options[:game_host] && @argv_options[:game_port]
     unless Lich.hosts_file
       Lich.log "error: cannot find hosts file"
       $stdout.puts "error: cannot find hosts file"
@@ -637,7 +637,7 @@ reconnect_if_wanted = proc {
         respond $!.backtrace.first
         Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         sleep 0.2
-        retry unless $_CLIENT_.closed? or Game.closed? or !Game.thread.alive? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed/i)
+        retry unless $_CLIENT_.closed? || Game.closed? || !Game.thread.alive? || ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed/i)
       ensure
         Frontend.cleanup_session_file
       end
@@ -761,7 +761,7 @@ reconnect_if_wanted = proc {
   Lich.log 'info: stopping scripts...'
   Script.running.each { |script| script.kill }
   Script.hidden.each { |script| script.kill }
-  200.times { sleep 0.1; break if Script.running.empty? and Script.hidden.empty? }
+  200.times { sleep 0.1; break if Script.running.empty? && Script.hidden.empty? }
   Lich.log 'info: saving script settings...'
   Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
   Settings.save
