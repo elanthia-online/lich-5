@@ -158,7 +158,7 @@ module Lich
       # finding another container if needed
       other_containers_var = nil
       other_containers = proc {
-        results = Lich::Util.issue_command('inventory containers', /^(?:You are carrying nothing at this time|You are wearing|You are holding no containers at this time.)/, silent: true, quiet: true)
+        results = Lich::Util.issue_command('inventory containers', /^(?:You are (?:carrying nothing|holding no containers) at this time|You are wearing)/, silent: true, quiet: true)
         other_containers_ids = results.to_s.scan(/exist=\\"(.*?)\\"/).flatten - [lootsack.id]
         other_containers_var = GameObj.inv.find_all { |obj| other_containers_ids.include?(obj.id) }
         other_containers_var
