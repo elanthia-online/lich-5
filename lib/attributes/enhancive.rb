@@ -327,16 +327,17 @@ module Lich
         BONUS_SKILLS.select { |s| skill_over_cap?(s) rescue false }
       end
 
-      # Trigger refresh of enhancive data (status + full totals)
-      # Blocks until complete, output is hidden from user
-      def self.refresh
-        respond "Refreshing enhancive data..."
+      # Blocks until complete
+      # @param silent [Boolean] suppress command echo (default: false)
+      # @param quiet [Boolean] suppress game output (default: true)
+      def self.refresh(silent: false, quiet: true)
+        respond "Refreshing enhancive data..." unless quiet
         # First get status (active state + pauses)
         Lich::Util.issue_command(
           "invento enh",
           /^You are (?:currently|not currently|now|already|no longer)/,
           /<prompt/,
-          include_end: true, timeout: 5, silent: false, usexml: true, quiet: true
+          include_end: true, timeout: 5, silent: silent, usexml: true, quiet: quiet
         )
         # Then get full totals
         # TODO: Update start pattern once GM adds proper start message to invento enhancive totals
@@ -345,19 +346,21 @@ module Lich
           "invento enhancive totals",
           /^<pushBold\/>(?:Stats:|Skills:|Resources:)|^No enhancive item bonuses found\./,
           /<prompt/,
-          include_end: true, timeout: 5, silent: false, usexml: true, quiet: true
+          include_end: true, timeout: 5, silent: silent, usexml: true, quiet: quiet
         )
-        respond "Enhancive data refreshed."
+        respond "Enhancive data refreshed." unless quiet
       end
 
       # Trigger refresh of active state and pauses only (lightweight)
-      # Blocks until complete, output is hidden from user
-      def self.refresh_status
+      # Blocks until complete
+      # @param silent [Boolean] suppress command echo (default: false)
+      # @param quiet [Boolean] suppress game output (default: true)
+      def self.refresh_status(silent: false, quiet: true)
         Lich::Util.issue_command(
           "invento enh",
           /^You are (?:currently|not currently|now|already|no longer)/,
           /<prompt/,
-          include_end: true, timeout: 5, silent: false, usexml: true, quiet: true
+          include_end: true, timeout: 5, silent: silent, usexml: true, quiet: quiet
         )
       end
 
