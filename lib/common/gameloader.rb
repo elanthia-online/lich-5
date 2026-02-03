@@ -23,6 +23,7 @@ module Lich
         require File.join(LIB_DIR, 'attributes', 'stats.rb')
         require File.join(LIB_DIR, 'attributes', 'spells.rb')
         require File.join(LIB_DIR, 'attributes', 'skills.rb')
+        require File.join(LIB_DIR, 'attributes', 'enhancive.rb')
         require File.join(LIB_DIR, 'gemstone', 'society.rb')
         require File.join(LIB_DIR, 'gemstone', 'infomon', 'status.rb')
         require File.join(LIB_DIR, 'gemstone', 'experience.rb')
@@ -44,7 +45,6 @@ module Lich
         require File.join(LIB_DIR, 'gemstone', 'stowlist.rb')
         require File.join(LIB_DIR, 'gemstone', 'armaments.rb')
         ActiveSpell.watch!
-        Infomon.watch!
         self.common_after
       end
 
@@ -54,23 +54,11 @@ module Lich
         require File.join(LIB_DIR, 'attributes', 'char.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'drinfomon.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'commons.rb')
-        DRInfomon.watch!
         self.common_after
       end
 
       def self.common_after
-        require File.join(LIB_DIR, 'common', 'postload.rb')
-        PostLoad.register("settings_init") do
-          # When the game server sends malformed <settingsInfo  space not found ...> XML,
-          # it means this character has never logged in with the Wrayth client.
-          # The reactive fix in handle_xml_error patches the XML and sets the flag.
-          # Here we send a dummy <db> command to seed a valid client record so
-          # the server sends properly formatted settingsInfo on future connects.
-          if GameBase::Game.settings_init_needed?
-            Game._puts("<db><settings client='1.0.1.28'></settings>")
-          end
-        end
-        PostLoad.watch!
+        # nil
       end
 
       def self.load!
