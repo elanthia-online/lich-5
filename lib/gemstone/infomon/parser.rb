@@ -99,12 +99,14 @@ module Lich
 
           # Enhancive parsing patterns - from INVENTORY ENHANCIVE TOTALS command
           EnhanciveStart = /^Stats:$/.freeze
-          EnhanciveStat = /^\s+(?<stat>Strength|Constitution|Dexterity|Agility|Discipline|Aura|Logic|Intuition|Wisdom)\s+\((?<abbr>\w{3})\):\s*(?<value>\d+)\/(?<cap>\d+)$/.freeze
+          EnhanciveStat = /^\s+(?<stat>Strength|Constitution|Dexterity|Agility|Discipline|Aura|Logic|Intuition|Wisdom|Influence)\s+\((?<abbr>\w{3})\):\s*(?<value>\d+)\/(?<cap>\d+)$/.freeze
           EnhanciveSkillsSection = /^Skills:$/.freeze
           EnhanciveSkillRanks = /^\s+(?<name>[\w\s\-']+?)\s+Ranks:\s*(?<value>\d+)\/(?<cap>\d+)$/.freeze
           EnhanciveSkillBonus = /^\s+(?<name>[\w\s\-']+?)\s+Bonus:\s*(?<value>\d+)\/(?<cap>\d+)$/.freeze
           EnhanciveResourcesSection = /^Resources:$/.freeze
-          EnhanciveResource = /^\s+(?<name>Max Mana|Max Health|Max Stamina|Mana Recovery|Stamina Recovery):\s*(?<value>\d+)\/(?<cap>\d+)$/.freeze
+          EnhanciveResource = /^\s+(?<name>[\w\s]+?):\s+(?<value>\d+)\/(?<cap>\d+)$/.freeze
+          EnhanciveMartialSection = /^Martial Knowledge Skills:$/.freeze
+          EnhanciveMartialSkill = /^\s+(?<name>[\w\s']+?):\s+\+(?<value>\d+)\s+ranks?$/.freeze
           EnhanciveSpellsSection = /^Self Knowledge Spells:$/.freeze
           EnhanciveSpells = /^\s+(?<spells>[\d,\s]+)$/.freeze
           EnhanciveStatisticsSection = /^Statistics:$/.freeze
@@ -131,8 +133,9 @@ module Lich
                              ShadowEssence, ShadowEssenceGain, ShadowEssenceCap, SacrificeMana, SacrificeChannel, SacrificeInfest,
                              SacrificeFate, SacrificeShift, GemstoneDust, EnhanciveStart, EnhanciveStat, EnhanciveSkillsSection,
                              EnhanciveSkillRanks, EnhanciveSkillBonus, EnhanciveResourcesSection, EnhanciveResource,
-                             EnhanciveSpellsSection, EnhanciveSpells, EnhanciveStatisticsSection, EnhanciveStatistic,
-                             EnhanciveEnd, EnhanciveNone, EnhanciveOn, EnhanciveOff, EnhancivePauses)
+                             EnhanciveMartialSection, EnhanciveMartialSkill, EnhanciveSpellsSection, EnhanciveSpells,
+                             EnhanciveStatisticsSection, EnhanciveStatistic, EnhanciveEnd, EnhanciveNone,
+                             EnhanciveOn, EnhanciveOff, EnhancivePauses)
         end
 
         module State
@@ -144,13 +147,20 @@ module Lich
           EnhanciveStats = :enhancive_stats
           EnhanciveSkills = :enhancive_skills
           EnhanciveResources = :enhancive_resources
+          EnhanciveMartial = :enhancive_martial
           EnhanciveSpells = :enhancive_spells
           EnhanciveStatistics = :enhancive_statistics
 
           def self.set(state)
             case state
-            when Goals, Profile, EnhanciveStats
+            when Goals, Profile
               unless @state.eql?(Ready)
+                Lich.log "error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
+                fail "--- Lich: error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
+              end
+            when EnhanciveStats, EnhanciveSkills, EnhanciveResources, EnhanciveMartial, EnhanciveSpells, EnhanciveStatistics
+              # Enhancive states can start from Ready or transition between each other
+              unless @state.eql?(Ready) || enhancive_state?
                 Lich.log "error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
                 fail "--- Lich: error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
               end
@@ -158,13 +168,13 @@ module Lich
             @state = state
           end
 
-          def self.enhancive_state?
-            [EnhanciveStats, EnhanciveSkills, EnhanciveResources,
-             EnhanciveSpells, EnhanciveStatistics].include?(@state)
-          end
-
           def self.get
             @state
+          end
+
+          def self.enhancive_state?
+            [EnhanciveStats, EnhanciveSkills, EnhanciveResources,
+             EnhanciveMartial, EnhanciveSpells, EnhanciveStatistics].include?(@state)
           end
         end
 
@@ -594,24 +604,31 @@ module Lich
               Spellsong.renewed
               :ok
             # === ENHANCIVE PARSING ===
+            # Any section header can start enhancive parsing (output may not include all sections)
             when Pattern::EnhanciveStart
-              @enhancive_hold = []
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
               State.set(State::EnhanciveStats)
-              Infomon.mutex_lock
-              # Reset all values to 0 first since output only shows non-zero
-              Lich::Gemstone::Enhancive.reset_all
               :ok
             when Pattern::EnhanciveStat
               if State.get == State::EnhanciveStats
                 match = Regexp.last_match
                 stat_key = Lich::Gemstone::Enhancive::STAT_ABBREV[match[:abbr]]
-                @enhancive_hold.push(["enhancive.stat.#{stat_key}", match[:value].to_i])
+                @enhancive_hold.push(["enhancive.stat.#{stat_key}", match[:value].to_i]) if stat_key
                 :ok
               else
                 :noop
               end
             when Pattern::EnhanciveSkillsSection
-              State.set(State::EnhanciveSkills) if State.get == State::EnhanciveStats
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveSkills)
               :ok
             when Pattern::EnhanciveSkillRanks
               if State.get == State::EnhanciveSkills
@@ -632,7 +649,12 @@ module Lich
                 :noop
               end
             when Pattern::EnhanciveResourcesSection
-              State.set(State::EnhanciveResources) if State.get == State::EnhanciveSkills
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveResources)
               :ok
             when Pattern::EnhanciveResource
               if State.get == State::EnhanciveResources
@@ -643,8 +665,30 @@ module Lich
               else
                 :noop
               end
+            when Pattern::EnhanciveMartialSection
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveMartial)
+              :ok
+            when Pattern::EnhanciveMartialSkill
+              if State.get == State::EnhanciveMartial
+                match = Regexp.last_match
+                martial_key = Lich::Gemstone::Enhancive.martial_display_to_symbol(match[:name].strip)
+                @enhancive_hold.push(["enhancive.martial.#{martial_key}", match[:value].to_i]) if martial_key
+                :ok
+              else
+                :noop
+              end
             when Pattern::EnhanciveSpellsSection
-              State.set(State::EnhanciveSpells) if State.get == State::EnhanciveResources
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveSpells)
               :ok
             when Pattern::EnhanciveSpells
               if State.get == State::EnhanciveSpells
@@ -656,7 +700,12 @@ module Lich
                 :noop
               end
             when Pattern::EnhanciveStatisticsSection
-              State.set(State::EnhanciveStatistics) if State.get == State::EnhanciveSpells
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveStatistics)
               :ok
             when Pattern::EnhanciveStatistic
               if State.get == State::EnhanciveStatistics
