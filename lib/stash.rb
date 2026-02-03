@@ -120,37 +120,6 @@ module Lich
       @bandolier_weapon[item.name] = found_container&.id || "unknown"
     end
 
-    def self.sheath_bags
-      # find ready list settings for sheaths only; regex courtesy Eloot
-      @sheath = {}
-      @checked_sheaths = false
-      sheath_list_match = /(?:sheath|secondary sheath):\s+<d\scmd="store\s(\w+)\sclear">[^<]+<a\sexist="(\d+)"\snoun="[^"]+">([^<]+)<\/a>(?:\s[^<]+)?<\/d>/
-
-      ready_lines = Lich::Util.issue_command("ready list", /Your current settings are/, /To change your default item for a category that is already set/, silent: true, quiet: true)
-      ready_lines.each { |line|
-        if line =~ sheath_list_match
-          sheath_obj = Regexp.last_match(3).to_s.downcase
-          sheath_type = Regexp.last_match(1).to_s.downcase.gsub('2', 'secondary_')
-          found_container = Stash.find_container(sheath_obj, loud_fail: false)
-          unless found_container.nil?
-            @sheath.store(sheath_type.to_sym, found_container)
-          else
-            respond("Lich::Stash.sheath_bags Error: Could not find sheath(#{sheath_obj}) in inventory. Not using, possibly hidden, tucked, or missing.")
-            Lich.log("Lich::Stash.sheath_bags Error: Could not find sheath(#{sheath_obj}) in inventory. Not using, possibly hidden, tucked, or missing.")
-          end
-        end
-      }
-      @checked_sheaths = true
-    end
-
-    def self.missing_primary_sheath? # check entry against actual inventory to catch inventory updatees
-      @sheath.has_key?(:sheath) && !GameObj.inv.any? { |item| item.id == @sheath[:sheath].id }
-    end
-
-    def self.missing_secondary_sheath? # check entry against actual inventory to catch inventory updates
-      @sheath.has_key?(:secondary_sheath) && !GameObj.inv.any? { |item| item.id == @sheath[:secondary_sheath].id }
-    end
-
     def self.stash_hands(right: false, left: false, both: false)
       $fill_hands_actions ||= Array.new
       $fill_left_hand_actions ||= Array.new
@@ -161,18 +130,18 @@ module Lich
       left_hand = GameObj.left_hand
 
       # extending to use sheath / 2sheath wherever possible
-      if !@checked_sheaths || missing_primary_sheath? || missing_secondary_sheath?
-        Stash.sheath_bags # @checked_sheaths is set true when this method executes
+      unless ReadyList.valid?
+        ReadyList.check(silent: true, quiet: true)
       end
-      if @sheath.has_key?(:sheath)
-        unless @sheath.has_key?(:secondary_sheath)
-          sheath = second_sheath = @sheath.fetch(:sheath)
+      if ReadyList.sheath
+        unless ReadyList.secondary_sheath
+          sheath = second_sheath = ReadyList.sheath
         else
-          sheath = @sheath.fetch(:sheath) if @sheath.has_key?(:sheath)
-          second_sheath = @sheath.fetch(:secondary_sheath) if @sheath.has_key?(:secondary_sheath)
+          sheath = ReadyList.sheath if ReadyList.sheath
+          second_sheath = ReadyList.secondary_sheath if ReadyList.secondary_sheath
         end
-      elsif @sheath.has_key?(:secondary_sheath)
-        sheath = second_sheath = @sheath.fetch(:secondary_sheath)
+      elsif ReadyList.secondary_sheath
+        sheath = second_sheath = ReadyList.secondary_sheath
       else
         sheath = second_sheath = nil
       end
@@ -189,7 +158,7 @@ module Lich
       # finding another container if needed
       other_containers_var = nil
       other_containers = proc {
-        results = Lich::Util.issue_command('inventory containers', /^(?:You are carrying nothing at this time|You are wearing)/, silent: true, quiet: true)
+        results = Lich::Util.issue_command('inventory containers', /^(?:You are (?:carrying nothing|holding no containers) at this time|You are wearing)/, silent: true, quiet: true)
         other_containers_ids = results.to_s.scan(/exist=\\"(.*?)\\"/).flatten - [lootsack.id]
         other_containers_var = GameObj.inv.find_all { |obj| other_containers_ids.include?(obj.id) }
         other_containers_var
