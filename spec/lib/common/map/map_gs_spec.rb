@@ -54,10 +54,6 @@ RSpec.describe 'GemStone Map Implementation' do
     it 'uses large UID threshold (4_294_967_296)' do
       expect(gs_map_content).to include('4_294_967_296')
     end
-
-    it 'includes save_json reload validation' do
-      expect(gs_map_content).to include('reload if self[-1].id != self[self[-1].id].id')
-    end
   end
 
   describe 'class structure' do
@@ -267,11 +263,16 @@ RSpec.describe 'Code sharing between DR and GS' do
     end
 
     # Methods moved to map_base.rb (shared via MapBase module)
-    %w[load_dat save save_json].each do |method|
+    %w[load_dat save_json].each do |method|
       it "base module defines #{method}" do
         base_content = File.read(File.join(__dir__, '../../../../lib/common/map/map_base.rb'))
         expect(base_content).to include("def #{method}")
       end
+    end
+
+    it 'base module aliases save to save_json' do
+      base_content = File.read(File.join(__dir__, '../../../../lib/common/map/map_base.rb'))
+      expect(base_content).to include('alias_method :save, :save_json')
     end
   end
 end

@@ -745,27 +745,6 @@ module Lich
         end
       end
 
-      # GS-specific: save_json with validation reload
-      def self.save_json(filename = File.join(DATA_DIR, XMLData.game, "map-#{Time.now.to_i}.json"))
-        if File.exist?(filename)
-          respond 'File exists!  Backing it up before proceeding...'
-          begin
-            File.open(filename, 'rb') do |infile|
-              File.open("#{filename}.bak", 'wb:UTF-8') do |outfile|
-                outfile.write(infile.read)
-              end
-            end
-          rescue StandardError => e
-            respond "--- Lich: error: #{e}\n\t#{e.backtrace[0..1].join("\n\t")}"
-            Lich.log "error: #{e}\n\t#{e.backtrace.join("\n\t")}"
-          end
-        end
-        File.open(filename, 'wb:UTF-8') { |file| file.write(to_json) }
-        respond "#{filename} saved"
-        # GS-specific: Reload if map seems corrupted
-        reload if self[-1].id != self[self[-1].id].id
-      end
-
       # @deprecated Use save_json instead. XML format is deprecated and will be removed in a future version.
       def self.save_xml(_filename = nil)
         respond '--- WARNING: Map.save_xml is deprecated. Use Map.save_json instead.'

@@ -152,12 +152,6 @@ module Lich
           list.to_json(args)
         end
 
-        # Save map as .dat file (Marshal format)
-        # @deprecated Use save_json instead. Marshal format is deprecated and will be removed in a future version.
-        def save(_filename = nil)
-          respond '--- WARNING: Map.save (Marshal .dat format) is deprecated. Use Map.save_json instead.'
-        end
-
         # Save map as JSON file
         def save_json(filename = nil)
           filename ||= File.join(DATA_DIR, XMLData.game, "map-#{Time.now.to_i}.json")
@@ -176,7 +170,11 @@ module Lich
           end
           File.open(filename, 'wb:UTF-8') { |file| file.write(to_json) }
           respond "#{filename} saved"
+          # Reload if map index appears corrupted
+          reload if self[-1].id != self[self[-1].id].id
         end
+
+        alias_method :save, :save_json
 
         # Load map from .dat file (Marshal format)
         # @deprecated Use load_json instead. Marshal format is deprecated and will be removed in a future version.
