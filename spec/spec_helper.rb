@@ -10,6 +10,12 @@ require 'json'
 # Add lib directory to load path
 $LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
 
+# Require application modules needed for testing
+require_relative '../lib/common/watchable'
+
+# Define LIB_DIR constant needed by gameloader
+LIB_DIR = File.expand_path('../lib', __dir__) unless defined?(LIB_DIR)
+
 # Require core gems if available
 begin
   require 'os'
@@ -110,6 +116,12 @@ module Lich
   end
 end
 
+# Load the real GameLoader now that dependencies are mocked
+require_relative '../lib/common/gameloader'
+
+# Load DRInfomon startup module for testing
+require_relative '../lib/dragonrealms/drinfomon/startup'
+
 # Mock database for testing
 class MockDB
   def initialize
@@ -179,6 +191,29 @@ DR_SKILLS_DATA = {
     'Warrior Mage' => {}
   }
 } unless defined?(DR_SKILLS_DATA)
+
+# Mock GameBase module for games.rb specs
+module GameBase
+  class Game
+    @@autostarted = false
+
+    def self.autostarted?
+      @@autostarted
+    end
+  end
+end unless defined?(GameBase)
+
+# Mock respond function used by watcher threads
+def respond(message)
+  # Capture for testing
+end unless defined?(respond)
+
+# Mock ExecScript for DRInfomon specs
+module ExecScript
+  def self.start(script, options = {})
+    # Mock implementation for testing
+  end
+end unless defined?(ExecScript)
 
 # NOTE: No RSpec.configure block here to avoid affecting other specs in the test suite.
 # This file only provides mock objects and constants needed by drexpmonitor and drskill specs.
