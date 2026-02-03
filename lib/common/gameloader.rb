@@ -44,6 +44,7 @@ module Lich
         require File.join(LIB_DIR, 'gemstone', 'stowlist.rb')
         require File.join(LIB_DIR, 'gemstone', 'armaments.rb')
         ActiveSpell.watch!
+        Infomon.watch!
         self.common_after
       end
 
@@ -53,11 +54,13 @@ module Lich
         require File.join(LIB_DIR, 'attributes', 'char.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'drinfomon.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'commons.rb')
+        DRInfomon.watch!
         self.common_after
       end
 
       def self.common_after
-        # nil
+        require File.join(LIB_DIR, 'common', 'postload.rb')
+        PostLoad.watch!
       end
 
       def self.load!
