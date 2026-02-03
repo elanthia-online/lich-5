@@ -5,12 +5,13 @@ require "ostruct"
 module Lich
   module Gemstone
     module Enhancive
-      # Stats - same 9 stats as base stats (no influence for enhancives based on output)
-      STATS = %i[strength constitution dexterity agility discipline aura logic intuition wisdom].freeze
+      # Stats - all 10 stats including influence
+      STATS = %i[strength constitution dexterity agility discipline aura logic intuition wisdom influence].freeze
       STAT_ABBREV = {
         'STR' => :strength, 'CON' => :constitution, 'DEX' => :dexterity,
         'AGI' => :agility, 'DIS' => :discipline, 'AUR' => :aura,
-        'LOG' => :logic, 'INT' => :intuition, 'WIS' => :wisdom
+        'LOG' => :logic, 'INT' => :intuition, 'WIS' => :wisdom,
+        'INF' => :influence
       }.freeze
       STAT_CAP = 40
 
@@ -95,6 +96,45 @@ module Lich
         'Stamina Recovery' => :stamina_recovery
       }.freeze
 
+      # Martial Knowledge Skills (CMan-based enhancives)
+      # These appear as "+X ranks" in the output rather than bonus format
+      # Derived dynamically from CMan module at runtime to stay DRY
+      MARTIAL_SKILL_CAP = 5  # Most martial skills cap at 5 ranks
+
+      # Special display name mappings for CMan skills with apostrophes
+      # These can't be auto-generated from the symbol name
+      MARTIAL_SPECIAL_NAMES = {
+        :acrobats_leap       => "Acrobat's Leap",
+        :executioners_stance => "Executioner's Stance",
+        :griffins_voice      => "Griffin's Voice",
+        :predators_eye       => "Predator's Eye"
+      }.freeze
+
+      # Convert symbol to display name (e.g., :combat_focus => "Combat Focus")
+      def self.martial_symbol_to_display(symbol)
+        return MARTIAL_SPECIAL_NAMES[symbol] if MARTIAL_SPECIAL_NAMES.key?(symbol)
+
+        symbol.to_s.split('_').map(&:capitalize).join(' ')
+      end
+
+      # Convert display name to symbol (e.g., "Combat Focus" => :combat_focus)
+      def self.martial_display_to_symbol(display_name)
+        # Check special names first (reverse lookup)
+        special = MARTIAL_SPECIAL_NAMES.key(display_name)
+        return special if special
+
+        # Standard conversion: lowercase, replace spaces with underscores
+        display_name.downcase.gsub(' ', '_').to_sym
+      end
+
+      # Get list of all martial skill symbols from CMan module
+      # Returns empty array if CMan not yet loaded
+      def self.martial_skills_list
+        return [] unless defined?(Lich::Gemstone::CMan)
+
+        Lich::Gemstone::CMan.cman_lookups.map { |cman| cman[:long_name].to_sym }
+      end
+
       # === STAT ACCESSORS ===
       # Returns OpenStruct with :value and :cap
       STATS.each do |stat|
@@ -107,7 +147,7 @@ module Lich
       end
 
       # Shorthand aliases (str, con, dex, etc.)
-      %i[str con dex agi dis aur log int wis].each do |shorthand|
+      %i[str con dex agi dis aur log int wis inf].each do |shorthand|
         long_hand = STATS.find { |s| s.to_s.start_with?(shorthand.to_s) }
         define_singleton_method(shorthand) do
           send(long_hand).value
@@ -182,6 +222,23 @@ module Lich
             cap: RESOURCE_CAPS[resource]
           )
         end
+      end
+
+      # === MARTIAL KNOWLEDGE SKILL ACCESSORS ===
+      # Dynamic accessor for any martial skill by symbol
+      # Returns OpenStruct with :ranks and :cap
+      def self.martial_skill(skill_symbol)
+        OpenStruct.new(
+          ranks: Infomon.get("enhancive.martial.#{skill_symbol}").to_i,
+          cap: MARTIAL_SKILL_CAP
+        )
+      end
+
+      # Get all martial skills with non-zero values
+      # Scans all CMan skills from the CMan module
+      def self.martial_skills
+        martial_skills_list.select { |s| martial_skill(s).ranks > 0 }
+                           .map { |s| { name: s, ranks: martial_skill(s).ranks } }
       end
 
       # Convenience aliases
@@ -324,6 +381,12 @@ module Lich
         # Reset all resources to 0
         RESOURCES.each do |resource|
           batch.push(["enhancive.resource.#{resource}", 0])
+        end
+
+        # Reset all martial knowledge skills to 0
+        # Uses CMan module to get full list of possible martial skills
+        martial_skills_list.each do |skill|
+          batch.push(["enhancive.martial.#{skill}", 0])
         end
 
         # Reset spells to empty array
