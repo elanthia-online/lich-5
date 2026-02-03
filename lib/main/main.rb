@@ -443,7 +443,7 @@ reconnect_if_wanted = proc {
       #
       # send version string
       #
-      client_string = "/FE:WIZARD /VERSION:1.0.1.22 /P:#{RUBY_PLATFORM} /XML"
+      client_string = "/FE:WRAYTH /VERSION:1.0.1.28 /P:#{RUBY_PLATFORM} /XML"
       $_CLIENTBUFFER_.push(client_string.dup)
       Game._puts(client_string)
       #
@@ -495,7 +495,7 @@ reconnect_if_wanted = proc {
         # take the version string from the client, ignore it, and ask the server for xml
         #
         $_CLIENT_.gets
-        client_string = "/FE:STORMFRONT /VERSION:1.0.1.26 /P:#{RUBY_PLATFORM} /XML"
+        client_string = "/FE:WRAYTH /VERSION:1.0.1.28 /P:#{RUBY_PLATFORM} /XML"
         $_CLIENTBUFFER_.push(client_string.dup)
         Game._puts(client_string)
         #
@@ -529,7 +529,7 @@ reconnect_if_wanted = proc {
         # take the version string from the client, ignore it, and ask the server for xml
         #
         $_CLIENT_.gets
-        client_string = "/FE:STORMFRONT /VERSION:1.0.1.26 /P:#{RUBY_PLATFORM} /XML"
+        client_string = "/FE:WRAYTH /VERSION:1.0.1.28 /P:#{RUBY_PLATFORM} /XML"
         $_CLIENTBUFFER_.push(client_string.dup)
         Game._puts(client_string)
         #
@@ -552,7 +552,7 @@ reconnect_if_wanted = proc {
           Game._puts(game_key)
           game_key = nil
 
-          client_string = "/FE:WIZARD /VERSION:1.0.1.22 /P:#{RUBY_PLATFORM} /XML"
+          client_string = "/FE:WRAYTH /VERSION:1.0.1.28 /P:#{RUBY_PLATFORM} /XML"
           $_CLIENTBUFFER_.push(client_string.dup)
           Game._puts(client_string)
 
