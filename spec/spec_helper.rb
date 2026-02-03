@@ -196,9 +196,14 @@ DR_SKILLS_DATA = {
 module GameBase
   class Game
     @@autostarted = false
+    @@settings_init_needed = false
 
     def self.autostarted?
       @@autostarted
+    end
+
+    def self.settings_init_needed?
+      @@settings_init_needed
     end
   end
 end unless defined?(GameBase)

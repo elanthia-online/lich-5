@@ -204,6 +204,10 @@ module Lich
           @@autostarted
         end
 
+        def settings_init_needed?
+          @@settings_init_needed
+        end
+
         def initialize_buffers
           @socket = nil
           @mutex = Mutex.new
@@ -213,6 +217,7 @@ module Lich
           @_buffer = Lich::Common::SharedBuffer.new
           @_buffer.max_size = 1000
           @@autostarted = false
+          @@settings_init_needed = false
           @cli_scripts = false
           @room_number_after_ready = false
           @last_id_shown_room_window = 0
@@ -537,8 +542,9 @@ module Lich
             # Handle specific XML errors
             if server_string =~ /<settingsInfo .*?space not found /
               Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
-              server_string.sub!(/\s\bspace not found\b\s/, '').strip!
+              server_string.sub!(/\s\bspace not found\b\s/, " client='1.0.1.28' ")
               Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
+              @@settings_init_needed = true
               return process_xml_data(server_string) # Return to retry with fixed string
             end
 
