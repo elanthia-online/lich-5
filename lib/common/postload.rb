@@ -45,7 +45,7 @@ module Lich
           begin
             # Phase 1: Wait for base readiness (same as other watchers)
             sleep 0.1 until GameBase::Game.autostarted? &&
-                           XMLData.name && !XMLData.name.empty?
+                            XMLData.name && !XMLData.name.empty?
 
             # Phase 2: Wait for game-specific init to signal completion
             sleep 0.1 until @@game_loaded
