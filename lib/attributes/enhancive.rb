@@ -99,7 +99,7 @@ module Lich
       # Martial Knowledge Skills (CMan-based enhancives)
       # These appear as "+X ranks" in the output rather than bonus format
       # Derived dynamically from CMan module at runtime to stay DRY
-      MARTIAL_SKILL_CAP = 5  # Most martial skills cap at 5 ranks
+      MARTIAL_SKILL_CAP = 5 # Most martial skills cap at 5 ranks
 
       # Special display name mappings for CMan skills with apostrophes
       # These can't be auto-generated from the symbol name
