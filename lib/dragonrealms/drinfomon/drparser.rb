@@ -370,11 +370,23 @@ module Lich
           when Pattern::GroupMembers
             DRRoom.group_members << Regexp.last_match(1)
           when Pattern::BriefExpOn, Pattern::BriefExpOff
-            skill   = Regexp.last_match[:skill]
-            rank    = Regexp.last_match[:rank].to_i
-            rate    = Regexp.last_match[:rate].to_i > 0 ? Regexp.last_match[:rate] : DR_LEARNING_RATES.index(Regexp.last_match[:rate])
-            percent = Regexp.last_match[:percent]
+            skill    = Regexp.last_match[:skill]
+            rank     = Regexp.last_match[:rank].to_i
+            rate_raw = Regexp.last_match[:rate]
+            rate     = rate_raw.to_i > 0 ? rate_raw : DR_LEARNING_RATES.index(rate_raw)
+            percent  = Regexp.last_match[:percent]
             DRSkill.update(skill, rank, rate, percent)
+
+            # Inline display of cumulative gained experience (from DRExpMonitor)
+            if DRExpMonitor.inline_display?
+              if rate_raw.to_i > 0
+                # BRIEFEXP ON format (rate is numeric)
+                line.replace(DRExpMonitor.format_briefexp_on(line, skill))
+              else
+                # BRIEFEXP OFF format (rate is word like "learning", "pondering")
+                line.replace(DRExpMonitor.format_briefexp_off(line, skill, rate_raw.strip))
+              end
+            end
           when Pattern::ExpClearMindstate
             skill = Regexp.last_match[:skill]
             DRSkill.clear_mind(skill)
