@@ -149,7 +149,7 @@ module Lich
         # Convert map to JSON
         def to_json(*args)
           list.delete_if(&:nil?)
-          list.to_json(args)
+          list.sort_by(&:id).to_json(args)
         end
 
         # Save map as JSON file
