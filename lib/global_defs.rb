@@ -1701,9 +1701,9 @@ def respond(first = "", *messages)
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
     # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
-    if $frontend == 'stormfront' || $frontend == 'genie'
+    if %w[stormfront genie].include?(Frontend.client)
       str = "<output class=\"mono\"/>\r\n#{str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')}<output class=\"\"/>\r\n"
-    elsif $frontend == 'profanity'
+    elsif Frontend.client.eql?('profanity')
       str = str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
     end
     # Double-checked locking to avoid interrupting a stream and crashing the client
@@ -2104,9 +2104,9 @@ def strip_xml(line, type: 'main')
 end
 
 def monsterbold_start
-  if $frontend =~ /^(?:wizard|avalon)$/
+  if Frontend.gsl_based?
     "\034GSL\r\n"
-  elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/
+  elsif Frontend.xml_capable?
     '<pushBold/>'
   else
     ''
@@ -2114,9 +2114,9 @@ def monsterbold_start
 end
 
 def monsterbold_end
-  if $frontend =~ /^(?:wizard|avalon)$/
+  if Frontend.gsl_based?
     "\034GSM\r\n"
-  elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/
+  elsif Frontend.xml_capable?
     '<popBold/>'
   else
     ''
@@ -2459,7 +2459,7 @@ def do_client(client_string)
     if $offline_mode
       respond "--- Lich: offline mode: ignoring #{client_string}"
     else
-      client_string = "#{$cmd_prefix}bbs" if ($frontend =~ /^(?:wizard|avalon)$/) and (client_string == "#{$cmd_prefix}\egbbk\n") # launch forum
+      client_string = "#{$cmd_prefix}bbs" if Frontend.gsl_based? and (client_string == "#{$cmd_prefix}\egbbk\n") # launch forum
       Game._puts client_string
     end
     $_CLIENTBUFFER_.push client_string

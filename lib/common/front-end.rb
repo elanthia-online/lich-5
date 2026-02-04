@@ -38,6 +38,54 @@ module Lich
       @frontend_pid = nil
       @pid_mutex = Mutex.new
 
+      # Client version string sent to the game server during handshake
+      CLIENT_STRING = "/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML"
+
+      # Frontend capability groups
+      XML_FRONTENDS    = %w[stormfront wrayth frostbite profanity genie].freeze
+      GSL_FRONTENDS    = %w[wizard avalon].freeze
+      STREAM_FRONTENDS = %w[stormfront wrayth profanity].freeze
+
+      def self.xml_capable?(fe = $frontend)
+        XML_FRONTENDS.include?(fe)
+      end
+
+      def self.gsl_based?(fe = $frontend)
+        GSL_FRONTENDS.include?(fe)
+      end
+
+      def self.supports_streams?(fe = $frontend)
+        STREAM_FRONTENDS.include?(fe)
+      end
+
+      # Accessor for the current frontend identity ($frontend global)
+      def self.client
+        $frontend
+      end
+
+      # Setter for the current frontend identity
+      def self.client=(value)
+        $frontend = value
+      end
+
+      # Send version string, ready signals, and setup commands to the game server.
+      # Used during login handshake for wizard/avalon/frostbite frontends.
+      def self.send_handshake(version_string)
+        $_CLIENTBUFFER_.push(version_string.dup)
+        Game._puts(version_string)
+        2.times do
+          sleep 0.3
+          $_CLIENTBUFFER_.push("#{$cmd_prefix}\r\n")
+          Game._puts($cmd_prefix)
+        end
+        ["#{$cmd_prefix}_injury 2",
+         "#{$cmd_prefix}_flag Display Inventory Boxes 1",
+         "#{$cmd_prefix}_flag Display Dialog Boxes 0"].each do |cmd|
+          $_CLIENTBUFFER_.push(cmd)
+          Game._puts(cmd)
+        end
+      end
+
       def self.create_session_file(name, host, port, display_session: true)
         return if name.nil?
         FileUtils.mkdir_p @tmp_session_dir
@@ -370,3 +418,6 @@ module Lich
     end
   end
 end
+
+# Top-level alias so all consumers can use bare `Frontend`
+Frontend = Lich::Common::Frontend unless defined?(Frontend)
