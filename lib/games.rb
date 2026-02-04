@@ -200,6 +200,14 @@ module Lich
       class << self
         attr_reader :thread, :buffer, :_buffer, :game_instance
 
+        def autostarted?
+          @@autostarted
+        end
+
+        def settings_init_needed?
+          @@settings_init_needed
+        end
+
         def initialize_buffers
           @socket = nil
           @mutex = Mutex.new
@@ -208,9 +216,9 @@ module Lich
           @buffer = Lich::Common::SharedBuffer.new
           @_buffer = Lich::Common::SharedBuffer.new
           @_buffer.max_size = 1000
-          @autostarted = false
+          @@autostarted = false
+          @@settings_init_needed = false
           @cli_scripts = false
-          @infomon_loaded = false
           @room_number_after_ready = false
           @last_id_shown_room_window = 0
           @game_instance = nil
@@ -271,12 +279,12 @@ module Lich
 
           @wrap_thread = Thread.new do
             @last_recv = Time.now
-            until @autostarted || (Time.now - @last_recv >= 6)
-              break if @autostarted
+            until @@autostarted || (Time.now - @last_recv >= 6)
+              break if @@autostarted
               sleep 0.2
             end
 
-            puts 'look' unless @autostarted
+            puts 'look' unless @@autostarted
           end
         end
 
@@ -420,16 +428,10 @@ module Lich
           $_SERVERBUFFER_.push(server_string)
 
           # Handle autostart
-          handle_autostart if !@autostarted && server_string =~ /<app char/
-
-          # Handle infomon loading
-          if !@infomon_loaded && (defined?(Infomon) || !$DRINFOMON_VERSION.nil?) && !XMLData.name.nil? && !XMLData.name.empty? && !XMLData.dialogs.empty?
-            ExecScript.start("Infomon.redo!", { quiet: true, name: "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
-            @infomon_loaded = true
-          end
+          handle_autostart if !@@autostarted && server_string =~ /<app char/
 
           # Handle CLI scripts
-          if !@cli_scripts && @autostarted && !XMLData.name.nil? && !XMLData.name.empty?
+          if !@cli_scripts && @@autostarted && !XMLData.name.nil? && !XMLData.name.empty?
             start_cli_scripts
           end
 
@@ -450,7 +452,7 @@ module Lich
           end
 
           Script.start('autostart') if defined?(Script) && Script.respond_to?(:exists?) && Script.exists?('autostart')
-          @autostarted = true
+          @@autostarted = true
 
           display_ruby_warning if defined?(RECOMMENDED_RUBY) && Gem::Version.new(RUBY_VERSION) < Gem::Version.new(RECOMMENDED_RUBY)
         end
@@ -540,8 +542,9 @@ module Lich
             # Handle specific XML errors
             if server_string =~ /<settingsInfo .*?space not found /
               Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
-              server_string.sub!(/\s\bspace not found\b\s/, '').strip!
+              server_string.sub!(/\s\bspace not found\b\s/, " client='1.0.1.28' ")
               Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
+              @@settings_init_needed = true
               return process_xml_data(server_string) # Return to retry with fixed string
             end
 
@@ -889,8 +892,9 @@ module Lich
       end
 
       def process_game_specific_data(server_string)
-        infomon_serverstring = server_string.dup
-        DRParser.parse(infomon_serverstring)
+        # Parse directly to allow inline modifications (e.g., inline exp display)
+        # The parser modifies server_string in place via line.replace()
+        DRParser.parse(server_string)
       end
 
       def modify_room_display(alt_string)

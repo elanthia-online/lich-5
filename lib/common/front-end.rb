@@ -45,6 +45,7 @@ module Lich
       XML_FRONTENDS    = %w[stormfront wrayth frostbite profanity genie].freeze
       GSL_FRONTENDS    = %w[wizard avalon].freeze
       STREAM_FRONTENDS = %w[stormfront wrayth profanity].freeze
+      MONO_FRONTENDS   = %w[stormfront wrayth genie].freeze
 
       def self.xml_capable?(fe = $frontend)
         XML_FRONTENDS.include?(fe)
@@ -56,6 +57,10 @@ module Lich
 
       def self.supports_streams?(fe = $frontend)
         STREAM_FRONTENDS.include?(fe)
+      end
+
+      def self.supports_mono?(fe = $frontend)
+        MONO_FRONTENDS.include?(fe)
       end
 
       # Accessor for the current frontend identity ($frontend global)

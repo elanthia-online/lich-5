@@ -138,7 +138,7 @@ module Lich
     def self.mono(msg, encode: false)
       return raise StandardError.new 'Lich::Messaging.mono only works with String parameters!' unless msg.is_a?(String)
       msg = xml_encode(msg) if encode
-      if %w[stormfront wrayth genie].include?(Frontend.client)
+      if Frontend.supports_mono?
         _respond "<output class=\"mono\"/>\n" + msg + "\n<output class=\"\"/>"
       else
         _respond msg.split("\n")

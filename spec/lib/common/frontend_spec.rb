@@ -144,6 +144,36 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
+  describe 'MONO_FRONTENDS' do
+    it 'is frozen' do
+      expect(FE::MONO_FRONTENDS).to be_frozen
+    end
+
+    it 'includes stormfront' do
+      expect(FE::MONO_FRONTENDS).to include('stormfront')
+    end
+
+    it 'includes wrayth' do
+      expect(FE::MONO_FRONTENDS).to include('wrayth')
+    end
+
+    it 'includes genie' do
+      expect(FE::MONO_FRONTENDS).to include('genie')
+    end
+
+    it 'does not include profanity' do
+      expect(FE::MONO_FRONTENDS).not_to include('profanity')
+    end
+
+    it 'does not include frostbite' do
+      expect(FE::MONO_FRONTENDS).not_to include('frostbite')
+    end
+
+    it 'is a subset of XML_FRONTENDS' do
+      expect(FE::MONO_FRONTENDS - FE::XML_FRONTENDS).to be_empty
+    end
+  end
+
   describe 'GSL_FRONTENDS and XML_FRONTENDS are mutually exclusive' do
     it 'have no overlap' do
       overlap = FE::GSL_FRONTENDS & FE::XML_FRONTENDS
@@ -282,6 +312,50 @@ RSpec.describe Lich::Common::Frontend do
       it 'returns false for wizard' do
         $frontend = 'wizard'
         expect(frontend.supports_streams?).to be false
+      end
+    end
+  end
+
+  describe '.supports_mono?' do
+    context 'with explicit argument' do
+      FE::MONO_FRONTENDS.each do |fe|
+        it "returns true for '#{fe}'" do
+          expect(frontend.supports_mono?(fe)).to be true
+        end
+      end
+
+      it "returns false for 'profanity'" do
+        expect(frontend.supports_mono?('profanity')).to be false
+      end
+
+      it "returns false for 'frostbite'" do
+        expect(frontend.supports_mono?('frostbite')).to be false
+      end
+
+      it "returns false for 'wizard'" do
+        expect(frontend.supports_mono?('wizard')).to be false
+      end
+
+      it 'returns false for nil' do
+        expect(frontend.supports_mono?(nil)).to be false
+      end
+    end
+
+    context 'with $frontend global (default argument)' do
+      around do |example|
+        original = $frontend
+        example.run
+        $frontend = original
+      end
+
+      it 'returns true for genie' do
+        $frontend = 'genie'
+        expect(frontend.supports_mono?).to be true
+      end
+
+      it 'returns false for wizard' do
+        $frontend = 'wizard'
+        expect(frontend.supports_mono?).to be false
       end
     end
   end
