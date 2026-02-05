@@ -425,15 +425,29 @@ module Lich
       end
 
       def logbook_item(logbook, noun, container)
-        DRC.bput("get my #{logbook} logbook", 'You get')
-        case DRC.bput("bundle my #{noun} with my logbook", 'You notate the', 'This work order has expired', 'The work order requires items of a higher quality', 'That isn\'t the correct type of item for this work order.')
+        DRCI.get_item?("#{logbook} logbook")
+        bundle_result = DRC.bput("bundle my #{noun} with my logbook",
+                                 'You notate the',
+                                 'This work order has expired',
+                                 'The work order requires items of a higher quality',
+                                 'That isn\'t the correct type of item for this work order.',
+                                 'You need to be holding')
+        case bundle_result
         when 'This work order has expired', 'The work order requires items of a higher quality', 'That isn\'t the correct type of item for this work order.'
           DRCI.dispose_trash(noun)
+        when 'You need to be holding'
+          if DRCI.get_item?(noun, container)
+            case DRC.bput("bundle my #{noun} with my logbook",
+                          'You notate the',
+                          'This work order has expired',
+                          'The work order requires items of a higher quality',
+                          'That isn\'t the correct type of item for this work order.')
+            when 'This work order has expired', 'The work order requires items of a higher quality', 'That isn\'t the correct type of item for this work order.'
+              DRCI.dispose_trash(noun)
+            end
+          end
         end
-        case DRC.bput("put my #{logbook} logbook in my #{container}", 'You tuck', 'You put', 'What were you referring to')
-        when 'What were you referring to'
-          DRC.bput("stow my #{logbook} logbook", 'You put', 'What were you referring to')
-        end
+        DRCI.put_away_item?("#{logbook} logbook", container) || DRCI.put_away_item?("#{logbook} logbook")
       end
 
       def order_enchant(stock_room, stock_needed, stock_number, bag, belt)
