@@ -1,6 +1,42 @@
 module Lich
   module DragonRealms
     class EquipmentManager
+      # Sheath patterns (no DRCI equivalent — weapon-specific operation)
+      SHEATH_SUCCESS_PATTERNS = [
+        /^Sheathing/,
+        /^You sheathe/,
+        /^You secure your/,
+        /^You slip/,
+        /^You hang/,
+        /^You strap/,
+        /^You easily strap/,
+        /^With a flick of your wrist you stealthily sheathe/,
+        /^The .* slides easily/
+      ].freeze
+
+      SHEATH_FAILURE_PATTERNS = [
+        /^Sheathe your .* where/,
+        /^There's no room/,
+        /is too small to hold that/,
+        /is too wide to fit/,
+        /^Your (left|right) hand is too injured/
+      ].freeze
+
+      # Recovery patterns handled by stow_helper's retry logic.
+      # These are automatically appended to every stow_helper call
+      # so callers only need to pass success/failure patterns.
+      STOW_RECOVERY_PATTERNS = [
+        /unload/,
+        /close the fan/,
+        /You are a little too busy/,
+        /You don't seem to be able to move/,
+        /is too small to hold that/,
+        /Your wounds hinder your ability to do that/,
+        /Sheathe your .* where/
+      ].freeze
+
+      STOW_HELPER_MAX_RETRIES = 10
+
       def initialize(settings = nil)
         items(settings)
       end
@@ -31,18 +67,19 @@ module Lich
       def wear_equipment_set?(set_name)
         return false unless set_name
 
-        worn_items = desc_to_items(@gear_sets[set_name])
-        echo("expected worn items:#{worn_items.map(&:short_name).join(',')}") if UserVars.equipmanager_debug
-        unless worn_items
-          echo("Could not find gear set #{set_name}")
+        unless @gear_sets[set_name]
+          Lich::Messaging.monsterbold("*** Could not find gear set '#{set_name}' ***")
           return false
         end
 
+        gear_set_items = desc_to_items(@gear_sets[set_name])
+        echo("expected worn items:#{gear_set_items.map(&:short_name).join(',')}") if UserVars.equipmanager_debug
+
         combat_items = get_combat_items
 
-        remove_unmatched_items(combat_items, worn_items)
+        remove_unmatched_items(combat_items, gear_set_items)
 
-        lost_items = wear_missing_items(worn_items, combat_items)
+        lost_items = wear_missing_items(gear_set_items, combat_items)
         notify_missing(lost_items)
 
         DRC.bput('sort auto head', /^Your inventory is now arranged/) if @sort_head
@@ -68,14 +105,14 @@ module Lich
         DRC.beep
       end
 
-      def wear_missing_items(worn_items, combat_items)
+      def wear_missing_items(target_items, combat_items)
         if UserVars.equipmanager_debug
           echo('wearing missing items between these two sets')
           echo(combat_items.join(',').to_s)
-          echo(worn_items.map(&:short_name).join(',').to_s)
+          echo(target_items.map(&:short_name).join(',').to_s)
         end
 
-        missing_items = worn_items
+        missing_items = target_items
                         .reject { |item| combat_items.find { |c_item| item.short_regex =~ c_item } }
                         .reject { |item| [DRC.right_hand, DRC.left_hand].grep(item.short_regex).any? ? (stow_weapon(item.short_name) || true) : false }
 
@@ -83,14 +120,14 @@ module Lich
         missing_items.reject { |item| wear_item?(item) }
       end
 
-      def remove_unmatched_items(combat_items, worn_items)
+      def remove_unmatched_items(combat_items, target_items)
         if UserVars.equipmanager_debug
           echo('removing unmatched items between these two sets')
           echo(combat_items.join(',').to_s)
-          echo(worn_items.map(&:short_name).join(',').to_s)
+          echo(target_items.map(&:short_name).join(',').to_s)
         end
         combat_items
-          .reject { |description| worn_items.find { |item| item.short_regex =~ description } }
+          .reject { |description| target_items.find { |item| item.short_regex =~ description } }
           .map { |description| items.find { |item| item.short_regex =~ description } }
           .compact
           .each { |item| remove_item(item) }
@@ -102,22 +139,26 @@ module Lich
         snapshot - ["All of your worn combat equipment:", "You aren't wearing anything like that."]
       end
 
-      def worn_items(list)
+      # Returns the subset of currently worn combat items that match the given description list.
+      def matching_combat_items(list)
         filter_gear = desc_to_items(list)
         gear = desc_to_items(get_combat_items)
         gear.select { |x| filter_gear.include?(x) }
       end
 
+      # Deprecated: use matching_combat_items instead.
+      alias_method :worn_items, :matching_combat_items
+
       def remove_item(item)
-        result = DRC.bput("remove my #{item.short_name}", "You .*#{item.name}", 'The leather gauntlets slide', 'Without any effort', 'you manage to loosen', "You need a free hand for that", "You'll need both hands free to do that", "then constricts tighter around your")
+        result = DRC.bput("remove my #{item.short_name}", *DRCI::REMOVE_ITEM_SUCCESS_PATTERNS, *DRCI::REMOVE_ITEM_FAILURE_PATTERNS, "then constricts tighter around your")
         waitrt?
         case result
         when /then constricts tighter around your/
           # Items that auto-repair, like exoskeletal armor,
           # may have a timer on them that prevents you removing them.
-          DRC.message("The #{item.short_name} is not ready to be removed yet. Try again later.")
+          Lich::Messaging.monsterbold("*** The #{item.short_name} is not ready to be removed yet. Try again later. ***")
           return false
-        when /You need a free hand for that/, /You'll need both hands free to do that/
+        when *DRCI::REMOVE_ITEM_FAILURE_PATTERNS
           # We may need to empty our hands to remove the item.
           # For example, exoskeletal armor requires two hands.
           temp_left_item = DRC.left_hand
@@ -128,26 +169,31 @@ module Lich
           if did_lower
             remove_item(item)
           else
-            DRC.message("*** Unable to empty your hands to remove #{item.short_name} ***")
+            Lich::Messaging.monsterbold("*** Unable to empty your hands to remove #{item.short_name} ***")
           end
           # Pick up the items in reverse order you lowered them
           # so that they end up in the correct hands again.
-          DRCI.get_item_if_not_held?(temp_right_item)
-          DRCI.get_item_if_not_held?(temp_left_item)
+          DRCI.get_item_if_not_held?(temp_right_item) if temp_right_item
+          DRCI.get_item_if_not_held?(temp_left_item) if temp_left_item
           # In case they end up in different hands, swap.
           DRC.bput('swap', /You move/, /^Will alone cannot conquer the paralysis/) if (DRC.left_hand != temp_left_item || DRC.right_hand != temp_right_item)
-        else
+        when *DRCI::REMOVE_ITEM_SUCCESS_PATTERNS
           # If removing item transforms it (e.g. exoskeletal armor => orb) then continue with the transformed item.
           if item.transforms_to && DRCI.in_hands?(item.transforms_to)
-            item = item_by_desc(item.transforms_to)
+            transform_desc = item.transforms_to
+            item = item_by_desc(transform_desc)
+            unless item
+              Lich::Messaging.monsterbold("*** Could not find transformed item matching '#{transform_desc}' in gear list ***")
+              return
+            end
           end
           if item.tie_to
             stow_helper("tie my #{item.short_name} to my #{item.tie_to}", item.short_name, *DRCI::TIE_ITEM_SUCCESS_PATTERNS, *DRCI::TIE_ITEM_FAILURE_PATTERNS)
           elsif item.wield
-            stow_helper("sheath my #{item.short_name}", item.short_name, 'Sheathing', 'You sheathe', 'You .* unload', 'You secure your', 'You slip', 'You hang', 'You .* strap', "Sheathe your .* where?")
+            stow_helper("sheath my #{item.short_name}", item.short_name, *SHEATH_SUCCESS_PATTERNS, *SHEATH_FAILURE_PATTERNS)
           elsif item.container
             stow_helper("put my #{item.short_name} into my #{item.container}", item.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
-          elsif /more room|too long to fit/ =~ DRC.bput("stow my #{item.short_name}", 'You put', 'You should unload', 'You easily strap', 'You secure your', 'There isn\'t any more room', 'straps have all been used', 'is too long to fit')
+          elsif /more room|too long to fit/ =~ DRC.bput("stow my #{item.short_name}", *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, 'There isn\'t any more room', 'straps have all been used', 'is too long to fit')
             wear_item?(item)
           end
         end
@@ -160,15 +206,9 @@ module Lich
           return false
         end
         if get_item?(item)
-          DRCI.wear_item?(item.short_name)
-          return true
+          return DRCI.wear_item?(item.short_name)
         end
         return false
-      end
-
-      # This method is deprecated in favor of the one that follows the `?` predicate convention.
-      def wield_weapon_offhand(description, skill = nil)
-        wield_weapon_offhand?(description, skill)
       end
 
       # Wields weapon into your left hand.
@@ -178,7 +218,7 @@ module Lich
 
         weapon = item_by_desc(description)
         unless weapon
-          DRC.message("Failed to match a weapon for #{description}:#{skill}")
+          Lich::Messaging.monsterbold("*** Failed to match a weapon for #{description}:#{skill} ***")
           return false
         end
 
@@ -198,9 +238,7 @@ module Lich
       end
 
       # This method is deprecated in favor of the one that follows the `?` predicate convention.
-      def wield_weapon(description, skill = nil)
-        wield_weapon?(description, skill)
-      end
+      alias_method :wield_weapon_offhand, :wield_weapon_offhand?
 
       # Wields weapon into your right hand.
       # If the skill to swap to is 'Offhand Weapon' then will swap it to your left hand.
@@ -211,7 +249,7 @@ module Lich
         offhand = skill == 'Offhand Weapon'
         weapon = item_by_desc(description)
         unless weapon
-          DRC.message("Failed to match a weapon for #{description}:#{skill}")
+          Lich::Messaging.monsterbold("*** Failed to match a weapon for #{description}:#{skill} ***")
           return false
         end
 
@@ -230,10 +268,15 @@ module Lich
               return false
             end
           end
+
+          return true
         end
 
         return false
       end
+
+      # This method is deprecated in favor of the one that follows the `?` predicate convention.
+      alias_method :wield_weapon, :wield_weapon?
 
       def get_item?(item)
         return true if DRCI.in_hands?(item)
@@ -241,48 +284,60 @@ module Lich
         if item.wield
           case DRC.bput("wield my #{item.short_name}", 'You draw', 'You deftly remove', 'You slip', 'With a flick of your wrist you stealthily unsheathe', 'Wield what', 'Your right hand is too injured', 'Your left hand is too injured')
           when 'Your right hand is too injured', 'Your left hand is too injured', 'Wield what'
+            Lich::Messaging.monsterbold("*** Unable to wield #{item.short_name} ***")
             return false
           else
             return true
           end
         elsif item.transforms_to
-          item = item_by_desc(item.transforms_to)
-          item.worn ? get_item_helper(item, :worn) : get_item_helper(item, :stowed)
-          get_item_helper(item, :transform)
+          transform_item = item_by_desc(item.transforms_to)
+          unless transform_item
+            Lich::Messaging.monsterbold("*** Could not find transformed item matching '#{item.transforms_to}' in gear list ***")
+            return false
+          end
+          unless transform_item.worn ? get_item_helper(transform_item, :worn) : get_item_helper(transform_item, :stowed)
+            Lich::Messaging.monsterbold("*** Unable to retrieve #{transform_item.short_name} for transform ***")
+            return false
+          end
+          get_item_helper(transform_item, :transform)
         elsif (item.tie_to && get_item_helper(item, :tied)) || (item.worn && get_item_helper(item, :worn)) || (item.container && DRCI.get_item(item.short_name, item.container)) || get_item_helper(item, :stowed)
           true
         else
-          echo("Could not find #{item.short_name} anywhere.")
+          Lich::Messaging.monsterbold("*** Could not find #{item.short_name} anywhere ***")
           false
         end
       end
 
-      def is_listed_item?(desc)
+      # Returns the item from the gear list matching the given description, or nil.
+      def listed_item?(desc)
         items.find { |item| item.short_regex =~ desc }
       end
+
+      # Deprecated: use listed_item? instead.
+      alias_method :is_listed_item?, :listed_item?
 
       def return_held_gear(gear_set = 'standard')
         return unless DRC.right_hand || DRC.left_hand
 
         todo = [DRC.left_hand, DRC.right_hand].compact
 
-        worn_items = desc_to_items(@gear_sets[gear_set])
+        gear_set_items = desc_to_items(@gear_sets[gear_set] || [])
 
         todo.all? do |held_item|
-          if (info = worn_items.find { |item| item.short_regex =~ held_item })
+          if (info = gear_set_items.find { |item| item.short_regex =~ held_item })
             unload_weapon(info.short_name) if info.needs_unloading
-            stow_helper("wear my #{info.short_name}", info.short_name, 'You sling', 'You attach', 'You .* unload', 'You strap', 'You slide', 'You work your way into', 'You spin', '^You ', 'You carefully loop', 'slide effortlessly onto your', 'You slip', /^A brisk chill rushes through you/)
+            stow_helper("wear my #{info.short_name}", info.short_name, *DRCI::WEAR_ITEM_SUCCESS_PATTERNS)
             true
           elsif (info = items.find { |item| item.short_regex =~ held_item })
             unload_weapon(info.short_name) if info.needs_unloading
             if info.tie_to
-              stow_helper("tie my #{info.short_name} to #{info.tie_to}", info.short_name, 'You attach', 'you tie', 'You are a little too busy', 'Your wounds hinder your ability to do that')
+              stow_helper("tie my #{info.short_name} to my #{info.tie_to}", info.short_name, *DRCI::TIE_ITEM_SUCCESS_PATTERNS, *DRCI::TIE_ITEM_FAILURE_PATTERNS)
             elsif info.wield
-              stow_helper("sheath my #{info.short_name}", info.short_name, 'Sheathing', 'You sheathe', 'You .* unload', 'You secure your', 'You slip', 'You hang', 'You .* strap')
+              stow_helper("sheath my #{info.short_name}", info.short_name, *SHEATH_SUCCESS_PATTERNS, *SHEATH_FAILURE_PATTERNS)
             elsif info.container
               stow_helper("put my #{info.short_name} into my #{info.container}", info.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
             else
-              stow_helper("stow my #{info.short_name}", info.short_name, 'You put', 'You should unload', 'You easily strap', 'You secure your')
+              stow_helper("stow my #{info.short_name}", info.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
             end
             true
           else
@@ -334,8 +389,12 @@ module Lich
             matches: [item.transform_text],
             failures: ["You'll need a free hand to do that!", "You don't seem to be holding"],
             failure_recovery: proc do |noun|
-                                fput('stow left') if DRC.left_hand && DRC.left_hand !~ /#{noun}/i
-                                fput('stow right') if DRC.right_hand && DRC.right_hand !~ /#{noun}/i
+                                DRCI.stow_hand('left') if DRC.left_hand && DRC.left_hand !~ /#{noun}/i
+                                DRCI.stow_hand('right') if DRC.right_hand && DRC.right_hand !~ /#{noun}/i
+                                if (DRC.left_hand && DRC.left_hand !~ /#{noun}/i) || (DRC.right_hand && DRC.right_hand !~ /#{noun}/i)
+                                  Lich::Messaging.monsterbold("*** Unable to free hands for transform ***")
+                                  next
+                                end
                                 item.worn ? DRC.bput("remove my #{noun}", '^You') : DRC.bput("get my #{noun}", '^You')
                                 DRC.bput("#{item.transform_verb} my #{item.short_name}", verb_data(item)[:matches])
                               end,
@@ -355,7 +414,7 @@ module Lich
 
         # Handle empty/nil response (bput timeout) as failure
         if response.nil? || response.empty?
-          DRC.message("*** No response from game for '#{data[:verb]} my #{item.short_name}' - command may have been lost ***")
+          Lich::Messaging.monsterbold("*** No response from game for '#{data[:verb]} my #{item.short_name}' - command may have been lost ***")
           return false
         end
 
@@ -366,12 +425,14 @@ module Lich
           return false
         when *data[:failures]
           data[:failure_recovery].call(item.name, item, response)
+          # After recovery, check if item is now in hand
+          return DRCI.in_hands?(item)
         else
           # Wait for hands to change with a timeout to prevent infinite loop
           timeout = Time.now + 5
           pause 0.05 while snapshot == [DRC.left_hand, DRC.right_hand] && Time.now < timeout
           if snapshot == [DRC.left_hand, DRC.right_hand]
-            DRC.message("*** Hands did not change after '#{data[:verb]} my #{item.short_name}' - item may not have been retrieved ***")
+            Lich::Messaging.monsterbold("*** Hands did not change after '#{data[:verb]} my #{item.short_name}' - item may not have been retrieved ***")
             return false
           end
           return true
@@ -425,7 +486,7 @@ module Lich
                        when /^ow$|offhand weapon/i
                          return true # just use weapon in your left hand
                        else
-                         DRC.message("Unsupported weapon swap: #{noun} to #{skill}. Please report this to https://github.com/elanthia-online/dr-scripts/issues")
+                         Lich::Messaging.monsterbold("*** Unsupported weapon swap: #{noun} to #{skill}. Please report this to https://github.com/elanthia-online/dr-scripts/issues ***")
                          return false
                        end
         # All possible weapon skills to swap into.
@@ -462,8 +523,13 @@ module Lich
           # Try to swap weapon to desired skill.
           case DRC.bput("swap my #{noun}", skill_match, /\b#{noun}\b.*(#{weapon_skills.join('|')})/, "You must have two free hands", *failure_matches)
           when /You must have two free hands/
-            fput('stow left') if DRC.left_hand && DRC.left_hand !~ /#{noun}/i
-            fput('stow right') if DRC.right_hand && DRC.right_hand !~ /#{noun}/i
+            DRCI.stow_hand('left') if DRC.left_hand && DRC.left_hand !~ /#{noun}/i
+            DRCI.stow_hand('right') if DRC.right_hand && DRC.right_hand !~ /#{noun}/i
+            hands_free = [DRC.left_hand, DRC.right_hand].compact.all? { |h| h =~ /#{noun}/i }
+            unless hands_free
+              Lich::Messaging.monsterbold("*** Unable to free hands for weapon swap ***")
+              return false
+            end
             next
           when *failure_matches
             return false
@@ -485,14 +551,22 @@ module Lich
           # Ammo fell to ground because hands are full.
           # Lower weapon, stow ammo, then pick it back up.
           ammo = Regexp.last_match[:ammo]
-          DRC.bput("lower ground left", "You lower") if DRCI.in_left_hand?(name)
-          DRC.bput("lower ground right", "You lower") if DRCI.in_right_hand?(name)
+          unless DRCI.lower_item?(name)
+            Lich::Messaging.monsterbold("*** Unable to lower #{name} to pick up ammo ***")
+            return
+          end
           DRCI.put_away_item?(ammo)
-          DRC.bput("get my #{name}", "You get", "You pick")
+          unless DRCI.get_item?(name)
+            Lich::Messaging.monsterbold("*** Unable to pick #{name} back up after unloading ***")
+          end
         when /^(You unload|You .* unloading)/
           # Ammo is in hand, stow whichever hand isn't holding the weapon.
-          DRC.bput("stow left", "You put") unless DRCI.in_left_hand?(name)
-          DRC.bput("stow right", "You put") unless DRCI.in_right_hand?(name)
+          unless DRCI.in_left_hand?(name)
+            Lich::Messaging.monsterbold("*** Unable to stow ammo from left hand ***") unless DRCI.stow_hand('left')
+          end
+          unless DRCI.in_right_hand?(name)
+            Lich::Messaging.monsterbold("*** Unable to stow ammo from right hand ***") unless DRCI.stow_hand('right')
+          end
         end
         waitrt?
       end
@@ -514,40 +588,45 @@ module Lich
         # Would be silly to try "unload my scimitar" wouldn't it? :grins:
         unload_weapon(weapon.short_name) if weapon.needs_unloading
         if weapon.wield
-          stow_helper("sheath my #{weapon.short_name}", weapon.short_name, 'Sheathing', 'You sheathe', 'You .* unload', 'close the fan', 'You secure your', 'You slip', 'You hang', 'You strap', "You don't seem to be able to move", 'You easily strap', 'is too small to hold that', 'is too wide to fit', 'With a flick of your wrist you stealthily sheathe', '^The .* slides easily', "There's no room", "Sheathe your .* where?", 'Your (left|right) hand is too injured')
+          stow_helper("sheath my #{weapon.short_name}", weapon.short_name, *SHEATH_SUCCESS_PATTERNS, *SHEATH_FAILURE_PATTERNS)
         elsif weapon.worn
-          stow_helper("wear my #{weapon.short_name}", weapon.short_name, 'You sling', 'You attach', 'You .* unload', 'You slide', 'You place', 'close the fan', 'You hang', 'You spin', 'You strap', 'You put', 'You carefully loop', "You don't seem to be able to move", "You are already wearing", "You work your way into", 'slide effortlessly onto your', "You can't wear")
+          stow_helper("wear my #{weapon.short_name}", weapon.short_name, *DRCI::WEAR_ITEM_SUCCESS_PATTERNS, *DRCI::WEAR_ITEM_FAILURE_PATTERNS)
         elsif !weapon.tie_to.nil?
-          stow_helper("tie my #{weapon.short_name} to my #{weapon.tie_to}", weapon.short_name, 'You attach', 'close the fan', 'you tie', 'You are a little too busy', "You don't seem to be able to move", 'Your wounds hinder your ability to do that', 'You must be holding')
+          stow_helper("tie my #{weapon.short_name} to my #{weapon.tie_to}", weapon.short_name, *DRCI::TIE_ITEM_SUCCESS_PATTERNS, *DRCI::TIE_ITEM_FAILURE_PATTERNS)
         elsif weapon.transforms_to
           stow_helper("#{weapon.transform_verb} my #{weapon.short_name}", weapon.short_name, weapon.transform_text)
           stow_weapon(weapon.transforms_to)
         elsif weapon.container
-          stow_helper("put my #{weapon.short_name} in my #{weapon.container}", weapon.short_name, "You put .*#{weapon.name}", *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
+          stow_helper("put my #{weapon.short_name} in my #{weapon.container}", weapon.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
         else
-          stow_helper("stow my #{weapon.short_name}", weapon.short_name, "You put .*#{weapon.name}", 'You .* unload', 'close the fan', 'You easily strap', "You don't seem to be able to move", 'You secure', 'is too small to hold that', 'is too wide to fit', 'You hang', '^The .* slides easily', "There's no room")
+          stow_helper("stow my #{weapon.short_name}", weapon.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
         end
       end
 
-      def stow_helper(action, weapon_name, *accept_strings)
-        case DRC.bput(action, accept_strings)
+      def stow_helper(action, weapon_name, *accept_strings, retries: STOW_HELPER_MAX_RETRIES)
+        if retries <= 0
+          Lich::Messaging.monsterbold("*** stow_helper exceeded max retries for '#{action}' ***")
+          return
+        end
+
+        case DRC.bput(action, *accept_strings, *STOW_RECOVERY_PATTERNS)
         when /unload/
           unload_weapon(weapon_name)
-          stow_helper(action, weapon_name, accept_strings)
+          stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
         when /close the fan/
           fput("close my #{weapon_name}")
-          stow_helper(action, weapon_name, accept_strings)
+          stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
         when /You are a little too busy/
           DRC.retreat
-          stow_helper(action, weapon_name, accept_strings)
+          stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
         when /You don't seem to be able to move/
           pause 1
-          stow_helper(action, weapon_name, accept_strings)
+          stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
         when /is too small to hold that/
           fput("swap my #{weapon_name}")
-          stow_helper(action, weapon_name, accept_strings)
+          stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
         when /Your wounds hinder your ability to do that/, /Sheathe your .* where/
-          stow_helper("stow my #{weapon_name}", weapon_name, 'You put', 'You should unload', 'You easily strap', 'You secure your')
+          stow_helper("stow my #{weapon_name}", weapon_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS, retries: retries - 1)
         end
       end
     end
