@@ -47,11 +47,11 @@ module Lich
       STREAM_FRONTENDS = %w[stormfront wrayth profanity].freeze
       MONO_FRONTENDS   = %w[stormfront wrayth genie].freeze
 
-      def self.xml_capable?(fe = $frontend)
+      def self.supports_xml?(fe = $frontend)
         XML_FRONTENDS.include?(fe)
       end
 
-      def self.gsl_based?(fe = $frontend)
+      def self.supports_gsl?(fe = $frontend)
         GSL_FRONTENDS.include?(fe)
       end
 

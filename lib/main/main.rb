@@ -478,7 +478,7 @@ reconnect_if_wanted = proc {
         # rubocop:disable Lint/Void
         nil
         # rubocop:enable Lint/Void
-      elsif Frontend.gsl_based?
+      elsif Frontend.supports_gsl?
         #
         # send the login key
         #
@@ -576,7 +576,7 @@ reconnect_if_wanted = proc {
 
       begin
         while (client_string = $_CLIENT_.gets)
-          if Frontend.gsl_based?
+          if Frontend.supports_gsl?
             client_string = "#{$cmd_prefix}#{client_string}"
           elsif Frontend.client.eql?('frostbite')
             client_string = fb_to_sf(client_string)
@@ -702,7 +702,7 @@ reconnect_if_wanted = proc {
 
   wait_while { $offline_mode }
 
-  if Frontend.gsl_based?
+  if Frontend.supports_gsl?
     $link_highlight_start = "\207".force_encoding(Encoding::ASCII_8BIT)
     $link_highlight_end = "\240".force_encoding(Encoding::ASCII_8BIT)
     $speech_highlight_start = "\212".force_encoding(Encoding::ASCII_8BIT)

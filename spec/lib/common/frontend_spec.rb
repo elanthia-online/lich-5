@@ -183,26 +183,26 @@ RSpec.describe Lich::Common::Frontend do
 
   # ─── Predicate Methods ─────────────────────────────────────
 
-  describe '.xml_capable?' do
+  describe '.supports_xml?' do
     context 'with explicit argument' do
       FE::XML_FRONTENDS.each do |fe|
         it "returns true for '#{fe}'" do
-          expect(frontend.xml_capable?(fe)).to be true
+          expect(frontend.supports_xml?(fe)).to be true
         end
       end
 
       FE::GSL_FRONTENDS.each do |fe|
         it "returns false for '#{fe}'" do
-          expect(frontend.xml_capable?(fe)).to be false
+          expect(frontend.supports_xml?(fe)).to be false
         end
       end
 
       it "returns false for 'unknown'" do
-        expect(frontend.xml_capable?('unknown')).to be false
+        expect(frontend.supports_xml?('unknown')).to be false
       end
 
       it 'returns false for nil' do
-        expect(frontend.xml_capable?(nil)).to be false
+        expect(frontend.supports_xml?(nil)).to be false
       end
     end
 
@@ -215,36 +215,36 @@ RSpec.describe Lich::Common::Frontend do
 
       it 'reads from $frontend when no argument given' do
         $frontend = 'stormfront'
-        expect(frontend.xml_capable?).to be true
+        expect(frontend.supports_xml?).to be true
       end
 
       it 'returns false for GSL frontend' do
         $frontend = 'wizard'
-        expect(frontend.xml_capable?).to be false
+        expect(frontend.supports_xml?).to be false
       end
     end
   end
 
-  describe '.gsl_based?' do
+  describe '.supports_gsl?' do
     context 'with explicit argument' do
       FE::GSL_FRONTENDS.each do |fe|
         it "returns true for '#{fe}'" do
-          expect(frontend.gsl_based?(fe)).to be true
+          expect(frontend.supports_gsl?(fe)).to be true
         end
       end
 
       FE::XML_FRONTENDS.each do |fe|
         it "returns false for '#{fe}'" do
-          expect(frontend.gsl_based?(fe)).to be false
+          expect(frontend.supports_gsl?(fe)).to be false
         end
       end
 
       it "returns false for 'unknown'" do
-        expect(frontend.gsl_based?('unknown')).to be false
+        expect(frontend.supports_gsl?('unknown')).to be false
       end
 
       it 'returns false for nil' do
-        expect(frontend.gsl_based?(nil)).to be false
+        expect(frontend.supports_gsl?(nil)).to be false
       end
     end
 
@@ -257,17 +257,17 @@ RSpec.describe Lich::Common::Frontend do
 
       it 'reads from $frontend when no argument given' do
         $frontend = 'wizard'
-        expect(frontend.gsl_based?).to be true
+        expect(frontend.supports_gsl?).to be true
       end
 
       it 'returns true for avalon' do
         $frontend = 'avalon'
-        expect(frontend.gsl_based?).to be true
+        expect(frontend.supports_gsl?).to be true
       end
 
       it 'returns false for stormfront' do
         $frontend = 'stormfront'
-        expect(frontend.gsl_based?).to be false
+        expect(frontend.supports_gsl?).to be false
       end
     end
   end
@@ -401,12 +401,12 @@ RSpec.describe Lich::Common::Frontend do
 
     it 'integrates with predicates' do
       frontend.client = 'wizard'
-      expect(frontend.gsl_based?).to be true
-      expect(frontend.xml_capable?).to be false
+      expect(frontend.supports_gsl?).to be true
+      expect(frontend.supports_xml?).to be false
 
       frontend.client = 'stormfront'
-      expect(frontend.gsl_based?).to be false
-      expect(frontend.xml_capable?).to be true
+      expect(frontend.supports_gsl?).to be false
+      expect(frontend.supports_xml?).to be true
     end
   end
 
@@ -430,13 +430,13 @@ RSpec.describe Lich::Common::Frontend do
     all_frontends.each do |fe|
       context "for frontend '#{fe}'" do
         it 'is not both xml_capable and gsl_based' do
-          expect(frontend.xml_capable?(fe) && frontend.gsl_based?(fe)).to be false
+          expect(frontend.supports_xml?(fe) && frontend.supports_gsl?(fe)).to be false
         end
 
         it 'stream support implies XML capability' do
           next unless frontend.supports_streams?(fe)
 
-          expect(frontend.xml_capable?(fe)).to be true
+          expect(frontend.supports_xml?(fe)).to be true
         end
       end
     end
@@ -483,10 +483,10 @@ RSpec.describe Lich::Common::Frontend do
     # results as the old regex patterns they replaced.
 
     describe 'old: $frontend =~ /^(?:wizard|avalon)$/' do
-      it 'matches gsl_based? for all known frontends' do
+      it 'matches supports_gsl? for all known frontends' do
         %w[stormfront wrayth frostbite profanity genie wizard avalon unknown suks].each do |fe|
           old_result = !!(fe =~ /^(?:wizard|avalon)$/)
-          new_result = frontend.gsl_based?(fe)
+          new_result = frontend.supports_gsl?(fe)
           expect(new_result).to eq(old_result),
                                 "Mismatch for '#{fe}': old=#{old_result}, new=#{new_result}"
         end
@@ -494,10 +494,10 @@ RSpec.describe Lich::Common::Frontend do
     end
 
     describe 'old: $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/' do
-      it 'matches xml_capable? for all known frontends' do
+      it 'matches supports_xml? for all known frontends' do
         %w[stormfront wrayth frostbite profanity genie wizard avalon unknown suks].each do |fe|
           old_result = !!(fe =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/)
-          new_result = frontend.xml_capable?(fe)
+          new_result = frontend.supports_xml?(fe)
           expect(new_result).to eq(old_result),
                                 "Mismatch for '#{fe}': old=#{old_result}, new=#{new_result}"
         end
@@ -520,15 +520,15 @@ RSpec.describe Lich::Common::Frontend do
     end
 
     describe 'old: $fake_stormfront (was true when wizard/avalon)' do
-      it 'gsl_based? matches old $fake_stormfront behavior' do
+      it 'supports_gsl? matches old $fake_stormfront behavior' do
         %w[wizard avalon].each do |fe|
-          expect(frontend.gsl_based?(fe)).to(be(true),
-                                             "gsl_based?('#{fe}') should be true (was $fake_stormfront=true)")
+          expect(frontend.supports_gsl?(fe)).to(be(true),
+                                                "supports_gsl?('#{fe}') should be true (was $fake_stormfront=true)")
         end
 
         %w[stormfront wrayth frostbite profanity genie unknown].each do |fe|
-          expect(frontend.gsl_based?(fe)).to(be(false),
-                                             "gsl_based?('#{fe}') should be false (was $fake_stormfront=false)")
+          expect(frontend.supports_gsl?(fe)).to(be(false),
+                                                "supports_gsl?('#{fe}') should be false (was $fake_stormfront=false)")
         end
       end
     end

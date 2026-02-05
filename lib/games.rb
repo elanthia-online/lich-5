@@ -574,7 +574,7 @@ module Lich
             end
 
             # Handle frontend-specific conversions
-            if Frontend.gsl_based?
+            if Frontend.supports_gsl?
               alt_string = sf_to_wiz(alt_string)
             end
 

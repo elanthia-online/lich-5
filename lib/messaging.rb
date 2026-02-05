@@ -6,7 +6,7 @@ Entries added here should always be accessible from Lich::Messaging.feature name
 module Lich
   module Messaging
     def self.xml_encode(msg)
-      if Frontend.gsl_based?
+      if Frontend.supports_gsl?
         sf_to_wiz(msg.encode(:xml => :text), bypass_multiline: true) || "" # sf_to_wiz returns nil when blank/new line only, which causes issue for messaging, always return string if nil
       else
         msg.encode(:xml => :text)
@@ -56,7 +56,7 @@ module Lich
         "dark red" => 133, "purple" => 134, "gold" => 135, "light grey" => 136, "blue" => 137,
         "bright green" => 138, "teal" => 139, "red" => 140, "pink" => 141, "yellow" => 142 }
 
-      if Frontend.xml_capable?
+      if Frontend.supports_xml?
         case type
         when "error", "yellow", "bold", "monster", "creature"
           preset_color_before = monsterbold_start
@@ -77,7 +77,7 @@ module Lich
           preset_color_before = "<d cmd='#{xml_encode(cmd_link)}'>"
           preset_color_after = "</d>"
         end
-      elsif Frontend.gsl_based?
+      elsif Frontend.supports_gsl?
         case type
         when "error", "yellow", "bold", "monster", "creature"
           preset_color_before = monsterbold_start

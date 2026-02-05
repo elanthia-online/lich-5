@@ -2104,9 +2104,9 @@ def strip_xml(line, type: 'main')
 end
 
 def monsterbold_start
-  if Frontend.gsl_based?
+  if Frontend.supports_gsl?
     "\034GSL\r\n"
-  elsif Frontend.xml_capable?
+  elsif Frontend.supports_xml?
     '<pushBold/>'
   else
     ''
@@ -2114,9 +2114,9 @@ def monsterbold_start
 end
 
 def monsterbold_end
-  if Frontend.gsl_based?
+  if Frontend.supports_gsl?
     "\034GSM\r\n"
-  elsif Frontend.xml_capable?
+  elsif Frontend.supports_xml?
     '<popBold/>'
   else
     ''
@@ -2510,7 +2510,7 @@ def do_client(client_string)
     if $offline_mode
       respond "--- Lich: offline mode: ignoring #{client_string}"
     else
-      client_string = "#{$cmd_prefix}bbs" if Frontend.gsl_based? and (client_string == "#{$cmd_prefix}\egbbk\n") # launch forum
+      client_string = "#{$cmd_prefix}bbs" if Frontend.supports_gsl? and (client_string == "#{$cmd_prefix}\egbbk\n") # launch forum
       Game._puts client_string
     end
     $_CLIENTBUFFER_.push client_string
