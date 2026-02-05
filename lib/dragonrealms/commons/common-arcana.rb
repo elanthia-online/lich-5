@@ -3,7 +3,7 @@ module Lich
     module DRCA
       module_function
 
-      @@cyclic_release_success_patterns = [
+      CYCLIC_RELEASE_SUCCESS_PATTERNS = [
         # Ranger spells
         /^The world seems to accelerate around you as the spirit of the cheetah escapes you/, # Cheetah Swiftness
         /^You feel distinctly frail and vulnerable as the spirit of the bear leaves you/, # Bear Strength
@@ -26,7 +26,7 @@ module Lich
         /^As your rendition of Hodierna's Lilt winds down to a close, you let each note linger on the air a moment, drawing out the final moment with a reluctance to let the soothing melody fade/, # Hodierna's Lilt (HODI)
         /^You build the final notes of Phoenix's Pyre with an upward scale that rises into a steep crescendo, and end with an abrupt silence/, # Phoenix's Pyre (PYRE)
         /^The dome of light extinguishes as the final notes of music die away/, # Sanctuary
-        # Warrior Mage spels
+        # Warrior Mage spells
         /^The dark mantle of aether surrounding you fades away/, # Aether Cloak (AC)
         /^You release your connection to the Elemental Plane of Electricity, allowing the static electricity to dissipate/, # Electrostatic Eddy (EE)
         /^Your link to the Fire Rain matrix has been severed/, # Fire Rain (FR)
@@ -57,19 +57,72 @@ module Lich
         /^The Rite of Grace matrix loses cohesion, leaving your body exposed/, # Rite of Grace (ROG)
         /^The greenish hues about you vanish as the Universal Solvent matrix loses its cohesion/, # Universal Solvent (USOL)
         /^You sense your Call from Within spell weaken and disperse/ # Call from Within (CFW)
-      ]
+      ].freeze
+
+      INFUSE_OM_SUCCESS_PATTERNS = [
+        'having reached its full capacity',
+        'A sense of fullness',
+        'Something in the area is interfering with your attempt to harness'
+      ].freeze
+
+      INFUSE_OM_FAILURE_PATTERNS = [
+        'as if it hungers for more',
+        'Your infusion fails completely',
+        "You don't have enough harnessed mana to infuse that much",
+        'You have no harnessed'
+      ].freeze
+
+      INFUSE_OM_MAX_RETRIES = 20
+      PREPARE_MAX_RETRIES = 3
+      CAST_MAX_RETRIES = 3
+      BARB_BUFF_MAX_RETRIES = 3
+      STOW_FOCUS_MAX_RETRIES = 3
+
+      WIELD_FOCUS_SUCCESS_PATTERNS = [
+        /^You draw out/,
+        /^You grab/,
+        /^You slip/,
+        /^You deftly remove/
+      ].freeze
+
+      WIELD_FOCUS_FAILURE_PATTERNS = [
+        /^What were you/,
+        /^Wield what/,
+        /^You need a free hand/
+      ].freeze
+
+      SHEATHE_FOCUS_SUCCESS_PATTERNS = [
+        /^You sheathe/,
+        /^Sheathing/,
+        /^You secure/,
+        /^You slip/,
+        /^You hang/,
+        /^You strap/,
+        /^You easily strap/
+      ].freeze
+
+      SHEATHE_FOCUS_FAILURE_PATTERNS = [
+        /^Sheathe your .* where/,
+        /^There's no room/
+      ].freeze
+
+      @backfired_status = false
 
       def infuse_om(harness, amount)
         return unless DRSpells.active_spells['Osrel Meraud'] && DRSpells.active_spells['Osrel Meraud'] < 90
         return unless amount
 
-        success = ['having reached its full capacity', 'A sense of fullness', 'Something in the area is interfering with your attempt to harness']
-        failure = ['as if it hungers for more', 'Your infusion fails completely', 'You don\'t have enough harnessed mana to infuse that much', 'You have no harnessed']
-
+        retries = 0
         loop do
+          if retries >= INFUSE_OM_MAX_RETRIES
+            Lich::Messaging.monsterbold("common-arcana: infuse_om exhausted #{INFUSE_OM_MAX_RETRIES} retries — giving up")
+            break
+          end
+          retries += 1
+
           pause 5 while DRStats.mana <= 40
           harness_mana([amount]) if harness
-          break if success.include?(DRC.bput("infuse om #{amount}", success, failure))
+          break if INFUSE_OM_SUCCESS_PATTERNS.include?(DRC.bput("infuse om #{amount}", INFUSE_OM_SUCCESS_PATTERNS, INFUSE_OM_FAILURE_PATTERNS))
 
           pause 0.5
           waitrt?
@@ -141,10 +194,15 @@ module Lich
         abilities.each { |name| activate_barb_buff?(name, settings.meditation_pause_timer, settings.sit_to_meditate) }
       end
 
-      def activate_barb_buff?(name, meditation_pause_timer = 20, sit_to_meditate = false)
+      def activate_barb_buff?(name, meditation_pause_timer = 20, sit_to_meditate = false, retries: BARB_BUFF_MAX_RETRIES)
         # Note, you must know Power meditation or Powermonger mastery
         # for your active abilities to be detected by DRSpells.
         return true if DRSpells.active_spells[name]
+
+        if retries <= 0
+          Lich::Messaging.monsterbold("common-arcana: activate_barb_buff? exhausted #{BARB_BUFF_MAX_RETRIES} retries for '#{name}' — giving up")
+          return false
+        end
 
         activated = false
         ability_data = get_data('spells').barb_abilities[name]
@@ -155,18 +213,19 @@ module Lich
         case DRC.bput(ability_data['start_command'], ability_data['activated_message'], 'You have not been trained', 'But you are already', 'Your inner fire lacks', 'find yourself lacking the inner fire', 'You should stand', 'You must be sitting', 'You must be unengaged', 'While swimming?')
         when 'You must be unengaged'
           DRC.retreat
-          activated = activate_barb_buff?(name, meditation_pause_timer)
+          activated = activate_barb_buff?(name, meditation_pause_timer, sit_to_meditate, retries: retries - 1)
         when 'You must be sitting'
           DRC.retreat
           case DRC.bput('sit', 'You sit', 'You are already', 'You rise', 'While swimming?')
           when 'While swimming?'
-            activated = false # can't sit here, water is too deep
+            Lich::Messaging.monsterbold("common-arcana: cannot sit to activate '#{name}' — water is too deep")
+            activated = false
           else
-            activated = activate_barb_buff?(name, meditation_pause_timer)
+            activated = activate_barb_buff?(name, meditation_pause_timer, sit_to_meditate, retries: retries - 1)
           end
         when 'You should stand'
           DRC.fix_standing
-          activated = activate_barb_buff?(name, meditation_pause_timer)
+          activated = activate_barb_buff?(name, meditation_pause_timer, sit_to_meditate, retries: retries - 1)
         when /#{ability_data['activated_message']}/
           # Pause at least for the preferred amount of time
           # to let the meditation take effect else it may fail.
@@ -183,7 +242,7 @@ module Lich
         activated
       end
 
-      def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep = nil)
+      def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep = nil, retries: PREPARE_MAX_RETRIES)
         return false unless abbrev
         spell_prep_messages = !custom_prep ? get_data('spells').prep_messages : (get_data('spells').prep_messages + [custom_prep])
 
@@ -195,8 +254,12 @@ module Lich
         end
         case match
         when 'Your desire to prepare this offensive spell suddenly slips away'
+          if retries <= 0
+            Lich::Messaging.monsterbold("common-arcana: prepare? exhausted #{PREPARE_MAX_RETRIES} retries for '#{abbrev}' — giving up")
+            return false
+          end
           pause 1
-          return prepare?(abbrev, mana, symbiosis, command, tattoo_tm, runestone_name, runestone_tm, custom_prep)
+          return prepare?(abbrev, mana, symbiosis, command, tattoo_tm, runestone_name, runestone_tm, custom_prep, retries: retries - 1)
         when 'Something in the area interferes with your spell preparations', 'You shouldn\'t disrupt the area right now', 'You have no idea how to cast that spell', 'You have yet to receive any training in the magical arts', 'Please don\'t do that here', 'You cannot use the tattoo while maintaining the effort to stay hidden'
           DRC.bput('release symbiosis', 'You release the', 'But you haven\'t') if symbiosis
           return false
@@ -261,12 +324,12 @@ module Lich
 
       def prepare_to_cast_runestone?(spell, settings)
         if DRCI.inside?("#{spell['runestone_name']}", settings.runestone_storage)
-          return false if !get_runestone?(spell['runestone_name'], settings)
+          return false unless get_runestone?(spell['runestone_name'], settings)
         else
-          DRC.message("*** Out of #{spell['runestone_name']}! ***")
+          Lich::Messaging.monsterbold("common-arcana: out of #{spell['runestone_name']}!")
           return false
         end
-        return true
+        true
       end
 
       def get_runestone?(runestone, settings)
@@ -275,16 +338,17 @@ module Lich
         DRCI.get_item(runestone, settings.runestone_storage)
         if reget(3, "You get a useless #{runestone}")
           DRCI.dispose_trash(runestone)
+          Lich::Messaging.monsterbold("common-arcana: got a useless #{runestone} — disposing and giving up")
           return false
         end
-        return true
+        true
       end
 
       def backfired?
-        return @@backfired_status || false
+        @backfired_status || false
       end
 
-      def cast?(cast_command = 'cast', symbiosis = false, before = [], after = [])
+      def cast?(cast_command = 'cast', symbiosis = false, before = [], after = [], retries: CAST_MAX_RETRIES)
         before.each { |action| DRC.bput(action['message'], action['matches']) }
 
         Flags.add('unknown-command', "Please rephrase that command")
@@ -305,13 +369,20 @@ module Lich
 
         # Warrior Mage failed to use (or doesn't know) barrage ability. Do regular cast instead.
         if cast_command =~ /\b(barrage)\b/i && (Flags['unknown-command'] || Flags['barrage-fail'])
-          cast?('cast', symbiosis, [], after)
+          return cast?('cast', symbiosis, [], after, retries: retries - 1) if retries > 0
+
+          Lich::Messaging.monsterbold("common-arcana: cast? barrage fallback exhausted retries — giving up")
+          return false
         end
 
         if Flags['cyclic-too-recent'] || Flags['spell-full-prep']
+          if retries <= 0
+            Lich::Messaging.monsterbold("common-arcana: cast? exhausted #{CAST_MAX_RETRIES} retries waiting for cyclic/full-prep — giving up")
+            return false
+          end
           pause 1
           Flags.delete('spell-full-prep')
-          return cast?(cast_command, symbiosis, [], after)
+          return cast?(cast_command, symbiosis, [], after, retries: retries - 1)
         end
 
         after.each { |action| DRC.bput(action['message'], action['matches']) }
@@ -323,13 +394,12 @@ module Lich
           DRC.bput('release mana', 'You release all', "You aren't harnessing any mana")
         end
 
-        @@backfired_status = Flags['spell-backfired']
+        @backfired_status = Flags['spell-backfired']
 
         !Flags['spell-fail']
       end
 
       def find_charge_invoke_stow(cambrinth, stored_cambrinth, cambrinth_cap, dedicated_camb_use, charges, invoke_exact_amount = nil)
-        # TODO: Remove default nil argument once all users are up to date with common-arcana
         return unless charges
 
         find_cambrinth(cambrinth, stored_cambrinth, cambrinth_cap)
@@ -341,31 +411,38 @@ module Lich
         return unless focus
 
         if worn
-          DRC.bput("remove my #{focus}", 'You remove', 'You slide', 'You sling', 'You take')
+          DRCI.remove_item?(focus)
         elsif tied
-          DRC.bput("untie my #{focus} from my #{tied}", 'You remove', '[Y|y]ou untie')
+          DRCI.untie_item?(focus, tied)
         elsif sheathed
-          DRC.bput("wield my #{focus}", 'You draw out your')
+          result = DRC.bput("wield my #{focus}", WIELD_FOCUS_SUCCESS_PATTERNS, WIELD_FOCUS_FAILURE_PATTERNS)
+          WIELD_FOCUS_FAILURE_PATTERNS.none? { |pattern| pattern =~ result }
         else
-          DRC.bput("get my #{focus}", 'You get')
+          DRCI.get_item?(focus)
         end
       end
 
-      def stow_focus(focus, worn, tied, sheathed)
+      def stow_focus(focus, worn, tied, sheathed, retries: STOW_FOCUS_MAX_RETRIES)
         return unless focus
 
         if worn
-          DRC.bput("wear my #{focus}", 'You attach', 'You slide', 'You are already wearing', 'You hang', 'You sling', 'You put', 'You place')
+          DRCI.wear_item?(focus)
         elsif tied
-          case DRC.bput("tie my #{focus} to my #{tied}", 'You attach', '[Y|y]ou tie', 'You are a little too busy to be worrying')
-          when 'You are a little too busy to be worrying'
+          result = DRCI.tie_item?(focus, tied)
+          unless result
+            if retries <= 0
+              Lich::Messaging.monsterbold("common-arcana: stow_focus exhausted #{STOW_FOCUS_MAX_RETRIES} retries tying #{focus} — giving up")
+              return false
+            end
             DRC.retreat
-            stow_focus(focus, worn, tied, sheathed)
+            return stow_focus(focus, worn, tied, sheathed, retries: retries - 1)
           end
+          result
         elsif sheathed
-          DRC.bput("sheathe #{focus}", "You sheathe")
+          result = DRC.bput("sheathe my #{focus}", SHEATHE_FOCUS_SUCCESS_PATTERNS, SHEATHE_FOCUS_FAILURE_PATTERNS)
+          SHEATHE_FOCUS_FAILURE_PATTERNS.none? { |pattern| pattern =~ result }
         else
-          DRC.bput("stow my #{focus}", 'You put', 'You easily strap your')
+          DRCI.stow_item?(focus)
         end
       end
 
@@ -415,12 +492,13 @@ module Lich
       end
 
       def charge_and_invoke(cambrinth, dedicated_camb_use, charges, invoke_exact_amount = nil)
-        # TODO: Remove default nil argument once all users are up to date with common-arcana
+        return unless charges&.any?
+
         charges.each do |mana|
           break unless charge?(cambrinth, mana)
         end
 
-        invoke_amount = invoke_exact_amount ? charges.inject(:+) : nil
+        invoke_amount = invoke_exact_amount ? charges.inject(0, :+) : nil
 
         invoke(cambrinth, dedicated_camb_use, invoke_amount)
       end
@@ -433,7 +511,7 @@ module Lich
         waitrt?
         case result
         when /you find it too clumsy/
-          DRC.message("*** Your arcana skill is too low to invoke your cambrinth while worn")
+          Lich::Messaging.monsterbold("common-arcana: your arcana skill is too low to invoke your cambrinth while worn")
           # If the cambrinth is in your hands and you can't invoke it, nothing else to do.
           unless DRCI.in_hands?(cambrinth)
             # Otherwise, try to find the cambrinth and get it to your hands.
@@ -457,13 +535,13 @@ module Lich
         when /You are in no condition to do that/
           charged = harness?(mana)
         when /You'll have to hold it/
-          # Your not wearing nor holding your cambrinth item, go find it again.
+          # You're not wearing nor holding your cambrinth item, go find it again.
           # Likely it's configured in your yaml that you wear it but it's stowed for some reason.
           # Try to find the cambrinth and get it to your hands.
-          DRC.message("*** Where did your cambrinth go?")
+          Lich::Messaging.monsterbold("common-arcana: where did your cambrinth go?")
           retry_find_cambrinth = true
         when /you find it too clumsy/
-          DRC.message("*** Your arcana skill is too low to charge your cambrinth while worn")
+          Lich::Messaging.monsterbold("common-arcana: your arcana skill is too low to charge your cambrinth while worn")
           retry_find_cambrinth = true
         else
           charged = result =~ /absorbs? all of the energy/
@@ -481,7 +559,7 @@ module Lich
             end
           end
         end
-        return charged
+        charged
       end
 
       def release_cyclics(cyclic_no_release = [])
@@ -491,19 +569,19 @@ module Lich
           .select { |name, _properties| DRSpells.active_spells.keys.include?(name) }
           .reject { |name| cyclic_no_release.include?(name) }
           .map { |_name, properties| properties['abbrev'] }
-          .each { |abbrev| DRC.bput("release #{abbrev}", @@cyclic_release_success_patterns, 'Release what?') }
+          .each { |abbrev| DRC.bput("release #{abbrev}", CYCLIC_RELEASE_SUCCESS_PATTERNS, 'Release what?') }
       end
 
-      def parse_regalia # generates an array of currently-worn regalia armor nouns
+      def parse_regalia
         return unless DRStats.trader?
 
         snapshot = Lich::Util.issue_command("inv combat", /All of your worn combat|You aren't wearing anything like that/, /Use INVENTORY HELP for more options/, usexml: false, include_end: false)
                              .map(&:strip)
         (snapshot - ["All of your worn combat equipment:", "You aren't wearing anything like that."]).select { |item| item.include?('rough-cut crystal') || item.include?('faceted crystal') || item.include?('resplendent crystal') }
-                                                                                                     .map { |item| DRC.get_noun(item) }
+          .map { |item| DRC.get_noun(item) }
       end
 
-      def shatter_regalia?(worn_regalia = nil) # takes an array of armor nouns to remove or gets its own from parse_regalia
+      def shatter_regalia?(worn_regalia = nil)
         return false unless DRStats.trader?
 
         worn_regalia ||= parse_regalia
@@ -588,8 +666,8 @@ module Lich
         spells.each do |name, data|
           next if DRSpells.active_spells[name] && (data['recast'].nil? || DRSpells.active_spells[name].to_i > data['recast'])
 
-          while (DRStats.mana < settings.waggle_spells_mana_threshold || DRStats.concentration < settings.waggle_spells_concentration_threshold)
-            echo("Waiting on mana over #{settings.waggle_spells_mana_threshold} or concentration over #{settings.waggle_spells_concentration_threshold}...")
+          while DRStats.mana < settings.waggle_spells_mana_threshold || DRStats.concentration < settings.waggle_spells_concentration_threshold
+            Lich::Messaging.msg("common-arcana", "waiting on mana over #{settings.waggle_spells_mana_threshold} or concentration over #{settings.waggle_spells_concentration_threshold}...")
             pause 15
           end
           cast_spell(data, settings, force_cambrinth, cast_lifecycle_lambda)
@@ -597,8 +675,7 @@ module Lich
       end
 
       def cast_spell?(data, settings, force_cambrinth = false, cast_lifecycle_lambda = nil)
-        result = cast_spell(data, settings, force_cambrinth, cast_lifecycle_lambda)
-        result ? true : false
+        !!cast_spell(data, settings, force_cambrinth, cast_lifecycle_lambda)
       end
 
       def cast_spell(data, settings, force_cambrinth = false, cast_lifecycle_lambda = nil)
@@ -618,12 +695,10 @@ module Lich
         end
 
         if data['runestone_name']
-          if !prepare_to_cast_runestone?(data, settings)
-            return
-          end
+          return unless prepare_to_cast_runestone?(data, settings)
         end
 
-        cast_lifecycle_lambda.call('pre-prep', data, settings) if cast_lifecycle_lambda != nil
+        cast_lifecycle_lambda&.call('pre-prep', data, settings)
 
         command = 'prep'
         command = data['prep'] if data['prep']
@@ -644,27 +719,14 @@ module Lich
         DRCI.put_away_item?(data['runestone_name'], settings.runestone_storage) if DRCI.in_hands?(data['runestone_name'])
         prepare_time = Time.now
 
-        unless settings.cambrinth_items[0]['name']
-          settings.cambrinth_items = [{
-            'name'   => settings.cambrinth,
-            'cap'    => settings.cambrinth_cap,
-            'stored' => settings.stored_cambrinth
-          }]
-        end
+        normalize_cambrinth_items(settings)
         if check_to_harness(settings.use_harness_when_arcana_locked) && !force_cambrinth
           harness_mana(data['cambrinth'].flatten)
         else
-          settings.cambrinth_items.each_with_index do |item, index|
-            case data['cambrinth'].first
-            when Array
-              find_charge_invoke_stow(item['name'], item['stored'], item['cap'], settings.dedicated_camb_use, data['cambrinth'][index], settings.cambrinth_invoke_exact_amount)
-            when Integer
-              find_charge_invoke_stow(item['name'], item['stored'], item['cap'], settings.dedicated_camb_use, data['cambrinth'], settings.cambrinth_invoke_exact_amount)
-            end
-          end
+          charge_cambrinth_items(data, settings)
         end
 
-        cast_lifecycle_lambda.call('post-prep', data, settings) if cast_lifecycle_lambda != nil
+        cast_lifecycle_lambda&.call('post-prep', data, settings)
 
         if data['prep_time']
           pause until Time.now - prepare_time >= data['prep_time']
@@ -672,11 +734,11 @@ module Lich
           waitcastrt?
         end
 
-        cast_lifecycle_lambda.call('pre-cast', data, settings) if cast_lifecycle_lambda != nil
+        cast_lifecycle_lambda&.call('pre-cast', data, settings)
         spell_cast = cast?(data['cast'], data['symbiosis'], data['before'], data['after'])
-        cast_lifecycle_lambda.call('post-cast', data, settings) if cast_lifecycle_lambda != nil
+        cast_lifecycle_lambda&.call('post-cast', data, settings)
 
-        return spell_cast
+        spell_cast
       end
 
       def segue?(abbrev, mana)
@@ -697,7 +759,7 @@ module Lich
             discern_data['mana'] = Regexp.last_match(1).to_i
             discern_data['cambrinth'] = nil
             discern_data['min'] = Regexp.last_match(1).to_i
-            discern_data['more'] = (more_override ? more_override : 0)
+            discern_data['more'] = (more_override || 0)
           end
           calculate_mana(discern_data['min'], discern_data['more'], discern_data, false, settings)
         elsif discern_data.empty? || discern_data['time_stamp'].nil? || Time.now - discern_data['time_stamp'] > settings.check_discern_timer_in_hours * 60 * 60 || !discern_data['more'].nil?
@@ -724,13 +786,7 @@ module Lich
         total = (total * settings.prep_scaling_factor).floor
         discern_data['mana'] = [(total / 5.0).ceil, min].max
         remaining = total - discern_data['mana']
-        unless settings.cambrinth_items[0]['name']
-          settings.cambrinth_items = [{
-            'name'   => settings.cambrinth,
-            'cap'    => settings.cambrinth_cap,
-            'stored' => settings.stored_cambrinth
-          }]
-        end
+        normalize_cambrinth_items(settings)
         # Ignore cambrinth if charges to use is nil or 0
         settings.cambrinth_num_charges ||= 0
         settings.cambrinth_items = [] if settings.cambrinth_num_charges == 0
@@ -773,24 +829,11 @@ module Lich
         return unless data
         return unless settings
 
-        unless settings.cambrinth_items[0]['name']
-          settings.cambrinth_items = [{
-            'name'   => settings.cambrinth,
-            'cap'    => settings.cambrinth_cap,
-            'stored' => settings.stored_cambrinth
-          }]
-        end
+        normalize_cambrinth_items(settings)
         if check_to_harness(settings.use_harness_when_arcana_locked)
           harness_mana(data['cambrinth'].flatten)
         else
-          settings.cambrinth_items.each_with_index do |item, index|
-            case data['cambrinth'].first
-            when Array
-              find_charge_invoke_stow(item['name'], item['stored'], item['cap'], settings.dedicated_camb_use, data['cambrinth'][index], settings.cambrinth_invoke_exact_amount)
-            when Integer
-              find_charge_invoke_stow(item['name'], item['stored'], item['cap'], settings.dedicated_camb_use, data['cambrinth'], settings.cambrinth_invoke_exact_amount)
-            end
-          end
+          charge_cambrinth_items(data, settings)
         end
 
         cast?(data['cast'], data['symbiosis'], data['before'], data['after'])
@@ -844,7 +887,6 @@ module Lich
       end
 
       def do_buffs(settings, set_name)
-        # takes a waggle and sends it to the appropriate helper
         return unless settings.waggle_sets[set_name]
 
         spells = settings.waggle_sets[set_name]
@@ -898,13 +940,11 @@ module Lich
       end
 
       def choose_avtalia(charge_needed, mana_percentage)
-        camb_to_use = UserVars.avtalia.select { |_camb, data| data['time_seen'] && data['cap'] && data['mana'] }
-                              .select { |_camb, data| Time.now - data['time_seen'] < 600.0 }
-                              .select { |_camb, data| (data['mana'].to_f / data['cap'].to_f) * 100 >= mana_percentage }
-                              .select { |_camb, data| data['mana'] > charge_needed / 10 }
-                              .max_by { |_camb, data| data['mana'] }
-
-        return camb_to_use ? camb_to_use : {}
+        UserVars.avtalia.select { |_camb, data| data['time_seen'] && data['cap'] && data['mana'] }
+                .select { |_camb, data| Time.now - data['time_seen'] < 600.0 }
+                .select { |_camb, data| (data['mana'].to_f / data['cap'].to_f) * 100 >= mana_percentage }
+                .select { |_camb, data| data['mana'] > charge_needed / 10 }
+                .max_by { |_camb, data| data['mana'] }
       end
 
       # Determine the numerical range of a Warrior Mage's elemental charge.
@@ -945,6 +985,27 @@ module Lich
       # release symbiotic research
       def release_magical_research
         2.times { DRC.bput("release symbiosis", "Are you sure", "You intentionally wipe", "But you haven't") }
+      end
+
+      def normalize_cambrinth_items(settings)
+        return if settings.cambrinth_items[0]['name']
+
+        settings.cambrinth_items = [{
+          'name'   => settings.cambrinth,
+          'cap'    => settings.cambrinth_cap,
+          'stored' => settings.stored_cambrinth
+        }]
+      end
+
+      def charge_cambrinth_items(data, settings)
+        settings.cambrinth_items.each_with_index do |item, index|
+          case data['cambrinth'].first
+          when Array
+            find_charge_invoke_stow(item['name'], item['stored'], item['cap'], settings.dedicated_camb_use, data['cambrinth'][index], settings.cambrinth_invoke_exact_amount)
+          when Integer
+            find_charge_invoke_stow(item['name'], item['stored'], item['cap'], settings.dedicated_camb_use, data['cambrinth'], settings.cambrinth_invoke_exact_amount)
+          end
+        end
       end
     end
   end
