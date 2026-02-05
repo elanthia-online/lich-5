@@ -1,16 +1,16 @@
-= Lich 5
-:toc:
+# Lich 5
 
-[link=https://app.netlify.com/sites/wonderful-kepler-18ffed/deploys]
-image::https://api.netlify.com/api/v1/badges/45ca1a98-eeff-43b1-9b48-0a80f37377bf/deploy-status[Netlify Build Status]
+[![Release](https://img.shields.io/github/v/release/elanthia-online/lich-5)](https://github.com/elanthia-online/lich-5/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/elanthia-online/lich-5/rspec_tests.yaml?branch=main&label=rspec)](https://github.com/elanthia-online/lich-5/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/elanthia-online/lich-5/rubocop.yaml?branch=main&label=rubocop)](https://github.com/elanthia-online/lich-5/actions)
 
-== About
+## About
 
 Lich 5 is a GTK3 variant of Lich that is meant to replace the existing versions of Lich. Lich is an open source scripting engine for Simutronic's text-based games DragonRealms and Gemstone IV. It is not a complete front-end in and of itself: it operates much like a proxy server and communicates with the user through their chosen front-end (effectively giving the appearance of expanding the front-end's features with its own). It allows you to write and run scripts in the Ruby language.
 
 Lich was originally created by Shaelun, who brought it up from an idea to version 3.57. Starting with version 3.58, Lich was maintained by Tillmen until version 5. Starting with version 5 of Lich, a community effort started to maintain and expand upon Lich and is now home here under the Elanthia-Online team.
 
-== Usage
+## Usage
 
 For instructions on how to install and use Lich, please see each game's separate wiki with instructions specific for each environment.
 
