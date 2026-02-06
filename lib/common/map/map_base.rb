@@ -250,6 +250,12 @@ module Lich
           end.join("\n")
         end
 
+        # Override in subclasses to add game-specific fields to JSON output.
+        # Must return a Hash. Nil/empty values are filtered automatically.
+        def json_extra_fields
+          {}
+        end
+
         # Convert room to JSON
         def to_json(*_args)
           mapjson = {
@@ -268,7 +274,9 @@ module Lich
             check_location: @check_location,
             unique_loot: @unique_loot,
             uid: @uid
-          }.delete_if { |_a, b| b.nil? || (b.is_a?(Array) && b.empty?) }
+          }
+          mapjson.merge!(json_extra_fields)
+          mapjson.delete_if { |_a, b| b.nil? || (b.is_a?(Array) && b.empty?) }
           JSON.pretty_generate(mapjson)
         end
 

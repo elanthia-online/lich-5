@@ -28,12 +28,14 @@ module Lich
       attr_reader :id
       attr_accessor :title, :description, :paths, :location, :climate, :terrain,
                     :wayto, :timeto, :image, :image_coords, :tags, :check_location,
-                    :unique_loot, :uid, :room_objects
+                    :unique_loot, :uid, :room_objects,
+                    :genie_id, :genie_zone, :genie_pos
 
       def initialize(id, title, description, paths, uid = [], location = nil,
                      climate = nil, terrain = nil, wayto = {}, timeto = {},
                      image = nil, image_coords = nil, tags = [], check_location = nil,
-                     unique_loot = nil, _room_objects = nil)
+                     unique_loot = nil, _room_objects = nil,
+                     genie_id = nil, genie_zone = nil, genie_pos = nil)
         @id = id
         @title = title
         @description = description
@@ -49,11 +51,18 @@ module Lich
         @tags = tags
         @check_location = check_location
         @unique_loot = unique_loot
+        @genie_id = genie_id
+        @genie_zone = genie_zone
+        @genie_pos = genie_pos
         @@list[@id] = self
       end
 
       def to_s
         "##{@id} (#{@uid[-1]}):\n#{@title[-1]}\n#{@description[-1]}\n#{@paths[-1]}"
+      end
+
+      def json_extra_fields
+        { genie_id: @genie_id, genie_zone: @genie_zone, genie_pos: @genie_pos }
       end
 
       # Class method accessors
@@ -86,6 +95,11 @@ module Lich
         def synchronize_load(&block)
           @@load_mutex.synchronize(&block)
         end
+      end
+
+      def self.by_genie_ref(zone_id, node_id)
+        self.load unless @@loaded
+        @@list.find { |r| r&.genie_zone == zone_id.to_s && r&.genie_id == node_id.to_s }
       end
 
       def self.get_free_id
@@ -395,7 +409,9 @@ module Lich
                   room['id'], room['title'], room['description'], room['paths'],
                   room['uid'], room['location'], room['climate'], room['terrain'],
                   room['wayto'], room['timeto'], room['image'], room['image_coords'],
-                  room['tags'], room['check_location'], room['unique_loot']
+                  room['tags'], room['check_location'], room['unique_loot'],
+                  nil, # _room_objects
+                  room['genie_id'], room['genie_zone'], room['genie_pos']
                 )
               end
             end
