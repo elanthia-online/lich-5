@@ -161,6 +161,14 @@ module DRSkill
   end
 end unless defined?(DRSkill)
 
+# Save mock references at load time — other spec files (e.g., drskill_spec)
+# may replace top-level constants with real classes via force-alias patterns.
+# These saved references let before(:all) swap the correct mocks into the
+# Lich::DragonRealms namespace regardless of file-load order.
+ARCANA_MOCK_DRSTATS  = DRStats
+ARCANA_MOCK_DRSKILL  = DRSkill
+ARCANA_MOCK_DRSPELLS = DRSpells
+
 module DRCMM
   def self.update_astral_data(data, _settings)
     data
@@ -276,22 +284,30 @@ require_relative '../../../../lib/dragonrealms/commons/common-arcana'
 DRCA = Lich::DragonRealms::DRCA unless defined?(DRCA)
 
 RSpec.describe Lich::DragonRealms::DRCA do
-  # In CI, drinfomon loads real DRStats/DRSkill/DRSpells into Lich::DragonRealms namespace.
-  # DRCA resolves these constants within that namespace, NOT our top-level test mocks.
-  # Temporarily swap the namespace constants so DRCA uses our mocks and stubs target
-  # the correct objects. Originals are restored in after(:all).
+  # DRCA resolves DRStats/DRSkill/DRSpells within the Lich::DragonRealms namespace.
+  # Other spec files may load real classes or incomplete mocks into that namespace.
+  # Swap our full mock modules into both the namespace (for DRCA code) and the
+  # top level (for allow/expect stubs in tests). Originals restored in after(:all).
   before(:all) do
     @saved_ns_constants = {}
-    %i[DRStats DRSkill DRSpells].each do |name|
-      next unless Lich::DragonRealms.const_defined?(name, false)
+    @saved_toplevel_constants = {}
 
-      real = Lich::DragonRealms.const_get(name)
-      mock = Object.const_defined?(name) ? Object.const_get(name) : nil
-      next unless mock && real != mock
+    mocks = { DRStats: ARCANA_MOCK_DRSTATS, DRSkill: ARCANA_MOCK_DRSKILL, DRSpells: ARCANA_MOCK_DRSPELLS }
 
-      @saved_ns_constants[name] = real
-      Lich::DragonRealms.send(:remove_const, name)
+    mocks.each do |name, mock|
+      # Save and swap in Lich::DragonRealms namespace
+      if Lich::DragonRealms.const_defined?(name, false)
+        @saved_ns_constants[name] = Lich::DragonRealms.const_get(name)
+        Lich::DragonRealms.send(:remove_const, name)
+      end
       Lich::DragonRealms.const_set(name, mock)
+
+      # Save and swap at top level
+      if Object.const_defined?(name)
+        @saved_toplevel_constants[name] = Object.const_get(name)
+        Object.send(:remove_const, name)
+      end
+      Object.const_set(name, mock)
     end
   end
 
@@ -299,6 +315,10 @@ RSpec.describe Lich::DragonRealms::DRCA do
     (@saved_ns_constants || {}).each do |name, original|
       Lich::DragonRealms.send(:remove_const, name) if Lich::DragonRealms.const_defined?(name, false)
       Lich::DragonRealms.const_set(name, original)
+    end
+    (@saved_toplevel_constants || {}).each do |name, original|
+      Object.send(:remove_const, name) if Object.const_defined?(name)
+      Object.const_set(name, original)
     end
   end
 
