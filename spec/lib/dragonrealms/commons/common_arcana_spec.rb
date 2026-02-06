@@ -291,6 +291,32 @@ require_relative '../../../../lib/dragonrealms/commons/common-arcana'
 DRCA = Lich::DragonRealms::DRCA unless defined?(DRCA)
 
 RSpec.describe Lich::DragonRealms::DRCA do
+  # In CI, drinfomon loads real DRStats/DRSkill/DRSpells into Lich::DragonRealms namespace.
+  # DRCA resolves these constants within that namespace, NOT our top-level test mocks.
+  # Temporarily swap the namespace constants so DRCA uses our mocks and stubs target
+  # the correct objects. Originals are restored in after(:all).
+  before(:all) do
+    @saved_ns_constants = {}
+    %i[DRStats DRSkill DRSpells].each do |name|
+      next unless Lich::DragonRealms.const_defined?(name, false)
+
+      real = Lich::DragonRealms.const_get(name)
+      mock = Object.const_defined?(name) ? Object.const_get(name) : nil
+      next unless mock && real != mock
+
+      @saved_ns_constants[name] = real
+      Lich::DragonRealms.send(:remove_const, name)
+      Lich::DragonRealms.const_set(name, mock)
+    end
+  end
+
+  after(:all) do
+    (@saved_ns_constants || {}).each do |name, original|
+      Lich::DragonRealms.send(:remove_const, name) if Lich::DragonRealms.const_defined?(name, false)
+      Lich::DragonRealms.const_set(name, original)
+    end
+  end
+
   before(:each) do
     Lich::Messaging.clear_monsterbold!
     Lich::Messaging.clear_messages!
