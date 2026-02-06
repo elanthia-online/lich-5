@@ -227,24 +227,9 @@ module UserVars
   end
 end unless defined?(UserVars)
 
-# Add monsterbold to Lich::Messaging mock if not already present
-module Lich
-  module Messaging
-    @monsterbold_messages = []
-
-    def self.monsterbold(message)
-      @monsterbold_messages ||= []
-      @monsterbold_messages << message
-    end
-
-    def self.monsterbold_messages
-      @monsterbold_messages || []
-    end
-
-    def self.clear_monsterbold!
-      @monsterbold_messages = []
-    end
-  end
+# Helper to extract bold messages from Lich::Messaging captures
+def bold_messages
+  Lich::Messaging.messages.select { |m| m[:type] == 'bold' }.map { |m| m[:message] }
 end
 
 # Mock global game functions
@@ -318,7 +303,6 @@ RSpec.describe Lich::DragonRealms::DRCA do
   end
 
   before(:each) do
-    Lich::Messaging.clear_monsterbold!
     Lich::Messaging.clear_messages!
     DRSpells.active_spells = {}
     Flags.reset!
@@ -406,7 +390,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       allow(DRStats).to receive(:mana).and_return(100)
       allow(DRC).to receive(:bput).with(/infuse om/, anything, anything).and_return('as if it hungers for more')
       DRCA.infuse_om(false, 10)
-      expect(Lich::Messaging.monsterbold_messages.any? { |m| m.include?('infuse_om exhausted') }).to be true
+      expect(bold_messages.any? { |m| m.include?('infuse_om exhausted') }).to be true
     end
   end
 
@@ -451,7 +435,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       allow(DRC).to receive(:bput).with('meditate famine', anything, anything, anything, anything, anything, anything, anything, anything, anything).and_return('You must be unengaged')
       result = DRCA.activate_barb_buff?('Famine', 20, false, retries: 0)
       expect(result).to be false
-      expect(Lich::Messaging.monsterbold_messages.any? { |m| m.include?('activate_barb_buff? exhausted') }).to be true
+      expect(bold_messages.any? { |m| m.include?('activate_barb_buff? exhausted') }).to be true
     end
 
     it 'returns true on successful activation' do
@@ -480,7 +464,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       allow(DRC).to receive(:bput).with(/prepare/, anything).and_return('Your desire to prepare this offensive spell suddenly slips away')
       result = DRCA.prepare?('fireball', 10, false, 'prepare', false, nil, false, nil, retries: 0)
       expect(result).to be false
-      expect(Lich::Messaging.monsterbold_messages.any? { |m| m.include?('prepare? exhausted') }).to be true
+      expect(bold_messages.any? { |m| m.include?('prepare? exhausted') }).to be true
     end
 
     it 'returns false on area interference' do
@@ -546,7 +530,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       Flags.set_pending('cyclic-too-recent', ['The mental strain'])
       result = DRCA.cast?('cast', false, [], [], retries: 0)
       expect(result).to be false
-      expect(Lich::Messaging.monsterbold_messages.any? { |m| m.include?('cast? exhausted') }).to be true
+      expect(bold_messages.any? { |m| m.include?('cast? exhausted') }).to be true
     end
 
     it 'falls back from barrage on barrage-fail' do
@@ -562,7 +546,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       Flags.set_pending('barrage-fail', ['That was an invalid attack choice.'])
       result = DRCA.cast?('barrage', false, [], [], retries: 0)
       expect(result).to be false
-      expect(Lich::Messaging.monsterbold_messages.any? { |m| m.include?('barrage fallback exhausted') }).to be true
+      expect(bold_messages.any? { |m| m.include?('barrage fallback exhausted') }).to be true
     end
 
     it 'releases mana and symbiosis on spell-fail with symbiosis' do
@@ -639,7 +623,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect(DRCI).to receive(:tie_item?).with('orb', 'belt').and_return(false)
       result = DRCA.stow_focus('orb', false, 'belt', false, retries: 0)
       expect(result).to be false
-      expect(Lich::Messaging.monsterbold_messages.any? { |m| m.include?('stow_focus exhausted') }).to be true
+      expect(bold_messages.any? { |m| m.include?('stow_focus exhausted') }).to be true
     end
 
     it 'uses sheathe bput for sheathed focus' do
@@ -768,7 +752,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       allow(DRCA).to receive(:find_cambrinth)
       allow(DRCA).to receive(:stow_cambrinth)
       DRCA.invoke('armband', nil, 10)
-      expect(Lich::Messaging.monsterbold_messages.any? { |m| m.include?('arcana skill is too low to invoke') }).to be true
+      expect(bold_messages.any? { |m| m.include?('arcana skill is too low to invoke') }).to be true
     end
   end
 
@@ -791,7 +775,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       allow(DRC).to receive(:bput).with(/charge my armband/, anything, anything).and_return("You'll have to hold it")
       allow(DRCI).to receive(:in_hands?).and_return(true)
       DRCA.charge?('armband', 10)
-      expect(Lich::Messaging.monsterbold_messages.any? { |m| m.include?('where did your cambrinth go') }).to be true
+      expect(bold_messages.any? { |m| m.include?('where did your cambrinth go') }).to be true
     end
   end
 
@@ -837,7 +821,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
     it 'returns false with message when out of runestones' do
       allow(DRCI).to receive(:inside?).and_return(false)
       expect(DRCA.prepare_to_cast_runestone?(spell, settings)).to be false
-      expect(Lich::Messaging.monsterbold_messages.any? { |m| m.include?('out of moonstone') }).to be true
+      expect(bold_messages.any? { |m| m.include?('out of moonstone') }).to be true
     end
   end
 
@@ -855,7 +839,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       allow(DRCA).to receive(:reget).and_return(true)
       expect(DRCI).to receive(:dispose_trash).with('moonstone')
       expect(DRCA.get_runestone?('moonstone', settings)).to be false
-      expect(Lich::Messaging.monsterbold_messages.any? { |m| m.include?('useless moonstone') }).to be true
+      expect(bold_messages.any? { |m| m.include?('useless moonstone') }).to be true
     end
   end
 

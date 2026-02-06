@@ -115,7 +115,7 @@ module Lich
         retries = 0
         loop do
           if retries >= INFUSE_OM_MAX_RETRIES
-            Lich::Messaging.monsterbold("common-arcana: infuse_om exhausted #{INFUSE_OM_MAX_RETRIES} retries — giving up")
+            Lich::Messaging.msg("bold", "common-arcana: infuse_om exhausted #{INFUSE_OM_MAX_RETRIES} retries — giving up")
             break
           end
           retries += 1
@@ -200,7 +200,7 @@ module Lich
         return true if DRSpells.active_spells[name]
 
         if retries <= 0
-          Lich::Messaging.monsterbold("common-arcana: activate_barb_buff? exhausted #{BARB_BUFF_MAX_RETRIES} retries for '#{name}' — giving up")
+          Lich::Messaging.msg("bold", "common-arcana: activate_barb_buff? exhausted #{BARB_BUFF_MAX_RETRIES} retries for '#{name}' — giving up")
           return false
         end
 
@@ -218,7 +218,7 @@ module Lich
           DRC.retreat
           case DRC.bput('sit', 'You sit', 'You are already', 'You rise', 'While swimming?')
           when 'While swimming?'
-            Lich::Messaging.monsterbold("common-arcana: cannot sit to activate '#{name}' — water is too deep")
+            Lich::Messaging.msg("bold", "common-arcana: cannot sit to activate '#{name}' — water is too deep")
             activated = false
           else
             activated = activate_barb_buff?(name, meditation_pause_timer, sit_to_meditate, retries: retries - 1)
@@ -255,7 +255,7 @@ module Lich
         case match
         when 'Your desire to prepare this offensive spell suddenly slips away'
           if retries <= 0
-            Lich::Messaging.monsterbold("common-arcana: prepare? exhausted #{PREPARE_MAX_RETRIES} retries for '#{abbrev}' — giving up")
+            Lich::Messaging.msg("bold", "common-arcana: prepare? exhausted #{PREPARE_MAX_RETRIES} retries for '#{abbrev}' — giving up")
             return false
           end
           pause 1
@@ -326,7 +326,7 @@ module Lich
         if DRCI.inside?("#{spell['runestone_name']}", settings.runestone_storage)
           return false unless get_runestone?(spell['runestone_name'], settings)
         else
-          Lich::Messaging.monsterbold("common-arcana: out of #{spell['runestone_name']}!")
+          Lich::Messaging.msg("bold", "common-arcana: out of #{spell['runestone_name']}!")
           return false
         end
         true
@@ -338,7 +338,7 @@ module Lich
         DRCI.get_item(runestone, settings.runestone_storage)
         if reget(3, "You get a useless #{runestone}")
           DRCI.dispose_trash(runestone)
-          Lich::Messaging.monsterbold("common-arcana: got a useless #{runestone} — disposing and giving up")
+          Lich::Messaging.msg("bold", "common-arcana: got a useless #{runestone} — disposing and giving up")
           return false
         end
         true
@@ -371,13 +371,13 @@ module Lich
         if cast_command =~ /\b(barrage)\b/i && (Flags['unknown-command'] || Flags['barrage-fail'])
           return cast?('cast', symbiosis, [], after, retries: retries - 1) if retries > 0
 
-          Lich::Messaging.monsterbold("common-arcana: cast? barrage fallback exhausted retries — giving up")
+          Lich::Messaging.msg("bold", "common-arcana: cast? barrage fallback exhausted retries — giving up")
           return false
         end
 
         if Flags['cyclic-too-recent'] || Flags['spell-full-prep']
           if retries <= 0
-            Lich::Messaging.monsterbold("common-arcana: cast? exhausted #{CAST_MAX_RETRIES} retries waiting for cyclic/full-prep — giving up")
+            Lich::Messaging.msg("bold", "common-arcana: cast? exhausted #{CAST_MAX_RETRIES} retries waiting for cyclic/full-prep — giving up")
             return false
           end
           pause 1
@@ -431,7 +431,7 @@ module Lich
           result = DRCI.tie_item?(focus, tied)
           unless result
             if retries <= 0
-              Lich::Messaging.monsterbold("common-arcana: stow_focus exhausted #{STOW_FOCUS_MAX_RETRIES} retries tying #{focus} — giving up")
+              Lich::Messaging.msg("bold", "common-arcana: stow_focus exhausted #{STOW_FOCUS_MAX_RETRIES} retries tying #{focus} — giving up")
               return false
             end
             DRC.retreat
@@ -511,7 +511,7 @@ module Lich
         waitrt?
         case result
         when /you find it too clumsy/
-          Lich::Messaging.monsterbold("common-arcana: your arcana skill is too low to invoke your cambrinth while worn")
+          Lich::Messaging.msg("bold", "common-arcana: your arcana skill is too low to invoke your cambrinth while worn")
           # If the cambrinth is in your hands and you can't invoke it, nothing else to do.
           unless DRCI.in_hands?(cambrinth)
             # Otherwise, try to find the cambrinth and get it to your hands.
@@ -538,10 +538,10 @@ module Lich
           # You're not wearing nor holding your cambrinth item, go find it again.
           # Likely it's configured in your yaml that you wear it but it's stowed for some reason.
           # Try to find the cambrinth and get it to your hands.
-          Lich::Messaging.monsterbold("common-arcana: where did your cambrinth go?")
+          Lich::Messaging.msg("bold", "common-arcana: where did your cambrinth go?")
           retry_find_cambrinth = true
         when /you find it too clumsy/
-          Lich::Messaging.monsterbold("common-arcana: your arcana skill is too low to charge your cambrinth while worn")
+          Lich::Messaging.msg("bold", "common-arcana: your arcana skill is too low to charge your cambrinth while worn")
           retry_find_cambrinth = true
         else
           charged = result =~ /absorbs? all of the energy/
@@ -668,7 +668,7 @@ module Lich
           next if DRSpells.active_spells[name] && (data['recast'].nil? || DRSpells.active_spells[name].to_i > data['recast'])
 
           while DRStats.mana < settings.waggle_spells_mana_threshold || DRStats.concentration < settings.waggle_spells_concentration_threshold
-            Lich::Messaging.msg("common-arcana", "waiting on mana over #{settings.waggle_spells_mana_threshold} or concentration over #{settings.waggle_spells_concentration_threshold}...")
+            Lich::Messaging.msg("plain", "common-arcana: waiting on mana over #{settings.waggle_spells_mana_threshold} or concentration over #{settings.waggle_spells_concentration_threshold}...")
             pause 15
           end
           cast_spell(data, settings, force_cambrinth, cast_lifecycle_lambda)
