@@ -279,9 +279,10 @@ def kneeling?
   false
 end unless defined?(kneeling?)
 
-# Stub XMLData.prepared_spell
-unless XMLData.respond_to?(:prepared_spell)
-  XMLData.prepared_spell = 'None'
+# Ensure XMLData has prepared_spell accessor for tests
+# In CI, XMLData may be a module (not OpenStruct) so we must define the accessor explicitly
+unless XMLData.respond_to?(:prepared_spell=)
+  XMLData.singleton_class.attr_accessor(:prepared_spell)
 end
 
 # Load the module under test
