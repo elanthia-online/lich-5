@@ -84,7 +84,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     context 'when gear set does not exist' do
       it 'returns false and prints a message' do
         em = described_class.new(make_settings(gear_sets: { 'combat' => ['sword'] }))
-        expect(Lich::Messaging).to receive(:monsterbold).with(/Could not find gear set 'missing'/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /Could not find gear set 'missing'/)
         expect(em.wear_equipment_set?('missing')).to be false
       end
     end
@@ -132,7 +132,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
 
     context 'when description does not match any item' do
       it 'returns false with a message' do
-        expect(Lich::Messaging).to receive(:monsterbold).with(/Failed to match a weapon/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /Failed to match a weapon/)
         expect(em.wield_weapon?('nonexistent')).to be false
       end
     end
@@ -242,7 +242,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     context 'when pre-transform retrieval fails (bug fix 1c)' do
       it 'returns false and prints a message' do
         allow(em).to receive(:get_item_helper).with(anything, :worn).and_return(false)
-        expect(Lich::Messaging).to receive(:monsterbold).with(/Unable to retrieve .* for transform/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /Unable to retrieve .* for transform/)
         expect(em.get_item?(em.items.first)).to be false
       end
     end
@@ -253,7 +253,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       end
 
       it 'returns false with a message' do
-        expect(Lich::Messaging).to receive(:monsterbold).with(/Could not find transformed item/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /Could not find transformed item/)
         expect(em.get_item?(em.items.first)).to be false
       end
     end
@@ -290,7 +290,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     context 'when bput returns nil (timeout)' do
       it 'returns false with a message' do
         allow(drc).to receive(:bput).and_return(nil)
-        expect(Lich::Messaging).to receive(:monsterbold).with(/No response from game/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /No response from game/)
         expect(em.send(:get_item_helper, item, :worn)).to be false
       end
     end
@@ -298,7 +298,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     context 'when bput returns empty string' do
       it 'returns false with a message' do
         allow(drc).to receive(:bput).and_return('')
-        expect(Lich::Messaging).to receive(:monsterbold).with(/No response from game/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /No response from game/)
         expect(em.send(:get_item_helper, item, :worn)).to be false
       end
     end
@@ -313,7 +313,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     context 'when response matches a failure and recovery is invoked (bug fix 1e)' do
       before do
         # Stub DRC.message since failure_recovery proc calls it (bput("wear my shield") in the recovery)
-        allow(Lich::Messaging).to receive(:monsterbold)
+        allow(Lich::Messaging).to receive(:msg)
         allow(drc).to receive(:bput).and_return("You get ")
       end
 
@@ -359,7 +359,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         it 'prints a warning and returns' do
           allow(drc).to receive(:bput).and_return('Your bolt falls from your crossbow to your feet.')
           allow(drci).to receive(:lower_item?).with('crossbow').and_return(false)
-          expect(Lich::Messaging).to receive(:monsterbold).with(/Unable to lower crossbow to pick up ammo/)
+          expect(Lich::Messaging).to receive(:msg).with("bold", /Unable to lower crossbow to pick up ammo/)
           em.send(:unload_weapon, 'crossbow')
         end
       end
@@ -370,7 +370,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
           allow(drci).to receive(:lower_item?).with('crossbow').and_return(true)
           allow(drci).to receive(:put_away_item?).with('bolt')
           allow(drci).to receive(:get_item?).with('crossbow').and_return(false)
-          expect(Lich::Messaging).to receive(:monsterbold).with(/Unable to pick crossbow back up after unloading/)
+          expect(Lich::Messaging).to receive(:msg).with("bold", /Unable to pick crossbow back up after unloading/)
           em.send(:unload_weapon, 'crossbow')
         end
       end
@@ -391,7 +391,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
           allow(drci).to receive(:in_left_hand?).with('crossbow').and_return(false)
           allow(drci).to receive(:in_right_hand?).with('crossbow').and_return(true)
           allow(drci).to receive(:stow_hand).with('left').and_return(false)
-          expect(Lich::Messaging).to receive(:monsterbold).with(/Unable to stow ammo from left hand/)
+          expect(Lich::Messaging).to receive(:msg).with("bold", /Unable to stow ammo from left hand/)
           em.send(:unload_weapon, 'crossbow')
         end
       end
@@ -425,7 +425,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
 
     context 'with unsupported skill' do
       it 'returns false with a message' do
-        expect(Lich::Messaging).to receive(:monsterbold).with(/Unsupported weapon swap/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /Unsupported weapon swap/)
         expect(em.send(:swap_to_skill?, 'sword', 'Underwater Basket Weaving')).to be false
       end
     end
@@ -453,7 +453,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
           allow(drc).to receive(:left_hand).and_return('shield')
           allow(drc).to receive(:right_hand).and_return('sword')
           allow(drci).to receive(:stow_hand).with('left').and_return(true)
-          expect(Lich::Messaging).to receive(:monsterbold).with(/Unable to free hands for weapon swap/)
+          expect(Lich::Messaging).to receive(:msg).with("bold", /Unable to free hands for weapon swap/)
           expect(em.send(:swap_to_skill?, 'sword', 'Large Edged')).to be false
         end
       end
@@ -495,7 +495,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     context 'when retries are exhausted' do
       it 'prints a warning and returns' do
         allow(drc).to receive(:bput).and_return('You are a little too busy')
-        expect(Lich::Messaging).to receive(:monsterbold).with(/stow_helper exceeded max retries/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /stow_helper exceeded max retries/)
         em.send(:stow_helper, 'stow my sword', 'sword', /You put/, retries: 1)
       end
     end
@@ -590,7 +590,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       it 'returns false with a message' do
         item = em.items.find { |i| i.name == 'shield' }
         allow(drc).to receive(:bput).and_return('then constricts tighter around your')
-        expect(Lich::Messaging).to receive(:monsterbold).with(/not ready to be removed yet/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /not ready to be removed yet/)
         expect(em.remove_item(item)).to be false
       end
     end
@@ -600,7 +600,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         item = make_item(name: 'widget', worn: true, transforms_to: 'nonexistent')
         allow(drc).to receive(:bput).and_return('You remove a widget')
         allow(drci).to receive(:in_hands?).with('nonexistent').and_return(true)
-        expect(Lich::Messaging).to receive(:monsterbold).with(/Could not find transformed item/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /Could not find transformed item/)
         em.remove_item(item)
       end
     end
