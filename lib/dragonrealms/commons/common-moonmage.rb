@@ -3,6 +3,41 @@ module Lich
     module DRCMM
       module_function
 
+      # Moon weapon detection regex. Matches summoned moon weapons in hand.
+      # Colors: black (Katamba), red-hot (Yavash), blue-white (Xibar).
+      MOON_WEAPON_REGEX = /^(?:black|red-hot|blue-white) moon(?:blade|staff)$/i.freeze
+
+      # Canonical moon weapon base names for glance/hold operations.
+      MOON_WEAPON_NAMES = ['moonblade', 'moonstaff'].freeze
+
+      # Expected game messages when wearing a summoned moon weapon.
+      MOON_WEAR_MESSAGES = ["You're already", "You can't wear", "Wear what", "telekinetic"].freeze
+
+      # Expected game messages when dropping a summoned moon weapon.
+      MOON_DROP_MESSAGES = ["As you open your hand", "What were you referring to"].freeze
+
+      # Maps moon weapon color adjective to moon name.
+      MOON_COLOR_TO_NAME = {
+        'black'      => 'katamba',
+        'red-hot'    => 'yavash',
+        'blue-white' => 'xibar'
+      }.freeze
+
+      # Regex for extracting moon color from glance output.
+      MOON_GLANCE_REGEX = /You glance at a .* (?<color>black|red-hot|blue-white) moon(?:blade|staff)/i.freeze
+
+      # Maps divination tool keywords to their use verb.
+      DIV_TOOL_VERBS = {
+        'charts' => 'review',
+        'bones'  => 'roll',
+        'mirror' => 'gaze',
+        'bowl'   => 'gaze',
+        'prism'  => 'raise'
+      }.freeze
+
+      # Minimum minutes remaining before a celestial body sets to be considered "visible."
+      MOON_VISIBILITY_TIMER_THRESHOLD = 4
+
       def observe(thing)
         output = "observe #{thing} in heavens"
         output = 'observe heavens' if thing.eql?('heavens')
@@ -26,12 +61,12 @@ module Lich
           DRCI.untie_item?(telescope_name, storage['tied'])
         elsif storage['container']
           unless DRCI.get_item?(telescope_name, storage['container'])
-            echo("Telescope not found in container. Trying to get it from anywhere we can.")
+            Lich::Messaging.msg("plain", "Telescope not found in container. Trying to get it from anywhere we can.")
             return DRCI.get_item?(telescope_name)
           end
           true
         else
-          return DRCI.get_item?(telescope_name)
+          DRCI.get_item?(telescope_name)
         end
       end
 
@@ -47,6 +82,8 @@ module Lich
         end
       end
 
+      # @deprecated Use {#get_telescope?} instead. This method uses raw DRC.bput
+      #   and does not return a boolean indicating success/failure.
       def get_telescope(storage)
         if storage['tied']
           DRC.bput("untie telescope from my #{storage['tied']}", 'You remove', 'You untie', '^What were you referring', 'Untie what', '^You are a little too busy')
@@ -57,6 +94,7 @@ module Lich
         end
       end
 
+      # @deprecated Use {#store_telescope?} instead.
       def store_telescope(storage)
         if storage['tied']
           DRC.bput("tie telescope to my #{storage['tied']}", 'You attach', 'you tie', 'You are a little too busy')
@@ -92,7 +130,7 @@ module Lich
                       "You'll need to open it to make any use of it",
                       'You must have both hands free')
         when 'The pain is too much', "That's a bit tough to do when you can't see the sky"
-          echo("Planet #{target} not visible. Are you indoors perhaps?")
+          Lich::Messaging.msg("bold", "Planet #{target} not visible. Are you indoors perhaps?")
         when "You'll need to open it to make any use of it"
           fput("open my telescope")
           fput("center telescope on #{target}")
@@ -123,17 +161,19 @@ module Lich
         end
       end
 
+      # @deprecated Use {#get_bones?} instead.
       def get_bones(storage)
         if storage['tied']
-          DRC.bput("untie bones from my #{storage['container']}", 'You untie', 'You remove')
+          DRC.bput("untie bones from my #{storage['tied']}", 'You untie', 'You remove')
         else
           DRC.bput("get bones from my #{storage['container']}", 'You get')
         end
       end
 
+      # @deprecated Use {#store_bones?} instead.
       def store_bones(storage)
         if storage['tied']
-          DRC.bput("tie bones to my #{storage['container']}", 'You attach', 'You tie')
+          DRC.bput("tie bones to my #{storage['tied']}", 'You attach', 'You tie')
         else
           DRC.bput("put bones in my #{storage['container']}", 'You put')
         end
@@ -168,6 +208,7 @@ module Lich
         end
       end
 
+      # @deprecated Use {#get_div_tool?} instead.
       def get_div_tool(tool)
         if tool['tied']
           DRC.bput("untie #{tool['name']} from my #{tool['container']}", tool['name'])
@@ -178,6 +219,7 @@ module Lich
         end
       end
 
+      # @deprecated Use {#store_div_tool?} instead.
       def store_div_tool(tool)
         if tool['tied']
           DRC.bput("tie #{tool['name']} to my #{tool['container']}", tool['name'])
@@ -191,13 +233,8 @@ module Lich
       def use_div_tool(tool_storage)
         get_div_tool(tool_storage)
 
-        {
-          'charts' => 'review',
-          'bones'  => 'roll',
-          'mirror' => 'gaze',
-          'bowl'   => 'gaze',
-          'prism'  => 'raise'
-        }.select { |tool, _| tool_storage['name'].include?(tool) }
+        DIV_TOOL_VERBS
+          .select { |tool, _| tool_storage['name'].include?(tool) }
           .each   { |tool, verb| DRC.bput("#{verb} my #{tool}", 'roundtime'); waitrt? }
 
         store_div_tool(tool_storage)
@@ -209,34 +246,32 @@ module Lich
       # Returns false if you're not holding a moon weapon, or you are but can't wear it.
       # https://elanthipedia.play.net/Shape_Moonblade
       def wear_moon_weapon?
-        moon_wear_messages = ["You're already", "You can't wear", "Wear what", "telekinetic"]
         wore_it = false
         if is_moon_weapon?(DRC.left_hand)
-          wore_it = wore_it || DRC.bput("wear #{DRC.left_hand}", *moon_wear_messages) == "telekinetic"
+          wore_it = wore_it || DRC.bput("wear #{DRC.left_hand}", *MOON_WEAR_MESSAGES) == "telekinetic"
         end
         if is_moon_weapon?(DRC.right_hand)
-          wore_it = wore_it || DRC.bput("wear #{DRC.right_hand}", *moon_wear_messages) == "telekinetic"
+          wore_it = wore_it || DRC.bput("wear #{DRC.right_hand}", *MOON_WEAR_MESSAGES) == "telekinetic"
         end
-        return wore_it
+        wore_it
       end
 
       # Drops the moon weapon in your hands, if any.
       # Returns true if dropped something, false otherwise.
       def drop_moon_weapon?
-        moon_drop_messages = ["As you open your hand", "What were you referring to"]
         dropped_it = false
         if is_moon_weapon?(DRC.left_hand)
-          dropped_it = dropped_it || DRC.bput("drop #{DRC.left_hand}", *moon_drop_messages) == "As you open your hand"
+          dropped_it = dropped_it || DRC.bput("drop #{DRC.left_hand}", *MOON_DROP_MESSAGES) == "As you open your hand"
         end
         if is_moon_weapon?(DRC.right_hand)
-          dropped_it = dropped_it || DRC.bput("drop #{DRC.right_hand}", *moon_drop_messages) == "As you open your hand"
+          dropped_it = dropped_it || DRC.bput("drop #{DRC.right_hand}", *MOON_DROP_MESSAGES) == "As you open your hand"
         end
-        return dropped_it
+        dropped_it
       end
 
       # Is a moon weapon in your hands?
       def holding_moon_weapon?
-        return is_moon_weapon?(DRC.left_hand) || is_moon_weapon?(DRC.right_hand)
+        is_moon_weapon?(DRC.left_hand) || is_moon_weapon?(DRC.right_hand)
       end
 
       # Try to hold a moon weapon.
@@ -245,7 +280,7 @@ module Lich
         return true if holding_moon_weapon?
         return false if [DRC.left_hand, DRC.right_hand].compact.length >= 2
 
-        ['moonblade', 'moonstaff'].each do |weapon|
+        MOON_WEAPON_NAMES.each do |weapon|
           glance = DRC.bput("glance my #{weapon}", "You glance at a .* #{weapon}", "I could not find")
           case glance
           when /You glance/
@@ -259,30 +294,20 @@ module Lich
       def is_moon_weapon?(item)
         return false unless item
 
-        !(item =~ /^((black|red-hot|blue-white) moon(blade|staff))$/i).nil?
+        MOON_WEAPON_REGEX.match?(item)
       end
 
       def moon_used_to_summon_weapon
         # Note, if you have more than one weapon summoned at a time
         # then the results of this method are non-deterministic.
         # For example, if you have 2+ moonblades/staffs cast on different moons.
-        ['moonblade', 'moonstaff'].each do |weapon|
-          glance = DRC.bput("glance my #{weapon}", "You glance at a .* (black|red-hot|blue-white) moon(blade|staff)", "I could not find")
-          case glance
-          when /black moon/
-            return 'katamba'
-          when /red-hot moon/
-            return 'yavash'
-          when /blue-white moon/
-            return 'xibar'
-          end
+        MOON_WEAPON_NAMES.each do |weapon|
+          glance = DRC.bput("glance my #{weapon}", MOON_GLANCE_REGEX, "I could not find")
+          match = glance&.match(MOON_GLANCE_REGEX)
+          return MOON_COLOR_TO_NAME[match[:color]] if match
         end
-        return nil
+        nil
       end
-
-      ## Migrating prediction/planet/moon defs from common-arcana to here.
-      # Delete this line, and the defs from common-arcana after they've been
-      # merged here and things look good.
 
       def update_astral_data(data, settings = nil)
         if data['moon']
@@ -295,7 +320,7 @@ module Lich
 
       def find_visible_planets(planets, settings = nil)
         unless get_telescope?(settings.telescope_name, settings.telescope_storage)
-          DRC.message("Coult not get telescope to find visible planets")
+          Lich::Messaging.msg("bold", "Could not get telescope to find visible planets")
           return
         end
 
@@ -309,7 +334,7 @@ module Lich
         end
 
         Flags.delete('planet-not-visible')
-        DRC.message("Could not store telescope after finding visible planets") unless store_telescope?(settings.telescope_name, settings.telescope_storage)
+        Lich::Messaging.msg("bold", "Could not store telescope after finding visible planets") unless store_telescope?(settings.telescope_name, settings.telescope_storage)
         observed_planets
       end
 
@@ -326,7 +351,7 @@ module Lich
           data['cast'] = "cast #{cast_on}"
           return data
         end
-        DRC.message("Could not set planet data. Cannot cast #{data['abbrev']}")
+        Lich::Messaging.msg("bold", "Could not set planet data. Cannot cast #{data['abbrev']}")
       end
 
       def set_moon_data(data)
@@ -335,10 +360,10 @@ module Lich
         moon = visible_moons.first
         if moon
           data['cast'] = "cast #{moon}"
-        elsif !moon && data['name'].downcase == 'cage of light'
+        elsif data['name'].downcase == 'cage of light'
           data['cast'] = "cast ambient"
         else
-          echo "No moon available to cast #{data['name']}"
+          Lich::Messaging.msg("bold", "No moon available to cast #{data['name']}")
           data = nil
         end
         data
@@ -348,14 +373,14 @@ module Lich
       #  above the horizon and won't set for at least another ~4 minutes.
       def bright_celestial_object?
         check_moonwatch
-        (UserVars.sun['day'] && UserVars.sun['timer'] >= 4) || moon_visible?('xibar') || moon_visible?('yavash')
+        (UserVars.sun['day'] && UserVars.sun['timer'] >= MOON_VISIBILITY_TIMER_THRESHOLD) || moon_visible?('xibar') || moon_visible?('yavash')
       end
 
       # returns true if at least one moon (katamba, yavash, xibar) or the sun are
       #  above the horizon and won't set for at least another ~4 minutes.
       def any_celestial_object?
         check_moonwatch
-        (UserVars.sun['day'] && UserVars.sun['timer'] >= 4) || moons_visible?
+        (UserVars.sun['day'] && UserVars.sun['timer'] >= MOON_VISIBILITY_TIMER_THRESHOLD) || moons_visible?
       end
 
       # Returns true if at least one moon (e.g. katamba, yavash, xibar)
@@ -373,17 +398,17 @@ module Lich
       # that are above the horizon and won't set for at least another ~4 minutes.
       def visible_moons
         check_moonwatch
-        UserVars.moons.select { |moon_name, moon_data| UserVars.moons['visible'].include?(moon_name) && moon_data['timer'] >= 4 }
+        UserVars.moons.select { |moon_name, moon_data| UserVars.moons['visible'].include?(moon_name) && moon_data['timer'] >= MOON_VISIBILITY_TIMER_THRESHOLD }
                 .map { |moon_name, _moon_data| moon_name }
       end
 
       def check_moonwatch
         return if Script.running?('moonwatch')
 
-        echo 'moonwatch is not running. Starting it now'
+        Lich::Messaging.msg("bold", "moonwatch is not running. Starting it now")
         UserVars.moons = {}
         custom_require.call('moonwatch')
-        echo "Run `#{$clean_lich_char}e autostart('moonwatch')` to avoid this in the future"
+        Lich::Messaging.msg("plain", "Run `#{$clean_lich_char}e autostart('moonwatch')` to avoid this in the future")
         pause 0.5 while UserVars.moons.empty?
       end
     end
