@@ -25,106 +25,76 @@ module Lich
   end
 end unless defined?(Lich::Messaging)
 
-# Mock DRC (module) — common.rb
-module Lich
-  module DragonRealms
-    module DRC
-      module_function
+# Mock DRC — define at top level for compatibility with other spec files.
+# Use *_args for flexible argument counts since different callers pass
+# different numbers of arguments.
+module DRC
+  def self.bput(*_args); nil; end
 
-      def bput(_command, *_patterns)
-        nil
-      end
+  def self.right_hand; nil; end
 
-      def right_hand
-        nil
-      end
+  def self.left_hand; nil; end
 
-      def left_hand
-        nil
-      end
+  def self.right_hand_noun; nil; end
 
-      def right_hand_noun
-        nil
-      end
+  def self.fix_standing; end
 
-      def fix_standing; end
+  def self.retreat; end
+end unless defined?(DRC)
 
-      def retreat; end
-    end
-  end
-end unless defined?(Lich::DragonRealms::DRC)
+# Add methods that other spec files' DRC mock may be missing
+DRC.define_singleton_method(:right_hand) { nil } unless DRC.respond_to?(:right_hand)
+DRC.define_singleton_method(:left_hand) { nil } unless DRC.respond_to?(:left_hand)
+DRC.define_singleton_method(:right_hand_noun) { nil } unless DRC.respond_to?(:right_hand_noun)
+DRC.define_singleton_method(:fix_standing) {} unless DRC.respond_to?(:fix_standing)
+DRC.define_singleton_method(:retreat) {} unless DRC.respond_to?(:retreat)
 
-DRC = Lich::DragonRealms::DRC unless defined?(DRC)
+# Mock DRStats
+module DRStats
+  def self.moon_mage?; false; end
 
-# Mock DRStats (module) — drstats.rb
-module Lich
-  module DragonRealms
-    module DRStats
-      module_function
+  def self.warrior_mage?; false; end
 
-      def moon_mage?
-        false
-      end
+  def self.guild; 'Unknown'; end
+end unless defined?(DRStats)
 
-      def warrior_mage?
-        false
-      end
+# Mock DRCMM
+module DRCMM
+  def self.hold_moon_weapon?; false; end
 
-      def guild
-        'Unknown'
-      end
-    end
-  end
-end unless defined?(Lich::DragonRealms::DRStats)
+  def self.is_moon_weapon?(*_args); false; end
+end unless defined?(DRCMM)
 
-DRStats = Lich::DragonRealms::DRStats unless defined?(DRStats)
+# Mock DRCI — use *_args for all methods since other code (e.g. common-crafting)
+# may call put_away_item? and get_item? with 1 or 2 arguments.
+module DRCI
+  def self.tap(*_args); nil; end
 
-# Mock DRCMM (module) — common-moonmage.rb
-module Lich
-  module DragonRealms
-    module DRCMM
-      module_function
+  def self.get_item?(*_args); true; end
 
-      def hold_moon_weapon?
-        false
-      end
+  def self.put_away_item?(*_args); true; end
+end unless defined?(DRCI)
 
-      def is_moon_weapon?(_item)
-        false
-      end
-    end
-  end
-end unless defined?(Lich::DragonRealms::DRCMM)
-
-DRCMM = Lich::DragonRealms::DRCMM unless defined?(DRCMM)
-
-# Mock DRCI (module) — common-items.rb
-module Lich
-  module DragonRealms
-    module DRCI
-      module_function
-
-      def tap(_item)
-        nil
-      end
-
-      def get_item?(_item)
-        true
-      end
-
-      def put_away_item?(_item)
-        true
-      end
-    end
-  end
-end unless defined?(Lich::DragonRealms::DRCI)
-
-DRCI = Lich::DragonRealms::DRCI unless defined?(DRCI)
+# Add methods that other spec files' DRCI mock may be missing
+DRCI.define_singleton_method(:tap) { |*_args| nil } unless DRCI.respond_to?(:tap)
 
 # Stub game helper methods that DRCS calls directly via module_function/Kernel
 module Kernel
   def pause(_seconds); end
   def waitrt?; end
+end
+
+# Ensure namespaced constants point to the same top-level mocks.
+# Code inside Lich::DragonRealms::DRCS resolves bare constants (DRC, DRCI, etc.)
+# to the Lich::DragonRealms namespace first. Without these aliases, expect/allow
+# calls on top-level constants won't intercept calls from the code under test.
+module Lich
+  module DragonRealms
+    DRC = ::DRC unless defined?(Lich::DragonRealms::DRC)
+    DRStats = ::DRStats unless defined?(Lich::DragonRealms::DRStats)
+    DRCMM = ::DRCMM unless defined?(Lich::DragonRealms::DRCMM)
+    DRCI = ::DRCI unless defined?(Lich::DragonRealms::DRCI)
+  end
 end
 
 # Load the module under test
