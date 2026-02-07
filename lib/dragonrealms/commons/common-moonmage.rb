@@ -47,24 +47,18 @@ module Lich
         end
       end
 
+      # @deprecated Use get_telescope? instead
       def get_telescope(storage)
-        if storage['tied']
-          DRC.bput("untie telescope from my #{storage['tied']}", 'You remove', 'You untie', '^What were you referring', 'Untie what', '^You are a little too busy')
-        elsif storage['container']
-          DRC.bput("get telescope in my #{storage['container']}", 'You get a', 'You are already', "That can't be picked up", 'You need a free hand to pick that up.', 'What were you referring to', 'stop practicing your Athletics')
-        else
-          DRC.bput('get my telescope', 'You get a', 'What were you referring to', 'You are already holding that.', "That can't be picked up", 'You need a free hand to pick that up.', 'stop practicing your Athletics')
-        end
+        return if get_telescope?('telescope', storage)
+
+        Lich::Messaging.msg('bold', 'DRCMM: Failed to get telescope.')
       end
 
+      # @deprecated Use store_telescope? instead
       def store_telescope(storage)
-        if storage['tied']
-          DRC.bput("tie telescope to my #{storage['tied']}", 'You attach', 'you tie', 'You are a little too busy')
-        elsif storage['container']
-          DRC.bput("put telescope in my #{storage['container']}", 'You put')
-        else
-          DRC.bput('stow my telescope', 'Stow what', 'You put your telescope')
-        end
+        return if store_telescope?('telescope', storage)
+
+        Lich::Messaging.msg('bold', 'DRCMM: Failed to store telescope.')
       end
 
       def peer_telescope
@@ -123,20 +117,18 @@ module Lich
         end
       end
 
+      # @deprecated Use get_bones? instead
       def get_bones(storage)
-        if storage['tied']
-          DRC.bput("untie bones from my #{storage['container']}", 'You untie', 'You remove')
-        else
-          DRC.bput("get bones from my #{storage['container']}", 'You get')
-        end
+        return if get_bones?(storage)
+
+        Lich::Messaging.msg('bold', 'DRCMM: Failed to get bones.')
       end
 
+      # @deprecated Use store_bones? instead
       def store_bones(storage)
-        if storage['tied']
-          DRC.bput("tie bones to my #{storage['container']}", 'You attach', 'You tie')
-        else
-          DRC.bput("put bones in my #{storage['container']}", 'You put')
-        end
+        return if store_bones?(storage)
+
+        Lich::Messaging.msg('bold', 'DRCMM: Failed to store bones.')
       end
 
       def roll_bones(storage)
@@ -168,24 +160,18 @@ module Lich
         end
       end
 
+      # @deprecated Use get_div_tool? instead
       def get_div_tool(tool)
-        if tool['tied']
-          DRC.bput("untie #{tool['name']} from my #{tool['container']}", tool['name'])
-        elsif tool['worn']
-          DRC.bput("remove my #{tool['name']}", tool['name'])
-        else
-          DRC.bput("get my #{tool['name']} from my #{tool['container']}", tool['name'], 'you get')
-        end
+        return if get_div_tool?(tool)
+
+        Lich::Messaging.msg('bold', "DRCMM: Failed to get divination tool '#{tool['name']}'.")
       end
 
+      # @deprecated Use store_div_tool? instead
       def store_div_tool(tool)
-        if tool['tied']
-          DRC.bput("tie #{tool['name']} to my #{tool['container']}", tool['name'])
-        elsif tool['worn']
-          DRC.bput("wear my #{tool['name']}", tool['name'])
-        else
-          DRC.bput("put #{tool['name']} in my #{tool['container']}", tool['name'], 'You put')
-        end
+        return if store_div_tool?(tool)
+
+        Lich::Messaging.msg('bold', "DRCMM: Failed to store divination tool '#{tool['name']}'.")
       end
 
       def use_div_tool(tool_storage)
