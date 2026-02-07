@@ -137,13 +137,22 @@ $ENC_MAP = {
 
 $box_regex = /((?:brass|copper|deobar|driftwood|iron|ironwood|mahogany|oaken|pine|steel|wooden) (?:box|caddy|casket|chest|coffer|crate|skippet|strongbox|trunk))/ unless defined?($box_regex)
 $fake_stormfront = false unless defined?($fake_stormfront)
+
+# Mock Frontend module (added in PR #1170)
+module Frontend
+  def self.supports_gsl?; false; end
+end unless defined?(Frontend)
 $pause_all_lock = Mutex.new unless defined?($pause_all_lock)
 $safe_pause_lock = Mutex.new unless defined?($safe_pause_lock)
 
-# NOTE: Do NOT define `clear` here — it would be inherited by all objects,
+# NOTE: `clear` MUST be private — a public Kernel `clear` is inherited by all objects,
 # causing `Effects::Buffs.respond_to?(:clear)` to return true in qstrike_spec,
-# which breaks buff cleanup. Tests that need `clear` should stub it on DRC directly.
+# which breaks buff cleanup. Private methods don't appear in `respond_to?` checks
+# but are still callable as bare method calls within module_function methods like bput.
 module Kernel
+  def clear; end
+  private :clear
+
   def pause(_seconds = nil); end
   def waitrt?; end
   def fput(_cmd); end
