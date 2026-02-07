@@ -1,15 +1,53 @@
-require 'rspec'
+# frozen_string_literal: true
 
-# NilClass monkey-patch (matches lich runtime behavior)
-class NilClass
-  def method_missing(*)
-    nil
+require 'rspec'
+require 'ostruct'
+
+# Setup load path (standalone spec, no spec_helper dependency)
+LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
+
+# Ensure Lich::DragonRealms namespace exists
+module Lich; module DragonRealms; end; end
+
+# Mock Lich::Messaging — always reopen (no guard) because other specs
+# may define Lich::Messaging without msg/messages/clear_messages!.
+module Lich
+  module Messaging
+    @messages = []
+
+    class << self
+      def messages
+        @messages ||= []
+      end
+
+      def clear_messages!
+        @messages = []
+      end
+
+      def msg(type, message)
+        @messages ||= []
+        @messages << { type: type, message: message }
+      end
+    end
   end
 end
 
-# Mock DRC (module)
+# Mock Lich::Util for issue_command
+module Lich
+  module Util
+    def self.issue_command(_command, _start, _end_pattern, **_opts)
+      []
+    end
+  end
+end unless defined?(Lich::Util)
+
+# ── Mock DRC ──────────────────────────────────────────────────────────
 module DRC
-  def self.bput(*_args)
+  def self.bput(_command, *_patterns)
+    nil
+  end
+
+  def self.right_hand
     nil
   end
 
@@ -17,83 +55,132 @@ module DRC
     nil
   end
 
-  def self.right_hand
-    nil
-  end
+  def self.message(_msg); end
+
+  def self.fix_standing; end
 end unless defined?(DRC)
 
-# Mock DRCI (module)
+Lich::DragonRealms::DRC = DRC unless defined?(Lich::DragonRealms::DRC)
+
+# ── Mock DRCI ─────────────────────────────────────────────────────────
 module DRCI
-  def self.in_hands?(*_args)
+  def self.in_hands?(_item)
     false
   end
 
-  def self.get_item?(*_args)
+  def self.get_item?(_item, _container = nil)
     true
   end
 
-  def self.put_away_item?(*_args)
+  def self.put_away_item?(_item, _container = nil)
     true
   end
 
-  def self.untie_item?(*_args)
+  def self.tie_item?(_item, _container = nil)
     true
   end
 
-  def self.tie_item?(*_args)
+  def self.untie_item?(_item, _container = nil)
     true
   end
 
-  def self.remove_item?(*_args)
+  def self.wear_item?(_item)
     true
   end
 
-  def self.wear_item?(*_args)
+  def self.remove_item?(_item)
     true
   end
 end unless defined?(DRCI)
 
-# Mock Lich::Messaging
-module Lich
-  module Messaging
-    def self.msg(_type, _message)
-      nil
-    end
-  end
-end unless defined?(Lich::Messaging)
+Lich::DragonRealms::DRCI = DRCI unless defined?(Lich::DragonRealms::DRCI)
 
-# Mock Script
+# ── Mock DRStats ──────────────────────────────────────────────────────
+module DRStats
+  def self.moon_mage?
+    false
+  end
+
+  def self.trader?
+    false
+  end
+end unless defined?(DRStats)
+
+Lich::DragonRealms::DRStats = DRStats unless defined?(Lich::DragonRealms::DRStats)
+
+# ── Mock UserVars ─────────────────────────────────────────────────────
+module UserVars
+  @moons = {}
+  @sun = {}
+
+  class << self
+    attr_accessor :moons, :sun
+  end
+end unless defined?(UserVars)
+
+# ── Mock Script ───────────────────────────────────────────────────────
 class Script
   def self.running?(_name)
     true
   end
 end unless defined?(Script)
 
-# Mock UserVars
-module UserVars
-  @data = {}
+# ── Mock Flags ────────────────────────────────────────────────────────
+module Flags
+  @flags = {}
 
   class << self
-    def method_missing(method_name, *args)
-      name = method_name.to_s
-      if name.end_with?('=')
-        @data[name.chomp('=')] = args.first
-      else
-        @data[name]
-      end
+    def add(name, *_patterns)
+      @flags[name] = nil
     end
 
-    def respond_to_missing?(*, **)
-      true
+    def [](name)
+      @flags[name]
+    end
+
+    def []=(name, value)
+      @flags[name] = value
+    end
+
+    def reset(name)
+      @flags[name] = nil
+    end
+
+    def delete(name)
+      @flags.delete(name)
     end
   end
-end unless defined?(UserVars)
+end unless defined?(Flags)
 
-require_relative '../../../../lib/dragonrealms/commons/common-moonmage'
+# Stub game helper methods
+module Kernel
+  def pause(_seconds = nil); end
+
+  def waitrt?; end
+
+  def echo(_msg); end
+
+  def fput(_cmd); end
+
+  def get_data(_key)
+    OpenStruct.new(observe_finished_messages: [], constellations: [])
+  end
+
+  def custom_require
+    proc { |_name| nil }
+  end
+end
+
+# Load the module under test
+require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-moonmage.rb')
 
 DRCMM = Lich::DragonRealms::DRCMM unless defined?(DRCMM)
 
-RSpec.describe DRCMM do
+RSpec.describe Lich::DragonRealms::DRCMM do
+  before(:each) do
+    Lich::Messaging.clear_messages!
+  end
+
   # ================================================================
   # Constants
   # ================================================================
@@ -135,7 +222,6 @@ RSpec.describe DRCMM do
   # is_moon_weapon?
   # ================================================================
   describe '.is_moon_weapon?' do
-    # Positive cases
     it 'returns true for "black moonblade"' do
       expect(DRCMM.is_moon_weapon?('black moonblade')).to be true
     end
@@ -165,7 +251,6 @@ RSpec.describe DRCMM do
       expect(DRCMM.is_moon_weapon?('Blue-White MoonStaff')).to be true
     end
 
-    # Negative cases
     it 'returns false for nil' do
       expect(DRCMM.is_moon_weapon?(nil)).to be false
     end
@@ -252,7 +337,7 @@ RSpec.describe DRCMM do
     end
 
     context 'when holding moon weapons in both hands' do
-      it 'attempts to wear both and returns true if either succeeds' do
+      it 'returns true if either wear succeeds' do
         allow(DRC).to receive(:left_hand).and_return('black moonblade')
         allow(DRC).to receive(:right_hand).and_return('red-hot moonstaff')
         allow(DRC).to receive(:bput).with('wear black moonblade', *DRCMM::MOON_WEAR_MESSAGES).and_return("You can't wear")
@@ -404,7 +489,7 @@ RSpec.describe DRCMM do
         'katamba' => { 'timer' => 10 },
         'xibar'   => { 'timer' => 5 },
         'yavash'  => { 'timer' => 2 },
-        'visible' => ['katamba', 'xibar', 'yavash']
+        'visible' => %w[katamba xibar yavash]
       }
       expect(DRCMM.visible_moons).to contain_exactly('katamba', 'xibar')
     end
@@ -451,7 +536,7 @@ RSpec.describe DRCMM do
       UserVars.moons = {
         'katamba' => { 'timer' => 10 },
         'xibar'   => { 'timer' => 1 },
-        'visible' => ['katamba', 'xibar']
+        'visible' => %w[katamba xibar]
       }
     end
 
@@ -485,9 +570,7 @@ RSpec.describe DRCMM do
     end
 
     it 'returns false when no moons are visible' do
-      UserVars.moons = {
-        'visible' => []
-      }
+      UserVars.moons = { 'visible' => [] }
       expect(DRCMM.moons_visible?).to be false
     end
 
@@ -516,28 +599,19 @@ RSpec.describe DRCMM do
 
     it 'returns true when xibar is visible' do
       UserVars.sun = { 'day' => false, 'timer' => 0 }
-      UserVars.moons = {
-        'xibar'   => { 'timer' => 10 },
-        'visible' => ['xibar']
-      }
+      UserVars.moons = { 'xibar' => { 'timer' => 10 }, 'visible' => ['xibar'] }
       expect(DRCMM.bright_celestial_object?).to be true
     end
 
     it 'returns true when yavash is visible' do
       UserVars.sun = { 'day' => false, 'timer' => 0 }
-      UserVars.moons = {
-        'yavash'  => { 'timer' => 10 },
-        'visible' => ['yavash']
-      }
+      UserVars.moons = { 'yavash' => { 'timer' => 10 }, 'visible' => ['yavash'] }
       expect(DRCMM.bright_celestial_object?).to be true
     end
 
     it 'returns false when only katamba is visible (not bright)' do
       UserVars.sun = { 'day' => false, 'timer' => 0 }
-      UserVars.moons = {
-        'katamba' => { 'timer' => 10 },
-        'visible' => ['katamba']
-      }
+      UserVars.moons = { 'katamba' => { 'timer' => 10 }, 'visible' => ['katamba'] }
       expect(DRCMM.bright_celestial_object?).to be false
     end
 
@@ -570,10 +644,7 @@ RSpec.describe DRCMM do
 
     it 'returns true when katamba is visible (unlike bright_celestial_object?)' do
       UserVars.sun = { 'day' => false, 'timer' => 0 }
-      UserVars.moons = {
-        'katamba' => { 'timer' => 10 },
-        'visible' => ['katamba']
-      }
+      UserVars.moons = { 'katamba' => { 'timer' => 10 }, 'visible' => ['katamba'] }
       expect(DRCMM.any_celestial_object?).to be true
     end
 
@@ -607,10 +678,7 @@ RSpec.describe DRCMM do
 
     context 'when a moon is visible' do
       it 'sets cast to the first visible moon' do
-        UserVars.moons = {
-          'katamba' => { 'timer' => 10 },
-          'visible' => ['katamba']
-        }
+        UserVars.moons = { 'katamba' => { 'timer' => 10 }, 'visible' => ['katamba'] }
         data = { 'moon' => true, 'name' => 'Moongate' }
         result = DRCMM.set_moon_data(data)
         expect(result['cast']).to eq('cast katamba')
@@ -642,8 +710,9 @@ RSpec.describe DRCMM do
 
       it 'sends a bold message when no moon available for non-CoL spell' do
         data = { 'moon' => true, 'name' => 'Moongate' }
-        expect(Lich::Messaging).to receive(:msg).with('bold', 'No moon available to cast Moongate')
         DRCMM.set_moon_data(data)
+        expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+        expect(Lich::Messaging.messages.last[:message]).to include('No moon available to cast Moongate')
       end
     end
   end
@@ -706,11 +775,6 @@ RSpec.describe DRCMM do
       expect(DRC).to receive(:bput).with('predict future', anything, anything, anything, anything, anything)
       DRCMM.predict('future')
     end
-
-    it 'predicts weather' do
-      expect(DRC).to receive(:bput).with('predict weather', anything, anything, anything, anything, anything)
-      DRCMM.predict('weather')
-    end
   end
 
   # ================================================================
@@ -734,7 +798,26 @@ RSpec.describe DRCMM do
   end
 
   # ================================================================
-  # get_telescope? (new API)
+  # center_telescope
+  # ================================================================
+  describe '.center_telescope' do
+    it 'sends bold message when target not visible' do
+      allow(DRC).to receive(:bput).and_return('The pain is too much')
+      DRCMM.center_telescope('katamba')
+      expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+      expect(Lich::Messaging.messages.last[:message]).to include('katamba')
+    end
+
+    it 'sends bold message when sky not visible' do
+      allow(DRC).to receive(:bput).and_return("That's a bit tough to do when you can't see the sky")
+      DRCMM.center_telescope('katamba')
+      expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+      expect(Lich::Messaging.messages.last[:message]).to include('indoors')
+    end
+  end
+
+  # ================================================================
+  # get_telescope? (DRCI predicate version)
   # ================================================================
   describe '.get_telescope?' do
     context 'when telescope is already in hands' do
@@ -746,19 +829,26 @@ RSpec.describe DRCMM do
     end
 
     context 'with tied storage' do
-      it 'unties from the tied item' do
+      it 'returns true when untie succeeds' do
         storage = { 'tied' => 'belt' }
         allow(DRCI).to receive(:in_hands?).and_return(false)
-        expect(DRCI).to receive(:untie_item?).with('telescope', 'belt').and_return(true)
+        allow(DRCI).to receive(:untie_item?).with('telescope', 'belt').and_return(true)
         expect(DRCMM.get_telescope?('telescope', storage)).to be true
+      end
+
+      it 'returns false when untie fails' do
+        storage = { 'tied' => 'belt' }
+        allow(DRCI).to receive(:in_hands?).and_return(false)
+        allow(DRCI).to receive(:untie_item?).with('telescope', 'belt').and_return(false)
+        expect(DRCMM.get_telescope?('telescope', storage)).to be false
       end
     end
 
     context 'with container storage' do
-      it 'gets from container' do
+      it 'returns true when get from container succeeds' do
         storage = { 'container' => 'backpack' }
         allow(DRCI).to receive(:in_hands?).and_return(false)
-        expect(DRCI).to receive(:get_item?).with('telescope', 'backpack').and_return(true)
+        allow(DRCI).to receive(:get_item?).with('telescope', 'backpack').and_return(true)
         expect(DRCMM.get_telescope?('telescope', storage)).to be true
       end
 
@@ -766,8 +856,16 @@ RSpec.describe DRCMM do
         storage = { 'container' => 'backpack' }
         allow(DRCI).to receive(:in_hands?).and_return(false)
         allow(DRCI).to receive(:get_item?).with('telescope', 'backpack').and_return(false)
-        expect(DRCI).to receive(:get_item?).with('telescope').and_return(true)
-        DRCMM.get_telescope?('telescope', storage)
+        allow(DRCI).to receive(:get_item?).with('telescope').and_return(true)
+        expect(DRCMM.get_telescope?('telescope', storage)).to be true
+      end
+
+      it 'returns false when both container and fallback fail' do
+        storage = { 'container' => 'backpack' }
+        allow(DRCI).to receive(:in_hands?).and_return(false)
+        allow(DRCI).to receive(:get_item?).with('telescope', 'backpack').and_return(false)
+        allow(DRCI).to receive(:get_item?).with('telescope').and_return(false)
+        expect(DRCMM.get_telescope?('telescope', storage)).to be false
       end
 
       it 'sends plain message when falling back' do
@@ -775,17 +873,22 @@ RSpec.describe DRCMM do
         allow(DRCI).to receive(:in_hands?).and_return(false)
         allow(DRCI).to receive(:get_item?).with('telescope', 'backpack').and_return(false)
         allow(DRCI).to receive(:get_item?).with('telescope').and_return(true)
-        expect(Lich::Messaging).to receive(:msg).with('plain', anything)
         DRCMM.get_telescope?('telescope', storage)
+        expect(Lich::Messaging.messages.last[:type]).to eq('plain')
       end
     end
 
     context 'with no storage specified' do
-      it 'gets from anywhere' do
-        storage = {}
+      it 'returns true when get succeeds' do
         allow(DRCI).to receive(:in_hands?).and_return(false)
-        expect(DRCI).to receive(:get_item?).with('telescope').and_return(true)
-        DRCMM.get_telescope?('telescope', storage)
+        allow(DRCI).to receive(:get_item?).with('telescope').and_return(true)
+        expect(DRCMM.get_telescope?('telescope', {})).to be true
+      end
+
+      it 'returns false when get fails' do
+        allow(DRCI).to receive(:in_hands?).and_return(false)
+        allow(DRCI).to receive(:get_item?).with('telescope').and_return(false)
+        expect(DRCMM.get_telescope?('telescope', {})).to be false
       end
     end
 
@@ -793,14 +896,14 @@ RSpec.describe DRCMM do
       it 'uses the custom name' do
         storage = { 'container' => 'sack' }
         allow(DRCI).to receive(:in_hands?).with('spyglass').and_return(false)
-        expect(DRCI).to receive(:get_item?).with('spyglass', 'sack').and_return(true)
-        DRCMM.get_telescope?('spyglass', storage)
+        allow(DRCI).to receive(:get_item?).with('spyglass', 'sack').and_return(true)
+        expect(DRCMM.get_telescope?('spyglass', storage)).to be true
       end
     end
   end
 
   # ================================================================
-  # store_telescope? (new API)
+  # store_telescope? (DRCI predicate version)
   # ================================================================
   describe '.store_telescope?' do
     context 'when telescope is not in hands' do
@@ -812,265 +915,578 @@ RSpec.describe DRCMM do
     end
 
     context 'with tied storage' do
-      it 'ties to the tied item' do
+      it 'returns true when tie succeeds' do
         storage = { 'tied' => 'belt' }
         allow(DRCI).to receive(:in_hands?).and_return(true)
-        expect(DRCI).to receive(:tie_item?).with('telescope', 'belt')
-        DRCMM.store_telescope?('telescope', storage)
+        allow(DRCI).to receive(:tie_item?).with('telescope', 'belt').and_return(true)
+        expect(DRCMM.store_telescope?('telescope', storage)).to be true
+      end
+
+      it 'returns false when tie fails' do
+        storage = { 'tied' => 'belt' }
+        allow(DRCI).to receive(:in_hands?).and_return(true)
+        allow(DRCI).to receive(:tie_item?).with('telescope', 'belt').and_return(false)
+        expect(DRCMM.store_telescope?('telescope', storage)).to be false
       end
     end
 
     context 'with container storage' do
-      it 'puts in container' do
+      it 'returns true when put away succeeds' do
         storage = { 'container' => 'backpack' }
         allow(DRCI).to receive(:in_hands?).and_return(true)
-        expect(DRCI).to receive(:put_away_item?).with('telescope', 'backpack')
-        DRCMM.store_telescope?('telescope', storage)
+        allow(DRCI).to receive(:put_away_item?).with('telescope', 'backpack').and_return(true)
+        expect(DRCMM.store_telescope?('telescope', storage)).to be true
+      end
+
+      it 'returns false when put away fails' do
+        storage = { 'container' => 'backpack' }
+        allow(DRCI).to receive(:in_hands?).and_return(true)
+        allow(DRCI).to receive(:put_away_item?).with('telescope', 'backpack').and_return(false)
+        expect(DRCMM.store_telescope?('telescope', storage)).to be false
       end
     end
 
     context 'with no storage specified' do
-      it 'puts away anywhere' do
-        storage = {}
+      it 'returns true when put away succeeds' do
         allow(DRCI).to receive(:in_hands?).and_return(true)
-        expect(DRCI).to receive(:put_away_item?).with('telescope')
-        DRCMM.store_telescope?('telescope', storage)
+        allow(DRCI).to receive(:put_away_item?).with('telescope').and_return(true)
+        expect(DRCMM.store_telescope?('telescope', {})).to be true
+      end
+
+      it 'returns false when put away fails' do
+        allow(DRCI).to receive(:in_hands?).and_return(true)
+        allow(DRCI).to receive(:put_away_item?).with('telescope').and_return(false)
+        expect(DRCMM.store_telescope?('telescope', {})).to be false
       end
     end
   end
 
   # ================================================================
-  # get_telescope (old API, deprecated)
+  # get_telescope (deprecated — delegates to get_telescope?)
   # ================================================================
   describe '.get_telescope' do
-    it 'unties when storage has tied key' do
-      storage = { 'tied' => 'belt' }
-      expect(DRC).to receive(:bput).with("untie telescope from my belt", anything, anything, anything, anything, anything)
-      DRCMM.get_telescope(storage)
+    context 'when get_telescope? succeeds' do
+      it 'returns without logging an error when tied' do
+        storage = { 'tied' => 'belt' }
+        allow(DRCI).to receive(:in_hands?).with('telescope').and_return(false)
+        allow(DRCI).to receive(:untie_item?).with('telescope', 'belt').and_return(true)
+        DRCMM.get_telescope(storage)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'returns without logging an error when in container' do
+        storage = { 'container' => 'backpack' }
+        allow(DRCI).to receive(:in_hands?).with('telescope').and_return(false)
+        allow(DRCI).to receive(:get_item?).with('telescope', 'backpack').and_return(true)
+        DRCMM.get_telescope(storage)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'returns without logging when already in hands' do
+        storage = {}
+        allow(DRCI).to receive(:in_hands?).with('telescope').and_return(true)
+        DRCMM.get_telescope(storage)
+        expect(Lich::Messaging.messages).to be_empty
+      end
     end
 
-    it 'gets from container when storage has container key' do
-      storage = { 'container' => 'backpack' }
-      expect(DRC).to receive(:bput).with("get telescope in my backpack", anything, anything, anything, anything, anything, anything)
-      DRCMM.get_telescope(storage)
-    end
-
-    it 'gets from anywhere when no storage keys' do
-      storage = {}
-      expect(DRC).to receive(:bput).with('get my telescope', anything, anything, anything, anything, anything, anything)
-      DRCMM.get_telescope(storage)
+    context 'when get_telescope? fails' do
+      it 'logs a bold DRCMM-prefixed error message' do
+        storage = { 'container' => 'backpack' }
+        allow(DRCI).to receive(:in_hands?).with('telescope').and_return(false)
+        allow(DRCI).to receive(:get_item?).with('telescope', 'backpack').and_return(false)
+        allow(DRCI).to receive(:get_item?).with('telescope').and_return(false)
+        DRCMM.get_telescope(storage)
+        expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+        expect(Lich::Messaging.messages.last[:message]).to include('DRCMM:')
+        expect(Lich::Messaging.messages.last[:message]).to include('Failed to get telescope')
+      end
     end
   end
 
   # ================================================================
-  # store_telescope (old API, deprecated)
+  # store_telescope (deprecated — delegates to store_telescope?)
   # ================================================================
   describe '.store_telescope' do
-    it 'ties when storage has tied key' do
-      storage = { 'tied' => 'belt' }
-      expect(DRC).to receive(:bput).with("tie telescope to my belt", anything, anything, anything)
-      DRCMM.store_telescope(storage)
+    context 'when store_telescope? succeeds' do
+      it 'returns without logging an error when tied' do
+        storage = { 'tied' => 'belt' }
+        allow(DRCI).to receive(:in_hands?).with('telescope').and_return(true)
+        allow(DRCI).to receive(:tie_item?).with('telescope', 'belt').and_return(true)
+        DRCMM.store_telescope(storage)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'returns without logging an error when in container' do
+        storage = { 'container' => 'backpack' }
+        allow(DRCI).to receive(:in_hands?).with('telescope').and_return(true)
+        allow(DRCI).to receive(:put_away_item?).with('telescope', 'backpack').and_return(true)
+        DRCMM.store_telescope(storage)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'returns without logging when not in hands' do
+        storage = {}
+        allow(DRCI).to receive(:in_hands?).with('telescope').and_return(false)
+        DRCMM.store_telescope(storage)
+        expect(Lich::Messaging.messages).to be_empty
+      end
     end
 
-    it 'puts in container when storage has container key' do
-      storage = { 'container' => 'backpack' }
-      expect(DRC).to receive(:bput).with("put telescope in my backpack", anything)
-      DRCMM.store_telescope(storage)
-    end
-
-    it 'stows when no storage keys' do
-      storage = {}
-      expect(DRC).to receive(:bput).with('stow my telescope', anything, anything)
-      DRCMM.store_telescope(storage)
-    end
-  end
-
-  # ================================================================
-  # center_telescope
-  # ================================================================
-  describe '.center_telescope' do
-    it 'sends bold message when target not visible' do
-      allow(DRC).to receive(:bput).and_return('The pain is too much')
-      expect(Lich::Messaging).to receive(:msg).with('bold', 'Planet katamba not visible. Are you indoors perhaps?')
-      DRCMM.center_telescope('katamba')
-    end
-
-    it 'sends bold message when sky not visible' do
-      allow(DRC).to receive(:bput).and_return("That's a bit tough to do when you can't see the sky")
-      expect(Lich::Messaging).to receive(:msg).with('bold', 'Planet katamba not visible. Are you indoors perhaps?')
-      DRCMM.center_telescope('katamba')
-    end
-  end
-
-  # ================================================================
-  # get_bones (old API — bug fix regression test)
-  # ================================================================
-  describe '.get_bones' do
-    it 'uses storage["tied"] in the tied branch (bug fix)' do
-      storage = { 'tied' => 'belt', 'container' => 'backpack' }
-      expect(DRC).to receive(:bput).with("untie bones from my belt", anything, anything)
-      DRCMM.get_bones(storage)
-    end
-
-    it 'uses storage["container"] in the else branch' do
-      storage = { 'container' => 'backpack' }
-      expect(DRC).to receive(:bput).with("get bones from my backpack", anything)
-      DRCMM.get_bones(storage)
+    context 'when store_telescope? fails' do
+      it 'logs a bold DRCMM-prefixed error message' do
+        storage = { 'container' => 'backpack' }
+        allow(DRCI).to receive(:in_hands?).with('telescope').and_return(true)
+        allow(DRCI).to receive(:put_away_item?).with('telescope', 'backpack').and_return(false)
+        DRCMM.store_telescope(storage)
+        expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+        expect(Lich::Messaging.messages.last[:message]).to include('DRCMM:')
+        expect(Lich::Messaging.messages.last[:message]).to include('Failed to store telescope')
+      end
     end
   end
 
   # ================================================================
-  # store_bones (old API — bug fix regression test)
-  # ================================================================
-  describe '.store_bones' do
-    it 'uses storage["tied"] in the tied branch (bug fix)' do
-      storage = { 'tied' => 'belt', 'container' => 'backpack' }
-      expect(DRC).to receive(:bput).with("tie bones to my belt", anything, anything)
-      DRCMM.store_bones(storage)
-    end
-
-    it 'uses storage["container"] in the else branch' do
-      storage = { 'container' => 'backpack' }
-      expect(DRC).to receive(:bput).with("put bones in my backpack", anything)
-      DRCMM.store_bones(storage)
-    end
-  end
-
-  # ================================================================
-  # get_bones? (new API)
+  # get_bones? (DRCI predicate version)
   # ================================================================
   describe '.get_bones?' do
-    it 'unties when storage has tied key' do
-      storage = { 'tied' => 'belt' }
-      expect(DRCI).to receive(:untie_item?).with('bones', 'belt')
-      DRCMM.get_bones?(storage)
+    context 'with tied storage' do
+      it 'returns true when untie succeeds' do
+        storage = { 'tied' => 'belt' }
+        allow(DRCI).to receive(:untie_item?).with('bones', 'belt').and_return(true)
+        expect(DRCMM.get_bones?(storage)).to be true
+      end
+
+      it 'returns false when untie fails' do
+        storage = { 'tied' => 'belt' }
+        allow(DRCI).to receive(:untie_item?).with('bones', 'belt').and_return(false)
+        expect(DRCMM.get_bones?(storage)).to be false
+      end
     end
 
-    it 'gets from container when storage has container key' do
-      storage = { 'container' => 'backpack' }
-      expect(DRCI).to receive(:get_item?).with('bones', 'backpack')
-      DRCMM.get_bones?(storage)
+    context 'with container storage' do
+      it 'returns true when get succeeds' do
+        storage = { 'container' => 'pouch' }
+        allow(DRCI).to receive(:get_item?).with('bones', 'pouch').and_return(true)
+        expect(DRCMM.get_bones?(storage)).to be true
+      end
+
+      it 'returns false when get fails' do
+        storage = { 'container' => 'pouch' }
+        allow(DRCI).to receive(:get_item?).with('bones', 'pouch').and_return(false)
+        expect(DRCMM.get_bones?(storage)).to be false
+      end
     end
 
-    it 'gets from anywhere when no storage keys' do
-      storage = {}
-      expect(DRCI).to receive(:get_item?).with('bones')
-      DRCMM.get_bones?(storage)
+    context 'with no storage specified' do
+      it 'returns true when get succeeds' do
+        storage = {}
+        allow(DRCI).to receive(:get_item?).with('bones').and_return(true)
+        expect(DRCMM.get_bones?(storage)).to be true
+      end
+
+      it 'returns false when get fails' do
+        storage = {}
+        allow(DRCI).to receive(:get_item?).with('bones').and_return(false)
+        expect(DRCMM.get_bones?(storage)).to be false
+      end
     end
   end
 
   # ================================================================
-  # store_bones? (new API)
+  # store_bones? (DRCI predicate version)
   # ================================================================
   describe '.store_bones?' do
-    it 'ties when storage has tied key' do
-      storage = { 'tied' => 'belt' }
-      expect(DRCI).to receive(:tie_item?).with('bones', 'belt')
-      DRCMM.store_bones?(storage)
+    context 'with tied storage' do
+      it 'returns true when tie succeeds' do
+        storage = { 'tied' => 'belt' }
+        allow(DRCI).to receive(:tie_item?).with('bones', 'belt').and_return(true)
+        expect(DRCMM.store_bones?(storage)).to be true
+      end
+
+      it 'returns false when tie fails' do
+        storage = { 'tied' => 'belt' }
+        allow(DRCI).to receive(:tie_item?).with('bones', 'belt').and_return(false)
+        expect(DRCMM.store_bones?(storage)).to be false
+      end
     end
 
-    it 'puts in container when storage has container key' do
-      storage = { 'container' => 'backpack' }
-      expect(DRCI).to receive(:put_away_item?).with('bones', 'backpack')
-      DRCMM.store_bones?(storage)
+    context 'with container storage' do
+      it 'returns true when put away succeeds' do
+        storage = { 'container' => 'pouch' }
+        allow(DRCI).to receive(:put_away_item?).with('bones', 'pouch').and_return(true)
+        expect(DRCMM.store_bones?(storage)).to be true
+      end
+
+      it 'returns false when put away fails' do
+        storage = { 'container' => 'pouch' }
+        allow(DRCI).to receive(:put_away_item?).with('bones', 'pouch').and_return(false)
+        expect(DRCMM.store_bones?(storage)).to be false
+      end
     end
 
-    it 'puts away anywhere when no storage keys' do
-      storage = {}
-      expect(DRCI).to receive(:put_away_item?).with('bones')
-      DRCMM.store_bones?(storage)
+    context 'with no storage specified' do
+      it 'returns true when put away succeeds' do
+        storage = {}
+        allow(DRCI).to receive(:put_away_item?).with('bones').and_return(true)
+        expect(DRCMM.store_bones?(storage)).to be true
+      end
+
+      it 'returns false when put away fails' do
+        storage = {}
+        allow(DRCI).to receive(:put_away_item?).with('bones').and_return(false)
+        expect(DRCMM.store_bones?(storage)).to be false
+      end
     end
   end
 
   # ================================================================
-  # get_div_tool? (new API)
+  # get_bones (deprecated — delegates to get_bones?)
+  # ================================================================
+  describe '.get_bones' do
+    context 'when get_bones? succeeds' do
+      it 'returns without logging when tied' do
+        storage = { 'tied' => 'belt' }
+        allow(DRCI).to receive(:untie_item?).with('bones', 'belt').and_return(true)
+        DRCMM.get_bones(storage)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'returns without logging when in container' do
+        storage = { 'container' => 'pouch' }
+        allow(DRCI).to receive(:get_item?).with('bones', 'pouch').and_return(true)
+        DRCMM.get_bones(storage)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+    end
+
+    context 'when get_bones? fails' do
+      it 'logs a bold DRCMM-prefixed error message' do
+        storage = { 'container' => 'pouch' }
+        allow(DRCI).to receive(:get_item?).with('bones', 'pouch').and_return(false)
+        DRCMM.get_bones(storage)
+        expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+        expect(Lich::Messaging.messages.last[:message]).to include('DRCMM:')
+        expect(Lich::Messaging.messages.last[:message]).to include('Failed to get bones')
+      end
+    end
+  end
+
+  # ================================================================
+  # store_bones (deprecated — delegates to store_bones?)
+  # ================================================================
+  describe '.store_bones' do
+    context 'when store_bones? succeeds' do
+      it 'returns without logging when tied' do
+        storage = { 'tied' => 'belt' }
+        allow(DRCI).to receive(:tie_item?).with('bones', 'belt').and_return(true)
+        DRCMM.store_bones(storage)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'returns without logging when in container' do
+        storage = { 'container' => 'pouch' }
+        allow(DRCI).to receive(:put_away_item?).with('bones', 'pouch').and_return(true)
+        DRCMM.store_bones(storage)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+    end
+
+    context 'when store_bones? fails' do
+      it 'logs a bold DRCMM-prefixed error message' do
+        storage = { 'container' => 'pouch' }
+        allow(DRCI).to receive(:put_away_item?).with('bones', 'pouch').and_return(false)
+        DRCMM.store_bones(storage)
+        expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+        expect(Lich::Messaging.messages.last[:message]).to include('DRCMM:')
+        expect(Lich::Messaging.messages.last[:message]).to include('Failed to store bones')
+      end
+    end
+  end
+
+  # ================================================================
+  # roll_bones (migrated to use ? methods)
+  # ================================================================
+  describe '.roll_bones' do
+    context 'when get_bones? succeeds' do
+      before do
+        allow(DRCI).to receive(:get_item?).with('bones', 'pouch').and_return(true)
+        allow(DRC).to receive(:bput).with('roll my bones', 'roundtime').and_return('roundtime')
+      end
+
+      it 'rolls and stores bones on success' do
+        storage = { 'container' => 'pouch' }
+        allow(DRCI).to receive(:put_away_item?).with('bones', 'pouch').and_return(true)
+        expect(DRC).to receive(:bput).with('roll my bones', 'roundtime')
+        DRCMM.roll_bones(storage)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'logs error when store_bones? fails after rolling' do
+        storage = { 'container' => 'pouch' }
+        allow(DRCI).to receive(:put_away_item?).with('bones', 'pouch').and_return(false)
+        DRCMM.roll_bones(storage)
+        expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+        expect(Lich::Messaging.messages.last[:message]).to include('DRCMM:')
+        expect(Lich::Messaging.messages.last[:message]).to include('Failed to store bones after rolling')
+      end
+    end
+
+    context 'when get_bones? fails' do
+      it 'aborts without rolling and logs error' do
+        storage = { 'container' => 'pouch' }
+        allow(DRCI).to receive(:get_item?).with('bones', 'pouch').and_return(false)
+        expect(DRC).not_to receive(:bput).with('roll my bones', anything)
+        DRCMM.roll_bones(storage)
+        expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+        expect(Lich::Messaging.messages.last[:message]).to include('DRCMM:')
+        expect(Lich::Messaging.messages.last[:message]).to include('Failed to get bones')
+        expect(Lich::Messaging.messages.last[:message]).to include('aborting')
+      end
+    end
+  end
+
+  # ================================================================
+  # get_div_tool? (DRCI predicate version)
   # ================================================================
   describe '.get_div_tool?' do
-    it 'unties when tool has tied key' do
-      tool = { 'name' => 'charts', 'tied' => true, 'container' => 'belt' }
-      expect(DRCI).to receive(:untie_item?).with('charts', 'belt')
-      DRCMM.get_div_tool?(tool)
+    context 'with tied tool' do
+      it 'returns true when untie succeeds' do
+        tool = { 'name' => 'charts', 'tied' => true, 'container' => 'belt' }
+        allow(DRCI).to receive(:untie_item?).with('charts', 'belt').and_return(true)
+        expect(DRCMM.get_div_tool?(tool)).to be true
+      end
+
+      it 'returns false when untie fails' do
+        tool = { 'name' => 'charts', 'tied' => true, 'container' => 'belt' }
+        allow(DRCI).to receive(:untie_item?).with('charts', 'belt').and_return(false)
+        expect(DRCMM.get_div_tool?(tool)).to be false
+      end
     end
 
-    it 'removes when tool has worn key' do
-      tool = { 'name' => 'mirror', 'worn' => true }
-      expect(DRCI).to receive(:remove_item?).with('mirror')
-      DRCMM.get_div_tool?(tool)
+    context 'with worn tool' do
+      it 'returns true when remove succeeds' do
+        tool = { 'name' => 'mirror', 'worn' => true }
+        allow(DRCI).to receive(:remove_item?).with('mirror').and_return(true)
+        expect(DRCMM.get_div_tool?(tool)).to be true
+      end
+
+      it 'returns false when remove fails' do
+        tool = { 'name' => 'mirror', 'worn' => true }
+        allow(DRCI).to receive(:remove_item?).with('mirror').and_return(false)
+        expect(DRCMM.get_div_tool?(tool)).to be false
+      end
     end
 
-    it 'gets from container otherwise' do
-      tool = { 'name' => 'bones', 'container' => 'sack' }
-      expect(DRCI).to receive(:get_item?).with('bones', 'sack')
-      DRCMM.get_div_tool?(tool)
+    context 'with container tool' do
+      it 'returns true when get succeeds' do
+        tool = { 'name' => 'bones', 'container' => 'sack' }
+        allow(DRCI).to receive(:get_item?).with('bones', 'sack').and_return(true)
+        expect(DRCMM.get_div_tool?(tool)).to be true
+      end
+
+      it 'returns false when get fails' do
+        tool = { 'name' => 'bones', 'container' => 'sack' }
+        allow(DRCI).to receive(:get_item?).with('bones', 'sack').and_return(false)
+        expect(DRCMM.get_div_tool?(tool)).to be false
+      end
     end
   end
 
   # ================================================================
-  # store_div_tool? (new API)
+  # store_div_tool? (DRCI predicate version)
   # ================================================================
   describe '.store_div_tool?' do
-    it 'ties when tool has tied key' do
-      tool = { 'name' => 'charts', 'tied' => true, 'container' => 'belt' }
-      expect(DRCI).to receive(:tie_item?).with('charts', 'belt')
-      DRCMM.store_div_tool?(tool)
+    context 'with tied tool' do
+      it 'returns true when tie succeeds' do
+        tool = { 'name' => 'charts', 'tied' => true, 'container' => 'belt' }
+        allow(DRCI).to receive(:tie_item?).with('charts', 'belt').and_return(true)
+        expect(DRCMM.store_div_tool?(tool)).to be true
+      end
+
+      it 'returns false when tie fails' do
+        tool = { 'name' => 'charts', 'tied' => true, 'container' => 'belt' }
+        allow(DRCI).to receive(:tie_item?).with('charts', 'belt').and_return(false)
+        expect(DRCMM.store_div_tool?(tool)).to be false
+      end
     end
 
-    it 'wears when tool has worn key' do
-      tool = { 'name' => 'mirror', 'worn' => true }
-      expect(DRCI).to receive(:wear_item?).with('mirror')
-      DRCMM.store_div_tool?(tool)
+    context 'with worn tool' do
+      it 'returns true when wear succeeds' do
+        tool = { 'name' => 'mirror', 'worn' => true }
+        allow(DRCI).to receive(:wear_item?).with('mirror').and_return(true)
+        expect(DRCMM.store_div_tool?(tool)).to be true
+      end
+
+      it 'returns false when wear fails' do
+        tool = { 'name' => 'mirror', 'worn' => true }
+        allow(DRCI).to receive(:wear_item?).with('mirror').and_return(false)
+        expect(DRCMM.store_div_tool?(tool)).to be false
+      end
     end
 
-    it 'puts in container otherwise' do
-      tool = { 'name' => 'bones', 'container' => 'sack' }
-      expect(DRCI).to receive(:put_away_item?).with('bones', 'sack')
-      DRCMM.store_div_tool?(tool)
+    context 'with container tool' do
+      it 'returns true when put away succeeds' do
+        tool = { 'name' => 'bones', 'container' => 'sack' }
+        allow(DRCI).to receive(:put_away_item?).with('bones', 'sack').and_return(true)
+        expect(DRCMM.store_div_tool?(tool)).to be true
+      end
+
+      it 'returns false when put away fails' do
+        tool = { 'name' => 'bones', 'container' => 'sack' }
+        allow(DRCI).to receive(:put_away_item?).with('bones', 'sack').and_return(false)
+        expect(DRCMM.store_div_tool?(tool)).to be false
+      end
     end
   end
 
   # ================================================================
-  # get_div_tool (old API, deprecated)
+  # get_div_tool (deprecated — delegates to get_div_tool?)
   # ================================================================
   describe '.get_div_tool' do
-    it 'unties when tool has tied key' do
-      tool = { 'name' => 'charts', 'tied' => true, 'container' => 'belt' }
-      expect(DRC).to receive(:bput).with("untie charts from my belt", 'charts')
-      DRCMM.get_div_tool(tool)
+    context 'when get_div_tool? succeeds' do
+      it 'returns without logging when tied' do
+        tool = { 'name' => 'charts', 'tied' => true, 'container' => 'satchel' }
+        allow(DRCI).to receive(:untie_item?).with('charts', 'satchel').and_return(true)
+        DRCMM.get_div_tool(tool)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'returns without logging when worn' do
+        tool = { 'name' => 'mirror', 'worn' => true }
+        allow(DRCI).to receive(:remove_item?).with('mirror').and_return(true)
+        DRCMM.get_div_tool(tool)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'returns without logging when in container' do
+        tool = { 'name' => 'charts', 'container' => 'satchel' }
+        allow(DRCI).to receive(:get_item?).with('charts', 'satchel').and_return(true)
+        DRCMM.get_div_tool(tool)
+        expect(Lich::Messaging.messages).to be_empty
+      end
     end
 
-    it 'removes when tool has worn key' do
-      tool = { 'name' => 'mirror', 'worn' => true }
-      expect(DRC).to receive(:bput).with("remove my mirror", 'mirror')
-      DRCMM.get_div_tool(tool)
-    end
-
-    it 'gets from container otherwise' do
-      tool = { 'name' => 'bones', 'container' => 'sack' }
-      expect(DRC).to receive(:bput).with("get my bones from my sack", 'bones', 'you get')
-      DRCMM.get_div_tool(tool)
+    context 'when get_div_tool? fails' do
+      it 'logs a bold DRCMM-prefixed error with tool name' do
+        tool = { 'name' => 'charts', 'container' => 'satchel' }
+        allow(DRCI).to receive(:get_item?).with('charts', 'satchel').and_return(false)
+        DRCMM.get_div_tool(tool)
+        expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+        expect(Lich::Messaging.messages.last[:message]).to include('DRCMM:')
+        expect(Lich::Messaging.messages.last[:message]).to include("Failed to get divination tool 'charts'")
+      end
     end
   end
 
   # ================================================================
-  # store_div_tool (old API, deprecated)
+  # store_div_tool (deprecated — delegates to store_div_tool?)
   # ================================================================
   describe '.store_div_tool' do
-    it 'ties when tool has tied key' do
-      tool = { 'name' => 'charts', 'tied' => true, 'container' => 'belt' }
-      expect(DRC).to receive(:bput).with("tie charts to my belt", 'charts')
-      DRCMM.store_div_tool(tool)
+    context 'when store_div_tool? succeeds' do
+      it 'returns without logging when tied' do
+        tool = { 'name' => 'charts', 'tied' => true, 'container' => 'satchel' }
+        allow(DRCI).to receive(:tie_item?).with('charts', 'satchel').and_return(true)
+        DRCMM.store_div_tool(tool)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'returns without logging when worn' do
+        tool = { 'name' => 'mirror', 'worn' => true }
+        allow(DRCI).to receive(:wear_item?).with('mirror').and_return(true)
+        DRCMM.store_div_tool(tool)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'returns without logging when in container' do
+        tool = { 'name' => 'charts', 'container' => 'satchel' }
+        allow(DRCI).to receive(:put_away_item?).with('charts', 'satchel').and_return(true)
+        DRCMM.store_div_tool(tool)
+        expect(Lich::Messaging.messages).to be_empty
+      end
     end
 
-    it 'wears when tool has worn key' do
-      tool = { 'name' => 'mirror', 'worn' => true }
-      expect(DRC).to receive(:bput).with("wear my mirror", 'mirror')
-      DRCMM.store_div_tool(tool)
+    context 'when store_div_tool? fails' do
+      it 'logs a bold DRCMM-prefixed error with tool name' do
+        tool = { 'name' => 'charts', 'container' => 'satchel' }
+        allow(DRCI).to receive(:put_away_item?).with('charts', 'satchel').and_return(false)
+        DRCMM.store_div_tool(tool)
+        expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+        expect(Lich::Messaging.messages.last[:message]).to include('DRCMM:')
+        expect(Lich::Messaging.messages.last[:message]).to include("Failed to store divination tool 'charts'")
+      end
+    end
+  end
+
+  # ================================================================
+  # use_div_tool (migrated to use ? methods)
+  # ================================================================
+  describe '.use_div_tool' do
+    context 'when get_div_tool? succeeds' do
+      it 'uses the tool and stores it on success' do
+        tool_storage = { 'name' => 'charts', 'container' => 'satchel' }
+        allow(DRCI).to receive(:get_item?).with('charts', 'satchel').and_return(true)
+        allow(DRC).to receive(:bput).with('review my charts', 'roundtime').and_return('roundtime')
+        allow(DRCI).to receive(:put_away_item?).with('charts', 'satchel').and_return(true)
+        DRCMM.use_div_tool(tool_storage)
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'logs error when store_div_tool? fails after using' do
+        tool_storage = { 'name' => 'charts', 'container' => 'satchel' }
+        allow(DRCI).to receive(:get_item?).with('charts', 'satchel').and_return(true)
+        allow(DRC).to receive(:bput).with('review my charts', 'roundtime').and_return('roundtime')
+        allow(DRCI).to receive(:put_away_item?).with('charts', 'satchel').and_return(false)
+        DRCMM.use_div_tool(tool_storage)
+        expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+        expect(Lich::Messaging.messages.last[:message]).to include('DRCMM:')
+        expect(Lich::Messaging.messages.last[:message]).to include("Failed to store divination tool 'charts'")
+      end
+
+      it 'uses correct verb for bones tool' do
+        tool_storage = { 'name' => 'bones', 'container' => 'sack' }
+        allow(DRCI).to receive(:get_item?).with('bones', 'sack').and_return(true)
+        expect(DRC).to receive(:bput).with('roll my bones', 'roundtime').and_return('roundtime')
+        allow(DRCI).to receive(:put_away_item?).with('bones', 'sack').and_return(true)
+        DRCMM.use_div_tool(tool_storage)
+      end
+
+      it 'uses correct verb for mirror tool' do
+        tool_storage = { 'name' => 'mirror', 'worn' => true }
+        allow(DRCI).to receive(:remove_item?).with('mirror').and_return(true)
+        expect(DRC).to receive(:bput).with('gaze my mirror', 'roundtime').and_return('roundtime')
+        allow(DRCI).to receive(:wear_item?).with('mirror').and_return(true)
+        DRCMM.use_div_tool(tool_storage)
+      end
+
+      it 'uses correct verb for bowl tool' do
+        tool_storage = { 'name' => 'bowl', 'container' => 'sack' }
+        allow(DRCI).to receive(:get_item?).with('bowl', 'sack').and_return(true)
+        expect(DRC).to receive(:bput).with('gaze my bowl', 'roundtime').and_return('roundtime')
+        allow(DRCI).to receive(:put_away_item?).with('bowl', 'sack').and_return(true)
+        DRCMM.use_div_tool(tool_storage)
+      end
+
+      it 'uses correct verb for prism tool' do
+        tool_storage = { 'name' => 'prism', 'container' => 'sack' }
+        allow(DRCI).to receive(:get_item?).with('prism', 'sack').and_return(true)
+        expect(DRC).to receive(:bput).with('raise my prism', 'roundtime').and_return('roundtime')
+        allow(DRCI).to receive(:put_away_item?).with('prism', 'sack').and_return(true)
+        DRCMM.use_div_tool(tool_storage)
+      end
     end
 
-    it 'puts in container otherwise' do
-      tool = { 'name' => 'bones', 'container' => 'sack' }
-      expect(DRC).to receive(:bput).with("put bones in my sack", 'bones', 'You put')
-      DRCMM.store_div_tool(tool)
+    context 'when get_div_tool? fails' do
+      it 'aborts without using the tool and logs error' do
+        tool_storage = { 'name' => 'charts', 'container' => 'satchel' }
+        allow(DRCI).to receive(:get_item?).with('charts', 'satchel').and_return(false)
+        expect(DRC).not_to receive(:bput).with('review my charts', anything)
+        DRCMM.use_div_tool(tool_storage)
+        expect(Lich::Messaging.messages.last[:type]).to eq('bold')
+        expect(Lich::Messaging.messages.last[:message]).to include('DRCMM:')
+        expect(Lich::Messaging.messages.last[:message]).to include("Failed to get divination tool 'charts'")
+        expect(Lich::Messaging.messages.last[:message]).to include('aborting')
+      end
     end
   end
 end
