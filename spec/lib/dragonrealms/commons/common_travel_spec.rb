@@ -125,74 +125,86 @@ end unless defined?(Lich::DragonRealms::DRCA)
 DRCA = Lich::DragonRealms::DRCA unless defined?(DRCA)
 
 # Mock Room for walk_to
+# Always define/redefine methods (no `unless defined?` guard) because
+# games_spec.rb may define Room first without `current=`.
 class Room
-  def self.current
-    @current ||= OpenStruct.new(id: 1, dijkstra: [nil, {}])
-  end
+  class << self
+    def current
+      @current ||= OpenStruct.new(id: 1, dijkstra: [nil, {}])
+    end
 
-  def self.current=(room)
-    @current = room
+    def current=(room)
+      @current = room
+    end
   end
-end unless defined?(Room)
+end
 
-# Mock Map
+# Mock Map — always define needed methods (games_spec.rb Map lacks dijkstra/list)
 class Map
-  def self.list
-    []
-  end
+  class << self
+    def list
+      []
+    end
 
-  def self.dijkstra(_id, _target = nil)
-    [nil, {}]
-  end
+    def dijkstra(_id, _target = nil)
+      [nil, {}]
+    end
 
-  def self.[](_id)
-    nil
+    def [](_id)
+      nil
+    end
   end
-end unless defined?(Map)
+end
 
-# Mock XMLData
+# Mock XMLData — always define needed methods (games_spec.rb XMLData lacks room_description/room_exits)
 module XMLData
-  def self.room_description
-    ''
-  end
+  class << self
+    def room_description
+      ''
+    end
 
-  def self.room_title
-    ''
-  end
+    def room_title
+      ''
+    end
 
-  def self.room_exits
-    []
+    def room_exits
+      []
+    end
   end
-end unless defined?(XMLData)
+end
 
-# Mock UserVars
+# Mock UserVars — always define needed methods
 module UserVars
-  @friends = []
-  @hunting_nemesis = []
+  @friends ||= []
+  @hunting_nemesis ||= []
 
   class << self
     attr_accessor :friends, :hunting_nemesis
   end
-end unless defined?(UserVars)
+end
 
-# Mock Flags
+# Mock Flags — always define needed methods
 module Flags
-  def self.add(_name, *_patterns); end
-  def self.delete(_name); end
-  def self.reset(_name); end
-  def self.[](_name); end
-end unless defined?(Flags)
+  class << self
+    def add(_name, *_patterns); end
+    def delete(_name); end
+    def reset(_name); end
+    def [](_name); end
+  end
+end
 
-# Mock Script
+# Mock Script — always define needed methods (games_spec.rb Script lacks running/running?)
 class Script
-  def self.running
-    []
-  end
+  class << self
+    def running
+      []
+    end
 
-  def self.running?(_name)
-    false
+    def running?(_name)
+      false
+    end
   end
-end unless defined?(Script)
+end
 
 # Stub game helper methods
 module Kernel

@@ -96,6 +96,12 @@ module Lich
       def remove_item?(_item)
         true
       end
+
+      def put_away_item_unsafe?(_item, _container = nil, _preposition = 'in')
+        true
+      end
+
+      def dispose_trash(_item, _container = nil, _verb = nil); end
     end
   end
 end unless defined?(Lich::DragonRealms::DRCI)
@@ -137,6 +143,7 @@ module Kernel
   def waitrt?; end
   def echo(_msg); end
   def fput(_cmd); end
+
   def get_data(_key)
     OpenStruct.new(observe_finished_messages: [])
   end
