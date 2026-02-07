@@ -37,7 +37,7 @@ module Lich
 
       # Ensure msg method captures messages for testing
       alias_method :original_msg, :msg if method_defined?(:msg) && !method_defined?(:original_msg)
-      def msg(type, message)
+      def msg(type, message, **_opts)
         @messages ||= []
         @messages << { type: type, message: message }
       end
