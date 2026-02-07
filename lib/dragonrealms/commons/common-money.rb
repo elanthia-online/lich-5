@@ -3,27 +3,15 @@ module Lich
     module DRCM
       module_function
 
-      # Map of regex abbreviations for coin denominations
-      # Supports abbreviations of input like DR
-      $DENOMINATION_REGEX_MAP = {
-        'platinum' => /\bp(l|la|lat|lati|latin|latinu|latinum)?\b/i,
-        'gold'     => /\bg(o|ol|old)?\b/i,
-        'silver'   => /\bs(i|il|ilv|ilve|ilver)?\b/i,
-        'bronze'   => /\bb(r|ro|ron|ronz|ronze)?\b/i,
-        'copper'   => /\bc(o|op|opp|oppe|opper)?\b/i
-      }
-
-      # Map of regex abbreviations for currency
-      # Supports abbreviations of input like DR
-      $CURRENCY_REGEX_MAP = {
-        'kronars' => /\bk(r|ro|ron|rona|ronar|ronars)?\b/i,
-        'lirums'  => /\bl(i|ir|iru|irum|irums)?\b/i,
-        'dokoras' => /\bd(o|ok|oko|okor|okora|okoras)?\b/i
-      }
+      # Strips XML tags and decodes common HTML entities from game output lines.
+      # Returns an array of non-empty, trimmed strings.
+      def strip_xml(lines)
+        lines.map { |line| line.gsub(/<[^>]+>/, '').gsub('&gt;', '>').gsub('&lt;', '<').strip }
+             .reject(&:empty?)
+      end
 
       def minimize_coins(copper)
-        denominations = [[10_000, 'platinum'], [1000, 'gold'], [100, 'silver'], [10, 'bronze'], [1, 'copper']]
-        denominations.inject([copper, []]) do |result, denomination|
+        DENOMINATIONS.inject([copper, []]) do |result, denomination|
           remaining = result.first
           display = result.last
           if remaining / denomination.first > 0
@@ -33,64 +21,44 @@ module Lich
         end.last
       end
 
+      # Convert an amount to copper given a denomination name (abbreviation permitted).
+      # If denomination is nil/empty, assumes coppers and logs a warning.
+      # Supports fractional amounts (e.g., '1.5 plat' = 15000 copper).
       def convert_to_copper(amount, denomination)
-        # Convert to copper given denomination (abbreviation permitted)
-        # If no denomination specified, return the integer amount (assumed to be coppers)
-        denomination = denomination.strip # trim whitespace and also convert nil to empty string
-        if !denomination.empty?
-          # Convert amount to float to support expressions like '1.5 plat' then truncate to integer.
-          # If convert amount to integer first then lose precision and '1.5 plat' becomes 10,000 instead of 15,000.
-          return (amount.to_f * 10_000).to_i if 'platinum'.start_with?(denomination.downcase)
-          return (amount.to_f * 1000).to_i if 'gold'.start_with?(denomination.downcase)
-          return (amount.to_f * 100).to_i if 'silver'.start_with?(denomination.downcase)
-          return (amount.to_f * 10).to_i if 'bronze'.start_with?(denomination.downcase)
-          return (amount.to_f * 1).to_i if 'copper'.start_with?(denomination.downcase)
+        denomination = denomination.to_s.strip
+        unless denomination.empty?
+          DENOMINATION_VALUES.each do |name, multiplier|
+            return (amount.to_f * multiplier).to_i if name.start_with?(denomination.downcase)
+          end
         end
-        DRC.message("Unknown denomination, assuming coppers: #{denomination}")
+        Lich::Messaging.msg('bold', "Unknown denomination, assuming coppers: #{denomination}")
         amount.to_i
       end
 
-      # Returns full canonical currency if given an abbreviation
+      # Returns full canonical currency name from an abbreviation.
+      # e.g., "k" -> "kronars", "li" -> "lirums"
       def get_canonical_currency(currency)
-        currencies = [
-          'kronars',
-          'lirums',
-          'dokoras'
-        ]
-        return currencies.find { |x| x.start_with?(currency) }
+        CURRENCIES.find { |c| c.start_with?(currency) }
       end
 
+      # Converts an amount between DR currencies, accounting for exchange fees.
+      # Use a negative fee to calculate how much is needed to receive a target amount.
+      # Use a positive fee to calculate how much will be received after the exchange.
       def convert_currency(amount, from, to, fee)
-        # When determining how much coin is needed to receive X amount in another currency
-        # Use a negative fee percentage
-        # When determining how much coin will be received after the exchange
-        # Use a positive fee percentage
-        exchange_rates = {
-          'dokoras' => {
-            'dokoras' => 1,
-            'kronars' => 1.385808991,
-            'lirums'  => 1.108646953
-          },
-          'kronars' => {
-            'dokoras' => 0.7216,
-            'kronars' => 1,
-            'lirums'  => 0.8
-          },
-          'lirums'  => {
-            'dokoras' => 0.902,
-            'kronars' => 1.25,
-            'lirums'  => 1
-          }
-        }
         if fee < 0
-          ((amount / exchange_rates[from][to]).ceil / (1 + fee)).ceil
+          ((amount / EXCHANGE_RATES[from][to]).ceil / (1 + fee)).ceil
         else
-          ((amount * exchange_rates[from][to]).ceil * (1 - fee)).floor
+          ((amount * EXCHANGE_RATES[from][to]).ceil * (1 - fee)).floor
         end
       end
 
       def hometown_currency(hometown_name)
         get_data('town')[hometown_name]['currency']
+      end
+
+      # Alias for backward compatibility — common-crafting.rb uses this name.
+      def town_currency(town)
+        hometown_currency(town)
       end
 
       def check_wealth(currency)
@@ -101,58 +69,35 @@ module Lich
         check_wealth(hometown_currency(hometown))
       end
 
+      # Captures total on-hand wealth across all three currencies.
+      # Returns a hash of currency name => copper value.
+      # Uses Lich::Util.issue_command for reliable bounded capture.
       def get_total_wealth
-        # This method captures your current total on-hand wealth
-        # and returns a hash representing the numerical value in
-        # coppers of each currency.
+        wealth_lines = Lich::Util.issue_command(
+          'wealth',
+          /^Wealth:/,
+          /<prompt/,
+          usexml: true,
+          quiet: true,
+          include_end: false,
+          timeout: 5
+        )
 
-        # Set up variables to capture the value in coppers of each currency
-        # Set to zero so that, if we have, for example, "No Lirums"
-        # we simply return the initialized value of 0.
-        kronars = 0
-        lirums = 0
-        dokoras = 0
+        result = { 'kronars' => 0, 'lirums' => 0, 'dokoras' => 0 }
+        return result if wealth_lines.nil?
 
-        # Grab the character's wealth, pausing a bit
-        # then grabbing a sufficient number of lines
-        # to ensure we get all the output taking into
-        # account other random scroll text.
-        # Reversing the lines ensures we are processing
-        # the most recent output from 'wealth', in case
-        # reget were to grab output from back-to-back calls.
-        DRC.bput("wealth", "Wealth")
-        pause 0.5
-        wealth_lines = reget(10).map(&:strip).reverse
+        strip_xml(wealth_lines).each do |line|
+          match = line.match(WEALTH_COPPER_REGEX)
+          next unless match
 
-        # We've reversed the reget array. Now we'll iterate over it and capture
-        # each line after we recognize we've hit the Wealth block.
-        wealth_lines.each do |line|
-          case line
-          when /^Wealth:/i
-            # This is the start of our Wealth lines.
-            # We don't need to parse this line. Break out of loop.
-            break
-          when /\(\d+ copper Kronars\)/i
-            kronars = line.scan(/\((\d+) copper kronars\)/i).first.first.to_i
-          when /\(\d+ copper Lirums\)/i
-            lirums = line.scan(/\((\d+) copper lirums\)/i).first.first.to_i
-          when /\(\d+ copper Dokoras\)/i
-            dokoras = line.scan(/\((\d+) copper dokoras\)/i).first.first.to_i
-          end
+          result[match[:currency].downcase] = match[:coppers].to_i
         end
 
-        # Set up a hash of currency and corresponding value
-        # in coppers. Return the hash for future use.
-        total_wealth = {
-          'kronars' => kronars,
-          'lirums'  => lirums,
-          'dokoras' => dokoras
-        }
-        return total_wealth
+        result
       end
 
       def ensure_copper_on_hand(copper, settings, hometown = nil)
-        hometown = settings.hometown if hometown == nil
+        hometown = settings.hometown if hometown.nil?
 
         on_hand = wealth(hometown)
         return true if on_hand >= copper
@@ -163,7 +108,7 @@ module Lich
       end
 
       def withdraw_exact_amount?(amount_as_string, settings, hometown = nil)
-        hometown = settings.hometown if hometown == nil
+        hometown = settings.hometown if hometown.nil?
 
         if settings.bankbot_enabled
           DRCT.walk_to(settings.bankbot_room_id)
@@ -185,7 +130,7 @@ module Lich
       end
 
       def get_money_from_bank(amount_as_string, settings, hometown = nil)
-        hometown = settings.hometown if hometown == nil
+        hometown = settings.hometown if hometown.nil?
 
         DRCT.walk_to(get_data('town')[hometown]['deposit']['id'])
         DRC.release_invisibility
@@ -219,40 +164,42 @@ module Lich
       def deposit_coins(keep_copper, settings, hometown = nil)
         return if settings.skip_bank
 
-        hometown = settings.hometown if hometown == nil
+        hometown = settings.hometown if hometown.nil?
 
         DRCT.walk_to(get_data('town')[hometown]['deposit']['id'])
         DRC.release_invisibility
         DRC.bput('wealth', 'Wealth:')
-        case DRC.bput('deposit all', 'you drop all your', 'You hand the clerk some coins', "You don't have any", 'There is no teller here', 'reached the maximum balance I can permit', 'You find your jar with little effort', 'Searching methodically through the shelves')
+        case DRC.bput('deposit all', 'you drop all your', 'You hand the clerk some coins', "You don't have any",
+                      'There is no teller here', 'reached the maximum balance I can permit',
+                      'You find your jar with little effort', 'Searching methodically through the shelves')
         when 'There is no teller here'
           return
         end
         minimize_coins(keep_copper).each { |amount| withdraw_exact_amount?(amount, settings) } if settings.hometown == hometown
-        case DRC.bput('check balance', /current balance is .*? (?:Kronars?|Dokoras?|Lirums?)\."$/,
-                      /If you would like to open one, you need only deposit a few (?:Kronars?|Dokoras?|Lirums?)\."$/,
-                      /As expected, there are .*? (?:Kronars?|Dokoras?|Lirums?)\.$/,
-                      'Perhaps you should find a new deposit jar for your financial needs.  Be sure to mark it with your name')
-        when /current balance is (?<balance>.*?) (?<currency>Kronars?|Dokoras?|Lirums?)\."$/,
-             /As expected, there are (?<balance>.*?) (?<currency>Kronars?|Dokoras?|Lirums?)\.$/
-          currency = Regexp.last_match(:currency)
+        balance_result = DRC.bput('check balance',
+                                  /current balance is .*? (?:Kronars?|Dokoras?|Lirums?)\."$/,
+                                  /If you would like to open one, you need only deposit a few (?:Kronars?|Dokoras?|Lirums?)\."$/,
+                                  /As expected, there are .*? (?:Kronars?|Dokoras?|Lirums?)\.$/,
+                                  'Perhaps you should find a new deposit jar for your financial needs.  Be sure to mark it with your name')
+        case balance_result
+        when /current balance is (?<bal>.*?) (?<cur>Kronars?|Dokoras?|Lirums?)\."$/,
+             /As expected, there are (?<bal>.*?) (?<cur>Kronars?|Dokoras?|Lirums?)\.$/
+          match = balance_result.match(/(?:current balance is|As expected, there are) (?<bal>.*?) (?<cur>Kronars?|Dokoras?|Lirums?)/)
+          currency = match[:cur]
           balance = 0
-          Regexp.last_match(:balance).gsub(/and /, '').split(', ').each do |amount_as_string|
-            amount, denomination = amount_as_string.split()
+          match[:bal].gsub(/and /, '').split(', ').each do |amount_as_string|
+            amount, denomination = amount_as_string.split
             balance += convert_to_copper(amount, denomination)
           end
-        when /If you would like to open one, you need only deposit a few (?<currency>Kronars?|Dokoras?|Lirums?)\."$/
+        when /If you would like to open one, you need only deposit a few (?<cur>Kronars?|Dokoras?|Lirums?)\."$/
+          match = balance_result.match(/deposit a few (?<cur>Kronars?|Dokoras?|Lirums?)/)
           balance = 0
-          currency = Regexp.last_match(:currency)
+          currency = match[:cur]
         when /Perhaps you should find a new deposit jar/
           balance = 0
           currency = 'Dokoras'
         end
-        return balance, currency
-      end
-
-      def town_currency(town)
-        get_data('town')[town]['currency']
+        [balance, currency]
       end
     end
   end
