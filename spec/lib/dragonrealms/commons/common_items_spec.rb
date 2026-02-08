@@ -5,15 +5,40 @@ require 'ostruct'
 # Mock modules/classes at top level first, then alias into namespace
 # This ensures expect() targets the same object the module code calls
 
+# Ensure Lich::DragonRealms namespace exists
+module Lich; module DragonRealms; end; end
+
+# Mock Lich::Messaging — always reopen (no guard) because other specs
+# may define Lich::Messaging without msg/messages/clear_messages!.
 module Lich
   module Messaging
-    def self.msg(*_args); end
-  end unless defined?(Lich::Messaging)
+    @messages = []
 
-  module Util
-    def self.issue_command(*_args); end
-  end unless defined?(Lich::Util)
+    class << self
+      def messages
+        @messages ||= []
+      end
+
+      def clear_messages!
+        @messages = []
+      end
+
+      def msg(type, message, **_opts)
+        @messages ||= []
+        @messages << { type: type, message: message }
+      end
+    end
+  end
 end
+
+# Mock Lich::Util for issue_command
+module Lich
+  module Util
+    def self.issue_command(*_args)
+      []
+    end
+  end
+end unless defined?(Lich::Util)
 
 module DRC
   module_function
@@ -68,11 +93,11 @@ class Room
   end
 end unless defined?(Room)
 
-module XMLData
-  def self.room_title
-    ''
-  end
-end unless defined?(XMLData)
+# Mock XMLData for room_title
+# XMLData may be a module (from this file) or OpenStruct (from spec_helper.rb).
+# Always add methods if missing, using define_singleton_method to work with both.
+module XMLData; end unless defined?(XMLData)
+XMLData.define_singleton_method(:room_title) { '' } unless XMLData.respond_to?(:room_title)
 
 module Flags
   @flags = {}
@@ -98,14 +123,24 @@ module Flags
   end
 end unless defined?(Flags)
 
-# Kernel-level methods that module_function code calls as bare methods
+# NOTE: `clear` MUST be private — a public Kernel `clear` is inherited by all objects,
+# causing `Effects::Buffs.respond_to?(:clear)` to return true in qstrike_spec,
+# which breaks buff cleanup. Private methods don't appear in `respond_to?` checks
+# but are still callable as bare method calls within module_function methods like bput.
 module Kernel
+  def clear; end
+  private :clear
+
+  def pause(_seconds = nil); end
   def waitrt?; end
+  def fput(_cmd); end
+  def put(_cmd); end
+  def echo(_msg); end
 
   def reget(*_args)
     []
   end
-end unless Kernel.private_method_defined?(:waitrt?)
+end
 
 # Global ordinals constant
 $ORDINALS = %w[first second third fourth fifth sixth seventh eighth ninth tenth] unless defined?($ORDINALS)
