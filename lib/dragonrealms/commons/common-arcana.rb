@@ -137,7 +137,7 @@ module Lich
       ].freeze
 
       PERC_MANA_START_PATTERN = /streams of .* mana/
-      PERC_MANA_END_PATTERN = /the Psychic Projection book/
+      PERC_MANA_END_PATTERN = /Roundtime/
       SYMBIOSIS_PATTERN = /combine the weaves of the (?<type>\w+) symbiosis/
       DISCERN_SORCERY_PATTERN = /requires at minimum (?<min>\d+) mana streams/
       DISCERN_FULL_PATTERN = /minimum (?<min>\d+) mana streams and you think you can reinforce it with (?<more>\d+) more/i
