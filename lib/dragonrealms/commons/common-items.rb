@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # This module should be 'bottom-level' and only depend on common.
 # Any modules that deal with items and <something> should be somewhere else
 
@@ -7,7 +9,7 @@ module Lich
       module_function
 
       ## How to add new trash receptacles https://github.com/elanthia-online/dr-scripts/wiki/Adding-new-trash-receptacles
-      TRASH_STORAGE = %w[arms barrel basin basket bin birdbath bucket chamberpot gloop hole log puddle statue stump tangle tree turtle urn gelapod]
+      TRASH_STORAGE = %w[arms barrel basin basket bin birdbath bucket chamberpot gloop hole log puddle statue stump tangle tree turtle urn gelapod].freeze
 
       DROP_TRASH_SUCCESS_PATTERNS = [
         /^You drop/,
@@ -18,7 +20,7 @@ module Lich
         /^As you open your hand to release the/,
         /^You toss .* at the domesticated gelapod/,
         /^You feed .* a bit warily to the domesticated gelapod/
-      ]
+      ].freeze
 
       DROP_TRASH_FAILURE_PATTERNS = [
         /^What were you referring to/,
@@ -38,7 +40,7 @@ module Lich
         /^You can't put that there/,
         /^The domesticated gelapod glances warily at/, # deeds
         /^You should empty it out, first./ # container with items
-      ]
+      ].freeze
 
       # Messages that when trying to drop an item you're warned.
       # To continue you must retry the command.
@@ -51,13 +53,13 @@ module Lich
         # Example: https://elanthipedia.play.net/Item:Leather_lotion
         /^Something appears different about/,
         /perhaps try doing that again/
-      ]
+      ].freeze
 
       WORN_TRASHCAN_VERB_PATTERNS = [
         /^You drum your fingers/,
         /^You pull a lever/,
         /^You poke your finger around/
-      ]
+      ].freeze
 
       GET_ITEM_SUCCESS_PATTERNS = [
         /you draw (?!\w+'s wounds)/i,
@@ -72,7 +74,7 @@ module Lich
         /^You carefully lift/,
         /^You carefully remove .* from the bundle/,
         /^With a flick of your wrist, you stealthily unsheath/
-      ]
+      ].freeze
 
       GET_ITEM_FAILURE_PATTERNS = [
         /^A magical force keeps you from grasping/,
@@ -96,7 +98,7 @@ module Lich
         /rapidly decays away/, # item disappears when try to get it
         /cracks and rots away/, # item disappears when try to get it
         /^You should stop practicing your Athletics skill before you do that/
-      ]
+      ].freeze
 
       WEAR_ITEM_SUCCESS_PATTERNS = [
         /^You put/,
@@ -128,7 +130,7 @@ module Lich
         /You lean over and slip your feet into the boots./, # a pair of weathered barkcloth boots lined in flannel,
         /^You reach down and step into/, # pair of enaada boots clasped by asharsh'dai
         /Gritting your teeth/ # Gritting your teeth, you grip each of your heavy combat boots in turn by the straps, and drive your feet into them for a secure fit.
-      ]
+      ].freeze
 
       WEAR_ITEM_FAILURE_PATTERNS = [
         /^You can't wear/,
@@ -138,12 +140,12 @@ module Lich
         /^Wear what/,
         /^I could not/,
         /^What were you/
-      ]
+      ].freeze
 
       TIE_ITEM_SUCCESS_PATTERNS = [
         /^You .* tie/,
         /^You attach/
-      ]
+      ].freeze
 
       TIE_ITEM_FAILURE_PATTERNS = [
         /^You don't seem to be able to move/,
@@ -154,19 +156,19 @@ module Lich
         /^You are a little too busy/,
         /^Your wounds hinder your ability to do that/,
         /^Tie what/
-      ]
+      ].freeze
 
       UNTIE_ITEM_SUCCESS_PATTERNS = [
         /^You remove/,
         /You untie/i
-      ]
+      ].freeze
 
       UNTIE_ITEM_FAILURE_PATTERNS = [
         /^You don't seem to be able to move/,
         /^You fumble with the ties/,
         /^Untie what/,
         /^What were you referring/
-      ]
+      ].freeze
 
       REMOVE_ITEM_SUCCESS_PATTERNS = [
         /^Dropping your shoulder/,
@@ -190,7 +192,7 @@ module Lich
         /you unlace/,
         /^You slam the heels/,
         /^With masterful grace, you ready/
-      ]
+      ].freeze
 
       REMOVE_ITEM_FAILURE_PATTERNS = [
         /^You'll need both hands free/,
@@ -201,7 +203,7 @@ module Lich
         /^I could not/,
         /^Grunting with momentary exertion/, # Grunting with momentary exertion, you grip each of your heavy combat boots in turn by the heel, and pull them off.
         /^What were you/
-      ]
+      ].freeze
 
       PUT_AWAY_ITEM_SUCCESS_PATTERNS = [
         /^You put your .* in/,
@@ -231,7 +233,7 @@ module Lich
         /^With a flick of your wrist, you stealthily sheath/,
         /^You strap your .* to your harness/,
         /^You toss .* into/ # You toss the alcohol into the bowl and mix it in thoroughly
-      ]
+      ].freeze
 
       PUT_AWAY_ITEM_FAILURE_PATTERNS = [
         /^Stow what/,
@@ -266,7 +268,7 @@ module Lich
         /completely full/,
         /That doesn't belong in there!/,
         /exerts a steady force preventing/
-      ]
+      ].freeze
 
       # Messages that when trying to put away an item you're warned.
       # To continue you must retry the command.
@@ -276,34 +278,34 @@ module Lich
         # Example: https://elanthipedia.play.net/Item:Leather_lotion
         /Something appears different about/,
         /perhaps try doing that again/
-      ]
+      ].freeze
 
       STOW_ITEM_SUCCESS_PATTERNS = [
         *GET_ITEM_SUCCESS_PATTERNS,
         *PUT_AWAY_ITEM_SUCCESS_PATTERNS
-      ]
+      ].freeze
 
       STOW_ITEM_FAILURE_PATTERNS = [
         *GET_ITEM_FAILURE_PATTERNS,
-        *PUT_AWAY_ITEM_FAILURE_PATTERNS,
-      ]
+        *PUT_AWAY_ITEM_FAILURE_PATTERNS
+      ].freeze
 
       STOW_ITEM_RETRY_PATTERNS = [
         *PUT_AWAY_ITEM_RETRY_PATTERNS
-      ]
+      ].freeze
 
       RUMMAGE_SUCCESS_PATTERNS = [
         /^You rummage through .* and see (.*)\./,
         /^In the .* you see (.*)\./,
         /there is nothing/i
-      ]
+      ].freeze
 
       RUMMAGE_FAILURE_PATTERNS = [
         /^You don't seem to be able to move/,
         /^I could not find/,
         /^I don't know what you are referring to/,
         /^What were you referring to/
-      ]
+      ].freeze
 
       TAP_SUCCESS_PATTERNS = [
         /^You tap\s(?!into).*/, # The `.*` is needed to capture entire phrase. Methods parse it to know if an item is worn, stowed, etc.
@@ -312,14 +314,14 @@ module Lich
         /^The orb is delicate/, # You tapped a favor orb
         /^You .* on the shoulder/, # You tapped someone
         /^You suddenly forget what you were doing/ # "tap my tessera" messaging when hands are full
-      ]
+      ].freeze
 
       TAP_FAILURE_PATTERNS = [
         /^You don't seem to be able to move/,
         /^I could not find/,
         /^I don't know what you are referring to/,
         /^What were you referring to/
-      ]
+      ].freeze
 
       OPEN_CONTAINER_SUCCESS_PATTERNS = [
         /^You open/,
@@ -328,7 +330,7 @@ module Lich
         /^You unbutton/,
         /(It's|is) already open/,
         /^You spread your arms, carefully holding your bag well away from your body/
-      ]
+      ].freeze
 
       OPEN_CONTAINER_FAILURE_PATTERNS = [
         /^Please rephrase that command/,
@@ -341,14 +343,14 @@ module Lich
         /^There is no way to do that/,
         /^You can't do that/,
         /^Open what/
-      ]
+      ].freeze
 
       CLOSE_CONTAINER_SUCCESS_PATTERNS = [
         /^You close/,
         /^You quickly close/,
         /^You pull/,
         /is already closed/
-      ]
+      ].freeze
 
       CLOSE_CONTAINER_FAILURE_PATTERNS = [
         /^Please rephrase that command/,
@@ -360,19 +362,19 @@ module Lich
         /^You don't seem to be able to move/,
         /^There is no way to do that/,
         /^You can't do that/
-      ]
+      ].freeze
 
       CONTAINER_IS_CLOSED_PATTERNS = [
         /^But that's closed/,
         /^That is closed/,
         /^While it's closed/
-      ]
+      ].freeze
 
       LOWER_SUCCESS_PATTERNS = [
         /^You lower/,
         # The next message is when item crumbles when leaves your hand, like a moonblade.
         /^As you open your hand to release the/
-      ]
+      ].freeze
 
       LOWER_FAILURE_PATTERNS = [
         /^You don't seem to be able to move/,
@@ -380,18 +382,18 @@ module Lich
         /^Please rephrase that command/,
         /^What were you referring to/,
         /^I could not find what you were referring to/
-      ]
+      ].freeze
 
       LIFT_SUCCESS_PATTERNS = [
         /^You pick up/
-      ]
+      ].freeze
 
       LIFT_FAILURE_PATTERNS = [
         /^There are no items lying at your feet/,
         /^What did you want to try and lift/,
         /can't quite lift it/,
         /^You are not strong enough to pick that up/
-      ]
+      ].freeze
 
       GIVE_ITEM_SUCCESS_PATTERNS = [
         /has accepted your offer/,
@@ -399,7 +401,7 @@ module Lich
         /Please don't lose this ticket!/,
         /^You hand .* gives you back a repair ticket/,
         /^You hand .* your ticket and are handed back/
-      ]
+      ].freeze
 
       GIVE_ITEM_FAILURE_PATTERNS = [
         /I don't repair those here/,
@@ -412,7 +414,7 @@ module Lich
         /^You may only have one outstanding offer at a time/,
         /^What is it you're trying to give/,
         /Lucky for you!  That isn't damaged!/
-      ]
+      ].freeze
 
       #########################################
       # TRASH ITEM
@@ -440,8 +442,9 @@ module Lich
         end
 
         # Check for meta:trashcan tag on the room to identify a specific trashcan to use.
-        if Room.current.tags.find { |t| t =~ /meta:trashcan:(.*)/ }
-          metatag_trashcan = Regexp.last_match(1)
+        metatag_match = Room.current.tags.find { |t| t =~ /meta:trashcan:(?<trashcan>.*)/ }&.match(/meta:trashcan:(?<trashcan>.*)/)
+        if metatag_match
+          metatag_trashcan = metatag_match[:trashcan]
 
           # Gelapod needs special handling since you feed it, and it disappears in winter
           metatag_trash_command = nil
@@ -523,6 +526,7 @@ module Lich
         when *DROP_TRASH_SUCCESS_PATTERNS
           return true
         when *DROP_TRASH_FAILURE_PATTERNS
+          Lich::Messaging.msg("bold", "DRCI: Failed to dispose of '#{item}'.")
           return false
         when *DROP_TRASH_RETRY_PATTERNS
           return dispose_trash(item)
@@ -530,6 +534,7 @@ module Lich
           return (DRCI.get_item?(item) && DRCI.dispose_trash(item))
         else
           # failure of match patterns in the bput, but still need to return a value
+          Lich::Messaging.msg("bold", "DRCI: Unexpected response when dropping '#{item}'.")
           return false
         end
       end
@@ -600,7 +605,7 @@ module Lich
         when 'both'
           in_left_hand?(item) && in_right_hand?(item)
         else
-          DRC.message("Unknown hand: #{which_hand}. Valid options are: left, right, either, both")
+          Lich::Messaging.msg("bold", "DRCI: Unknown hand: #{which_hand}. Valid options are: left, right, either, both")
           false
         end
       end
@@ -623,34 +628,39 @@ module Lich
       # COUNT ITEMS
       #########################################
 
+      COUNT_PART_PATTERNS = [
+        /and see there (?:is|are) (?<count>.+) left\./,
+        /There (?:is|are) (?:only )?(?<count>.+) parts? left/,
+        /There's (?:only )?(?<count>.+) parts? left/,
+        /The (?:.+) has (?<count>.+) uses remaining./,
+        /There are enough left to create (?<count>.+) more/,
+        /You count out (?<count>.+) pieces? of material there/,
+        /There (?:is|are) (?<count>.+) scrolls? left for use with crafting/
+      ].freeze
+
       def count_item_parts(item)
-        match_messages = [
-          /and see there (?:is|are) (.+) left\./,
-          /There (?:is|are) (?:only )?(.+) parts? left/,
-          /There's (?:only )?(.+) parts? left/,
-          /The (?:.+) has (.+) uses remaining./,
-          /There are enough left to create (.+) more/,
-          /You count out (.+) pieces? of material there/,
-          /There (?:is|are) (.+) scrolls? left for use with crafting/
-        ]
         count = 0
         $ORDINALS.each do |ordinal|
-          case DRC.bput("count my #{ordinal} #{item}",
-                        'I could not find what you were referring to.',
-                        'tell you much of anything.',
-                        *match_messages)
-          when 'I could not find what you were referring to.'
+          result = DRC.bput("count my #{ordinal} #{item}",
+                            'I could not find what you were referring to.',
+                            'tell you much of anything.',
+                            *COUNT_PART_PATTERNS)
+          if result == 'I could not find what you were referring to.'
             break
-          when 'tell you much of anything.'
-            echo "ERROR: count_item_parts called on non-stackable item: #{item}"
+          elsif result == 'tell you much of anything.'
+            Lich::Messaging.msg("bold", "DRCI: count_item_parts called on non-stackable item: #{item}")
             count = count_items(item)
             break
-          when *match_messages
-            countval = Regexp.last_match(1).tr('-', ' ')
-            if countval.match?(/\A\d+\z/)
-              count += Integer(countval)
-            else
-              count += DRC.text2num(countval)
+          else
+            # Try to match against our count patterns
+            match = COUNT_PART_PATTERNS.lazy.filter_map { |pat| result.match(pat) }.first
+            if match
+              countval = match[:count].tr('-', ' ')
+              if countval.match?(/\A\d+\z/)
+                count += Integer(countval)
+              else
+                count += DRC.text2num(countval)
+              end
             end
           end
           waitrt?
@@ -661,11 +671,11 @@ module Lich
       # Counts items in a container that is inferred by first tapping the item.
       # If you want to count items in a specific container, use `count_items_in_container(item, container)`
       def count_items(item)
-        /inside your (.*)/ =~ tap(item)
-        container = Regexp.last_match(1)
-        return 0 if container.nil?
+        tap_result = tap(item)
+        match = tap_result&.match(/inside your (?<container>.*)/)
+        return 0 unless match
 
-        count_items_in_container(item, container)
+        count_items_in_container(item, match[:container])
       end
 
       # Counts items in a container.
@@ -725,14 +735,16 @@ module Lich
           (!DRC.right_hand || stow_hand('right'))
       end
 
+      BRAID_TOO_LONG_PATTERN = /The braided (?<braid_name>.+) is too long/.freeze
+
       def stow_hand(hand)
-        braid_regex = /The braided (.+) is too long/
-        case DRC.bput("stow #{hand}", braid_regex, CONTAINER_IS_CLOSED_PATTERNS, STOW_ITEM_SUCCESS_PATTERNS, STOW_ITEM_FAILURE_PATTERNS, STOW_ITEM_RETRY_PATTERNS)
-        when braid_regex
-          dispose_trash(DRC.get_noun(Regexp.last_match(1)))
-        when *STOW_ITEM_RETRY_PATTERNS
+        result = DRC.bput("stow #{hand}", BRAID_TOO_LONG_PATTERN, CONTAINER_IS_CLOSED_PATTERNS, STOW_ITEM_SUCCESS_PATTERNS, STOW_ITEM_FAILURE_PATTERNS, STOW_ITEM_RETRY_PATTERNS)
+        braid_match = result&.match(BRAID_TOO_LONG_PATTERN)
+        if braid_match
+          dispose_trash(DRC.get_noun(braid_match[:braid_name]))
+        elsif STOW_ITEM_RETRY_PATTERNS.any? { |pat| pat.match?(result) }
           stow_hand(hand)
-        when *STOW_ITEM_SUCCESS_PATTERNS
+        elsif STOW_ITEM_SUCCESS_PATTERNS.any? { |pat| pat.match?(result) }
           true
         else
           false
@@ -985,7 +997,7 @@ module Lich
       def get_inventory_by_type(type = 'combat', line_count = 40)
         case DRC.bput("inventory #{type}", /Use INVENTORY HELP for more options/, /The INVENTORY command is the best way/, /You can't do that/)
         when /The INVENTORY command is the best way/, /You can't do that/
-          DRC.message("Unrecognized inventory type: #{type}. Valid options are ARMOR, WEAPON, FLUFF, CONTAINER, COMBAT, or any slot from INVENTORY SLOTS LIST.")
+          Lich::Messaging.msg("bold", "DRCI: Unrecognized inventory type: #{type}. Valid options are ARMOR, WEAPON, FLUFF, CONTAINER, COMBAT, or any slot from INVENTORY SLOTS LIST.")
           return []
         end
         # Multiple lines may have been printed to the game window,
@@ -1030,9 +1042,13 @@ module Lich
         contents = DRC.bput("rummage #{container}", CONTAINER_IS_CLOSED_PATTERNS, RUMMAGE_SUCCESS_PATTERNS, RUMMAGE_FAILURE_PATTERNS)
         case contents
         when *RUMMAGE_FAILURE_PATTERNS
+          Lich::Messaging.msg("bold", "DRCI: Unable to rummage in '#{container}'.")
           return nil
         when *CONTAINER_IS_CLOSED_PATTERNS
-          return nil unless open_container?(container)
+          unless open_container?(container)
+            Lich::Messaging.msg("bold", "DRCI: Unable to open '#{container}' for rummaging.")
+            return nil
+          end
 
           rummage_container(container)
         else
@@ -1051,9 +1067,13 @@ module Lich
         contents = DRC.bput("look in #{container}", CONTAINER_IS_CLOSED_PATTERNS, RUMMAGE_SUCCESS_PATTERNS, RUMMAGE_FAILURE_PATTERNS)
         case contents
         when *RUMMAGE_FAILURE_PATTERNS
+          Lich::Messaging.msg("bold", "DRCI: Unable to look in '#{container}'.")
           return nil
         when *CONTAINER_IS_CLOSED_PATTERNS
-          return nil unless open_container?(container)
+          unless open_container?(container)
+            Lich::Messaging.msg("bold", "DRCI: Unable to open '#{container}' to look inside.")
+            return nil
+          end
 
           look_in_container(container)
         else
@@ -1162,15 +1182,14 @@ module Lich
         end
       end
 
+      ACCEPT_SUCCESS_PATTERN = /You accept (?<name>\w+)'s offer and are now holding/.freeze
+
       # If you accept then returns the name of the person whose offer you accepted. This serves as a "truthy" value, too.
       # If you don't, or aren't able to, accept then returns false.
       def accept_item?
-        case DRC.bput("accept", "You accept .* offer and are now holding", "You have no offers", "Both of your hands are full", "would push you over your item limit")
-        when /You accept (?<name>\w+)'s offer and are now holding/
-          Regexp.last_match[:name]
-        else
-          false
-        end
+        result = DRC.bput("accept", ACCEPT_SUCCESS_PATTERN, "You have no offers", "Both of your hands are full", "would push you over your item limit")
+        match = result&.match(ACCEPT_SUCCESS_PATTERN)
+        match ? match[:name] : false
       end
 
       #########################################
@@ -1178,22 +1197,22 @@ module Lich
       #########################################
       def swap_out_full_gempouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container = nil, spare_gem_pouch_container = nil, should_tie_gem_pouches = false)
         unless DRC.left_hand.nil? || DRC.right_hand.nil?
-          DRC.message("No free hand. Not swapping pouches now.")
+          Lich::Messaging.msg("bold", "DRCI: No free hand. Not swapping pouches now.")
           return false
         end
 
         unless remove_and_stow_pouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container)
-          DRC.message("Remove and stow pouch routine failed.")
+          Lich::Messaging.msg("bold", "DRCI: Remove and stow pouch routine failed.")
           return false
         end
 
         unless get_item?("#{gem_pouch_adjective} #{gem_pouch_noun}", spare_gem_pouch_container)
-          DRC.message("No spare pouch found.")
+          Lich::Messaging.msg("bold", "DRCI: No spare pouch found in #{spare_gem_pouch_container || 'default container'}.")
           return false
         end
 
         unless wear_item?("#{gem_pouch_adjective} #{gem_pouch_noun}")
-          DRC.message("Could not wear new pouch.")
+          Lich::Messaging.msg("bold", "DRCI: Could not wear new pouch.")
           return false
         end
 
@@ -1204,7 +1223,7 @@ module Lich
 
       def remove_and_stow_pouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container = nil)
         unless remove_item?("#{gem_pouch_adjective} #{gem_pouch_noun}")
-          DRC.message("Unable to remove existing pouch.")
+          Lich::Messaging.msg("bold", "DRCI: Unable to remove existing pouch.")
           return false
         end
         if put_away_item?("#{gem_pouch_adjective} #{gem_pouch_noun}", full_pouch_container)
@@ -1222,38 +1241,42 @@ module Lich
 
       def fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container = nil, spare_gem_pouch_container = nil, should_tie_gem_pouches = false)
         Flags.add("pouch-full", /is too full to fit any more/)
-        case DRC.bput("fill my #{gem_pouch_adjective} #{gem_pouch_noun} with my #{source_container}",
-                      /^You open/,
-                      /is too full to fit/,
-                      /^You'd better tie it up before putting/,
-                      /You'll need to tie it up before/,
-                      /Please rephrase that command/,
-                      'What were you referring to',
-                      "There aren't any gems",
-                      'You fill your')
-        when /Please rephrase that command/
-          DRC.message("Container #{source_container} not found. Skipping fill")
-          return
-        when /^You'd better tie it up before putting/, /You'll need to tie it up before/
-          # This is equivalent to a full pouch, unless we should tie pouches, in which case we tie and retry
-          unless should_tie_gem_pouches
+        begin
+          case DRC.bput("fill my #{gem_pouch_adjective} #{gem_pouch_noun} with my #{source_container}",
+                        /^You open/,
+                        /is too full to fit/,
+                        /^You'd better tie it up before putting/,
+                        /You'll need to tie it up before/,
+                        /Please rephrase that command/,
+                        'What were you referring to',
+                        "There aren't any gems",
+                        'You fill your')
+          when /Please rephrase that command/
+            Lich::Messaging.msg("bold", "DRCI: Container #{source_container} not found. Skipping fill.")
+            return
+          when /^You'd better tie it up before putting/, /You'll need to tie it up before/
+            # This is equivalent to a full pouch, unless we should tie pouches, in which case we tie and retry
+            unless should_tie_gem_pouches
+              unless swap_out_full_gempouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
+                Lich::Messaging.msg("bold", "DRCI: Could not swap gem pouches.")
+                return
+              end
+              fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
+            end
+            tie_gem_pouch(gem_pouch_adjective, gem_pouch_noun) if should_tie_gem_pouches
+            fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
+          end
+          if Flags["pouch-full"]
             unless swap_out_full_gempouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
-              DRC.message("Could not swap gem pouches.")
+              Lich::Messaging.msg("bold", "DRCI: Could not swap gem pouches.")
               return
             end
             fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
+            tie_gem_pouch(gem_pouch_adjective, gem_pouch_noun) if should_tie_gem_pouches
+            Flags.reset("pouch-full")
           end
-          tie_gem_pouch(gem_pouch_adjective, gem_pouch_noun) if should_tie_gem_pouches
-          fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
-        end
-        if Flags["pouch-full"]
-          unless swap_out_full_gempouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
-            DRC.message("Could not swap gem pouches.")
-            return
-          end
-          fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
-          tie_gem_pouch(gem_pouch_adjective, gem_pouch_noun) if should_tie_gem_pouches
-          Flags.reset("pouch-full")
+        ensure
+          Flags.delete("pouch-full")
         end
       end
     end
