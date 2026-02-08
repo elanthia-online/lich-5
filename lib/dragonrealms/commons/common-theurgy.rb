@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     module DRCTH
@@ -94,10 +96,16 @@ module Lich
 
       def buy_cleric_item?(town, item_name, stackable, num_to_buy, theurgy_supply_container)
         town_theurgy_data = get_data('theurgy')[town]
-        return false if town_theurgy_data.nil?
+        if town_theurgy_data.nil?
+          Lich::Messaging.msg("bold", "DRCTH: No theurgy data found for town '#{town}'.")
+          return false
+        end
 
         item_shop_data = town_theurgy_data["#{item_name}_shop"]
-        return false if item_shop_data.nil?
+        if item_shop_data.nil?
+          Lich::Messaging.msg("bold", "DRCTH: No shop data found for '#{item_name}' in '#{town}'.")
+          return false
+        end
 
         DRCT.walk_to(item_shop_data['id'])
         if stackable
