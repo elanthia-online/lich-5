@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     module DRCMM
@@ -38,6 +40,20 @@ module Lich
       # Minimum minutes remaining before a celestial body sets to be considered "visible."
       MOON_VISIBILITY_TIMER_THRESHOLD = 4
 
+      # Expected game responses when centering a telescope on a target.
+      CENTER_TELESCOPE_MESSAGES = [
+        'Center what',
+        'You put your eye',
+        'open it to make any use of it',
+        'The pain is too much',
+        "That's a bit tough to do when you can't see the sky",
+        "You would probably need a periscope to do that",
+        'Your search for',
+        'Your vision is too fuzzy',
+        "You'll need to open it to make any use of it",
+        'You must have both hands free'
+      ].freeze
+
       def observe(thing)
         output = "observe #{thing} in heavens"
         output = 'observe heavens' if thing.eql?('heavens')
@@ -61,7 +77,7 @@ module Lich
           DRCI.untie_item?(telescope_name, storage['tied'])
         elsif storage['container']
           unless DRCI.get_item?(telescope_name, storage['container'])
-            Lich::Messaging.msg("plain", "Telescope not found in container. Trying to get it from anywhere we can.")
+            Lich::Messaging.msg("plain", "DRCMM: Telescope not found in container. Trying to get it from anywhere we can.")
             return DRCI.get_item?(telescope_name)
           end
           true
@@ -109,19 +125,9 @@ module Lich
       end
 
       def center_telescope(target)
-        case DRC.bput("center telescope on #{target}",
-                      'Center what',
-                      'You put your eye',
-                      'open it to make any use of it',
-                      'The pain is too much',
-                      "That's a bit tough to do when you can't see the sky",
-                      "You would probably need a periscope to do that",
-                      'Your search for',
-                      'Your vision is too fuzzy',
-                      "You'll need to open it to make any use of it",
-                      'You must have both hands free')
+        case DRC.bput("center telescope on #{target}", *CENTER_TELESCOPE_MESSAGES)
         when 'The pain is too much', "That's a bit tough to do when you can't see the sky"
-          Lich::Messaging.msg("bold", "Planet #{target} not visible. Are you indoors perhaps?")
+          Lich::Messaging.msg("bold", "DRCMM: Planet #{target} not visible. Are you indoors perhaps?")
         when "You'll need to open it to make any use of it"
           fput("open my telescope")
           fput("center telescope on #{target}")
@@ -307,21 +313,24 @@ module Lich
 
       def find_visible_planets(planets, settings = nil)
         unless get_telescope?(settings.telescope_name, settings.telescope_storage)
-          Lich::Messaging.msg("bold", "Could not get telescope to find visible planets")
+          Lich::Messaging.msg("bold", "DRCMM: Could not get telescope to find visible planets.")
           return
         end
 
         Flags.add('planet-not-visible', 'turns up fruitless')
         observed_planets = []
 
-        planets.each do |planet|
-          center_telescope(planet)
-          observed_planets << planet unless Flags['planet-not-visible']
-          Flags.reset('planet-not-visible')
+        begin
+          planets.each do |planet|
+            center_telescope(planet)
+            observed_planets << planet unless Flags['planet-not-visible']
+            Flags.reset('planet-not-visible')
+          end
+        ensure
+          Flags.delete('planet-not-visible')
         end
 
-        Flags.delete('planet-not-visible')
-        Lich::Messaging.msg("bold", "Could not store telescope after finding visible planets") unless store_telescope?(settings.telescope_name, settings.telescope_storage)
+        Lich::Messaging.msg("bold", "DRCMM: Could not store telescope after finding visible planets.") unless store_telescope?(settings.telescope_name, settings.telescope_storage)
         observed_planets
       end
 
@@ -338,7 +347,7 @@ module Lich
           data['cast'] = "cast #{cast_on}"
           return data
         end
-        Lich::Messaging.msg("bold", "Could not set planet data. Cannot cast #{data['abbrev']}")
+        Lich::Messaging.msg("bold", "DRCMM: Could not set planet data. Cannot cast #{data['abbrev']}.")
       end
 
       def set_moon_data(data)
@@ -350,7 +359,7 @@ module Lich
         elsif data['name'].downcase == 'cage of light'
           data['cast'] = "cast ambient"
         else
-          Lich::Messaging.msg("bold", "No moon available to cast #{data['name']}")
+          Lich::Messaging.msg("bold", "DRCMM: No moon available to cast #{data['name']}.")
           data = nil
         end
         data
@@ -392,10 +401,10 @@ module Lich
       def check_moonwatch
         return if Script.running?('moonwatch')
 
-        Lich::Messaging.msg("bold", "moonwatch is not running. Starting it now")
+        Lich::Messaging.msg("bold", "DRCMM: moonwatch is not running. Starting it now.")
         UserVars.moons = {}
         custom_require.call('moonwatch')
-        Lich::Messaging.msg("plain", "Run `#{$clean_lich_char}e autostart('moonwatch')` to avoid this in the future")
+        Lich::Messaging.msg("plain", "DRCMM: Run `#{$clean_lich_char}e autostart('moonwatch')` to avoid this in the future.")
         pause 0.5 while UserVars.moons.empty?
       end
     end
