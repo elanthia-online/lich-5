@@ -191,6 +191,7 @@ module Lich
         /you manage to loosen/,
         /you unlace/,
         /^You slam the heels/,
+        /^You work your way out/,
         /^With masterful grace, you ready/
       ].freeze
 
