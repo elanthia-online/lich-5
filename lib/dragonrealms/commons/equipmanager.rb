@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     class EquipmentManager
@@ -68,12 +70,12 @@ module Lich
         return false unless set_name
 
         unless @gear_sets[set_name]
-          Lich::Messaging.msg("bold", "*** Could not find gear set '#{set_name}' ***")
+          Lich::Messaging.msg("bold", "EquipmentManager: Could not find gear set '#{set_name}'")
           return false
         end
 
         gear_set_items = desc_to_items(@gear_sets[set_name])
-        echo("expected worn items:#{gear_set_items.map(&:short_name).join(',')}") if UserVars.equipmanager_debug
+        Lich::Messaging.msg("plain", "EquipmentManager: expected worn items: #{gear_set_items.map(&:short_name).join(',')}") if UserVars.equipmanager_debug
 
         combat_items = get_combat_items
 
@@ -99,32 +101,32 @@ module Lich
         return unless lost_items && !lost_items.empty?
 
         DRC.beep
-        echo 'MISSING EQUIPMENT: Please verify these items are in a closed container and not lost:'
-        echo lost_items.map(&:short_name).join(', ').to_s
+        Lich::Messaging.msg("bold", "EquipmentManager: MISSING EQUIPMENT - Please verify these items are in a closed container and not lost:")
+        Lich::Messaging.msg("bold", "EquipmentManager: #{lost_items.map(&:short_name).join(', ')}")
         pause
         DRC.beep
       end
 
       def wear_missing_items(target_items, combat_items)
         if UserVars.equipmanager_debug
-          echo('wearing missing items between these two sets')
-          echo(combat_items.join(',').to_s)
-          echo(target_items.map(&:short_name).join(',').to_s)
+          Lich::Messaging.msg("plain", "EquipmentManager: wearing missing items between these two sets")
+          Lich::Messaging.msg("plain", "EquipmentManager: combat: #{combat_items.join(',')}")
+          Lich::Messaging.msg("plain", "EquipmentManager: target: #{target_items.map(&:short_name).join(',')}")
         end
 
         missing_items = target_items
                         .reject { |item| combat_items.find { |c_item| item.short_regex =~ c_item } }
                         .reject { |item| [DRC.right_hand, DRC.left_hand].grep(item.short_regex).any? ? (stow_weapon(item.short_name) || true) : false }
 
-        echo("wear missing items #{missing_items}") if !missing_items.empty? && UserVars.equipmanager_debug
+        Lich::Messaging.msg("plain", "EquipmentManager: wear missing items #{missing_items}") if !missing_items.empty? && UserVars.equipmanager_debug
         missing_items.reject { |item| wear_item?(item) }
       end
 
       def remove_unmatched_items(combat_items, target_items)
         if UserVars.equipmanager_debug
-          echo('removing unmatched items between these two sets')
-          echo(combat_items.join(',').to_s)
-          echo(target_items.map(&:short_name).join(',').to_s)
+          Lich::Messaging.msg("plain", "EquipmentManager: removing unmatched items between these two sets")
+          Lich::Messaging.msg("plain", "EquipmentManager: combat: #{combat_items.join(',')}")
+          Lich::Messaging.msg("plain", "EquipmentManager: target: #{target_items.map(&:short_name).join(',')}")
         end
         combat_items
           .reject { |description| target_items.find { |item| item.short_regex =~ description } }
@@ -156,7 +158,7 @@ module Lich
         when /then constricts tighter around your/
           # Items that auto-repair, like exoskeletal armor,
           # may have a timer on them that prevents you removing them.
-          Lich::Messaging.msg("bold", "*** The #{item.short_name} is not ready to be removed yet. Try again later. ***")
+          Lich::Messaging.msg("bold", "EquipmentManager: The #{item.short_name} is not ready to be removed yet. Try again later.")
           return false
         when *DRCI::REMOVE_ITEM_FAILURE_PATTERNS
           # We may need to empty our hands to remove the item.
@@ -169,7 +171,7 @@ module Lich
           if did_lower
             remove_item(item)
           else
-            Lich::Messaging.msg("bold", "*** Unable to empty your hands to remove #{item.short_name} ***")
+            Lich::Messaging.msg("bold", "EquipmentManager: Unable to empty your hands to remove #{item.short_name}")
           end
           # Pick up the items in reverse order you lowered them
           # so that they end up in the correct hands again.
@@ -183,7 +185,7 @@ module Lich
             transform_desc = item.transforms_to
             item = item_by_desc(transform_desc)
             unless item
-              Lich::Messaging.msg("bold", "*** Could not find transformed item matching '#{transform_desc}' in gear list ***")
+              Lich::Messaging.msg("bold", "EquipmentManager: Could not find transformed item matching '#{transform_desc}' in gear list")
               return
             end
           end
@@ -202,7 +204,7 @@ module Lich
 
       def wear_item?(item)
         if item.nil?
-          echo("failed to match an item, try turning on debugging with #{$clean_lich_char}e UserVars.equipmanager_debug = true")
+          Lich::Messaging.msg("bold", "EquipmentManager: Failed to match an item, try turning on debugging with #{$clean_lich_char}e UserVars.equipmanager_debug = true")
           return false
         end
         if get_item?(item)
@@ -218,7 +220,7 @@ module Lich
 
         weapon = item_by_desc(description)
         unless weapon
-          Lich::Messaging.msg("bold", "*** Failed to match a weapon for #{description}:#{skill} ***")
+          Lich::Messaging.msg("bold", "EquipmentManager: Failed to match a weapon for #{description}:#{skill}")
           return false
         end
 
@@ -249,7 +251,7 @@ module Lich
         offhand = skill == 'Offhand Weapon'
         weapon = item_by_desc(description)
         unless weapon
-          Lich::Messaging.msg("bold", "*** Failed to match a weapon for #{description}:#{skill} ***")
+          Lich::Messaging.msg("bold", "EquipmentManager: Failed to match a weapon for #{description}:#{skill}")
           return false
         end
 
@@ -284,7 +286,7 @@ module Lich
         if item.wield
           case DRC.bput("wield my #{item.short_name}", 'You draw', 'You deftly remove', 'You slip', 'With a flick of your wrist you stealthily unsheathe', 'Wield what', 'Your right hand is too injured', 'Your left hand is too injured')
           when 'Your right hand is too injured', 'Your left hand is too injured', 'Wield what'
-            Lich::Messaging.msg("bold", "*** Unable to wield #{item.short_name} ***")
+            Lich::Messaging.msg("bold", "EquipmentManager: Unable to wield #{item.short_name}")
             return false
           else
             return true
@@ -292,18 +294,18 @@ module Lich
         elsif item.transforms_to
           transform_item = item_by_desc(item.transforms_to)
           unless transform_item
-            Lich::Messaging.msg("bold", "*** Could not find transformed item matching '#{item.transforms_to}' in gear list ***")
+            Lich::Messaging.msg("bold", "EquipmentManager: Could not find transformed item matching '#{item.transforms_to}' in gear list")
             return false
           end
           unless transform_item.worn ? get_item_helper(transform_item, :worn) : get_item_helper(transform_item, :stowed)
-            Lich::Messaging.msg("bold", "*** Unable to retrieve #{transform_item.short_name} for transform ***")
+            Lich::Messaging.msg("bold", "EquipmentManager: Unable to retrieve #{transform_item.short_name} for transform")
             return false
           end
           get_item_helper(transform_item, :transform)
         elsif (item.tie_to && get_item_helper(item, :tied)) || (item.worn && get_item_helper(item, :worn)) || (item.container && DRCI.get_item(item.short_name, item.container)) || get_item_helper(item, :stowed)
           true
         else
-          Lich::Messaging.msg("bold", "*** Could not find #{item.short_name} anywhere ***")
+          Lich::Messaging.msg("bold", "EquipmentManager: Could not find #{item.short_name} anywhere")
           false
         end
       end
@@ -392,7 +394,7 @@ module Lich
                                 DRCI.stow_hand('left') if DRC.left_hand && DRC.left_hand !~ /#{noun}/i
                                 DRCI.stow_hand('right') if DRC.right_hand && DRC.right_hand !~ /#{noun}/i
                                 if (DRC.left_hand && DRC.left_hand !~ /#{noun}/i) || (DRC.right_hand && DRC.right_hand !~ /#{noun}/i)
-                                  Lich::Messaging.msg("bold", "*** Unable to free hands for transform ***")
+                                  Lich::Messaging.msg("bold", "EquipmentManager: Unable to free hands for transform")
                                   next
                                 end
                                 item.worn ? DRC.bput("remove my #{noun}", '^You') : DRC.bput("get my #{noun}", '^You')
@@ -414,7 +416,7 @@ module Lich
 
         # Handle empty/nil response (bput timeout) as failure
         if response.nil? || response.empty?
-          Lich::Messaging.msg("bold", "*** No response from game for '#{data[:verb]} my #{item.short_name}' - command may have been lost ***")
+          Lich::Messaging.msg("bold", "EquipmentManager: No response from game for '#{data[:verb]} my #{item.short_name}' - command may have been lost")
           return false
         end
 
@@ -432,7 +434,7 @@ module Lich
           timeout = Time.now + 5
           pause 0.05 while snapshot == [DRC.left_hand, DRC.right_hand] && Time.now < timeout
           if snapshot == [DRC.left_hand, DRC.right_hand]
-            Lich::Messaging.msg("bold", "*** Hands did not change after '#{data[:verb]} my #{item.short_name}' - item may not have been retrieved ***")
+            Lich::Messaging.msg("bold", "EquipmentManager: Hands did not change after '#{data[:verb]} my #{item.short_name}' - item may not have been retrieved")
             return false
           end
           return true
@@ -486,7 +488,7 @@ module Lich
                        when /^ow$|offhand weapon/i
                          return true # just use weapon in your left hand
                        else
-                         Lich::Messaging.msg("bold", "*** Unsupported weapon swap: #{noun} to #{skill}. Please report this to https://github.com/elanthia-online/dr-scripts/issues ***")
+                         Lich::Messaging.msg("bold", "EquipmentManager: Unsupported weapon swap: #{noun} to #{skill}. Please report this to https://github.com/elanthia-online/dr-scripts/issues")
                          return false
                        end
         # All possible weapon skills to swap into.
@@ -527,7 +529,7 @@ module Lich
             DRCI.stow_hand('right') if DRC.right_hand && DRC.right_hand !~ /#{noun}/i
             hands_free = [DRC.left_hand, DRC.right_hand].compact.all? { |h| h =~ /#{noun}/i }
             unless hands_free
-              Lich::Messaging.msg("bold", "*** Unable to free hands for weapon swap ***")
+              Lich::Messaging.msg("bold", "EquipmentManager: Unable to free hands for weapon swap")
               return false
             end
             next
@@ -546,26 +548,27 @@ module Lich
         #   (hidden) You unload your <weapon> while blended in with your surroundings, but cannot shake the feeling that you drew attention to yourself.
         #   (one hand empty) You unload the <weapon>.
         #   (hands full) Your <ammo> falls from your <weapon> to your feet.
-        case DRC.bput("unload my #{name}", /^You unload/, /^Your .* fall.*to your feet\.$/, 'As you release the string', /^You .* unloading/, 'But your .* isn\'t loaded', 'You can\'t unload such a weapon', 'You don\'t have a ranged weapon to unload', 'You must be holding the weapon to do that')
-        when /^(?:Your .*?\b(?<ammo>[\w]+)\b fall.* from your .* to your feet\.)$/
+        result = DRC.bput("unload my #{name}", /^You unload/, /^Your .* fall.*to your feet\.$/, 'As you release the string', /^You .* unloading/, 'But your .* isn\'t loaded', 'You can\'t unload such a weapon', 'You don\'t have a ranged weapon to unload', 'You must be holding the weapon to do that')
+        ammo_match = result&.match(/^(?:Your .*?\b(?<ammo>[\w]+)\b fall.* from your .* to your feet\.)$/)
+        if ammo_match
           # Ammo fell to ground because hands are full.
           # Lower weapon, stow ammo, then pick it back up.
-          ammo = Regexp.last_match[:ammo]
+          ammo = ammo_match[:ammo]
           unless DRCI.lower_item?(name)
-            Lich::Messaging.msg("bold", "*** Unable to lower #{name} to pick up ammo ***")
+            Lich::Messaging.msg("bold", "EquipmentManager: Unable to lower #{name} to pick up ammo")
             return
           end
           DRCI.put_away_item?(ammo)
           unless DRCI.get_item?(name)
-            Lich::Messaging.msg("bold", "*** Unable to pick #{name} back up after unloading ***")
+            Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick #{name} back up after unloading")
           end
-        when /^(You unload|You .* unloading)/
+        elsif result&.match?(/^(?:You unload|You .* unloading)/)
           # Ammo is in hand, stow whichever hand isn't holding the weapon.
           unless DRCI.in_left_hand?(name)
-            Lich::Messaging.msg("bold", "*** Unable to stow ammo from left hand ***") unless DRCI.stow_hand('left')
+            Lich::Messaging.msg("bold", "EquipmentManager: Unable to stow ammo from left hand") unless DRCI.stow_hand('left')
           end
           unless DRCI.in_right_hand?(name)
-            Lich::Messaging.msg("bold", "*** Unable to stow ammo from right hand ***") unless DRCI.stow_hand('right')
+            Lich::Messaging.msg("bold", "EquipmentManager: Unable to stow ammo from right hand") unless DRCI.stow_hand('right')
           end
         end
         waitrt?
@@ -605,7 +608,7 @@ module Lich
 
       def stow_helper(action, weapon_name, *accept_strings, retries: STOW_HELPER_MAX_RETRIES)
         if retries <= 0
-          Lich::Messaging.msg("bold", "*** stow_helper exceeded max retries for '#{action}' ***")
+          Lich::Messaging.msg("bold", "EquipmentManager: stow_helper exceeded max retries for '#{action}'")
           return
         end
 

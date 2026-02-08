@@ -84,7 +84,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     context 'when gear set does not exist' do
       it 'returns false and prints a message' do
         em = described_class.new(make_settings(gear_sets: { 'combat' => ['sword'] }))
-        expect(Lich::Messaging).to receive(:msg).with("bold", /Could not find gear set 'missing'/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: Could not find gear set 'missing'/)
         expect(em.wear_equipment_set?('missing')).to be false
       end
     end
@@ -132,7 +132,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
 
     context 'when description does not match any item' do
       it 'returns false with a message' do
-        expect(Lich::Messaging).to receive(:msg).with("bold", /Failed to match a weapon/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: Failed to match a weapon/)
         expect(em.wield_weapon?('nonexistent')).to be false
       end
     end
@@ -242,7 +242,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     context 'when pre-transform retrieval fails (bug fix 1c)' do
       it 'returns false and prints a message' do
         allow(em).to receive(:get_item_helper).with(anything, :worn).and_return(false)
-        expect(Lich::Messaging).to receive(:msg).with("bold", /Unable to retrieve .* for transform/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: Unable to retrieve .* for transform/)
         expect(em.get_item?(em.items.first)).to be false
       end
     end
@@ -253,7 +253,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       end
 
       it 'returns false with a message' do
-        expect(Lich::Messaging).to receive(:msg).with("bold", /Could not find transformed item/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: Could not find transformed item/)
         expect(em.get_item?(em.items.first)).to be false
       end
     end
@@ -290,7 +290,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     context 'when bput returns nil (timeout)' do
       it 'returns false with a message' do
         allow(drc).to receive(:bput).and_return(nil)
-        expect(Lich::Messaging).to receive(:msg).with("bold", /No response from game/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: No response from game/)
         expect(em.send(:get_item_helper, item, :worn)).to be false
       end
     end
@@ -298,7 +298,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     context 'when bput returns empty string' do
       it 'returns false with a message' do
         allow(drc).to receive(:bput).and_return('')
-        expect(Lich::Messaging).to receive(:msg).with("bold", /No response from game/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: No response from game/)
         expect(em.send(:get_item_helper, item, :worn)).to be false
       end
     end
@@ -359,7 +359,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         it 'prints a warning and returns' do
           allow(drc).to receive(:bput).and_return('Your bolt falls from your crossbow to your feet.')
           allow(drci).to receive(:lower_item?).with('crossbow').and_return(false)
-          expect(Lich::Messaging).to receive(:msg).with("bold", /Unable to lower crossbow to pick up ammo/)
+          expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: Unable to lower crossbow to pick up ammo/)
           em.send(:unload_weapon, 'crossbow')
         end
       end
@@ -370,7 +370,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
           allow(drci).to receive(:lower_item?).with('crossbow').and_return(true)
           allow(drci).to receive(:put_away_item?).with('bolt')
           allow(drci).to receive(:get_item?).with('crossbow').and_return(false)
-          expect(Lich::Messaging).to receive(:msg).with("bold", /Unable to pick crossbow back up after unloading/)
+          expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: Unable to pick crossbow back up after unloading/)
           em.send(:unload_weapon, 'crossbow')
         end
       end
@@ -391,7 +391,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
           allow(drci).to receive(:in_left_hand?).with('crossbow').and_return(false)
           allow(drci).to receive(:in_right_hand?).with('crossbow').and_return(true)
           allow(drci).to receive(:stow_hand).with('left').and_return(false)
-          expect(Lich::Messaging).to receive(:msg).with("bold", /Unable to stow ammo from left hand/)
+          expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: Unable to stow ammo from left hand/)
           em.send(:unload_weapon, 'crossbow')
         end
       end
@@ -425,7 +425,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
 
     context 'with unsupported skill' do
       it 'returns false with a message' do
-        expect(Lich::Messaging).to receive(:msg).with("bold", /Unsupported weapon swap/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: Unsupported weapon swap/)
         expect(em.send(:swap_to_skill?, 'sword', 'Underwater Basket Weaving')).to be false
       end
     end
@@ -453,7 +453,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
           allow(drc).to receive(:left_hand).and_return('shield')
           allow(drc).to receive(:right_hand).and_return('sword')
           allow(drci).to receive(:stow_hand).with('left').and_return(true)
-          expect(Lich::Messaging).to receive(:msg).with("bold", /Unable to free hands for weapon swap/)
+          expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: Unable to free hands for weapon swap/)
           expect(em.send(:swap_to_skill?, 'sword', 'Large Edged')).to be false
         end
       end
@@ -495,7 +495,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     context 'when retries are exhausted' do
       it 'prints a warning and returns' do
         allow(drc).to receive(:bput).and_return('You are a little too busy')
-        expect(Lich::Messaging).to receive(:msg).with("bold", /stow_helper exceeded max retries/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: stow_helper exceeded max retries/)
         em.send(:stow_helper, 'stow my sword', 'sword', /You put/, retries: 1)
       end
     end
@@ -590,7 +590,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       it 'returns false with a message' do
         item = em.items.find { |i| i.name == 'shield' }
         allow(drc).to receive(:bput).and_return('then constricts tighter around your')
-        expect(Lich::Messaging).to receive(:msg).with("bold", /not ready to be removed yet/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager:.*not ready to be removed yet/)
         expect(em.remove_item(item)).to be false
       end
     end
@@ -600,7 +600,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         item = make_item(name: 'widget', worn: true, transforms_to: 'nonexistent')
         allow(drc).to receive(:bput).and_return('You remove a widget')
         allow(drci).to receive(:in_hands?).with('nonexistent').and_return(true)
-        expect(Lich::Messaging).to receive(:msg).with("bold", /Could not find transformed item/)
+        expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: Could not find transformed item/)
         em.remove_item(item)
       end
     end
@@ -750,6 +750,285 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     it 'worn_items delegates to matching_combat_items' do
       filter = ['shield']
       expect(em.worn_items(filter)).to eq(em.matching_combat_items(filter))
+    end
+  end
+
+  # ── stow_weapon ──────────────────────────────────────────────────
+
+  describe '#stow_weapon' do
+    let(:gear) do
+      [
+        { name: 'sword', is_worn: false, is_leather: false, wield: true },
+        { name: 'shield', is_worn: true, is_leather: false },
+        { name: 'dagger', is_worn: false, is_leather: false, tie_to: 'belt' },
+        { name: 'lockpick', is_worn: false, is_leather: false, container: 'toolkit' }
+      ]
+    end
+    let(:em) { described_class.new(make_settings(gear: gear)) }
+
+    before do
+      stub_game_methods(em)
+      allow(drc).to receive(:right_hand).and_return(nil)
+      allow(drc).to receive(:left_hand).and_return(nil)
+    end
+
+    context 'with nil description and both hands full' do
+      it 'stows both hands' do
+        allow(drc).to receive(:right_hand).and_return('sword')
+        allow(drc).to receive(:left_hand).and_return('shield')
+        expect(em).to receive(:stow_helper).twice
+        em.stow_weapon
+      end
+    end
+
+    context 'with nil description and empty hands' do
+      it 'returns without stowing' do
+        expect(em).not_to receive(:stow_helper)
+        em.stow_weapon
+      end
+    end
+
+    context 'when weapon has wield flag' do
+      it 'sheathes the weapon' do
+        expect(em).to receive(:stow_helper).with(
+          'sheath my sword', 'sword',
+          *described_class::SHEATH_SUCCESS_PATTERNS,
+          *described_class::SHEATH_FAILURE_PATTERNS
+        )
+        em.stow_weapon('sword')
+      end
+    end
+
+    context 'when weapon has worn flag' do
+      it 'wears the weapon' do
+        expect(em).to receive(:stow_helper).with(
+          'wear my shield', 'shield',
+          *Lich::DragonRealms::DRCI::WEAR_ITEM_SUCCESS_PATTERNS,
+          *Lich::DragonRealms::DRCI::WEAR_ITEM_FAILURE_PATTERNS
+        )
+        em.stow_weapon('shield')
+      end
+    end
+
+    context 'when weapon has tie_to' do
+      it 'ties the weapon' do
+        expect(em).to receive(:stow_helper).with(
+          'tie my dagger to my belt', 'dagger',
+          *Lich::DragonRealms::DRCI::TIE_ITEM_SUCCESS_PATTERNS,
+          *Lich::DragonRealms::DRCI::TIE_ITEM_FAILURE_PATTERNS
+        )
+        em.stow_weapon('dagger')
+      end
+    end
+
+    context 'when weapon has container' do
+      it 'puts weapon in container' do
+        expect(em).to receive(:stow_helper).with(
+          'put my lockpick in my toolkit', 'lockpick',
+          *Lich::DragonRealms::DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS,
+          *Lich::DragonRealms::DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS
+        )
+        em.stow_weapon('lockpick')
+      end
+    end
+
+    context 'when weapon has no special storage' do
+      let(:gear) { [{ name: 'gem', is_worn: false, is_leather: false }] }
+
+      it 'uses generic stow' do
+        expect(em).to receive(:stow_helper).with(
+          'stow my gem', 'gem',
+          *Lich::DragonRealms::DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS,
+          *Lich::DragonRealms::DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS
+        )
+        em.stow_weapon('gem')
+      end
+    end
+
+    context 'when description does not match any item' do
+      it 'returns without stowing' do
+        expect(em).not_to receive(:stow_helper)
+        em.stow_weapon('nonexistent')
+      end
+    end
+
+    context 'when weapon needs unloading' do
+      let(:gear) { [{ name: 'crossbow', is_worn: false, is_leather: false, wield: true, needs_unloading: true }] }
+
+      it 'unloads before stowing' do
+        expect(em).to receive(:unload_weapon).with('crossbow').ordered
+        expect(em).to receive(:stow_helper).ordered
+        em.stow_weapon('crossbow')
+      end
+    end
+  end
+
+  # ── turn_to_weapon? ─────────────────────────────────────────────
+
+  describe '#turn_to_weapon?' do
+    let(:em) { described_class.new(make_settings) }
+
+    before { stub_game_methods(em) }
+
+    context 'when old_noun equals new_noun' do
+      it 'returns true without issuing a command' do
+        expect(drc).not_to receive(:bput)
+        expect(em.turn_to_weapon?('sword', 'sword')).to be true
+      end
+    end
+
+    context 'when turn succeeds' do
+      it 'returns true' do
+        allow(drc).to receive(:bput).and_return('Your bastard sword shifts and reshapes before resolving itself into a longsword')
+        expect(em.turn_to_weapon?('bastard sword', 'longsword')).to be true
+      end
+    end
+
+    context 'when turn fails with Turn what' do
+      it 'returns false' do
+        allow(drc).to receive(:bput).and_return('Turn what?')
+        expect(em.turn_to_weapon?('sword', 'dagger')).to be false
+      end
+    end
+
+    context 'when turn fails with Which weapon' do
+      it 'returns false' do
+        allow(drc).to receive(:bput).and_return('Which weapon did you want to pull out')
+        expect(em.turn_to_weapon?('sword', 'nonexistent')).to be false
+      end
+    end
+  end
+
+  # ── wield_weapon_offhand? ───────────────────────────────────────
+
+  describe '#wield_weapon_offhand?' do
+    let(:gear) { [{ name: 'dagger', is_worn: false, is_leather: false }] }
+    let(:em) { described_class.new(make_settings(gear: gear)) }
+
+    before do
+      stub_game_methods(em)
+      allow(drc).to receive(:right_hand).and_return(nil)
+      allow(drc).to receive(:left_hand).and_return(nil)
+    end
+
+    context 'with nil description' do
+      it 'returns nil' do
+        expect(em.wield_weapon_offhand?(nil)).to be_nil
+      end
+    end
+
+    context 'with empty description' do
+      it 'returns nil' do
+        expect(em.wield_weapon_offhand?('')).to be_nil
+      end
+    end
+
+    context 'when description does not match any item' do
+      it 'returns false with a message' do
+        expect(Lich::Messaging).to receive(:msg).with("bold", /EquipmentManager: Failed to match a weapon/)
+        expect(em.wield_weapon_offhand?('nonexistent')).to be false
+      end
+    end
+
+    context 'when get_item? succeeds and weapon is in right hand' do
+      it 'swaps to left hand and returns true' do
+        allow(em).to receive(:get_item?).and_return(true)
+        allow(drci).to receive(:in_right_hand?).and_return(true)
+        allow(drc).to receive(:bput).and_return('You move a dagger to your left hand')
+        expect(em.wield_weapon_offhand?('dagger')).to be true
+      end
+    end
+
+    context 'when get_item? succeeds but swap fails (paralysis)' do
+      it 'returns false' do
+        allow(em).to receive(:get_item?).and_return(true)
+        allow(drci).to receive(:in_right_hand?).and_return(true)
+        allow(drc).to receive(:bput).and_return('Will alone cannot conquer the paralysis')
+        expect(em.wield_weapon_offhand?('dagger')).to be false
+      end
+    end
+
+    context 'when get_item? fails' do
+      it 'returns false' do
+        allow(em).to receive(:get_item?).and_return(false)
+        expect(em.wield_weapon_offhand?('dagger')).to be false
+      end
+    end
+
+    context 'deprecated alias wield_weapon_offhand' do
+      it 'delegates to wield_weapon_offhand?' do
+        allow(em).to receive(:get_item?).and_return(true)
+        allow(drci).to receive(:in_right_hand?).and_return(true)
+        allow(drc).to receive(:bput).and_return('You move a dagger to your left hand')
+        expect(em.wield_weapon_offhand('dagger')).to be true
+      end
+    end
+  end
+
+  # ── wear_items ──────────────────────────────────────────────────
+
+  describe '#wear_items' do
+    let(:gear) { [{ name: 'gloves', is_worn: true, is_leather: true }, { name: 'shield', is_worn: true, is_leather: false }] }
+    let(:em) { described_class.new(make_settings(gear: gear, sort_auto_head: false)) }
+
+    before { stub_game_methods(em) }
+
+    it 'calls wear_item? for each item in the list' do
+      items_list = em.items
+      items_list.each { |item| expect(em).to receive(:wear_item?).with(item) }
+      em.wear_items(items_list)
+    end
+
+    context 'when sort_auto_head is true' do
+      let(:em) { described_class.new(make_settings(gear: gear, sort_auto_head: true)) }
+
+      it 'sends sort auto head command' do
+        allow(em).to receive(:wear_item?)
+        expect(drc).to receive(:bput).with('sort auto head', /^Your inventory is now arranged/)
+        em.wear_items(em.items)
+      end
+    end
+
+    context 'when sort_auto_head is false' do
+      it 'does not send sort command' do
+        allow(em).to receive(:wear_item?)
+        expect(drc).not_to receive(:bput).with('sort auto head', anything)
+        em.wear_items(em.items)
+      end
+    end
+  end
+
+  # ── empty_hands ─────────────────────────────────────────────────
+
+  describe '#empty_hands' do
+    let(:gear) { [{ name: 'sword', is_worn: false, is_leather: false, wield: true }] }
+    let(:sets) { { 'standard' => ['sword'] } }
+    let(:em) { described_class.new(make_settings(gear: gear, gear_sets: sets)) }
+
+    before { stub_game_methods(em) }
+
+    context 'when return_held_gear succeeds' do
+      it 'does not call DRCI.stow_hands' do
+        allow(em).to receive(:return_held_gear).and_return(true)
+        expect(drci).not_to receive(:stow_hands)
+        em.empty_hands
+      end
+    end
+
+    context 'when return_held_gear returns nil (empty hands)' do
+      it 'calls DRCI.stow_hands' do
+        allow(em).to receive(:return_held_gear).and_return(nil)
+        expect(drci).to receive(:stow_hands)
+        em.empty_hands
+      end
+    end
+
+    context 'when return_held_gear returns false (unknown items)' do
+      it 'calls DRCI.stow_hands' do
+        allow(em).to receive(:return_held_gear).and_return(false)
+        expect(drci).to receive(:stow_hands)
+        em.empty_hands
+      end
     end
   end
 
