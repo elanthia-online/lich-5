@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     module DRCA
@@ -106,6 +108,54 @@ module Lich
         /^There's no room/
       ].freeze
 
+      STARLIGHT_MESSAGES = [
+        'The smallest hint of starlight flickers within your aura',
+        'A bare flicker of starlight plays within your aura',
+        'A faint amount of starlight illuminates your aura',
+        'Your aura pulses slowly with starlight',
+        'A steady pulse of starlight runs through your aura',
+        'Starlight dances vividly across the confines of your aura',
+        'Strong pulses of starlight flare within your aura',
+        'Your aura seethes with brilliant starlight',
+        'Your aura is blinding',
+        'The power contained in your aura'
+      ].freeze
+
+      CHARGE_LEVELS = [
+        /^You sense nothing out of the ordinary.  Only magic could detect the useless trace of .* still in your system.$/,
+        /^A small charge lingers within your body, just above the threshold of perception.$/,
+        /^A small charge lingers within your body.$/,
+        /^A charge dances through your body.$/,
+        /^A charge dances just below the threshold of discomfort.$/,
+        /^A charge circulates through your body, causing a low hum to vibrate through your bones.$/,
+        /^Elemental essence floats freely within your body, leaving little untouched.$/,
+        /^Elemental essence has infused every inch of your body.  While you could contain more, you'd do so at the risk of your health.$/,
+        /^Extraplanar power crackles within your body, leaving you feeling mildly feverish.$/,
+        /^Extraplanar power crackles within your body, leaving you feeling acutely ill.$/,
+        /^Your body sings and crackles with a barely contained charge, destroying what little cenesthesia you had left.$/,
+        /^You have reached the limits of your body's capacity to store a charge.  The laws of the Elemental Plane of .* scream demands upon your physiology, threatening your life.$/
+      ].freeze
+
+      PERC_MANA_START_PATTERN = /streams of .* mana/
+      PERC_MANA_END_PATTERN = /the Psychic Projection book/
+      SYMBIOSIS_PATTERN = /combine the weaves of the (?<type>\w+) symbiosis/
+      DISCERN_SORCERY_PATTERN = /requires at minimum (?<min>\d+) mana streams/
+      DISCERN_FULL_PATTERN = /minimum (?<min>\d+) mana streams and you think you can reinforce it with (?<more>\d+) more/i
+
+      USELESS_RUNESTONE_PATTERNS = [
+        /^You get a useless/
+      ].freeze
+
+      GET_RUNESTONE_SUCCESS_PATTERNS = [
+        /^You get/,
+        /^You pick up/
+      ].freeze
+
+      GET_RUNESTONE_FAILURE_PATTERNS = [
+        /^What were you referring to/,
+        /^I could not find/
+      ].freeze
+
       @backfired_status = false
 
       def infuse_om(harness, amount)
@@ -115,7 +165,7 @@ module Lich
         retries = 0
         loop do
           if retries >= INFUSE_OM_MAX_RETRIES
-            Lich::Messaging.msg("bold", "common-arcana: infuse_om exhausted #{INFUSE_OM_MAX_RETRIES} retries — giving up")
+            Lich::Messaging.msg("bold", "DRCA: infuse_om exhausted #{INFUSE_OM_MAX_RETRIES} retries — giving up")
             break
           end
           retries += 1
@@ -200,7 +250,7 @@ module Lich
         return true if DRSpells.active_spells[name]
 
         if retries <= 0
-          Lich::Messaging.msg("bold", "common-arcana: activate_barb_buff? exhausted #{BARB_BUFF_MAX_RETRIES} retries for '#{name}' — giving up")
+          Lich::Messaging.msg("bold", "DRCA: activate_barb_buff? exhausted #{BARB_BUFF_MAX_RETRIES} retries for '#{name}' — giving up")
           return false
         end
 
@@ -218,7 +268,7 @@ module Lich
           DRC.retreat
           case DRC.bput('sit', 'You sit', 'You are already', 'You rise', 'While swimming?')
           when 'While swimming?'
-            Lich::Messaging.msg("bold", "common-arcana: cannot sit to activate '#{name}' — water is too deep")
+            Lich::Messaging.msg("bold", "DRCA: cannot sit to activate '#{name}' — water is too deep")
             activated = false
           else
             activated = activate_barb_buff?(name, meditation_pause_timer, sit_to_meditate, retries: retries - 1)
@@ -255,7 +305,7 @@ module Lich
         case match
         when 'Your desire to prepare this offensive spell suddenly slips away'
           if retries <= 0
-            Lich::Messaging.msg("bold", "common-arcana: prepare? exhausted #{PREPARE_MAX_RETRIES} retries for '#{abbrev}' — giving up")
+            Lich::Messaging.msg("bold", "DRCA: prepare? exhausted #{PREPARE_MAX_RETRIES} retries for '#{abbrev}' — giving up")
             return false
           end
           pause 1
@@ -326,7 +376,7 @@ module Lich
         if DRCI.inside?("#{spell['runestone_name']}", settings.runestone_storage)
           return false unless get_runestone?(spell['runestone_name'], settings)
         else
-          Lich::Messaging.msg("bold", "common-arcana: out of #{spell['runestone_name']}!")
+          Lich::Messaging.msg("bold", "DRCA: out of #{spell['runestone_name']}!")
           return false
         end
         true
@@ -335,10 +385,16 @@ module Lich
       def get_runestone?(runestone, settings)
         return true if DRCI.in_hands?(runestone)
 
-        DRCI.get_item(runestone, settings.runestone_storage)
-        if reget(3, "You get a useless #{runestone}")
+        result = DRC.bput(
+          "get my #{runestone} from my #{settings.runestone_storage}",
+          USELESS_RUNESTONE_PATTERNS, GET_RUNESTONE_SUCCESS_PATTERNS, GET_RUNESTONE_FAILURE_PATTERNS
+        )
+        if USELESS_RUNESTONE_PATTERNS.any? { |pat| pat.match?(result) }
           DRCI.dispose_trash(runestone)
-          Lich::Messaging.msg("bold", "common-arcana: got a useless #{runestone} — disposing and giving up")
+          Lich::Messaging.msg("bold", "DRCA: got a useless #{runestone} — disposing and giving up")
+          return false
+        elsif GET_RUNESTONE_FAILURE_PATTERNS.any? { |pat| pat.match?(result) }
+          Lich::Messaging.msg("bold", "DRCA: could not find #{runestone} in #{settings.runestone_storage}")
           return false
         end
         true
@@ -371,13 +427,13 @@ module Lich
         if cast_command =~ /\b(barrage)\b/i && (Flags['unknown-command'] || Flags['barrage-fail'])
           return cast?('cast', symbiosis, [], after, retries: retries - 1) if retries > 0
 
-          Lich::Messaging.msg("bold", "common-arcana: cast? barrage fallback exhausted retries — giving up")
+          Lich::Messaging.msg("bold", "DRCA: cast? barrage fallback exhausted retries — giving up")
           return false
         end
 
         if Flags['cyclic-too-recent'] || Flags['spell-full-prep']
           if retries <= 0
-            Lich::Messaging.msg("bold", "common-arcana: cast? exhausted #{CAST_MAX_RETRIES} retries waiting for cyclic/full-prep — giving up")
+            Lich::Messaging.msg("bold", "DRCA: cast? exhausted #{CAST_MAX_RETRIES} retries waiting for cyclic/full-prep — giving up")
             return false
           end
           pause 1
@@ -431,7 +487,7 @@ module Lich
           result = DRCI.tie_item?(focus, tied)
           unless result
             if retries <= 0
-              Lich::Messaging.msg("bold", "common-arcana: stow_focus exhausted #{STOW_FOCUS_MAX_RETRIES} retries tying #{focus} — giving up")
+              Lich::Messaging.msg("bold", "DRCA: stow_focus exhausted #{STOW_FOCUS_MAX_RETRIES} retries tying #{focus} — giving up")
               return false
             end
             DRC.retreat
@@ -511,7 +567,7 @@ module Lich
         waitrt?
         case result
         when /you find it too clumsy/
-          Lich::Messaging.msg("bold", "common-arcana: your arcana skill is too low to invoke your cambrinth while worn")
+          Lich::Messaging.msg("bold", "DRCA: your arcana skill is too low to invoke your cambrinth while worn")
           # If the cambrinth is in your hands and you can't invoke it, nothing else to do.
           unless DRCI.in_hands?(cambrinth)
             # Otherwise, try to find the cambrinth and get it to your hands.
@@ -538,10 +594,10 @@ module Lich
           # You're not wearing nor holding your cambrinth item, go find it again.
           # Likely it's configured in your yaml that you wear it but it's stowed for some reason.
           # Try to find the cambrinth and get it to your hands.
-          Lich::Messaging.msg("bold", "common-arcana: where did your cambrinth go?")
+          Lich::Messaging.msg("bold", "DRCA: where did your cambrinth go?")
           retry_find_cambrinth = true
         when /you find it too clumsy/
-          Lich::Messaging.msg("bold", "common-arcana: your arcana skill is too low to charge your cambrinth while worn")
+          Lich::Messaging.msg("bold", "DRCA: your arcana skill is too low to charge your cambrinth while worn")
           retry_find_cambrinth = true
         else
           charged = result =~ /absorbs? all of the energy/
@@ -614,46 +670,43 @@ module Lich
         return nil if DRStats.barbarian? || DRStats.thief? || DRStats.trader? || DRStats.commoner?
 
         if DRStats.moon_mage?
-          DRC.bput('perc mana', 'the Psychic Projection book.')
-          mana_msgs = reget(5)[0..3]
+          lines = Lich::Util.issue_command(
+            'perc mana',
+            PERC_MANA_START_PATTERN,
+            PERC_MANA_END_PATTERN,
+            usexml: false,
+            include_end: false,
+            quiet: true,
+            timeout: 5
+          )
+          return nil if lines.nil?
 
-          mana_msgs.collect! do |mana_msg|
-            mana_msg.split(' streams')[0]
-          end
+          mana_msgs = lines.map(&:strip).select { |line| line.include?('streams') }[0..3]
+          return nil if mana_msgs.length < 4
 
-          mana_levels = {}
-          mana_levels['enlightened_geometry'] = parse_mana_message(mana_msgs[0])
-          mana_levels['moonlight_manipulation'] = parse_mana_message(mana_msgs[1])
-          mana_levels['perception'] = parse_mana_message(mana_msgs[2])
-          mana_levels['psychic_projection'] = parse_mana_message(mana_msgs[3])
-          return mana_levels
+          mana_msgs.collect! { |mana_msg| mana_msg.split(' streams')[0] }
+
+          {
+            'enlightened_geometry'   => parse_mana_message(mana_msgs[0]),
+            'moonlight_manipulation' => parse_mana_message(mana_msgs[1]),
+            'perception'             => parse_mana_message(mana_msgs[2]),
+            'psychic_projection'     => parse_mana_message(mana_msgs[3])
+          }
         else
           mana_msg = DRC.bput('perc', '^You reach out with your .* and (see|hear) \w+')
-          return parse_mana_message(mana_msg)
+          parse_mana_message(mana_msg)
         end
       end
 
       def perc_aura
         return unless DRStats.trader?
 
-        starlight_messages = [
-          'The smallest hint of starlight flickers within your aura',
-          'A bare flicker of starlight plays within your aura',
-          'A faint amount of starlight illuminates your aura',
-          'Your aura pulses slowly with starlight',
-          'A steady pulse of starlight runs through your aura',
-          'Starlight dances vividly across the confines of your aura',
-          'Strong pulses of starlight flare within your aura',
-          'Your aura seethes with brilliant starlight',
-          'Your aura is blinding',
-          'The power contained in your aura'
-        ]
-        Flags.add('aura-level', Regexp.union(starlight_messages))
+        Flags.add('aura-level', Regexp.union(STARLIGHT_MESSAGES))
         Flags.add('aura-capped?', 'Your aura contains as much starlight as you can safely handle')
         Flags.add('aura-growing?', 'Local conditions permit optimal growth of your aura', 'Local conditions are hindering the growth of your aura')
         aura = {}
         DRC.bput('perceive aura', 'Roundtime')
-        aura['level'] = Flags['aura-level'] ? starlight_messages.index(Flags['aura-level'][0]) : 0
+        aura['level'] = Flags['aura-level'] ? STARLIGHT_MESSAGES.index(Flags['aura-level'][0]) : 0
         aura['capped'] = Flags['aura-capped?'] ? true : false
         aura['growing'] = Flags['aura-growing?'] ? true : false
         Flags.delete('aura-level')
@@ -668,7 +721,7 @@ module Lich
           next if DRSpells.active_spells[name] && (data['recast'].nil? || DRSpells.active_spells[name].to_i > data['recast'])
 
           while DRStats.mana < settings.waggle_spells_mana_threshold || DRStats.concentration < settings.waggle_spells_concentration_threshold
-            Lich::Messaging.msg("plain", "common-arcana: waiting on mana over #{settings.waggle_spells_mana_threshold} or concentration over #{settings.waggle_spells_concentration_threshold}...")
+            Lich::Messaging.msg("plain", "DRCA: waiting on mana over #{settings.waggle_spells_mana_threshold} or concentration over #{settings.waggle_spells_concentration_threshold}...")
             pause 15
           end
           cast_spell(data, settings, force_cambrinth, cast_lifecycle_lambda)
@@ -756,11 +809,14 @@ module Lich
         if data['symbiosis'] || spell_is_sorcery
           if discern_data.empty? || discern_data['min'].nil? || more_override
             DRC.retreat
-            /requires at minimum (\d+) mana streams/ =~ DRC.bput("discern #{data['abbrev']}", 'requires at minimum \d+ mana streams')
-            discern_data['mana'] = Regexp.last_match(1).to_i
-            discern_data['cambrinth'] = nil
-            discern_data['min'] = Regexp.last_match(1).to_i
-            discern_data['more'] = (more_override || 0)
+            discern_result = DRC.bput("discern #{data['abbrev']}", 'requires at minimum \d+ mana streams')
+            match = discern_result.match(DISCERN_SORCERY_PATTERN)
+            if match
+              discern_data['mana'] = match[:min].to_i
+              discern_data['cambrinth'] = nil
+              discern_data['min'] = match[:min].to_i
+              discern_data['more'] = (more_override || 0)
+            end
           end
           calculate_mana(discern_data['min'], discern_data['more'], discern_data, false, settings)
         elsif discern_data.empty? || discern_data['time_stamp'].nil? || Time.now - discern_data['time_stamp'] > settings.check_discern_timer_in_hours * 60 * 60 || !discern_data['more'].nil?
@@ -771,8 +827,8 @@ module Lich
             discern_data['mana'] = 1
             discern_data['cambrinth'] = nil
           else
-            discern =~ /minimum (\d+) mana streams and you think you can reinforce it with (\d+) more/i
-            calculate_mana(Regexp.last_match(1).to_i, Regexp.last_match(2).to_i, discern_data, data['cyclic'] || data['ritual'], settings)
+            match = discern.match(DISCERN_FULL_PATTERN)
+            calculate_mana(match[:min].to_i, match[:more].to_i, discern_data, data['cyclic'] || data['ritual'], settings) if match
           end
         end
         waitrt?
@@ -955,32 +1011,15 @@ module Lich
       def check_elemental_charge
         return 0 unless DRStats.warrior_mage?
 
-        charge_levels = [
-          /^You sense nothing out of the ordinary.  Only magic could detect the useless trace of .* still in your system.$/,
-          /^A small charge lingers within your body, just above the threshold of perception.$/,
-          /^A small charge lingers within your body.$/,
-          /^A charge dances through your body.$/,
-          /^A charge dances just below the threshold of discomfort.$/,
-          /^A charge circulates through your body, causing a low hum to vibrate through your bones.$/,
-          /^Elemental essence floats freely within your body, leaving little untouched.$/,
-          /^Elemental essence has infused every inch of your body.  While you could contain more, you'd do so at the risk of your health.$/,
-          /^Extraplanar power crackles within your body, leaving you feeling mildly feverish.$/,
-          /^Extraplanar power crackles within your body, leaving you feeling acutely ill.$/,
-          /^Your body sings and crackles with a barely contained charge, destroying what little cenesthesia you had left.$/,
-          /^You have reached the limits of your body's capacity to store a charge.  The laws of the Elemental Plane of .* scream demands upon your physiology, threatening your life.$/
-        ]
-        result = DRC.bput("pathway sense", *charge_levels)
-        charge_levels.find_index { |pattern| pattern =~ result }
+        result = DRC.bput("pathway sense", *CHARGE_LEVELS)
+        CHARGE_LEVELS.find_index { |pattern| pattern =~ result }
       end
 
       # check which symbiotic research is active
       def perc_symbiotic_research
-        case DRC.bput('perceive', /combine the weaves of the (\w+) symbiosis/, /Roundtime/)
-        when /combine the weaves of the (\w+) symbiosis/
-          Regexp.last_match(1)
-        else
-          nil
-        end
+        result = DRC.bput('perceive', SYMBIOSIS_PATTERN, /Roundtime/)
+        match = result.match(SYMBIOSIS_PATTERN)
+        match ? match[:type] : nil
       end
 
       # release symbiotic research

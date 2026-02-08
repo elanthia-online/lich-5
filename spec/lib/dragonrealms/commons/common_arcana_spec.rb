@@ -139,13 +139,13 @@ module DRStats
   end
 end unless defined?(DRStats)
 
-module DRSkill
-  def self.getrank(skill)
+class DRSkill
+  def self.getrank(skill = nil, *_rest)
     @ranks ||= {}
     @ranks[skill] || 0
   end
 
-  def self.getxp(skill)
+  def self.getxp(skill = nil, *_rest)
     @xps ||= {}
     @xps[skill] || 0
   end
@@ -178,6 +178,16 @@ module DRCMM
     true
   end
 end unless defined?(DRCMM)
+
+# Namespace aliases — ensure DRCA code resolves these to the same objects as top-level
+module Lich
+  module DragonRealms
+    DRC = ::DRC unless defined?(Lich::DragonRealms::DRC)
+    DRCI = ::DRCI unless defined?(Lich::DragonRealms::DRCI)
+    DRCMM = ::DRCMM unless defined?(Lich::DragonRealms::DRCMM)
+    DRSpells = ::DRSpells unless defined?(Lich::DragonRealms::DRSpells)
+  end
+end
 
 module Flags
   @flags = {}
@@ -234,6 +244,15 @@ module UserVars
     @avtalia || {}
   end
 end unless defined?(UserVars)
+
+# Mock Lich::Util for issue_command
+module Lich
+  module Util
+    def self.issue_command(*_args, **_kwargs)
+      []
+    end
+  end unless defined?(Lich::Util)
+end
 
 # Helper to extract bold messages from Lich::Messaging captures
 def bold_messages
@@ -372,6 +391,34 @@ RSpec.describe Lich::DragonRealms::DRCA do
       DRCA::CYCLIC_RELEASE_SUCCESS_PATTERNS.each do |pattern|
         expect(pattern).to be_a(Regexp)
       end
+    end
+
+    it 'freezes STARLIGHT_MESSAGES' do
+      expect(DRCA::STARLIGHT_MESSAGES).to be_frozen
+    end
+
+    it 'freezes CHARGE_LEVELS' do
+      expect(DRCA::CHARGE_LEVELS).to be_frozen
+    end
+
+    it 'freezes USELESS_RUNESTONE_PATTERNS' do
+      expect(DRCA::USELESS_RUNESTONE_PATTERNS).to be_frozen
+    end
+
+    it 'freezes GET_RUNESTONE_SUCCESS_PATTERNS' do
+      expect(DRCA::GET_RUNESTONE_SUCCESS_PATTERNS).to be_frozen
+    end
+
+    it 'freezes GET_RUNESTONE_FAILURE_PATTERNS' do
+      expect(DRCA::GET_RUNESTONE_FAILURE_PATTERNS).to be_frozen
+    end
+
+    it 'defines named capture patterns' do
+      expect(DRCA::SYMBIOSIS_PATTERN).to be_a(Regexp)
+      expect(DRCA::DISCERN_SORCERY_PATTERN).to be_a(Regexp)
+      expect(DRCA::DISCERN_FULL_PATTERN).to be_a(Regexp)
+      expect(DRCA::PERC_MANA_START_PATTERN).to be_a(Regexp)
+      expect(DRCA::PERC_MANA_END_PATTERN).to be_a(Regexp)
     end
   end
 
@@ -853,13 +900,25 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect(DRCA.get_runestone?('moonstone', settings)).to be true
     end
 
+    it 'returns true on successful get' do
+      allow(DRCI).to receive(:in_hands?).with('moonstone').and_return(false)
+      allow(DRC).to receive(:bput).and_return('You get a moonstone')
+      expect(DRCA.get_runestone?('moonstone', settings)).to be true
+    end
+
     it 'returns false and disposes useless runestone' do
       allow(DRCI).to receive(:in_hands?).with('moonstone').and_return(false)
-      allow(DRCI).to receive(:get_item)
-      allow(DRCA).to receive(:reget).and_return(true)
+      allow(DRC).to receive(:bput).and_return('You get a useless moonstone')
       expect(DRCI).to receive(:dispose_trash).with('moonstone')
       expect(DRCA.get_runestone?('moonstone', settings)).to be false
       expect(bold_messages.any? { |m| m.include?('useless moonstone') }).to be true
+    end
+
+    it 'returns false when runestone not found' do
+      allow(DRCI).to receive(:in_hands?).with('moonstone').and_return(false)
+      allow(DRC).to receive(:bput).and_return('What were you referring to')
+      expect(DRCA.get_runestone?('moonstone', settings)).to be false
+      expect(bold_messages.any? { |m| m.include?('could not find moonstone') }).to be true
     end
   end
 
@@ -996,6 +1055,49 @@ RSpec.describe Lich::DragonRealms::DRCA do
     it 'sends release symbiosis twice' do
       expect(DRC).to receive(:bput).with('release symbiosis', anything, anything, anything).twice
       DRCA.release_magical_research
+    end
+  end
+
+  # ──────────────────────────────────────────────
+  # perc_mana
+  # ──────────────────────────────────────────────
+  describe '.perc_mana' do
+    it 'returns nil for barbarians' do
+      DRStats.guild = 'Barbarian'
+      expect(DRCA.perc_mana).to be_nil
+    end
+
+    it 'returns nil for thieves' do
+      DRStats.guild = 'Thief'
+      expect(DRCA.perc_mana).to be_nil
+    end
+
+    it 'returns mana levels for moon mages via issue_command' do
+      DRStats.guild = 'Moon Mage'
+      mock_lines = [
+        'The developing streams of Enlightened Geometry mana flowing through',
+        'The developing streams of Moonlight Manipulation mana flowing through',
+        'The developing streams of Perception mana flowing through',
+        'The developing streams of Psychic Projection mana flowing through'
+      ]
+      allow(Lich::Util).to receive(:issue_command).and_return(mock_lines)
+      allow(DRCA).to receive(:parse_mana_message).and_return(3)
+      result = DRCA.perc_mana
+      expect(result).to be_a(Hash)
+      expect(result.keys).to contain_exactly('enlightened_geometry', 'moonlight_manipulation', 'perception', 'psychic_projection')
+    end
+
+    it 'returns nil when issue_command times out for moon mage' do
+      DRStats.guild = 'Moon Mage'
+      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(DRCA.perc_mana).to be_nil
+    end
+
+    it 'returns parsed mana for non-moon-mage casters' do
+      DRStats.guild = 'Warrior Mage'
+      allow(DRC).to receive(:bput).and_return('You reach out with your senses and see developing')
+      allow(DRCA).to receive(:parse_mana_message).and_return(5)
+      expect(DRCA.perc_mana).to eq(5)
     end
   end
 
