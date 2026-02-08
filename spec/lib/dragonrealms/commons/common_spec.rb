@@ -92,16 +92,37 @@ DRC_MOCK_GAME_OBJ = Class.new do
   end
 end
 
+# Always reopen Script to add attributes/methods needed by common.rb tests.
+# Other specs may define Script first (spec_helper.rb has a minimal version),
+# so we augment rather than replace to avoid cross-spec failures.
 class Script
   attr_accessor :paused, :no_pause_all, :name
 
-  def self.running; []; end
-  def self.running?(_name); false; end
-  def self.exists?(_name); true; end
-  def self.current; nil; end
-  def self.self; OpenStruct.new(name: 'test'); end
   def paused?; @paused || false; end
-end unless defined?(Script)
+
+  # Only define class methods if they don't exist (spec_helper.rb may have its own)
+  class << self
+    def running
+      []
+    end unless method_defined?(:running)
+
+    def running?(_name)
+      false
+    end unless method_defined?(:running?)
+
+    def exists?(_name)
+      true
+    end unless method_defined?(:exists?)
+
+    def current
+      nil
+    end unless method_defined?(:current)
+
+    def self
+      OpenStruct.new(name: 'test')
+    end unless method_defined?(:self)
+  end
+end
 
 module UserVars
   @vars = {}
@@ -144,9 +165,10 @@ module Frontend
 end unless defined?(Frontend)
 
 # Mock XMLData for log_window
-module XMLData
-  def self.server_time; Time.at(1234567890); end
-end unless defined?(XMLData)
+# XMLData may be a module (from this file) or OpenStruct (from spec_helper.rb).
+# Always add server_time if missing, using define_singleton_method to work with both.
+module XMLData; end unless defined?(XMLData)
+XMLData.define_singleton_method(:server_time) { Time.at(1234567890) } unless XMLData.respond_to?(:server_time)
 $pause_all_lock = Mutex.new unless defined?($pause_all_lock)
 $safe_pause_lock = Mutex.new unless defined?($safe_pause_lock)
 
@@ -990,7 +1012,22 @@ RSpec.describe Lich::DragonRealms::DRC do
       allow(DRCI).to receive(:wear_item?).and_return(true)
       allow(DRCI).to receive(:stow_item?).and_return(true)
       allow(described_class).to receive(:stop_playing)
-      allow(described_class).to receive(:bput).and_return('not in need of cleaning')
+      # clean_instrument has 3 bput calls:
+      # 1. "wipe my ... with my ..." -> 'not in need of drying' breaks outer loop
+      # 2. "wring my ..." -> 'you wring a dry' breaks inner loop (skipped if wipe returns 'not in need of drying')
+      # 3. "clean my ... with my ..." -> 'not in need of cleaning' breaks final loop
+      allow(described_class).to receive(:bput) do |cmd, *_patterns|
+        case cmd
+        when /^wipe my/
+          'not in need of drying'
+        when /^clean my/
+          'not in need of cleaning'
+        when /^wring my/
+          'you wring a dry'
+        else
+          'Roundtime'
+        end
+      end
       allow(described_class).to receive(:waitrt?)
       allow(described_class).to receive(:pause)
       allow(described_class).to receive(:fix_standing)

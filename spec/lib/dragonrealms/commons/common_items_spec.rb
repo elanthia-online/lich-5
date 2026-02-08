@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
+require 'rspec'
 require 'ostruct'
 
-# Mock modules/classes at top level first, then alias into namespace
-# This ensures expect() targets the same object the module code calls
+# Setup load path (standalone spec, no spec_helper dependency)
+LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
 
 # Ensure Lich::DragonRealms namespace exists
 module Lich; module DragonRealms; end; end
@@ -34,11 +35,29 @@ end
 # Mock Lich::Util for issue_command
 module Lich
   module Util
-    def self.issue_command(*_args)
+    def self.issue_command(_command, _start, _end_pattern, **_opts)
       []
     end
   end
 end unless defined?(Lich::Util)
+
+module DRStats
+  def self.guild; 'Warrior Mage'; end
+  def self.encumbrance; 'None'; end
+  def self.barbarian?; false; end
+  def self.thief?; false; end
+end unless defined?(DRStats)
+Lich::DragonRealms::DRStats = DRStats unless defined?(Lich::DragonRealms::DRStats)
+
+class DRSkill
+  def self.getrank(_skill); 0; end
+end unless defined?(DRSkill)
+Lich::DragonRealms::DRSkill = DRSkill unless defined?(Lich::DragonRealms::DRSkill)
+
+module DRSpells
+  def self.active_spells; {}; end
+end unless defined?(DRSpells)
+Lich::DragonRealms::DRSpells = DRSpells unless defined?(Lich::DragonRealms::DRSpells)
 
 module DRC
   module_function
@@ -80,12 +99,13 @@ module DRC
     end
   end
 end unless defined?(DRC)
+Lich::DragonRealms::DRC = DRC unless defined?(Lich::DragonRealms::DRC)
 
-module DRRoom
-  def self.room_objs
-    []
-  end
+class DRRoom
+  def self.npcs; []; end
+  def self.room_objs; []; end
 end unless defined?(DRRoom)
+Lich::DragonRealms::DRRoom = DRRoom unless defined?(Lich::DragonRealms::DRRoom)
 
 class Room
   def self.current
@@ -98,6 +118,7 @@ end unless defined?(Room)
 # Always add methods if missing, using define_singleton_method to work with both.
 module XMLData; end unless defined?(XMLData)
 XMLData.define_singleton_method(:room_title) { '' } unless XMLData.respond_to?(:room_title)
+XMLData.define_singleton_method(:server_time) { Time.at(1234567890) } unless XMLData.respond_to?(:server_time)
 
 module Flags
   @flags = {}
@@ -123,6 +144,57 @@ module Flags
   end
 end unless defined?(Flags)
 
+# Always reopen Script to add attributes/methods needed by tests.
+# Other specs may define Script first (spec_helper.rb has a minimal version),
+# so we augment rather than replace to avoid cross-spec failures.
+class Script
+  attr_accessor :paused, :no_pause_all, :name
+
+  def paused?; @paused || false; end
+
+  class << self
+    def running
+      []
+    end unless method_defined?(:running)
+
+    def running?(_name)
+      false
+    end unless method_defined?(:running?)
+
+    def exists?(_name)
+      true
+    end unless method_defined?(:exists?)
+
+    def current
+      nil
+    end unless method_defined?(:current)
+
+    def self
+      OpenStruct.new(name: 'test')
+    end unless method_defined?(:self)
+  end
+end
+
+module UserVars
+  @vars = {}
+  class << self
+    def method_missing(name, *args)
+      name.to_s.end_with?('=') ? @vars[name.to_s.chomp('=')] = args.first : @vars[name.to_s]
+    end
+
+    def respond_to_missing?(_name, _include_private = false); true; end
+  end
+end unless defined?(UserVars)
+
+# Mock Frontend module (added in PR #1170)
+module Frontend
+  def self.supports_gsl?; false; end
+end unless defined?(Frontend)
+
+$pause_all_lock = Mutex.new unless defined?($pause_all_lock)
+$safe_pause_lock = Mutex.new unless defined?($safe_pause_lock)
+$ORDINALS = %w[first second third fourth fifth sixth seventh eighth ninth tenth] unless defined?($ORDINALS)
+
 # NOTE: `clear` MUST be private — a public Kernel `clear` is inherited by all objects,
 # causing `Effects::Buffs.respond_to?(:clear)` to return true in qstrike_spec,
 # which breaks buff cleanup. Private methods don't appear in `respond_to?` checks
@@ -135,17 +207,24 @@ module Kernel
   def waitrt?; end
   def fput(_cmd); end
   def put(_cmd); end
+  def get?; nil; end
   def echo(_msg); end
+  def standing?; true; end
+  def hiding?; false; end
+  def invisible?; false; end
+  def stunned?; false; end
+  def webbed?; false; end
+  def start_script(_name, _args = [], _flags = {}); nil; end
+  def get_data(_key); OpenStruct.new(spell_data: {}); end
+  def _respond(*_args); end
+  def custom_require; proc { |_name| nil }; end
 
   def reget(*_args)
     []
   end
 end
 
-# Global ordinals constant
-$ORDINALS = %w[first second third fourth fifth sixth seventh eighth ninth tenth] unless defined?($ORDINALS)
-
-require_relative '../../../../lib/dragonrealms/commons/common-items'
+require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-items.rb')
 
 # Alias the real module at top level
 DRCI = Lich::DragonRealms::DRCI unless defined?(DRCI)
