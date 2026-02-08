@@ -1,10 +1,12 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     module DRCS
       module_function
 
       # Shared response for elemental charge depletion
-      LACK_CHARGE = 'You lack the elemental charge'
+      LACK_CHARGE = 'You lack the elemental charge'.freeze
 
       SUMMON_WEAPON_RESPONSES = [
         LACK_CHARGE,
