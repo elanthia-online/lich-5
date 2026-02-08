@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     module DRCH
@@ -25,7 +27,10 @@ module Lich
           quiet: true,
           include_end: false
         )
-        return HealthResult.new if health_lines.nil?
+        if health_lines.nil?
+          Lich::Messaging.msg("bold", "DRCH: Failed to capture HEALTH output (timeout).")
+          return HealthResult.new
+        end
 
         parse_health_lines(strip_xml(health_lines))
       end
@@ -76,7 +81,10 @@ module Lich
       # Uses PERCEIVE HEALTH SELF command to check for wounds and scars.
       # Returns a HealthResult with perceived wound details merged with check_health diagnostics.
       def perceive_health
-        return unless DRStats.empath?
+        unless DRStats.empath?
+          Lich::Messaging.msg("bold", "DRCH: Only empaths can perceive health.")
+          return nil
+        end
 
         lines = Lich::Util.issue_command(
           'perceive health self',
@@ -87,7 +95,10 @@ module Lich
           include_end: false,
           timeout: 15
         )
-        return nil if lines.nil?
+        if lines.nil?
+          Lich::Messaging.msg("bold", "DRCH: Failed to capture PERCEIVE HEALTH output (timeout).")
+          return nil
+        end
 
         lines = strip_xml(lines)
 
@@ -113,7 +124,10 @@ module Lich
       end
 
       def perceive_health_other(target)
-        return unless DRStats.empath?
+        unless DRStats.empath?
+          Lich::Messaging.msg("bold", "DRCH: Only empaths can perceive health of others.")
+          return nil
+        end
 
         touch_lines = Lich::Util.issue_command(
           "touch #{target}",
@@ -124,11 +138,17 @@ module Lich
           include_end: false,
           timeout: 10
         )
-        return nil if touch_lines.nil?
+        if touch_lines.nil?
+          Lich::Messaging.msg("bold", "DRCH: Failed to capture TOUCH output for #{target} (timeout).")
+          return nil
+        end
 
         touch_lines = strip_xml(touch_lines)
 
-        return nil if touch_lines.any? { |line| line =~ /Touch what|feels cold|avoids your touch|You quickly recoil/ }
+        if touch_lines.any? { |line| line =~ /Touch what|feels cold|avoids your touch|You quickly recoil/ }
+          Lich::Messaging.msg("bold", "DRCH: Unable to perceive health of #{target}.")
+          return nil
+        end
 
         # Extract actual character name from the empathic link message.
         # The target passed to the method may be abbreviated or differently cased.
