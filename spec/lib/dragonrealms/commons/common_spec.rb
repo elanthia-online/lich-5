@@ -142,6 +142,11 @@ $fake_stormfront = false unless defined?($fake_stormfront)
 module Frontend
   def self.supports_gsl?; false; end
 end unless defined?(Frontend)
+
+# Mock XMLData for log_window
+module XMLData
+  def self.server_time; Time.at(1234567890); end
+end unless defined?(XMLData)
 $pause_all_lock = Mutex.new unless defined?($pause_all_lock)
 $safe_pause_lock = Mutex.new unless defined?($safe_pause_lock)
 
@@ -586,6 +591,506 @@ RSpec.describe Lich::DragonRealms::DRC do
       allow(described_class).to receive(:bput).and_return('You stop playing your song')
       described_class.stop_playing
       expect(described_class).to have_received(:bput).with('stop play', 'You stop playing your song', 'In the name of', "But you're not performing")
+    end
+  end
+
+  describe '.forage?' do
+    before do
+      allow(described_class).to receive(:waitrt?)
+      allow(described_class).to receive(:right_hand).and_return(nil)
+      allow(described_class).to receive(:left_hand).and_return(nil)
+    end
+
+    it 'returns true when forage succeeds (hands change)' do
+      n = 0
+      allow(described_class).to receive(:right_hand) { (n += 1) > 1 ? 'rock' : nil }
+      allow(described_class).to receive(:bput).and_return('Roundtime')
+      expect(described_class.forage?('rock')).to be true
+    end
+
+    it 'returns false after exhausting tries' do
+      allow(described_class).to receive(:bput).and_return('Roundtime')
+      expect(described_class.forage?('rock', 1)).to be false
+    end
+
+    it 'returns false when area is futile' do
+      allow(described_class).to receive(:bput).and_return('You survey the area and realize that any foraging efforts would be futile')
+      expect(described_class.forage?('rock')).to be false
+    end
+
+    it 'calls DRCI.stow_hand on hand-full message' do
+      allow(described_class).to receive(:bput).and_return('You really need to have at least one hand free to forage properly')
+      allow(DRCI).to receive(:stow_hand).and_return(false)
+      expect(described_class.forage?('rock', 1)).to be false
+      expect(DRCI).to have_received(:stow_hand).with('right')
+    end
+
+    it 'handles cluttered room with kick_pile?' do
+      n = 0
+      allow(described_class).to receive(:bput) { |_, *_| (n += 1) == 1 ? 'The room is too cluttered to find anything here' : 'Roundtime' }
+      allow(described_class).to receive(:kick_pile?).and_return(false)
+      expect(described_class.forage?('rock', 2)).to be false
+    end
+  end
+
+  describe '.collect' do
+    before do
+      allow(described_class).to receive(:waitrt?)
+    end
+
+    it 'issues collect command with practice by default' do
+      allow(described_class).to receive(:bput).and_return('You begin to forage around')
+      described_class.collect('rock')
+      expect(described_class).to have_received(:bput).with('collect rock practice', described_class::COLLECT_MESSAGES)
+    end
+
+    it 'issues collect without practice when false' do
+      allow(described_class).to receive(:bput).and_return('You begin to forage around')
+      described_class.collect('rock', false)
+      expect(described_class).to have_received(:bput).with('collect rock ', described_class::COLLECT_MESSAGES)
+    end
+
+    it 'calls kick_pile? when room is cluttered' do
+      n = 0
+      allow(described_class).to receive(:bput) { |_, *_| (n += 1) == 1 ? 'The room is too cluttered' : 'You begin' }
+      allow(described_class).to receive(:kick_pile?).and_return(true)
+      described_class.collect('rock')
+      expect(described_class).to have_received(:kick_pile?)
+    end
+  end
+
+  describe '.rummage' do
+    it 'returns empty array when container is closed' do
+      allow(described_class).to receive(:bput).and_return("While it's closed")
+      expect(described_class.rummage('G', 'backpack')).to eq([])
+    end
+
+    it 'returns empty array when nothing found' do
+      allow(described_class).to receive(:bput).and_return('but there is nothing in there like that.')
+      expect(described_class.rummage('G', 'backpack')).to eq([])
+    end
+
+    it 'returns empty array when container not found' do
+      allow(described_class).to receive(:bput).and_return("I don't know what you are referring to")
+      expect(described_class.rummage('G', 'backpack')).to eq([])
+    end
+
+    it 'retries after releasing invisibility on "You feel about"' do
+      n = 0
+      allow(described_class).to receive(:bput) { |_, *_| (n += 1) == 1 ? 'You feel about' : 'but there is nothing in there like that.' }
+      allow(described_class).to receive(:release_invisibility)
+      expect(described_class.rummage('G', 'backpack')).to eq([])
+      expect(described_class).to have_received(:release_invisibility)
+    end
+
+    it 'parses box list with B parameter' do
+      allow(described_class).to receive(:bput).and_return('looking for boxes and see a wooden strongbox.')
+      expect(described_class.rummage('B', 'backpack')).to eq(['wooden strongbox'])
+    end
+
+    it 'parses scroll list with SC parameter' do
+      allow(described_class).to receive(:bput).and_return('looking for scrolls and see a blue scroll.')
+      expect(described_class.rummage('SC', 'backpack')).to eq(['blue scroll'])
+    end
+
+    it 'parses gem list to nouns' do
+      allow(described_class).to receive(:bput).and_return('looking for gems and see a ruby and an emerald.')
+      expect(described_class.rummage('G', 'backpack')).to eq(%w[ruby emerald])
+    end
+  end
+
+  describe '.get_skins / .get_gems / .get_materials' do
+    before { allow(described_class).to receive(:rummage).and_return([]) }
+
+    it('.get_skins calls rummage with S') { described_class.get_skins('bag'); expect(described_class).to have_received(:rummage).with('S', 'bag') }
+    it('.get_gems calls rummage with G') { described_class.get_gems('bag'); expect(described_class).to have_received(:rummage).with('G', 'bag') }
+    it('.get_materials calls rummage with M') { described_class.get_materials('bag'); expect(described_class).to have_received(:rummage).with('M', 'bag') }
+  end
+
+  describe '.release_invisibility' do
+    before do
+      allow(described_class).to receive(:get_data).and_return(OpenStruct.new(spell_data: {}))
+      allow(described_class).to receive(:fput)
+      allow(described_class).to receive(:bput)
+      allow(DRSpells).to receive(:active_spells).and_return({})
+      allow(DRStats).to receive(:guild).and_return('Thief')
+      allow(described_class).to receive(:invisible?).and_return(false)
+    end
+
+    it 'does nothing when no invisibility spells active' do
+      described_class.release_invisibility
+      expect(described_class).not_to have_received(:fput)
+    end
+
+    it 'releases active invisibility spells' do
+      allow(described_class).to receive(:get_data).and_return(
+        OpenStruct.new(spell_data: { 'Invisibility' => { 'invisibility' => true, 'abbrev' => 'invis' } })
+      )
+      allow(DRSpells).to receive(:active_spells).and_return({ 'Invisibility' => 300 })
+      described_class.release_invisibility
+      expect(described_class).to have_received(:fput).with('release invis')
+    end
+
+    it 'stops Khri Silence when active' do
+      allow(DRSpells).to receive(:active_spells).and_return({ 'Khri Silence' => 300 })
+      described_class.release_invisibility
+      expect(described_class).to have_received(:bput).with('khri stop silence', 'You attempt to relax')
+    end
+
+    it 'stops Khri Vanish for invisible thief' do
+      allow(described_class).to receive(:invisible?).and_return(true)
+      described_class.release_invisibility
+      expect(described_class).to have_received(:bput).with('khri stop vanish', /^You would need to start Vanish/, /^Your control over the limited subversion of reality falters/, /^You are not trained in the Vanish meditation/)
+    end
+  end
+
+  describe '.wait_for_script_to_complete' do
+    before do
+      allow(described_class).to receive(:verify_script).and_return(true)
+      allow(described_class).to receive(:start_script).and_return(nil)
+      allow(described_class).to receive(:pause)
+    end
+
+    it 'verifies script exists' do
+      described_class.wait_for_script_to_complete('test')
+      expect(described_class).to have_received(:verify_script).with('test')
+    end
+
+    it 'starts script with quoted args containing spaces' do
+      allow(Script).to receive(:running).and_return([])
+      described_class.wait_for_script_to_complete('test', ['arg with space'])
+      expect(described_class).to have_received(:start_script).with('test', ['"arg with space"'], {})
+    end
+
+    it 'waits for script to finish running' do
+      mock_script = double('Script', name: 'test')
+      n = 0
+      allow(described_class).to receive(:start_script).and_return(mock_script)
+      allow(Script).to receive(:running) { (n += 1) > 2 ? [] : [mock_script] }
+      described_class.wait_for_script_to_complete('test')
+      expect(described_class).to have_received(:pause).at_least(3).times
+    end
+  end
+
+  describe '.pause_all / .unpause_all' do
+    let(:mock_script) { Script.new.tap { |s| s.name = 'test'; s.paused = false; s.no_pause_all = false } }
+
+    before do
+      allow(Script).to receive(:current).and_return(nil)
+      allow(Script).to receive(:running).and_return([mock_script])
+      allow(mock_script).to receive(:pause)
+      allow(mock_script).to receive(:unpause)
+      allow(described_class).to receive(:pause)
+    end
+
+    describe '.pause_all' do
+      after { $pause_all_lock.unlock if $pause_all_lock.owned? }
+
+      it 'returns false if lock already held' do
+        $pause_all_lock.lock
+        expect(described_class.pause_all).to be false
+      end
+
+      it 'pauses running scripts' do
+        expect(described_class.pause_all).to be true
+        expect(mock_script).to have_received(:pause)
+      end
+
+      it 'skips scripts with no_pause_all set' do
+        mock_script.no_pause_all = true
+        described_class.pause_all
+        expect(mock_script).not_to have_received(:pause)
+      end
+    end
+
+    describe '.unpause_all' do
+      it 'returns false if lock not owned' do
+        expect(described_class.unpause_all).to be false
+      end
+
+      it 'unpauses paused scripts and releases lock' do
+        described_class.pause_all
+        mock_script.paused = true
+        described_class.unpause_all
+        expect(mock_script).to have_received(:unpause)
+        expect($pause_all_lock.owned?).to be false
+      end
+    end
+  end
+
+  describe '.smart_pause_all' do
+    let(:mock_script) { Script.new.tap { |s| s.name = 'other'; s.paused = false; s.no_pause_all = false } }
+
+    before do
+      allow(Script).to receive(:running).and_return([mock_script])
+      allow(mock_script).to receive(:pause)
+    end
+
+    it 'pauses running scripts and returns their names' do
+      result = described_class.smart_pause_all
+      expect(result).to eq(['other'])
+      expect(mock_script).to have_received(:pause)
+    end
+
+    it 'logs the paused scripts' do
+      described_class.smart_pause_all
+      expect(Lich::Messaging.messages.any? { |m| m[:message].include?('Pausing') }).to be true
+    end
+  end
+
+  describe '.unpause_all_list' do
+    let(:mock_script) { Script.new.tap { |s| s.name = 'other'; s.paused = true; s.no_pause_all = false } }
+
+    before do
+      allow(Script).to receive(:running).and_return([mock_script])
+      allow(mock_script).to receive(:unpause)
+    end
+
+    it 'unpauses listed scripts' do
+      described_class.unpause_all_list(['other'])
+      expect(mock_script).to have_received(:unpause)
+    end
+
+    it 'does not unpause unlisted scripts' do
+      described_class.unpause_all_list(['different'])
+      expect(mock_script).not_to have_received(:unpause)
+    end
+  end
+
+  describe '.safe_pause_list / .safe_unpause_list' do
+    let(:mock_script) { Script.new.tap { |s| s.name = 'other'; s.paused = false; s.no_pause_all = false } }
+
+    before do
+      allow(Script).to receive(:running).and_return([mock_script])
+      allow(mock_script).to receive(:pause)
+      allow(mock_script).to receive(:unpause)
+    end
+
+    after { $safe_pause_lock.unlock if $safe_pause_lock.owned? }
+
+    describe '.safe_pause_list' do
+      it 'returns false if lock already held' do
+        $safe_pause_lock.lock
+        expect(described_class.safe_pause_list).to be false
+      end
+
+      it 'pauses scripts and returns their names' do
+        result = described_class.safe_pause_list
+        expect(result).to eq(['other'])
+      end
+    end
+
+    describe '.safe_unpause_list' do
+      it 'returns false if lock not owned' do
+        expect(described_class.safe_unpause_list(['other'])).to be false
+      end
+
+      it 'unpauses scripts and releases lock' do
+        described_class.safe_pause_list
+        mock_script.paused = true
+        described_class.safe_unpause_list(['other'])
+        expect(mock_script).to have_received(:unpause)
+        expect($safe_pause_lock.owned?).to be false
+      end
+    end
+  end
+
+  describe '.log_window' do
+    before { allow(described_class).to receive(:_respond) }
+
+    it 'sends stream tags with window name' do
+      described_class.log_window('test', 'mywindow')
+      expect(described_class).to have_received(:_respond).with(
+        /<pushStream id="mywindow"\/>/,
+        /<popStream id="mywindow"/
+      )
+    end
+
+    it 'creates window when create_window is true' do
+      described_class.log_window('test', 'mywindow', true, true)
+      expect(described_class).to have_received(:_respond).with(/<streamWindow id="mywindow"/)
+    end
+
+    it 'clears window when pre_clear_window is true' do
+      described_class.log_window('test', 'mywindow', true, false, true)
+      expect(described_class).to have_received(:_respond).with(/<clearStream id="mywindow"/)
+    end
+  end
+
+  describe '.atmo' do
+    it 'delegates to log_window with atmospherics' do
+      allow(described_class).to receive(:log_window)
+      described_class.atmo('test', true)
+      expect(described_class).to have_received(:log_window).with('test', 'atmospherics', true)
+    end
+  end
+
+  describe '.play_song?' do
+    let(:settings) do
+      OpenStruct.new(
+        worn_instrument: 'lute',
+        instrument: nil,
+        cleaning_cloth: 'cloth'
+      )
+    end
+    # Single-song list to avoid recursion
+    let(:song_list) { { 'song1' => 'song1' } }
+
+    before do
+      # 'slightest hint of difficulty' returns true without recursion
+      allow(described_class).to receive(:bput).and_return('slightest hint of difficulty')
+      allow(described_class).to receive(:fput)
+      allow(described_class).to receive(:waitrt?)
+      allow(DRSpells).to receive(:active_spells).and_return({})
+      allow(DRSkill).to receive(:getrank).and_return(100)
+      UserVars.song = 'song1'
+      UserVars.climbing_song = 'song1'
+      UserVars.instrument = 'lute'
+    end
+
+    it 'returns true on successful play (slightest hint of difficulty)' do
+      expect(described_class.play_song?(settings, song_list)).to be true
+    end
+
+    it 'releases Eillies Cry if active' do
+      allow(DRSpells).to receive(:active_spells).and_return({ "Eillie's Cry" => 100 })
+      described_class.play_song?(settings, song_list)
+      expect(described_class).to have_received(:fput).with('release ecry')
+    end
+
+    it 'returns false on "now isn\'t the best time to be playing"' do
+      allow(described_class).to receive(:bput).and_return("now isn't the best time to be playing")
+      expect(described_class.play_song?(settings, song_list)).to be false
+    end
+
+    it 'uses DRCI.get_item? on missing instrument' do
+      allow(described_class).to receive(:bput).and_return('Play on what instrument')
+      allow(DRCI).to receive(:get_item?).and_return(false)
+      expect(described_class.play_song?(settings, song_list)).to be false
+      expect(DRCI).to have_received(:get_item?).with('lute')
+    end
+
+    it 'uses DRCI.wear_item? on worn instrument' do
+      allow(described_class).to receive(:bput).and_return('Play on what instrument')
+      allow(DRCI).to receive(:get_item?).and_return(true)
+      allow(DRCI).to receive(:wear_item?).and_return(false)
+      expect(described_class.play_song?(settings, song_list)).to be false
+      expect(DRCI).to have_received(:wear_item?).with('lute')
+    end
+
+    # Avoid recursion-prone tests - focus on non-recursive paths
+  end
+
+  describe '.clean_instrument' do
+    let(:settings) { OpenStruct.new(worn_instrument: 'lute', instrument: nil, cleaning_cloth: 'cloth') }
+
+    before do
+      allow(DRCI).to receive(:get_item?).and_return(true)
+      allow(DRCI).to receive(:remove_item?).and_return(true)
+      allow(DRCI).to receive(:wear_item?).and_return(true)
+      allow(DRCI).to receive(:stow_item?).and_return(true)
+      allow(described_class).to receive(:stop_playing)
+      allow(described_class).to receive(:bput).and_return('not in need of cleaning')
+      allow(described_class).to receive(:waitrt?)
+      allow(described_class).to receive(:pause)
+      allow(described_class).to receive(:fix_standing)
+    end
+
+    it 'returns true on successful clean' do
+      expect(described_class.clean_instrument(settings, true)).to be true
+    end
+
+    it 'returns false when cloth cannot be gotten' do
+      allow(DRCI).to receive(:get_item?).with('cloth').and_return(false)
+      expect(described_class.clean_instrument(settings)).to be false
+    end
+
+    it 'returns false when worn instrument cannot be removed' do
+      allow(DRCI).to receive(:remove_item?).and_return(false)
+      expect(described_class.clean_instrument(settings, true)).to be false
+    end
+
+    it 'uses get_item for non-worn instrument' do
+      settings.worn_instrument = nil
+      settings.instrument = 'lute'
+      allow(DRCI).to receive(:get_item?).with('lute').and_return(false)
+      allow(DRCI).to receive(:stow_item?).and_return(true)
+      expect(described_class.clean_instrument(settings, false)).to be false
+    end
+  end
+
+  describe '.tune_instrument' do
+    let(:settings) { OpenStruct.new(worn_instrument: 'lute', instrument: nil) }
+
+    before do
+      allow(described_class).to receive(:stop_playing)
+      allow(described_class).to receive(:left_hand).and_return(nil)
+      allow(described_class).to receive(:right_hand).and_return(nil)
+      allow(DRCI).to receive(:remove_item?).and_return(true)
+      allow(DRCI).to receive(:in_hands?).and_return(true)
+      allow(DRCI).to receive(:wear_item?).and_return(true)
+      allow(described_class).to receive(:do_tune).and_return(true)
+      allow(described_class).to receive(:waitrt?)
+      allow(described_class).to receive(:pause)
+    end
+
+    it 'returns true on successful tune' do
+      expect(described_class.tune_instrument(settings)).to be true
+    end
+
+    it 'returns false when no instrument configured' do
+      settings.worn_instrument = nil
+      settings.instrument = nil
+      expect(described_class.tune_instrument(settings)).to be false
+    end
+
+    it 'returns false when hands not free and instrument not in hands' do
+      allow(described_class).to receive(:left_hand).and_return('sword')
+      allow(DRCI).to receive(:in_hands?).and_return(false)
+      expect(described_class.tune_instrument(settings)).to be false
+    end
+
+    it 'returns false when worn instrument cannot be removed' do
+      allow(DRCI).to receive(:remove_item?).and_return(false)
+      allow(DRCI).to receive(:in_hands?).and_return(false)
+      expect(described_class.tune_instrument(settings)).to be false
+    end
+  end
+
+  describe '.do_tune' do
+    before do
+      allow(described_class).to receive(:beep)
+      allow(DRCI).to receive(:in_hands?).and_return(true)
+      allow(described_class).to receive(:fix_standing)
+    end
+
+    it 'returns false when instrument not in hands' do
+      allow(DRCI).to receive(:in_hands?).and_return(false)
+      expect(described_class.do_tune('lute')).to be false
+    end
+
+    it 'returns true when already in tune' do
+      allow(described_class).to receive(:bput).and_return('After a moment, you find it in tune')
+      expect(described_class.do_tune('lute')).to be true
+    end
+
+    it 'retunes sharp when flat' do
+      n = 0
+      allow(described_class).to receive(:bput) { |_, *_| (n += 1) == 1 ? 'After a moment, you hear it flat' : 'After a moment, you find it in tune' }
+      expect(described_class.do_tune('lute')).to be true
+    end
+
+    it 'retunes flat when sharp' do
+      n = 0
+      allow(described_class).to receive(:bput) { |_, *_| (n += 1) == 1 ? 'After a moment, you hear it sharp' : 'After a moment, you find it in tune' }
+      expect(described_class.do_tune('lute')).to be true
+    end
+
+    it 'fixes standing when needed' do
+      n = 0
+      allow(described_class).to receive(:bput) { |_, *_| (n += 1) == 1 ? 'You should be sitting up' : 'After a moment, you find it in tune' }
+      described_class.do_tune('lute')
+      expect(described_class).to have_received(:fix_standing)
     end
   end
 end

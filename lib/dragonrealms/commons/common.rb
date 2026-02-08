@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     module DRC
@@ -225,8 +227,11 @@ module Lich
           when 'You survey the area and realize that any foraging efforts would be futile'
             return false
           when 'You really need to have at least one hand free to forage properly'
-            Lich::Messaging.msg("bold", "DRC: Hands not emptied properly. Stowing...")
-            fput('stow right')
+            Lich::Messaging.msg("bold", "DRC: Hands not emptied properly. Stowing right hand...")
+            unless DRCI.stow_hand('right')
+              Lich::Messaging.msg("bold", "DRC: Failed to stow right hand, cannot forage.")
+              return false
+            end
           end
           waitrt?
         end
@@ -617,11 +622,14 @@ module Lich
         result = bput(play_command, 'too damaged to play', 'dirtiness may affect your performance', 'slightest hint of difficulty', 'fumble slightly', /Your .+ is submerged in the water/, 'You begin a', 'You struggle to begin', 'You\'re already playing a song', 'You effortlessly begin', 'You begin some', 'You cannot play', 'Play on what instrument', 'Are you sure that\'s the right instrument', 'now isn\'t the best time to be playing', 'Perhaps you should find somewhere drier before trying to play', 'You should stop practicing', /^You really need to drain/, /Your .* tuning is off, and may hinder your performance/)
         case result
         when 'Play on what instrument', 'Are you sure that\'s the right instrument'
-          snapshot = "#{right_hand}#{left_hand}"
-          fput("get #{instrument}")
-          return false if snapshot == "#{right_hand}#{left_hand}"
-
-          fput("wear #{instrument}") if worn
+          unless DRCI.get_item?(instrument)
+            Lich::Messaging.msg("bold", "DRC: Failed to get #{instrument}.")
+            return false
+          end
+          if worn && !DRCI.wear_item?(instrument)
+            Lich::Messaging.msg("bold", "DRC: Failed to wear #{instrument}.")
+            return false
+          end
           play_song?(settings, song_list, worn, skip_clean, climbing, skip_tuning)
         when 'now isn\'t the best time to be playing', 'Perhaps you should find somewhere drier before trying to play', 'You should stop practicing'
           false
@@ -910,15 +918,9 @@ module Lich
       # to make it render as bold in a frontend client.
       # Used by `atmo` and `log_window` methods.
       def bold(text)
-        string = ''
-
-        Frontend.supports_gsl? ? string.concat("\034GSL\r\n ") : string.concat("<pushBold\/>")
-
-        string.concat(text)
-
-        Frontend.supports_gsl? ? string.concat("\034GSM\r\n ") : string.concat("<popBold\/>")
-
-        string
+        prefix = Frontend.supports_gsl? ? "\034GSL\r\n " : "<pushBold\/>"
+        suffix = Frontend.supports_gsl? ? "\034GSM\r\n " : "<popBold\/>"
+        "#{prefix}#{text}#{suffix}"
       end
 
       # Sends a message to the game window.
