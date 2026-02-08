@@ -38,6 +38,10 @@ module DRC
     0
   end
 
+  def rummage(*_args)
+    []
+  end
+
   # Mock DRC::Item class for in_hand? method
   class Item
     attr_reader :short_regex
@@ -976,6 +980,222 @@ RSpec.describe Lich::DragonRealms::DRCI do
         )
         expect(described_class.count_item_parts('ingot')).to eq(8)
       end
+    end
+  end
+
+  describe '#count_items_in_container' do
+    it 'counts matching items in container' do
+      stub_bput('You rummage through your pouch and see a gem, a gem, and a rock.')
+      expect(described_class.count_items_in_container('gem', 'pouch')).to eq(2)
+    end
+
+    it 'returns 0 when no matching items' do
+      stub_bput('You rummage through your pouch and see a rock.')
+      expect(described_class.count_items_in_container('gem', 'pouch')).to eq(0)
+    end
+
+    it 'returns 0 when container is empty' do
+      stub_bput('That would accomplish nothing.')
+      expect(described_class.count_items_in_container('gem', 'pouch')).to eq(0)
+    end
+  end
+
+  describe '#count_lockpick_container' do
+    before { allow(described_class).to receive(:waitrt?) }
+
+    it 'returns capacity when container has space' do
+      stub_bput('it might hold an additional 15 lockpicks.')
+      expect(described_class.count_lockpick_container('ring')).to eq(15)
+    end
+
+    it 'returns 0 when container is full' do
+      stub_bput('it appears to be full.')
+      expect(described_class.count_lockpick_container('ring')).to eq(0)
+    end
+
+    it 'returns count when empty' do
+      stub_bput('25 lockpicks would probably fit.')
+      expect(described_class.count_lockpick_container('ring')).to eq(25)
+    end
+  end
+
+  describe '#count_necro_stacker' do
+    it 'returns the item count' do
+      stub_bput('The stacker currently holds 42 items.')
+      expect(described_class.count_necro_stacker('stacker')).to eq(42)
+    end
+
+    it 'returns 0 when no match' do
+      stub_bput('You see nothing special.')
+      expect(described_class.count_necro_stacker('stacker')).to eq(0)
+    end
+  end
+
+  describe '#count_all_boxes' do
+    let(:settings) do
+      OpenStruct.new(
+        picking_box_source: 'pack',
+        pick: {
+          'picking_box_sources' => ['bag'],
+          'blacklist_container' => 'sack',
+          'too_hard_container'  => nil
+        }
+      )
+    end
+
+    it 'counts boxes across all configured containers' do
+      allow(described_class).to receive(:get_box_list_in_container).and_return(['box1'], ['box2', 'box3'], [])
+      expect(described_class.count_all_boxes(settings)).to eq(3)
+    end
+
+    it 'handles empty containers' do
+      allow(described_class).to receive(:get_box_list_in_container).and_return([])
+      expect(described_class.count_all_boxes(settings)).to eq(0)
+    end
+  end
+
+  describe '#get_box_list_in_container' do
+    it 'delegates to DRC.rummage' do
+      expect(DRC).to receive(:rummage).with('B', 'pack').and_return(['box1', 'box2'])
+      expect(described_class.get_box_list_in_container('pack')).to eq(['box1', 'box2'])
+    end
+  end
+
+  describe '#get_scroll_list_in_container' do
+    it 'delegates to DRC.rummage' do
+      expect(DRC).to receive(:rummage).with('SC', 'pack').and_return(['scroll1'])
+      expect(described_class.get_scroll_list_in_container('pack')).to eq(['scroll1'])
+    end
+  end
+
+  describe '#get_inventory_by_type' do
+    before do
+      allow(described_class).to receive(:reget).and_return([
+                                                             'All of your combat items:',
+                                                             'a sword',
+                                                             'a shield',
+                                                             '[Use INVENTORY HELP for more options.]'
+                                                           ])
+    end
+
+    context 'when type is valid' do
+      it 'returns list of items' do
+        stub_bput('Use INVENTORY HELP for more options.')
+        result = described_class.get_inventory_by_type('combat')
+        expect(result).to include('sword')
+      end
+    end
+
+    context 'when type is invalid' do
+      it 'returns empty array and logs message' do
+        stub_bput('The INVENTORY command is the best way')
+        expect(Lich::Messaging).to receive(:msg).with('bold', /Unrecognized inventory type/)
+        expect(described_class.get_inventory_by_type('invalid')).to eq([])
+      end
+    end
+  end
+
+  describe '#get_item_list' do
+    it 'delegates to rummage_container for rummage verb' do
+      expect(described_class).to receive(:rummage_container).with('pack').and_return(['sword'])
+      expect(described_class.get_item_list('pack', 'rummage')).to eq(['sword'])
+    end
+
+    it 'delegates to look_in_container for look verb' do
+      expect(described_class).to receive(:look_in_container).with('pack').and_return(['sword'])
+      expect(described_class.get_item_list('pack', 'look')).to eq(['sword'])
+    end
+  end
+
+  describe '#have_item_by_look?' do
+    context 'when item is nil' do
+      it 'returns false' do
+        expect(described_class.have_item_by_look?(nil, 'pack')).to be false
+      end
+    end
+
+    context 'when item exists' do
+      it 'returns true' do
+        stub_bput('You see nothing unusual about the sword.')
+        expect(described_class.have_item_by_look?('sword', 'pack')).to be true
+      end
+    end
+
+    context 'when item not found' do
+      it 'returns false' do
+        stub_bput('I could not find what you were referring to.')
+        expect(described_class.have_item_by_look?('sword', 'pack')).to be false
+      end
+    end
+  end
+
+  describe '#get_item_from_eddy_portal?' do
+    before do
+      allow(described_class).to receive(:open_container?).and_return(true)
+      allow(described_class).to receive(:look_in_container).and_return(['item'])
+    end
+
+    context 'when eddy cannot be opened' do
+      it 'returns false' do
+        allow(described_class).to receive(:open_container?).and_return(false)
+        expect(described_class.get_item_from_eddy_portal?('gem', 'portal')).to be false
+      end
+    end
+
+    context 'when get succeeds' do
+      it 'returns true' do
+        stub_bput('You get a gem from the portal.')
+        expect(described_class.get_item_from_eddy_portal?('gem', 'portal')).to be true
+      end
+    end
+
+    context 'when get fails' do
+      it 'returns false' do
+        stub_bput('Get what?')
+        expect(described_class.get_item_from_eddy_portal?('gem', 'portal')).to be false
+      end
+    end
+  end
+
+  describe '#tie_gem_pouch' do
+    it 'ties the gem pouch' do
+      expect(DRC).to receive(:bput).with('tie my leather pouch', anything, anything, anything)
+      described_class.tie_gem_pouch('leather', 'pouch')
+    end
+  end
+
+  describe '#get_item_safe' do
+    it 'delegates to get_item_safe?' do
+      expect(described_class).to receive(:get_item_safe?).with('sword', 'pack').and_return(true)
+      expect(described_class.get_item_safe('sword', 'pack')).to be true
+    end
+  end
+
+  describe '#put_away_item_safe?' do
+    it 'adds my prefix and delegates to put_away_item_unsafe?' do
+      expect(described_class).to receive(:put_away_item_unsafe?).with('my sword', 'my pack').and_return(true)
+      described_class.put_away_item_safe?('sword', 'pack')
+    end
+  end
+
+  describe '#wear_item_safe?' do
+    it 'adds my prefix and delegates to wear_item_unsafe?' do
+      expect(described_class).to receive(:wear_item_unsafe?).with('my cloak').and_return(true)
+      described_class.wear_item_safe?('cloak')
+    end
+  end
+
+  describe '#remove_item_safe?' do
+    it 'adds my prefix and delegates to remove_item_unsafe?' do
+      expect(described_class).to receive(:remove_item_unsafe?).with('my cloak').and_return(true)
+      described_class.remove_item_safe?('cloak')
+    end
+  end
+
+  describe '#stow_item_safe?' do
+    it 'adds my prefix and delegates to stow_item_unsafe?' do
+      expect(described_class).to receive(:stow_item_unsafe?).with('my sword').and_return(true)
+      described_class.stow_item_safe?('sword')
     end
   end
 end
