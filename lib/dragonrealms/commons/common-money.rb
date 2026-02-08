@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     module DRCM
@@ -31,7 +33,7 @@ module Lich
             return (amount.to_f * multiplier).to_i if name.start_with?(denomination.downcase)
           end
         end
-        Lich::Messaging.msg('bold', "Unknown denomination, assuming coppers: #{denomination}")
+        Lich::Messaging.msg('bold', "DRCM: Unknown denomination, assuming coppers: #{denomination}")
         amount.to_i
       end
 
@@ -173,6 +175,7 @@ module Lich
                       'There is no teller here', 'reached the maximum balance I can permit',
                       'You find your jar with little effort', 'Searching methodically through the shelves')
         when 'There is no teller here'
+          Lich::Messaging.msg('bold', "DRCM: No teller found at this location. Cannot deposit coins.")
           return
         end
         minimize_coins(keep_copper).each { |amount| withdraw_exact_amount?(amount, settings) } if settings.hometown == hometown
