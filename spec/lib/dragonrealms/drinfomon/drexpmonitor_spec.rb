@@ -168,6 +168,48 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
     end
   end
 
+  describe 'constants' do
+    describe 'MAX_SQLITE_RETRIES' do
+      it 'is defined as 10 (BUG FIX: prevents infinite retry loops)' do
+        expect(DRExpMonitor::MAX_SQLITE_RETRIES).to eq(10)
+      end
+    end
+
+    describe 'BOOLEAN_TRUE_PATTERN' do
+      it 'matches "on" exactly' do
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('on')).to be true
+      end
+
+      it 'matches "true" exactly' do
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('true')).to be true
+      end
+
+      it 'matches "yes" exactly' do
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('yes')).to be true
+      end
+
+      it 'matches case-insensitively' do
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('ON')).to be true
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('TRUE')).to be true
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('YES')).to be true
+      end
+
+      it 'does not match partial strings (BUG FIX)' do
+        # Before fix, /on|true|yes/ would match "money" or "trust"
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('money')).to be false
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('trust')).to be false
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('yesman')).to be false
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('ongoing')).to be false
+      end
+
+      it 'does not match "off", "false", "no"' do
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('off')).to be false
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('false')).to be false
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('no')).to be false
+      end
+    end
+  end
+
   describe '.format_briefexp_on' do
     before do
       DRExpMonitor.inline_display = true
