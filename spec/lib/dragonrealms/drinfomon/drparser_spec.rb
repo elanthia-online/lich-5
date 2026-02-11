@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative '../../../spec_helper'
+require 'rspec'
 
 # Mock dependencies
 module Lich
@@ -162,23 +162,57 @@ module Lich
       end
     end unless defined?(Lich::DragonRealms::Flags)
   end
+
+  # Mock Messaging module for specs
+  module Messaging
+    def self.msg(type, message)
+      # Capture messages for test assertions
+      @messages ||= []
+      @messages << { type: type, message: message }
+    end
+
+    def self.messages
+      @messages ||= []
+    end
+
+    def self.clear_messages!
+      @messages = []
+    end
+  end unless defined?(Lich::Messaging)
 end
 
-# Mock GameObj
+# Mock GameObj - includes methods needed by both drparser and other specs (like qstrike)
+# This prevents spec ordering issues when drparser_spec runs before qstrike_spec
 class GameObj
+  @right_hand = nil
+  @left_hand = nil
+
+  # Methods used by drparser.rb
   def self.clear_inv; end
 
   def self.new_inv(*args); end
 
-  def self.clear_hands; end
+  # Hand tracking methods needed by qstrike_spec when running after this spec
+  def self.clear_hands
+    @right_hand = nil
+    @left_hand = nil
+  end
 
-  def self.right_hand; nil; end
+  def self.right_hand
+    @right_hand
+  end
 
-  def self.left_hand; nil; end
+  def self.left_hand
+    @left_hand
+  end
 
-  def self.set_right_hand(_obj); end
+  def self.set_right_hand(obj)
+    @right_hand = obj
+  end
 
-  def self.set_left_hand(_obj); end
+  def self.set_left_hand(obj)
+    @left_hand = obj
+  end
 end unless defined?(GameObj)
 
 # Mock UserVars
