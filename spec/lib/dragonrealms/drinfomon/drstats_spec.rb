@@ -6,22 +6,22 @@ require 'rspec'
 module XMLData
 end unless defined?(XMLData)
 
-# Always define/override these methods to ensure consistent test values
-# regardless of which specs ran before this one (games_spec.rb defines
-# XMLData methods as attr_accessors with different default values)
-XMLData.define_singleton_method(:name) { 'TestChar' }
-XMLData.define_singleton_method(:health) { 100 }
-XMLData.define_singleton_method(:mana) { 50 }
-XMLData.define_singleton_method(:stamina) { 75 }
-XMLData.define_singleton_method(:spirit) { 80 }
-XMLData.define_singleton_method(:concentration) { 90 }
-
 require_relative '../../../../lib/dragonrealms/drinfomon/drstats'
 
 RSpec.describe Lich::DragonRealms::DRStats do
   let(:described_module) { Lich::DragonRealms::DRStats }
 
   before(:each) do
+    # Always define/override XMLData methods before EACH test to ensure consistent test values
+    # regardless of which specs ran before this one (games_spec.rb defines
+    # XMLData methods as attr_accessors with different default values)
+    XMLData.define_singleton_method(:name) { 'TestChar' }
+    XMLData.define_singleton_method(:health) { 100 }
+    XMLData.define_singleton_method(:mana) { 50 }
+    XMLData.define_singleton_method(:stamina) { 75 }
+    XMLData.define_singleton_method(:spirit) { 80 }
+    XMLData.define_singleton_method(:concentration) { 90 }
+
     # Reset all class variables to defaults before each test
     described_module.race = nil
     described_module.guild = nil

@@ -6,19 +6,19 @@ require 'rspec'
 module XMLData
 end unless defined?(XMLData)
 
-# Always define/override these methods to ensure consistent test values
-# regardless of which specs ran before this one (games_spec.rb defines
-# XMLData.room_title as attr_accessor that defaults to nil)
-XMLData.define_singleton_method(:room_exits) { ['north', 'south'] }
-XMLData.define_singleton_method(:room_title) { '[Test Room]' }
-XMLData.define_singleton_method(:room_description) { 'A test room description.' }
-
 require_relative '../../../../lib/dragonrealms/drinfomon/drroom'
 
 RSpec.describe Lich::DragonRealms::DRRoom do
   let(:described_class) { Lich::DragonRealms::DRRoom }
 
   before(:each) do
+    # Always define/override XMLData methods before EACH test to ensure consistent test values
+    # regardless of which specs ran before this one (games_spec.rb defines
+    # XMLData.room_title as attr_accessor that defaults to nil)
+    XMLData.define_singleton_method(:room_exits) { ['north', 'south'] }
+    XMLData.define_singleton_method(:room_title) { '[Test Room]' }
+    XMLData.define_singleton_method(:room_description) { 'A test room description.' }
+
     # Reset all class variables
     described_class.npcs = []
     described_class.pcs = []
