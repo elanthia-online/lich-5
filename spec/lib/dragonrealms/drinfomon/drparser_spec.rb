@@ -181,39 +181,16 @@ module Lich
   end unless defined?(Lich::Messaging)
 end
 
-# Mock GameObj - includes methods needed by both drparser and other specs (like qstrike)
-# This prevents spec ordering issues when drparser_spec runs before qstrike_spec
-class GameObj
-  @right_hand = nil
-  @left_hand = nil
+# Mock GameObj - ONLY add methods that drparser.rb actually uses
+# Don't define a full class to avoid blocking qstrike_spec's own GameObj setup
+unless defined?(GameObj)
+  # Create a minimal GameObj module if it doesn't exist
+  Object.const_set(:GameObj, Module.new)
+end
 
-  # Methods used by drparser.rb
-  def self.clear_inv; end
-
-  def self.new_inv(*args); end
-
-  # Hand tracking methods needed by qstrike_spec when running after this spec
-  def self.clear_hands
-    @right_hand = nil
-    @left_hand = nil
-  end
-
-  def self.right_hand
-    @right_hand
-  end
-
-  def self.left_hand
-    @left_hand
-  end
-
-  def self.set_right_hand(obj)
-    @right_hand = obj
-  end
-
-  def self.set_left_hand(obj)
-    @left_hand = obj
-  end
-end unless defined?(GameObj)
+# Add methods drparser.rb needs (idempotent - safe to call multiple times)
+GameObj.define_singleton_method(:clear_inv) {} unless GameObj.respond_to?(:clear_inv)
+GameObj.define_singleton_method(:new_inv) { |*_args| } unless GameObj.respond_to?(:new_inv)
 
 # Mock UserVars
 module UserVars
