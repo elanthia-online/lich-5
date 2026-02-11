@@ -181,16 +181,9 @@ module Lich
   end unless defined?(Lich::Messaging)
 end
 
-# Mock GameObj - ONLY add methods that drparser.rb actually uses
-# Don't define a full class to avoid blocking qstrike_spec's own GameObj setup
-unless defined?(GameObj)
-  # Create a minimal GameObj module if it doesn't exist
-  Object.const_set(:GameObj, Module.new)
-end
-
-# Add methods drparser.rb needs (idempotent - safe to call multiple times)
-GameObj.define_singleton_method(:clear_inv) {} unless GameObj.respond_to?(:clear_inv)
-GameObj.define_singleton_method(:new_inv) { |*_args| } unless GameObj.respond_to?(:new_inv)
+# NOTE: Do NOT define GameObj at top level here - it would block qstrike_spec's own GameObj setup.
+# The tests in this file don't trigger GameObj code paths, so no mock is needed.
+# If future tests need GameObj, stub it in a before(:each) block instead.
 
 # Mock UserVars
 module UserVars
