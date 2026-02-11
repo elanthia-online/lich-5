@@ -169,6 +169,16 @@ class GameObj
   def self.clear_inv; end
 
   def self.new_inv(*args); end
+
+  def self.clear_hands; end
+
+  def self.right_hand; nil; end
+
+  def self.left_hand; nil; end
+
+  def self.set_right_hand(_obj); end
+
+  def self.set_left_hand(_obj); end
 end unless defined?(GameObj)
 
 # Mock UserVars
