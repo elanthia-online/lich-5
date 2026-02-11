@@ -12,12 +12,11 @@ RSpec.describe Lich::DragonRealms::DRRoom do
   let(:described_class) { Lich::DragonRealms::DRRoom }
 
   before(:each) do
-    # Always define/override XMLData methods before EACH test to ensure consistent test values
-    # regardless of which specs ran before this one (games_spec.rb defines
-    # XMLData.room_title as attr_accessor that defaults to nil)
-    XMLData.define_singleton_method(:room_exits) { ['north', 'south'] }
-    XMLData.define_singleton_method(:room_title) { '[Test Room]' }
-    XMLData.define_singleton_method(:room_description) { 'A test room description.' }
+    # Use RSpec stubs for XMLData methods - automatically cleaned up after each test
+    # This prevents polluting global state that breaks other specs
+    allow(XMLData).to receive(:room_exits).and_return(['north', 'south'])
+    allow(XMLData).to receive(:room_title).and_return('[Test Room]')
+    allow(XMLData).to receive(:room_description).and_return('A test room description.')
 
     # Reset all class variables
     described_class.npcs = []

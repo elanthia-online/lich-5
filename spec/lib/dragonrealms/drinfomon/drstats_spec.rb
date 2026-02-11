@@ -12,15 +12,14 @@ RSpec.describe Lich::DragonRealms::DRStats do
   let(:described_module) { Lich::DragonRealms::DRStats }
 
   before(:each) do
-    # Always define/override XMLData methods before EACH test to ensure consistent test values
-    # regardless of which specs ran before this one (games_spec.rb defines
-    # XMLData methods as attr_accessors with different default values)
-    XMLData.define_singleton_method(:name) { 'TestChar' }
-    XMLData.define_singleton_method(:health) { 100 }
-    XMLData.define_singleton_method(:mana) { 50 }
-    XMLData.define_singleton_method(:stamina) { 75 }
-    XMLData.define_singleton_method(:spirit) { 80 }
-    XMLData.define_singleton_method(:concentration) { 90 }
+    # Use RSpec stubs for XMLData methods - automatically cleaned up after each test
+    # This prevents polluting global state that breaks other specs (psms_spec.rb)
+    allow(XMLData).to receive(:name).and_return('TestChar')
+    allow(XMLData).to receive(:health).and_return(100)
+    allow(XMLData).to receive(:mana).and_return(50)
+    allow(XMLData).to receive(:stamina).and_return(75)
+    allow(XMLData).to receive(:spirit).and_return(80)
+    allow(XMLData).to receive(:concentration).and_return(90)
 
     # Reset all class variables to defaults before each test
     described_module.race = nil
