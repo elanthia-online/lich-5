@@ -14,13 +14,9 @@ module Lich
         @@flags[key] = value
       end
 
-      # BUG FIX: Use Regexp.escape to prevent regex injection attacks.
-      # If `item` contains special regex characters like ".*" or "(foo|bar)",
-      # those would be interpreted as regex metacharacters, potentially
-      # matching unintended strings or causing ReDoS attacks.
       def self.add(key, *matchers)
         @@flags[key] = false
-        @@matchers[key] = matchers.map { |item| item.is_a?(Regexp) ? item : /#{Regexp.escape(item)}/i }
+        @@matchers[key] = matchers.map { |item| item.is_a?(Regexp) ? item : /#{item}/i }
       end
 
       def self.reset(key)
