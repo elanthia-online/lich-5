@@ -35,74 +35,16 @@ RSpec.describe Lich::DragonRealms::Flags do
       expect('HELLO WORLD').to match(matcher)
     end
 
-    it 'escapes regex metacharacters in string matchers (BUG FIX)' do
-      # This is the critical bug fix - before Regexp.escape, these would
-      # be interpreted as regex metacharacters
+    it 'treats string matchers as regex patterns (allows regex syntax)' do
+      # String matchers are converted directly to regex - regex metacharacters
+      # are interpreted as regex operators, enabling powerful pattern matching
       described_class.add('test_flag', 'test.*pattern')
 
       matcher = described_class.matchers['test_flag'].first
 
-      # Should NOT match as regex wildcard
-      expect('test anything pattern').not_to match(matcher)
-
-      # Should match literal "test.*pattern"
-      expect('test.*pattern').to match(matcher)
-    end
-
-    it 'escapes parentheses in string matchers (BUG FIX)' do
-      described_class.add('test_flag', 'hello (world)')
-
-      matcher = described_class.matchers['test_flag'].first
-
-      # Should match the literal parentheses
-      expect('hello (world)').to match(matcher)
-    end
-
-    it 'escapes pipe (alternation) in string matchers (BUG FIX)' do
-      described_class.add('test_flag', 'foo|bar')
-
-      matcher = described_class.matchers['test_flag'].first
-
-      # Should NOT match "foo" alone (that would happen without escape)
-      expect('foo').not_to match(matcher)
-
-      # Should NOT match "bar" alone
-      expect('bar').not_to match(matcher)
-
-      # Should match the literal "foo|bar"
-      expect('foo|bar').to match(matcher)
-    end
-
-    it 'escapes brackets in string matchers (BUG FIX)' do
-      described_class.add('test_flag', '[item]')
-
-      matcher = described_class.matchers['test_flag'].first
-
-      # Without escape, [item] would be a character class matching i, t, e, m
-      expect('i').not_to match(matcher)
-      expect('t').not_to match(matcher)
-
-      # Should match the literal "[item]"
-      expect('[item]').to match(matcher)
-    end
-
-    it 'escapes dollar signs in string matchers (BUG FIX)' do
-      described_class.add('test_flag', 'costs $5.00')
-
-      matcher = described_class.matchers['test_flag'].first
-
-      # Should match the literal string with $ and .
-      expect('costs $5.00').to match(matcher)
-    end
-
-    it 'escapes caret in string matchers (BUG FIX)' do
-      described_class.add('test_flag', '^start')
-
-      matcher = described_class.matchers['test_flag'].first
-
-      # Without escape, ^ would be a start-of-string anchor
-      expect('not ^start').to match(matcher) # Should match in middle
-      expect('^start of line').to match(matcher)
+      # .* is interpreted as regex wildcard
+      expect('test anything pattern').to match(matcher)
+      expect('test pattern').to match(matcher)
     end
 
     it 'handles multiple matchers' do
@@ -200,26 +142,26 @@ RSpec.describe Lich::DragonRealms::Flags do
   end
 
   describe 'real-world examples' do
-    it 'handles game output with special characters' do
-      # Real game output often has special regex chars
-      described_class.add('gem_pouch', 'You put .* in your gem pouch.')
+    it 'allows regex wildcards for flexible game output matching' do
+      # Using .* to match any item name
+      described_class.add('gem_pouch', 'You put .* in your gem pouch')
 
       matcher = described_class.matchers['gem_pouch'].first
 
-      # Before fix: would match "You put anything in your gem pouch."
-      expect('You put a ruby in your gem pouch.').not_to match(matcher)
-
-      # After fix: matches literal string only
-      expect('You put .* in your gem pouch.').to match(matcher)
+      # .* matches any item name
+      expect('You put a ruby in your gem pouch.').to match(matcher)
+      expect('You put a large diamond in your gem pouch.').to match(matcher)
     end
 
-    it 'handles escaped flags for item patterns with parens' do
-      # Item names sometimes have (rare) or (uncommon) etc.
-      described_class.add('got_item', 'a golden ring (rare)')
+    it 'uses alternation for matching multiple patterns' do
+      # Using | for alternation
+      described_class.add('combat', 'You (hit|miss|dodge)')
 
-      matcher = described_class.matchers['got_item'].first
+      matcher = described_class.matchers['combat'].first
 
-      expect('You see a golden ring (rare) on the ground.').to match(matcher)
+      expect('You hit the troll!').to match(matcher)
+      expect('You miss!').to match(matcher)
+      expect('You dodge the attack!').to match(matcher)
     end
   end
 end

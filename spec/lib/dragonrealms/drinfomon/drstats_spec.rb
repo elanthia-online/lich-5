@@ -2,32 +2,18 @@
 
 require 'rspec'
 
-# Mock XMLData for testing
+# Define XMLData module if not already defined
 module XMLData
-  def self.name
-    'TestChar'
-  end
-
-  def self.health
-    100
-  end
-
-  def self.mana
-    50
-  end
-
-  def self.stamina
-    75
-  end
-
-  def self.spirit
-    80
-  end
-
-  def self.concentration
-    90
-  end
 end unless defined?(XMLData)
+
+# Add required methods to XMLData (may already exist from other specs)
+# Note: :name must always be defined because Module#name exists but returns the wrong value
+XMLData.define_singleton_method(:name) { 'TestChar' }
+XMLData.define_singleton_method(:health) { 100 } unless XMLData.respond_to?(:health)
+XMLData.define_singleton_method(:mana) { 50 } unless XMLData.respond_to?(:mana)
+XMLData.define_singleton_method(:stamina) { 75 } unless XMLData.respond_to?(:stamina)
+XMLData.define_singleton_method(:spirit) { 80 } unless XMLData.respond_to?(:spirit)
+XMLData.define_singleton_method(:concentration) { 90 } unless XMLData.respond_to?(:concentration)
 
 require_relative '../../../../lib/dragonrealms/drinfomon/drstats'
 

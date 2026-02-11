@@ -7,14 +7,15 @@ module XMLData
 end unless defined?(XMLData)
 
 # Add required methods to XMLData (may already exist from spec_helper)
+# Values match spec_helper.rb for consistency across test ordering
 unless XMLData.respond_to?(:room_exits)
   XMLData.define_singleton_method(:room_exits) { ['north', 'south'] }
 end
 unless XMLData.respond_to?(:room_title)
-  XMLData.define_singleton_method(:room_title) { '[[Test Room]]' }
+  XMLData.define_singleton_method(:room_title) { '[Test Room]' }
 end
 unless XMLData.respond_to?(:room_description)
-  XMLData.define_singleton_method(:room_description) { 'A test room for specs.' }
+  XMLData.define_singleton_method(:room_description) { 'A test room description.' }
 end
 
 require_relative '../../../../lib/dragonrealms/drinfomon/drroom'
@@ -127,13 +128,13 @@ RSpec.describe Lich::DragonRealms::DRRoom do
 
     describe '.title' do
       it 'returns XMLData.room_title' do
-        expect(described_class.title).to eq('[[Test Room]]')
+        expect(described_class.title).to eq('[Test Room]')
       end
     end
 
     describe '.description' do
       it 'returns XMLData.room_description' do
-        expect(described_class.description).to eq('A test room for specs.')
+        expect(described_class.description).to eq('A test room description.')
       end
     end
   end
