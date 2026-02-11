@@ -6,14 +6,15 @@ require 'rspec'
 module XMLData
 end unless defined?(XMLData)
 
-# Add required methods to XMLData (may already exist from other specs)
-# Note: :name must always be defined because Module#name exists but returns the wrong value
+# Always define/override these methods to ensure consistent test values
+# regardless of which specs ran before this one (games_spec.rb defines
+# XMLData methods as attr_accessors with different default values)
 XMLData.define_singleton_method(:name) { 'TestChar' }
-XMLData.define_singleton_method(:health) { 100 } unless XMLData.respond_to?(:health)
-XMLData.define_singleton_method(:mana) { 50 } unless XMLData.respond_to?(:mana)
-XMLData.define_singleton_method(:stamina) { 75 } unless XMLData.respond_to?(:stamina)
-XMLData.define_singleton_method(:spirit) { 80 } unless XMLData.respond_to?(:spirit)
-XMLData.define_singleton_method(:concentration) { 90 } unless XMLData.respond_to?(:concentration)
+XMLData.define_singleton_method(:health) { 100 }
+XMLData.define_singleton_method(:mana) { 50 }
+XMLData.define_singleton_method(:stamina) { 75 }
+XMLData.define_singleton_method(:spirit) { 80 }
+XMLData.define_singleton_method(:concentration) { 90 }
 
 require_relative '../../../../lib/dragonrealms/drinfomon/drstats'
 

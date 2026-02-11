@@ -6,17 +6,12 @@ require 'rspec'
 module XMLData
 end unless defined?(XMLData)
 
-# Add required methods to XMLData (may already exist from spec_helper)
-# Values match spec_helper.rb for consistency across test ordering
-unless XMLData.respond_to?(:room_exits)
-  XMLData.define_singleton_method(:room_exits) { ['north', 'south'] }
-end
-unless XMLData.respond_to?(:room_title)
-  XMLData.define_singleton_method(:room_title) { '[Test Room]' }
-end
-unless XMLData.respond_to?(:room_description)
-  XMLData.define_singleton_method(:room_description) { 'A test room description.' }
-end
+# Always define/override these methods to ensure consistent test values
+# regardless of which specs ran before this one (games_spec.rb defines
+# XMLData.room_title as attr_accessor that defaults to nil)
+XMLData.define_singleton_method(:room_exits) { ['north', 'south'] }
+XMLData.define_singleton_method(:room_title) { '[Test Room]' }
+XMLData.define_singleton_method(:room_description) { 'A test room description.' }
 
 require_relative '../../../../lib/dragonrealms/drinfomon/drroom'
 
