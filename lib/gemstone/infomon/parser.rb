@@ -114,7 +114,7 @@ module Lich
           EnhanciveSpells = /^\s+(?<spells>[\d,\s]+)$/.freeze
           EnhanciveStatisticsSection = /^Statistics:$/.freeze
           EnhanciveStatistic = /^\s+(?<name>Enhancive Items|Enhancive Properties|Total Enhancive Amount):\s*(?<value>\d+)$/.freeze
-          EnhanciveEnd = /^For more details, see INVENTORY ENHANCIVE TOTALS DETAILS\.$/.freeze
+          EnhanciveEnd = /^For (?:more|fewer) details, see INVENTORY ENHANCIVE TOTALS(?: DETAILS)?\.$/.freeze
           EnhanciveNone = /^No enhancive item bonuses found\.$/.freeze
 
           # Enhancive active state tracking (on/off)
