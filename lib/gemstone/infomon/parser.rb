@@ -525,14 +525,10 @@ module Lich
                 :noop
               end
             when Pattern::AccountSubscription
-              if Account.subscription
-                match = Regexp.last_match
-                Account.subscription = match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
-                Infomon.set('account.type', match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').upcase)
-                :ok
-              else
-                :noop
-              end
+              match = Regexp.last_match
+              Account.subscription = match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
+              Infomon.set('account.type', match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').upcase)
+              :ok
             when Pattern::ProfileStart
               State.set(State::Profile)
               :ok
