@@ -2,6 +2,13 @@
 
 require 'spec_helper'
 
+# ──────────────────────────────────────────────
+# Mocks for game-specific dependencies
+# ──────────────────────────────────────────────
+
+# NOTE: Do NOT stub Lich::Messaging here - let spec_helper define it with message capture
+# Other specs (common_arcana_spec) rely on Lich::Messaging.messages for assertions
+
 # Stub Lich::Util for inv command
 module Lich
   module Util
@@ -11,12 +18,195 @@ module Lich
   end
 end unless defined?(Lich::Util)
 
-# Stub UserVars
+# Stub UserVars - use method_missing for maximum compatibility with all specs
+# This pattern matches common_spec.rb and handles any method call dynamically
 module UserVars
-  def self.equipmanager_debug
-    false
+  @vars = { 'equipmanager_debug' => false, 'moons' => {}, 'sun' => {} }
+  class << self
+    def method_missing(name, *args)
+      name_str = name.to_s
+      name_str.end_with?('=') ? @vars[name_str.chomp('=')] = args.first : @vars[name_str]
+    end
+
+    def respond_to_missing?(_name, _include_private = false)
+      true
+    end
   end
 end unless defined?(UserVars)
+
+# Add missing methods defensively if UserVars was defined by another spec
+# common_moonmage_spec needs: moons, moons=, sun, sun=
+# common_spec needs: method_missing (dynamic)
+# common_arcana_spec defines sun (reader only), discerns, discerns=, avtalia
+unless UserVars.respond_to?(:moons=)
+  UserVars.instance_variable_set(:@moons, {}) unless UserVars.instance_variable_defined?(:@moons)
+  UserVars.define_singleton_method(:moons) { @moons ||= {} }
+  UserVars.define_singleton_method(:moons=) { |v| @moons = v }
+end
+unless UserVars.respond_to?(:sun=)
+  UserVars.instance_variable_set(:@sun, {}) unless UserVars.instance_variable_defined?(:@sun)
+  # Override existing sun method if it exists but doesn't accept arguments
+  UserVars.define_singleton_method(:sun) { @sun ||= {} }
+  UserVars.define_singleton_method(:sun=) { |v| @sun = v }
+end
+UserVars.define_singleton_method(:equipmanager_debug) { false } unless UserVars.respond_to?(:equipmanager_debug)
+
+# Mock DRC module (must be defined before loading equipmanager.rb)
+# IMPORTANT: This mock must include all methods used by ANY spec file to avoid
+# spec isolation issues when files are loaded in different orders.
+module DRC
+  def self.bput(_command, *_patterns)
+    'default'
+  end
+
+  def self.retreat(*_args); end
+  def self.fix_standing; end
+  def self.release_invisibility; end
+  def self.set_stance(_stance); end
+  def self.beep; end
+
+  def self.get_noun(item)
+    item.to_s.split.last
+  end
+
+  def self.right_hand
+    @right_hand
+  end
+
+  def self.left_hand
+    @left_hand
+  end
+
+  def self.right_hand=(val)
+    @right_hand = val
+  end
+
+  def self.left_hand=(val)
+    @left_hand = val
+  end
+end unless defined?(DRC)
+
+# DRC::Item class - defined separately so it's added even if DRC was defined
+# by another spec file that didn't include Item
+class DRC::Item
+  attr_accessor :name, :leather, :worn, :hinders_locks, :swappable, :tie_to,
+                :adjective, :bound, :wield, :transforms_to, :transform_verb,
+                :transform_text, :lodges, :skip_repair, :ranged, :needs_unloading,
+                :container
+
+  # Class method used by DRCI.in_hand? (common-items.rb)
+  def self.from_text(text)
+    new(name: text.to_s.split.last)
+  end
+
+  def initialize(name:, leather: false, worn: false, hinders_locks: false,
+                 swappable: false, tie_to: nil, adjective: nil, bound: false,
+                 wield: false, transforms_to: nil, transform_verb: nil,
+                 transform_text: nil, lodges: true, skip_repair: false,
+                 ranged: false, needs_unloading: false, container: nil)
+    @name = name
+    @leather = leather
+    @worn = worn
+    @hinders_locks = hinders_locks
+    @swappable = swappable
+    @tie_to = tie_to
+    @adjective = adjective
+    @bound = bound
+    @wield = wield
+    @transforms_to = transforms_to
+    @transform_verb = transform_verb
+    @transform_text = transform_text
+    @lodges = lodges
+    @skip_repair = skip_repair
+    @ranged = ranged
+    @needs_unloading = needs_unloading
+    @container = container
+  end
+
+  def short_name
+    adjective ? "#{adjective} #{name}" : name
+  end
+
+  def short_regex
+    /#{Regexp.escape(short_name)}/i
+  end
+end unless defined?(DRC::Item)
+
+# Mock DRCI module with methods needed by EquipmentManager
+module DRCI
+  def self.in_hands?(_item)
+    false
+  end
+
+  def self.in_left_hand?(_item)
+    false
+  end
+
+  def self.in_right_hand?(_item)
+    false
+  end
+
+  def self.wear_item?(_item)
+    true
+  end
+
+  def self.stow_hands; end
+
+  def self.stow_hand(_hand)
+    true
+  end
+
+  def self.lower_item?(_item)
+    true
+  end
+
+  def self.put_away_item?(_item, _container = nil)
+    true
+  end
+
+  def self.get_item?(_item, _container = nil)
+    true
+  end
+
+  def self.get_item_if_not_held?(_item)
+    true
+  end
+end unless defined?(DRCI)
+
+# DRCI constants - defined separately so they're added even if DRCI was defined
+# by another spec file that didn't include these constants
+DRCI::WEAR_ITEM_SUCCESS_PATTERNS = [/^You (?:attach|drape|pull|put|slide|slip|sling)/].freeze unless defined?(DRCI::WEAR_ITEM_SUCCESS_PATTERNS)
+DRCI::WEAR_ITEM_FAILURE_PATTERNS = [/^You can't wear/].freeze unless defined?(DRCI::WEAR_ITEM_FAILURE_PATTERNS)
+DRCI::TIE_ITEM_SUCCESS_PATTERNS = [/^You (?:attach|tie)/].freeze unless defined?(DRCI::TIE_ITEM_SUCCESS_PATTERNS)
+DRCI::TIE_ITEM_FAILURE_PATTERNS = [/^What were you/].freeze unless defined?(DRCI::TIE_ITEM_FAILURE_PATTERNS)
+DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS = [/^You put/].freeze unless defined?(DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS)
+DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS = [/^What were you/].freeze unless defined?(DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
+DRCI::REMOVE_ITEM_SUCCESS_PATTERNS = [/^You (?:remove|sling|slide)/].freeze unless defined?(DRCI::REMOVE_ITEM_SUCCESS_PATTERNS)
+DRCI::REMOVE_ITEM_FAILURE_PATTERNS = [/^Remove what/, /^You need a free hand/].freeze unless defined?(DRCI::REMOVE_ITEM_FAILURE_PATTERNS)
+
+# Add Flags methods defensively - ensure compatibility with all specs that use Flags
+if defined?(Flags)
+  # common_moonmage_spec needs reset(name)
+  Flags.define_singleton_method(:reset) { |name| @flags[name] = nil } unless Flags.respond_to?(:reset)
+  # drparser_spec needs matchers and flags accessors
+  unless Flags.respond_to?(:matchers)
+    Flags.instance_variable_set(:@matchers, {}) unless Flags.instance_variable_defined?(:@matchers)
+    Flags.define_singleton_method(:matchers) { @matchers ||= {} }
+  end
+  unless Flags.respond_to?(:flags)
+    Flags.instance_variable_set(:@flags, {}) unless Flags.instance_variable_defined?(:@flags)
+    Flags.define_singleton_method(:flags) { @flags ||= {} }
+  end
+end
+
+# Alias into Lich::DragonRealms namespace for production code compatibility
+# Use const_defined? with false to check only this module, not ancestors
+module Lich
+  module DragonRealms
+    DRC = ::DRC unless const_defined?(:DRC, false)
+    DRCI = ::DRCI unless const_defined?(:DRCI, false)
+  end
+end
 
 # Define global methods used by EquipmentManager as private Object methods.
 # These exist in the game runtime as Kernel-level methods.
@@ -32,9 +222,8 @@ def get_settings
   OpenStruct.new(gear_sets: {}, sort_auto_head: false, gear: [])
 end
 
-# Load production code
-require_relative '../../../../lib/dragonrealms/commons/common'
-require_relative '../../../../lib/dragonrealms/commons/common-items'
+# Load only equipmanager.rb - NOT common.rb or common-items.rb
+# The mock DRC/DRCI modules above provide the required dependencies
 require_relative '../../../../lib/dragonrealms/commons/equipmanager'
 
 RSpec.describe Lich::DragonRealms::EquipmentManager do
@@ -50,7 +239,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       lodges: true, skip_repair: false, ranged: false, needs_unloading: false,
       container: nil
     }
-    Lich::DragonRealms::DRC::Item.new(**defaults.merge(overrides))
+    DRC::Item.new(**defaults.merge(overrides))
   end
 
   def make_settings(gear: [], gear_sets: {}, sort_auto_head: false)
