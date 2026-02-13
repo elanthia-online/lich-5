@@ -345,7 +345,7 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
 
       DRExpMonitor.report_skill_gains
 
-      expect(Lich::Messaging.messages.last[:message]).to include('Gained:')
+      expect(Lich::Messaging.messages.last[:message]).to include('DRExpMonitor:')
       expect(Lich::Messaging.messages.last[:message]).to include('Evasion(+2)')
       expect(DRSkill.gained_skills).to be_empty
     end
