@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative '../../../spec_helper'
 require 'rspec'
 require 'ostruct'
 
@@ -217,7 +218,7 @@ module Kernel
   def stunned?; false; end
   def webbed?; false; end
   def start_script(_name, _args = [], _flags = {}); nil; end
-  def get_data(_key); OpenStruct.new(spell_data: {}); end
+  def get_data(_key); OpenStruct.new(spell_data: {}); end unless defined?(get_data)
   def _respond(*_args); end
   def custom_require; proc { |_name| nil }; end
 
