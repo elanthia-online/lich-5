@@ -51,9 +51,16 @@ require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
 # Load the module under test
 require_relative '../../../../lib/dragonrealms/drinfomon/drexpmonitor'
 
-# Create aliases for easier access
-DRExpMonitor = Lich::DragonRealms::DRExpMonitor unless defined?(DRExpMonitor)
-DRSkill = Lich::DragonRealms::DRSkill unless defined?(DRSkill)
+# Force aliases to point to real classes — mock modules from other specs
+# (e.g., common_arcana_spec) may have defined these as top-level modules,
+# shadowing the real Lich::DragonRealms classes.
+%i[DRExpMonitor DRSkill].each do |name|
+  real = Lich::DragonRealms.const_get(name)
+  if Object.const_defined?(name) && Object.const_get(name) != real
+    Object.send(:remove_const, name)
+  end
+  Object.const_set(name, real) unless Object.const_defined?(name)
+end
 
 RSpec.describe Lich::DragonRealms::DRExpMonitor do
   before(:each) do
