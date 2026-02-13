@@ -24,32 +24,33 @@ rescue LoadError
 end
 
 # Mock global constants used throughout Lich
-# XMLData may be defined as a module by other specs with attr_accessor (which returns nil
-# by default). We ALWAYS define our methods to ensure they return test values, not nil.
-# The last definition wins, so our values override nil defaults from attr_accessor.
-XMLData = OpenStruct.new(
-  game: 'DR',
-  name: 'TestChar',
-  room_id: 12345,
-  room_count: 1,
-  room_title: '[Test Room]',
-  room_description: 'A test room description.',
-  room_exits_string: 'Obvious paths: north, south',
-  room_window_disabled: false,
-  previous_nav_rm: 11111
-) unless defined?(XMLData)
+# XMLData uses attr_accessor so tests can override values, with defaults reset before each test.
+XMLData = OpenStruct.new unless defined?(XMLData)
 
-# Always define methods on XMLData to ensure they return test values, not nil.
-# Other specs may have defined attr_accessor which creates methods that return nil.
-# Our define_singleton_method overwrites those to return actual test values.
-XMLData.define_singleton_method(:game) { 'DR' }
-XMLData.define_singleton_method(:name) { 'TestChar' }
-XMLData.define_singleton_method(:room_id) { 12345 }
-XMLData.define_singleton_method(:room_title) { '[Test Room]' }
-XMLData.define_singleton_method(:room_description) { 'A test room description.' }
-XMLData.define_singleton_method(:room_exits_string) { 'Obvious paths: north, south' }
-XMLData.define_singleton_method(:room_exits) { [] }
-XMLData.singleton_class.attr_accessor(:prepared_spell) unless XMLData.respond_to?(:prepared_spell=)
+# Define accessors on XMLData singleton class for all commonly used attributes
+XMLData.singleton_class.class_eval do
+  attr_accessor :game, :name, :room_id, :room_count, :room_title, :room_description,
+                :room_exits_string, :room_window_disabled, :previous_nav_rm, :room_exits,
+                :prepared_spell
+end
+
+# Helper method to reset XMLData to default values (called in before(:each))
+def reset_xml_data!
+  XMLData.game = 'DR'
+  XMLData.name = 'TestChar'
+  XMLData.room_id = 12345
+  XMLData.room_count = 1
+  XMLData.room_title = '[Test Room]'
+  XMLData.room_description = 'A test room description.'
+  XMLData.room_exits_string = 'Obvious paths: north, south'
+  XMLData.room_exits = []
+  XMLData.room_window_disabled = false
+  XMLData.previous_nav_rm = 11111
+  XMLData.prepared_spell = nil
+end
+
+# Set initial defaults
+reset_xml_data!
 
 # Mock global variables
 $clean_lich_char = ';' unless defined?($clean_lich_char)
@@ -555,8 +556,8 @@ class Room
   end
 end unless defined?(Room)
 
-# ─── Map ──────────────────────────────────────────────────────────────────────
-module Map
+# ─── Map (must be class, not module, for games_spec.rb compatibility) ─────────
+class Map
   class << self
     def dijkstra(*_args)
       [nil, {}]
@@ -568,6 +569,10 @@ end unless defined?(Map)
 module Frontend
   def self.supports_gsl?
     false
+  end
+
+  def self.client
+    'stormfront'
   end
 end unless defined?(Frontend)
 
@@ -807,6 +812,7 @@ end
 RSpec.configure do |config|
   config.before(:each) do
     # Reset mutable state before each test
+    reset_xml_data!
     Lich::Messaging.clear_messages!
     DRStats.reset! if DRStats.respond_to?(:reset!)
     DRSkill.reset! if DRSkill.respond_to?(:reset!)
