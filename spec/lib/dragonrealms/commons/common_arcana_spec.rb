@@ -109,9 +109,10 @@ module DRStats
   @mana = 100
   @concentration = 100
   @guild = 'Warrior Mage'
+  @encumbrance = 'None'
 
   class << self
-    attr_accessor :mana, :concentration, :guild
+    attr_accessor :mana, :concentration, :guild, :encumbrance
 
     def barbarian?
       @guild == 'Barbarian'
@@ -223,25 +224,30 @@ module Flags
     @flags = {}
     @pending = {}
   end
+
+  # common_moonmage_spec needs reset(name) to reset individual flags
+  def self.reset(name)
+    @flags[name] = nil
+  end
 end unless defined?(Flags)
 
 module UserVars
   @data = {}
+  @moons = {}
+  @sun = nil
 
-  def self.discerns
-    @discerns
-  end
+  class << self
+    attr_accessor :discerns, :avtalia, :moons
+    # song/climbing_song/instrument for common_spec.rb play_song? tests
+    attr_accessor :song, :climbing_song, :instrument
 
-  def self.discerns=(val)
-    @discerns = val
-  end
+    def sun
+      @sun || { 'night' => false, 'day' => true }
+    end
 
-  def self.sun
-    @sun || { 'night' => false, 'day' => true }
-  end
-
-  def self.avtalia
-    @avtalia || {}
+    def sun=(val)
+      @sun = val
+    end
   end
 end unless defined?(UserVars)
 

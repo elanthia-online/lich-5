@@ -1,6 +1,7 @@
+require_relative '../../../spec_helper'
 require 'rspec'
 
-# Setup load path (standalone spec, no spec_helper dependency)
+# Setup load path
 LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
 $LOAD_PATH.unshift(LIB_DIR) unless $LOAD_PATH.include?(LIB_DIR)
 
