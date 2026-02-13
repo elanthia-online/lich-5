@@ -36,15 +36,15 @@ module Lich
             # Run startup once
             startup
           rescue StandardError => e
-            respond 'Error in DRInfomon startup thread'
-            respond e.inspect
-            respond e.backtrace.join("\n")
+            Lich::Messaging.msg('error', 'DRInfomon: Error in startup thread')
+            Lich::Messaging.msg('error', "DRInfomon: #{e.inspect}")
+            Lich::Messaging.msg('error', "DRInfomon: #{e.backtrace.join("\n")}")
           end
         end
       end
 
       def self.startup
-        ExecScript.start(startup_script, { quiet: true, name: "drinfomon_startup" })
+        ExecScript.start(startup_script, { quiet: true, name: 'drinfomon_startup' })
       end
 
       def self.startup_script
