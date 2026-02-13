@@ -337,8 +337,8 @@ module DRCI
   end
 end unless defined?(DRCI)
 
-# ─── DRRoom ───────────────────────────────────────────────────────────────────
-module DRRoom
+# ─── DRRoom (must be class, not module) ───────────────────────────────────────
+class DRRoom
   @npcs = []
   @pcs = []
   @room_objs = []
@@ -485,8 +485,8 @@ module UserVars
   end
 end unless defined?(UserVars)
 
-# ─── Flags ────────────────────────────────────────────────────────────────────
-module Flags
+# ─── Flags (must be class, not module) ────────────────────────────────────────
+class Flags
   @flags = {}
   @pending = {}
   @matchers = {}
