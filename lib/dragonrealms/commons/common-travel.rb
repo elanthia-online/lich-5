@@ -1,7 +1,74 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     module DRCT
       module_function
+
+      DIRECTION_REVERSE = {
+        'northeast' => 'southwest',
+        'southwest' => 'northeast',
+        'northwest' => 'southeast',
+        'southeast' => 'northwest',
+        'north'     => 'south',
+        'south'     => 'north',
+        'east'      => 'west',
+        'west'      => 'east',
+        'up'        => 'down',
+        'down'      => 'up'
+      }.each_value(&:freeze).freeze unless defined?(DIRECTION_REVERSE)
+
+      SELL_SUCCESS_PATTERNS = [
+        /hands? you \d+ (?:kronars|lirums|dokoras)/i
+      ].each(&:freeze).freeze unless defined?(SELL_SUCCESS_PATTERNS)
+
+      SELL_FAILURE_PATTERNS = [
+        /I need to examine the merchandise first/,
+        /That's not worth anything/,
+        /I only deal in pelts/,
+        /There's folk around here that'd slit a throat for this/
+      ].each(&:freeze).freeze unless defined?(SELL_FAILURE_PATTERNS)
+
+      BUY_PRICE_PATTERNS = [
+        /prepared to offer it to you for (?<amount>.*) (?:kronar|lirum|dokora)s?/,
+        /Let me but ask the humble sum of (?<amount>.*) coins/,
+        /it would be just (?<amount>\d*) (?:kronar|lirum|dokora)s?/,
+        /for a (?:mere )?(?<amount>\d*) (?:kronar|lirum|dokora)s?/,
+        /I can let that go for\.\.\.(?<amount>.*) (?:kronar|lirum|dokora)s?/,
+        /cost you (?:just )?(?<amount>.*) (?:kronar|lirum|dokora)s?/,
+        /it may be yours for just (?<amount>.*) (?:kronar|lirum|dokora)s?/,
+        /I'll give that to you for (?<amount>.*) (?:kronar|lirum|dokora)s?/,
+        /I'll let you have it for (?<amount>.*) (?:kronar|lirum|dokora)s?/i,
+        /I ask that you give (?<amount>.*) copper (?:kronar|lirum|dokora)s?/,
+        /it'll be (?<amount>.*) (?:kronar|lirum|dokora)s?/,
+        /the price of (?<amount>.*) coins? is all I ask/,
+        /tis only (?<amount>.*) (?:kronar|lirum|dokora)s?/,
+        /That will be (?<amount>.*) copper (?:kronar|lirum|dokora)s? please/,
+        /That'll be (?<amount>.*) copper (?:kronar|lirum|dokora)s?/,
+        /to you for (?<amount>.*) (?:kronar|lirum|dokora)s?/,
+        /I ask (?<amount>.*) copper (?:kronar|lirum|dokora)s or if you would prefer/,
+        /Cost you just (?<amount>.*) (?:kronar|lirum|dokora)s?, okie dokie\?/i,
+        /It will cost just (?<amount>.*) (?:kronar|lirum|dokora)s?/i,
+        /I would suggest (?<amount>.*) (?:kronar|lirum|dokora)s?/i,
+        /to you for (?<amount>.*) (?:kronar|lirum|dokora)s?/i,
+        /asking (?<amount>.*) (?:kronar|lirum|dokora)s?/i
+      ].each(&:freeze).freeze unless defined?(BUY_PRICE_PATTERNS)
+
+      BUY_NON_PRICE_PATTERNS = [
+        'You decide to purchase',
+        'Buy what'
+      ].each(&:freeze).freeze unless defined?(BUY_NON_PRICE_PATTERNS)
+
+      ASK_SUCCESS_PATTERNS = [
+        /hands you/
+      ].each(&:freeze).freeze unless defined?(ASK_SUCCESS_PATTERNS)
+
+      ASK_FAILURE_PATTERNS = [
+        /does not seem to know anything about that/,
+        /All I know about/,
+        /To whom are you speaking/,
+        /Usage: ASK/
+      ].each(&:freeze).freeze unless defined?(ASK_FAILURE_PATTERNS)
 
       # Visit a merchant and sell an item.
       # Usually to sell junk at pawn shops.
@@ -10,21 +77,10 @@ module Lich
 
         walk_to(room)
 
-        success_patterns = [
-          /hands? you \d+ (kronars|lirums|dokoras)/i
-        ]
-
-        failure_patterns = [
-          /I need to examine the merchandise first/,
-          /That's not worth anything/,
-          /I only deal in pelts/,
-          /There's folk around here that'd slit a throat for this/
-        ]
-
-        case DRC.bput("sell my #{item}", *success_patterns, *failure_patterns)
-        when *success_patterns
+        case DRC.bput("sell my #{item}", *SELL_SUCCESS_PATTERNS, *SELL_FAILURE_PATTERNS)
+        when *SELL_SUCCESS_PATTERNS
           true
-        when *failure_patterns
+        when *SELL_FAILURE_PATTERNS
           false
         end
       end
@@ -34,37 +90,11 @@ module Lich
       def buy_item(room, item)
         walk_to(room)
 
-        # Amount to pay should be first capturing group.
-        patterns = [/prepared to offer it to you for (.*) (?:kronar|lirum|dokora)s?/,
-                    /Let me but ask the humble sum of (.*) coins/,
-                    /it would be just (\d*) (?:kronar|lirum|dokora)s?/,
-                    /for a (?:mere )?(\d*) (?:kronar|lirum|dokora)s?/,
-                    /I can let that go for...(.*) (?:kronar|lirum|dokora)s?/,
-                    /cost you (?:just )?(.*) (?:kronar|lirum|dokora)s?/,
-                    /it may be yours for just (.*) (?:kronar|lirum|dokora)s?/,
-                    /I'll give that to you for (.*) (?:kronar|lirum|dokora)s?/,
-                    /I'll let you have it for (.*) (?:kronar|lirum|dokora)s?/i,
-                    /I ask that you give (.*) copper (?:kronar|lirum|dokora)s?/,
-                    /it'll be (.*) (?:kronar|lirum|dokora)s?/,
-                    /the price of (.*) coins? is all I ask/,
-                    /tis only (.*) (?:kronar|lirum|dokora)s?/,
-                    /That will be (.*) copper (?:kronar|lirum|dokora)s? please/,
-                    /That'll be (.*) copper (?:kronar|lirum|dokora)s?/,
-                    /to you for (.*) (?:kronar|lirum|dokora)s?/,
-                    /I ask (.*) copper (?:kronar|lirum|dokora)s or if you would prefer/,
-                    /Cost you just (.*) (?:kronar|lirum|dokora)s?, okie dokie\?/i,
-                    /It will cost just (.*) (?:kronar|lirum|dokora)s?/i,
-                    /I would suggest (.*) (?:kronar|lirum|dokora)s?/i,
-                    /to you for (.*) (?:kronar|lirum|dokora)s?/i,
-                    /asking (.*) (?:kronar|lirum|dokora)s?/i,
-                    'You decide to purchase',
-                    'Buy what']
+        all_patterns = BUY_PRICE_PATTERNS + BUY_NON_PRICE_PATTERNS
+        result = DRC.bput("buy #{item}", *all_patterns)
 
-        match = DRC.bput("buy #{item}", *patterns)
-        if match
-          patterns.each { |p| break if p.match(match) }
-        end
-        amount = Regexp.last_match(1)
+        match_data = BUY_PRICE_PATTERNS.lazy.filter_map { |p| p.match(result) }.first
+        amount = match_data[:amount] if match_data
 
         fput("offer #{amount}") if amount
       end
@@ -74,19 +104,8 @@ module Lich
       def ask_for_item?(room, name, item)
         walk_to(room)
 
-        success_patterns = [
-          /hands you/
-        ]
-
-        failure_patterns = [
-          /does not seem to know anything about that/,
-          /All I know about/,
-          /To whom are you speaking/,
-          /Usage: ASK/
-        ]
-
-        case DRC.bput("ask #{name} for #{item}", *success_patterns, *failure_patterns)
-        when /hands you/
+        case DRC.bput("ask #{name} for #{item}", *ASK_SUCCESS_PATTERNS, *ASK_FAILURE_PATTERNS)
+        when *ASK_SUCCESS_PATTERNS
           true
         else
           false
@@ -115,21 +134,20 @@ module Lich
         room = get_data('town')[hometown]['locksmithing']['id']
 
         if room.nil?
-          echo '***No locksmith location found for current Hometown! Skipping refilling!***'
+          Lich::Messaging.msg('bold', 'DRCT: No locksmith location found for current hometown. Skipping refilling.')
           return
         end
 
         walk_to(room)
         if Room.current.id != room
-          echo '***Could not reach locksmith location! Skipping refilling!***'
+          Lich::Messaging.msg('bold', 'DRCT: Could not reach locksmith location. Skipping refilling.')
           return
         end
 
         count.times do
           buy_item(room, "#{lockpick_type} lockpick")
-          case DRC.bput("put my lockpick on my #{container}", 'You put', 'different kinds of lockpicks on the same lockpick')
-          when 'different kinds of lockpicks on the same lockpick'
-            DRC.message('There is something wrong with your lockpick settings. Mixing types in a container is not allowed.')
+          unless DRCI.put_away_item_unsafe?('my lockpick', "my #{container}", 'on')
+            Lich::Messaging.msg('bold', "DRCT: Failed to put lockpick on #{container}. Check your lockpick settings — mixing types in a container is not allowed.")
             break
           end
         end
@@ -150,10 +168,10 @@ module Lich
         DRC.fix_standing
 
         if Room.current.id.nil?
-          echo "In an unknown room, manually attempting to navigate to #{room_num}"
+          Lich::Messaging.msg('plain', "DRCT: In an unknown room, manually attempting to navigate to #{room_num}")
           rooms = Map.list.select { |room| room.description.include?(XMLData.room_description.strip) && room.title.include?(XMLData.room_title) }
           if rooms.empty? || rooms.length > 1
-            echo 'failed to find a matching room'
+            Lich::Messaging.msg('bold', 'DRCT: Failed to find a matching room from unknown location.')
             return false
           end
           room = rooms.first
@@ -178,61 +196,49 @@ module Lich
         timer = Time.now
         prev_room = XMLData.room_description + XMLData.room_title
 
-        # Moved flag declaration from the start of the method to here
-        # so that they only exist when needed and because the above code
-        # has lots of 'return' statements that'd have to be refactored to
-        # properly delete the flags at each method exit point.
-        # I didn't want to tackle that endeavor in this change.
         Flags.add('travel-closed-shop', 'The door is locked up tightly for the night', 'You smash your nose', '^A servant (blocks|stops)')
         Flags.add('travel-engaged', 'You are engaged')
 
-        while Script.running.include?(script_handle)
-          # Shop closed, stop script and open door then restart
-          if Flags['travel-closed-shop']
-            Flags.reset('travel-closed-shop')
-            kill_script(script_handle)
-            if /You open/ !~ DRC.bput('open door', 'It is locked', 'You .+', 'What were')
-              # You cannot get to where you want to go,
-              # and no amount of retries will get you through the locked door.
-              restart_on_fail = false
-              break
+        begin
+          while Script.running.include?(script_handle)
+            if Flags['travel-closed-shop']
+              Flags.reset('travel-closed-shop')
+              kill_script(script_handle)
+              if /You open/ !~ DRC.bput('open door', 'It is locked', 'You .+', 'What were')
+                restart_on_fail = false
+                break
+              end
+              timer = Time.now
+              script_handle = start_script('go2', [room_num.to_s])
             end
-            timer = Time.now
-            script_handle = start_script('go2', [room_num.to_s])
-          end
-          # You're engaged, stop script and retreat then restart
-          if Flags['travel-engaged']
-            Flags.reset('travel-engaged')
-            kill_script(script_handle)
-            DRC.retreat
-            timer = Time.now
-            script_handle = start_script('go2', [room_num.to_s])
-          end
-          # Something interferred with movement, stop script then restart
-          if (Time.now - timer) > 90
-            kill_script(script_handle)
-            pause 0.5 while Script.running.include?(script_handle)
-            break unless restart_on_fail
+            if Flags['travel-engaged']
+              Flags.reset('travel-engaged')
+              kill_script(script_handle)
+              DRC.retreat
+              timer = Time.now
+              script_handle = start_script('go2', [room_num.to_s])
+            end
+            if (Time.now - timer) > 90
+              kill_script(script_handle)
+              pause 0.5 while Script.running.include?(script_handle)
+              break unless restart_on_fail
 
-            timer = Time.now
-            script_handle = start_script('go2', [room_num.to_s])
+              timer = Time.now
+              script_handle = start_script('go2', [room_num.to_s])
+            end
+            if Script.running?('escort') || Script.running?('bescort') || (XMLData.room_description + XMLData.room_title) != prev_room || XMLData.room_description =~ /The terrain constantly changes as you travel along on your journey/
+              timer = Time.now
+            end
+            prev_room = XMLData.room_description + XMLData.room_title
+            pause 0.5
           end
-          # If an escort script is running or we're making progress then update our timer so we don't timeout (see above)
-          if Script.running?('escort') || Script.running?('bescort') || (XMLData.room_description + XMLData.room_title) != prev_room || XMLData.room_description =~ /The terrain constantly changes as you travel along on your journey/
-            timer = Time.now
-          end
-          # Where did you come from, where did you go? Where did you come from, Cotten-Eye Joe?
-          prev_room = XMLData.room_description + XMLData.room_title
-          pause 0.5
+        ensure
+          Flags.delete('travel-closed-shop')
+          Flags.delete('travel-engaged')
         end
 
-        # Delete flags, no longer needed at this point
-        Flags.delete('travel-closed-shop')
-        Flags.delete('travel-engaged')
-
-        # Consider just returning this boolean and letting callers decide what to do on a failed move.
         if room_num != Room.current.id && restart_on_fail
-          echo "Failed to navigate to room #{room_num}, attempting again"
+          Lich::Messaging.msg('bold', "DRCT: Failed to navigate to room #{room_num}, attempting again.")
           walk_to(room_num)
         end
         room_num == Room.current.id
@@ -243,25 +249,25 @@ module Lich
         target_list = Map.list.find_all { |room| room.tags.include?(target) }.collect { |room| room.id }
 
         if target_list.empty?
-          DRC.message("No go2 targets matching #{target} found!")
-          exit
+          Lich::Messaging.msg('bold', "DRCT: No go2 targets matching '#{target}' found.")
+          return nil
         end
 
         if target_list.include?(start_room)
-          echo "You're already here..."
+          Lich::Messaging.msg('plain', "DRCT: You're already here.")
           return start_room
         end
         _previous, shortest_distances = Room.current.dijkstra(target_list)
         target_list.delete_if { |room_id| shortest_distances[room_id].nil? }
         if target_list.empty?
-          DRC.message("Couldn't find a path from here to any room with a #{target} tag")
-          exit
+          Lich::Messaging.msg('bold', "DRCT: Couldn't find a path from here to any room with a '#{target}' tag.")
+          return nil
         end
 
         target_id = target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }.first
-        unless target_id and (destination = Map[target_id])
-          DRC.message("Something went wrong!  Debug failed with #{target_id}, #{destination}, and #{target}")
-          exit
+        unless target_id && (destination = Map[target_id])
+          Lich::Messaging.msg('bold', "DRCT: Something went wrong! Debug failed with target_id=#{target_id}, destination=#{destination}, tag='#{target}'.")
+          return nil
         end
         target_id
       end
@@ -272,13 +278,13 @@ module Lich
         DRC.retreat(ignored_npcs)
       end
 
-      def find_empty_room(search_rooms, idle_room, predicate = nil, min_mana = 0, strict_mana = false, max_search_attempts = Float::INFINITY, priotize_buddies = false)
+      def find_empty_room(search_rooms, idle_room, predicate = nil, min_mana = 0, strict_mana = false, max_search_attempts = Float::INFINITY, prioritize_buddies = false)
         search_attempt = 0
         check_mana = min_mana > 0
         rooms_searched = 0
         loop do
           search_attempt += 1
-          echo("*** Search attempt #{search_attempt} of #{max_search_attempts} to find a suitable room. ***")
+          Lich::Messaging.msg('plain', "DRCT: Search attempt #{search_attempt} of #{max_search_attempts} to find a suitable room.")
           found_empty = false
           search_rooms.each do |room_id|
             walk_to(room_id)
@@ -286,11 +292,11 @@ module Lich
 
             rooms_searched += 1
 
-            if priotize_buddies && (rooms_searched <= search_rooms.size)
+            if prioritize_buddies && (rooms_searched <= search_rooms.size)
               suitable_room = ((DRRoom.pcs & UserVars.friends).any? && (DRRoom.pcs & UserVars.hunting_nemesis).none?)
-              if (rooms_searched == search_rooms.size && (DRRoom.pcs & UserVars.friends).empty? && (DRRoom.pcs & UserVars.hunting_nemesis).empty?)
-                echo("*** Reached last room in list, and found no buddies. Retrying for empty room. ***")
-                return find_empty_room(search_rooms, idle_room, predicate, min_mana, strict_mana, max_search_attempts, priotize_buddies = false)
+              if rooms_searched == search_rooms.size && (DRRoom.pcs & UserVars.friends).empty? && (DRRoom.pcs & UserVars.hunting_nemesis).empty?
+                Lich::Messaging.msg('plain', 'DRCT: Reached last room in list, and found no buddies. Retrying for empty room.')
+                return find_empty_room(search_rooms, idle_room, predicate, min_mana, strict_mana, max_search_attempts, false)
               end
             else
               suitable_room = predicate ? predicate.call(search_attempt) : (DRRoom.pcs - DRRoom.group_members).empty?
@@ -304,20 +310,20 @@ module Lich
 
           if found_empty && check_mana && !strict_mana
             check_mana = false
-            echo '*** Empty rooms found, but not with the right mana. Going to use those anyway! ***'
+            Lich::Messaging.msg('plain', 'DRCT: Empty rooms found, but not with the right mana. Going to use those anyway.')
             next
           end
 
-          (check_mana = min_mana > 0) && !check_mana
+          check_mana = min_mana > 0
 
           if idle_room && search_attempt < max_search_attempts
             idle_room = idle_room.sample if idle_room.is_a?(Array)
             walk_to(idle_room)
             wait_time = rand(20..40)
-            echo "*** Failed to find an empty room, pausing #{wait_time} seconds ***"
+            Lich::Messaging.msg('plain', "DRCT: Failed to find an empty room, pausing #{wait_time} seconds.")
             pause wait_time
           else
-            echo '*** Failed to find an empty room, stopping the search ***'
+            Lich::Messaging.msg('plain', 'DRCT: Failed to find an empty room, stopping the search.')
             return false
           end
         end
@@ -341,47 +347,32 @@ module Lich
       end
 
       def reverse_path(path)
-        dir_to_prev_dir = {
-          'northeast' => 'southwest',
-          'southwest' => 'northeast',
-          'northwest' => 'southeast',
-          'southeast' => 'northwest',
-          'north'     => 'south',
-          'south'     => 'north',
-          'east'      => 'west',
-          'west'      => 'east',
-          'up'        => 'down',
-          'down'      => 'up'
-        }
-        reverse_path = []
-        path = path.reverse
-        for i in 0..path.length - 1
-          if dir_to_prev_dir[path[i]].nil?
-            DRC.message("Error: No reverse direction found for #{path[i]}.  Please use the full direction, northeast instead of ne, check your spelling, and make sure the path parameter is an array.")
-            exit
+        path.reverse.map do |dir|
+          reversed = DIRECTION_REVERSE[dir]
+          unless reversed
+            Lich::Messaging.msg('bold', "DRCT: No reverse direction found for '#{dir}'. Use full direction names (e.g., 'northeast' not 'ne'). Path must be an array.")
+            return nil
           end
-          reverse_path.push(dir_to_prev_dir[path[i]])
+          reversed
         end
-        return reverse_path
       end
 
       def get_hometown_target_id(hometown, target)
         hometown_data = get_data('town')[hometown]
         target_id = hometown_data[target] && hometown_data[target]['id']
-        # try twice with pause if failed the first time, because sometimes data doesn't get loaded correctly
-        if !target_id
-          echo("*** get_hometown_target_id failed first attempt for #{target} in #{hometown}. Trying again:") if $common_travel_debug
+        unless target_id
+          Lich::Messaging.msg('plain', "DRCT: get_hometown_target_id failed first attempt for #{target} in #{hometown}. Trying again.") if $common_travel_debug
           pause 2
           hometown_data = get_data('town')[hometown]
           target_id = hometown_data[target] && hometown_data[target]['id']
-          if !target_id
-            echo("*** get_hometown_target_id failed second attempt for #{target} in #{hometown}.  Likely target doesn't exist") if $common_travel_debug
+          unless target_id
+            Lich::Messaging.msg('plain', "DRCT: get_hometown_target_id failed second attempt for #{target} in #{hometown}. Likely target doesn't exist.") if $common_travel_debug
             target_id = nil
           else
-            echo("*** get_hometown_target_id succeeded second attempt for #{target} in #{hometown}.") if $common_travel_debug
+            Lich::Messaging.msg('plain', "DRCT: get_hometown_target_id succeeded second attempt for #{target} in #{hometown}.") if $common_travel_debug
           end
         end
-        echo("*** target_id = #{target_id}") if $common_travel_debug
+        Lich::Messaging.msg('plain', "DRCT: target_id = #{target_id}") if $common_travel_debug
         target_id
       end
     end
