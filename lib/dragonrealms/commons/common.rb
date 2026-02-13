@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     module DRC
@@ -5,6 +7,68 @@ module Lich
       $safe_pause_lock ||= Mutex.new
 
       module_function
+
+      # ── Constants ────────────────────────────────────────────────────────
+
+      # Pattern for game wait/roundtime responses in bput
+      WAIT_RESPONSE_PATTERN = /(?:\.\.\.wait |Wait |\.\.\. wait )(?<seconds>[0-9]+)/.freeze
+
+      # Collect command response messages
+      COLLECT_MESSAGES = [
+        'As you rummage around',
+        'believe you would probably have better luck trying to find a dragon',
+        'if you had a bit more luck',
+        'The room is too cluttered',
+        'one hand free to properly collect',
+        'You are sure you knew',
+        'You begin to forage around,',
+        'You begin scanning the area before you',
+        'You begin exploring the area, searching for',
+        'You find something dead and lifeless',
+        'You cannot collect anything',
+        'you fail to find anything',
+        'You forage around but are unable to find anything',
+        'You manage to collect a pile',
+        'You survey the area and realize that any collecting efforts would be futile',
+        'You wander around and poke your fingers',
+        'You forage around for a while and manage to stir up a small mound of fire ants!'
+      ].freeze
+
+      # Retreat command response patterns
+      RETREAT_ESCAPE_MESSAGES = [
+        /You are already as far away as you can get/,
+        /You retreat from combat/,
+        /You sneak back out of combat/,
+        /Retreat to where/,
+        /There's no place to retreat to/
+      ].freeze
+
+      RETREAT_MESSAGES = [
+        /retreat/,
+        /sneak/,
+        /grip on you/,
+        /grip remains solid/,
+        /You try to back/,
+        /You must stand first/,
+        /You stop advancing/,
+        /You are already/
+      ].freeze
+
+      # Assess teach parsing patterns
+      ASSESS_TEACH_TEACHER_PATTERN = /(?<teacher>.*) is teaching a class on (?<skill>.*) which is still open to new students/.freeze
+      ASSESS_TEACH_SKILL_FILTER_PATTERN = /.* \(compared to what you already know\) (?<filtered_skill>.*)/.freeze
+
+      # Common ranged weapon nouns
+      COMMON_RANGED_WEAPONS_PATTERN = /^(bow|shortbow|longbow|crossbow|stonebow|latchbow|slurbow|lockbow|pelletbow|arbalest|sling|slingshot|blowgun)$/i.freeze
+
+      # Gamgweth/racial ranged weapon nouns
+      # https://elanthipedia.play.net/Genie_racial_language_item_subs
+      # https://elanthipedia.play.net/Category:Language_Book
+      RACIAL_RANGED_WEAPONS_PATTERN = /^(jranoki|uku'uan|uku'uanstaho|chunenguti|hhr'ibu|guti|mahil|taisgwelduan|chyeb|sverfil|tangara|alaer|kari|wami|usus|srigos|href|vrope|falocisana|stof|dzelt)$/i.freeze
+
+      # Flavor text pattern for item descriptions
+      # https://regex101.com/r/4lGY6u/13
+      FLAVOR_TEXT_PATTERN = /\s?\b(?:(?:colorfully and )?(?:artfully|artistically|attractively|beautifully|bl?ack-|cleverly|clumsily|crudely|deeply|delicately|edged|elaborately|faintly|flamboyantly|front-|fully|gracefully|heavily|held|intricately|lavishly|masterfully|plentifully|prominantly|roughly|securely|sewn|shabbily|shadow-|simply|somberly|skillfully|sloppily|starkly|stitched|tied and|tightly|well-)\s?)?(?:accented|accentuated|acid-etched|adorned|affixed|appliqued|assembled|attached|augmented|awash|backed|back-laced|balanced|banded|batiked|beaded|bearded|bearing|bedazzled|bedecked|bejeweled|beset|bestrewn|blazoned|bordered|bound|braided|branded|brocaded|bristling|brushed|buckled|burned|buttoned|caked|camouflaged|capped|carved|caught|centered|chased|chiseled|cinched|circled|clasped|cloaked|closed|coated|cobbled together|coiled|colored|composed|concealed|connected|constructed|countoured|covered|crafted|crested|crisscrossed|crowded|crowned|cuffed|cut|dangling|dappled|decked|decorated|deformed|depicting|designed|detailed|discolored|displaying|divided|done|dotted|draped|drawn|dressed|drizzled|dusted|edged|elaborately|embedded|embell?ished|emblazed|emblazoned|embossed|embroidered(?: all over| painstakingly)?|enameled(?: across)?|encircled|encrusted|engraved|engulfed|enhanced|entwined|equipped|etched|fashioned(?: so)?|fastened|feathered|featuring|festooned|fettered|filed|filled|firestained|fit|fitted|fixed|flecked|fletched|forged|formed|framed|fringed|frosted|full|gathered|gleaming|glimmering|glittering|goldworked|growing|gypsy-set|hafted|hand-tooled|hanging|heavily(?:-beaded| covered)?|held fast|hemmed|hewn|hideously|highlighted|hilted|honed|hung|impressed|incised|ingeniously repurposed|inscribed|inlaid|inset|interlaced|interspersed|interwoven|jeweled|joined|laced(?: up)?|lacquered|laden|layered|limned|lined|linked|looped|knotted|made|marbled|marked|marred|meshed|mosaicked|mottled|mounted|oiled|oozing|outlined|ornamented|overlai(?:d|n)|padded|painted|paired|patched|pattern-welded|patterned|pinned|plumed|polished|printed|reinforced|reminiscent|rendered|revealing|riddled|ridged|rimed|ringed|riveted|sashed|scarred|scattered|scorched|sculpted|sealed|seamed|secured|securely|set|sewn|shaped|shimmering|shod|shot|shrouded|side-laced|slashed|slung|smeared|smudged|spangled|speckled|spiraled|splatter-dyed|splattered|spotted|sprinkled|stacked|surmounted|surrounded|suspended|stained|stamped|starred|stenciled|stippled|stitched(?: together)?|strapped|streaked|strengthened|strewn|striated|striped|strung|studded|swathed|swirled|tailored|tangled|tapered|tethered|textured|threaded|tied|tightly|tinged|tinted|tipped|tooled|topped|traced|trimmed|twined|veined|vivified|washed|webbed|weighted|whorled|worked|worn|woven|wrapped|wreathed|wrought)?\b ["]?\b(?:a hand-tooled|across|along|an|around|atop|bearing|belted|bright streaks|dangling|designed|detailing|down (?:each leg|one side)|dyed (?:a|and|deep|of|in|night|rust|shimmering|the|to|with)|engravings|entitled|errant pieces|featuring|flaunting|frescoed|from|Gnomish Pride|(?:encased |quartered )?in(?: the)?|into|labeled|leading|like|lining|matching|(?<!stick|slice|chunk|flask|hunk|series|set|pair|piece) of|on|out|overlayed gleaming silver|resembling|shades of color|sporting|surrounding|that|the|through|tinged somber black|titled|to|upon|WAR MONGER|with|within|\b(?:at|bearing|(?:accented |held |secured )?by|carrying|clutching|colored|cradling|dangling|depicting|(?:prominently )?displaying|embossed|etched|featuring|for(?:ming)?|holding|(?<!slice |chunk |flask |hunk |series |set |pair |piece )of|over|patterned|striped|suspending|textured|that)\b \b(?:a (?:band|beaded|brass|cascade|cluster|coral|crown|dead|.+ (?:ingot|boulder|stone|rock|nugget)|fierce|fanged|fringe|glowing|golden|grinning|howling|large|lotus|mosaic|pair|poorly|rainbow|roaring|row|silver(?:y|weave)?|small|snarling|spray|tailored|thick|tiny|trio|turquoise|yellowed)|(?:squared )?agonite (?:links|decorated)|alternating|an|(?:purple |blue )?and|ash|beaded fringe|blackened (?:steel(?: accents| bearing| with|$)|ironwood)|blue (?:gold|steel)|burnished golden|cascading layers|carved ivory|chain-lined|chitinous|(?:deep red|dull black|pale blue) cloth|cloudberry blossoms|colorful tightly|cotton candy|crimson steel|crisscrossed|curious design|curved|crystaline charm|dark (?:blue|green|grey|metals|windsteel) (?:and|exuding|glaes|hues|khor'vela|muracite|pennon|with)|dark supple|deepest|deeply blending|delicate|dusky (?:dreamweave|green-grey)|ebonwood$|emblazoned|enamel?led (?:steel|bronze)|etched|fine(?:-grained| black| crushed)|finely wrought|flame-kissed|forest|fused-together|fuzzy grey|gauze atop|gilded steel|glass eyeballs|glistening green|golden oak|grey fur|hammered|haralun|has|heavy (?:grey|pearl|silver)|horn|Ilithi cedar|inky black|interlocking silver|interwoven|iridescent|jagged interlocking plates|(?:soft dark|supple|thick|woven) (?:bolts|leather)|lightweight|long swaths|lustrous|kertig ravens|made|metal cogs|mirror-finished|mottled|multiple woods|naphtha|oak|oblong sanguine|one|onyx buttons|opposing images|overlapping|pale cerulean|pallid links|pastel-hued|pins|pitted (?:black iron|steel)|plush velvet|polished (?:bronze|hemlock|steel)|raccoon tails|ram's horns|rat pelts|raw|red and blue|rich (?:purple|golden)|riveted bindings|roughened|rowan|sanguine thornweave|scattered star|scorch marks|sculpted|shadows|shark cartilage|shifting (?:celadon|shades)|shipboard|(?:braided |cobalt |deep black |desert-tan |dusky red Taisidon |ebony |exquisite spider|fine leaf-green |flowing night|glimmering ebony |heavy |marigold |pale gold marquisette and virid |rich copper |spiral-braided |steel|unadorned black Musparan )?silk(?:cress)?|(?:coiled |shimmering )?silver(?:steel| and |y)?|sirese blue spun glitter|six crossed|slender|small bones|smoothly interlocking|snow leopard|soft brushed|somber black|sprawled|sun-bleached|steel links|stones|strips of|sunny yellow|teardrop plates|telothian|the|tiny (?:golden|indurium|scales|skull)|tightly braided|tomiek|torn|twists|two|undyed|vibrant multicolored|viscous|waves of|weighted|well-cured|white ironwood|windstorm gossamer|wintry faeweave|woven diamondwood))\b.*/.freeze
 
       # Like `fput` but better because will wait for RT
       # before performing command and do smart retries.
@@ -51,9 +115,10 @@ module Lich
             put message
             timer = Time.now
             next
-          when /(?:\.\.\.wait |Wait |\.\.\. wait )([0-9]+)/
+          when WAIT_RESPONSE_PATTERN
             unless ignore_rt
-              pause(Regexp.last_match(1).to_i - 0.5)
+              wait_match = response.match(WAIT_RESPONSE_PATTERN)
+              pause(wait_match[:seconds].to_i - 0.5)
               waitrt?
               put message
               timer = Time.now
@@ -110,11 +175,10 @@ module Lich
         end
 
         unless suppress
-          echo "*** No match was found after #{timeout} seconds, dumping info"
-          echo "messages seen length: #{log.length}"
-          log.reverse.each { |logged_response| echo "message: #{logged_response}" }
-          echo "checked against #{matches}"
-          echo "for command #{message}"
+          Lich::Messaging.msg("bold", "DRC: No match was found after #{timeout} seconds for command '#{message}'")
+          Lich::Messaging.msg("bold", "DRC: Messages seen: #{log.length}")
+          log.reverse.each { |logged_response| Lich::Messaging.msg("bold", "DRC: > #{logged_response}") }
+          Lich::Messaging.msg("bold", "DRC: Checked against: #{matches}")
         end
 
         ''
@@ -126,7 +190,7 @@ module Lich
         script_names
           .reject { |name| Script.exists?(name) }
           .each do |name|
-            echo "Failed to find a script named '#{name}'"
+            Lich::Messaging.msg("bold", "DRC: Failed to find a script named '#{name}'")
             state = false
           end
         state
@@ -163,8 +227,11 @@ module Lich
           when 'You survey the area and realize that any foraging efforts would be futile'
             return false
           when 'You really need to have at least one hand free to forage properly'
-            echo 'WARNING: hands not emptied properly. Stowing...'
-            fput('stow right')
+            Lich::Messaging.msg("bold", "DRC: Hands not emptied properly. Stowing right hand...")
+            unless DRCI.stow_hand('right')
+              Lich::Messaging.msg("bold", "DRC: Failed to stow right hand, cannot forage.")
+              return false
+            end
           end
           waitrt?
         end
@@ -172,29 +239,9 @@ module Lich
       end
 
       def collect(item, practice = true)
-        messages = [
-          'As you rummage around',
-          'believe you would probably have better luck trying to find a dragon',
-          'if you had a bit more luck',
-          'The room is too cluttered',
-          'one hand free to properly collect',
-          'You are sure you knew',
-          'You begin to forage around,',
-          'You begin scanning the area before you',
-          'You begin exploring the area, searching for',
-          'You find something dead and lifeless',
-          'You cannot collect anything',
-          'you fail to find anything',
-          'You forage around but are unable to find anything',
-          'You manage to collect a pile',
-          'You survey the area and realize that any collecting efforts would be futile',
-          'You wander around and poke your fingers',
-          'You forage around for a while and manage to stir up a small mound of fire ants!'
-        ]
-
         practicing = "practice" if practice
 
-        case bput("collect #{item} #{practicing}", messages)
+        case bput("collect #{item} #{practicing}", COLLECT_MESSAGES)
         when 'The room is too cluttered'
           return unless kick_pile?
 
@@ -301,15 +348,13 @@ module Lich
       end
 
       def remove_flavor_text(item)
-        # link is to online regex expression tester
-        # https://regex101.com/r/4lGY6u/13
-        item.sub(/\s?\b(?:(?:colorfully and )?(?:artfully|artistically|attractively|beautifully|bl?ack-|cleverly|clumsily|crudely|deeply|delicately|edged|elaborately|faintly|flamboyantly|front-|fully|gracefully|heavily|held|intricately|lavishly|masterfully|plentifully|prominantly|roughly|securely|sewn|shabbily|shadow-|simply|somberly|skillfully|sloppily|starkly|stitched|tied and|tightly|well-)\s?)?(?:accented|accentuated|acid-etched|adorned|affixed|appliqued|assembled|attached|augmented|awash|backed|back-laced|balanced|banded|batiked|beaded|bearded|bearing|bedazzled|bedecked|bejeweled|beset|bestrewn|blazoned|bordered|bound|braided|branded|brocaded|bristling|brushed|buckled|burned|buttoned|caked|camouflaged|capped|carved|caught|centered|chased|chiseled|cinched|circled|clasped|cloaked|closed|coated|cobbled together|coiled|colored|composed|concealed|connected|constructed|countoured|covered|crafted|crested|crisscrossed|crowded|crowned|cuffed|cut|dangling|dappled|decked|decorated|deformed|depicting|designed|detailed|discolored|displaying|divided|done|dotted|draped|drawn|dressed|drizzled|dusted|edged|elaborately|embedded|embell?ished|emblazed|emblazoned|embossed|embroidered(?: all over| painstakingly)?|enameled(?: across)?|encircled|encrusted|engraved|engulfed|enhanced|entwined|equipped|etched|fashioned(?: so)?|fastened|feathered|featuring|festooned|fettered|filed|filled|firestained|fit|fitted|fixed|flecked|fletched|forged|formed|framed|fringed|frosted|full|gathered|gleaming|glimmering|glittering|goldworked|growing|gypsy-set|hafted|hand-tooled|hanging|heavily(?:-beaded| covered)?|held fast|hemmed|hewn|hideously|highlighted|hilted|honed|hung|impressed|incised|ingeniously repurposed|inscribed|inlaid|inset|interlaced|interspersed|interwoven|jeweled|joined|laced(?: up)?|lacquered|laden|layered|limned|lined|linked|looped|knotted|made|marbled|marked|marred|meshed|mosaicked|mottled|mounted|oiled|oozing|outlined|ornamented|overlai(?:d|n)|padded|painted|paired|patched|pattern-welded|patterned|pinned|plumed|polished|printed|reinforced|reminiscent|rendered|revealing|riddled|ridged|rimed|ringed|riveted|sashed|scarred|scattered|scorched|sculpted|sealed|seamed|secured|securely|set|sewn|shaped|shimmering|shod|shot|shrouded|side-laced|slashed|slung|smeared|smudged|spangled|speckled|spiraled|splatter-dyed|splattered|spotted|sprinkled|stacked|surmounted|surrounded|suspended|stained|stamped|starred|stenciled|stippled|stitched(?: together)?|strapped|streaked|strengthened|strewn|striated|striped|strung|studded|swathed|swirled|tailored|tangled|tapered|tethered|textured|threaded|tied|tightly|tinged|tinted|tipped|tooled|topped|traced|trimmed|twined|veined|vivified|washed|webbed|weighted|whorled|worked|worn|woven|wrapped|wreathed|wrought)?\b ["]?\b(?:a hand-tooled|across|along|an|around|atop|bearing|belted|bright streaks|dangling|designed|detailing|down (?:each leg|one side)|dyed (?:a|and|deep|of|in|night|rust|shimmering|the|to|with)|engravings|entitled|errant pieces|featuring|flaunting|frescoed|from|Gnomish Pride|(?:encased |quartered )?in(?: the)?|into|labeled|leading|like|lining|matching|(?<!stick|slice|chunk|flask|hunk|series|set|pair|piece) of|on|out|overlayed gleaming silver|resembling|shades of color|sporting|surrounding|that|the|through|tinged somber black|titled|to|upon|WAR MONGER|with|within|\b(?:at|bearing|(?:accented |held |secured )?by|carrying|clutching|colored|cradling|dangling|depicting|(?:prominently )?displaying|embossed|etched|featuring|for(?:ming)?|holding|(?<!slice |chunk |flask |hunk |series |set |pair |piece )of|over|patterned|striped|suspending|textured|that)\b \b(?:a (?:band|beaded|brass|cascade|cluster|coral|crown|dead|.+ (?:ingot|boulder|stone|rock|nugget)|fierce|fanged|fringe|glowing|golden|grinning|howling|large|lotus|mosaic|pair|poorly|rainbow|roaring|row|silver(?:y|weave)?|small|snarling|spray|tailored|thick|tiny|trio|turquoise|yellowed)|(?:squared )?agonite (?:links|decorated)|alternating|an|(?:purple |blue )?and|ash|beaded fringe|blackened (?:steel(?: accents| bearing| with|$)|ironwood)|blue (?:gold|steel)|burnished golden|cascading layers|carved ivory|chain-lined|chitinous|(?:deep red|dull black|pale blue) cloth|cloudberry blossoms|colorful tightly|cotton candy|crimson steel|crisscrossed|curious design|curved|crystaline charm|dark (?:blue|green|grey|metals|windsteel) (?:and|exuding|glaes|hues|khor'vela|muracite|pennon|with)|dark supple|deepest|deeply blending|delicate|dusky (?:dreamweave|green-grey)|ebonwood$|emblazoned|enamel?led (?:steel|bronze)|etched|fine(?:-grained| black| crushed)|finely wrought|flame-kissed|forest|fused-together|fuzzy grey|gauze atop|gilded steel|glass eyeballs|glistening green|golden oak|grey fur|hammered|haralun|has|heavy (?:grey|pearl|silver)|horn|Ilithi cedar|inky black|interlocking silver|interwoven|iridescent|jagged interlocking plates|(?:soft dark|supple|thick|woven) (?:bolts|leather)|lightweight|long swaths|lustrous|kertig ravens|made|metal cogs|mirror-finished|mottled|multiple woods|naphtha|oak|oblong sanguine|one|onyx buttons|opposing images|overlapping|pale cerulean|pallid links|pastel-hued|pins|pitted (?:black iron|steel)|plush velvet|polished (?:bronze|hemlock|steel)|raccoon tails|ram's horns|rat pelts|raw|red and blue|rich (?:purple|golden)|riveted bindings|roughened|rowan|sanguine thornweave|scattered star|scorch marks|sculpted|shadows|shark cartilage|shifting (?:celadon|shades)|shipboard|(?:braided |cobalt |deep black |desert-tan |dusky red Taisidon |ebony |exquisite spider|fine leaf-green |flowing night|glimmering ebony |heavy |marigold |pale gold marquisette and virid |rich copper |spiral-braided |steel|unadorned black Musparan )?silk(?:cress)?|(?:coiled |shimmering )?silver(?:steel| and |y)?|sirese blue spun glitter|six crossed|slender|small bones|smoothly interlocking|snow leopard|soft brushed|somber black|sprawled|sun-bleached|steel links|stones|strips of|sunny yellow|teardrop plates|telothian|the|tiny (?:golden|indurium|scales|skull)|tightly braided|tomiek|torn|twists|two|undyed|vibrant multicolored|viscous|waves of|weighted|well-cured|white ironwood|windstorm gossamer|wintry faeweave|woven diamondwood))\b.*/, '')
+        item.sub(FLAVOR_TEXT_PATTERN, '')
       end
 
       # Items class. Name is the noun of the object. Leather/metal boolean. Is the item worn (defaults to true). Does it hinder lockpicking? (false)
       # Item.new(name:'gloves', leather:true, worn:true, hinders_locks:true, adjective:'ring', bound:true)
       class Item
-        attr_accessor :name, :leather, :worn, :hinders_lockpicking, :container, :swappable, :tie_to, :adjective, :bound, :wield, :transforms_to, :transform_verb, :transform_text, :lodges, :skip_repair, :ranged, :needs_unloading
+        attr_reader :name, :leather, :worn, :hinders_lockpicking, :container, :swappable, :tie_to, :adjective, :bound, :wield, :transforms_to, :transform_verb, :transform_text, :lodges, :skip_repair, :ranged, :needs_unloading
 
         def initialize(name: nil, leather: nil, worn: false, hinders_locks: nil, container: nil, swappable: false, tie_to: nil, adjective: nil, bound: false, wield: false, transforms_to: nil, transform_text: nil, transform_verb: nil, lodges: true, skip_repair: false, ranged: nil, needs_unloading: nil)
           @name = name
@@ -336,35 +381,32 @@ module Lich
         end
 
         def short_regex
-          @adjective ? /\b#{adjective}.*\b#{@name}/i : /\b#{@name}/i
+          @adjective ? /\b#{@adjective}.*\b#{@name}/i : /\b#{@name}/i
         end
 
         def ranged_weapon?(noun)
-          # Common ranged weapon names
-          return true if noun =~ /^(bow|shortbow|longbow|crossbow|stonebow|latchbow|slurbow|lockbow|pelletbow|arbalest|sling|slingshot|blowgun)$/i
-          # Gamgweth or racial ranged weapon names
-          # https://elanthipedia.play.net/Genie_racial_language_item_subs
-          # https://elanthipedia.play.net/Category:Language_Book
-          return true if noun =~ /^(jranoki|uku'uan|uku'uanstaho|chunenguti|hhr'ibu|guti|mahil|taisgwelduan|chyeb|sverfil|tangara|alaer|kari|wami|usus|srigos|href|vrope|falocisana|stof|dzelt)$/i
+          return false if noun.nil?
 
-          # Not a ranged weapon we're aware of
-          return false
+          return true if COMMON_RANGED_WEAPONS_PATTERN.match?(noun)
+          return true if RACIAL_RANGED_WEAPONS_PATTERN.match?(noun)
+
+          false
         end
 
         # Convenience method to parse the text of an item as shown when in your hands, with or without an adjective,
         # into an Item class instance. Originally designed to support DRCI and equipmanager methods.
         def self.from_text(text)
-          text = text
-                 .sub('.', ' ') # convert 'foo.bar' => 'foo bar' so more easily split into adjective and noun
-                 .squeeze(' ') # condense repeated runs of whitespace with a single space
-                 .strip # remove leading/trailing whitespace
-          parts = text.split
-          if text.nil? || text.empty?
-            nil
-          elsif parts.size > 1
+          return nil if text.nil? || text.to_s.strip.empty?
+
+          normalized = text
+                       .sub('.', ' ') # convert 'foo.bar' => 'foo bar' so more easily split into adjective and noun
+                       .squeeze(' ') # condense repeated runs of whitespace with a single space
+                       .strip # remove leading/trailing whitespace
+          parts = normalized.split
+          if parts.size > 1
             DRC::Item.new(adjective: parts.first, name: parts.last)
           else
-            DRC::Item.new(name: text)
+            DRC::Item.new(name: normalized)
           end
         end
       end
@@ -378,9 +420,9 @@ module Lich
       def get_town_name(text)
         towns = $HOMETOWN_REGEX_MAP.select { |_town, regex| regex =~ text }.keys
         if towns.length > 1
-          DRC.message("Found multiple towns that match '#{text}': #{towns}")
-          DRC.message("Using first town that matched: #{towns.first}")
-          DRC.message("To avoid ambiguity, please use the town's full name: https://elanthipedia.play.net/Category:Cities")
+          Lich::Messaging.msg("bold", "DRC: Found multiple towns that match '#{text}': #{towns}")
+          Lich::Messaging.msg("bold", "DRC: Using first town that matched: #{towns.first}")
+          Lich::Messaging.msg("bold", "DRC: To avoid ambiguity, please use the town's full name: https://elanthipedia.play.net/Category:Cities")
         end
         towns.first
       end
@@ -408,14 +450,14 @@ module Lich
 
         observe = observe_flag ? 'observe' : ''
 
-        case bput("listen to #{teacher} #{observe}", 'begin to listen to \w+ teach the .* skill', 'already listening', 'could not find who', 'You have no idea', 'isn\'t teaching a class', 'don\'t have the appropriate training', 'Your teacher appears to have left', 'isn\'t teaching you anymore', 'experience differs too much from your own', 'but you don\'t see any harm in listening', 'invitation if you wish to join this class', 'You cannot concentrate to listen to .* while in combat')
-        when /begin to listen to \w+ teach the (.*) skill/
-          return true if bad_classes.grep(/#{Regexp.last_match(1)}/i).empty?
+        result = bput("listen to #{teacher} #{observe}", 'begin to listen to \w+ teach the .* skill', 'already listening', 'could not find who', 'You have no idea', 'isn\'t teaching a class', 'don\'t have the appropriate training', 'Your teacher appears to have left', 'isn\'t teaching you anymore', 'experience differs too much from your own', 'but you don\'t see any harm in listening', 'invitation if you wish to join this class', 'You cannot concentrate to listen to .* while in combat')
+        if (skill_match = result.match(/begin to listen to \w+ teach the (?<skill>.*) skill/))
+          return true if bad_classes.grep(/#{skill_match[:skill]}/i).empty?
 
           bput('stop listening', 'You stop listening')
-        when 'already listening'
+        elsif result == 'already listening'
           return true
-        when 'but you don\'t see any harm in listening'
+        elsif result == "but you don't see any harm in listening"
           bput('stop listening', 'You stop listening')
         end
 
@@ -423,22 +465,32 @@ module Lich
       end
 
       def assess_teach
-        case bput('assess teach', 'is teaching a class', 'No one seems to be teaching', 'You are teaching a class')
-        when 'No one seems to be teaching', 'You are teaching a class'
-          waitrt?
-          return {}
-        end
-        results = reget(20, 'is teaching a class')
+        lines = Lich::Util.issue_command(
+          'assess teach',
+          /is teaching a class|No one seems to be teaching|You are teaching a class/,
+          /Roundtime/,
+          usexml: false,
+          quiet: true,
+          include_end: false
+        )
         waitrt?
+        return {} if lines.nil?
+        return {} if lines.any? { |l| l.match?(/No one seems to be teaching|You are teaching a class/) }
 
-        results.each_with_object({}) do |line, hash|
-          line.match(/(.*) is teaching a class on (.*) which is still open to new students/) do |match|
-            teacher = match[1]
-            skill = match[2]
-            # Some classes match the first format, some have additional text in the 'skill' string that needs to be filtered
-            skill.match(/.* \(compared to what you already know\) (.*)/) { |m| skill = m[1] }
-            hash[teacher] = skill
-          end
+        parse_assess_teach_lines(lines.map(&:strip).reject(&:empty?))
+      end
+
+      # Pure parsing method for assess teach output (unit-testable)
+      def parse_assess_teach_lines(lines)
+        lines.each_with_object({}) do |line, hash|
+          match = line.match(ASSESS_TEACH_TEACHER_PATTERN)
+          next unless match
+
+          teacher = match[:teacher]
+          skill = match[:skill]
+          skill_filter = skill.match(ASSESS_TEACH_SKILL_FILTER_PATTERN)
+          skill = skill_filter[:filtered_skill] if skill_filter
+          hash[teacher] = skill
         end
       end
 
@@ -464,10 +516,12 @@ module Lich
       def fix_dr_bullshit(string)
         return string if string.split.length <= 2
 
-        string.sub!(' and chain', '') if string =~ /ball and chain/
+        string = string.sub(' and chain', '') if string =~ /ball and chain/
 
-        string =~ /(\S+) .* (\S+)/
-        "#{Regexp.last_match(1)} #{Regexp.last_match(2)}"
+        match = string.match(/(?<first>\S+) .* (?<last>\S+)/)
+        return string unless match
+
+        "#{match[:first]} #{match[:last]}"
       end
 
       def left_hand
@@ -503,10 +557,9 @@ module Lich
         encumbrance = DRStats.encumbrance
         if refresh
           encumbrance_pattern = /(?:Encumbrance)\s:\s(?<encumbrance>.*)/
-          case bput('encumbrance', encumbrance_pattern)
-          when encumbrance_pattern
-            encumbrance = Regexp.last_match[:encumbrance]
-          end
+          result = bput('encumbrance', encumbrance_pattern)
+          enc_match = result.match(encumbrance_pattern)
+          encumbrance = enc_match[:encumbrance] if enc_match
         end
         $ENC_MAP[encumbrance]
       end
@@ -514,28 +567,9 @@ module Lich
       def retreat(ignored_npcs = [])
         return if (DRRoom.npcs - ignored_npcs).empty?
 
-        escape_messages = [
-          /You are already as far away as you can get/,
-          /You retreat from combat/,
-          /You sneak back out of combat/,
-          /Retreat to where/,
-          /There's no place to retreat to/
-        ]
-
-        retreat_messages = [
-          /retreat/,
-          /sneak/,
-          /grip on you/,
-          /grip remains solid/,
-          /You try to back/,
-          /You must stand first/,
-          /You stop advancing/,
-          /You are already/
-        ]
-
         loop do
-          case DRC.bput("retreat", *escape_messages, *retreat_messages)
-          when *escape_messages
+          case DRC.bput("retreat", *RETREAT_ESCAPE_MESSAGES, *RETREAT_MESSAGES)
+          when *RETREAT_ESCAPE_MESSAGES
             return true
           else
             DRC.fix_standing
@@ -553,7 +587,7 @@ module Lich
           if word.eql?('hundred') && (g != 0)
             g *= 100
           elsif x.nil?
-            echo 'Unknown number'
+            Lich::Messaging.msg("bold", "DRC: Unknown number word '#{word}' in '#{text_num}'")
             return nil
           else
             g += x
@@ -567,12 +601,12 @@ module Lich
         instrument = worn ? settings.worn_instrument : settings.instrument
 
         if UserVars.instrument.nil?
-          message("No previous instrument setting detected. Cleaning stored song data.")
+          Lich::Messaging.msg("plain", "DRC: No previous instrument setting detected. Cleaning stored song data.")
           UserVars.song = nil
           UserVars.climbing_song = nil
           UserVars.instrument = instrument
         elsif UserVars.instrument != instrument
-          message("New instrument #{instrument} detected; old instrument: #{UserVars.instrument}. Resetting stored song data.")
+          Lich::Messaging.msg("plain", "DRC: New instrument #{instrument} detected; old instrument: #{UserVars.instrument}. Resetting stored song data.")
           UserVars.song = nil
           UserVars.climbing_song = nil
           UserVars.instrument = instrument
@@ -588,11 +622,14 @@ module Lich
         result = bput(play_command, 'too damaged to play', 'dirtiness may affect your performance', 'slightest hint of difficulty', 'fumble slightly', /Your .+ is submerged in the water/, 'You begin a', 'You struggle to begin', 'You\'re already playing a song', 'You effortlessly begin', 'You begin some', 'You cannot play', 'Play on what instrument', 'Are you sure that\'s the right instrument', 'now isn\'t the best time to be playing', 'Perhaps you should find somewhere drier before trying to play', 'You should stop practicing', /^You really need to drain/, /Your .* tuning is off, and may hinder your performance/)
         case result
         when 'Play on what instrument', 'Are you sure that\'s the right instrument'
-          snapshot = "#{right_hand}#{left_hand}"
-          fput("get #{instrument}")
-          return false if snapshot == "#{right_hand}#{left_hand}"
-
-          fput("wear #{instrument}") if worn
+          unless DRCI.get_item?(instrument)
+            Lich::Messaging.msg("bold", "DRC: Failed to get #{instrument}.")
+            return false
+          end
+          if worn && !DRCI.wear_item?(instrument)
+            Lich::Messaging.msg("bold", "DRC: Failed to wear #{instrument}.")
+            return false
+          end
           play_song?(settings, song_list, worn, skip_clean, climbing, skip_tuning)
         when 'now isn\'t the best time to be playing', 'Perhaps you should find somewhere drier before trying to play', 'You should stop practicing'
           false
@@ -602,7 +639,7 @@ module Lich
         when 'You cannot play'
           wait_for_script_to_complete('safe-room')
         when /Your .* tuning is off, and may hinder your performance/
-          DRC.message("Instrument out of tune. Attempting to tune it.")
+          Lich::Messaging.msg("bold", "DRC: Instrument out of tune. Attempting to tune it.")
           return true if DRSkill.getrank('Performance') < 20
           return true if skip_tuning
           return true unless DRC.tune_instrument(settings)
@@ -648,7 +685,7 @@ module Lich
         instrument = worn ? settings.worn_instrument : settings.instrument
 
         unless DRCI.get_item?(cloth)
-          DRC.message('You have no chamois cloth -- this could cause problems with playing an instrument!')
+          Lich::Messaging.msg("bold", "DRC: You have no chamois cloth -- this could cause problems with playing an instrument!")
           DRC.beep
           return false
         end
@@ -656,14 +693,14 @@ module Lich
 
         if worn
           unless DRCI.remove_item?(instrument)
-            DRC.message("Could not remove #{instrument} putting away cloth, and not trying to clean.")
+            Lich::Messaging.msg("bold", "DRC: Could not remove #{instrument}, putting away cloth, and not trying to clean.")
             DRCI.stow_item?(cloth)
             DRC.beep
             return false
           end
         else
           unless DRCI.get_item?(instrument)
-            DRC.message("Could not get #{instrument} putting away cloth, and not trying to clean.")
+            Lich::Messaging.msg("bold", "DRC: Could not get #{instrument}, putting away cloth, and not trying to clean.")
             DRCI.stow_item?(cloth)
             DRC.beep
             return false
@@ -701,26 +738,26 @@ module Lich
         instrument = settings.worn_instrument || settings.instrument
 
         unless instrument
-          DRC.message("Neither worn_instrument, nor instrument set. Doing nothing.")
+          Lich::Messaging.msg("bold", "DRC: Neither worn_instrument nor instrument set. Doing nothing.")
           return false
         end
 
         DRC.stop_playing
 
         unless (DRC.left_hand.nil? && DRC.right_hand.nil?) || DRCI.in_hands?(instrument)
-          DRC.message("Need two free hands. Not tuning now.")
+          Lich::Messaging.msg("bold", "DRC: Need two free hands. Not tuning now.")
           return false
         end
 
         if settings.worn_instrument
           unless DRCI.remove_item?(instrument) || DRCI.in_hands?(instrument)
-            DRC.message("Could not remove #{instrument}. Not trying to tune.")
+            Lich::Messaging.msg("bold", "DRC: Could not remove #{instrument}. Not trying to tune.")
             DRC.beep
             return false
           end
         else
           unless DRCI.get_item?(instrument) || DRCI.in_hands?(instrument)
-            DRC.message("Could not get #{instrument}. Not trying to tune.")
+            Lich::Messaging.msg("bold", "DRC: Could not get #{instrument}. Not trying to tune.")
             DRC.beep
             return false
           end
@@ -734,7 +771,7 @@ module Lich
 
       def do_tune(instrument, tuning = "")
         unless instrument && DRCI.in_hands?(instrument)
-          DRC.message("No instrument found in hands. Not trying to tune.")
+          Lich::Messaging.msg("bold", "DRC: No instrument found in hands. Not trying to tune.")
           DRC.beep
           return false
         end
@@ -745,7 +782,7 @@ module Lich
                       /After a moment, you .* sharp/,
                       /After a moment, you .* tune/)
         when /After a moment, you .* tune/
-          DRC.message("Instrument tuned.")
+          Lich::Messaging.msg("plain", "DRC: Instrument tuned.")
           return true
         when /After a moment, you .* flat/
           DRC.do_tune(instrument, "sharp")
@@ -798,12 +835,12 @@ module Lich
           s.pause
           paused_script_list << s.name
         end
-        echo("Pausing #{paused_script_list} to run #{Script.self.name}")
+        Lich::Messaging.msg("plain", "DRC: Pausing #{paused_script_list} to run #{Script.self.name}")
         return paused_script_list
       end
 
       def unpause_all_list(scripts_to_unpause)
-        echo("Unpausing #{scripts_to_unpause}, #{Script.self.name} has finished.")
+        Lich::Messaging.msg("plain", "DRC: Unpausing #{scripts_to_unpause}, #{Script.self.name} has finished.")
         Script.running.find_all { |s| s.paused? && !s.no_pause_all && scripts_to_unpause.include?(s.name) }.each(&:unpause)
       end
 
@@ -815,14 +852,14 @@ module Lich
           s.pause
           paused_script_list << s.name
         end
-        echo("Pausing #{paused_script_list} to run #{Script.self.name}")
+        Lich::Messaging.msg("plain", "DRC: Pausing #{paused_script_list} to run #{Script.self.name}")
         return paused_script_list
       end
 
       def safe_unpause_list(scripts_to_unpause)
         return false unless $safe_pause_lock.owned?
 
-        echo("Unpausing #{scripts_to_unpause}, #{Script.self.name} has finished.")
+        Lich::Messaging.msg("plain", "DRC: Unpausing #{scripts_to_unpause}, #{Script.self.name} has finished.")
         Script.running.find_all { |s| s.paused? && !s.no_pause_all && scripts_to_unpause.include?(s.name) }.each(&:unpause)
         $safe_pause_lock.unlock
       end
@@ -879,30 +916,18 @@ module Lich
 
       # Helper function to wrap text in the necessary markup
       # to make it render as bold in a frontend client.
-      # This method has little use to other scripts and is designed for
-      # `atmo` and `message` methods in common.lic.
+      # Used by `atmo` and `log_window` methods.
       def bold(text)
-        string = ''
-
-        Frontend.supports_gsl? ? string.concat("\034GSL\r\n ") : string.concat("<pushBold\/>")
-
-        string.concat(text)
-
-        Frontend.supports_gsl? ? string.concat("\034GSM\r\n ") : string.concat("<popBold\/>")
-
-        string
+        prefix = Frontend.supports_gsl? ? "\034GSL\r\n " : "<pushBold\/>"
+        suffix = Frontend.supports_gsl? ? "\034GSM\r\n " : "<popBold\/>"
+        "#{prefix}#{text}#{suffix}"
       end
 
       # Sends a message to the game window.
       # By default the message is bold.
+      # Delegates to Lich::Messaging.msg for consistent multi-frontend support.
       def message(text, make_bold = true)
-        string = ''
-        if text.index('\n')
-          text.split('\n').each { |line| string.concat("#{line}") }
-        else
-          string.concat(text)
-        end
-        _respond(make_bold ? bold(string) : string)
+        Lich::Messaging.msg(make_bold ? "bold" : "plain", text, encode: false)
       end
     end
   end
