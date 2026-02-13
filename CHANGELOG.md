@@ -1,5 +1,31 @@
 # Changelog
 
+## [5.14.0](https://github.com/elanthia-online/lich-5/compare/v5.13.6...v5.14.0) (2026-02-07)
+
+
+### Features
+
+* **all:** Add Genie map cross-reference fields to the DragonRealms map data model ([#1169](https://github.com/elanthia-online/lich-5/issues/1169)) ([1e7c1dd](https://github.com/elanthia-online/lich-5/commit/1e7c1dde11025e5fe8bdbdf9f562f97bb4a84a2c))
+* **dr:** DRExpMonitor move into core lich ([#1154](https://github.com/elanthia-online/lich-5/issues/1154)) ([48524b9](https://github.com/elanthia-online/lich-5/commit/48524b9a1bef7089f371df5bb0073792ef287023))
+* **gs:** add Enhancive module for enhancive item bonus tracking ([#1113](https://github.com/elanthia-online/lich-5/issues/1113)) ([61cff8f](https://github.com/elanthia-online/lich-5/commit/61cff8f7fb0155c6ebf8096186bed1cd8fc023e9))
+* **gs:** add QStrike module for optimal stamina-based RT reduction ([#1114](https://github.com/elanthia-online/lich-5/issues/1114)) ([b10af81](https://github.com/elanthia-online/lich-5/commit/b10af81f1ec8ad6143f58e1565968312d469a62e))
+
+
+### Bug Fixes
+
+* **all:** map_base.rb sort JSON better ([#1171](https://github.com/elanthia-online/lich-5/issues/1171)) ([7e60e68](https://github.com/elanthia-online/lich-5/commit/7e60e68c1dc310ebe87a10cbf25696287cf7f4bc))
+* **all:** remove strip! from settingsInfo replacement ([#1161](https://github.com/elanthia-online/lich-5/issues/1161)) ([aef52ad](https://github.com/elanthia-online/lich-5/commit/aef52add62c47daa73579ac69e13db0352c34cdd))
+* **dr:** logbook_item recovery when crafted item not in hand ([#1175](https://github.com/elanthia-online/lich-5/issues/1175)) ([da18fa9](https://github.com/elanthia-online/lich-5/commit/da18fa95e602fdae0ee1cc256212fed4eaaba00d))
+* **gs:** stash.rb ReadyList sheath handling and update inventory checks ([#1166](https://github.com/elanthia-online/lich-5/issues/1166)) ([7aeec90](https://github.com/elanthia-online/lich-5/commit/7aeec90f8faf8a4cef881317ab7719d6858c7b78))
+* **gs:** xmlparser.rb capture additional death messaging ([#1158](https://github.com/elanthia-online/lich-5/issues/1158)) ([02293d1](https://github.com/elanthia-online/lich-5/commit/02293d1ce3b771a02b7a37176158b0ec4e09c766))
+
+
+### Refactoring
+
+* **all:** Centralize frontend capability checks in Frontend module ([#1170](https://github.com/elanthia-online/lich-5/issues/1170)) ([26e4e00](https://github.com/elanthia-online/lich-5/commit/26e4e003429a3577e4e025aed5917ceaba2bee58))
+* **all:** Map update for robustness and maintainability ([#1163](https://github.com/elanthia-online/lich-5/issues/1163)) ([b803822](https://github.com/elanthia-online/lich-5/commit/b8038229e80b84c9d47577e8865b2970ce65e565))
+* **all:** Refactor game initialization process ([#1162](https://github.com/elanthia-online/lich-5/issues/1162)) ([b90bcf9](https://github.com/elanthia-online/lich-5/commit/b90bcf97be6a404da1db6d238ad70aa7857ce958))
+
 ## [5.13.6](https://github.com/elanthia-online/lich-5/compare/v5.13.5...v5.13.6) (2026-01-26)
 
 
