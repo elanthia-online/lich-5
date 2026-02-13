@@ -184,10 +184,11 @@ RSpec.describe Lich::DragonRealms::DRSkill do
       expect(result).to eq(0.00)
     end
 
-    it 'returns nil for unknown skill' do
+    it 'returns 0.00 for unknown skill (BUG FIX)' do
+      # Previously returned nil, now returns 0.00 for consistency and safety
       result = DRSkill.gained_exp('UnknownSkill')
 
-      expect(result).to be_nil
+      expect(result).to eq(0.00)
     end
   end
 
@@ -230,6 +231,51 @@ RSpec.describe Lich::DragonRealms::DRSkill do
       DRStats.guild = 'Barbarian'
 
       expect(DRSkill.lookup_alias('Primary Magic')).to eq('Inner Fire')
+    end
+
+    it 'returns skill unchanged when guild is nil (BUG FIX)' do
+      DRStats.guild = nil
+      # This would crash with NoMethodError before the .dig() fix
+      expect(DRSkill.lookup_alias('Primary Magic')).to eq('Primary Magic')
+    end
+
+    it 'returns skill unchanged when guild not in aliases hash (BUG FIX)' do
+      DRStats.guild = 'Commoner'
+      # Commoner has no alias entries - would crash before .dig() fix
+      expect(DRSkill.lookup_alias('Primary Magic')).to eq('Primary Magic')
+    end
+  end
+
+  describe '.getrank nil guard (BUG FIX)' do
+    it 'returns 0 for non-existent skill instead of crashing' do
+      expect(DRSkill.getrank('NonExistentSkill')).to eq(0)
+    end
+  end
+
+  describe '.getpercent nil guard (BUG FIX)' do
+    it 'returns 0 for non-existent skill instead of crashing' do
+      expect(DRSkill.getpercent('NonExistentSkill')).to eq(0)
+    end
+  end
+
+  describe '.getskillset nil guard (BUG FIX)' do
+    it 'returns nil for non-existent skill instead of crashing' do
+      expect(DRSkill.getskillset('NonExistentSkill')).to be_nil
+    end
+  end
+
+  describe '.clear_mind nil guard (BUG FIX)' do
+    it 'does not raise for non-existent skill' do
+      expect { DRSkill.clear_mind('NonExistentSkill') }.not_to raise_error
+    end
+  end
+
+  describe '#lookup_skillset nil guard (BUG FIX)' do
+    it 'returns nil for unknown skill without crashing' do
+      # Create a skill with an unknown name directly
+      skill = DRSkill.allocate
+      result = skill.lookup_skillset('CompletelyUnknownSkill')
+      expect(result).to be_nil
     end
   end
 
