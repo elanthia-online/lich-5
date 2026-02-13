@@ -24,7 +24,7 @@ module Lich
         @messages = []
       end
 
-      def msg(type, message)
+      def msg(type, message, **_opts)
         @messages ||= []
         @messages << { type: type, message: message }
       end

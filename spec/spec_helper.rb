@@ -100,7 +100,7 @@ module Lich
 
   # Mock Messaging module
   module Messaging
-    def self.msg(type, message)
+    def self.msg(type, message, **_opts)
       # Capture messages for test assertions
       @messages ||= []
       @messages << { type: type, message: message }

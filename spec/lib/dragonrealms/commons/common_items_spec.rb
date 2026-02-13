@@ -151,6 +151,8 @@ class Script
   attr_accessor :paused, :no_pause_all, :name
 
   def paused?; @paused || false; end
+  def pause; end
+  def unpause; end
 
   class << self
     def running

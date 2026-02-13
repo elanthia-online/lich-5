@@ -17,7 +17,7 @@ module Lich
         @messages = []
       end
 
-      def msg(type, message)
+      def msg(type, message, **_opts)
         @messages ||= []
         @messages << { type: type, message: message }
       end
@@ -52,6 +52,8 @@ DRC.define_singleton_method(:retreat) {} unless DRC.respond_to?(:retreat)
 # Mock DRStats
 module DRStats
   def self.moon_mage?; false; end
+
+  def self.trader?; false; end
 
   def self.warrior_mage?; false; end
 

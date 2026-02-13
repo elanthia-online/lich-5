@@ -13,7 +13,7 @@ module Lich
     @messages = []
 
     class << self
-      def msg(type, message)
+      def msg(type, message, **_opts)
         @messages << { type: type, message: message }
       end
 
