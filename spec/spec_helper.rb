@@ -451,6 +451,14 @@ module DRSpells
   end
 end unless defined?(DRSpells)
 
+# Ensure DRSpells has active_spells= even if defined elsewhere (drparser_spec.rb)
+unless DRSpells.respond_to?(:active_spells=)
+  DRSpells.instance_variable_set(:@active_spells, {})
+  DRSpells.define_singleton_method(:active_spells) { @active_spells }
+  DRSpells.define_singleton_method(:active_spells=) { |val| @active_spells = val }
+  DRSpells.define_singleton_method(:reset!) { @active_spells = {} }
+end
+
 # ─── UserVars ─────────────────────────────────────────────────────────────────
 module UserVars
   @vars = {}
@@ -707,19 +715,118 @@ end
 
 # ─── Namespace Aliases ────────────────────────────────────────────────────────
 # Ensure all modules are accessible from both top level and Lich::DragonRealms
+# ALWAYS overwrite to ensure our mocks take precedence over any earlier definitions
+# (e.g., drparser_spec.rb may define incomplete mocks before spec_helper loads)
 module Lich
   module DragonRealms
-    DRC = ::DRC unless defined?(Lich::DragonRealms::DRC)
-    DRCI = ::DRCI unless defined?(Lich::DragonRealms::DRCI)
-    DRRoom = ::DRRoom unless defined?(Lich::DragonRealms::DRRoom)
-    DRStats = ::DRStats unless defined?(Lich::DragonRealms::DRStats)
-    DRSkill = ::DRSkill unless defined?(Lich::DragonRealms::DRSkill)
-    DRSpells = ::DRSpells unless defined?(Lich::DragonRealms::DRSpells)
-    DRCA = ::DRCA unless defined?(Lich::DragonRealms::DRCA)
-    DRCM = ::DRCM unless defined?(Lich::DragonRealms::DRCM)
-    DRCMM = ::DRCMM unless defined?(Lich::DragonRealms::DRCMM)
-    DRCT = ::DRCT unless defined?(Lich::DragonRealms::DRCT)
-    Flags = ::Flags unless defined?(Lich::DragonRealms::Flags)
+    # Remove existing constants first to avoid "already initialized" warnings
+    remove_const(:DRC) if const_defined?(:DRC, false)
+    remove_const(:DRCI) if const_defined?(:DRCI, false)
+    remove_const(:DRRoom) if const_defined?(:DRRoom, false)
+    remove_const(:DRStats) if const_defined?(:DRStats, false)
+    remove_const(:DRSkill) if const_defined?(:DRSkill, false)
+    remove_const(:DRSpells) if const_defined?(:DRSpells, false)
+    remove_const(:DRCA) if const_defined?(:DRCA, false)
+    remove_const(:DRCM) if const_defined?(:DRCM, false)
+
+    DRC = ::DRC
+    DRCI = ::DRCI
+    DRRoom = ::DRRoom
+    DRStats = ::DRStats
+    DRSkill = ::DRSkill
+    DRSpells = ::DRSpells
+    DRCA = ::DRCA
+    DRCM = ::DRCM
+    remove_const(:DRCMM) if const_defined?(:DRCMM, false)
+    remove_const(:DRCT) if const_defined?(:DRCT, false)
+    remove_const(:Flags) if const_defined?(:Flags, false)
+    DRCMM = ::DRCMM
+    DRCT = ::DRCT
+    Flags = ::Flags
+
+    # Ensure namespaced DRSkill has set_xp/set_rank methods (may have been defined by drparser_spec.rb)
+    unless DRSkill.respond_to?(:set_xp)
+      DRSkill.instance_variable_set(:@ranks, {})
+      DRSkill.instance_variable_set(:@xps, {})
+      DRSkill.define_singleton_method(:getrank) { |skill = nil, *_rest| (@ranks ||= {})[skill] || 0 }
+      DRSkill.define_singleton_method(:getxp) { |skill = nil, *_rest| (@xps ||= {})[skill] || 0 }
+      DRSkill.define_singleton_method(:set_rank) { |skill, rank| (@ranks ||= {})[skill] = rank }
+      DRSkill.define_singleton_method(:set_xp) { |skill, xp| (@xps ||= {})[skill] = xp }
+      DRSkill.define_singleton_method(:reset!) { @ranks = {}; @xps = {} }
+    end
+
+    # Ensure namespaced DRStats has guild check methods (may have been defined by drparser_spec.rb)
+    unless DRStats.respond_to?(:barbarian?)
+      DRStats.define_singleton_method(:barbarian?) { @guild == 'Barbarian' }
+      DRStats.define_singleton_method(:thief?) { @guild == 'Thief' }
+      DRStats.define_singleton_method(:trader?) { @guild == 'Trader' }
+      DRStats.define_singleton_method(:commoner?) { @guild == 'Commoner' }
+      DRStats.define_singleton_method(:moon_mage?) { @guild == 'Moon Mage' }
+      DRStats.define_singleton_method(:warrior_mage?) { @guild == 'Warrior Mage' }
+      DRStats.define_singleton_method(:empath?) { @guild == 'Empath' }
+      DRStats.define_singleton_method(:paladin?) { @guild == 'Paladin' }
+      DRStats.define_singleton_method(:ranger?) { @guild == 'Ranger' }
+      DRStats.define_singleton_method(:cleric?) { @guild == 'Cleric' }
+      DRStats.define_singleton_method(:bard?) { @guild == 'Bard' }
+      DRStats.define_singleton_method(:necromancer?) { @guild == 'Necromancer' }
+    end
+
+    # Ensure namespaced DRStats has mana accessor (may have been defined by drparser_spec.rb)
+    unless DRStats.respond_to?(:mana)
+      DRStats.instance_variable_set(:@mana, 100)
+      DRStats.define_singleton_method(:mana) { @mana }
+      DRStats.define_singleton_method(:mana=) { |val| @mana = val }
+    end
+
+    # Ensure namespaced DRSpells has active_spells= (may have been defined by drparser_spec.rb)
+    unless DRSpells.respond_to?(:active_spells=)
+      DRSpells.instance_variable_set(:@active_spells, {})
+      DRSpells.define_singleton_method(:active_spells) { @active_spells }
+      DRSpells.define_singleton_method(:active_spells=) { |val| @active_spells = val }
+      DRSpells.define_singleton_method(:reset!) { @active_spells = {} }
+    end
+
+    # Ensure namespaced Flags has all needed methods (may have been defined by drparser_spec.rb)
+    unless Flags.respond_to?(:reset!)
+      Flags.instance_variable_set(:@flags, {})
+      Flags.instance_variable_set(:@pending, {})
+      Flags.instance_variable_set(:@matchers, {})
+
+      Flags.define_singleton_method(:add) do |name, *patterns|
+        @matchers[name] = patterns
+        @flags[name] = nil unless @pending.key?(name)
+      end
+
+      Flags.define_singleton_method(:delete) do |name|
+        @matchers.delete(name)
+        @flags.delete(name)
+      end
+
+      Flags.define_singleton_method(:[]) do |name|
+        if @pending.key?(name)
+          @flags[name] = @pending.delete(name)
+        end
+        @flags[name]
+      end
+
+      Flags.define_singleton_method(:[]=) do |name, val|
+        @flags[name] = val
+      end
+
+      Flags.define_singleton_method(:set_pending) do |name, val|
+        @pending[name] = val
+      end
+
+      Flags.define_singleton_method(:reset) do |name|
+        @flags[name] = nil
+      end
+
+      Flags.define_singleton_method(:reset!) do
+        @flags = {}
+        @pending = {}
+        @matchers = {}
+      end
+    end
   end
 end
 
