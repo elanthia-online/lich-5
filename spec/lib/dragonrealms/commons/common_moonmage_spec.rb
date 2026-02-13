@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative '../../../spec_helper'
 require 'rspec'
 require 'ostruct'
 
@@ -165,9 +166,7 @@ module Kernel
 
   def fput(_cmd); end
 
-  def get_data(_key)
-    OpenStruct.new(observe_finished_messages: [], constellations: [])
-  end
+  # Note: get_data is provided by spec_helper.rb — do not redefine here
 
   def custom_require
     proc { |_name| nil }

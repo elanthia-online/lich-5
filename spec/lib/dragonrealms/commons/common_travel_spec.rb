@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative '../../../spec_helper'
 require 'rspec'
 require 'ostruct'
 
@@ -218,11 +219,7 @@ module Kernel
 
   def kill_script(_handle); end
 
-  def get_data(key)
-    return { 'Crossing' => { 'locksmithing' => { 'id' => 19_073 } } } if key == 'town'
-
-    {}
-  end
+  # Note: get_data is provided by spec_helper.rb — do not redefine here
 end
 
 # Load the module under test
