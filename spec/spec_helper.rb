@@ -24,8 +24,9 @@ rescue LoadError
 end
 
 # Mock global constants used throughout Lich
-# XMLData may be defined as a module by other specs, so we use define_singleton_method
-# to add methods defensively rather than relying on OpenStruct.
+# XMLData may be defined as a module by other specs with attr_accessor (which returns nil
+# by default). We ALWAYS define our methods to ensure they return test values, not nil.
+# The last definition wins, so our values override nil defaults from attr_accessor.
 XMLData = OpenStruct.new(
   game: 'DR',
   name: 'TestChar',
@@ -38,14 +39,16 @@ XMLData = OpenStruct.new(
   previous_nav_rm: 11111
 ) unless defined?(XMLData)
 
-# Ensure XMLData has required methods even if it was defined as a module by other specs
-XMLData.define_singleton_method(:game) { 'DR' } unless XMLData.respond_to?(:game)
-XMLData.define_singleton_method(:name) { 'TestChar' } unless XMLData.respond_to?(:name)
-XMLData.define_singleton_method(:room_id) { 12345 } unless XMLData.respond_to?(:room_id)
-XMLData.define_singleton_method(:room_title) { '[Test Room]' } unless XMLData.respond_to?(:room_title)
-XMLData.define_singleton_method(:room_description) { 'A test room description.' } unless XMLData.respond_to?(:room_description)
-XMLData.define_singleton_method(:room_exits_string) { 'Obvious paths: north, south' } unless XMLData.respond_to?(:room_exits_string)
-XMLData.define_singleton_method(:room_exits) { [] } unless XMLData.respond_to?(:room_exits)
+# Always define methods on XMLData to ensure they return test values, not nil.
+# Other specs may have defined attr_accessor which creates methods that return nil.
+# Our define_singleton_method overwrites those to return actual test values.
+XMLData.define_singleton_method(:game) { 'DR' }
+XMLData.define_singleton_method(:name) { 'TestChar' }
+XMLData.define_singleton_method(:room_id) { 12345 }
+XMLData.define_singleton_method(:room_title) { '[Test Room]' }
+XMLData.define_singleton_method(:room_description) { 'A test room description.' }
+XMLData.define_singleton_method(:room_exits_string) { 'Obvious paths: north, south' }
+XMLData.define_singleton_method(:room_exits) { [] }
 XMLData.singleton_class.attr_accessor(:prepared_spell) unless XMLData.respond_to?(:prepared_spell=)
 
 # Mock global variables
