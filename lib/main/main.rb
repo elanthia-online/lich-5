@@ -606,25 +606,58 @@ reconnect_if_wanted = proc {
 
   unless @argv_options[:detachable_client_port].nil?
     detachable_client_thread = Thread.new {
+      server = nil
       loop {
         begin
+          # Close any existing server socket before creating a new one
+          if server && !server.closed?
+            Lich.log "info: closing existing server socket before recreating"
+            server.close rescue nil
+            sleep 0.5 # Give OS time to release the port
+          end
+
+          # Create new server socket
           server = TCPServer.new(@argv_options[:detachable_client_host], @argv_options[:detachable_client_port])
           char_name = ARGV[ARGV.index('--login') + 1].capitalize
-          Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
 
+          # Create session file (wrap in rescue to prevent errors from breaking the loop)
+          begin
+            Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
+          rescue => e
+            Lich.log "warning: failed to create session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
+          end
+
+          Lich.log "info: detachable client server listening on #{@argv_options[:detachable_client_host]}:#{@argv_options[:detachable_client_port]}"
+
+          # Wait for and accept client connection
           $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(server.accept)
           $_DETACHABLE_CLIENT_.sync = true
-        rescue
-          Lich.log "#{$!}\n\t#{$!.backtrace.join("\n\t")}"
+
+          Lich.log "info: detachable client connected from #{$_DETACHABLE_CLIENT_.peeraddr[2]}:#{$_DETACHABLE_CLIENT_.peeraddr[1]}"
+
+          # Close server socket after accepting connection (we only need the client socket now)
           server.close rescue nil
+          server = nil
+        rescue => e
+          # Error during server creation or client accept
+          Lich.log "error: detachable_client_thread (server setup): #{e}\n\t#{e.backtrace.join("\n\t")}"
+          server.close rescue nil
+          server = nil
           $_DETACHABLE_CLIENT_.close rescue nil
           $_DETACHABLE_CLIENT_ = nil
-          sleep 5
+
+          # Cleanup session file (don't let errors here break the loop)
+          begin
+            Frontend.cleanup_session_file
+          rescue => e
+            Lich.log "warning: failed to cleanup session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
+          end
+
+          sleep 5 # Wait before retrying
           next
-        ensure
-          server.close rescue nil
-          Frontend.cleanup_session_file
         end
+
+        # Client communication phase
         if $_DETACHABLE_CLIENT_
           begin
             unless ARGV.include?('--genie')
@@ -666,6 +699,8 @@ reconnect_if_wanted = proc {
                 nil
               }
             end
+
+            # Main client communication loop
             while (client_string = $_DETACHABLE_CLIENT_.gets)
               # Profanity handshake:  SET_FRONTEND_PID <pid>
               if client_string =~ /^SET_FRONTEND_PID\s+(\d+)\s*$/
@@ -676,24 +711,36 @@ reconnect_if_wanted = proc {
               begin
                 $_IDLETIMESTAMP_ = Time.now
                 do_client(client_string)
-              rescue
-                respond "--- Lich: error: client_thread: #{$!}"
-                respond $!.backtrace.first
-                Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+              rescue => e
+                respond "--- Lich: error: client_thread: #{e}"
+                respond e.backtrace.first
+                Lich.log "error: client_thread: #{e}\n\t#{e.backtrace.join("\n\t")}"
               end
             end
-          rescue
-            respond "--- Lich: error: client_thread: #{$!}"
-            respond $!.backtrace.first
-            Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            $_DETACHABLE_CLIENT_.close rescue nil
-            $_DETACHABLE_CLIENT_ = nil
+
+            # If we get here, the client disconnected cleanly (gets returned nil)
+            Lich.log "info: detachable client disconnected cleanly"
+          rescue => e
+            # Error during client communication (e.g., Broken pipe)
+            Lich.log "error: detachable_client_thread (communication): #{e}\n\t#{e.backtrace.join("\n\t")}"
           ensure
+            # Clean up client connection
             $_DETACHABLE_CLIENT_.close rescue nil
             $_DETACHABLE_CLIENT_ = nil
+
+            # Cleanup session file (don't let errors here break the loop)
+            begin
+              Frontend.cleanup_session_file
+            rescue => e
+              Lich.log "warning: failed to cleanup session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
+            end
+
+            Lich.log "info: detachable client cleaned up, will accept new connection"
           end
         end
-        sleep 0.1
+
+        # Small delay before accepting next connection
+        sleep 0.5
       }
     }
   else
