@@ -220,5 +220,510 @@ module ExecScript
   end
 end unless defined?(ExecScript)
 
-# NOTE: No RSpec.configure block here to avoid affecting other specs in the test suite.
-# This file only provides mock objects and constants needed by drexpmonitor and drskill specs.
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONSOLIDATED MOCKS FOR COMMONS SPECS
+# All commons spec files share these mocks to avoid isolation issues.
+# Individual specs can override methods using allow().to receive() as needed.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─── Global Variables ─────────────────────────────────────────────────────────
+$pause_all_lock ||= Mutex.new
+$safe_pause_lock ||= Mutex.new
+$fake_stormfront ||= false
+
+# ─── Lich::Util ───────────────────────────────────────────────────────────────
+module Lich
+  module Util
+    def self.issue_command(_command, _start, _end_pattern, **_opts)
+      []
+    end
+  end unless defined?(Lich::Util)
+end
+
+# ─── DRC (Common module) ──────────────────────────────────────────────────────
+module DRC
+  class << self
+    attr_accessor :right_hand_item, :left_hand_item
+
+    def bput(_command, *_patterns)
+      nil
+    end
+
+    def right_hand
+      @right_hand_item
+    end
+
+    def left_hand
+      @left_hand_item
+    end
+
+    def get_noun(item)
+      item.to_s.split.last
+    end
+
+    def bold(text)
+      "<pushBold/>#{text}<popBold/>"
+    end
+
+    def retreat(*_args); end
+    def fix_standing; end
+    def release_invisibility; end
+    def set_stance(_stance); end
+    def wait_for_script_to_complete(_name, *_args); end
+    def standing?; true; end
+    def hiding?; false; end
+    def invisible?; false; end
+    def stunned?; false; end
+    def webbed?; false; end
+    def kneeling?; false; end
+
+    def message(text, make_bold = true)
+      Lich::Messaging.msg(make_bold ? 'bold' : 'plain', text)
+    end
+  end
+end unless defined?(DRC)
+
+# DRC::Item class (must be defined separately with its own guard)
+class DRC::Item
+  attr_accessor :name, :adjective, :ranged, :needs_unloading, :wield, :lodges,
+                :bound, :swappable, :skip_repair, :worn
+
+  def initialize(name: nil, adjective: nil, ranged: false, needs_unloading: false)
+    @name = name
+    @adjective = adjective
+    @ranged = ranged
+    @needs_unloading = needs_unloading
+    @worn = false
+    @lodges = true
+    @swappable = false
+    @bound = false
+    @wield = false
+    @skip_repair = false
+  end
+
+  def short_name
+    @adjective ? "#{@adjective} #{@name}" : @name
+  end
+
+  def short_regex
+    Regexp.new(short_name.to_s, Regexp::IGNORECASE)
+  end
+
+  def self.from_text(text)
+    return nil if text.nil? || text.empty?
+    new(name: text.split.last)
+  end
+end unless defined?(DRC::Item)
+
+# ─── DRCI (Common Items module) ───────────────────────────────────────────────
+module DRCI
+  class << self
+    def get_item?(*_args); true; end
+    def put_away_item?(*_args); true; end
+    def stow_item?(*_args); true; end
+    def tie_item?(*_args); true; end
+    def untie_item?(*_args); true; end
+    def wear_item?(*_args); true; end
+    def remove_item?(*_args); true; end
+    def dispose_trash(*_args); end
+    def get_item(*_args); end
+    def get_item_if_not_held?(*_args); true; end
+    def in_hands?(*_args); false; end
+    def in_left_hand?(*_args); false; end
+    def in_right_hand?(*_args); false; end
+    def inside?(*_args); false; end
+    def put_away_item_unsafe?(*_args); true; end
+    def have_item_by_look?(*_args); false; end
+  end
+end unless defined?(DRCI)
+
+# ─── DRRoom ───────────────────────────────────────────────────────────────────
+module DRRoom
+  @npcs = []
+  @pcs = []
+  @room_objs = []
+  @dead_npcs = []
+  @group_members = []
+
+  class << self
+    attr_accessor :npcs, :pcs, :room_objs, :dead_npcs, :group_members
+
+    def reset!
+      @npcs = []
+      @pcs = []
+      @room_objs = []
+      @dead_npcs = []
+      @group_members = []
+    end
+  end
+end unless defined?(DRRoom)
+
+# ─── DRStats ──────────────────────────────────────────────────────────────────
+module DRStats
+  @guild = 'Warrior Mage'
+  @encumbrance = 'None'
+  @mana = 100
+  @concentration = 100
+
+  class << self
+    attr_accessor :guild, :encumbrance, :mana, :concentration
+
+    def barbarian?; @guild == 'Barbarian'; end
+    def thief?; @guild == 'Thief'; end
+    def trader?; @guild == 'Trader'; end
+    def commoner?; @guild == 'Commoner'; end
+    def moon_mage?; @guild == 'Moon Mage'; end
+    def warrior_mage?; @guild == 'Warrior Mage'; end
+    def empath?; @guild == 'Empath'; end
+    def paladin?; @guild == 'Paladin'; end
+    def ranger?; @guild == 'Ranger'; end
+    def cleric?; @guild == 'Cleric'; end
+    def bard?; @guild == 'Bard'; end
+    def necromancer?; @guild == 'Necromancer'; end
+
+    def reset!
+      @guild = 'Warrior Mage'
+      @encumbrance = 'None'
+      @mana = 100
+      @concentration = 100
+    end
+  end
+end unless defined?(DRStats)
+
+# ─── DRSkill (must be class, not module) ──────────────────────────────────────
+class DRSkill
+  @ranks = {}
+  @xps = {}
+
+  class << self
+    def getrank(skill = nil, *_rest)
+      @ranks ||= {}
+      @ranks[skill] || 0
+    end
+
+    def getxp(skill = nil, *_rest)
+      @xps ||= {}
+      @xps[skill] || 0
+    end
+
+    def set_rank(skill, rank)
+      @ranks ||= {}
+      @ranks[skill] = rank
+    end
+
+    def set_xp(skill, xp)
+      @xps ||= {}
+      @xps[skill] = xp
+    end
+
+    def reset!
+      @ranks = {}
+      @xps = {}
+    end
+  end
+end unless defined?(DRSkill)
+
+# ─── DRSpells ─────────────────────────────────────────────────────────────────
+module DRSpells
+  @active_spells = {}
+
+  class << self
+    attr_accessor :active_spells
+
+    def reset!
+      @active_spells = {}
+    end
+  end
+end unless defined?(DRSpells)
+
+# ─── UserVars ─────────────────────────────────────────────────────────────────
+module UserVars
+  @vars = {}
+  @moons = {}
+  @sun = { 'night' => false, 'day' => true }
+
+  class << self
+    attr_accessor :song, :climbing_song, :instrument, :discerns, :avtalia, :moons
+
+    def method_missing(name, *args)
+      name_str = name.to_s
+      if name_str.end_with?('=')
+        @vars[name_str.chomp('=')] = args.first
+      else
+        @vars[name_str]
+      end
+    end
+
+    def respond_to_missing?(_name, _include_private = false)
+      true
+    end
+
+    def sun
+      @sun || { 'night' => false, 'day' => true }
+    end
+
+    def sun=(val)
+      @sun = val
+    end
+
+    def friends
+      @vars['friends'] || []
+    end
+
+    def hunting_nemesis
+      @vars['hunting_nemesis'] || []
+    end
+
+    def reset!
+      @vars = {}
+      @moons = {}
+      @sun = { 'night' => false, 'day' => true }
+      @song = nil
+      @climbing_song = nil
+      @instrument = nil
+    end
+  end
+end unless defined?(UserVars)
+
+# ─── Flags ────────────────────────────────────────────────────────────────────
+module Flags
+  @flags = {}
+  @pending = {}
+  @matchers = {}
+
+  class << self
+    def add(name, *patterns)
+      @matchers[name] = patterns
+      @flags[name] = nil unless @pending.key?(name)
+    end
+
+    def delete(name)
+      @matchers.delete(name)
+      @flags.delete(name)
+    end
+
+    def [](name)
+      if @pending.key?(name)
+        @flags[name] = @pending.delete(name)
+      end
+      @flags[name]
+    end
+
+    def []=(name, val)
+      @flags[name] = val
+    end
+
+    def set_pending(name, val)
+      @pending[name] = val
+    end
+
+    def reset(name)
+      @flags[name] = nil
+    end
+
+    def reset!
+      @flags = {}
+      @pending = {}
+      @matchers = {}
+    end
+
+    # Accessors for drparser_spec.rb compatibility
+    def flags
+      @flags
+    end
+
+    def matchers
+      @matchers
+    end
+  end
+end unless defined?(Flags)
+
+# ─── Room ─────────────────────────────────────────────────────────────────────
+class Room
+  class << self
+    def current
+      nil
+    end
+  end
+end unless defined?(Room)
+
+# ─── Map ──────────────────────────────────────────────────────────────────────
+module Map
+  class << self
+    def dijkstra(*_args)
+      [nil, {}]
+    end
+  end
+end unless defined?(Map)
+
+# ─── Frontend ─────────────────────────────────────────────────────────────────
+module Frontend
+  def self.supports_gsl?
+    false
+  end
+end unless defined?(Frontend)
+
+# ─── Enhanced Script class ────────────────────────────────────────────────────
+# Reopen to add instance methods needed by pause_all tests
+class Script
+  attr_accessor :paused, :no_pause_all, :name
+
+  def paused?
+    @paused || false
+  end
+
+  def pause; end
+  def unpause; end
+
+  class << self
+    def running
+      []
+    end unless method_defined?(:running)
+
+    def exists?(_name)
+      true
+    end unless method_defined?(:exists?)
+
+    def current
+      nil
+    end unless method_defined?(:current)
+
+    def hidden
+      []
+    end unless method_defined?(:hidden)
+  end
+end
+
+# ─── DRCA (Arcana module) - basic mock ────────────────────────────────────────
+module DRCA
+  class << self
+    def perc_mana
+      0
+    end
+  end
+end unless defined?(DRCA)
+
+# ─── DRCM (Money module) - basic mock ─────────────────────────────────────────
+module DRCM
+  class << self
+    def check_wealth(_currency = nil)
+      0
+    end
+  end
+end unless defined?(DRCM)
+
+# ─── DRCMM (Moonmage module) - basic mock ─────────────────────────────────────
+module DRCMM
+  class << self
+    def hold_moon_weapon?
+      false
+    end
+
+    def is_moon_weapon?(*_args)
+      false
+    end
+
+    def update_astral_data(data, _settings)
+      data
+    end
+
+    def set_moon_data(_data); end
+  end
+end unless defined?(DRCMM)
+
+# ─── DRCT (Travel module) - basic mock ────────────────────────────────────────
+module DRCT
+  class << self
+    def walk_to(*_args)
+      true
+    end
+  end
+end unless defined?(DRCT)
+
+# ─── Kernel methods (game engine functions) ───────────────────────────────────
+module Kernel
+  def pause(_seconds = nil); end
+  def waitrt?; end
+  def waitcastrt?; end
+  def fput(_cmd); end
+  def put(_cmd); end
+  def get?; nil; end
+  def echo(_msg); end
+  def standing?; true; end
+  def hiding?; false; end
+  def invisible?; false; end
+  def stunned?; false; end
+  def webbed?; false; end
+  def kneeling?; false; end
+  def checkprep; 'None'; end
+  def checkcastrt; 0; end
+  def reget(*_args); nil; end
+  def start_script(_name, _args = [], _flags = {}); nil; end
+  def kill_script(_handle); end
+  def _respond(*_args); end
+  def custom_require; proc { |_name| nil }; end
+
+  def get_data(key)
+    case key
+    when 'town'
+      { 'Crossing' => { 'locksmithing' => { 'id' => 19_073 } } }
+    when 'spells'
+      OpenStruct.new(
+        prep_messages: ['You begin to', "But you've already prepared", 'Your desire to prepare this offensive spell suddenly slips away', 'Something in the area interferes with your spell preparations'],
+        cast_messages: ['You gesture', 'Your target pattern dissipates'],
+        invoke_messages: ['Your cambrinth absorbs', 'you find it too clumsy', 'Invoke what?'],
+        charge_messages: ['Your cambrinth absorbs all of the energy', 'You are in no condition to do that', "You'll have to hold it", 'you find it too clumsy'],
+        segue_messages: ['You segue', 'You must be performing a cyclic spell to segue from', 'It is too soon to segue'],
+        khri_preps: ['You focus your mind', 'Your mind and body are willing', 'Your body is willing'],
+        spell_data: {},
+        barb_abilities: {
+          'Famine' => { 'type' => 'meditation', 'start_command' => 'meditate famine', 'activated_message' => 'You feel hungry' }
+        }
+      )
+    else
+      OpenStruct.new(spell_data: {}, observe_finished_messages: [], constellations: [])
+    end
+  end
+
+  # clear must be private to avoid interfering with respond_to? checks
+  def clear; end
+  private :clear
+end
+
+# ─── Namespace Aliases ────────────────────────────────────────────────────────
+# Ensure all modules are accessible from both top level and Lich::DragonRealms
+module Lich
+  module DragonRealms
+    DRC = ::DRC unless defined?(Lich::DragonRealms::DRC)
+    DRCI = ::DRCI unless defined?(Lich::DragonRealms::DRCI)
+    DRRoom = ::DRRoom unless defined?(Lich::DragonRealms::DRRoom)
+    DRStats = ::DRStats unless defined?(Lich::DragonRealms::DRStats)
+    DRSkill = ::DRSkill unless defined?(Lich::DragonRealms::DRSkill)
+    DRSpells = ::DRSpells unless defined?(Lich::DragonRealms::DRSpells)
+    DRCA = ::DRCA unless defined?(Lich::DragonRealms::DRCA)
+    DRCM = ::DRCM unless defined?(Lich::DragonRealms::DRCM)
+    DRCMM = ::DRCMM unless defined?(Lich::DragonRealms::DRCMM)
+    DRCT = ::DRCT unless defined?(Lich::DragonRealms::DRCT)
+    Flags = ::Flags unless defined?(Lich::DragonRealms::Flags)
+  end
+end
+
+# ─── RSpec Configuration ──────────────────────────────────────────────────────
+RSpec.configure do |config|
+  config.before(:each) do
+    # Reset mutable state before each test
+    Lich::Messaging.clear_messages!
+    DRStats.reset! if DRStats.respond_to?(:reset!)
+    DRSkill.reset! if DRSkill.respond_to?(:reset!)
+    DRSpells.reset! if DRSpells.respond_to?(:reset!)
+    Flags.reset! if Flags.respond_to?(:reset!)
+    UserVars.reset! if UserVars.respond_to?(:reset!)
+    DRRoom.reset! if DRRoom.respond_to?(:reset!)
+    DRC.right_hand_item = nil if DRC.respond_to?(:right_hand_item=)
+    DRC.left_hand_item = nil if DRC.respond_to?(:left_hand_item=)
+  end
+end
+
+# NOTE: Individual spec files can still define additional mocks or override
+# methods using allow().to receive(). The mocks above provide a baseline that
+# works for all specs when run together.
