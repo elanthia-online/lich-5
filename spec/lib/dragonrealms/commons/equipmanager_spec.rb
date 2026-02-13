@@ -34,21 +34,9 @@ module UserVars
   end
 end unless defined?(UserVars)
 
-# Add missing methods defensively if UserVars was defined by another spec
-# common_moonmage_spec needs: moons, moons=, sun, sun=
-# common_spec needs: method_missing (dynamic)
-# common_arcana_spec defines sun (reader only), discerns, discerns=, avtalia
-unless UserVars.respond_to?(:moons=)
-  UserVars.instance_variable_set(:@moons, {}) unless UserVars.instance_variable_defined?(:@moons)
-  UserVars.define_singleton_method(:moons) { @moons ||= {} }
-  UserVars.define_singleton_method(:moons=) { |v| @moons = v }
-end
-unless UserVars.respond_to?(:sun=)
-  UserVars.instance_variable_set(:@sun, {}) unless UserVars.instance_variable_defined?(:@sun)
-  # Override existing sun method if it exists but doesn't accept arguments
-  UserVars.define_singleton_method(:sun) { @sun ||= {} }
-  UserVars.define_singleton_method(:sun=) { |v| @sun = v }
-end
+# Only add equipmanager_debug - that's the only UserVars method EquipmentManager uses.
+# Do NOT add moons/sun methods here - they would pollute other specs (common_arcana_spec,
+# common_moonmage_spec) that define UserVars with specific implementations.
 UserVars.define_singleton_method(:equipmanager_debug) { false } unless UserVars.respond_to?(:equipmanager_debug)
 
 # Mock DRC module (must be defined before loading equipmanager.rb)
@@ -184,20 +172,9 @@ DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS = [/^What were you/].freeze unless defined?
 DRCI::REMOVE_ITEM_SUCCESS_PATTERNS = [/^You (?:remove|sling|slide)/].freeze unless defined?(DRCI::REMOVE_ITEM_SUCCESS_PATTERNS)
 DRCI::REMOVE_ITEM_FAILURE_PATTERNS = [/^Remove what/, /^You need a free hand/].freeze unless defined?(DRCI::REMOVE_ITEM_FAILURE_PATTERNS)
 
-# Add Flags methods defensively - ensure compatibility with all specs that use Flags
-if defined?(Flags)
-  # common_moonmage_spec needs reset(name)
-  Flags.define_singleton_method(:reset) { |name| @flags[name] = nil } unless Flags.respond_to?(:reset)
-  # drparser_spec needs matchers and flags accessors
-  unless Flags.respond_to?(:matchers)
-    Flags.instance_variable_set(:@matchers, {}) unless Flags.instance_variable_defined?(:@matchers)
-    Flags.define_singleton_method(:matchers) { @matchers ||= {} }
-  end
-  unless Flags.respond_to?(:flags)
-    Flags.instance_variable_set(:@flags, {}) unless Flags.instance_variable_defined?(:@flags)
-    Flags.define_singleton_method(:flags) { @flags ||= {} }
-  end
-end
+# NOTE: Do NOT modify Flags here - EquipmentManager doesn't use Flags, and any
+# modifications would pollute other specs (common_arcana_spec, common_moonmage_spec, etc.)
+# that define their own Flags mocks with specific behavior.
 
 # Alias into Lich::DragonRealms namespace for production code compatibility
 # Use const_defined? with false to check only this module, not ancestors
