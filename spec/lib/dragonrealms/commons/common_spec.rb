@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative '../../../spec_helper'
 require 'rspec'
 require 'ostruct'
 
@@ -99,6 +100,8 @@ class Script
   attr_accessor :paused, :no_pause_all, :name
 
   def paused?; @paused || false; end
+  def pause; end
+  def unpause; end
 
   # Only define class methods if they don't exist (spec_helper.rb may have its own)
   class << self
@@ -192,7 +195,7 @@ module Kernel
   def stunned?; false; end
   def webbed?; false; end
   def start_script(_name, _args = [], _flags = {}); nil; end
-  def get_data(_key); OpenStruct.new(spell_data: {}); end
+  # Note: get_data is provided by spec_helper.rb — do not redefine here
   def _respond(*_args); end
   def custom_require; proc { |_name| nil }; end
 end
