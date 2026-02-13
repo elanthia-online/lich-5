@@ -739,10 +739,15 @@ module Lich
     DRCM = ::DRCM
     remove_const(:DRCMM) if const_defined?(:DRCMM, false)
     remove_const(:DRCT) if const_defined?(:DRCT, false)
-    remove_const(:Flags) if const_defined?(:Flags, false)
+    # Only replace Flags if it's a mock (no @@flags class variable) - don't replace real implementation
+    if const_defined?(:Flags, false)
+      existing_flags = const_get(:Flags)
+      is_real_impl = existing_flags.class_variables.include?(:@@flags) rescue false
+      remove_const(:Flags) unless is_real_impl
+    end
     DRCMM = ::DRCMM
     DRCT = ::DRCT
-    Flags = ::Flags
+    Flags = ::Flags unless const_defined?(:Flags, false)
 
     # Ensure namespaced DRSkill has set_xp/set_rank methods (may have been defined by drparser_spec.rb)
     unless DRSkill.respond_to?(:set_xp)
@@ -778,6 +783,33 @@ module Lich
       DRStats.define_singleton_method(:mana=) { |val| @mana = val }
     end
 
+    # Ensure UserVars has moons accessor (drparser_spec.rb doesn't define it)
+    unless UserVars.respond_to?(:moons=)
+      UserVars.instance_variable_set(:@moons, {})
+      UserVars.define_singleton_method(:moons) { @moons }
+      UserVars.define_singleton_method(:moons=) { |val| @moons = val }
+    end
+
+    # Ensure UserVars has sun accessor (drparser_spec.rb doesn't define it)
+    unless UserVars.respond_to?(:sun=)
+      UserVars.instance_variable_set(:@sun, { 'night' => false, 'day' => true })
+      UserVars.define_singleton_method(:sun) { @sun || { 'night' => false, 'day' => true } }
+      UserVars.define_singleton_method(:sun=) { |val| @sun = val }
+    end
+
+    # Ensure UserVars has song/instrument accessors (drparser_spec.rb doesn't define them)
+    unless UserVars.respond_to?(:song=)
+      UserVars.instance_variable_set(:@song, nil)
+      UserVars.instance_variable_set(:@instrument, nil)
+      UserVars.instance_variable_set(:@climbing_song, nil)
+      UserVars.define_singleton_method(:song) { @song }
+      UserVars.define_singleton_method(:song=) { |val| @song = val }
+      UserVars.define_singleton_method(:instrument) { @instrument }
+      UserVars.define_singleton_method(:instrument=) { |val| @instrument = val }
+      UserVars.define_singleton_method(:climbing_song) { @climbing_song }
+      UserVars.define_singleton_method(:climbing_song=) { |val| @climbing_song = val }
+    end
+
     # Ensure namespaced DRSpells has active_spells= (may have been defined by drparser_spec.rb)
     unless DRSpells.respond_to?(:active_spells=)
       DRSpells.instance_variable_set(:@active_spells, {})
@@ -786,47 +818,54 @@ module Lich
       DRSpells.define_singleton_method(:reset!) { @active_spells = {} }
     end
 
-    # Ensure namespaced Flags has all needed methods (may have been defined by drparser_spec.rb)
-    unless Flags.respond_to?(:reset!)
-      Flags.instance_variable_set(:@flags, {})
-      Flags.instance_variable_set(:@pending, {})
-      Flags.instance_variable_set(:@matchers, {})
+    # Ensure namespaced Flags has all needed methods
+    # Real Flags (from events.rb) has `reset` method; drparser's mock doesn't
+    is_real_flags = Flags.respond_to?(:reset) && !Flags.respond_to?(:reset!)
 
-      Flags.define_singleton_method(:add) do |name, *patterns|
-        @matchers[name] = patterns
-        @flags[name] = nil unless @pending.key?(name)
-      end
+    # Only add mock Flags methods if it's not the real implementation
+    unless is_real_flags
+      # Mock Flags (defined by drparser_spec.rb) - add all methods
+      unless Flags.respond_to?(:reset!)
+        Flags.instance_variable_set(:@flags, {})
+        Flags.instance_variable_set(:@pending, {})
+        Flags.instance_variable_set(:@matchers, {})
 
-      Flags.define_singleton_method(:delete) do |name|
-        @matchers.delete(name)
-        @flags.delete(name)
-      end
-
-      Flags.define_singleton_method(:[]) do |name|
-        if @pending.key?(name)
-          @flags[name] = @pending.delete(name)
+        Flags.define_singleton_method(:add) do |name, *patterns|
+          @matchers[name] = patterns
+          @flags[name] = nil unless @pending.key?(name)
         end
-        @flags[name]
-      end
 
-      Flags.define_singleton_method(:[]=) do |name, val|
-        @flags[name] = val
-      end
+        Flags.define_singleton_method(:delete) do |name|
+          @matchers.delete(name)
+          @flags.delete(name)
+        end
 
-      Flags.define_singleton_method(:set_pending) do |name, val|
-        @pending[name] = val
-      end
+        Flags.define_singleton_method(:[]) do |name|
+          if @pending.key?(name)
+            @flags[name] = @pending.delete(name)
+          end
+          @flags[name]
+        end
 
-      Flags.define_singleton_method(:reset) do |name|
-        @flags[name] = nil
-      end
+        Flags.define_singleton_method(:[]=) do |name, val|
+          @flags[name] = val
+        end
 
-      Flags.define_singleton_method(:reset!) do
-        @flags = {}
-        @pending = {}
-        @matchers = {}
-      end
-    end
+        Flags.define_singleton_method(:set_pending) do |name, val|
+          @pending[name] = val
+        end
+
+        Flags.define_singleton_method(:reset) do |name|
+          @flags[name] = nil
+        end
+
+        Flags.define_singleton_method(:reset!) do
+          @flags = {}
+          @pending = {}
+          @matchers = {}
+        end
+      end # unless Flags.respond_to?(:reset!)
+    end # unless is_real_flags
   end
 end
 
