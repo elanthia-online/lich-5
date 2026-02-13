@@ -1,5 +1,49 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
+    # Pattern constants for room/NPC parsing
+    module DRDefsPattern
+      # Pattern to extract the final "and X" portion of room player lists
+      TRAILING_AND = / and (?<last>.*)$/.freeze
+      # Pattern to match player status descriptions
+      PLAYER_STATUS = / (who|whose body)? ?(has|is|appears|glows) .+/.freeze
+      # Pattern to match parenthetical info after player names
+      PARENTHETICAL = / \(.+\)/.freeze
+      # Pattern to extract player name (word characters at end)
+      PLAYER_NAME = /\w+$/.freeze
+      # Pattern for lying down players
+      LYING_DOWN = /who is lying down/i.freeze
+      # Pattern for sitting players
+      SITTING = /who is sitting/i.freeze
+      # Pattern for "You also see" prefix
+      YOU_ALSO_SEE = /You also see/.freeze
+      # Pattern for mount descriptions
+      MOUNT_DESCRIPTION = / with a [\w\s]+ sitting astride its back/.freeze
+      # Pattern to find NPCs in room objects (bold tags indicate creatures)
+      NPC_SCAN = %r{<pushBold/>[^<>]*<popBold/> which appears dead|<pushBold/>[^<>]*<popBold/> \(dead\)|<pushBold/>[^<>]*<popBold/>}.freeze
+      # Pattern for dead NPCs
+      DEAD_NPC = /which appears dead|\(dead\)/.freeze
+      # Pattern for pushBold tags (indicates creature, not object)
+      PUSH_BOLD = /pushBold/.freeze
+      # Pattern for leading articles
+      LEADING_ARTICLE = /^(a|some) /.freeze
+      # Pattern for trailing period
+      TRAILING_PERIOD = /\.$/.freeze
+      # Pattern for splitting on comma or "and"
+      COMMA_OR_AND = /,|\sand\s/.freeze
+      # Pattern for extracting creature name (letters, hyphens, apostrophes only)
+      # Note: Using [A-Za-z] instead of [A-z] to avoid matching [\]^_` characters
+      CREATURE_NAME = /[A-Za-z'-]+$/.freeze
+      # Pattern for "who has/is" descriptions
+      WHO_STATUS = / who (has|is) .+/.freeze
+      # Pattern for "glowing with" modifiers
+      GLOWING_WITH = /(?:\sglowing)?\swith\s.*/.freeze
+      # Gelapod replacement pattern
+      GELAPOD = "<pushBold/>a domesticated gelapod<popBold/>".freeze
+      GELAPOD_REPLACEMENT = 'domesticated gelapod'.freeze
+    end
+
     def convert2copper(amt, denomination)
       if denomination =~ /platinum/
         (amt.to_i * 10_000)
@@ -31,35 +75,58 @@ module Lich
     end
 
     def clean_and_split(room_objs)
-      room_objs.sub(/You also see/, '').sub(/ with a [\w\s]+ sitting astride its back/, '').strip.split(/,|\sand\s/)
+      room_objs.sub(DRDefsPattern::YOU_ALSO_SEE, '')
+               .sub(DRDefsPattern::MOUNT_DESCRIPTION, '')
+               .strip
+               .split(DRDefsPattern::COMMA_OR_AND)
+    end
+
+    # Helper to normalize "X and Y" to "X, Y" for consistent splitting
+    def normalize_trailing_and(text)
+      if (match = text.match(DRDefsPattern::TRAILING_AND))
+        text.sub(DRDefsPattern::TRAILING_AND, ", #{match[:last]}")
+      else
+        text
+      end
     end
 
     def find_pcs(room_players)
-      room_players.sub(/ and (.*)$/) { ", #{Regexp.last_match(1)}" }
-                  .split(', ')
-                  .map { |obj| obj.sub(/ (who|whose body)? ?(has|is|appears|glows) .+/, '').sub(/ \(.+\)/, '') }
-                  .map { |obj| obj.strip.scan(/\w+$/).first }
+      return [] if room_players.nil? || room_players.empty?
+
+      normalize_trailing_and(room_players)
+        .split(', ')
+        .map { |obj| obj.sub(DRDefsPattern::PLAYER_STATUS, '').sub(DRDefsPattern::PARENTHETICAL, '') }
+        .map { |obj| obj.strip.scan(DRDefsPattern::PLAYER_NAME).first }
+        .compact
     end
 
     def find_pcs_prone(room_players)
-      room_players.sub(/ and (.*)$/) { ", #{Regexp.last_match(1)}" }
-                  .split(', ')
-                  .select { |obj| obj =~ /who is lying down/i }
-                  .map { |obj| obj.sub(/ who (has|is) .+/, '').sub(/ \(.+\)/, '') }
-                  .map { |obj| obj.strip.scan(/\w+$/).first }
+      return [] if room_players.nil? || room_players.empty?
+
+      normalize_trailing_and(room_players)
+        .split(', ')
+        .select { |obj| DRDefsPattern::LYING_DOWN.match?(obj) }
+        .map { |obj| obj.sub(DRDefsPattern::WHO_STATUS, '').sub(DRDefsPattern::PARENTHETICAL, '') }
+        .map { |obj| obj.strip.scan(DRDefsPattern::PLAYER_NAME).first }
+        .compact
     end
 
     def find_pcs_sitting(room_players)
-      room_players.sub(/ and (.*)$/) { ", #{Regexp.last_match(1)}" }
-                  .split(', ')
-                  .select { |obj| obj =~ /who is sitting/i }
-                  .map { |obj| obj.sub(/ who (has|is) .+/, '').sub(/ \(.+\)/, '') }
-                  .map { |obj| obj.strip.scan(/\w+$/).first }
+      return [] if room_players.nil? || room_players.empty?
+
+      normalize_trailing_and(room_players)
+        .split(', ')
+        .select { |obj| DRDefsPattern::SITTING.match?(obj) }
+        .map { |obj| obj.sub(DRDefsPattern::WHO_STATUS, '').sub(DRDefsPattern::PARENTHETICAL, '') }
+        .map { |obj| obj.strip.scan(DRDefsPattern::PLAYER_NAME).first }
+        .compact
     end
 
     def find_all_npcs(room_objs)
-      room_objs.sub(/You also see/, '').sub(/ with a [\w\s]+ sitting astride its back/, '').strip
-               .scan(%r{<pushBold/>[^<>]*<popBold/> which appears dead|<pushBold/>[^<>]*<popBold/> \(dead\)|<pushBold/>[^<>]*<popBold/>})
+      room_objs.sub(DRDefsPattern::YOU_ALSO_SEE, '')
+               .sub(DRDefsPattern::MOUNT_DESCRIPTION, '')
+               .strip
+               .scan(DRDefsPattern::NPC_SCAN)
     end
 
     def clean_npc_string(npc_string)
@@ -69,6 +136,7 @@ module Lich
                         .map { |obj| remove_html_tags(obj) }
                         .map { |obj| extract_last_creature(obj) }
                         .map { |obj| extract_final_name(obj) }
+                        .compact
                         .sort
 
       # Count occurrences and add ordinals
@@ -90,12 +158,12 @@ module Lich
 
     def extract_last_creature(text)
       # Get the last creature name after "and", removing modifiers like "glowing with"
-      text.split(/\sand\s/).last.sub(/(?:\sglowing)?\swith\s.*/, '')
+      text.split(/\sand\s/).last.sub(DRDefsPattern::GLOWING_WITH, '')
     end
 
     def extract_final_name(text)
       # Extract just the creature name (letters, hyphens, apostrophes)
-      text.strip.scan(/[A-z'-]+$/).first
+      text.strip.scan(DRDefsPattern::CREATURE_NAME).first
     end
 
     def add_ordinals_to_duplicates(npc_list)
@@ -107,8 +175,13 @@ module Lich
 
         # Create entries with ordinals for duplicates
         count.times do |index|
-          name = index.zero? ? npc : "#{$ORDINALS[index]} #{npc}"
-          flat_npcs << name
+          if index.zero?
+            flat_npcs << npc
+          else
+            # Use ordinal from $ORDINALS if available, otherwise generate one
+            ordinal = $ORDINALS[index] || "#{index + 1}th"
+            flat_npcs << "#{ordinal} #{npc}"
+          end
         end
       end
 
@@ -116,20 +189,21 @@ module Lich
     end
 
     def find_npcs(room_objs)
-      npcs = find_all_npcs(room_objs).reject { |obj| obj =~ /which appears dead|\(dead\)/ }
+      npcs = find_all_npcs(room_objs).reject { |obj| DRDefsPattern::DEAD_NPC.match?(obj) }
       clean_npc_string(npcs)
     end
 
     def find_dead_npcs(room_objs)
-      dead_npcs = find_all_npcs(room_objs).select { |obj| obj =~ /which appears dead|\(dead\)/ }
+      dead_npcs = find_all_npcs(room_objs).select { |obj| DRDefsPattern::DEAD_NPC.match?(obj) }
       clean_npc_string(dead_npcs)
     end
 
     def find_objects(room_objs)
-      room_objs.sub!("<pushBold/>a domesticated gelapod<popBold/>", 'domesticated gelapod')
-      clean_and_split(room_objs)
-        .reject { |obj| obj =~ /pushBold/ }
-        .map { |obj| obj.sub(/\.$/, '').strip.sub(/^a /, '').strip.sub(/^some /, '') }
+      # Use sub instead of sub! to avoid mutating frozen strings
+      processed_objs = room_objs.sub(DRDefsPattern::GELAPOD, DRDefsPattern::GELAPOD_REPLACEMENT)
+      clean_and_split(processed_objs)
+        .reject { |obj| DRDefsPattern::PUSH_BOLD.match?(obj) }
+        .map { |obj| obj.sub(DRDefsPattern::TRAILING_PERIOD, '').strip.sub(DRDefsPattern::LEADING_ARTICLE, '').strip }
     end
   end
 end
