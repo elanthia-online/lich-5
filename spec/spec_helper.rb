@@ -508,58 +508,43 @@ module UserVars
   end
 end unless defined?(UserVars)
 
-# ─── Flags (must be class, not module) ────────────────────────────────────────
-class Flags
-  @flags = {}
+# ─── Flags ─────────────────────────────────────────────────────────────────────
+# Load the REAL Flags implementation from events.rb, then add test extensions.
+# This ensures all specs use the same Flags (with @@flags class variables).
+require_relative '../lib/dragonrealms/drinfomon/events'
+
+# Alias to top level for test convenience
+Flags = Lich::DragonRealms::Flags unless defined?(Flags)
+
+# Add test extensions to the real Flags
+class Lich::DragonRealms::Flags
   @pending = {}
-  @matchers = {}
 
   class << self
-    def add(name, *patterns)
-      @matchers[name] = patterns
-      @flags[name] = nil unless @pending.key?(name)
-    end
-
-    def delete(name)
-      @matchers.delete(name)
-      @flags.delete(name)
-    end
-
-    def [](name)
-      if @pending.key?(name)
-        @flags[name] = @pending.delete(name)
-      end
-      @flags[name]
-    end
-
-    def []=(name, val)
-      @flags[name] = val
-    end
-
+    # Set a flag value that survives add() calls (simulates game triggering flag during bput)
     def set_pending(name, val)
+      @pending ||= {}
       @pending[name] = val
     end
 
-    def reset(name)
-      @flags[name] = nil
-    end
-
+    # Reset all state for test isolation
     def reset!
-      @flags = {}
+      @@flags = {}
+      @@matchers = {}
       @pending = {}
-      @matchers = {}
-    end
-
-    # Accessors for drparser_spec.rb compatibility
-    def flags
-      @flags
-    end
-
-    def matchers
-      @matchers
     end
   end
-end unless defined?(Flags)
+
+  # Override add to inject pending values after initialization
+  original_add = method(:add)
+  define_singleton_method(:add) do |name, *patterns|
+    original_add.call(name, *patterns)
+    @pending ||= {}
+    if @pending.key?(name)
+      @@flags[name] = @pending.delete(name)
+    end
+  end
+end
 
 # ─── Room ─────────────────────────────────────────────────────────────────────
 class Room
@@ -739,15 +724,9 @@ module Lich
     DRCM = ::DRCM
     remove_const(:DRCMM) if const_defined?(:DRCMM, false)
     remove_const(:DRCT) if const_defined?(:DRCT, false)
-    # Only replace Flags if it's a mock (no @@flags class variable) - don't replace real implementation
-    if const_defined?(:Flags, false)
-      existing_flags = const_get(:Flags)
-      is_real_impl = existing_flags.class_variables.include?(:@@flags) rescue false
-      remove_const(:Flags) unless is_real_impl
-    end
     DRCMM = ::DRCMM
     DRCT = ::DRCT
-    Flags = ::Flags unless const_defined?(:Flags, false)
+    # Flags is already Lich::DragonRealms::Flags (loaded from events.rb at top of spec_helper)
 
     # Ensure namespaced DRSkill has set_xp/set_rank methods (may have been defined by drparser_spec.rb)
     unless DRSkill.respond_to?(:set_xp)
@@ -818,103 +797,15 @@ module Lich
       DRSpells.define_singleton_method(:reset!) { @active_spells = {} }
     end
 
-    # Ensure namespaced Flags has all needed methods
-    # Real Flags (from events.rb) has `reset` method; drparser's mock doesn't
-    # NOTE: Real Flags detection and set_pending injection happens in before(:each)
-    # hook because events_spec.rb loads the real Flags AFTER spec_helper.rb loads.
-    is_real_flags = Flags.respond_to?(:reset) && !Flags.respond_to?(:reset!)
-
-    # Add full mock Flags methods if it's not the real implementation
-    unless is_real_flags
-      # Mock Flags (defined by drparser_spec.rb) - add all methods
-      unless Flags.respond_to?(:reset!)
-        Flags.instance_variable_set(:@flags, {})
-        Flags.instance_variable_set(:@pending, {})
-        Flags.instance_variable_set(:@matchers, {})
-
-        Flags.define_singleton_method(:add) do |name, *patterns|
-          @matchers[name] = patterns
-          @flags[name] = nil unless @pending.key?(name)
-        end
-
-        Flags.define_singleton_method(:delete) do |name|
-          @matchers.delete(name)
-          @flags.delete(name)
-        end
-
-        Flags.define_singleton_method(:[]) do |name|
-          if @pending.key?(name)
-            @flags[name] = @pending.delete(name)
-          end
-          @flags[name]
-        end
-
-        Flags.define_singleton_method(:[]=) do |name, val|
-          @flags[name] = val
-        end
-
-        Flags.define_singleton_method(:set_pending) do |name, val|
-          @pending[name] = val
-        end
-
-        Flags.define_singleton_method(:reset) do |name|
-          @flags[name] = nil
-        end
-
-        Flags.define_singleton_method(:reset!) do
-          @flags = {}
-          @pending = {}
-          @matchers = {}
-        end
-      end # unless Flags.respond_to?(:reset!)
-    end # unless is_real_flags
+    # Flags is now loaded from events.rb at the top of spec_helper,
+    # with test extensions (set_pending, reset!) added directly.
+    # No additional setup needed here.
   end
 end
 
 # ─── RSpec Configuration ──────────────────────────────────────────────────────
 RSpec.configure do |config|
   config.before(:each) do
-    # Detect if real Flags (from events.rb) was loaded into Lich::DragonRealms::Flags
-    # This happens when events_spec.rb runs. We need to:
-    # 1. Make ::Flags point to the real Flags (so test code using `Flags` works)
-    # 2. Add set_pending support to the real Flags for commons spec compatibility
-    if defined?(Lich::DragonRealms::Flags)
-      ns_flags = Lich::DragonRealms::Flags
-      is_real_flags = ns_flags.respond_to?(:reset) && !ns_flags.respond_to?(:reset!)
-
-      if is_real_flags
-        # Ensure ::Flags points to the real Flags so test code using `Flags` works
-        # (production code inside Lich::DragonRealms uses ns_flags via namespace resolution)
-        Object.send(:remove_const, :Flags) if defined?(::Flags) && ::Flags != ns_flags
-        Object.const_set(:Flags, ns_flags) unless defined?(::Flags)
-
-        # Add set_pending support if not already added
-        unless ns_flags.respond_to?(:set_pending)
-          original_add = ns_flags.method(:add)
-          ns_flags.instance_variable_set(:@pending, {})
-
-          ns_flags.define_singleton_method(:set_pending) do |name, val|
-            @pending[name] = val
-          end
-
-          # Override add to inject pending values after initialization
-          ns_flags.define_singleton_method(:add) do |name, *patterns|
-            original_add.call(name, *patterns)
-            if @pending&.key?(name)
-              Lich::DragonRealms::Flags.class_variable_get(:@@flags)[name] = @pending.delete(name)
-            end
-          end
-
-          # Add reset! for spec cleanup
-          ns_flags.define_singleton_method(:reset!) do
-            Lich::DragonRealms::Flags.class_variable_set(:@@flags, {})
-            Lich::DragonRealms::Flags.class_variable_set(:@@matchers, {})
-            @pending = {}
-          end
-        end
-      end
-    end
-
     # Reset mutable state before each test
     Lich::Messaging.clear_messages!
     DRStats.reset! if DRStats.respond_to?(:reset!)
