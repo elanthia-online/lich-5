@@ -822,7 +822,35 @@ module Lich
     # Real Flags (from events.rb) has `reset` method; drparser's mock doesn't
     is_real_flags = Flags.respond_to?(:reset) && !Flags.respond_to?(:reset!)
 
-    # Only add mock Flags methods if it's not the real implementation
+    # Add set_pending support to real Flags for commons spec compatibility
+    # We override `add` (not `[]`) to inject pending values after initialization,
+    # preserving the original `[]` behavior that accesses @@flags correctly.
+    if is_real_flags && !Flags.respond_to?(:set_pending)
+      original_add = Flags.method(:add)
+      Flags.instance_variable_set(:@pending, {})
+
+      Flags.define_singleton_method(:set_pending) do |name, val|
+        @pending[name] = val
+      end
+
+      # Override add to inject pending values after the original initialization
+      Flags.define_singleton_method(:add) do |name, *patterns|
+        original_add.call(name, *patterns)
+        # If there's a pending value, overwrite the false initialization
+        if @pending&.key?(name)
+          Flags.class_variable_get(:@@flags)[name] = @pending.delete(name)
+        end
+      end
+
+      # Add reset! for spec cleanup
+      Flags.define_singleton_method(:reset!) do
+        Flags.class_variable_set(:@@flags, {})
+        Flags.class_variable_set(:@@matchers, {})
+        @pending = {}
+      end
+    end
+
+    # Add full mock Flags methods if it's not the real implementation
     unless is_real_flags
       # Mock Flags (defined by drparser_spec.rb) - add all methods
       unless Flags.respond_to?(:reset!)
