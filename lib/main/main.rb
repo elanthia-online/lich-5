@@ -702,7 +702,7 @@ reconnect_if_wanted = proc {
 
   wait_while { $offline_mode }
 
-  if Frontend.supports_gsl?
+  if Frontend.client.eql?('wizard')
     $link_highlight_start = "\207".force_encoding(Encoding::ASCII_8BIT)
     $link_highlight_end = "\240".force_encoding(Encoding::ASCII_8BIT)
     $speech_highlight_start = "\212".force_encoding(Encoding::ASCII_8BIT)

@@ -14,7 +14,7 @@ module Lich
       @@cost_list ||= Array.new
       @@load_mutex = Mutex.new
       @@after_stance = nil
-      attr_reader :num, :name, :timestamp, :msgup, :msgdn, :circle, :active, :type, :cast_proc, :real_time, :persist_on_death, :availability, :no_incant
+      attr_reader :num, :name, :timestamp, :msgup, :msgdn, :circle, :active, :type, :cast_proc, :real_time, :persist_on_death, :availability, :no_incant, :last_cast
       attr_accessor :stance, :channel
 
       @@prepare_regex = Regexp.union(
@@ -124,6 +124,7 @@ module Lich
           end
         }
         @cast_proc = xml_spell.elements['cast-proc'].text
+        @last_cast = Time.at(0)
         @timestamp = Time.now
         @timeleft = 0
         @active = false
@@ -752,6 +753,7 @@ module Lich
             cast_result
           end
         ensure
+          @last_cast = Time.now
           script.want_downstream = save_want_downstream
           script.want_downstream_xml = save_want_downstream_xml
           @@cast_lock.delete(script)
