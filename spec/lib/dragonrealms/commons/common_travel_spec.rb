@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative '../../../spec_helper'
 require 'rspec'
 require 'ostruct'
 
@@ -24,7 +25,7 @@ module Lich
         @messages = []
       end
 
-      def msg(type, message)
+      def msg(type, message, **_opts)
         @messages ||= []
         @messages << { type: type, message: message }
       end
@@ -171,7 +172,7 @@ unless defined?(XMLData)
     end
   end
 else
-  # Add missing methods to existing XMLData
+  # Add missing methods to existing XMLData (works with both module and OpenStruct)
   XMLData.define_singleton_method(:room_description) { '' } unless XMLData.respond_to?(:room_description)
   XMLData.define_singleton_method(:room_title) { '' } unless XMLData.respond_to?(:room_title)
   XMLData.define_singleton_method(:room_exits) { [] } unless XMLData.respond_to?(:room_exits)
@@ -236,11 +237,7 @@ module Kernel
 
   def kill_script(_handle); end
 
-  def get_data(key)
-    return { 'Crossing' => { 'locksmithing' => { 'id' => 19_073 } } } if key == 'town'
-
-    {}
-  end
+  # Note: get_data is provided by spec_helper.rb — do not redefine here
 end
 
 # Load the module under test
@@ -477,8 +474,11 @@ RSpec.describe DRCT do
     let(:lockpick_type) { 'steel' }
     let(:hometown) { 'Crossing' }
     let(:container) { 'lockpick ring' }
+    let(:town_data) { { 'Crossing' => { 'locksmithing' => { 'id' => 19_073 } } } }
 
     before(:each) do
+      # Stub get_data to return proper town data (get_data is a Kernel function from dependency.lic)
+      allow_any_instance_of(Object).to receive(:get_data).with('town').and_return(town_data)
       allow(DRCT).to receive(:walk_to).and_return(true)
       allow(DRCT).to receive(:buy_item)
       allow(DRC).to receive(:fix_standing)
@@ -530,8 +530,8 @@ RSpec.describe DRCT do
 
     it 'logs error when no locksmith location found' do
       # Provide data where locksmithing id is explicitly nil
-      town_data = { 'Crossing' => { 'locksmithing' => { 'id' => nil } } }
-      allow(DRCT).to receive(:get_data).with('town').and_return(town_data)
+      nil_town_data = { 'Crossing' => { 'locksmithing' => { 'id' => nil } } }
+      allow_any_instance_of(Object).to receive(:get_data).with('town').and_return(nil_town_data)
 
       DRCT.refill_lockpick_container(lockpick_type, hometown, container, 1)
 
@@ -916,6 +916,8 @@ RSpec.describe DRCT do
       call_count = 0
       allow(Room).to receive(:current).and_return(OpenStruct.new(id: 100))
       allow(DRRoom).to receive(:pcs).and_return([])
+      allow(DRStats).to receive(:moon_mage?).and_return(false)
+      allow(DRStats).to receive(:trader?).and_return(false)
       allow(DRCA).to receive(:perc_mana) do
         call_count += 1
         call_count <= 1 ? 10 : 10

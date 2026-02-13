@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative '../../../spec_helper'
 require 'rspec'
 
 LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
@@ -13,7 +14,7 @@ module Lich
     @messages = []
 
     class << self
-      def msg(type, message)
+      def msg(type, message, **_opts)
         @messages << { type: type, message: message }
       end
 
