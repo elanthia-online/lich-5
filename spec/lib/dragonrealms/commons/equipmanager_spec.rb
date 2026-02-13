@@ -34,10 +34,23 @@ module UserVars
   end
 end unless defined?(UserVars)
 
-# Only add equipmanager_debug - that's the only UserVars method EquipmentManager uses.
-# Do NOT add moons/sun methods here - they would pollute other specs (common_arcana_spec,
-# common_moonmage_spec) that define UserVars with specific implementations.
+# Add missing UserVars methods that other specs need, BUT only if they don't exist.
+# - equipmanager_debug: needed by EquipmentManager
+# - moons/moons=: needed by common_moonmage_spec (common_arcana_spec doesn't define these)
+# - Do NOT touch sun - common_arcana_spec's sun has a default value that must be preserved
 UserVars.define_singleton_method(:equipmanager_debug) { false } unless UserVars.respond_to?(:equipmanager_debug)
+
+# common_moonmage_spec needs moons/moons= which common_arcana_spec doesn't provide
+unless UserVars.respond_to?(:moons)
+  UserVars.instance_variable_set(:@moons, {}) unless UserVars.instance_variable_defined?(:@moons)
+  UserVars.define_singleton_method(:moons) { @moons ||= {} }
+  UserVars.define_singleton_method(:moons=) { |v| @moons = v }
+end
+
+# common_moonmage_spec needs sun= but common_arcana_spec only defines sun (reader).
+# Add ONLY sun= without initializing @sun - this preserves common_arcana_spec's
+# default value behavior: def self.sun; @sun || { 'night' => false, 'day' => true }; end
+UserVars.define_singleton_method(:sun=) { |v| @sun = v } unless UserVars.respond_to?(:sun=)
 
 # Mock DRC module (must be defined before loading equipmanager.rb)
 # IMPORTANT: This mock must include all methods used by ANY spec file to avoid
@@ -172,9 +185,12 @@ DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS = [/^What were you/].freeze unless defined?
 DRCI::REMOVE_ITEM_SUCCESS_PATTERNS = [/^You (?:remove|sling|slide)/].freeze unless defined?(DRCI::REMOVE_ITEM_SUCCESS_PATTERNS)
 DRCI::REMOVE_ITEM_FAILURE_PATTERNS = [/^Remove what/, /^You need a free hand/].freeze unless defined?(DRCI::REMOVE_ITEM_FAILURE_PATTERNS)
 
-# NOTE: Do NOT modify Flags here - EquipmentManager doesn't use Flags, and any
-# modifications would pollute other specs (common_arcana_spec, common_moonmage_spec, etc.)
-# that define their own Flags mocks with specific behavior.
+# common_moonmage_spec needs Flags.reset(name) but common_arcana_spec only defines reset!
+# Add ONLY reset(name) - this doesn't break common_arcana_spec which uses reset! directly
+if defined?(Flags) && !Flags.respond_to?(:reset)
+  Flags.instance_variable_set(:@flags, {}) unless Flags.instance_variable_defined?(:@flags)
+  Flags.define_singleton_method(:reset) { |name| @flags[name] = nil }
+end
 
 # Alias into Lich::DragonRealms namespace for production code compatibility
 # Use const_defined? with false to check only this module, not ancestors
