@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative '../../../spec_helper'
 require 'rspec'
 
 # NilClass monkey-patch (matches lich runtime behavior where nil.method returns nil)
@@ -108,14 +109,8 @@ module Lich
 end
 
 # Kernel mocks for global methods used by module_function code
+# Note: get_data is provided by spec_helper.rb — do not redefine here
 module Kernel
-  def get_data(*_args)
-    {}
-  end
-  unless method_defined?(:get_data)
-    define_method(:get_data) { |*_args| {} }
-  end
-
   def waitrt?
     nil
   end
