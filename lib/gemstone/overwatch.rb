@@ -147,9 +147,6 @@ module Lich
             /You notice the hiding place of <pushBold\/>\w+ <a exist="\d+" noun=" ?\w+">[^<]+<\/a><popBold\/>, but do not reveal your hidden position./
           )
 
-          # Room change pattern
-          ROOM_CHANGE = /<nav rm='\d+'\/?>/
-
           # Patterns for creatures being revealed from hiding
           REVEALED_DISCOVERY = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is revealed from hiding\./
           REVEALED_FORCED = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is forced from hiding\!/
@@ -213,7 +210,7 @@ module Lich
             SILENT_STALKER_SAVAGE
           )
 
-          ANY = Regexp.union(HIDING, ROOM_CHANGE, ANY_REVEALED, ANY_SILENT_STRIKE)
+          ANY = Regexp.union(HIDING, ANY_REVEALED, ANY_SILENT_STRIKE)
         end
 
         # Checks if a line contains Overwatch-related information.
@@ -234,8 +231,6 @@ module Lich
           case line
           when Term::HIDING
             Overwatch.track_hidden_targets(XMLData.room_id)
-          when Term::ROOM_CHANGE
-            Overwatch.room_with_hiders_reset
           when Term::ANY_REVEALED
             Overwatch.push_revealed_targets(
               match_data[:id],
