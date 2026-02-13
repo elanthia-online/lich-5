@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     module DRStats
@@ -188,30 +190,42 @@ module Lich
         XMLData.concentration
       end
 
+      # Guilds and their native mana types, frozen for immutability.
+      GUILD_MANA_TYPES = {
+        'Necromancer'  => 'arcane',
+        'Barbarian'    => nil,
+        'Thief'        => nil,
+        'Moon Mage'    => 'lunar',
+        'Trader'       => 'lunar',
+        'Warrior Mage' => 'elemental',
+        'Bard'         => 'elemental',
+        'Cleric'       => 'holy',
+        'Paladin'      => 'holy',
+        'Empath'       => 'life',
+        'Ranger'       => 'life'
+      }.freeze
+
       def self.native_mana
-        case DRStats.guild
-        when 'Necromancer'
-          'arcane'
-        when 'Barbarian', 'Thief'
-          nil
-        when 'Moon Mage', 'Trader'
-          'lunar'
-        when 'Warrior Mage', 'Bard'
-          'elemental'
-        when 'Cleric', 'Paladin'
-          'holy'
-        when 'Empath', 'Ranger'
-          'life'
-        end
+        GUILD_MANA_TYPES[@@guild]
       end
 
+      # Serialization order (17 elements, indices 0-16):
+      # 0: race, 1: guild, 2: gender, 3: age, 4: circle,
+      # 5: strength, 6: stamina, 7: reflex, 8: agility,
+      # 9: intelligence, 10: wisdom, 11: discipline, 12: charisma,
+      # 13: favors, 14: tdps, 15: luck, 16: encumbrance
       def self.serialize
         [@@race, @@guild, @@gender, @@age, @@circle, @@strength, @@stamina, @@reflex, @@agility, @@intelligence, @@wisdom, @@discipline, @@charisma, @@favors, @@tdps, @@luck, @@encumbrance]
       end
 
+      # BUG FIX: Original code used array[5..12] which only provides 8 elements
+      # but tried to assign to 13 variables (circle + 12 stats), causing data loss.
+      # The correct slice is array[4..16] for the remaining 13 variables.
       def self.load_serialized=(array)
+        return if array.nil? || array.empty?
+
         @@race, @@guild, @@gender, @@age = array[0..3]
-        @@circle, @@strength, @@stamina, @@reflex, @@agility, @@intelligence, @@wisdom, @@discipline, @@charisma, @@favors, @@tdps, @@luck, @@encumbrance = array[5..12]
+        @@circle, @@strength, @@stamina, @@reflex, @@agility, @@intelligence, @@wisdom, @@discipline, @@charisma, @@favors, @@tdps, @@luck, @@encumbrance = array[4..16]
       end
 
       def self.barbarian?
