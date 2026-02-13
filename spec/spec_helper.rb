@@ -406,59 +406,57 @@ module DRStats
   end
 end unless defined?(DRStats)
 
-# ─── DRSkill (must be class, not module) ──────────────────────────────────────
-class DRSkill
-  @ranks = {}
-  @xps = {}
+# ─── DRSkill (real implementation with test extensions) ───────────────────────
+# Load the REAL DRSkill from drskill.rb, then add test extensions.
+# Note: drskill.rb depends on drexpmonitor.rb being loaded first
+require_relative '../lib/dragonrealms/drinfomon/drexpmonitor'
+require_relative '../lib/dragonrealms/drinfomon/drskill'
+
+# Alias to top level for test convenience
+DRSkill = Lich::DragonRealms::DRSkill unless defined?(DRSkill)
+
+# Add test extensions - override getxp/getrank to be settable
+class Lich::DragonRealms::DRSkill
+  @xp_overrides = {}
+  @rank_overrides = {}
 
   class << self
-    def getrank(skill = nil, *_rest)
-      @ranks ||= {}
-      @ranks[skill] || 0
+    # Override getxp: use override if set, otherwise delegate to real implementation
+    alias_method :original_getxp, :getxp
+    def getxp(val)
+      return @xp_overrides[val] if @xp_overrides&.key?(val)
+
+      original_getxp(val)
     end
 
-    def getxp(skill = nil, *_rest)
-      @xps ||= {}
-      @xps[skill] || 0
-    end
+    # Override getrank: use override if set, otherwise delegate to real implementation
+    alias_method :original_getrank, :getrank
+    def getrank(val)
+      return @rank_overrides[val] if @rank_overrides&.key?(val)
 
-    def set_rank(skill, rank)
-      @ranks ||= {}
-      @ranks[skill] = rank
+      original_getrank(val)
     end
 
     def set_xp(skill, xp)
-      @xps ||= {}
-      @xps[skill] = xp
+      @xp_overrides ||= {}
+      @xp_overrides[skill] = xp
+    end
+
+    def set_rank(skill, rank)
+      @rank_overrides ||= {}
+      @rank_overrides[skill] = rank
     end
 
     def reset!
-      @ranks = {}
-      @xps = {}
+      @xp_overrides = {}
+      @rank_overrides = {}
     end
   end
-end unless defined?(DRSkill)
+end
 
 # ─── DRSpells ─────────────────────────────────────────────────────────────────
-module DRSpells
-  @active_spells = {}
-
-  class << self
-    attr_accessor :active_spells
-
-    def reset!
-      @active_spells = {}
-    end
-  end
-end unless defined?(DRSpells)
-
-# Ensure DRSpells has active_spells= even if defined elsewhere (drparser_spec.rb)
-unless DRSpells.respond_to?(:active_spells=)
-  DRSpells.instance_variable_set(:@active_spells, {})
-  DRSpells.define_singleton_method(:active_spells) { @active_spells }
-  DRSpells.define_singleton_method(:active_spells=) { |val| @active_spells = val }
-  DRSpells.define_singleton_method(:reset!) { @active_spells = {} }
-end
+# DRSpells is now loaded from drspells.rb above (after Flags), with test extensions added.
+# No mock needed here.
 
 # ─── UserVars ─────────────────────────────────────────────────────────────────
 module UserVars
@@ -543,6 +541,43 @@ class Lich::DragonRealms::Flags
     @pending ||= {}
     if @pending.key?(name)
       @@flags[name] = @pending.delete(name)
+    end
+  end
+end
+
+# ─── DRSpells (real implementation with test extensions) ──────────────────────
+# Load the REAL DRSpells from drspells.rb, then add test extensions.
+# The real DRSpells.active_spells delegates to XMLData.dr_active_spells.
+# For testing, we override it to use an instance variable that tests can set.
+require_relative '../lib/dragonrealms/drinfomon/drspells'
+
+# Alias to top level for test convenience
+DRSpells = Lich::DragonRealms::DRSpells unless defined?(DRSpells)
+
+# Add test extensions - override active_spells to be settable while preserving delegation
+module Lich::DragonRealms::DRSpells
+  @active_spells_override = nil
+
+  class << self
+    # Override active_spells: use override if set, otherwise delegate to XMLData
+    # This allows tests to set DRSpells.active_spells = {...} while drspells_spec
+    # can still test the XMLData delegation (when override is nil)
+    def active_spells
+      @active_spells_override.nil? ? XMLData.dr_active_spells : @active_spells_override
+    end
+
+    def active_spells=(val)
+      @active_spells_override = val
+    end
+
+    def reset!
+      @active_spells_override = nil
+      @@known_spells = {}
+      @@known_feats = {}
+      @@spellbook_format = nil
+      @@grabbing_known_spells = false
+      @@grabbing_known_barbarian_abilities = false
+      @@grabbing_known_khri = false
     end
   end
 end
@@ -714,8 +749,8 @@ module Lich
     remove_const(:DRCI) if const_defined?(:DRCI, false)
     remove_const(:DRRoom) if const_defined?(:DRRoom, false)
     remove_const(:DRStats) if const_defined?(:DRStats, false)
-    remove_const(:DRSkill) if const_defined?(:DRSkill, false)
-    remove_const(:DRSpells) if const_defined?(:DRSpells, false)
+    # DRSkill already set up via require of drskill.rb above
+    # DRSpells already set up via require of drspells.rb above
     remove_const(:DRCA) if const_defined?(:DRCA, false)
     remove_const(:DRCM) if const_defined?(:DRCM, false)
 
@@ -723,8 +758,8 @@ module Lich
     DRCI = ::DRCI
     DRRoom = ::DRRoom
     DRStats = ::DRStats
-    DRSkill = ::DRSkill
-    DRSpells = ::DRSpells
+    # DRSkill already Lich::DragonRealms::DRSkill (loaded from drskill.rb)
+    # DRSpells already Lich::DragonRealms::DRSpells (loaded from drspells.rb)
     DRCA = ::DRCA
     DRCM = ::DRCM
     remove_const(:DRCMM) if const_defined?(:DRCMM, false)
@@ -733,16 +768,7 @@ module Lich
     DRCT = ::DRCT
     # Flags is already Lich::DragonRealms::Flags (loaded from events.rb at top of spec_helper)
 
-    # Ensure namespaced DRSkill has set_xp/set_rank methods (may have been defined by drparser_spec.rb)
-    unless DRSkill.respond_to?(:set_xp)
-      DRSkill.instance_variable_set(:@ranks, {})
-      DRSkill.instance_variable_set(:@xps, {})
-      DRSkill.define_singleton_method(:getrank) { |skill = nil, *_rest| (@ranks ||= {})[skill] || 0 }
-      DRSkill.define_singleton_method(:getxp) { |skill = nil, *_rest| (@xps ||= {})[skill] || 0 }
-      DRSkill.define_singleton_method(:set_rank) { |skill, rank| (@ranks ||= {})[skill] = rank }
-      DRSkill.define_singleton_method(:set_xp) { |skill, xp| (@xps ||= {})[skill] = xp }
-      DRSkill.define_singleton_method(:reset!) { @ranks = {}; @xps = {} }
-    end
+    # DRSkill set_xp/set_rank methods are added in test extensions above
 
     # Ensure namespaced DRStats has guild check methods (may have been defined by drparser_spec.rb)
     unless DRStats.respond_to?(:barbarian?)
