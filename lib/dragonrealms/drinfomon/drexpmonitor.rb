@@ -182,7 +182,7 @@ module Lich
 
         # Format and display
         formatted_gains = format_gains(new_skills)
-        Lich::Messaging.msg('info', "DRExpMonitor: Gained: #{formatted_gains.join(', ')}")
+        Lich::Messaging.msg('info', "DRExpMonitor: #{formatted_gains.join(', ')}")
       end
     end
   end
