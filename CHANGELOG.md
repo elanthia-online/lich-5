@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.14.1](https://github.com/elanthia-online/lich-5/compare/v5.14.0...v5.14.1) (2026-02-12)
+
+
+### Bug Fixes
+
+* **all:** change encodings in main.rb to wizard FE only ([#1199](https://github.com/elanthia-online/lich-5/issues/1199)) ([fe43007](https://github.com/elanthia-online/lich-5/commit/fe4300702392b8b4c1720ac3f988cc2fa56d2bf9))
+* **all:** Change server_time_offset in XMLParser to be float instead of int ([#1184](https://github.com/elanthia-online/lich-5/issues/1184)) ([2e26e8e](https://github.com/elanthia-online/lich-5/commit/2e26e8ea7af4c8ccb208af19a806a9005e8d7526))
+* **gs:** Infomon parser.rb bug in EnhanciveEnd ([#1198](https://github.com/elanthia-online/lich-5/issues/1198)) ([fe20c7b](https://github.com/elanthia-online/lich-5/commit/fe20c7b069157f4e244f19d376a117fa0c6f11a0))
+* **gs:** Infomon parser.rb update Account.subscription/type ([#1192](https://github.com/elanthia-online/lich-5/issues/1192)) ([698d1da](https://github.com/elanthia-online/lich-5/commit/698d1daf7da2d50fa330f84f4f60180e7ec21033))
+* **gs:** spell.rb add last_cast to track last time casted ([#1193](https://github.com/elanthia-online/lich-5/issues/1193)) ([67115dd](https://github.com/elanthia-online/lich-5/commit/67115dd0b6bfbedc118de0740dc61f57603740a0))
+* **gs:** stash.rb additional improvements with ReadyList/StowList ([#1197](https://github.com/elanthia-online/lich-5/issues/1197)) ([5ef1c85](https://github.com/elanthia-online/lich-5/commit/5ef1c859f188f506af2c7b29faa2b7b344035e21))
+
 ## [5.14.0](https://github.com/elanthia-online/lich-5/compare/v5.13.6...v5.14.0) (2026-02-07)
 
 
