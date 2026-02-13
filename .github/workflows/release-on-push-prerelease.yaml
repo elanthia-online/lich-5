@@ -256,6 +256,7 @@ jobs:
 
           cp lich.rbw Lich5/
           cp Gemfile Lich5/
+          cp LICENSE Lich5/
           cp -r lib Lich5/
 
           tar -czvf lich-5.tar.gz Lich5/

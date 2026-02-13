@@ -15,7 +15,7 @@ reconnect_if_wanted = proc {
     sleep reconnect_delay
     Lich.log 'info: reconnecting...'
     if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
-      if $frontend == 'stormfront'
+      if Frontend.client.eql?('stormfront')
         system 'taskkill /FI "WINDOWTITLE eq [GSIV: ' + Char.name + '*"' # fixme: window title changing to Gemstone IV: Char.name # name optional
       end
       args = ['start rubyw.exe']
@@ -38,7 +38,7 @@ reconnect_if_wanted = proc {
   test_mode = false
   $SEND_CHARACTER = '>'
   $cmd_prefix = '<c>'
-  $clean_lich_char = $frontend == 'genie' ? ',' : ';'
+  $clean_lich_char = Frontend.client.eql?('genie') ? ',' : ';'
   $lich_char = Regexp.escape($clean_lich_char)
   $lich_char_regex = Regexp.union(',', ';')
 
@@ -174,14 +174,14 @@ reconnect_if_wanted = proc {
       Lich.log "info: Current WINE working directory is #{custom_launch_dir}"
     end
     if ARGV.include?('--without-frontend')
-      $frontend = 'unknown'
+      Frontend.client = 'unknown'
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
         exit(1)
       end
     elsif game =~ /SUKS/i
-      $frontend = 'suks'
+      Frontend.client = 'suks'
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
@@ -218,17 +218,17 @@ reconnect_if_wanted = proc {
     Lich.log "info: game: #{game}"
     if ARGV.include?('--without-frontend')
       $_CLIENT_ = nil
-    elsif $frontend == 'suks'
+    elsif Frontend.client.eql?('suks')
       nil
     else
       if game =~ /WIZ/i
-        $frontend = 'wizard'
+        Frontend.client = 'wizard'
       elsif game =~ /STORM/i
-        $frontend = 'stormfront'
+        Frontend.client = 'stormfront'
       elsif game =~ /AVALON/i
-        $frontend = 'avalon'
+        Frontend.client = 'avalon'
       else
-        $frontend = 'unknown'
+        Frontend.client = 'unknown'
       end
       begin
         listener = TCPServer.new('127.0.0.1', nil)
@@ -424,13 +424,6 @@ reconnect_if_wanted = proc {
 
   listener = nil
 
-  # backward compatibility
-  if $frontend =~ /^(?:wizard|avalon)$/
-    $fake_stormfront = true
-  else
-    $fake_stormfront = false
-  end
-
   undef :exit!
 
   if ARGV.include?('--without-frontend')
@@ -443,7 +436,7 @@ reconnect_if_wanted = proc {
       #
       # send version string
       #
-      client_string = "/FE:WIZARD /VERSION:1.0.1.22 /P:#{RUBY_PLATFORM} /XML"
+      client_string = Frontend::CLIENT_STRING
       $_CLIENTBUFFER_.push(client_string.dup)
       Game._puts(client_string)
       #
@@ -485,7 +478,7 @@ reconnect_if_wanted = proc {
         # rubocop:disable Lint/Void
         nil
         # rubocop:enable Lint/Void
-      elsif $frontend =~ /^(?:wizard|avalon)$/
+      elsif Frontend.supports_gsl?
         #
         # send the login key
         #
@@ -495,30 +488,13 @@ reconnect_if_wanted = proc {
         # take the version string from the client, ignore it, and ask the server for xml
         #
         $_CLIENT_.gets
-        client_string = "/FE:STORMFRONT /VERSION:1.0.1.26 /P:#{RUBY_PLATFORM} /XML"
-        $_CLIENTBUFFER_.push(client_string.dup)
-        Game._puts(client_string)
-        #
-        # tell the server we're ready
-        #
-        2.times {
-          sleep 0.3
-          $_CLIENTBUFFER_.push("#{$cmd_prefix}\r\n")
-          Game._puts($cmd_prefix)
-        }
-        #
-        # set up some stuff
-        #
-        for client_string in ["#{$cmd_prefix}_injury 2", "#{$cmd_prefix}_flag Display Inventory Boxes 1", "#{$cmd_prefix}_flag Display Dialog Boxes 0"]
-          $_CLIENTBUFFER_.push(client_string)
-          Game._puts(client_string)
-        end
+        Frontend.send_handshake(Frontend::CLIENT_STRING)
         #
         # client wants to send "GOOD", xml server won't recognize it
         # Avalon requires 2 gets to clear / Wizard only 1
-        2.times { $_CLIENT_.gets } if $frontend =~ /avalon/i
-        $_CLIENT_.gets if $frontend =~ /wizard/i
-      elsif $frontend =~ /^(?:frostbite)$/
+        2.times { $_CLIENT_.gets } if Frontend.client.eql?('avalon')
+        $_CLIENT_.gets if Frontend.client.eql?('wizard')
+      elsif Frontend.client.eql?('frostbite')
         #
         # send the login key
         #
@@ -529,30 +505,13 @@ reconnect_if_wanted = proc {
         # take the version string from the client, ignore it, and ask the server for xml
         #
         $_CLIENT_.gets
-        client_string = "/FE:STORMFRONT /VERSION:1.0.1.26 /P:#{RUBY_PLATFORM} /XML"
-        $_CLIENTBUFFER_.push(client_string.dup)
-        Game._puts(client_string)
-        #
-        # tell the server we're ready
-        #
-        2.times {
-          sleep 0.3
-          $_CLIENTBUFFER_.push("#{$cmd_prefix}\r\n")
-          Game._puts($cmd_prefix)
-        }
-        #
-        # set up some stuff
-        #
-        for client_string in ["#{$cmd_prefix}_injury 2", "#{$cmd_prefix}_flag Display Inventory Boxes 1", "#{$cmd_prefix}_flag Display Dialog Boxes 0"]
-          $_CLIENTBUFFER_.push(client_string)
-          Game._puts(client_string)
-        end
+        Frontend.send_handshake(Frontend::CLIENT_STRING)
       else
         if launcher_cmd =~ /mudlet/
           Game._puts(game_key)
           game_key = nil
 
-          client_string = "/FE:WIZARD /VERSION:1.0.1.22 /P:#{RUBY_PLATFORM} /XML"
+          client_string = Frontend::CLIENT_STRING
           $_CLIENTBUFFER_.push(client_string.dup)
           Game._puts(client_string)
 
@@ -617,9 +576,9 @@ reconnect_if_wanted = proc {
 
       begin
         while (client_string = $_CLIENT_.gets)
-          if $frontend =~ /^(?:wizard|avalon)$/
+          if Frontend.supports_gsl?
             client_string = "#{$cmd_prefix}#{client_string}"
-          elsif $frontend =~ /^(?:frostbite)$/
+          elsif Frontend.client.eql?('frostbite')
             client_string = fb_to_sf(client_string)
           end
           # Lich.log(client_string)
@@ -669,7 +628,7 @@ reconnect_if_wanted = proc {
         if $_DETACHABLE_CLIENT_
           begin
             unless ARGV.include?('--genie')
-              $frontend = 'profanity'
+              Frontend.client = 'profanity'
               Thread.new {
                 100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
                 init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
@@ -743,7 +702,7 @@ reconnect_if_wanted = proc {
 
   wait_while { $offline_mode }
 
-  if $frontend == 'wizard'
+  if Frontend.client.eql?('wizard')
     $link_highlight_start = "\207".force_encoding(Encoding::ASCII_8BIT)
     $link_highlight_end = "\240".force_encoding(Encoding::ASCII_8BIT)
     $speech_highlight_start = "\212".force_encoding(Encoding::ASCII_8BIT)
