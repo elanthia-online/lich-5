@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative '../../../spec_helper'
 require 'rspec'
 
 # Setup load path (standalone spec, no spec_helper dependency)

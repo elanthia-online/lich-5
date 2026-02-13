@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative '../../../spec_helper'
 require 'rspec'
 require 'json'
 require 'net/http'

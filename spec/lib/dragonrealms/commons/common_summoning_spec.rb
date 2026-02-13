@@ -1,6 +1,7 @@
+require_relative '../../../spec_helper'
 require 'rspec'
 
-# Setup load path (standalone spec, no spec_helper dependency)
+# Setup load path
 LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
 
 # Mock Lich::Messaging before loading the module under test
@@ -17,7 +18,7 @@ module Lich
         @messages = []
       end
 
-      def msg(type, message)
+      def msg(type, message, **_opts)
         @messages ||= []
         @messages << { type: type, message: message }
       end
@@ -52,6 +53,8 @@ DRC.define_singleton_method(:retreat) {} unless DRC.respond_to?(:retreat)
 # Mock DRStats
 module DRStats
   def self.moon_mage?; false; end
+
+  def self.trader?; false; end
 
   def self.warrior_mage?; false; end
 
