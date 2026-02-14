@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     class DRSkill
@@ -55,10 +57,10 @@ module Lich
       # Note, don't confuse the 'exp' in this method name with DRSkill.getxp(..)
       # which returns the current learning rate of the skill.
       def self.gained_exp(val)
-        skill = self.find_skill(val)
-        if skill
-          return skill.current ? (skill.current - skill.baseline).round(2) : 0.00
-        end
+        skill = find_skill(val)
+        return 0.00 unless skill&.current
+
+        (skill.current - skill.baseline).round(2)
       end
 
       # Updates DRStats.gained_skills if the learning rate increased.
@@ -79,12 +81,12 @@ module Lich
       end
 
       def self.include?(val)
-        !self.find_skill(val).nil?
+        !find_skill(val).nil?
       end
 
       def self.update(name, rank, exp, percent)
-        self.handle_exp_change(name, exp)
-        skill = self.find_skill(name)
+        handle_exp_change(name, exp)
+        skill = find_skill(name)
         if skill
           skill.rank = rank.to_i
           skill.exp = skill.rank.to_i >= 1750 ? 34 : exp.to_i
@@ -96,13 +98,13 @@ module Lich
       end
 
       def self.update_mods(name, rank)
-        self.exp_modifiers[self.lookup_alias(name)] = rank.to_i
+        exp_modifiers[lookup_alias(name)] = rank.to_i
       end
 
       def self.update_rested_exp(stored, usable, refresh)
-        @@rexp_stored = self.convert_rexp_str_to_seconds(stored)
-        @@rexp_usable = self.convert_rexp_str_to_seconds(usable)
-        @@rexp_refresh = self.convert_rexp_str_to_seconds(refresh)
+        @@rexp_stored = convert_rexp_str_to_seconds(stored)
+        @@rexp_usable = convert_rexp_str_to_seconds(usable)
+        @@rexp_refresh = convert_rexp_str_to_seconds(refresh)
       end
 
       def self.exp_modifiers
@@ -125,41 +127,55 @@ module Lich
         @@rexp_stored > 0 && @@rexp_usable > 0
       end
 
+      # BUG FIX: Added nil guard - find_skill can return nil if skill not found
       def self.clear_mind(val)
-        self.find_skill(val).exp = 0
+        skill = find_skill(val)
+        skill.exp = 0 if skill
       end
 
+      # BUG FIX: Added nil guard - find_skill can return nil if skill not found
       def self.getrank(val)
-        self.find_skill(val).rank.to_i
+        skill = find_skill(val)
+        return 0 unless skill
+
+        skill.rank.to_i
       end
 
       def self.getmodrank(val)
-        skill = self.find_skill(val)
-        if skill
-          rank = skill.rank.to_i
-          modifier = self.exp_modifiers[skill.name].to_i
-          rank + modifier
-        end
+        skill = find_skill(val)
+        return 0 unless skill
+
+        rank = skill.rank.to_i
+        modifier = exp_modifiers[skill.name].to_i
+        rank + modifier
       end
 
       def self.getxp(val)
-        skill = self.find_skill(val)
+        skill = find_skill(val)
         return 0 unless skill
 
         skill.exp.to_i
       end
 
+      # BUG FIX: Added nil guard - find_skill can return nil if skill not found
       def self.getpercent(val)
-        self.find_skill(val).percent.to_i
+        skill = find_skill(val)
+        return 0 unless skill
+
+        skill.percent.to_i
       end
 
+      # BUG FIX: Added nil guard - find_skill can return nil if skill not found
       def self.getskillset(val)
-        self.find_skill(val).skillset
+        skill = find_skill(val)
+        return nil unless skill
+
+        skill.skillset
       end
 
       def self.listall
         @@list.each do |i|
-          echo "#{i.name}: #{i.rank}.#{i.percent}% [#{i.exp}/34]"
+          Lich::Messaging.msg('plain', "DRSkill: #{i.name}: #{i.rank}.#{i.percent}% [#{i.exp}/34]")
         end
       end
 
@@ -168,15 +184,15 @@ module Lich
       end
 
       def self.find_skill(val)
-        @@list.find { |data| data.name == self.lookup_alias(val) }
+        @@list.find { |data| data.name == lookup_alias(val) }
       end
 
       def self.convert_rexp_str_to_seconds(time_string)
         # Handle empty, nil, or specific "zero" cases (less than a minute is zero because it can get stuck there)
         return 0 if time_string.nil? ||
                     time_string.to_s.strip.empty? ||
-                    time_string.include?("none") ||
-                    time_string.include?("less than a minute")
+                    time_string.include?('none') ||
+                    time_string.include?('less than a minute')
 
         total_seconds = 0
 
@@ -204,16 +220,23 @@ module Lich
       # Some guilds rename skills, like Barbarians call "Primary Magic" as "Inner Fire".
       # Given the canonical or colloquial name, this method returns the value
       # that's usable with the other methods like `getxp(skill)` and `getrank(skill)`.
+      #
+      # BUG FIX: Added safe navigation with .dig() for nested hash access.
+      # Original code crashed with NoMethodError if DRStats.guild was nil
+      # or if the guild wasn't in the aliases hash.
       def self.lookup_alias(skill)
-        @@skills_data[:guild_skill_aliases][DRStats.guild][skill] || skill
+        @@skills_data.dig(:guild_skill_aliases, DRStats.guild, skill) || skill
       end
 
       # This is an instance method, do not prefix with `self`.
       # It is called from the initialize method (constructor).
       # When it was defined as a class method then the initialize method
       # complained that this method didn't yet exist.
+      #
+      # BUG FIX: Added nil guard for .find result before calling .first
       def lookup_skillset(skill)
-        @@skills_data[:skillsets].find { |_skillset, skills| skills.include?(skill) }.first
+        result = @@skills_data[:skillsets].find { |_skillset, skills| skills.include?(skill) }
+        result&.first
       end
     end
   end
