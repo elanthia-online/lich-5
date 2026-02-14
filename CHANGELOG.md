@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.15.0-beta.0](https://github.com/elanthia-online/lich-5/compare/v5.14.1...v5.15.0-beta.0) (2026-02-14)
+
+
+### Miscellaneous Chores
+
+* pin prerelease v5.15.0-beta.0 ([d941a4b](https://github.com/elanthia-online/lich-5/commit/d941a4b42d85afd6a1adda8961d7976130c28c32))
+
 ## [5.14.1](https://github.com/elanthia-online/lich-5/compare/v5.14.0...v5.14.1) (2026-02-12)
 
 
