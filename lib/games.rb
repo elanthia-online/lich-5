@@ -42,6 +42,7 @@ module Lich
           @atmospherics = false
           @combat_count = 0
           @end_combat_tags = ["<prompt", "<clearStream", "<component", "<pushStream id=\"percWindow"]
+          @pending_room_objs = nil
         end
 
         def clean_serverstring(server_string)
@@ -82,6 +83,31 @@ module Lich
 
         def atmospherics=(value)
           @atmospherics = value
+        end
+
+        # Buffer split <component id='room objs'> or <component id='room players'> when server sends "...wait N seconds." on separate line
+        # Returns [should_skip, server_string]
+        def buffer_room_objs(server_string)
+          if @pending_room_objs
+            if server_string.include?("</component>")
+              combined = @pending_room_objs + server_string.sub(/\r\n$/, '')
+              Lich.log "Combined split room component: #{combined.inspect}"
+              @pending_room_objs = nil
+              return [false, combined]
+            else
+              @pending_room_objs = @pending_room_objs + server_string.sub(/\r\n$/, '')
+              return [true, nil]
+            end
+          end
+
+          if server_string =~ /^<component id='room (?:objs|players)'>.*\.\.\.wait \d+ seconds?\.\r\n$/ && !server_string.include?("</component>")
+            Lich.log "Open-ended room component tag, buffering: #{server_string.inspect}"
+            # Strip the "...wait N seconds.\r\n" part, keep the opening tag and any content before it
+            @pending_room_objs = server_string.sub(/\.\.\.wait \d+ seconds?\.\r\n$/, '')
+            return [true, nil]
+          end
+
+          [false, server_string]
         end
 
         protected
@@ -174,6 +200,14 @@ module Lich
       class << self
         attr_reader :thread, :buffer, :_buffer, :game_instance
 
+        def autostarted?
+          @@autostarted
+        end
+
+        def settings_init_needed?
+          @@settings_init_needed
+        end
+
         def initialize_buffers
           @socket = nil
           @mutex = Mutex.new
@@ -182,9 +216,9 @@ module Lich
           @buffer = Lich::Common::SharedBuffer.new
           @_buffer = Lich::Common::SharedBuffer.new
           @_buffer.max_size = 1000
-          @autostarted = false
+          @@autostarted = false
+          @@settings_init_needed = false
           @cli_scripts = false
-          @infomon_loaded = false
           @room_number_after_ready = false
           @last_id_shown_room_window = 0
           @game_instance = nil
@@ -196,11 +230,38 @@ module Lich
 
         def open(host, port)
           @socket = TCPSocket.open(host, port)
+
+          # Configure socket with error handling
+          # More forgiving settings for Windows reliability under network stress
           begin
-            @socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, true)
+            SocketConfigurator.configure(@socket,
+                                         keepalive: {
+                                           enable: true,
+                                           idle: 120,      # 2 minutes before first keepalive
+                                           interval: 30    # 30 seconds between keepalive probes
+                                         },
+                                         linger: {
+                                           enable: true,
+                                           timeout: 5      # Wait 5 seconds for data to send on close
+                                         },
+                                         timeout: {
+                                           recv: 30,       # 30 second receive timeout (increased from 10)
+                                           send: 30        # 30 second send timeout (increased from 10)
+                                         },
+                                         buffer_size: {
+                                           recv: 32768,    # 32KB receive buffer (reduced from 65536)
+                                           send: 32768     # 32KB send buffer (reduced from 65536)
+                                         },
+                                         tcp_nodelay: true, # Disable Nagle's algorithm for low latency
+                                         tcp_maxrt: 10)     # Windows: max 10 retransmissions before giving up
+
+            Lich.log("Socket configured successfully for #{host}:#{port}") if ARGV.include?("--debug")
           rescue StandardError => e
-            log_error("Socket option error", e)
+            # Log the error but continue - socket may still work with default settings
+            log_error("Socket configuration error (continuing with defaults)", e)
+            Lich.log("WARNING: Socket running with default OS settings - may be less reliable under network stress")
           end
+
           @socket.sync = true
 
           start_wrap_thread
@@ -210,14 +271,20 @@ module Lich
         end
 
         def start_wrap_thread
+          begin
+            Lich.db_vacuum_if_due!(months: 6)
+          rescue => e
+            Lich.log "db_maint(startup): #{e.class}: #{e.message}"
+          end
+
           @wrap_thread = Thread.new do
             @last_recv = Time.now
-            until @autostarted || (Time.now - @last_recv >= 6)
-              break if @autostarted
+            until @@autostarted || (Time.now - @last_recv >= 6)
+              break if @@autostarted
               sleep 0.2
             end
 
-            puts 'look' unless @autostarted
+            puts 'look' unless @@autostarted
           end
         end
 
@@ -265,19 +332,68 @@ module Lich
 
         def start_main_thread
           @thread = Thread.new do
-            begin
-              while (server_string = @socket.gets)
-                @last_recv = Time.now
-                @_buffer.update(server_string) if defined?(TESTING) && TESTING
+            consecutive_timeouts = 0
+            max_consecutive_timeouts = 3 # Allow 3 timeouts before giving up
 
+            begin
+              while true
                 begin
-                  process_server_string(server_string)
-                rescue StandardError => e
-                  log_error("Error processing server string", e)
+                  # Try to read from socket with timeout
+                  server_string = @socket.gets
+
+                  # Successfully received data - reset timeout counter
+                  consecutive_timeouts = 0
+
+                  # Break if socket closed (gets returns nil)
+                  break if server_string.nil?
+
+                  @last_recv = Time.now
+                  @_buffer.update(server_string) if defined?(TESTING) && TESTING
+
+                  begin
+                    process_server_string(server_string)
+                  rescue StandardError => e
+                    log_error("Error processing server string", e)
+                  end
+                rescue Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError => timeout_error
+                  # Socket read timed out - this is expected if server is quiet
+                  consecutive_timeouts += 1
+
+                  Lich.log "Socket read timeout #{consecutive_timeouts}/#{max_consecutive_timeouts} (no data for 30s)"
+
+                  if consecutive_timeouts >= max_consecutive_timeouts
+                    Lich.log "Too many consecutive timeouts, connection may be dead"
+                    raise timeout_error # Let the outer rescue handle it
+                  end
+
+                  # Check if socket is still alive
+                  if @socket.closed?
+                    Lich.log "Socket is closed, exiting thread"
+                    break
+                  end
+
+                  # Small sleep before retry
+                  sleep 0.1
+                  retry
+                rescue Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED => conn_error
+                  # Connection was reset/broken - these are fatal
+                  Lich.log "Connection error: #{conn_error.class} - #{conn_error.message}"
+                  raise conn_error
                 end
               end
             rescue StandardError => e
-              handle_thread_error(e)
+              # Handle any other errors
+              should_continue = handle_thread_error(e)
+
+              # Only retry if handle_thread_error says it's safe and socket is still open
+              if should_continue && !@socket.closed? && !$_CLIENT_.closed?
+                Lich.log "Retrying server thread after error..."
+                consecutive_timeouts = 0 # Reset counter on retry
+                sleep 1 # Brief pause before retry
+                retry
+              else
+                Lich.log "Server thread exiting due to unrecoverable error"
+              end
             end
           end
           @thread.priority = 4
@@ -289,7 +405,7 @@ module Lich
           # Load game-specific modules if needed
           unless (XMLData.game.nil? || XMLData.game.empty?)
             unless Module.const_defined?(:GameLoader)
-              require_relative 'common/game-loader'
+              require_relative 'common/gameloader'
               GameLoader.load!
             end
           end
@@ -302,6 +418,7 @@ module Lich
           # Clean server string based on game type
           if @game_instance
             server_string = @game_instance.clean_serverstring(server_string)
+            return if server_string.nil? # Buffering split component, wait for next line
           end
 
           # Debug output if needed
@@ -311,16 +428,10 @@ module Lich
           $_SERVERBUFFER_.push(server_string)
 
           # Handle autostart
-          handle_autostart if !@autostarted && server_string =~ /<app char/
-
-          # Handle infomon loading
-          if !@infomon_loaded && (defined?(Infomon) || !$DRINFOMON_VERSION.nil?) && !XMLData.name.nil? && !XMLData.name.empty? && !XMLData.dialogs.empty?
-            ExecScript.start("Infomon.redo!", { quiet: true, name: "infomon_reset" }) if XMLData.game !~ /^DR/ && Infomon.db_refresh_needed?
-            @infomon_loaded = true
-          end
+          handle_autostart if !@@autostarted && server_string =~ /<app char/
 
           # Handle CLI scripts
-          if !@cli_scripts && @autostarted && !XMLData.name.nil? && !XMLData.name.empty?
+          if !@cli_scripts && @@autostarted && !XMLData.name.nil? && !XMLData.name.empty?
             start_cli_scripts
           end
 
@@ -341,7 +452,7 @@ module Lich
           end
 
           Script.start('autostart') if defined?(Script) && Script.respond_to?(:exists?) && Script.exists?('autostart')
-          @autostarted = true
+          @@autostarted = true
 
           display_ruby_warning if defined?(RECOMMENDED_RUBY) && Gem::Version.new(RUBY_VERSION) < Gem::Version.new(RECOMMENDED_RUBY)
         end
@@ -431,8 +542,9 @@ module Lich
             # Handle specific XML errors
             if server_string =~ /<settingsInfo .*?space not found /
               Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
-              server_string.sub!('space not found', '')
+              server_string.sub!(/\s\bspace not found\b\s/, " client='1.0.1.28' ")
               Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
+              @@settings_init_needed = true
               return process_xml_data(server_string) # Return to retry with fixed string
             end
 
@@ -447,11 +559,11 @@ module Lich
             process_room_information(alt_string)
 
             # Handle frontend-specific modifications
-            if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+            if Frontend.client.eql?('genie') && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
               alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
             end
 
-            if $frontend =~ /frostbite/i && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+            if Frontend.client.eql?('frostbite') && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
               alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
             end
 
@@ -462,7 +574,7 @@ module Lich
             end
 
             # Handle frontend-specific conversions
-            if $frontend =~ /^(?:wizard|avalon)$/
+            if Frontend.supports_gsl?
               alt_string = sf_to_wiz(alt_string)
             end
 
@@ -501,9 +613,30 @@ module Lich
           Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
           $stdout.puts "error: server_thread: #{error}\n\t#{error.backtrace.slice(0..10).join("\n\t")}"
           sleep 0.2
-          # Cannot use retry here as it's not in a rescue block
-          # Instead, we'll return a boolean indicating whether to retry
-          return !($_CLIENT_.closed? || @socket.closed? || (error.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i))
+
+          # Determine if we should retry
+          case error
+          when Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
+            # Timeout errors are potentially recoverable if we haven't seen too many
+            Lich.log "Timeout error detected - may attempt retry"
+            return true
+          when Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED
+            # Connection errors are fatal
+            Lich.log "Fatal connection error - will not retry"
+            return false
+          else
+            # Check if socket/client are closed or if it's a known fatal error
+            if $_CLIENT_.closed? || @socket.closed?
+              Lich.log "Client or socket closed - will not retry"
+              return false
+            elsif error.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i
+              Lich.log "Fatal error pattern detected - will not retry"
+              return false
+            else
+              Lich.log "Unknown error - will attempt retry"
+              return true
+            end
+          end
         end
 
         protected
@@ -659,7 +792,7 @@ module Lich
 
           unless room_exits.empty?
             alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}"
-            if ['wrayth', 'stormfront'].include?($frontend) && Map.current.id != Game.instance_variable_get(:@last_id_shown_room_window)
+            if %w[wrayth stormfront].include?(Frontend.client) && Map.current.id != Game.instance_variable_get(:@last_id_shown_room_window)
               alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{room_exits.join(', ')}\r\n<popStream/>\r\n"
               Game.instance_variable_set(:@last_id_shown_room_window, Map.current.id)
             end
@@ -679,8 +812,8 @@ module Lich
         end
       end
 
-      # Initialize the class
-      initialize
+      # Initialize the class only if not already connected
+      initialize if @socket.nil?
     end
   end
 
@@ -691,6 +824,10 @@ module Lich
     # DragonRealms-specific game instance
     class GameInstance < GameBase::GameInstance::Base
       def clean_serverstring(server_string)
+        # Buffer split room objs components (server sends "...wait N seconds." separately)
+        should_skip, server_string = buffer_room_objs(server_string)
+        return nil if should_skip
+
         # Clear out superfluous tags
         server_string = server_string.gsub("<pushStream id=\"combat\" /><popStream id=\"combat\" />", "")
         server_string = server_string.gsub("<popStream id=\"combat\" /><pushStream id=\"combat\" />", "")
@@ -755,8 +892,9 @@ module Lich
       end
 
       def process_game_specific_data(server_string)
-        infomon_serverstring = server_string.dup
-        DRParser.parse(infomon_serverstring)
+        # Parse directly to allow inline modifications (e.g., inline exp display)
+        # The parser modifies server_string in place via line.replace()
+        DRParser.parse(server_string)
       end
 
       def modify_room_display(alt_string)
@@ -806,7 +944,7 @@ module Lich
 
         unless room_number.empty?
           alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
-          if ['wrayth', 'stormfront'].include?($frontend)
+          if %w[wrayth stormfront].include?(Frontend.client)
             alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
             alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
           end
@@ -825,8 +963,8 @@ module Lich
         end
       end
 
-      # Initialize the class
-      initialize
+      # Initialize the class only if not already connected
+      initialize if @socket.nil?
     end
   end
 end

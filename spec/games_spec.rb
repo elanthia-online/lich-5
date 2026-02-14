@@ -2,6 +2,7 @@ require 'rspec'
 
 LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 
+require File.join(LIB_DIR, "common", "front-end.rb")
 require File.join(LIB_DIR, "common", "sharedbuffer.rb")
 require File.join(LIB_DIR, "games.rb")
 require File.join(LIB_DIR, "gemstone", "wounds.rb")

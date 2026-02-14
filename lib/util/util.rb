@@ -235,11 +235,11 @@ module Lich
     # This method will attempt to install any gems that are not already installed.
     # If a gem is installed and its value is true, it will be required.
     # If installation fails for any gem, an error will be raised listing all failed gems.
-    def self.install_gem_requirements(gems_to_install)
+    def self.install_gem_requirements(gems_to_install, user_install: false)
       raise ArgumentError, "install_gem_requirements must be passed a Hash" unless gems_to_install.is_a?(Hash)
       require "rubygems"
       require "rubygems/dependency_installer"
-      installer = Gem::DependencyInstaller.new({ :user_install => true, :document => nil })
+      installer = Gem::DependencyInstaller.new({ :user_install => user_install, :document => nil })
       installed_gems = Gem::Specification.map { |gem| gem.name }.sort.uniq
       failed_gems = []
 
@@ -249,22 +249,70 @@ module Lich
         end
         begin
           unless installed_gems.include?(gem_name)
-            respond("--- Lich: Installing missing ruby gem '#{gem_name}' now, please wait!")
-            installer.install(gem_name)
-            respond("--- Lich: Done installing '#{gem_name}' gem!")
+            respond("--- Lich: Installing missing ruby gem '#{gem_name}' now, please wait!") if defined?(Script)
+            Lich.log("--- Lich: Installing missing ruby gem '#{gem_name}' now, please wait!")
+            result = installer.install(gem_name)
+            Gem.clear_paths
+            Gem::Specification.reset
+            Gem::Specification.find_by_name(gem_name).activate
+            Lich.log("RubyGem Installer Result: #{result.inspect}")
+            unless Gem::Specification.map { |gem| gem.name }.sort.uniq.include?(gem_name)
+              Lich.log("RubyGems failed, attempting system method instead!")
+              result = system(File.join(RbConfig::CONFIG['bindir'], 'gem'), 'install', gem_name)
+              Lich.log("SYSTEM Call Result: #{result.inspect}")
+              Gem.clear_paths
+              Gem::Specification.reset
+              Gem::Specification.find_by_name(gem_name).activate
+            end
+            respond("--- Lich: Done installing '#{gem_name}' gem!") if defined?(Script)
+            Lich.log("--- Lich: Done installing '#{gem_name}' gem!")
           end
           require gem_name if should_require
-        rescue StandardError
-          respond("--- Lich: error: Failed to install Ruby gem: #{gem_name}")
-          respond("--- Lich: error: #{$!}")
-          Lich.log("error: Failed to install Ruby gem: #{gem_name}")
+        rescue LoadError, StandardError
+          respond("--- Lich: error: Failed to install/require Ruby gem: #{gem_name}") if defined?(Script)
+          respond("--- Lich: error: #{$!}") if defined?(Script)
+          Lich.log("installed_gems.include?(#{gem_name}): #{installed_gems.include?(gem_name)} - #{installed_gems.find_all { |gem| gem == gem_name }.inspect}")
+          Lich.log("error: Failed to install/require Ruby gem: #{gem_name}")
           Lich.log("error: #{$!}")
           failed_gems.push(gem_name)
         end
       end
       unless failed_gems.empty?
-        raise("Please install the failed gems: #{failed_gems.join(', ')} to run #{$lich_char}#{Script.current.name}")
+        if defined?(Script.current.name) && Script.current.name != "unknown"
+          raise("Please install the failed gems: #{failed_gems.join(', ')} manually to run #{$lich_char}#{Script.current.name}")
+        else
+          raise("Please install the failed gems: #{failed_gems.join(', ')} manually to continue.")
+        end
       end
+    end
+
+    ##
+    # Recursively freezes a nested data structure in-place.
+    #
+    # This method ensures that all elements of deeply nested Arrays and Hashes are frozen,
+    # including their keys and values. It helps prevent unintended mutations of static or
+    # constant data, particularly useful for reference tables like weapon, armor, or shield stats.
+    #
+    # @param obj [Object] The object to be deeply frozen. Can be a Hash, Array, or any Ruby object.
+    # @return [Object] The same object, after freezing all its elements recursively.
+    #
+    # @example Freezing a nested hash
+    #   data = { stats: { damage: [1, 2, 3], type: "slash" } }
+    #   Lich::Gemstone::Armaments::Freezer.deep_freeze(data)
+    #   data.frozen?                   # => true
+    #   data[:stats].frozen?           # => true
+    #   data[:stats][:damage].frozen?  # => true
+    def self.deep_freeze(obj)
+      case obj
+      when Hash
+        obj.each do |k, v|
+          deep_freeze(k)
+          deep_freeze(v)
+        end
+      when Array
+        obj.each { |el| deep_freeze(el) }
+      end
+      obj.freeze
     end
   end
 end

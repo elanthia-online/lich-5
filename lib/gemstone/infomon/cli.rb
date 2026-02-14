@@ -16,7 +16,7 @@ module Lich
           end
           shroud_detected = true
         end
-        request = { 'info'               => /<a exist=.+#{XMLData.name}/,
+        request = { 'info full'          => /<a exist=.+#{XMLData.name}/,
                     'skill'              => /<a exist=.+#{XMLData.name}/,
                     'spell'              => %r{<output class="mono"/>},
                     'experience'         => %r{<output class="mono"/>},

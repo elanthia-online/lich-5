@@ -238,7 +238,7 @@ jobs:
       # 3) Only build/upload when a new GitHub Release was created
       - name: Checkout repository
         if: ${{ steps.rp.outputs.release_created == 'true' }}
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.2
         with:
           fetch-depth: 0
 
@@ -265,6 +265,8 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml   > Lich5/data/effect-list.xml
 
           cp lich.rbw Lich5/
+          cp Gemfile Lich5/
+          cp LICENSE Lich5/
           cp -r lib Lich5/
 
           tar -czvf lich-5.tar.gz Lich5/
@@ -348,13 +350,13 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.2
 
       # Pin Ruby explicitly on windows-latest
-      - name: Set up Ruby (3.4.5)
-        uses: ruby/setup-ruby@d5126b9b3579e429dd52e51e68624dda2e05be25 # v1.267.0
+      - name: Set up Ruby (4.0.0)
+        uses: ruby/setup-ruby@708024e6c902387ab41de36e1669e43b5ee7085e # v1.283.0
         with:
-          ruby-version: '3.4.5'
+          ruby-version: '4.0.0'
           bundler-cache: false
 
       # Install Inno Setup
@@ -469,7 +471,7 @@ jobs:
           PKG_CONFIG: pkg-config
         run: |
           gem install sqlite3 --platform ruby -- --enable-system-libraries --with-sqlite3-include=${env:MSYS2_ROOT}/ucrt64/include --with-sqlite3-lib=${env:MSYS2_ROOT}/ucrt64/lib
-          gem install ascii_charts gtk3 json logger os ostruct redis sequel terminal-table tzinfo tzinfo-data webrick --no-document
+          gem install ascii_charts ffi gtk3 json kramdown logger os ostruct redis sequel terminal-table tzinfo tzinfo-data webrick --no-document
 
       # Optional experiment: validate Ruby actually initializes GTK (not just require)
       - name: Validate Ruby GTK/sqlite3 runtime

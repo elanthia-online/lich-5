@@ -9,7 +9,9 @@ module Lich
           # Regex patterns grouped for Info, Exp, Skill and PSM parsing - calls upsert_batch to reduce db impact
           CharRaceProf = /^Name:\s+(?<name>[A-z\s'-]+)\s+Race:\s+(?<race>[A-z]+|[A-z]+(?: |-)[A-z]+)\s+Profession:\s+(?<profession>[-A-z]+)/.freeze
           CharGenderAgeExpLevel = /^Gender:\s+(?<gender>[A-z]+)\s+Age:\s+(?<age>[,0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)/.freeze
-          Stat = /^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)/.freeze
+          # Matches both 'info' (2 columns) and 'info full' (3 columns with base stats)
+          # Base stats are optional - only present in 'info full' output
+          Stat = /^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):(?:\s+(?<base_value>\d+)\s+\((?<base_bonus>-?\d+)\)\s+[.]{3})?\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)/.freeze
           StatEnd = /^Mana:\s+-?\d+\s+Silver:\s(?<silver>-?[\d,]+)$/.freeze
           Fame = /^\s+Level: \d+\s+Fame: (?<fame>-?[\d,]+)$/.freeze # serves as ExprStart
           RealExp = %r{^\s+Experience: [\d,]+\s+Field Exp: (?<fxp_current>[\d,]+)/(?<fxp_max>[\d,]+)$}.freeze
@@ -49,15 +51,24 @@ module Lich
           Suffused = /^Suffused (?<type>(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck Inspiration|Guile|Vitality)): (?<suffused>[0-9,]+)$/.freeze
           VolnFavor = /^Voln Favor: (?<favor>[-\d,]+)$/.freeze
           CovertArtsCharges = /^Covert Arts Charges: (?<charges>[-\d,]+)\/200$/.freeze
-          GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments\.$/.freeze
-          RedsteelMarks = /^(?:\s* Redsteel Marks:           |You are carrying) (?<redsteel_marks>[\d,]+)(?: redsteel marks\.)?$/.freeze
-          GemstoneDust = /^You are carrying (?<gemstone_dust>[\d,]+) Dust in your reserves\.$/.freeze
-          TicketGeneral = /^\s*General - (?<tickets>[\d,]+) tickets\.$/.freeze
+          ShadowEssence = /^Accumulated Shadow (?:E|e)ssence: (?<essence>\d)/.freeze
+          ShadowEssenceGain = /^You violently shatter the bond on the soul of the .+\.  As you draw it into yourself, you manipulate the chaotic and broken life forces, forming shadow essence\./.freeze
+          ShadowEssenceCap = /^You begin to sacrifice your victim but immediately sense that it would overwhelm you with shadow essence\./.freeze
+          SacrificeMana = /^You summon the shadow essence from the inner depths of your body, surrounding yourself in a dark halo of power\.  You will the shadows into the eddies and currents of the flows of essence around you, spreading through them like blackened veins of corruption\.  The surroundings glow with silent anguish\.  Everything around you becomes pale and enervated with discoloration, like the life has been drained out of the world\.  There is a flood of power as you feel (?<amount>\d+) mana surge into you!$/.freeze
+          SacrificeChannel = /^Focusing on the bond to your animate, you force shadow essence into .+, leveraging its broken life forces\.  The backlash of sorcerous violence with the necrotic energy of the \w+ ends in the unnatural revitalization of its animate matter\.$/.freeze
+          SacrificeInfest = /^Mastering the struggle against the frantic rush of stolen power, you unleash a dark haze of necrosis upon your unfortunate victim\.  With a small smirk, you force the sickly currents of shadow essence from your body, commanding them to seek and infest .+\.$/.freeze
+          SacrificeFate = /^You close your eyes momentarily and visualize the strands of fate that tie together the firmament\.  Identifying a susceptible star, you compel the shadow essence within you to corrupt it\.$/.freeze
+          SacrificeShift = /^Summoning the shadow essence within yourself, you will it to bleed through the veil, exposing your mind to the vast abyss of cosmic horror\.  Countless possible gateways reveal themselves, with runes hidden in the fabric of reality\.$/.freeze
+          GigasArtifactFragments = /^You are carrying (?<gigas_artifact_fragments>[\d,]+) gigas artifact fragments?\.$/.freeze
+          RedsteelMarks = /^(?:\s* Redsteel Marks:           |You are carrying) (?<redsteel_marks>[\d,]+)(?: redsteel marks?\.)?$/.freeze
+          GemstoneDust = /^You are carrying (?<gemstone_dust>[\d,]+) Dust in your reserves?\.$/.freeze
+          TicketGeneral = /^\s*General - (?<tickets>[\d,]+) tickets?\.$/.freeze
           TicketBlackscrip = /^\s*Troubled Waters - (?<blackscrip>[\d,]+) blackscrip\.$/.freeze
           TicketBloodscrip = /^\s*Duskruin Arena - (?<bloodscrip>[\d,]+) bloodscrip\.$/.freeze
           TicketEtherealScrip = /^\s*Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
-          TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards\.$/.freeze
+          TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards?\.$/.freeze
           TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
+          TicketGold = /^\s*Gold - (?<gold>[\d,]+) gold\.$/.freeze
           WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
           WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
           AccountName = /^Account Name:     (?<name>[\w\d\-\_]+)$/.freeze
@@ -65,7 +76,8 @@ module Lich
           ProfileStart = /^PERSONAL INFORMATION$/.freeze
           ProfileName = /^Name: (?<name>[\w\s]+)$/.freeze
           ProfileHouseCHE = /^[A-Za-z\- ]+? (?:of House of the |of House of |of House |of )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?$|^(?<none>No House affiliation)$/.freeze
-          ResignCHE = /^(?:Once you have resigned from your House, you will be unable to rejoin without being inducted again by the |If you wish to renounce your membership in the |Before you can resign from the )(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?|^(?<none>The RESIGN command is for resigning your membership in a House, but you don't currently belong to any of the Cooperative Houses of Elanthia)\.$/.freeze
+          ResignCHE = /^(?:Once you have resigned from your House, you will be unable to rejoin without being inducted again by the |If you wish to renounce your membership in the |Before you can resign from the )(?:House |of House of the |of House of |of House |of )?(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?|^(?<none>The RESIGN command is for resigning your membership in a House, but you don't currently belong to any of the Cooperative Houses of Elanthia)\.$/.freeze
+          ResignConfirmCHE = /^\[You have resigned from the (?:House |of House of the |of House of |of House |of )?(?<house>Argent Aspis|Rising Phoenix|Paupers|Arcane Masters|Brigatta|Twilight Hall|Silvergate Inn|Sovyn|Sylvanfair|Helden Hall|White Haven|Beacon Hall|Rone Academy|Willow Hall|Moonstone Abbey|Obsidian Tower|Cairnfang Manor)(?: Archive)?\.\]$/.freeze
 
           # TODO: refactor / streamline?
           SleepActive = /^Your mind goes completely blank\.$|^You close your eyes and slowly drift off to sleep\.$|^You slump to the ground and immediately fall asleep\.  You must have been exhausted!$|^That is impossible to do while unconscious$/.freeze
@@ -88,17 +100,45 @@ module Lich
           SpellDnMsgs = /^#{Lich::Common::Spell.dnmsgs.join('$|^')}$/o.freeze
           SpellsongRenewed = /^Your songs? renews?/.freeze
 
+          # Enhancive parsing patterns - from INVENTORY ENHANCIVE TOTALS command
+          EnhanciveStart = /^Stats:$/.freeze
+          EnhanciveStat = /^\s+(?<stat>Strength|Constitution|Dexterity|Agility|Discipline|Aura|Logic|Intuition|Wisdom|Influence)\s+\((?<abbr>\w{3})\):\s*(?<value>\d+)\/(?<cap>\d+)$/.freeze
+          EnhanciveSkillsSection = /^Skills:$/.freeze
+          EnhanciveSkillRanks = /^\s+(?<name>[\w\s\-']+?)\s+Ranks:\s*(?<value>\d+)\/(?<cap>\d+)$/.freeze
+          EnhanciveSkillBonus = /^\s+(?<name>[\w\s\-']+?)\s+Bonus:\s*(?<value>\d+)\/(?<cap>\d+)$/.freeze
+          EnhanciveResourcesSection = /^Resources:$/.freeze
+          EnhanciveResource = /^\s+(?<name>[\w\s]+?):\s+(?<value>\d+)\/(?<cap>\d+)$/.freeze
+          EnhanciveMartialSection = /^Martial Knowledge Skills:$/.freeze
+          EnhanciveMartialSkill = /^\s+(?<name>[\w\s']+?):\s+\+(?<value>\d+)\s+ranks?$/.freeze
+          EnhanciveSpellsSection = /^Self Knowledge Spells:$/.freeze
+          EnhanciveSpells = /^\s+(?<spells>[\d,\s]+)$/.freeze
+          EnhanciveStatisticsSection = /^Statistics:$/.freeze
+          EnhanciveStatistic = /^\s+(?<name>Enhancive Items|Enhancive Properties|Total Enhancive Amount):\s*(?<value>\d+)$/.freeze
+          EnhanciveEnd = /^For (?:more|fewer) details, see INVENTORY ENHANCIVE TOTALS(?: DETAILS)?\.$/.freeze
+          EnhanciveNone = /^No enhancive item bonuses found\.$/.freeze
+
+          # Enhancive active state tracking (on/off)
+          EnhanciveOn = /^You are (?:now|already|currently) accepting the benefits of (?:your|any and all) enhancive (?:inventory )?items(?: in your inventory)?\./.freeze
+          EnhanciveOff = /^You (?:are no longer|already are not|are not currently) accepting the benefit(?:s)? of (?:your|any) enhancive (?:inventory )?items(?: in your inventory)?\./.freeze
+          EnhancivePauses = /^You currently have (?<pauses>\d+) enhancive pauses? available\.$/.freeze
+
           All = Regexp.union(CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
                              ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
                              Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
                              BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
                              CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
                              SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
-                             Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral,
+                             Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketGold,
                              TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
                              WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
                              ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
-                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, GemstoneDust)
+                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, ResignConfirmCHE,
+                             ShadowEssence, ShadowEssenceGain, ShadowEssenceCap, SacrificeMana, SacrificeChannel, SacrificeInfest,
+                             SacrificeFate, SacrificeShift, GemstoneDust, EnhanciveStart, EnhanciveStat, EnhanciveSkillsSection,
+                             EnhanciveSkillRanks, EnhanciveSkillBonus, EnhanciveResourcesSection, EnhanciveResource,
+                             EnhanciveMartialSection, EnhanciveMartialSkill, EnhanciveSpellsSection, EnhanciveSpells,
+                             EnhanciveStatisticsSection, EnhanciveStatistic, EnhanciveEnd, EnhanciveNone,
+                             EnhanciveOn, EnhanciveOff, EnhancivePauses)
         end
 
         module State
@@ -106,11 +146,24 @@ module Lich
           Goals = :goals
           Profile = :profile
           Ready = :ready
+          # Enhancive parsing states
+          EnhanciveStats = :enhancive_stats
+          EnhanciveSkills = :enhancive_skills
+          EnhanciveResources = :enhancive_resources
+          EnhanciveMartial = :enhancive_martial
+          EnhanciveSpells = :enhancive_spells
+          EnhanciveStatistics = :enhancive_statistics
 
           def self.set(state)
             case state
             when Goals, Profile
               unless @state.eql?(Ready)
+                Lich.log "error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
+                fail "--- Lich: error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
+              end
+            when EnhanciveStats, EnhanciveSkills, EnhanciveResources, EnhanciveMartial, EnhanciveSpells, EnhanciveStatistics
+              # Enhancive states can start from Ready or transition between each other
+              unless @state.eql?(Ready) || enhancive_state?
                 Lich.log "error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
                 fail "--- Lich: error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
               end
@@ -120,6 +173,11 @@ module Lich
 
           def self.get
             @state
+          end
+
+          def self.enhancive_state?
+            [EnhanciveStats, EnhanciveSkills, EnhanciveResources,
+             EnhanciveMartial, EnhanciveSpells, EnhanciveStatistics].include?(@state)
           end
         end
 
@@ -168,6 +226,11 @@ module Lich
                               ['stat.%s_bonus' % match[:stat], match[:bonus].to_i],
                               ['stat.%s.enhanced' % match[:stat], match[:enhanced_value].to_i],
                               ['stat.%s.enhanced_bonus' % match[:stat], match[:enhanced_bonus].to_i])
+              # Store base stats if present (from 'info full' command)
+              if match[:base_value]
+                @stat_hold.push(['stat.%s.base' % match[:stat], match[:base_value].to_i],
+                                ['stat.%s.base_bonus' % match[:stat], match[:base_bonus].to_i])
+              end
               :ok
             when Pattern::StatEnd
               match = Regexp.last_match
@@ -370,6 +433,34 @@ module Lich
               match = Regexp.last_match
               Infomon.set('resources.covert_arts_charges', match[:charges].delete(',').to_i)
               :ok
+            when Pattern::ShadowEssence
+              match = Regexp.last_match
+              Infomon.set('resources.shadow_essence', match[:essence].to_i.clamp(0, 5))
+              :ok
+            when Pattern::ShadowEssenceGain
+              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i + 1).clamp(0, 5))
+              :ok
+            when Pattern::ShadowEssenceCap
+              Infomon.set('resources.shadow_essence', 5)
+              :ok
+            when Pattern::SacrificeMana
+              match = Regexp.last_match
+              # Calculate effective mana control ranks
+              effective_mana_ranks = [Skills.elemental_mana_control, Skills.spirit_mana_control].max + [Skills.elemental_mana_control, Skills.spirit_mana_control].min / 2
+
+              # Base mana for first essence
+              base_mana = Char.level + 20
+
+              # Mana per essence after
+              mana_per_essence = (base_mana * (0.5 + effective_mana_ranks.clamp(0, 60) / 120))
+
+              # Estimate of essences used
+              essences_used = (((match[:amount].to_i - mana_per_essence) / (base_mana * 0.5))).round.clamp(1, 5)
+              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i - essences_used).clamp(0, 5))
+              :ok
+            when Pattern::SacrificeChannel, Pattern::SacrificeInfest, Pattern::SacrificeFate, Pattern::SacrificeShift
+              Infomon.set('resources.shadow_essence', (Lich::Resources.shadow_essence.to_i - 1).clamp(0, 5))
+              :ok
             when Pattern::GigasArtifactFragments
               match = Regexp.last_match
               Infomon.set('currency.gigas_artifact_fragments', match[:gigas_artifact_fragments].delete(',').to_i)
@@ -402,6 +493,10 @@ module Lich
               match = Regexp.last_match
               Infomon.set('currency.soul_shards', match[:soul_shards].delete(',').to_i)
               :ok
+            when Pattern::TicketGold
+              match = Regexp.last_match
+              Infomon.set('currency.gold', match[:gold].delete(',').to_i)
+              :ok
             when Pattern::TicketRaikhen
               match = Regexp.last_match
               Infomon.set('currency.raikhen', match[:raikhen].delete(',').to_i)
@@ -430,14 +525,10 @@ module Lich
                 :noop
               end
             when Pattern::AccountSubscription
-              if Account.subscription
-                match = Regexp.last_match
-                Account.subscription = match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
-                Infomon.set('account.type', match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').upcase)
-                :ok
-              else
-                :noop
-              end
+              match = Regexp.last_match
+              Account.subscription = match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
+              Infomon.set('account.type', match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').upcase)
+              :ok
             when Pattern::ProfileStart
               State.set(State::Profile)
               :ok
@@ -461,6 +552,9 @@ module Lich
             when Pattern::ResignCHE
               match = Regexp.last_match
               Infomon.set('che', (match[:none] ? 'none' : Lich::Util.normalize_name(match[:house])))
+              :ok
+            when Pattern::ResignConfirmCHE
+              Infomon.set('che', 'none')
               :ok
 
             # TODO: refactor / streamline?
@@ -516,6 +610,148 @@ module Lich
               :ok
             when Pattern::SpellsongRenewed
               Spellsong.renewed
+              :ok
+            # === ENHANCIVE PARSING ===
+            # Any section header can start enhancive parsing (output may not include all sections)
+            when Pattern::EnhanciveStart
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveStats)
+              :ok
+            when Pattern::EnhanciveStat
+              if State.get == State::EnhanciveStats
+                match = Regexp.last_match
+                stat_key = Lich::Gemstone::Enhancive::STAT_ABBREV[match[:abbr]]
+                @enhancive_hold.push(["enhancive.stat.#{stat_key}", match[:value].to_i]) if stat_key
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveSkillsSection
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveSkills)
+              :ok
+            when Pattern::EnhanciveSkillRanks
+              if State.get == State::EnhanciveSkills
+                match = Regexp.last_match
+                skill_key = Lich::Gemstone::Enhancive::SKILL_NAME_MAP[match[:name].strip]
+                @enhancive_hold.push(["enhancive.skill.#{skill_key}.ranks", match[:value].to_i]) if skill_key
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveSkillBonus
+              if State.get == State::EnhanciveSkills
+                match = Regexp.last_match
+                skill_key = Lich::Gemstone::Enhancive::SKILL_NAME_MAP[match[:name].strip]
+                @enhancive_hold.push(["enhancive.skill.#{skill_key}.bonus", match[:value].to_i]) if skill_key
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveResourcesSection
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveResources)
+              :ok
+            when Pattern::EnhanciveResource
+              if State.get == State::EnhanciveResources
+                match = Regexp.last_match
+                resource_key = Lich::Gemstone::Enhancive::RESOURCE_NAME_MAP[match[:name].strip]
+                @enhancive_hold.push(["enhancive.resource.#{resource_key}", match[:value].to_i]) if resource_key
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveMartialSection
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveMartial)
+              :ok
+            when Pattern::EnhanciveMartialSkill
+              if State.get == State::EnhanciveMartial
+                match = Regexp.last_match
+                martial_key = Lich::Gemstone::Enhancive.martial_display_to_symbol(match[:name].strip)
+                @enhancive_hold.push(["enhancive.martial.#{martial_key}", match[:value].to_i]) if martial_key
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveSpellsSection
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveSpells)
+              :ok
+            when Pattern::EnhanciveSpells
+              if State.get == State::EnhanciveSpells
+                match = Regexp.last_match
+                spell_nums = match[:spells].split(',').map { |s| s.strip.to_i }
+                @enhancive_hold.push(["enhancive.spells", spell_nums.join(',')])
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveStatisticsSection
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveStatistics)
+              :ok
+            when Pattern::EnhanciveStatistic
+              if State.get == State::EnhanciveStatistics
+                match = Regexp.last_match
+                case match[:name]
+                when 'Enhancive Items'
+                  @enhancive_hold.push(['enhancive.stats.item_count', match[:value].to_i])
+                when 'Enhancive Properties'
+                  @enhancive_hold.push(['enhancive.stats.property_count', match[:value].to_i])
+                when 'Total Enhancive Amount'
+                  @enhancive_hold.push(['enhancive.stats.total_amount', match[:value].to_i])
+                end
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveEnd
+              if State.enhancive_state?
+                Infomon.upsert_batch(@enhancive_hold)
+                Infomon.mutex_unlock
+                State.set(State::Ready)
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveNone
+              # Player has no enhancives - reset all values to 0
+              Lich::Gemstone::Enhancive.reset_all
+              :ok
+            when Pattern::EnhanciveOn
+              Infomon.set('enhancive.active', true)
+              :ok
+            when Pattern::EnhanciveOff
+              Infomon.set('enhancive.active', false)
+              :ok
+            when Pattern::EnhancivePauses
+              match = Regexp.last_match
+              Infomon.set('enhancive.pauses', match[:pauses].to_i)
               :ok
             else
               :noop

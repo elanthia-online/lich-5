@@ -1,6 +1,9 @@
+require_relative '../../common/watchable'
+
 module Lich
   module Gemstone
     module ActiveSpell
+      extend Lich::Common::Watchable
       #
       # Spell timing true-up (Invoker and SK item spells do not have proper durations)
       # this needs to be addressed in class Spell rewrite

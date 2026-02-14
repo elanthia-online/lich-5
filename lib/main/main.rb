@@ -15,7 +15,7 @@ reconnect_if_wanted = proc {
     sleep reconnect_delay
     Lich.log 'info: reconnecting...'
     if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
-      if $frontend == 'stormfront'
+      if Frontend.client.eql?('stormfront')
         system 'taskkill /FI "WINDOWTITLE eq [GSIV: ' + Char.name + '*"' # fixme: window title changing to Gemstone IV: Char.name # name optional
       end
       args = ['start rubyw.exe']
@@ -38,7 +38,7 @@ reconnect_if_wanted = proc {
   test_mode = false
   $SEND_CHARACTER = '>'
   $cmd_prefix = '<c>'
-  $clean_lich_char = $frontend == 'genie' ? ',' : ';'
+  $clean_lich_char = Frontend.client.eql?('genie') ? ',' : ';'
   $lich_char = Regexp.escape($clean_lich_char)
   $lich_char_regex = Regexp.union(',', ';')
 
@@ -46,84 +46,38 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'eaccess.rb')
 
   if ARGV.include?('--login')
-    if File.exist?(File.join(DATA_DIR, "entry.dat"))
-      entry_data = File.open(File.join(DATA_DIR, "entry.dat"), 'r') { |blob|
-        begin
-          Marshal.load(blob.read.unpack('m').first)
-        rescue
-          Array.new
-        end
-      }
-    else
-      entry_data = Array.new
-    end
-    char_name = ARGV[ARGV.index('--login') + 1].capitalize
-    if ARGV.include?('--gemstone')
-      if ARGV.include?('--platinum')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSX') }
-      elsif ARGV.include?('--shattered')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
-      elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
-        data[:game_code] = 'GST'
-      else
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GS3') }
-      end
-    elsif ARGV.include?('--shattered')
-      data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'GSF') }
-    elsif ARGV.include?('--dragonrealms')
-      if ARGV.include?('--platinum')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRX') }
-      elsif ARGV.include?('--fallen')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
-      elsif ARGV.include?('--test')
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
-        data[:game_code] = 'DRT'
-      else
-        data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DR') }
-      end
-    elsif ARGV.include?('--fallen')
-      data = entry_data.find { |d| (d[:char_name] == char_name) and (d[:game_code] == 'DRF') }
-    else
-      data = entry_data.find { |d| (d[:char_name] == char_name) }
-    end
-    if data
-      Lich.log "info: using quick game entry settings for #{char_name}"
+    # CLI login flow: character authentication via saved entries
+    require File.join(LIB_DIR, 'common', 'cli', 'cli_login')
 
-      if ARGV.include?('--gst')
-        data[:game_code] = 'GST'
-      elsif ARGV.include?('--drt')
-        data[:game_code] = 'DRT'
-      end
+    # Extract character name from --login argument
+    requested_character = ARGV[ARGV.index('--login') + 1].capitalize
 
-      launch_data_hash = EAccess.auth(
-        account: data[:user_id],
-        password: data[:password],
-        character: data[:char_name],
-        game_code: data[:game_code]
-      )
+    # Parse game code, frontend, and custom_launch from remaining arguments
+    modifiers = ARGV.dup
+    requested_instance, requested_fe, requested_custom_launch = Lich::Util::LoginHelpers.resolve_login_args(modifiers)
 
-      @launch_data = launch_data_hash.map { |k, v| "#{k.upcase}=#{v}" }
-      if data[:frontend] == 'wizard'
-        @launch_data.collect! { |line| line.sub(/GAMEFILE=.+/, 'GAMEFILE=WIZARD.EXE').sub(/GAME=.+/, 'GAME=WIZ').sub(/FULLGAMENAME=.+/, 'FULLGAMENAME=Wizard Front End') }
-      elsif data[:frontend] == 'avalon'
-        @launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') }
-      end
-      if data[:custom_launch]
-        @launch_data.push "CUSTOMLAUNCH=#{data[:custom_launch]}"
-        if data[:custom_launch_dir]
-          @launch_data.push "CUSTOMLAUNCHDIR=#{data[:custom_launch_dir]}"
-        end
-      end
+    # Execute CLI login flow and get launch data
+    launch_data_array = Lich::Common::CLI::CLILogin.execute(
+      requested_character,
+      game_code: requested_instance,
+      frontend: requested_fe,
+      custom_launch: requested_custom_launch,
+      data_dir: DATA_DIR
+    )
+
+    if launch_data_array
+      Lich.log "info: CLI login successful for #{requested_character}"
+      @launch_data = launch_data_array
     else
-      $stdout.puts "error: failed to find login data for #{char_name}"
-      Lich.log "error: failed to find login data for #{char_name}"
+      $stdout.puts "error: failed to authenticate for #{requested_character}"
+      Lich.log "error: CLI login failed for #{requested_character}"
+      exit 1
     end
 
   ## GUI starts here
 
   elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
-    require File.join(LIB_DIR, 'common', 'gui-login.rb')
+    require File.join(LIB_DIR, 'common', 'gui_login.rb')
     gui_login
   end
 
@@ -220,14 +174,14 @@ reconnect_if_wanted = proc {
       Lich.log "info: Current WINE working directory is #{custom_launch_dir}"
     end
     if ARGV.include?('--without-frontend')
-      $frontend = 'unknown'
+      Frontend.client = 'unknown'
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
         exit(1)
       end
     elsif game =~ /SUKS/i
-      $frontend = 'suks'
+      Frontend.client = 'suks'
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
@@ -264,17 +218,17 @@ reconnect_if_wanted = proc {
     Lich.log "info: game: #{game}"
     if ARGV.include?('--without-frontend')
       $_CLIENT_ = nil
-    elsif $frontend == 'suks'
+    elsif Frontend.client.eql?('suks')
       nil
     else
       if game =~ /WIZ/i
-        $frontend = 'wizard'
+        Frontend.client = 'wizard'
       elsif game =~ /STORM/i
-        $frontend = 'stormfront'
+        Frontend.client = 'stormfront'
       elsif game =~ /AVALON/i
-        $frontend = 'avalon'
+        Frontend.client = 'avalon'
       else
-        $frontend = 'unknown'
+        Frontend.client = 'unknown'
       end
       begin
         listener = TCPServer.new('127.0.0.1', nil)
@@ -311,7 +265,8 @@ reconnect_if_wanted = proc {
           Dir.chdir(custom_launch_dir)
         end
 
-        spawn launcher_cmd
+        frontend_pid = spawn(launcher_cmd)
+        Lich::Common::Frontend.pid = frontend_pid if defined?(Lich::Common::Frontend)
       rescue
         Lich.log "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}\n\t#{$!.backtrace.join("\n\t")}"
         Lich.msgbox(:message => "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}", :icon => :error)
@@ -386,16 +341,16 @@ reconnect_if_wanted = proc {
       end
     end
     Lich.log 'info: connected'
-  elsif @game_host and @game_port
+  elsif @argv_options[:game_host] and @argv_options[:game_port]
     unless Lich.hosts_file
       Lich.log "error: cannot find hosts file"
       $stdout.puts "error: cannot find hosts file"
       exit
     end
-    IPSocket.getaddress(@game_host)
+    IPSocket.getaddress(@argv_options[:game_host])
     error_count = 0
     begin
-      listener = TCPServer.new('127.0.0.1', @game_port)
+      listener = TCPServer.new('127.0.0.1', @argv_options[:game_port])
       begin
         listener.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, 1)
       rescue
@@ -411,13 +366,13 @@ reconnect_if_wanted = proc {
         retry
       end
     end
-    Lich.modify_hosts(@game_host)
+    Lich.modify_hosts(@argv_options[:game_host])
 
-    $stdout.puts "Pretending to be #{@game_host}"
-    $stdout.puts "Listening on port #{@game_port}"
+    $stdout.puts "Pretending to be #{@argv_options[:game_host]}"
+    $stdout.puts "Listening on port #{@argv_options[:game_port]}"
     $stdout.puts "Waiting for the client to connect..."
-    Lich.log "info: pretending to be #{@game_host}"
-    Lich.log "info: listening on port #{@game_port}"
+    Lich.log "info: pretending to be #{@argv_options[:game_host]}"
+    Lich.log "info: listening on port #{@argv_options[:game_port]}"
     Lich.log "info: waiting for the client to connect..."
 
     timeout_thread = Thread.new {
@@ -440,18 +395,18 @@ reconnect_if_wanted = proc {
       $_CLIENT_.puts "Running in test mode: host socket set to stdin."
     else
       Lich.log 'info: connecting to the real game host...'
-      @game_host, @game_port = Lich.fix_game_host_port(@game_host, @game_port)
+      @argv_options[:game_host], @argv_options[:game_port] = Lich.fix_game_host_port(@argv_options[:game_host], @argv_options[:game_port])
       begin
         timeout_thread = Thread.new {
           sleep 30
-          Lich.log "error: timed out connecting to #{@game_host}:#{@game_port}"
-          $stdout.puts "error: timed out connecting to #{@game_host}:#{@game_port}"
+          Lich.log "error: timed out connecting to #{@argv_options[:game_host]}:#{@argv_options[:game_port]}"
+          $stdout.puts "error: timed out connecting to #{@argv_options[:game_host]}:#{@argv_options[:game_port]}"
           exit
         }
         begin
-          include Lich::Gemstone if @game_host =~ /gs/i
-          include Lich::DragonRealms if @game_host =~ /dr/i
-          Game.open(@game_host, @game_port)
+          include Lich::Gemstone if @argv_options[:game_host] =~ /gs/i
+          include Lich::DragonRealms if @argv_options[:game_host] =~ /dr/i
+          Game.open(@argv_options[:game_host], @argv_options[:game_port])
         rescue
           Lich.log "error: #{$!}"
           $stdout.puts "error: #{$!}"
@@ -469,13 +424,6 @@ reconnect_if_wanted = proc {
 
   listener = nil
 
-  # backward compatibility
-  if $frontend =~ /^(?:wizard|avalon)$/
-    $fake_stormfront = true
-  else
-    $fake_stormfront = false
-  end
-
   undef :exit!
 
   if ARGV.include?('--without-frontend')
@@ -488,7 +436,7 @@ reconnect_if_wanted = proc {
       #
       # send version string
       #
-      client_string = "/FE:WIZARD /VERSION:1.0.1.22 /P:#{RUBY_PLATFORM} /XML"
+      client_string = Frontend::CLIENT_STRING
       $_CLIENTBUFFER_.push(client_string.dup)
       Game._puts(client_string)
       #
@@ -530,7 +478,7 @@ reconnect_if_wanted = proc {
         # rubocop:disable Lint/Void
         nil
         # rubocop:enable Lint/Void
-      elsif $frontend =~ /^(?:wizard|avalon)$/
+      elsif Frontend.supports_gsl?
         #
         # send the login key
         #
@@ -540,30 +488,13 @@ reconnect_if_wanted = proc {
         # take the version string from the client, ignore it, and ask the server for xml
         #
         $_CLIENT_.gets
-        client_string = "/FE:STORMFRONT /VERSION:1.0.1.26 /P:#{RUBY_PLATFORM} /XML"
-        $_CLIENTBUFFER_.push(client_string.dup)
-        Game._puts(client_string)
-        #
-        # tell the server we're ready
-        #
-        2.times {
-          sleep 0.3
-          $_CLIENTBUFFER_.push("#{$cmd_prefix}\r\n")
-          Game._puts($cmd_prefix)
-        }
-        #
-        # set up some stuff
-        #
-        for client_string in ["#{$cmd_prefix}_injury 2", "#{$cmd_prefix}_flag Display Inventory Boxes 1", "#{$cmd_prefix}_flag Display Dialog Boxes 0"]
-          $_CLIENTBUFFER_.push(client_string)
-          Game._puts(client_string)
-        end
+        Frontend.send_handshake(Frontend::CLIENT_STRING)
         #
         # client wants to send "GOOD", xml server won't recognize it
         # Avalon requires 2 gets to clear / Wizard only 1
-        2.times { $_CLIENT_.gets } if $frontend =~ /avalon/i
-        $_CLIENT_.gets if $frontend =~ /wizard/i
-      elsif $frontend =~ /^(?:frostbite)$/
+        2.times { $_CLIENT_.gets } if Frontend.client.eql?('avalon')
+        $_CLIENT_.gets if Frontend.client.eql?('wizard')
+      elsif Frontend.client.eql?('frostbite')
         #
         # send the login key
         #
@@ -574,30 +505,13 @@ reconnect_if_wanted = proc {
         # take the version string from the client, ignore it, and ask the server for xml
         #
         $_CLIENT_.gets
-        client_string = "/FE:STORMFRONT /VERSION:1.0.1.26 /P:#{RUBY_PLATFORM} /XML"
-        $_CLIENTBUFFER_.push(client_string.dup)
-        Game._puts(client_string)
-        #
-        # tell the server we're ready
-        #
-        2.times {
-          sleep 0.3
-          $_CLIENTBUFFER_.push("#{$cmd_prefix}\r\n")
-          Game._puts($cmd_prefix)
-        }
-        #
-        # set up some stuff
-        #
-        for client_string in ["#{$cmd_prefix}_injury 2", "#{$cmd_prefix}_flag Display Inventory Boxes 1", "#{$cmd_prefix}_flag Display Dialog Boxes 0"]
-          $_CLIENTBUFFER_.push(client_string)
-          Game._puts(client_string)
-        end
+        Frontend.send_handshake(Frontend::CLIENT_STRING)
       else
         if launcher_cmd =~ /mudlet/
           Game._puts(game_key)
           game_key = nil
 
-          client_string = "/FE:WIZARD /VERSION:1.0.1.22 /P:#{RUBY_PLATFORM} /XML"
+          client_string = Frontend::CLIENT_STRING
           $_CLIENTBUFFER_.push(client_string.dup)
           Game._puts(client_string)
 
@@ -662,9 +576,9 @@ reconnect_if_wanted = proc {
 
       begin
         while (client_string = $_CLIENT_.gets)
-          if $frontend =~ /^(?:wizard|avalon)$/
+          if Frontend.supports_gsl?
             client_string = "#{$cmd_prefix}#{client_string}"
-          elsif $frontend =~ /^(?:frostbite)$/
+          elsif Frontend.client.eql?('frostbite')
             client_string = fb_to_sf(client_string)
           end
           # Lich.log(client_string)
@@ -690,11 +604,11 @@ reconnect_if_wanted = proc {
     }
   end
 
-  unless @detachable_client_port.nil?
+  unless @argv_options[:detachable_client_port].nil?
     detachable_client_thread = Thread.new {
       loop {
         begin
-          server = TCPServer.new(@detachable_client_host, @detachable_client_port)
+          server = TCPServer.new(@argv_options[:detachable_client_host], @argv_options[:detachable_client_port])
           char_name = ARGV[ARGV.index('--login') + 1].capitalize
           Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
 
@@ -714,7 +628,7 @@ reconnect_if_wanted = proc {
         if $_DETACHABLE_CLIENT_
           begin
             unless ARGV.include?('--genie')
-              $frontend = 'profanity'
+              Frontend.client = 'profanity'
               Thread.new {
                 100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
                 init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
@@ -753,6 +667,11 @@ reconnect_if_wanted = proc {
               }
             end
             while (client_string = $_DETACHABLE_CLIENT_.gets)
+              # Profanity handshake:  SET_FRONTEND_PID <pid>
+              if client_string =~ /^SET_FRONTEND_PID\s+(\d+)\s*$/
+                Frontend.set_from_client($1.to_i) if defined?(Frontend)
+                next # swallow the control line; don't pass it to do_client
+              end
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
               begin
                 $_IDLETIMESTAMP_ = Time.now
@@ -783,7 +702,7 @@ reconnect_if_wanted = proc {
 
   wait_while { $offline_mode }
 
-  if $frontend == 'wizard'
+  if Frontend.client.eql?('wizard')
     $link_highlight_start = "\207".force_encoding(Encoding::ASCII_8BIT)
     $link_highlight_end = "\240".force_encoding(Encoding::ASCII_8BIT)
     $speech_highlight_start = "\212".force_encoding(Encoding::ASCII_8BIT)

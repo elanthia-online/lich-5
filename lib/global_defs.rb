@@ -640,7 +640,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
         sleep 0.3
       end
       put_dir.call
-    elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down/
+    elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down|^You must be standing/
       fput 'stand'
       waitrt?
       put_dir.call
@@ -1701,9 +1701,9 @@ def respond(first = "", *messages)
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
     # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
-    if $frontend == 'stormfront' || $frontend == 'genie'
+    if Frontend.supports_mono?
       str = "<output class=\"mono\"/>\r\n#{str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')}<output class=\"\"/>\r\n"
-    elsif $frontend == 'profanity'
+    elsif Frontend.client.eql?('profanity')
       str = str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
     end
     # Double-checked locking to avoid interrupting a stream and crashing the client
@@ -2104,9 +2104,9 @@ def strip_xml(line, type: 'main')
 end
 
 def monsterbold_start
-  if $frontend =~ /^(?:wizard|avalon)$/
+  if Frontend.supports_gsl?
     "\034GSL\r\n"
-  elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/
+  elsif Frontend.supports_xml?
     '<pushBold/>'
   else
     ''
@@ -2114,9 +2114,9 @@ def monsterbold_start
 end
 
 def monsterbold_end
-  if $frontend =~ /^(?:wizard|avalon)$/
+  if Frontend.supports_gsl?
     "\034GSM\r\n"
-  elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/
+  elsif Frontend.supports_xml?
     '<popBold/>'
   else
     ''
@@ -2365,6 +2365,52 @@ def do_client(client_string)
       end
       respond "Changing Lich to display Room Exits of StringProcs to #{new_value}"
       Lich.display_stringprocs = new_value
+    elsif XMLData.game =~ /^DR/ && (expgains_match = cmd.match(/^display expgains?(?: (?<toggle>true|false|on|off))?$/i))
+      if running?('exp-monitor')
+        respond "Error: exp-monitor.lic script is currently running"
+        respond "Stop it first with: #{$clean_lich_char}kill exp-monitor"
+      else
+        new_value = !Lich.display_expgains
+        case expgains_match[:toggle]
+        when 'true', 'on'
+          new_value = true
+        when 'false', 'off'
+          new_value = false
+        end
+        Lich.display_expgains = new_value
+        if new_value
+          respond "Enabling real-time experience gain reporting"
+          DRExpMonitor.start
+        else
+          respond "Disabling real-time experience gain reporting"
+          DRExpMonitor.stop
+        end
+      end
+    elsif XMLData.game =~ /^DR/ && (inlineexp_match = cmd.match(/^display inlineexp(?: (?<toggle>true|false|on|off))?$/i))
+      new_value = !DRExpMonitor.inline_display?
+      case inlineexp_match[:toggle]
+      when 'true', 'on'
+        new_value = true
+      when 'false', 'off'
+        new_value = false
+      end
+      DRExpMonitor.inline_display = new_value
+      if new_value
+        respond "Enabling inline experience display (gained ranks shown in exp window)"
+      else
+        respond "Disabling inline experience display"
+      end
+    elsif XMLData.game =~ /^DR/ && cmd =~ /^display exp-status$/i
+      respond
+      respond "DragonRealms Experience Monitor Status:"
+      respond "  expgains:   #{Lich.display_expgains ? 'ON' : 'OFF'}  (real-time gain messages)"
+      respond "  inlineexp:  #{DRExpMonitor.inline_display? ? 'ON' : 'OFF'}  (cumulative gains in EXP window)"
+      respond "  reporter:   #{DRExpMonitor.active? ? 'RUNNING' : 'STOPPED'}"
+      respond
+      respond "Commands:"
+      respond "  #{$clean_lich_char}display expgains [on|off]    toggle gain messages"
+      respond "  #{$clean_lich_char}display inlineexp [on|off]   toggle inline display"
+      respond
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
       Lich::Util::Update.request("#{update_parameter}")
@@ -2439,6 +2485,11 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"
       respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
       respond "   #{$clean_lich_char}display stringprocs       toggle display of StringProc exits known for room in mapdb if timeto is valid"
+      if XMLData.game =~ /^DR/
+        respond "   #{$clean_lich_char}display expgains          toggle real-time experience gain reporting (DragonRealms only)"
+        respond "   #{$clean_lich_char}display inlineexp         toggle inline exp display in EXP window (DragonRealms only)"
+        respond "   #{$clean_lich_char}display exp-status        show experience monitor status (DragonRealms only)"
+      end
       respond
       respond 'If you liked this help message, you might also enjoy:'
       respond "   #{$clean_lich_char}lnet help" if defined?(LNet)
@@ -2459,7 +2510,7 @@ def do_client(client_string)
     if $offline_mode
       respond "--- Lich: offline mode: ignoring #{client_string}"
     else
-      client_string = "#{$cmd_prefix}bbs" if ($frontend =~ /^(?:wizard|avalon)$/) and (client_string == "#{$cmd_prefix}\egbbk\n") # launch forum
+      client_string = "#{$cmd_prefix}bbs" if Frontend.supports_gsl? and (client_string == "#{$cmd_prefix}\egbbk\n") # launch forum
       Game._puts client_string
     end
     $_CLIENTBUFFER_.push client_string
@@ -2512,7 +2563,7 @@ end
 
 ## Alias block from Lich (needs further cleanup)
 
-undef :abort
+undef :abort if respond_to?(:abort)
 alias :mana :checkmana
 alias :mana? :checkmana
 alias :max_mana :maxmana

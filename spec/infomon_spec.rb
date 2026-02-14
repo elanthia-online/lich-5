@@ -184,7 +184,7 @@ require "games"
 require "gemstone/infomon"
 require "attributes/stats"
 require "attributes/resources"
-require "gemstone/infomon/currency"
+require "gemstone/currency"
 require "gemstone/infomon/status"
 require "gemstone/experience"
 require "util/util"
@@ -272,6 +272,53 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
 
       expect(Lich::Gemstone::Stats.aur).to eq([100, -35])
       expect(Lich::Gemstone::Stats.enhanced_log).to eq([118, 34])
+    end
+
+    it "handles info full with base stats" do
+      test_stats = <<~Stuffed
+        Name: Nisugi Race: Half-Elf  Profession: Ranger (shown as: Hero)
+        Gender: Male    Age: 35    Expr: 43,904,921    Level:  100
+                          Normal (Bonus)  ...  Ascended (Bonus)  ...  Enhanced (Bonus)
+            Strength (STR):   100 (25)    ...  115 (32)          ...  155 (52)
+        Constitution (CON):    97 (23)    ...   97 (23)          ...  134 (42)
+           Dexterity (DEX):   100 (30)    ...  116 (38)          ...  156 (58)
+             Agility (AGI):    98 (34)    ...  102 (36)          ...  142 (56)
+          Discipline (DIS):    98 (19)    ...   98 (19)          ...  138 (39)
+                Aura (AUR):    98 (24)    ...   98 (24)          ...  104 (27)
+               Logic (LOG):    95 (22)    ...   95 (22)          ...  115 (32)
+           Intuition (INT):    98 (24)    ...   98 (24)          ...  133 (41)
+              Wisdom (WIS):   100 (25)    ...  114 (32)          ...  154 (52)
+           Influence (INF):    90 (25)    ...   90 (25)          ...   90 (25)
+        Mana:  431   Silver: 0
+      Stuffed
+      test_stats.split("\n").each { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
+
+      # Base stats (from 'info full')
+      expect(Lich::Gemstone::Infomon.get("stat.Strength.base")).to eq(100)
+      expect(Lich::Gemstone::Infomon.get("stat.Strength.base_bonus")).to eq(25)
+      expect(Lich::Gemstone::Infomon.get("stat.Aura.base")).to eq(98)
+      expect(Lich::Gemstone::Infomon.get("stat.Aura.base_bonus")).to eq(24)
+
+      # Ascended stats (value/bonus)
+      expect(Lich::Gemstone::Infomon.get("stat.Strength")).to eq(115)
+      expect(Lich::Gemstone::Infomon.get("stat.Strength_bonus")).to eq(32)
+
+      # Enhanced stats
+      expect(Lich::Gemstone::Infomon.get("stat.Strength.enhanced")).to eq(155)
+      expect(Lich::Gemstone::Infomon.get("stat.Strength.enhanced_bonus")).to eq(52)
+
+      # Stats module accessors
+      expect(Lich::Gemstone::Stats.strength.base.value).to eq(100)
+      expect(Lich::Gemstone::Stats.strength.base.bonus).to eq(25)
+      expect(Lich::Gemstone::Stats.strength.value).to eq(115)
+      expect(Lich::Gemstone::Stats.strength.bonus).to eq(32)
+      expect(Lich::Gemstone::Stats.strength.enhanced.value).to eq(155)
+      expect(Lich::Gemstone::Stats.strength.enhanced.bonus).to eq(52)
+
+      # Shorthand accessors
+      expect(Lich::Gemstone::Stats.base_str).to eq([100, 25])
+      expect(Lich::Gemstone::Stats.str).to eq([115, 32])
+      expect(Lich::Gemstone::Stats.enhanced_str).to eq([155, 52])
     end
 
     it "handles levelup" do
@@ -396,9 +443,9 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get("currency.silver")).to eq(5585)
       expect(Lich::Gemstone::Infomon.get("currency.silver_container")).to eq(6112)
       expect(Lich::Gemstone::Infomon.get("currency.gigas_artifact_fragments")).to eq(16)
-      expect(Lich::Currency.silver).to eq(5585)
-      expect(Lich::Currency.silver_container).to eq(6112)
-      expect(Lich::Currency.gigas_artifact_fragments).to eq(16)
+      expect(Lich::Gemstone::Currency.silver).to eq(5585)
+      expect(Lich::Gemstone::Currency.silver_container).to eq(6112)
+      expect(Lich::Gemstone::Currency.gigas_artifact_fragments).to eq(16)
     end
 
     it "handles ticket balance info" do
@@ -418,12 +465,12 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get("currency.ethereal_scrip")).to eq(295702)
       expect(Lich::Gemstone::Infomon.get("currency.soul_shards")).to eq(53058)
       expect(Lich::Gemstone::Infomon.get("currency.raikhen")).to eq(38847)
-      expect(Lich::Currency.tickets).to eq(1417)
-      expect(Lich::Currency.blackscrip).to eq(95)
-      expect(Lich::Currency.bloodscrip).to eq(78634)
-      expect(Lich::Currency.ethereal_scrip).to eq(295702)
-      expect(Lich::Currency.soul_shards).to eq(53058)
-      expect(Lich::Currency.raikhen).to eq(38847)
+      expect(Lich::Gemstone::Currency.tickets).to eq(1417)
+      expect(Lich::Gemstone::Currency.blackscrip).to eq(95)
+      expect(Lich::Gemstone::Currency.bloodscrip).to eq(78634)
+      expect(Lich::Gemstone::Currency.ethereal_scrip).to eq(295702)
+      expect(Lich::Gemstone::Currency.soul_shards).to eq(53058)
+      expect(Lich::Gemstone::Currency.raikhen).to eq(38847)
     end
 
     it "handles beast status info" do
@@ -442,7 +489,7 @@ describe Lich::Gemstone::Infomon::Parser, ".parse" do
       output.split("\n").map { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
 
       expect(Lich::Gemstone::Infomon.get("currency.redsteel_marks")).to eq(3441)
-      expect(Lich::Currency.redsteel_marks).to eq(3441)
+      expect(Lich::Gemstone::Currency.redsteel_marks).to eq(3441)
     end
   end
 

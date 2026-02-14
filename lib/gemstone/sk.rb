@@ -21,9 +21,10 @@ module Lich
       end
 
       def self.sk_known=(val)
-        return @sk_known if @sk_known == val
-        DB_Store.save("#{XMLData.game}:#{XMLData.name}", "sk_known", val)
-        @sk_known = val
+        unless @sk_known == val
+          DB_Store.save("#{XMLData.game}:#{XMLData.name}", "sk_known", val)
+          @sk_known = val
+        end
       end
 
       def self.known?(spell)

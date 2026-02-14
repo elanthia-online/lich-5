@@ -41,19 +41,32 @@ module Lich
         DRC.bput("break my #{item}", 'Focusing your will', 'disrupting its matrix', "You can't break", "Break what")
       end
 
-      def shape_summoned_weapon(skill, ingot = nil)
+      def shape_summoned_weapon(skill, ingot = nil, settings = nil)
+        summoned_weapon = identify_summoned_weapon(settings)
         if DRStats.moon_mage?
           skill_to_shape = { 'Staves' => 'blunt', 'Twohanded Edged' => 'huge', 'Large Edged' => 'heavy', 'Small Edged' => 'normal' }
           shape = skill_to_shape[skill]
           if DRCMM.hold_moon_weapon?
-            DRC.bput("shape #{identify_summoned_weapon} to #{shape}", 'you adjust the magic that defines its shape', 'already has', 'You fumble around')
+            DRC.bput("shape #{summoned_weapon} to #{shape}", 'you adjust the magic that defines its shape', 'already has', 'You fumble around')
           end
         elsif DRStats.warrior_mage?
+          shape_failures = ['You lack the elemental charge', 'You reach out', 'You fumble around', "You don't know how to manipulate your weapon in that way"]
           get_ingot(ingot, false)
-          case DRC.bput("shape my #{identify_summoned_weapon} to #{skill}", 'You lack the elemental charge', 'You reach out', 'You fumble around', "You don't know how to manipulate your weapon in that way")
+          case DRC.bput("shape my #{summoned_weapon} to #{skill}", shape_failures + ['What type of weapon were you trying'])
           when 'You lack the elemental charge'
             summon_admittance
-            shape_summoned_weapon(skill, nil)
+            shape_summoned_weapon(skill, nil, settings)
+          when 'What type of weapon were you trying'
+            # currently custom adjectives from https://elanthipedia.play.net/Books_of_Binding tomes
+            # aren't recognized for shaping summoned elemental weapons, and the error message itself is misleading
+            # thankfully breaking, turning, pulling, pushing work fine with custom adj
+            unless summoned_weapon.nil?
+              case DRC.bput("shape my #{summoned_weapon.sub(settings&.summoned_weapons_adjective || '', '')} to #{skill}", shape_failures)
+              when 'You lack the elemental charge'
+                summon_admittance
+                shape_summoned_weapon(skill, nil, settings)
+              end
+            end
           end
           stow_ingot(ingot)
         else
@@ -65,12 +78,13 @@ module Lich
 
       # Returns what kind of summoned weapon you're holding.
       # Will be the <adj> <noun> like 'red-hot moonblade' or 'electric sword.
-      def identify_summoned_weapon
+      def identify_summoned_weapon(settings = nil)
         if DRStats.moon_mage?
           return DRC.right_hand if DRCMM.is_moon_weapon?(DRC.right_hand)
           return DRC.left_hand  if DRCMM.is_moon_weapon?(DRC.left_hand)
         elsif DRStats.warrior_mage?
-          weapon_regex = /^You tap (?:a|an|some)(?:[\w\s\-]+)((stone|fiery|icy|electric) [\w\s\-]+) that you are holding.$/
+          custom_adjective = settings&.summoned_weapons_adjective ? (settings.summoned_weapons_adjective + '|') : ''
+          weapon_regex = /^You tap (?:a|an|some)(?:[\w\s\-]+)((#{custom_adjective}stone|fiery|icy|electric) [\w\s\-]+) that you are holding.$/
           # For a two-worded weapon like 'short sword' the only way to know
           # which element it was summoned with is by tapping it. That's the only
           # way we can infer if it's a summoned sword or a regular one.

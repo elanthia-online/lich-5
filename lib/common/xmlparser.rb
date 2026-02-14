@@ -82,7 +82,7 @@ module Lich
         @nerve_tracker_num = 0
         @nerve_tracker_active = 'no'
         @server_time = Time.now.to_i
-        @server_time_offset = 0
+        @server_time_offset = 0.0
         @roundtime_end = 0
         @cast_roundtime_end = 0
         @last_pulse = Time.now.to_i
@@ -325,7 +325,9 @@ module Lich
           if name == 'pushStream'
             @in_stream = true
             @current_stream = attributes['id'].to_s
-            GameObj.clear_inv if attributes['id'].to_s == 'inv'
+            if XMLData.game =~ /^GS/
+              GameObj.clear_inv if attributes['id'].to_s == 'inv'
+            end
           end
           if name == 'popStream'
             if attributes['id'] == 'room'
@@ -379,7 +381,7 @@ module Lich
 
           if name == 'prompt'
             @server_time = attributes['time'].to_i
-            @server_time_offset = (Time.now.to_i - @server_time)
+            @server_time_offset = (Time.now.to_f - @server_time)
             $_CLIENT_.puts "\034GSq#{sprintf('%010d', @server_time)}\r\n" if @send_fake_tags
 
             if @dr_active_spell_tracking
@@ -598,7 +600,7 @@ module Lich
           end
           if (name == 'playerID')
             @player_id = attributes['id']
-            unless $frontend =~ /^(?:wizard|avalon)$/
+            unless Frontend.supports_gsl?
               if Lich.inventory_boxes(@player_id)
                 DownstreamHook.remove('inventory_boxes_off')
               end
@@ -625,7 +627,7 @@ module Lich
             unless File.exist?("#{DATA_DIR}/#{@game}/#{@name}")
               Dir.mkdir("#{DATA_DIR}/#{@game}/#{@name}")
             end
-            if $frontend =~ /^(?:wizard|avalon)$/
+            if Frontend.supports_gsl?
               Game._puts "#{$cmd_prefix}_flag Display Dialog Boxes 0"
               sleep 0.05
               Game._puts "#{$cmd_prefix}_injury 2"
@@ -746,6 +748,7 @@ module Lich
               if @active_tags.include?('a')
                 if @bold
                   GameObj.new_npc(@obj_exist, @obj_noun, text_string)
+                  Creature.register(text_string, @obj_exist, @obj_noun) if XMLData.current_target_ids.include?(@obj_exist)
                 else
                   GameObj.new_loot(@obj_exist, @obj_noun, text_string)
                 end
@@ -926,10 +929,12 @@ module Lich
             end
             @room_description = @room_description.strip
             @room_exits_string.concat " #{@room_exits.join(', ')}" unless @room_exits.empty?
-            gsl_exits = String.new
-            @room_exits.each { |exit| gsl_exits.concat(DIRMAP[SHORTDIR[exit]].to_s) }
-            $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
-            gsl_exits = nil
+            if @send_fake_tags
+              gsl_exits = String.new
+              @room_exits.each { |exit| gsl_exits.concat(DIRMAP[SHORTDIR[exit]].to_s) }
+              $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
+              gsl_exits = nil
+            end
             @room_count += 1
             $room_count += 1
           end
