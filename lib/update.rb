@@ -441,6 +441,22 @@ module Lich
       end
 
       #
+      # Extract version from a version.rb file
+      #
+      # @param version_file_path [String] path to the version.rb file
+      # @return [String, nil] the extracted version string or nil if not found
+      #
+      def self.extract_version_from_file(version_file_path)
+        return nil unless File.exist?(version_file_path)
+        
+        version_file_content = File.read(version_file_path)
+        if version_file_content =~ /LICH_VERSION\s*=\s*['"]([^'"]+)['"]/
+          return $1
+        end
+        nil
+      end
+
+      #
       # Download and install a specific branch from GitHub
       #
       # @param branch_name [String] the name of the branch to download
@@ -497,15 +513,29 @@ module Lich
             raise StandardError, "Downloaded branch does not appear to be a valid Lich installation"
           end
 
-          # Perform the update
-          perform_update(source_dir, branch_name)
+          # Extract the actual version from the downloaded branch's version.rb file
+          version_file_path = File.join(source_dir, "lib", "version.rb")
+          extracted_version = extract_version_from_file(version_file_path)
+          
+          if extracted_version.nil?
+            respond
+            respond "Warning: Could not extract version from branch's version.rb file."
+            respond "Using existing Lich version identifier: #{LICH_VERSION}"
+            extracted_version = LICH_VERSION
+          else
+            respond
+            respond "Detected version from branch: #{extracted_version}"
+          end
+
+          # Perform the update with the extracted version
+          perform_update(source_dir, extracted_version)
 
           # Clean up
           FileUtils.remove_dir(extract_dir) if File.directory?(extract_dir)
           FileUtils.rm(tarball_path) if File.exist?(tarball_path)
 
           respond
-          respond "Successfully updated to branch: #{branch_name}"
+          respond "Successfully updated to branch: #{branch_name} (version #{extracted_version})"
           respond "You should exit the game, then log back in to use the updated version."
           respond "Enjoy!"
         rescue OpenURI::HTTPError => e
