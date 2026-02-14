@@ -18,6 +18,7 @@ module Lich
         require File.join(LIB_DIR, 'gemstone', 'effects.rb')
         require File.join(LIB_DIR, 'gemstone', 'bounty.rb')
         require File.join(LIB_DIR, 'gemstone', 'claim.rb')
+        require File.join(LIB_DIR, 'gemstone', 'overwatch.rb')
         require File.join(LIB_DIR, 'gemstone', 'infomon.rb')
         require File.join(LIB_DIR, 'attributes', 'resources.rb')
         require File.join(LIB_DIR, 'attributes', 'stats.rb')

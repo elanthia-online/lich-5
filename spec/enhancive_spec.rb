@@ -134,6 +134,7 @@ end
 require "common/sharedbuffer"
 require "common/buffer"
 require "games"
+require "gemstone/overwatch"
 require "gemstone/infomon"
 require "attributes/stats"
 require "attributes/resources"
