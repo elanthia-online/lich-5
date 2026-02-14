@@ -448,7 +448,7 @@ module Lich
       #
       def self.extract_version_from_file(version_file_path)
         return nil unless File.exist?(version_file_path)
-        
+
         version_file_content = File.read(version_file_path)
         if version_file_content =~ /LICH_VERSION\s*=\s*['"]([^'"]+)['"]/
           return $1
@@ -516,7 +516,7 @@ module Lich
           # Extract the actual version from the downloaded branch's version.rb file
           version_file_path = File.join(source_dir, "lib", "version.rb")
           extracted_version = extract_version_from_file(version_file_path)
-          
+
           if extracted_version.nil?
             respond
             respond "Warning: Could not extract version from branch's version.rb file."
