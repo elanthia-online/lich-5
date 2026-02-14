@@ -321,9 +321,9 @@ module Lich
         candidates = prereleases.select do |r|
           maj, min, patch = major_minor_patch_from(r['tag_name'])
           next false unless maj && min
-          # Accept if: major > stable, OR (major == stable AND minor > stable), 
+          # Accept if: major > stable, OR (major == stable AND minor > stable),
           # OR (major == stable AND minor == stable AND patch > stable)
-          (maj > stable_major) || 
+          (maj > stable_major) ||
             (maj == stable_major && min > stable_minor) ||
             (maj == stable_major && min == stable_minor && patch > stable_patch)
         end
@@ -350,7 +350,7 @@ module Lich
         filtered = candidates.select do |n|
           maj, min, patch = major_minor_patch_from(n)
           maj && min && (
-            (maj > stable_major) || 
+            (maj > stable_major) ||
             (maj == stable_major && min > stable_minor) ||
             (maj == stable_major && min == stable_minor && patch > stable_patch)
           )
