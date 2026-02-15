@@ -121,6 +121,7 @@ module Lich
   [Branch update examples]
     #{$clean_lich_char}lich5-update --branch=main               Update to the main stable branch
     #{$clean_lich_char}lich5-update --branch=some_branch_name   Update to a different branch
+    #{$clean_lich_char}lich5-update --branch=owner:branch_name  Update to a fork's branch
 
     *NOTE* If you use '--snapshot' in '#{$clean_lich_char}autostart' you will create a new
                 snapshot folder every time you log a character in.  NOT recommended.
@@ -459,21 +460,33 @@ module Lich
       #
       # Download and install a specific branch from GitHub
       #
-      # @param branch_name [String] the name of the branch to download
+      # @param branch_spec [String] the branch specification - either "branch_name" or "owner:branch_name"
       # @return [void]
       #
-      def self.download_branch_update(branch_name)
-        branch_name = branch_name.strip
-        if branch_name.empty?
+      def self.download_branch_update(branch_spec)
+        branch_spec = branch_spec.strip
+        if branch_spec.empty?
           respond
-          respond "Error: Branch name cannot be empty."
+          respond "Error: Branch specification cannot be empty."
           respond "Usage: #{$clean_lich_char}lich5-update --branch=<branch_name>"
+          respond "   Or: #{$clean_lich_char}lich5-update --branch=<owner>:<branch_name>"
           respond
           return
         end
 
+        # Parse owner:branch or just branch format
+        if branch_spec.include?(':')
+          owner, branch_name = branch_spec.split(':', 2)
+          repo = "#{owner}/lich-5"
+        else
+          owner = nil
+          branch_name = branch_spec
+          repo = GITHUB_REPO
+        end
+
         respond
         respond "Attempting to update to branch: #{branch_name}"
+        respond "Repository: #{repo}" if owner
         respond "This will download from GitHub and extract over your current installation."
         respond
 
@@ -481,8 +494,20 @@ module Lich
         snapshot
 
         # Construct the GitHub tar.gz download URL
-        tarball_url = "https://github.com/#{GITHUB_REPO}/archive/refs/heads/#{branch_name}.tar.gz"
-        filename = "lich5-branch-#{branch_name}"
+        # URL-encode only special characters that would break the URL
+        # Don't encode '/' since it's part of the path structure GitHub expects
+        require 'erb'
+        encoded_branch_name = ERB::Util.url_encode(branch_name)
+        tarball_url = "https://github.com/#{repo}/archive/refs/heads/#{encoded_branch_name}.tar.gz"
+
+        # GitHub creates directory name as: repo-name + '-' + branch-name-with-slashes-replaced
+        # Example: lich-5-fix-update.rb-allow-bugfix-betas-and-branch-updates
+        # Note: The directory name uses the ORIGINAL branch name with only / replaced by -
+        repo.split('/').last # Get 'lich-5' from 'owner/lich-5'
+        sanitized_branch = branch_name.gsub('/', '-')
+
+        # Use a simpler filename for our temporary storage (also sanitize for filesystem)
+        filename = "lich5-branch-#{sanitized_branch}"
 
         begin
           # Download the branch tarball
