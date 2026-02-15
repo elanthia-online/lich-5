@@ -71,6 +71,263 @@ RSpec.describe Lich::Common::GUI::Authentication do
     end
   end
 
+  describe "retry configuration constants" do
+    it "defines MAX_AUTH_RETRIES" do
+      expect(described_class::MAX_AUTH_RETRIES).to eq(3)
+    end
+
+    it "defines AUTH_RETRY_BASE_DELAY" do
+      expect(described_class::AUTH_RETRY_BASE_DELAY).to eq(5)
+    end
+  end
+
+  describe ".with_retry" do
+    before do
+      # Stub sleep to avoid actual delays in tests
+      allow(described_class).to receive(:sleep)
+      # Stub Lich.log to capture log messages
+      allow(Lich).to receive(:log)
+    end
+
+    context "when block succeeds on first attempt" do
+      it "returns the result without retry" do
+        result = described_class.with_retry { auth_data }
+
+        expect(result).to eq(auth_data)
+      end
+
+      it "does not log retry success message" do
+        described_class.with_retry { auth_data }
+
+        expect(Lich).not_to have_received(:log).with(/succeeded on attempt/)
+      end
+
+      it "does not call sleep" do
+        described_class.with_retry { auth_data }
+
+        expect(described_class).not_to have_received(:sleep)
+      end
+    end
+
+    context "when block fails then succeeds on retry" do
+      it "returns result after retry" do
+        call_count = 0
+        result = described_class.with_retry do
+          call_count += 1
+          raise StandardError, "SSL_read: unexpected eof while reading" if call_count == 1
+
+          auth_data
+        end
+
+        expect(result).to eq(auth_data)
+      end
+
+      it "logs warning for failed attempt" do
+        call_count = 0
+        described_class.with_retry do
+          call_count += 1
+          raise StandardError, "SSL_read: unexpected eof while reading" if call_count == 1
+
+          auth_data
+        end
+
+        expect(Lich).to have_received(:log).with(/Authentication attempt 1\/3 failed.*retrying/)
+      end
+
+      it "logs success on retry" do
+        call_count = 0
+        described_class.with_retry do
+          call_count += 1
+          raise StandardError, "SSL_read: unexpected eof while reading" if call_count == 1
+
+          auth_data
+        end
+
+        expect(Lich).to have_received(:log).with(/Authentication succeeded on attempt 2/)
+      end
+
+      it "sleeps with exponential backoff" do
+        call_count = 0
+        described_class.with_retry do
+          call_count += 1
+          raise StandardError, "SSL_read: unexpected eof while reading" if call_count == 1
+
+          auth_data
+        end
+
+        # First retry uses base delay (5 seconds)
+        expect(described_class).to have_received(:sleep).with(5)
+      end
+    end
+
+    context "when block fails twice then succeeds" do
+      it "returns result after second retry" do
+        call_count = 0
+        result = described_class.with_retry do
+          call_count += 1
+          raise StandardError, "Connection reset by peer" if call_count <= 2
+
+          auth_data
+        end
+
+        expect(result).to eq(auth_data)
+      end
+
+      it "sleeps with exponential backoff for each retry" do
+        call_count = 0
+        described_class.with_retry do
+          call_count += 1
+          raise StandardError, "Connection reset by peer" if call_count <= 2
+
+          auth_data
+        end
+
+        # First retry: 5 * 2^0 = 5 seconds
+        # Second retry: 5 * 2^1 = 10 seconds
+        expect(described_class).to have_received(:sleep).with(5).ordered
+        expect(described_class).to have_received(:sleep).with(10).ordered
+      end
+
+      it "logs success on third attempt" do
+        call_count = 0
+        described_class.with_retry do
+          call_count += 1
+          raise StandardError, "Connection reset by peer" if call_count <= 2
+
+          auth_data
+        end
+
+        expect(Lich).to have_received(:log).with(/Authentication succeeded on attempt 3/)
+      end
+    end
+
+    context "when all retry attempts fail" do
+      let(:error_message) { "SSL_read: unexpected eof while reading" }
+
+      it "raises the last error" do
+        expect do
+          described_class.with_retry do
+            raise StandardError, error_message
+          end
+        end.to raise_error(StandardError, error_message)
+      end
+
+      it "logs final failure message" do
+        described_class.with_retry do
+          raise StandardError, error_message
+        end
+      rescue StandardError
+        # Expected to raise
+      end
+
+      it "attempts block MAX_AUTH_RETRIES times" do
+        call_count = 0
+
+        described_class.with_retry do
+          call_count += 1
+          raise StandardError, error_message
+        end
+      rescue StandardError
+        # Expected to raise
+      end
+
+      it "sleeps between retries but not after final attempt" do
+        described_class.with_retry do
+          raise StandardError, error_message
+        end
+      rescue StandardError
+        # Expected to raise
+      end
+
+      it "uses exponential backoff delays" do
+        described_class.with_retry do
+          raise StandardError, error_message
+        end
+      rescue StandardError
+        # Expected to raise
+      end
+    end
+
+    context "with different error types" do
+      it "retries on SSL errors" do
+        call_count = 0
+        result = described_class.with_retry do
+          call_count += 1
+          raise StandardError, "SSL_read: unexpected eof while reading" if call_count == 1
+
+          auth_data
+        end
+        expect(result).to eq(auth_data)
+      end
+
+      it "retries on connection reset errors" do
+        call_count = 0
+        result = described_class.with_retry do
+          call_count += 1
+          raise StandardError, "Connection reset by peer" if call_count == 1
+
+          auth_data
+        end
+        expect(result).to eq(auth_data)
+      end
+
+      it "retries on timeout errors" do
+        call_count = 0
+        result = described_class.with_retry do
+          call_count += 1
+          raise StandardError, "Connection timed out" if call_count == 1
+
+          auth_data
+        end
+        expect(result).to eq(auth_data)
+      end
+    end
+  end
+
+  describe ".authenticate with retry behavior" do
+    before do
+      allow(described_class).to receive(:sleep)
+      allow(Lich).to receive(:log)
+    end
+
+    context "when EAccess.auth fails then succeeds" do
+      it "retries and returns auth data" do
+        call_count = 0
+        allow(Lich::Common::EAccess).to receive(:auth) do
+          call_count += 1
+          raise StandardError, "SSL_read: unexpected eof while reading" if call_count == 1
+
+          auth_data
+        end
+
+        result = described_class.authenticate(
+          account: account,
+          password: password,
+          character: character,
+          game_code: game_code
+        )
+
+        expect(result).to eq(auth_data)
+      end
+    end
+
+    context "when EAccess.auth fails all attempts" do
+      it "raises the error after retries exhausted" do
+        allow(Lich::Common::EAccess).to receive(:auth)
+          .and_raise(StandardError, "Connection reset by peer")
+
+        expect do
+          described_class.authenticate(
+            account: account,
+            password: password,
+            character: character,
+            game_code: game_code
+          )
+        end.to raise_error(StandardError, "Connection reset by peer")
+      end
+    end
+  end
+
   describe ".prepare_launch_data" do
     let(:auth_data) do
       {

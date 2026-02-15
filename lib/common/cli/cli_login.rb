@@ -15,13 +15,6 @@ module Lich
       # Reuses GUI infrastructure (YamlState, Authentication, LoginHelpers)
       # to ensure consistent password decryption and authentication logic.
       module CLILogin
-        # Retry configuration for transient SSL/network errors
-        # These errors are often temporary and resolve on retry:
-        # - SSL_read: unexpected eof while reading (server closed connection)
-        # - Connection reset by peer
-        # - Connection timed out
-        MAX_AUTH_RETRIES = 3
-        AUTH_RETRY_BASE_DELAY = 5 # seconds, doubles each retry: 5s, 10s, 20s
         # Executes CLI login flow for a specified character
         #
         # @param character_name [String] Character name to login with
@@ -116,48 +109,21 @@ module Lich
             return nil
           end
 
-          # Authenticate with game server (with retry for transient errors)
-          authenticate_with_retry(char_entry, plaintext_password)
-        end
+          # Authenticate with game server
+          # Authentication.authenticate handles retry with exponential backoff internally
+          begin
+            launch_data_hash = Lich::Common::GUI::Authentication.authenticate(
+              account: char_entry[:username],
+              password: plaintext_password,
+              character: char_entry[:char_name],
+              game_code: char_entry[:game_code]
+            )
 
-        # Authenticates with retry logic for transient SSL/network errors
-        #
-        # @param char_entry [Hash] Character entry data
-        # @param plaintext_password [String] Decrypted password
-        # @return [Array<String>, nil] Launch data if successful, nil on failure
-        def self.authenticate_with_retry(char_entry, plaintext_password)
-          last_error = nil
-
-          MAX_AUTH_RETRIES.times do |attempt|
-            begin
-              launch_data_hash = Lich::Common::GUI::Authentication.authenticate(
-                account: char_entry[:username],
-                password: plaintext_password,
-                character: char_entry[:char_name],
-                game_code: char_entry[:game_code]
-              )
-
-              # Success - log if this was a retry
-              if attempt.positive?
-                Lich.log "info: Authentication succeeded on attempt #{attempt + 1}"
-              end
-
-              return format_launch_data(launch_data_hash, char_entry)
-            rescue StandardError => e
-              last_error = e
-
-              if attempt < MAX_AUTH_RETRIES - 1
-                delay = AUTH_RETRY_BASE_DELAY * (2**attempt)
-                Lich.log "warn: Authentication attempt #{attempt + 1}/#{MAX_AUTH_RETRIES} failed: " \
-                         "#{e.message}, retrying in #{delay}s..."
-                sleep(delay)
-              end
-            end
+            format_launch_data(launch_data_hash, char_entry)
+          rescue StandardError => e
+            Lich.log "error: Authentication failed: #{e.message}"
+            nil
           end
-
-          # All retries exhausted
-          Lich.log "error: Authentication failed after #{MAX_AUTH_RETRIES} attempts: #{last_error&.message}"
-          nil
         end
 
         def self.format_launch_data(launch_data_hash, char_entry)

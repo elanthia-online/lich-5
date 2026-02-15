@@ -14,8 +14,6 @@ RSpec.describe Lich::Common::CLI::CLILogin do
     }
   end
 
-  let(:plaintext_password) { 'test_password' }
-
   let(:launch_data_hash) do
     {
       'key'          => 'test_key',
@@ -25,210 +23,6 @@ RSpec.describe Lich::Common::CLI::CLILogin do
       'game'         => 'STORM',
       'fullgamename' => 'StormFront'
     }
-  end
-
-  describe 'retry configuration constants' do
-    it 'defines MAX_AUTH_RETRIES' do
-      expect(described_class::MAX_AUTH_RETRIES).to eq(3)
-    end
-
-    it 'defines AUTH_RETRY_BASE_DELAY' do
-      expect(described_class::AUTH_RETRY_BASE_DELAY).to eq(5)
-    end
-  end
-
-  describe '.authenticate_with_retry' do
-    before do
-      # Stub sleep to avoid actual delays in tests
-      allow(described_class).to receive(:sleep)
-      # Stub Lich.log to capture log messages
-      allow(Lich).to receive(:log)
-    end
-
-    context 'when authentication succeeds on first attempt' do
-      before do
-        allow(Lich::Common::GUI::Authentication).to receive(:authenticate)
-          .and_return(launch_data_hash)
-      end
-
-      it 'returns formatted launch data' do
-        result = described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        expect(result).to be_an(Array)
-        expect(result).to include('KEY=test_key')
-        expect(result).to include('SERVER=game.example.com')
-      end
-
-      it 'does not log retry success message' do
-        described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        expect(Lich).not_to have_received(:log).with(/succeeded on attempt/)
-      end
-
-      it 'does not call sleep' do
-        described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        expect(described_class).not_to have_received(:sleep)
-      end
-    end
-
-    context 'when authentication fails then succeeds on retry' do
-      before do
-        call_count = 0
-        allow(Lich::Common::GUI::Authentication).to receive(:authenticate) do
-          call_count += 1
-          if call_count == 1
-            raise StandardError, 'SSL_read: unexpected eof while reading'
-          else
-            launch_data_hash
-          end
-        end
-      end
-
-      it 'returns launch data after retry' do
-        result = described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        expect(result).to be_an(Array)
-        expect(result).to include('KEY=test_key')
-      end
-
-      it 'logs warning for failed attempt' do
-        described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        expect(Lich).to have_received(:log).with(/Authentication attempt 1\/3 failed.*retrying/)
-      end
-
-      it 'logs success on retry' do
-        described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        expect(Lich).to have_received(:log).with(/Authentication succeeded on attempt 2/)
-      end
-
-      it 'sleeps with exponential backoff' do
-        described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        # First retry uses base delay (5 seconds)
-        expect(described_class).to have_received(:sleep).with(5)
-      end
-    end
-
-    context 'when authentication fails on second attempt then succeeds' do
-      before do
-        call_count = 0
-        allow(Lich::Common::GUI::Authentication).to receive(:authenticate) do
-          call_count += 1
-          if call_count <= 2
-            raise StandardError, 'Connection reset by peer'
-          else
-            launch_data_hash
-          end
-        end
-      end
-
-      it 'returns launch data after second retry' do
-        result = described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        expect(result).to be_an(Array)
-        expect(result).to include('KEY=test_key')
-      end
-
-      it 'sleeps with exponential backoff for each retry' do
-        described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        # First retry: 5 * 2^0 = 5 seconds
-        # Second retry: 5 * 2^1 = 10 seconds
-        expect(described_class).to have_received(:sleep).with(5).ordered
-        expect(described_class).to have_received(:sleep).with(10).ordered
-      end
-
-      it 'logs success on third attempt' do
-        described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        expect(Lich).to have_received(:log).with(/Authentication succeeded on attempt 3/)
-      end
-    end
-
-    context 'when all retry attempts fail' do
-      let(:error_message) { 'SSL_read: unexpected eof while reading' }
-
-      before do
-        allow(Lich::Common::GUI::Authentication).to receive(:authenticate)
-          .and_raise(StandardError, error_message)
-      end
-
-      it 'returns nil' do
-        result = described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        expect(result).to be_nil
-      end
-
-      it 'logs final failure message' do
-        described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        expect(Lich).to have_received(:log).with(/Authentication failed after 3 attempts.*#{error_message}/)
-      end
-
-      it 'attempts authentication MAX_AUTH_RETRIES times' do
-        described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        expect(Lich::Common::GUI::Authentication).to have_received(:authenticate).exactly(3).times
-      end
-
-      it 'sleeps between retries but not after final attempt' do
-        described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        # Should sleep twice (after attempts 1 and 2, not after attempt 3)
-        expect(described_class).to have_received(:sleep).exactly(2).times
-      end
-
-      it 'uses exponential backoff delays' do
-        described_class.authenticate_with_retry(char_entry, plaintext_password)
-
-        expect(described_class).to have_received(:sleep).with(5).ordered   # 5 * 2^0
-        expect(described_class).to have_received(:sleep).with(10).ordered  # 5 * 2^1
-      end
-    end
-
-    context 'with different error types' do
-      it 'retries on SSL errors' do
-        call_count = 0
-        allow(Lich::Common::GUI::Authentication).to receive(:authenticate) do
-          call_count += 1
-          raise StandardError, 'SSL_read: unexpected eof while reading' if call_count == 1
-
-          launch_data_hash
-        end
-
-        result = described_class.authenticate_with_retry(char_entry, plaintext_password)
-        expect(result).to be_an(Array)
-      end
-
-      it 'retries on connection reset errors' do
-        call_count = 0
-        allow(Lich::Common::GUI::Authentication).to receive(:authenticate) do
-          call_count += 1
-          raise StandardError, 'Connection reset by peer' if call_count == 1
-
-          launch_data_hash
-        end
-
-        result = described_class.authenticate_with_retry(char_entry, plaintext_password)
-        expect(result).to be_an(Array)
-      end
-
-      it 'retries on timeout errors' do
-        call_count = 0
-        allow(Lich::Common::GUI::Authentication).to receive(:authenticate) do
-          call_count += 1
-          raise StandardError, 'Connection timed out' if call_count == 1
-
-          launch_data_hash
-        end
-
-        result = described_class.authenticate_with_retry(char_entry, plaintext_password)
-        expect(result).to be_an(Array)
-      end
-    end
   end
 
   describe '.format_launch_data' do
@@ -277,6 +71,116 @@ RSpec.describe Lich::Common::CLI::CLILogin do
 
         expect(result).to include('CUSTOMLAUNCH=/path/to/frontend')
         expect(result).to include('CUSTOMLAUNCHDIR=/path/to')
+      end
+    end
+
+    context 'with custom launch without directory' do
+      let(:custom_entry) do
+        char_entry.merge(
+          custom_launch: '/path/to/frontend',
+          custom_launch_dir: nil
+        )
+      end
+
+      it 'adds only CUSTOMLAUNCH' do
+        result = described_class.format_launch_data(launch_data_hash, custom_entry)
+
+        expect(result).to include('CUSTOMLAUNCH=/path/to/frontend')
+        expect(result).not_to include('CUSTOMLAUNCHDIR=')
+      end
+    end
+  end
+
+  describe '.decrypt_and_authenticate' do
+    let(:entry_data) { { encryption_mode: 'plaintext' } }
+    let(:plaintext_password) { 'test_password' }
+
+    before do
+      allow(Lich).to receive(:log)
+      allow(Lich::Common::GUI::YamlState).to receive(:decrypt_password)
+        .and_return(plaintext_password)
+    end
+
+    context 'when authentication succeeds' do
+      before do
+        allow(Lich::Common::GUI::Authentication).to receive(:authenticate)
+          .and_return(launch_data_hash)
+      end
+
+      it 'returns formatted launch data' do
+        result = described_class.decrypt_and_authenticate(char_entry, entry_data)
+
+        expect(result).to be_an(Array)
+        expect(result).to include('KEY=test_key')
+        expect(result).to include('SERVER=game.example.com')
+      end
+
+      it 'calls Authentication.authenticate with correct parameters' do
+        expect(Lich::Common::GUI::Authentication).to receive(:authenticate).with(
+          account: 'test_account',
+          password: plaintext_password,
+          character: 'TestChar',
+          game_code: 'DR'
+        )
+
+        described_class.decrypt_and_authenticate(char_entry, entry_data)
+      end
+    end
+
+    context 'when authentication fails' do
+      before do
+        allow(Lich::Common::GUI::Authentication).to receive(:authenticate)
+          .and_raise(StandardError, 'Connection reset by peer')
+      end
+
+      it 'returns nil' do
+        result = described_class.decrypt_and_authenticate(char_entry, entry_data)
+
+        expect(result).to be_nil
+      end
+
+      it 'logs the authentication failure' do
+        described_class.decrypt_and_authenticate(char_entry, entry_data)
+
+        expect(Lich).to have_received(:log).with(/Authentication failed: Connection reset by peer/)
+      end
+    end
+
+    context 'when password decryption fails' do
+      before do
+        allow(Lich::Common::GUI::YamlState).to receive(:decrypt_password)
+          .and_raise(StandardError, 'Decryption error')
+      end
+
+      it 'returns nil' do
+        result = described_class.decrypt_and_authenticate(char_entry, entry_data)
+
+        expect(result).to be_nil
+      end
+
+      it 'logs the decryption failure' do
+        described_class.decrypt_and_authenticate(char_entry, entry_data)
+
+        expect(Lich).to have_received(:log).with(/Failed to decrypt password: Decryption error/)
+      end
+    end
+
+    context 'when decrypted password is nil' do
+      before do
+        allow(Lich::Common::GUI::YamlState).to receive(:decrypt_password)
+          .and_return(nil)
+      end
+
+      it 'returns nil' do
+        result = described_class.decrypt_and_authenticate(char_entry, entry_data)
+
+        expect(result).to be_nil
+      end
+
+      it 'logs the missing password error' do
+        described_class.decrypt_and_authenticate(char_entry, entry_data)
+
+        expect(Lich).to have_received(:log).with(/No password available for character/)
       end
     end
   end
