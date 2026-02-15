@@ -110,7 +110,6 @@ module Lich
           end
 
           # Authenticate with game server
-          # Authentication.authenticate handles retry with exponential backoff internally
           begin
             launch_data_hash = Lich::Common::GUI::Authentication.authenticate(
               account: char_entry[:username],
@@ -119,10 +118,11 @@ module Lich
               game_code: char_entry[:game_code]
             )
 
+            # Format and return launch data
             format_launch_data(launch_data_hash, char_entry)
           rescue StandardError => e
             Lich.log "error: Authentication failed: #{e.message}"
-            nil
+            return nil
           end
         end
 
