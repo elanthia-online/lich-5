@@ -39,6 +39,8 @@ module Lich
           prep_betatest($1&.dup, $2&.dup)
         when /^(?:--help|-h)\b/
           help
+        when /^--status\b/
+          show_status
         when /^(?:--update|-u)\b/
           download_release_update
         when /^--refresh\b/
@@ -90,6 +92,36 @@ module Lich
       end
 
       #
+      # Display current version and branch status information
+      #
+      # @return [void]
+      #
+      def self.show_status
+        respond
+        respond "Lich5 Version Information:"
+        respond "  Version: #{LICH_VERSION}"
+
+        branch_info = get_branch_info
+        if branch_info
+          respond "  Type: Branch (Development)"
+          respond "  Branch: #{branch_info[:branch_name]}"
+          respond "  Repository: #{branch_info[:repository] || GITHUB_REPO}"
+          if branch_info[:updated_at]
+            updated = Time.at(branch_info[:updated_at])
+            days_ago = ((Time.now - updated) / 86400).to_i
+            respond "  Updated: #{updated.strftime('%Y-%m-%d %H:%M:%S')} (#{days_ago} day#{days_ago == 1 ? '' : 's'} ago)"
+          end
+          respond
+          respond "You are running a development branch, not a release package."
+        else
+          respond "  Type: Release Package"
+          respond
+          respond "To check for updates: #{$clean_lich_char}lich5-update --announce"
+        end
+        respond
+      end
+
+      #
       # Display help information for available commands
       #
       # @return [void]
@@ -100,6 +132,7 @@ module Lich
     --announce               Get summary of changes for next version
     --update                 Update all changes for next version
     --branch=<name>          Update to a specific GitHub branch
+    --status                 Show current version and branch tracking info
     --snapshot               Grab current snapshot of Lich5 ecosystem and put in backup
     --revert                 Roll the Lich5 ecosystem back to the most recent snapshot
 
@@ -110,6 +143,7 @@ module Lich
     #{$clean_lich_char}autostart add --global lich5-update --update      To auto accept all updates at login
 
   [On demand suggestions]
+    #{$clean_lich_char}lich5-update --status                    Show current version and branch info
     #{$clean_lich_char}lich5-update --announce                  Check to see if a new version is available
     #{$clean_lich_char}lich5-update --update                    Update the Lich5 ecosystem to the current release
     #{$clean_lich_char}lich5-update --branch=<name>             Update to a specific GitHub branch (advanced)
@@ -555,13 +589,20 @@ module Lich
           # Perform the update with the extracted version
           perform_update(source_dir, extracted_version)
 
+          # Store branch tracking in version.rb
+          store_branch_tracking(branch_name, repo, extracted_version)
+
           # Clean up
           FileUtils.remove_dir(extract_dir) if File.directory?(extract_dir)
           FileUtils.rm(tarball_path) if File.exist?(tarball_path)
 
           respond
           respond "Successfully updated to branch: #{branch_name} (version #{extracted_version})"
+          respond "Branch tracking: This installation is now tracking branch '#{branch_name}'"
+          respond "                 from repository '#{repo}'" if owner
           respond "You should exit the game, then log back in to use the updated version."
+          respond
+          respond "To check your current branch status, run: #{$clean_lich_char}lich5-update --status"
           respond "Enjoy!"
         rescue OpenURI::HTTPError => e
           respond
@@ -639,6 +680,9 @@ module Lich
           # Clean up after ourselves
           FileUtils.remove_dir(source_dir) # we know these exist because
           FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) # we just processed them
+
+          # Clear branch tracking - we're back on stable
+          clear_branch_tracking
 
           respond
           respond "Lich5 has been updated to Lich5 version #{@update_to}"
@@ -767,6 +811,10 @@ module Lich
               targetversion = line.sub(/LICH_VERSION\s+?=\s+?/, '').sub('"', '')
             end
           end
+
+          # Clear branch tracking - we've reverted
+          clear_branch_tracking
+
           respond
           respond "Lich5 has been reverted to Lich5 version #{targetversion}"
           respond "You should exit the game, then log back in.  This will start the game"
@@ -919,6 +967,75 @@ module Lich
         # Update Lich.db value with last updated version
         Lich.core_updated_with_lich_version = version
       end
+
+      #
+      # Store branch tracking information in version.rb
+      #
+      # @param branch_name [String] the branch name
+      # @param repo [String] the repository (owner/repo-name)
+      # @param version [String] the version from the branch
+      # @return [void]
+      #
+      def self.store_branch_tracking(branch_name, repo, _version)
+        version_file_path = File.join(LIB_DIR, "version.rb")
+        version_content = File.read(version_file_path)
+
+        # Remove any existing branch tracking section
+        version_content.gsub!(/\n# Branch tracking \(added by lich5-update --branch\).*?\n(?:LICH_BRANCH[^\n]*\n)*/m, '')
+
+        # Build branch tracking section
+        branch_tracking = <<~RUBY
+
+          # Branch tracking (added by lich5-update --branch)
+          LICH_BRANCH = '#{branch_name}'
+          LICH_BRANCH_REPO = '#{repo}'
+          LICH_BRANCH_UPDATED_AT = #{Time.now.to_i}
+        RUBY
+
+        # Append to end of file (after stripping trailing whitespace)
+        version_content = version_content.rstrip + branch_tracking
+
+        File.write(version_file_path, version_content)
+      end
+
+      #
+      # Clear branch tracking information from version.rb
+      #
+      # @return [void]
+      #
+      def self.clear_branch_tracking
+        version_file_path = File.join(LIB_DIR, "version.rb")
+        return unless File.exist?(version_file_path)
+
+        version_content = File.read(version_file_path)
+
+        # Remove branch tracking section
+        version_content.gsub!(/\n# Branch tracking \(added by lich5-update --branch\).*?\n(?:LICH_BRANCH[^\n]*\n)*/m, '')
+
+        # Clean up trailing whitespace
+        version_content = version_content.rstrip + "\n"
+
+        File.write(version_file_path, version_content)
+      end
+
+      #
+      # Get branch tracking information (if present)
+      #
+      # @return [Hash, nil] hash with branch info or nil if not on a branch
+      #
+      def self.get_branch_info
+        # Check if constants are defined
+        if defined?(LICH_BRANCH) && LICH_BRANCH && !LICH_BRANCH.empty?
+          {
+            branch_name: LICH_BRANCH,
+            repository: (defined?(LICH_BRANCH_REPO) ? LICH_BRANCH_REPO : nil),
+            updated_at: (defined?(LICH_BRANCH_UPDATED_AT) ? LICH_BRANCH_UPDATED_AT : nil)
+          }
+        else
+          nil
+        end
+      end
+
       # End module definitions
     end
   end
