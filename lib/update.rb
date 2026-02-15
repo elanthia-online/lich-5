@@ -635,7 +635,7 @@ module Lich
       def self.download_release_update
         # This is the workhorse routine that does the file moves from an update
         prep_update if @update_to.nil? || @update_to.empty?
-        if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}")
+        if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}") && !defined?(LICH_BRANCH)
           respond ''
           respond "Lich version #{LICH_VERSION} is good.  Enjoy!"
           respond ''
