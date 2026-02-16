@@ -144,19 +144,21 @@ module Lich
 
       TIE_ITEM_SUCCESS_PATTERNS = [
         /^You .* tie/,
-        /^You attach/
+        /^You attach/,
+        /has already been tied off/
       ].freeze
 
       TIE_ITEM_FAILURE_PATTERNS = [
-        /^You don't seem to be able to move/,
         /^There's no more free ties/,
-        /^You must be holding/,
-        /doesn't seem to fit/,
-        /close the fan/,
+        /^Tie what/,
         /^You are a little too busy/,
+        /^You don't seem to be able to move/,
+        /^You must be holding/,
         /^Your wounds hinder your ability to do that/,
-        /^Tie what/
+        /close the fan/,
+        /doesn't seem to fit/
       ].freeze
+
 
       UNTIE_ITEM_SUCCESS_PATTERNS = [
         /^You remove/,
