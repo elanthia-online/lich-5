@@ -1020,11 +1020,13 @@ module Lich
 
       #
       # Get branch tracking information (if present)
+      # Checks runtime constants first, then falls back to reading version.rb directly
+      # (handles the case where branch was just set in this session before restart)
       #
       # @return [Hash, nil] hash with branch info or nil if not on a branch
       #
       def self.get_branch_info
-        # Check if constants are defined
+        # Check if constants are defined in runtime
         if defined?(LICH_BRANCH) && LICH_BRANCH && !LICH_BRANCH.empty?
           {
             branch_name: LICH_BRANCH,
@@ -1032,8 +1034,38 @@ module Lich
             updated_at: (defined?(LICH_BRANCH_UPDATED_AT) ? LICH_BRANCH_UPDATED_AT : nil)
           }
         else
-          nil
+          # Fall back to reading version.rb directly (handles same-session branch updates)
+          read_branch_info_from_file
         end
+      end
+
+      #
+      # Read branch tracking information directly from version.rb file
+      #
+      # @return [Hash, nil] hash with branch info or nil if not on a branch
+      #
+      def self.read_branch_info_from_file
+        version_file_path = File.join(LIB_DIR, "version.rb")
+        return nil unless File.exist?(version_file_path)
+
+        content = File.read(version_file_path)
+
+        # Look for LICH_BRANCH constant
+        branch_match = content.match(/LICH_BRANCH\s*=\s*['"]([^'"]+)['"]/)
+        return nil unless branch_match
+
+        branch_name = branch_match[1]
+        return nil if branch_name.empty?
+
+        # Extract optional repo and timestamp
+        repo_match = content.match(/LICH_BRANCH_REPO\s*=\s*['"]([^'"]+)['"]/)
+        timestamp_match = content.match(/LICH_BRANCH_UPDATED_AT\s*=\s*(\d+)/)
+
+        {
+          branch_name: branch_name,
+          repository: repo_match ? repo_match[1] : nil,
+          updated_at: timestamp_match ? timestamp_match[1].to_i : nil
+        }
       end
 
       # End module definitions
