@@ -159,7 +159,6 @@ module Lich
         /doesn't seem to fit/
       ].freeze
 
-
       UNTIE_ITEM_SUCCESS_PATTERNS = [
         /^You remove/,
         /You untie/i
@@ -418,6 +417,35 @@ module Lich
         /^What is it you're trying to give/,
         /Lucky for you!  That isn't damaged!/
       ].freeze
+
+      #########################################
+      # GEM POUCH FILL PATTERNS
+      #########################################
+
+      FILL_POUCH_SUCCESS_PATTERNS = [
+        /^You open/,
+        /^You fill your/
+      ].freeze
+
+      FILL_POUCH_NEEDS_TIE_PATTERNS = [
+        /^You'd better tie it up before putting/,
+        /^You'll need to tie it up before/
+      ].freeze
+
+      FILL_POUCH_FULL_PATTERN = /is too full to fit/.freeze
+
+      FILL_POUCH_FAILURE_PATTERNS = [
+        /^Please rephrase that command/,
+        /^What were you referring to/,
+        /^There aren't any gems/
+      ].freeze
+
+      #########################################
+      # INVENTORY BELT PATTERNS
+      #########################################
+
+      INV_BELT_START_PATTERN = /^All of your items worn attached to the belt:/.freeze
+      INV_BELT_END_PATTERN = /^\[Use INVENTORY HELP/.freeze
 
       #########################################
       # TRASH ITEM
@@ -1198,6 +1226,54 @@ module Lich
       #########################################
       # GEM POUCH HANDLING ROUTINES
       #########################################
+
+      # Check if a gem pouch matching the adjective/noun is already on the belt.
+      # Uses 'inv belt' to inspect belt contents.
+      # Returns true if a matching pouch is found, false otherwise.
+      def check_belt_for_pouch?(gem_pouch_adjective, gem_pouch_noun)
+        belt_contents = Lich::Util.issue_command(
+          "inv belt",
+          INV_BELT_START_PATTERN,
+          INV_BELT_END_PATTERN,
+          timeout: 3,
+          silent: true,
+          quiet: true,
+          usexml: false,
+          include_end: false
+        )
+
+        return false if belt_contents.nil? || belt_contents.empty?
+
+        pouch_pattern = /#{gem_pouch_adjective}.*gem.*#{gem_pouch_noun}/i
+        belt_contents.any? { |line| line.match?(pouch_pattern) }
+      end
+
+      # Tie a gem pouch. Returns true if successful or already tied, false otherwise.
+      def tie_gem_pouch?(gem_pouch_adjective, gem_pouch_noun)
+        tie_item?("#{gem_pouch_adjective} #{gem_pouch_noun}")
+      end
+
+      # @deprecated Use {#tie_gem_pouch?} instead for boolean return value.
+      def tie_gem_pouch(gem_pouch_adjective, gem_pouch_noun)
+        unless tie_gem_pouch?(gem_pouch_adjective, gem_pouch_noun)
+          Lich::Messaging.msg("bold", "DRCI: Failed to tie #{gem_pouch_adjective} #{gem_pouch_noun}.")
+        end
+      end
+
+      # Remove the current gem pouch and stow it in the specified container.
+      # Returns true if successful, false otherwise.
+      def remove_and_stow_pouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container = nil)
+        pouch = "#{gem_pouch_adjective} #{gem_pouch_noun}"
+        unless remove_item?(pouch)
+          Lich::Messaging.msg("bold", "DRCI: Unable to remove existing pouch.")
+          return false
+        end
+        put_away_item?(pouch, full_pouch_container) || stow_item?(pouch)
+      end
+
+      # Swap out a full gem pouch for a spare one.
+      # First checks if a pouch is already on the belt before getting from spare container.
+      # Returns true if successful, false otherwise.
       def swap_out_full_gempouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container = nil, spare_gem_pouch_container = nil, should_tie_gem_pouches = false)
         unless DRC.left_hand.nil? || DRC.right_hand.nil?
           Lich::Messaging.msg("bold", "DRCI: No free hand. Not swapping pouches now.")
@@ -1209,75 +1285,87 @@ module Lich
           return false
         end
 
-        unless get_item?("#{gem_pouch_adjective} #{gem_pouch_noun}", spare_gem_pouch_container)
+        pouch = "#{gem_pouch_adjective} #{gem_pouch_noun}"
+
+        # Check if there's already another pouch on the belt before getting from spare container
+        if check_belt_for_pouch?(gem_pouch_adjective, gem_pouch_noun)
+          Lich::Messaging.msg("plain", "DRCI: Found existing #{pouch} on belt, using that.")
+          unless untie_item?(pouch)
+            Lich::Messaging.msg("bold", "DRCI: Could not untie existing pouch on belt.")
+            return false
+          end
+        elsif !get_item?(pouch, spare_gem_pouch_container)
           Lich::Messaging.msg("bold", "DRCI: No spare pouch found in #{spare_gem_pouch_container || 'default container'}.")
           return false
         end
 
-        unless wear_item?("#{gem_pouch_adjective} #{gem_pouch_noun}")
+        unless wear_item?(pouch)
           Lich::Messaging.msg("bold", "DRCI: Could not wear new pouch.")
           return false
         end
 
-        tie_gem_pouch(gem_pouch_adjective, gem_pouch_noun) if should_tie_gem_pouches
-
-        return true
-      end
-
-      def remove_and_stow_pouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container = nil)
-        unless remove_item?("#{gem_pouch_adjective} #{gem_pouch_noun}")
-          Lich::Messaging.msg("bold", "DRCI: Unable to remove existing pouch.")
-          return false
+        if should_tie_gem_pouches && !tie_gem_pouch?(gem_pouch_adjective, gem_pouch_noun)
+          Lich::Messaging.msg("bold", "DRCI: Could not tie new pouch.")
+          # Not a fatal error - pouch is worn, just not tied
         end
-        if put_away_item?("#{gem_pouch_adjective} #{gem_pouch_noun}", full_pouch_container)
-          return true
-        elsif stow_item?("#{gem_pouch_adjective} #{gem_pouch_noun}")
-          return true
-        else
-          return false
-        end
+
+        true
       end
 
-      def tie_gem_pouch(gem_pouch_adjective, gem_pouch_noun)
-        DRC.bput("tie my #{gem_pouch_adjective} #{gem_pouch_noun}", 'you tie', "it's empty?", 'has already been tied off')
-      end
-
+      # Fill a gem pouch from a source container.
+      # Handles full pouches by swapping them out for spare pouches.
+      # Handles untied pouches by tying them if should_tie_gem_pouches is true.
       def fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container = nil, spare_gem_pouch_container = nil, should_tie_gem_pouches = false)
-        Flags.add("pouch-full", /is too full to fit any more/)
+        Flags.add("pouch-full", FILL_POUCH_FULL_PATTERN)
         begin
-          case DRC.bput("fill my #{gem_pouch_adjective} #{gem_pouch_noun} with my #{source_container}",
-                        /^You open/,
-                        /is too full to fit/,
-                        /^You'd better tie it up before putting/,
-                        /You'll need to tie it up before/,
-                        /Please rephrase that command/,
-                        'What were you referring to',
-                        "There aren't any gems",
-                        'You fill your')
-          when /Please rephrase that command/
-            Lich::Messaging.msg("bold", "DRCI: Container #{source_container} not found. Skipping fill.")
+          pouch = "#{gem_pouch_adjective} #{gem_pouch_noun}"
+          result = DRC.bput(
+            "fill my #{pouch} with my #{source_container}",
+            *FILL_POUCH_SUCCESS_PATTERNS,
+            FILL_POUCH_FULL_PATTERN,
+            *FILL_POUCH_NEEDS_TIE_PATTERNS,
+            *FILL_POUCH_FAILURE_PATTERNS
+          )
+
+          case result
+          when *FILL_POUCH_FAILURE_PATTERNS
+            Lich::Messaging.msg("bold", "DRCI: Fill failed - #{result}")
             return
-          when /^You'd better tie it up before putting/, /You'll need to tie it up before/
-            # This is equivalent to a full pouch, unless we should tie pouches, in which case we tie and retry
-            unless should_tie_gem_pouches
+          when *FILL_POUCH_NEEDS_TIE_PATTERNS
+            # Pouch needs to be tied before more gems can be added
+            if should_tie_gem_pouches
+              # Tie the pouch and retry
+              tie_gem_pouch?(gem_pouch_adjective, gem_pouch_noun)
+              return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
+            else
+              # Treat as full - swap out the pouch
               unless swap_out_full_gempouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
                 Lich::Messaging.msg("bold", "DRCI: Could not swap gem pouches.")
                 return
               end
-              fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
+              return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
             end
-            tie_gem_pouch(gem_pouch_adjective, gem_pouch_noun) if should_tie_gem_pouches
-            fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
-          end
-          if Flags["pouch-full"]
+          when FILL_POUCH_FULL_PATTERN
+            # Pouch is full, swap it out
             unless swap_out_full_gempouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
               Lich::Messaging.msg("bold", "DRCI: Could not swap gem pouches.")
               return
             end
-            fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
-            tie_gem_pouch(gem_pouch_adjective, gem_pouch_noun) if should_tie_gem_pouches
-            Flags.reset("pouch-full")
+            return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
           end
+
+          # Check flag for mid-fill full pouch (when pouch fills up during the fill operation)
+          if Flags["pouch-full"]
+            Flags.reset("pouch-full")
+            unless swap_out_full_gempouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
+              Lich::Messaging.msg("bold", "DRCI: Could not swap gem pouches.")
+              return
+            end
+            return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
+          end
+
+          # Optionally tie the pouch after successful fill
+          tie_gem_pouch?(gem_pouch_adjective, gem_pouch_noun) if should_tie_gem_pouches
         ensure
           Flags.delete("pouch-full")
         end
