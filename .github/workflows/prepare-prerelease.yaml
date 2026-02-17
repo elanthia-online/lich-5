@@ -252,33 +252,36 @@ jobs:
           # Use --force-if-includes to ensure atomic push (fails if remote changed)
           git push --force-if-includes origin "${{ steps.guard_validate.outputs.target_safe }}"
 
-      - name: Pin Release-As to next beta.N based on latest stable (start next minor)
+      - name: Smart Release-As based on commit types
         shell: bash
         run: |
           set -euo pipefail
-          # Determine latest stable on main and start prerelease for NEXT MINOR (patch 0)
-          git fetch --tags origin main >/dev/null 2>&1 || true
+          git fetch --tags origin main
+
+          # Get latest stable
           stable="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --merged origin/main --sort=-version:refname | head -n1 || true)"
-          if [[ ! "$stable" =~ ^v([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
-            echo "No stable tag detected on main; skipping pin."
+          if [[ ! "$stable" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "No stable tag detected; skipping pin."
             exit 0
           fi
-          S_MAJ="${BASH_REMATCH[1]}"; S_MIN="${BASH_REMATCH[2]}"
-          TARGET_MIN=$((S_MIN+1))
-          base="v${S_MAJ}.${TARGET_MIN}.0"
 
-          # If a prerelease train already exists for this base, bump N; else start at beta.0
-          last_base_beta="$(git tag -l "${base}-beta.[0-9]*" --sort=-version:refname | head -n1 || true)"
-          if [[ "$last_base_beta" =~ ^v[0-9]+\.[0-9]+\.0-beta\.([0-9]+)$ ]]; then
-            NEXT_N=$((BASH_REMATCH[1]+1))
+          MAJ="${BASH_REMATCH[1]}"
+          MIN="${BASH_REMATCH[2]}"
+          PATCH="${BASH_REMATCH[3]}"
+    
+          # Check if there are any feat: commits since last stable
+          if git log "${stable}..HEAD" --oneline | grep -q '^[a-f0-9]* feat[(:!]'; then
+            # Feature commits present - bump minor
+            NEXT="v${MAJ}.$((MIN+1)).0-beta.0"
           else
-            NEXT_N=0
+            # Only fixes/chores - bump patch
+            NEXT="v${MAJ}.${MIN}.$((PATCH+1))-beta.0"
           fi
-          next="${base}-beta.${NEXT_N}"
-          echo "Pinning prerelease to ${next} (derived from latest stable ${stable})"
+
+          echo "Setting Release-As: ${NEXT}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit --allow-empty -m "chore: pin prerelease ${next}" -m "Release-As: ${next}"
+          git commit --allow-empty -m "chore: pin prerelease ${NEXT}" -m "Release-As: ${NEXT}"
           git push origin HEAD:${{ steps.guard_validate.outputs.target_safe }}
 
       - name: Sync local view with remote target branch

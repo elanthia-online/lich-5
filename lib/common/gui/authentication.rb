@@ -8,7 +8,16 @@ module Lich
       # Handles authentication and launch data preparation for the Lich GUI
       # Provides methods for user authentication and preparing launch data for different frontends
       module Authentication
+        # Retry configuration for transient SSL/network errors
+        # These errors are often temporary and resolve on retry:
+        # - SSL_read: unexpected eof while reading (server closed connection)
+        # - Connection reset by peer
+        # - Connection timed out
+        MAX_AUTH_RETRIES = 3
+        AUTH_RETRY_BASE_DELAY = 5 # seconds, doubles each retry: 5s, 10s, 20s
+
         # Authenticates a user with the game server
+        # Includes automatic retry with exponential backoff for transient errors
         #
         # @param account [String] User account name
         # @param password [String] User password
@@ -16,26 +25,64 @@ module Lich
         # @param game_code [String, nil] Game code (optional)
         # @param legacy [Boolean] Whether to use legacy authentication
         # @return [Hash, Array] Authentication data containing connection information
+        # @raise [StandardError] Re-raises the last error after all retries exhausted
         def self.authenticate(account:, password:, character: nil, game_code: nil, legacy: false)
-          if character && game_code
-            EAccess.auth(
-              account: account,
-              password: password,
-              character: character,
-              game_code: game_code
-            )
-          elsif legacy
-            EAccess.auth(
-              account: account,
-              password: password,
-              legacy: true
-            )
-          else
-            EAccess.auth(
-              account: account,
-              password: password
-            )
+          with_retry do
+            if character && game_code
+              EAccess.auth(
+                account: account,
+                password: password,
+                character: character,
+                game_code: game_code
+              )
+            elsif legacy
+              EAccess.auth(
+                account: account,
+                password: password,
+                legacy: true
+              )
+            else
+              EAccess.auth(
+                account: account,
+                password: password
+              )
+            end
           end
+        end
+
+        # Executes a block with retry logic for transient errors
+        #
+        # @yield The block to execute with retry
+        # @return [Object] The result of the block
+        # @raise [StandardError] Re-raises the last error after all retries exhausted
+        def self.with_retry
+          last_error = nil
+
+          MAX_AUTH_RETRIES.times do |attempt|
+            begin
+              result = yield
+
+              # Success - log if this was a retry
+              if attempt.positive?
+                Lich.log "info: Authentication succeeded on attempt #{attempt + 1}"
+              end
+
+              return result
+            rescue StandardError => e
+              last_error = e
+
+              if attempt < MAX_AUTH_RETRIES - 1
+                delay = AUTH_RETRY_BASE_DELAY * (2**attempt)
+                Lich.log "warn: Authentication attempt #{attempt + 1}/#{MAX_AUTH_RETRIES} failed: " \
+                         "#{e.message}, retrying in #{delay}s..."
+                sleep(delay)
+              end
+            end
+          end
+
+          # All retries exhausted - re-raise the last error
+          Lich.log "error: Authentication failed after #{MAX_AUTH_RETRIES} attempts: #{last_error&.message}"
+          raise last_error
         end
 
         # Prepares launch data from authentication result

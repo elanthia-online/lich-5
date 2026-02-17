@@ -11,18 +11,13 @@ permissions:
 jobs:
   installer:
     runs-on: windows-2022
-    strategy:
-      matrix:
-        ruby: ['4.0.0']
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.2
         with:
           fetch-depth: 0
-      - name: Install Ruby ${{ matrix.ruby }}
+      - name: Install Ruby
         uses: ruby/setup-ruby@708024e6c902387ab41de36e1669e43b5ee7085e # v1.283.0
-        with:
-          ruby-version: ${{ matrix.ruby }}
       - name: Create Core Lich-5 package
         id: install_core_scripts
         run: |

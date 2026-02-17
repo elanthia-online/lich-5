@@ -638,6 +638,8 @@ end
 
 $stderr.sync = true
 Lich.log "info: Lich #{LICH_VERSION}"
+Lich.log "info: Branch - #{LICH_BRANCH}" if defined?(LICH_BRANCH)
+Lich.log "info: Repo - #{LICH_BRANCH_REPO}" if defined?(LICH_BRANCH_REPO)
 Lich.log "info: Ruby #{RUBY_VERSION}"
 Lich.log "info: #{RUBY_PLATFORM}"
 Lich.log @early_gtk_error if @early_gtk_error
