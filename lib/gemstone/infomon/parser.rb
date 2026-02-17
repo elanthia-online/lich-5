@@ -100,6 +100,28 @@ module Lich
           SpellDnMsgs = /^#{Lich::Common::Spell.dnmsgs.join('$|^')}$/o.freeze
           SpellsongRenewed = /^Your songs? renews?/.freeze
 
+          # Enhancive parsing patterns - from INVENTORY ENHANCIVE TOTALS command
+          EnhanciveStart = /^Stats:$/.freeze
+          EnhanciveStat = /^\s+(?<stat>Strength|Constitution|Dexterity|Agility|Discipline|Aura|Logic|Intuition|Wisdom|Influence)\s+\((?<abbr>\w{3})\):\s*(?<value>\d+)\/(?<cap>\d+)$/.freeze
+          EnhanciveSkillsSection = /^Skills:$/.freeze
+          EnhanciveSkillRanks = /^\s+(?<name>[\w\s\-']+?)\s+Ranks:\s*(?<value>\d+)\/(?<cap>\d+)$/.freeze
+          EnhanciveSkillBonus = /^\s+(?<name>[\w\s\-']+?)\s+Bonus:\s*(?<value>\d+)\/(?<cap>\d+)$/.freeze
+          EnhanciveResourcesSection = /^Resources:$/.freeze
+          EnhanciveResource = /^\s+(?<name>[\w\s]+?):\s+(?<value>\d+)\/(?<cap>\d+)$/.freeze
+          EnhanciveMartialSection = /^Martial Knowledge Skills:$/.freeze
+          EnhanciveMartialSkill = /^\s+(?<name>[\w\s']+?):\s+\+(?<value>\d+)\s+ranks?$/.freeze
+          EnhanciveSpellsSection = /^Self Knowledge Spells:$/.freeze
+          EnhanciveSpells = /^\s+(?<spells>[\d,\s]+)$/.freeze
+          EnhanciveStatisticsSection = /^Statistics:$/.freeze
+          EnhanciveStatistic = /^\s+(?<name>Enhancive Items|Enhancive Properties|Total Enhancive Amount):\s*(?<value>\d+)$/.freeze
+          EnhanciveEnd = /^For (?:more|fewer) details, see INVENTORY ENHANCIVE TOTALS(?: DETAILS)?\.$/.freeze
+          EnhanciveNone = /^No enhancive item bonuses found\.$/.freeze
+
+          # Enhancive active state tracking (on/off)
+          EnhanciveOn = /^You are (?:now|already|currently) accepting the benefits of (?:your|any and all) enhancive (?:inventory )?items(?: in your inventory)?\./.freeze
+          EnhanciveOff = /^You (?:are no longer|already are not|are not currently) accepting the benefit(?:s)? of (?:your|any) enhancive (?:inventory )?items(?: in your inventory)?\./.freeze
+          EnhancivePauses = /^You currently have (?<pauses>\d+) enhancive pauses? available\.$/.freeze
+
           All = Regexp.union(CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
                              ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
                              Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
@@ -112,7 +134,11 @@ module Lich
                              ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
                              AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, ResignConfirmCHE,
                              ShadowEssence, ShadowEssenceGain, ShadowEssenceCap, SacrificeMana, SacrificeChannel, SacrificeInfest,
-                             SacrificeFate, SacrificeShift, GemstoneDust)
+                             SacrificeFate, SacrificeShift, GemstoneDust, EnhanciveStart, EnhanciveStat, EnhanciveSkillsSection,
+                             EnhanciveSkillRanks, EnhanciveSkillBonus, EnhanciveResourcesSection, EnhanciveResource,
+                             EnhanciveMartialSection, EnhanciveMartialSkill, EnhanciveSpellsSection, EnhanciveSpells,
+                             EnhanciveStatisticsSection, EnhanciveStatistic, EnhanciveEnd, EnhanciveNone,
+                             EnhanciveOn, EnhanciveOff, EnhancivePauses)
         end
 
         module State
@@ -120,11 +146,24 @@ module Lich
           Goals = :goals
           Profile = :profile
           Ready = :ready
+          # Enhancive parsing states
+          EnhanciveStats = :enhancive_stats
+          EnhanciveSkills = :enhancive_skills
+          EnhanciveResources = :enhancive_resources
+          EnhanciveMartial = :enhancive_martial
+          EnhanciveSpells = :enhancive_spells
+          EnhanciveStatistics = :enhancive_statistics
 
           def self.set(state)
             case state
             when Goals, Profile
               unless @state.eql?(Ready)
+                Lich.log "error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
+                fail "--- Lich: error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
+              end
+            when EnhanciveStats, EnhanciveSkills, EnhanciveResources, EnhanciveMartial, EnhanciveSpells, EnhanciveStatistics
+              # Enhancive states can start from Ready or transition between each other
+              unless @state.eql?(Ready) || enhancive_state?
                 Lich.log "error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
                 fail "--- Lich: error: Infomon::Parser::State is in invalid state(#{@state}) - caller: #{caller[0]}"
               end
@@ -134,6 +173,11 @@ module Lich
 
           def self.get
             @state
+          end
+
+          def self.enhancive_state?
+            [EnhanciveStats, EnhanciveSkills, EnhanciveResources,
+             EnhanciveMartial, EnhanciveSpells, EnhanciveStatistics].include?(@state)
           end
         end
 
@@ -481,14 +525,10 @@ module Lich
                 :noop
               end
             when Pattern::AccountSubscription
-              if Account.subscription
-                match = Regexp.last_match
-                Account.subscription = match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
-                Infomon.set('account.type', match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').upcase)
-                :ok
-              else
-                :noop
-              end
+              match = Regexp.last_match
+              Account.subscription = match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
+              Infomon.set('account.type', match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').upcase)
+              :ok
             when Pattern::ProfileStart
               State.set(State::Profile)
               :ok
@@ -570,6 +610,148 @@ module Lich
               :ok
             when Pattern::SpellsongRenewed
               Spellsong.renewed
+              :ok
+            # === ENHANCIVE PARSING ===
+            # Any section header can start enhancive parsing (output may not include all sections)
+            when Pattern::EnhanciveStart
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveStats)
+              :ok
+            when Pattern::EnhanciveStat
+              if State.get == State::EnhanciveStats
+                match = Regexp.last_match
+                stat_key = Lich::Gemstone::Enhancive::STAT_ABBREV[match[:abbr]]
+                @enhancive_hold.push(["enhancive.stat.#{stat_key}", match[:value].to_i]) if stat_key
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveSkillsSection
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveSkills)
+              :ok
+            when Pattern::EnhanciveSkillRanks
+              if State.get == State::EnhanciveSkills
+                match = Regexp.last_match
+                skill_key = Lich::Gemstone::Enhancive::SKILL_NAME_MAP[match[:name].strip]
+                @enhancive_hold.push(["enhancive.skill.#{skill_key}.ranks", match[:value].to_i]) if skill_key
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveSkillBonus
+              if State.get == State::EnhanciveSkills
+                match = Regexp.last_match
+                skill_key = Lich::Gemstone::Enhancive::SKILL_NAME_MAP[match[:name].strip]
+                @enhancive_hold.push(["enhancive.skill.#{skill_key}.bonus", match[:value].to_i]) if skill_key
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveResourcesSection
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveResources)
+              :ok
+            when Pattern::EnhanciveResource
+              if State.get == State::EnhanciveResources
+                match = Regexp.last_match
+                resource_key = Lich::Gemstone::Enhancive::RESOURCE_NAME_MAP[match[:name].strip]
+                @enhancive_hold.push(["enhancive.resource.#{resource_key}", match[:value].to_i]) if resource_key
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveMartialSection
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveMartial)
+              :ok
+            when Pattern::EnhanciveMartialSkill
+              if State.get == State::EnhanciveMartial
+                match = Regexp.last_match
+                martial_key = Lich::Gemstone::Enhancive.martial_display_to_symbol(match[:name].strip)
+                @enhancive_hold.push(["enhancive.martial.#{martial_key}", match[:value].to_i]) if martial_key
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveSpellsSection
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveSpells)
+              :ok
+            when Pattern::EnhanciveSpells
+              if State.get == State::EnhanciveSpells
+                match = Regexp.last_match
+                spell_nums = match[:spells].split(',').map { |s| s.strip.to_i }
+                @enhancive_hold.push(["enhancive.spells", spell_nums.join(',')])
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveStatisticsSection
+              unless State.enhancive_state?
+                @enhancive_hold = []
+                Infomon.mutex_lock
+                Lich::Gemstone::Enhancive.reset_all
+              end
+              State.set(State::EnhanciveStatistics)
+              :ok
+            when Pattern::EnhanciveStatistic
+              if State.get == State::EnhanciveStatistics
+                match = Regexp.last_match
+                case match[:name]
+                when 'Enhancive Items'
+                  @enhancive_hold.push(['enhancive.stats.item_count', match[:value].to_i])
+                when 'Enhancive Properties'
+                  @enhancive_hold.push(['enhancive.stats.property_count', match[:value].to_i])
+                when 'Total Enhancive Amount'
+                  @enhancive_hold.push(['enhancive.stats.total_amount', match[:value].to_i])
+                end
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveEnd
+              if State.enhancive_state?
+                Infomon.upsert_batch(@enhancive_hold)
+                Infomon.mutex_unlock
+                State.set(State::Ready)
+                :ok
+              else
+                :noop
+              end
+            when Pattern::EnhanciveNone
+              # Player has no enhancives - reset all values to 0
+              Lich::Gemstone::Enhancive.reset_all
+              :ok
+            when Pattern::EnhanciveOn
+              Infomon.set('enhancive.active', true)
+              :ok
+            when Pattern::EnhanciveOff
+              Infomon.set('enhancive.active', false)
+              :ok
+            when Pattern::EnhancivePauses
+              match = Regexp.last_match
+              Infomon.set('enhancive.pauses', match[:pauses].to_i)
               :ok
             else
               :noop

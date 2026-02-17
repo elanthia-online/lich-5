@@ -49,6 +49,21 @@ RSpec.describe GameBase::Game do
     end
   end
 
+  describe '.settings_init_needed?' do
+    before do
+      described_class.class_variable_set(:@@settings_init_needed, false)
+    end
+
+    it 'returns false initially' do
+      expect(described_class.settings_init_needed?).to be false
+    end
+
+    it 'returns true when @@settings_init_needed is set' do
+      described_class.class_variable_set(:@@settings_init_needed, true)
+      expect(described_class.settings_init_needed?).to be true
+    end
+  end
+
   describe 'class variable vs instance variable' do
     it 'uses a class variable (@@autostarted) not instance variable (@autostarted)' do
       # This test verifies the refactor from @ to @@

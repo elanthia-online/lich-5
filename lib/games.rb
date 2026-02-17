@@ -204,6 +204,10 @@ module Lich
           @@autostarted
         end
 
+        def settings_init_needed?
+          @@settings_init_needed
+        end
+
         def initialize_buffers
           @socket = nil
           @mutex = Mutex.new
@@ -213,6 +217,7 @@ module Lich
           @_buffer = Lich::Common::SharedBuffer.new
           @_buffer.max_size = 1000
           @@autostarted = false
+          @@settings_init_needed = false
           @cli_scripts = false
           @room_number_after_ready = false
           @last_id_shown_room_window = 0
@@ -537,8 +542,9 @@ module Lich
             # Handle specific XML errors
             if server_string =~ /<settingsInfo .*?space not found /
               Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
-              server_string.sub!(/\s\bspace not found\b\s/, '').strip!
+              server_string.sub!(/\s\bspace not found\b\s/, " client='1.0.1.28' ")
               Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
+              @@settings_init_needed = true
               return process_xml_data(server_string) # Return to retry with fixed string
             end
 
@@ -553,11 +559,11 @@ module Lich
             process_room_information(alt_string)
 
             # Handle frontend-specific modifications
-            if $frontend =~ /genie/i && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+            if Frontend.client.eql?('genie') && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
               alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
             end
 
-            if $frontend =~ /frostbite/i && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+            if Frontend.client.eql?('frostbite') && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
               alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
             end
 
@@ -568,7 +574,7 @@ module Lich
             end
 
             # Handle frontend-specific conversions
-            if $frontend =~ /^(?:wizard|avalon)$/
+            if Frontend.supports_gsl?
               alt_string = sf_to_wiz(alt_string)
             end
 
@@ -786,7 +792,7 @@ module Lich
 
           unless room_exits.empty?
             alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}"
-            if ['wrayth', 'stormfront'].include?($frontend) && Map.current.id != Game.instance_variable_get(:@last_id_shown_room_window)
+            if %w[wrayth stormfront].include?(Frontend.client) && Map.current.id != Game.instance_variable_get(:@last_id_shown_room_window)
               alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{room_exits.join(', ')}\r\n<popStream/>\r\n"
               Game.instance_variable_set(:@last_id_shown_room_window, Map.current.id)
             end
@@ -938,7 +944,7 @@ module Lich
 
         unless room_number.empty?
           alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
-          if ['wrayth', 'stormfront'].include?($frontend)
+          if %w[wrayth stormfront].include?(Frontend.client)
             alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
             alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
           end

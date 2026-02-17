@@ -884,11 +884,11 @@ module Lich
       def bold(text)
         string = ''
 
-        $fake_stormfront ? string.concat("\034GSL\r\n ") : string.concat("<pushBold\/>")
+        Frontend.supports_gsl? ? string.concat("\034GSL\r\n ") : string.concat("<pushBold\/>")
 
         string.concat(text)
 
-        $fake_stormfront ? string.concat("\034GSM\r\n ") : string.concat("<popBold\/>")
+        Frontend.supports_gsl? ? string.concat("\034GSM\r\n ") : string.concat("<popBold\/>")
 
         string
       end

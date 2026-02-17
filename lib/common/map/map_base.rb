@@ -149,7 +149,7 @@ module Lich
         # Convert map to JSON
         def to_json(*args)
           list.delete_if(&:nil?)
-          list.to_json(args)
+          list.sort_by(&:id).to_json(args)
         end
 
         # Save map as JSON file
@@ -250,6 +250,12 @@ module Lich
           end.join("\n")
         end
 
+        # Override in subclasses to add game-specific fields to JSON output.
+        # Must return a Hash. Nil/empty values are filtered automatically.
+        def json_extra_fields
+          {}
+        end
+
         # Convert room to JSON
         def to_json(*_args)
           mapjson = {
@@ -260,15 +266,17 @@ module Lich
             location: @location,
             climate: @climate,
             terrain: @terrain,
-            wayto: @wayto,
-            timeto: @timeto,
+            wayto: @wayto&.sort_by { |k, _v| k.to_i }&.to_h,
+            timeto: @timeto&.sort_by { |k, _v| k.to_i }&.to_h,
             image: @image,
             image_coords: @image_coords,
-            tags: @tags,
+            tags: @tags&.sort_by(&:downcase),
             check_location: @check_location,
             unique_loot: @unique_loot,
             uid: @uid
-          }.delete_if { |_a, b| b.nil? || (b.is_a?(Array) && b.empty?) }
+          }
+          mapjson.merge!(json_extra_fields)
+          mapjson.delete_if { |_a, b| b.nil? || (b.is_a?(Array) && b.empty?) }
           JSON.pretty_generate(mapjson)
         end
 

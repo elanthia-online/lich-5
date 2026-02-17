@@ -82,7 +82,7 @@ module Lich
         @nerve_tracker_num = 0
         @nerve_tracker_active = 'no'
         @server_time = Time.now.to_i
-        @server_time_offset = 0
+        @server_time_offset = 0.0
         @roundtime_end = 0
         @cast_roundtime_end = 0
         @last_pulse = Time.now.to_i
@@ -381,7 +381,7 @@ module Lich
 
           if name == 'prompt'
             @server_time = attributes['time'].to_i
-            @server_time_offset = (Time.now.to_i - @server_time)
+            @server_time_offset = (Time.now.to_f - @server_time)
             $_CLIENT_.puts "\034GSq#{sprintf('%010d', @server_time)}\r\n" if @send_fake_tags
 
             if @dr_active_spell_tracking
@@ -600,7 +600,7 @@ module Lich
           end
           if (name == 'playerID')
             @player_id = attributes['id']
-            unless $frontend =~ /^(?:wizard|avalon)$/
+            unless Frontend.supports_gsl?
               if Lich.inventory_boxes(@player_id)
                 DownstreamHook.remove('inventory_boxes_off')
               end
@@ -627,7 +627,7 @@ module Lich
             unless File.exist?("#{DATA_DIR}/#{@game}/#{@name}")
               Dir.mkdir("#{DATA_DIR}/#{@game}/#{@name}")
             end
-            if $frontend =~ /^(?:wizard|avalon)$/
+            if Frontend.supports_gsl?
               Game._puts "#{$cmd_prefix}_flag Display Dialog Boxes 0"
               sleep 0.05
               Game._puts "#{$cmd_prefix}_injury 2"

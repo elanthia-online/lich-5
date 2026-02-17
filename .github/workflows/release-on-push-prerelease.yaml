@@ -256,6 +256,7 @@ jobs:
 
           cp lich.rbw Lich5/
           cp Gemfile Lich5/
+          cp LICENSE Lich5/
           cp -r lib Lich5/
 
           tar -czvf lich-5.tar.gz Lich5/
@@ -385,10 +386,9 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.2
 
       # Pin Ruby explicitly on windows-latest
-      - name: Set up Ruby (4.0.0)
+      - name: Set up Ruby
         uses: ruby/setup-ruby@708024e6c902387ab41de36e1669e43b5ee7085e # v1.283.0
         with:
-          ruby-version: '4.0.0'
           bundler-cache: false
 
       # Install Inno Setup
