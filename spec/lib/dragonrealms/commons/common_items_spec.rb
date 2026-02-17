@@ -1334,6 +1334,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
         patterns = described_class::FILL_POUCH_SUCCESS_PATTERNS
         expect(patterns.any? { |p| 'You open your pouch'.match?(p) }).to be true
         expect(patterns.any? { |p| 'You fill your pouch with gems'.match?(p) }).to be true
+        expect(patterns.any? { |p| "There aren't any gems".match?(p) }).to be true
       end
     end
 
@@ -1368,7 +1369,11 @@ RSpec.describe Lich::DragonRealms::DRCI do
         patterns = described_class::FILL_POUCH_FAILURE_PATTERNS
         expect(patterns.any? { |p| 'Please rephrase that command'.match?(p) }).to be true
         expect(patterns.any? { |p| 'What were you referring to'.match?(p) }).to be true
-        expect(patterns.any? { |p| "There aren't any gems".match?(p) }).to be true
+      end
+
+      it 'does not contain empty source pattern (moved to success)' do
+        patterns = described_class::FILL_POUCH_FAILURE_PATTERNS
+        expect(patterns.any? { |p| "There aren't any gems".match?(p) }).to be false
       end
     end
 
@@ -1739,9 +1744,9 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when no gems in container' do
-      it 'logs message and returns early' do
+      it 'completes successfully (empty source is valid)' do
         stub_bput("There aren't any gems")
-        expect(Lich::Messaging).to receive(:msg).with('bold', /Fill failed/)
+        expect(Lich::Messaging).not_to receive(:msg).with('bold', /Fill failed/)
         described_class.fill_gem_pouch_with_container(adj, noun, source)
       end
     end
