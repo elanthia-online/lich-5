@@ -424,7 +424,8 @@ module Lich
 
       FILL_POUCH_SUCCESS_PATTERNS = [
         /^You open/,
-        /^You fill your/
+        /^You fill your/,
+        /^There aren't any gems/
       ].freeze
 
       FILL_POUCH_NEEDS_TIE_PATTERNS = [
@@ -436,8 +437,7 @@ module Lich
 
       FILL_POUCH_FAILURE_PATTERNS = [
         /^Please rephrase that command/,
-        /^What were you referring to/,
-        /^There aren't any gems/
+        /^What were you referring to/
       ].freeze
 
       #########################################

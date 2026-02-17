@@ -840,8 +840,12 @@ module Lich
       end
 
       def unpause_all_list(scripts_to_unpause)
-        Lich::Messaging.msg("plain", "DRC: Unpausing #{scripts_to_unpause}, #{Script.self.name} has finished.")
-        Script.running.find_all { |s| s.paused? && !s.no_pause_all && scripts_to_unpause.include?(s.name) }.each(&:unpause)
+        if scripts_to_unpause.empty?
+          Lich::Messaging.msg("plain", "DRC: #{Script.self.name} has finished.")
+        else
+          Lich::Messaging.msg("plain", "DRC: Unpausing #{scripts_to_unpause}, #{Script.self.name} has finished.")
+          Script.running.find_all { |s| s.paused? && !s.no_pause_all && scripts_to_unpause.include?(s.name) }.each(&:unpause)
+        end
       end
 
       def safe_pause_list
@@ -859,8 +863,12 @@ module Lich
       def safe_unpause_list(scripts_to_unpause)
         return false unless $safe_pause_lock.owned?
 
-        Lich::Messaging.msg("plain", "DRC: Unpausing #{scripts_to_unpause}, #{Script.self.name} has finished.")
-        Script.running.find_all { |s| s.paused? && !s.no_pause_all && scripts_to_unpause.include?(s.name) }.each(&:unpause)
+        if scripts_to_unpause.empty?
+          Lich::Messaging.msg("plain", "DRC: #{Script.self.name} has finished.")
+        else
+          Lich::Messaging.msg("plain", "DRC: Unpausing #{scripts_to_unpause}, #{Script.self.name} has finished.")
+          Script.running.find_all { |s| s.paused? && !s.no_pause_all && scripts_to_unpause.include?(s.name) }.each(&:unpause)
+        end
         $safe_pause_lock.unlock
       end
 
