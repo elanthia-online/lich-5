@@ -145,7 +145,8 @@ module Lich
       TIE_ITEM_SUCCESS_PATTERNS = [
         /^You .*tie/,
         /^You attach/,
-        /has already been tied off/
+        /has already been tied off/,
+        /Tie it off when it's empty\?/
       ].freeze
 
       TIE_ITEM_FAILURE_PATTERNS = [

@@ -1402,6 +1402,11 @@ RSpec.describe Lich::DragonRealms::DRCI do
         patterns = described_class::TIE_ITEM_SUCCESS_PATTERNS
         expect(patterns.any? { |p| 'has already been tied off'.match?(p) }).to be true
       end
+
+      it 'includes empty container rhetorical question' do
+        patterns = described_class::TIE_ITEM_SUCCESS_PATTERNS
+        expect(patterns.any? { |p| "Tie it off when it's empty?  Why?".match?(p) }).to be true
+      end
     end
   end
 
