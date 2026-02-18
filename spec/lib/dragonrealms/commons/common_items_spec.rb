@@ -625,6 +625,20 @@ RSpec.describe Lich::DragonRealms::DRCI do
       end
     end
 
+    context 'when item needs to be emptied first' do
+      it 'returns true for tie-off-when-empty message' do
+        stub_bput("Tie it off when it's empty.")
+        expect(described_class.tie_item?('pouch', 'belt')).to be true
+      end
+    end
+
+    context 'when item is already tied off' do
+      it 'returns true' do
+        stub_bput('The pouch has already been tied off.')
+        expect(described_class.tie_item?('pouch', 'belt')).to be true
+      end
+    end
+
     context 'when tie fails' do
       it 'returns false' do
         stub_bput("There's no more free ties.")
