@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.14.2](https://github.com/elanthia-online/lich-5/compare/v5.14.1...v5.14.2) (2026-02-18)
+
+
+### Bug Fixes
+
+* **all:** add retry with exponential backoff for all login authentication ([#1205](https://github.com/elanthia-online/lich-5/issues/1205)) ([ff365ef](https://github.com/elanthia-online/lich-5/commit/ff365ef783cdd6803ce01e811b6ecf2cb5937859))
+* **all:** update.rb allow for bugfix betas and branch updates ([#1211](https://github.com/elanthia-online/lich-5/issues/1211)) ([2d60245](https://github.com/elanthia-online/lich-5/commit/2d602450d38c19724b09fa9527776a49a642f907))
+* **gs:** infomon.rb bug in _key transformation ([#1216](https://github.com/elanthia-online/lich-5/issues/1216)) ([46bfc81](https://github.com/elanthia-online/lich-5/commit/46bfc811d41bb3d0d80911b9e64b6fb6ca13186b))
+
 ## [5.14.1](https://github.com/elanthia-online/lich-5/compare/v5.14.0...v5.14.1) (2026-02-12)
 
 
