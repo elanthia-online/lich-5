@@ -3,6 +3,34 @@
 require 'spec_helper'
 
 RSpec.describe Lich::Common::GameLoader do
+  describe '.common_before' do
+    before do
+      # Define LIB_DIR if not defined
+      stub_const('LIB_DIR', '/fake/lib') unless defined?(LIB_DIR)
+      # Stub all requires to prevent actual loading
+      allow(described_class).to receive(:require)
+    end
+
+    it 'loads db_store.rb for both games' do
+      expect(described_class).to receive(:require).with(%r{common/db_store\.rb$})
+      described_class.common_before
+    end
+
+    it 'loads shared utilities before db_store' do
+      load_order = []
+      allow(described_class).to receive(:require) do |path|
+        load_order << File.basename(path, '.rb')
+      end
+
+      described_class.common_before
+
+      # db_store should be loaded after other common utilities
+      expect(load_order).to include('db_store')
+      expect(load_order).to include('log')
+      expect(load_order).to include('hmr')
+    end
+  end
+
   describe '.dragon_realms' do
     before do
       # Stub file requires to prevent actual loading

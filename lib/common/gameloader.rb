@@ -9,6 +9,7 @@ module Lich
         require File.join(LIB_DIR, 'util', 'util.rb')
         require File.join(LIB_DIR, 'util', 'textstripper.rb')
         require File.join(LIB_DIR, 'common', 'hmr.rb')
+        require File.join(LIB_DIR, 'common', 'db_store.rb')
       end
 
       def self.gemstone

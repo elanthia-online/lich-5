@@ -8,7 +8,6 @@
 require_relative 'parser'
 require_relative 'processor'
 require_relative 'async_processor'
-require_relative '../../common/db_store'
 
 module Lich
   module Gemstone
