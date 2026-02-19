@@ -128,9 +128,7 @@ module Lich
       end
 
       def self._key(key)
-        key = key.to_s.downcase
-        key.tr!(' ', '_').gsub!('_-_', '_').tr!('-', '_') if /\s|-/.match?(key)
-        return key
+        key.to_s.downcase.tr(' -', '_').gsub(/_+/, '_')
       end
 
       def self._value(val)
