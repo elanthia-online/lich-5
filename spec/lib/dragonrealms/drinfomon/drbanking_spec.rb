@@ -9,22 +9,26 @@ module XMLData
   end
 end unless defined?(XMLData)
 
-# Mock GameSettings module
-module GameSettings
-  @data = {}
+# Mock Lich::Common::GameSettings module
+module Lich
+  module Common
+    module GameSettings
+      @data = {}
 
-  def self.[](key)
-    @data[key]
-  end
+      def self.[](key)
+        @data[key]
+      end
 
-  def self.[]=(key, value)
-    @data[key] = value
-  end
+      def self.[]=(key, value)
+        @data[key] = value
+      end
 
-  def self.clear_test_data!
-    @data = {}
+      def self.clear_test_data!
+        @data = {}
+      end
+    end
   end
-end unless defined?(GameSettings)
+end unless defined?(Lich::Common::GameSettings)
 
 # Mock Lich::Messaging
 module Lich
@@ -54,7 +58,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
   before(:each) do
     # Reset test state
-    GameSettings.clear_test_data!
+    Lich::Common::GameSettings.clear_test_data!
     Lich::Messaging.clear_messages!
 
     # Set up default XMLData values
@@ -328,7 +332,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'returns all characters accounts' do
-      GameSettings['drbanking_accounts'] = {
+      Lich::Common::GameSettings['drbanking_accounts'] = {
         'Mahtra'     => { 'Crossings' => 10_000 },
         'Quilsilgas' => { 'Shard' => 20_000 }
       }
@@ -344,7 +348,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
     it 'returns current characters accounts' do
       XMLData.name = 'Mahtra'
-      GameSettings['drbanking_accounts'] = {
+      Lich::Common::GameSettings['drbanking_accounts'] = {
         'Mahtra'    => { 'Crossings' => 10_000, 'Shard' => 5_000 },
         'OtherChar' => { 'Riverhaven' => 20_000 }
       }
@@ -407,7 +411,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'sums all bank balances across all characters' do
-      GameSettings['drbanking_accounts'] = {
+      Lich::Common::GameSettings['drbanking_accounts'] = {
         'Char1' => { 'Crossings' => 10_000, 'Shard' => 5_000 },
         'Char2' => { 'Riverhaven' => 20_000 }
       }
@@ -541,7 +545,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'displays all characters bank balances' do
-      GameSettings['drbanking_accounts'] = {
+      Lich::Common::GameSettings['drbanking_accounts'] = {
         'Mahtra'     => { 'Crossings' => 10_000 },
         'Quilsilgas' => { 'Shard' => 20_000 }
       }

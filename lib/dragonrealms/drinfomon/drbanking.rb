@@ -7,7 +7,7 @@ module Lich
     # Bank balances are tracked passively by parsing game output when players
     # deposit, withdraw, or check their balance at banks across Elanthia.
     #
-    # Data is persisted using GameSettings (game-scoped) so that the `;banks all`
+    # Data is persisted using Lich::Common::GameSettings (game-scoped) so that the `;banks all`
     # command can aggregate balances across all characters.
     #
     # Usage:
@@ -73,7 +73,7 @@ module Lich
         # @return [Hash] { "CharName" => { "Town" => copper_amount } }
         def all_accounts
           ensure_initialized
-          GameSettings['drbanking_accounts']
+          Lich::Common::GameSettings['drbanking_accounts']
         end
 
         # Returns bank accounts for the current character
@@ -253,7 +253,7 @@ module Lich
         end
 
         def ensure_initialized
-          GameSettings['drbanking_accounts'] ||= {}
+          Lich::Common::GameSettings['drbanking_accounts'] ||= {}
         end
 
         def handle_deposit_portion(town, match)
