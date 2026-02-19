@@ -8,6 +8,7 @@ module Lich
       DRINFOMON_IN_CORE_LICH = true
       require_relative 'drinfomon/drdefs'
       require_relative 'drinfomon/drvariables'
+      require_relative 'drinfomon/drbanking'
       require_relative 'drinfomon/drparser'
       require_relative 'drinfomon/drskill'
       require_relative 'drinfomon/drstats'
