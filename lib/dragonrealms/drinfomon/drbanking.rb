@@ -7,7 +7,7 @@ module Lich
     # Bank balances are tracked passively by parsing game output when players
     # deposit, withdraw, or check their balance at banks across Elanthia.
     #
-    # Data is persisted using Lich::Common::GameSettings (game-scoped) so that the `;banks all`
+    # Data is persisted using Lich::Common::DB_Store (game-scoped) so that the `;banks all`
     # command can aggregate balances across all characters.
     #
     # Usage:
@@ -68,18 +68,23 @@ module Lich
         'Dokoras' => DOKORA_BANKS
       }.freeze
 
+      # DB_Store script name for banking data
+      SCRIPT_NAME = 'drbanking'
+
+      # In-memory cache of accounts data
+      @@accounts_cache = nil
+
       class << self
         # Returns all bank accounts for all characters (game-scoped)
         # @return [Hash] { "CharName" => { "Town" => copper_amount } }
         def all_accounts
-          ensure_initialized
-          Lich::Common::GameSettings['drbanking_accounts']
+          load_accounts unless @@accounts_cache
+          @@accounts_cache
         end
 
         # Returns bank accounts for the current character
         # @return [Hash] { "Town" => copper_amount }
         def my_accounts
-          ensure_initialized
           all_accounts[character_name] ||= {}
         end
 
@@ -87,9 +92,9 @@ module Lich
         # @param town [String] The town/bank name
         # @param copper [Integer] The balance in copper
         def update_balance(town, copper)
-          ensure_initialized
           all_accounts[character_name] ||= {}
           all_accounts[character_name][town] = copper.to_i
+          save_accounts
           Lich::Messaging.msg('info', "DRBanking: Updated #{town} balance to #{format_currency(copper)}")
         end
 
@@ -246,14 +251,26 @@ module Lich
           Lich::Messaging.msg('info', "Grand Total (all characters): #{format_currency(grand_total)}")
         end
 
+        # Force reload from database (useful for testing)
+        def reload!
+          @@accounts_cache = nil
+          load_accounts
+        end
+
         private
 
         def character_name
           XMLData.name
         end
 
-        def ensure_initialized
-          Lich::Common::GameSettings['drbanking_accounts'] ||= {}
+        # Load accounts from DB_Store (game-scoped)
+        def load_accounts
+          @@accounts_cache = Lich::Common::DB_Store.read(XMLData.game, SCRIPT_NAME) || {}
+        end
+
+        # Save accounts to DB_Store (game-scoped)
+        def save_accounts
+          Lich::Common::DB_Store.save(XMLData.game, SCRIPT_NAME, @@accounts_cache)
         end
 
         def handle_deposit_portion(town, match)
