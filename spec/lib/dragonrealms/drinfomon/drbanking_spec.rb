@@ -9,18 +9,18 @@ module XMLData
   end
 end unless defined?(XMLData)
 
-# Mock Lich::Common::GameSettings module
+# Mock Lich::Common::DB_Store module
 module Lich
   module Common
-    module GameSettings
+    module DB_Store
       @data = {}
 
-      def self.[](key)
-        @data[key]
+      def self.read(scope, script)
+        @data["#{scope}:#{script}"] || {}
       end
 
-      def self.[]=(key, value)
-        @data[key] = value
+      def self.save(scope, script, value)
+        @data["#{scope}:#{script}"] = value
       end
 
       def self.clear_test_data!
@@ -28,7 +28,7 @@ module Lich
       end
     end
   end
-end unless defined?(Lich::Common::GameSettings)
+end unless defined?(Lich::Common::DB_Store)
 
 # Mock Lich::Messaging
 module Lich
@@ -58,8 +58,9 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
   before(:each) do
     # Reset test state
-    Lich::Common::GameSettings.clear_test_data!
+    Lich::Common::DB_Store.clear_test_data!
     Lich::Messaging.clear_messages!
+    described_module.reload!
 
     # Set up default XMLData values
     XMLData.name = 'TestChar'
@@ -332,10 +333,11 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'returns all characters accounts' do
-      Lich::Common::GameSettings['drbanking_accounts'] = {
+      Lich::Common::DB_Store.save('DRF', 'drbanking', {
         'Mahtra'     => { 'Crossings' => 10_000 },
         'Quilsilgas' => { 'Shard' => 20_000 }
-      }
+      })
+      described_module.reload!
       expect(described_module.all_accounts).to have_key('Mahtra')
       expect(described_module.all_accounts).to have_key('Quilsilgas')
     end
@@ -348,10 +350,11 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
     it 'returns current characters accounts' do
       XMLData.name = 'Mahtra'
-      Lich::Common::GameSettings['drbanking_accounts'] = {
+      Lich::Common::DB_Store.save('DRF', 'drbanking', {
         'Mahtra'    => { 'Crossings' => 10_000, 'Shard' => 5_000 },
         'OtherChar' => { 'Riverhaven' => 20_000 }
-      }
+      })
+      described_module.reload!
       accounts = described_module.my_accounts
       expect(accounts['Crossings']).to eq(10_000)
       expect(accounts['Shard']).to eq(5_000)
@@ -380,6 +383,13 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     it 'logs the update' do
       described_module.update_balance('Crossings', 10_000)
       expect(Lich::Messaging.messages.last).to include('Updated Crossings balance')
+    end
+
+    it 'persists to DB_Store' do
+      described_module.update_balance('Crossings', 10_000)
+      # Reload to verify persistence
+      described_module.reload!
+      expect(described_module.my_accounts['Crossings']).to eq(10_000)
     end
   end
 
@@ -411,10 +421,11 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'sums all bank balances across all characters' do
-      Lich::Common::GameSettings['drbanking_accounts'] = {
+      Lich::Common::DB_Store.save('DRF', 'drbanking', {
         'Char1' => { 'Crossings' => 10_000, 'Shard' => 5_000 },
         'Char2' => { 'Riverhaven' => 20_000 }
-      }
+      })
+      described_module.reload!
       expect(described_module.total_wealth_all).to eq(35_000)
     end
   end
@@ -545,15 +556,29 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'displays all characters bank balances' do
-      Lich::Common::GameSettings['drbanking_accounts'] = {
+      Lich::Common::DB_Store.save('DRF', 'drbanking', {
         'Mahtra'     => { 'Crossings' => 10_000 },
         'Quilsilgas' => { 'Shard' => 20_000 }
-      }
+      })
+      described_module.reload!
       described_module.display_banks_all
       messages = Lich::Messaging.messages.join("\n")
       expect(messages).to include('Mahtra')
       expect(messages).to include('Quilsilgas')
       expect(messages).to include('Grand Total')
+    end
+  end
+
+  describe '.reload!' do
+    it 'reloads data from DB_Store' do
+      described_module.update_balance('Crossings', 10_000)
+      # Directly modify DB_Store behind the cache
+      Lich::Common::DB_Store.save('DRF', 'drbanking', { 'TestChar' => { 'Crossings' => 99_999 } })
+      # Without reload, still shows cached value
+      expect(described_module.my_accounts['Crossings']).to eq(10_000)
+      # After reload, shows new value
+      described_module.reload!
+      expect(described_module.my_accounts['Crossings']).to eq(99_999)
     end
   end
 end
