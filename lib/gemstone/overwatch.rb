@@ -85,7 +85,7 @@ module Lich
 
         if silent_strike
           respond "Checking for silent strike against #{target_id} #{target_name}." if @@debug
-          result = reget(10, /fades into the surroundings\./, /slips into the shadows\./, /botch an attempt at concealing\./, /The figure quickly disappears from view\./)
+          result = reget(core: true, 10, /fades into the surroundings\./, /slips into the shadows\./, /botch an attempt at concealing\./, /The figure quickly disappears from view\./)
           respond result if @@debug
 
           unless result.empty?
