@@ -462,7 +462,7 @@ module Lich
           check_known_spells(line) if DRSpells.grabbing_known_spells
 
           # Parse bank transactions passively
-          DRBanking.parse(line)
+          Lich::DragonRealms::DRBanking.parse(line)
         rescue StandardError => e
           Lich::Messaging.msg("bold", "DRParser: error in parse: #{e.message}")
           Lich::Messaging.msg("bold", "DRParser: line: #{line}")
