@@ -581,4 +581,68 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(described_module.my_accounts['Crossings']).to eq(99_999)
     end
   end
+
+  describe '.reset_character!' do
+    it 'clears current character bank data' do
+      described_module.update_balance('Crossings', 10_000)
+      described_module.update_balance('Shard', 5_000)
+      expect(described_module.my_accounts).not_to be_empty
+
+      described_module.reset_character!
+
+      expect(described_module.my_accounts).to eq({})
+    end
+
+    it 'preserves other characters data' do
+      XMLData.name = 'Mahtra'
+      described_module.update_balance('Crossings', 10_000)
+
+      XMLData.name = 'OtherChar'
+      described_module.reload!
+      described_module.update_balance('Shard', 5_000)
+
+      described_module.reset_character!
+
+      expect(described_module.my_accounts).to eq({})
+      expect(described_module.all_accounts['Mahtra']).to eq({ 'Crossings' => 10_000 })
+    end
+
+    it 'persists the change' do
+      described_module.update_balance('Crossings', 10_000)
+      described_module.reset_character!
+      described_module.reload!
+      expect(described_module.my_accounts).to eq({})
+    end
+
+    it 'logs the reset' do
+      described_module.reset_character!
+      expect(Lich::Messaging.messages.last).to include('Cleared bank data for')
+    end
+  end
+
+  describe '.reset_all!' do
+    it 'clears all characters bank data' do
+      Lich::Common::DB_Store.save('DRF', 'drbanking', {
+        'Char1' => { 'Crossings' => 10_000 },
+        'Char2' => { 'Shard' => 20_000 }
+      })
+      described_module.reload!
+
+      described_module.reset_all!
+
+      expect(described_module.all_accounts).to eq({})
+    end
+
+    it 'persists the change' do
+      described_module.update_balance('Crossings', 10_000)
+      described_module.reset_all!
+      described_module.reload!
+      expect(described_module.all_accounts).to eq({})
+    end
+
+    it 'logs the reset' do
+      described_module.reset_all!
+      expect(Lich::Messaging.messages.last).to include('Cleared all bank data')
+    end
+  end
 end
