@@ -460,6 +460,9 @@ module Lich
           check_known_barbarian_abilities(line) if DRSpells.check_known_barbarian_abilities
           check_known_thief_khri(line) if DRSpells.grabbing_known_khri
           check_known_spells(line) if DRSpells.grabbing_known_spells
+
+          # Parse bank transactions passively
+          DRBanking.parse(line)
         rescue StandardError => e
           Lich::Messaging.msg("bold", "DRParser: error in parse: #{e.message}")
           Lich::Messaging.msg("bold", "DRParser: line: #{line}")
