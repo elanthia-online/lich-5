@@ -257,6 +257,20 @@ module Lich
           load_accounts
         end
 
+        # Reset current character's bank data
+        def reset_character!
+          all_accounts.delete(character_name)
+          save_accounts
+          Lich::Messaging.msg('info', "DRBanking: Cleared bank data for #{character_name}.")
+        end
+
+        # Reset all bank data for all characters
+        def reset_all!
+          @@accounts_cache = {}
+          save_accounts
+          Lich::Messaging.msg('info', 'DRBanking: Cleared all bank data for all characters.')
+        end
+
         private
 
         def character_name

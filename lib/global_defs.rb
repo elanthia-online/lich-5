@@ -2419,9 +2419,14 @@ def do_client(client_string)
     elsif cmd =~ /^banks$/ && XMLData.game =~ /^GS/
       Game._puts "<c>bank account"
       $_CLIENTBUFFER_.push "<c>bank account"
-    elsif cmd =~ /^banks(?: (all))?$/i && XMLData.game =~ /^DR/
-      if Regexp.last_match(1)&.downcase == 'all'
+    elsif cmd =~ /^banks(?: (all|reset|reset all))?$/i && XMLData.game =~ /^DR/
+      case Regexp.last_match(1)&.downcase
+      when 'all'
         Lich::DragonRealms::DRBanking.display_banks_all
+      when 'reset'
+        Lich::DragonRealms::DRBanking.reset_character!
+      when 'reset all'
+        Lich::DragonRealms::DRBanking.reset_all!
       else
         Lich::DragonRealms::DRBanking.display_banks
       end
@@ -2497,6 +2502,8 @@ def do_client(client_string)
         respond "   #{$clean_lich_char}display exp-status        show experience monitor status (DragonRealms only)"
         respond "   #{$clean_lich_char}banks                     show your bank balances (DragonRealms only)"
         respond "   #{$clean_lich_char}banks all                 show bank balances for all characters (DragonRealms only)"
+        respond "   #{$clean_lich_char}banks reset               clear your bank data (DragonRealms only)"
+        respond "   #{$clean_lich_char}banks reset all           clear all characters' bank data (DragonRealms only)"
       end
       respond
       respond 'If you liked this help message, you might also enjoy:'
