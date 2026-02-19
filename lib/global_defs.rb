@@ -1494,7 +1494,7 @@ def get?
   Script.current.gets?
 end
 
-def reget(core: false, *lines)
+def reget(*lines, core: false)
   unless (script = Script.current) || core.eql?(true)
     respond('--- reget: Unable to identify calling script.')
     return false
