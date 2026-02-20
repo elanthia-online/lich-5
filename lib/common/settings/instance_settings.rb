@@ -117,6 +117,18 @@ module Lich
         Lich.deprecated('InstanceSettings.save', 'not using, not applicable,', caller[0], fe_log: true)
         nil
       end
+
+      # Test helper: clears game accessor cache and resets module state
+      # @note For testing purposes only
+      def self.clear_test_data!
+        @game_accessor = nil
+      end
+
+      # Test helper: provides direct access to game data for test setup
+      # @note For testing purposes only
+      def self.game_data
+        game_proxy.target
+      end
     end
   end
 end
