@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'rspec'
+require_relative '../../../spec_helper'
 
 # Load dependencies
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
@@ -30,69 +30,48 @@ module Lich
       end
     end
   end unless defined?(Lich::Common::InstanceSettings)
-
-  module Messaging
-    def self.msg(style, message)
-      DRBankingTestData.messages << { message: message, type: style }
-    end
-  end unless defined?(Lich::Messaging)
 end
 
-module XMLData
-  class << self
-    attr_accessor :name, :room_title, :game
-  end
-  self.name = 'TestChar'
-  self.room_title = ''
-  self.game = 'DRF'
-end unless defined?(XMLData)
+# Note: XMLData and Lich::Messaging are provided by spec_helper.rb
+# We use Lich::Messaging.messages/clear_messages! for test assertions
 
 require_relative '../../../../lib/dragonrealms/drinfomon/drbanking'
 
 RSpec.describe Lich::DragonRealms::DRBanking do
   let(:described_module) { Lich::DragonRealms::DRBanking }
 
-  # Helper to extract message strings
+  # Helper to extract message strings from Lich::Messaging (provided by spec_helper)
   def message_strings
-    DRBankingTestData.messages.map { |m| m.is_a?(Hash) ? m[:message] : m.to_s }
+    Lich::Messaging.messages.map { |m| m.is_a?(Hash) ? m[:message] : m.to_s }
   end
 
   before(:all) do
-    # Save original methods to restore after tests
+    # Save original InstanceSettings.game method to restore after tests
     @original_game_method = Lich::Common::InstanceSettings.method(:game)
-    @original_msg_method = Lich::Messaging.method(:msg)
   end
 
   after(:all) do
-    # Restore original methods to avoid breaking other specs
+    # Restore original InstanceSettings.game method
     if @original_game_method
       Lich::Common::InstanceSettings.define_singleton_method(:game, @original_game_method)
-    end
-    if @original_msg_method
-      Lich::Messaging.define_singleton_method(:msg, @original_msg_method)
     end
   end
 
   before(:each) do
     # Reset test data
     DRBankingTestData.reset!
+    Lich::Messaging.clear_messages!
 
-    # Reset XMLData
-    XMLData.name = 'TestChar'
+    # XMLData is reset by spec_helper's before(:each) via reset_xml_data!
+    # Just set room_title which isn't reset by default
     XMLData.room_title = ''
-    XMLData.game = 'DRF'
 
-    # Directly redefine the module methods to use our test data
-    # This is more invasive than allow().to receive() but works reliably in CI
+    # Redefine InstanceSettings.game to use our test data
     Lich::Common::InstanceSettings.define_singleton_method(:game) do
       Object.new.tap do |obj|
         obj.define_singleton_method(:[]) { |key| DRBankingTestData.game_data[key] }
         obj.define_singleton_method(:[]=) { |key, value| DRBankingTestData.game_data[key] = value }
       end
-    end
-
-    Lich::Messaging.define_singleton_method(:msg) do |style, message|
-      DRBankingTestData.messages << { message: message, type: style }
     end
 
     # Reset DRBanking cache
