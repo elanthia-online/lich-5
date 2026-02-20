@@ -2,16 +2,19 @@
 
 require 'rspec'
 
-# Mock XMLData module
+# Mock XMLData module BEFORE loading the source file
 module XMLData
   class << self
     attr_accessor :name, :room_title, :game
   end
 end unless defined?(XMLData)
 
-# Mock Lich::Common::InstanceSettings module for game-scoped settings
+# Define mock modules in a way that forces them to be used even if real modules exist
 module Lich
   module Common
+    # Remove existing InstanceSettings if present
+    remove_const(:InstanceSettings) if defined?(InstanceSettings)
+
     module InstanceSettings
       @game_data = {}
 
@@ -34,18 +37,19 @@ module Lich
 
       def self.clear_test_data!
         @game_data = {}
+        @game_accessor = nil
       end
     end
   end
-end unless defined?(Lich::Common::InstanceSettings)
 
-# Mock Lich::Messaging
-module Lich
+  # Remove existing Messaging if present
+  remove_const(:Messaging) if defined?(Messaging)
+
   module Messaging
     @messages = []
 
-    def self.msg(_style, message)
-      @messages << message
+    def self.msg(style, message)
+      @messages << { message: message, type: style }
     end
 
     def self.messages
@@ -56,7 +60,7 @@ module Lich
       @messages = []
     end
   end
-end unless defined?(Lich::Messaging)
+end
 
 # Load dependencies
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
@@ -65,10 +69,18 @@ require_relative '../../../../lib/dragonrealms/drinfomon/drbanking'
 RSpec.describe Lich::DragonRealms::DRBanking do
   let(:described_module) { Lich::DragonRealms::DRBanking }
 
+  # Helper to extract message strings from Lich::Messaging
+  def message_strings
+    Lich::Messaging.messages.map { |m| m.is_a?(Hash) ? m[:message] : m }
+  end
+
   before(:each) do
-    # Reset test state
+    # Reset test state - order matters here
     Lich::Common::InstanceSettings.clear_test_data!
     Lich::Messaging.clear_messages!
+
+    # Reset the DRBanking class variable cache
+    described_module.class_variable_set(:@@accounts_cache, nil)
     described_module.reload!
 
     # Set up default XMLData values
@@ -391,7 +403,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
     it 'logs the update' do
       described_module.update_balance('Crossings', 10_000)
-      expect(Lich::Messaging.messages.last).to include('Updated Crossings balance')
+      expect(message_strings.last).to include('Updated Crossings balance')
     end
 
     it 'persists to InstanceSettings' do
@@ -545,14 +557,14 @@ RSpec.describe Lich::DragonRealms::DRBanking do
   describe '.display_banks' do
     it 'shows message when no accounts recorded' do
       described_module.display_banks
-      expect(Lich::Messaging.messages).to include('DRBanking: No bank account info recorded.')
+      expect(message_strings).to include('DRBanking: No bank account info recorded.')
     end
 
     it 'displays bank balances when accounts exist' do
       described_module.update_balance('Crossings', 10_000)
       Lich::Messaging.clear_messages!
       described_module.display_banks
-      messages = Lich::Messaging.messages.join("\n")
+      messages = message_strings.join("\n")
       expect(messages).to include('Crossings')
       expect(messages).to include('1 platinum')
     end
@@ -561,7 +573,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
   describe '.display_banks_all' do
     it 'shows message when no accounts recorded' do
       described_module.display_banks_all
-      expect(Lich::Messaging.messages).to include('DRBanking: No bank account info recorded for any character.')
+      expect(message_strings).to include('DRBanking: No bank account info recorded for any character.')
     end
 
     it 'displays all characters bank balances' do
@@ -571,7 +583,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       }
       described_module.reload!
       described_module.display_banks_all
-      messages = Lich::Messaging.messages.join("\n")
+      messages = message_strings.join("\n")
       expect(messages).to include('Mahtra')
       expect(messages).to include('Quilsilgas')
       expect(messages).to include('Grand Total')
@@ -625,7 +637,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
     it 'logs the reset' do
       described_module.reset_character!
-      expect(Lich::Messaging.messages.last).to include('Cleared bank data for')
+      expect(message_strings.last).to include('Cleared bank data for')
     end
   end
 
@@ -651,7 +663,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
     it 'logs the reset' do
       described_module.reset_all!
-      expect(Lich::Messaging.messages.last).to include('Cleared all bank data')
+      expect(message_strings.last).to include('Cleared all bank data')
     end
   end
 end
