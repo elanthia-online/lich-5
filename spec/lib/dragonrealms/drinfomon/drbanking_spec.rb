@@ -17,38 +17,16 @@ class DRBankingTestData
   end
 end
 
-# Game accessor that reads/writes to DRBankingTestData.game_data
-# This class is used at runtime, so it always references current test data
-class TestGameAccessor
-  def [](key)
-    DRBankingTestData.game_data[key]
-  end
-
-  def []=(key, value)
-    DRBankingTestData.game_data[key] = value
-  end
-end
-
-# Mock InstanceSettings module for testing
-module TestInstanceSettings
-  def self.game
-    TestGameAccessor.new
-  end
-end
-
-# Mock Messaging module for testing
-module TestMessaging
-  def self.msg(style, message)
-    DRBankingTestData.messages << { message: message, type: style }
-  end
-end
-
 # Minimal stubs for initial load (if real modules not yet defined)
 module Lich
   module Common
     module InstanceSettings
       def self.game
-        TestGameAccessor.new
+        # Returns a mock accessor that reads/writes to test data
+        Object.new.tap do |obj|
+          obj.define_singleton_method(:[]) { |key| DRBankingTestData.game_data[key] }
+          obj.define_singleton_method(:[]=) { |key, value| DRBankingTestData.game_data[key] = value }
+        end
       end
     end
   end unless defined?(Lich::Common::InstanceSettings)
@@ -88,10 +66,21 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     XMLData.room_title = ''
     XMLData.game = 'DRF'
 
-    # Use stub_const to completely replace the modules for this test
-    # This ensures the real modules are not used even if they were loaded by other specs
-    stub_const('Lich::Common::InstanceSettings', TestInstanceSettings)
-    stub_const('Lich::Messaging', TestMessaging)
+    # Stub Lich::Messaging.msg to capture messages to our test array
+    allow(Lich::Messaging).to receive(:msg) do |style, message|
+      DRBankingTestData.messages << { message: message, type: style }
+    end
+
+    # Stub Lich::Common::InstanceSettings.game to return our test accessor
+    # This is the key stub - we're stubbing the .game method to return an object
+    # that reads/writes to DRBankingTestData.game_data
+    allow(Lich::Common::InstanceSettings).to receive(:game) do
+      # Create a new accessor each time that references current test data
+      Object.new.tap do |obj|
+        obj.define_singleton_method(:[]) { |key| DRBankingTestData.game_data[key] }
+        obj.define_singleton_method(:[]=) { |key, value| DRBankingTestData.game_data[key] = value }
+      end
+    end
 
     # Reset DRBanking cache
     described_module.class_variable_set(:@@accounts_cache, nil)
