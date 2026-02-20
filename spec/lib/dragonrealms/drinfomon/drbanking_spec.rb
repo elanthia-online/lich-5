@@ -36,39 +36,44 @@ require_relative '../../../../lib/dragonrealms/drinfomon/drbanking'
 
 RSpec.describe Lich::DragonRealms::DRBanking do
   let(:described_module) { Lich::DragonRealms::DRBanking }
-  let(:test_messages) { [] }
-  let(:test_game_data) { {} }
-
-  # Create a fresh mock module for each test
-  let(:mock_instance_settings) do
-    game_data = test_game_data
-    Module.new do
-      define_singleton_method(:game) do
-        @game_mock ||= Object.new.tap do |m|
-          m.define_singleton_method(:[]) { |key| game_data[key] }
-          m.define_singleton_method(:[]=) { |key, value| game_data[key] = value }
-        end
-      end
-    end
-  end
-
-  let(:mock_messaging) do
-    msgs = test_messages
-    Module.new do
-      define_singleton_method(:msg) { |style, message| msgs << { message: message, type: style } }
-    end
-  end
 
   # Helper to extract message strings
   def message_strings
-    test_messages.map { |m| m.is_a?(Hash) ? m[:message] : m.to_s }
+    @test_messages.map { |m| m.is_a?(Hash) ? m[:message] : m.to_s }
+  end
+
+  # Helper to access test game data
+  def test_game_data
+    @test_game_data
   end
 
   before(:each) do
+    # Initialize test data storage as instance variables
+    @test_messages = []
+    @test_game_data = {}
+
     # Reset XMLData
     XMLData.name = 'TestChar'
     XMLData.room_title = ''
     XMLData.game = 'DRF'
+
+    # Capture instance variables for closures
+    game_data = @test_game_data
+    msgs = @test_messages
+
+    # Create mock game accessor
+    mock_game = Object.new
+    mock_game.define_singleton_method(:[]) { |key| game_data[key] }
+    mock_game.define_singleton_method(:[]=) { |key, value| game_data[key] = value }
+
+    # Create mock modules
+    mock_instance_settings = Module.new do
+      define_singleton_method(:game) { mock_game }
+    end
+
+    mock_messaging = Module.new do
+      define_singleton_method(:msg) { |style, message| msgs << { message: message, type: style } }
+    end
 
     # Use stub_const to completely replace the modules for this test
     stub_const('Lich::Common::InstanceSettings', mock_instance_settings)
@@ -344,7 +349,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'returns all characters accounts' do
-      test_game_data['banking'] = {
+      @test_game_data['banking'] = {
         'Mahtra'     => { 'Crossings' => 10_000 },
         'Quilsilgas' => { 'Shard' => 20_000 }
       }
@@ -361,7 +366,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
     it 'returns current characters accounts' do
       XMLData.name = 'Mahtra'
-      test_game_data['banking'] = {
+      @test_game_data['banking'] = {
         'Mahtra'    => { 'Crossings' => 10_000, 'Shard' => 5_000 },
         'OtherChar' => { 'Riverhaven' => 20_000 }
       }
@@ -432,7 +437,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'sums all bank balances across all characters' do
-      test_game_data['banking'] = {
+      @test_game_data['banking'] = {
         'Char1' => { 'Crossings' => 10_000, 'Shard' => 5_000 },
         'Char2' => { 'Riverhaven' => 20_000 }
       }
@@ -552,7 +557,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
     it 'displays bank balances when accounts exist' do
       described_module.update_balance('Crossings', 10_000)
-      test_messages.clear
+      @test_messages.clear
       described_module.display_banks
       messages_text = message_strings.join("\n")
       expect(messages_text).to include('Crossings')
@@ -567,7 +572,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'displays all characters bank balances' do
-      test_game_data['banking'] = {
+      @test_game_data['banking'] = {
         'Mahtra'     => { 'Crossings' => 10_000 },
         'Quilsilgas' => { 'Shard' => 20_000 }
       }
@@ -584,7 +589,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     it 'reloads data from InstanceSettings' do
       described_module.update_balance('Crossings', 10_000)
       # Directly modify storage behind the cache
-      test_game_data['banking'] = { 'TestChar' => { 'Crossings' => 99_999 } }
+      @test_game_data['banking'] = { 'TestChar' => { 'Crossings' => 99_999 } }
       # Without reload, still shows cached value
       expect(described_module.my_accounts['Crossings']).to eq(10_000)
       # After reload, shows new value
@@ -633,7 +638,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
   describe '.reset_all!' do
     it 'clears all characters bank data' do
-      test_game_data['banking'] = {
+      @test_game_data['banking'] = {
         'Char1' => { 'Crossings' => 10_000 },
         'Char2' => { 'Shard' => 20_000 }
       }
