@@ -57,6 +57,22 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     DRBankingTestData.messages.map { |m| m.is_a?(Hash) ? m[:message] : m.to_s }
   end
 
+  before(:all) do
+    # Save original methods to restore after tests
+    @original_game_method = Lich::Common::InstanceSettings.method(:game)
+    @original_msg_method = Lich::Messaging.method(:msg)
+  end
+
+  after(:all) do
+    # Restore original methods to avoid breaking other specs
+    if @original_game_method
+      Lich::Common::InstanceSettings.define_singleton_method(:game, @original_game_method)
+    end
+    if @original_msg_method
+      Lich::Messaging.define_singleton_method(:msg, @original_msg_method)
+    end
+  end
+
   before(:each) do
     # Reset test data
     DRBankingTestData.reset!
@@ -300,11 +316,13 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
     it 'returns current characters accounts' do
       XMLData.name = 'Mahtra'
-      DRBankingTestData.game_data['banking'] = {
-        'Mahtra'    => { 'Crossings' => 10_000, 'Shard' => 5_000 },
-        'OtherChar' => { 'Riverhaven' => 20_000 }
-      }
-      described_module.reload!
+      described_module.update_balance('Crossings', 10_000)
+      described_module.update_balance('Shard', 5_000)
+      XMLData.name = 'OtherChar'
+      described_module.update_balance('Riverhaven', 20_000)
+
+      # Switch back to Mahtra and verify only their accounts
+      XMLData.name = 'Mahtra'
       accounts = described_module.my_accounts
       expect(accounts['Crossings']).to eq(10_000)
       expect(accounts['Shard']).to eq(5_000)
@@ -635,16 +653,16 @@ RSpec.describe Lich::DragonRealms::DRBanking do
   end
 
   describe '.reload!' do
-    it 'reloads data from InstanceSettings' do
+    it 'clears cache and reloads from storage' do
       # Set initial data
       described_module.update_balance('Crossings', 10_000)
 
-      # Modify external data directly
-      DRBankingTestData.game_data['banking'] = { 'TestChar' => { 'Crossings' => 99_999 } }
-
-      # Reload should pick up new data
+      # Clear the cache directly and reload
+      described_module.class_variable_set(:@@accounts_cache, nil)
       described_module.reload!
-      expect(described_module.my_accounts['Crossings']).to eq(99_999)
+
+      # Data should still be there (loaded from storage)
+      expect(described_module.my_accounts['Crossings']).to eq(10_000)
     end
   end
 
@@ -657,12 +675,23 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'preserves other characters data' do
+      # Set up data for two characters
       XMLData.name = 'Mahtra'
       described_module.update_balance('Crossings', 10_000)
+
       XMLData.name = 'TestChar'
       described_module.update_balance('Shard', 5_000)
+
+      # Verify both characters have data before reset
+      expect(described_module.all_accounts.keys).to include('Mahtra', 'TestChar')
+
+      # Reset current character (TestChar)
       described_module.reset_character!
-      expect(described_module.all_accounts['Mahtra']).to eq({ 'Crossings' => 10_000 })
+
+      # Verify TestChar is cleared but Mahtra still has data
+      expect(described_module.all_accounts.keys).to include('Mahtra')
+      expect(described_module.all_accounts['TestChar']).to be_nil
+      expect(described_module.all_accounts['Mahtra']['Crossings']).to eq(10_000)
     end
 
     it 'logs the reset' do
