@@ -54,10 +54,22 @@ module Lich
         'You must have both hands free'
       ].freeze
 
+      # Expected game responses when observing celestial bodies.
+      # Used by `observe` method to match bput responses.
+      OBSERVE_MESSAGES = [
+        'Your search for',
+        'You see nothing regarding the future',
+        'Clouds obscure',
+        'Roundtime',
+        'The following heavenly bodies are visible:',
+        "That's a bit hard to do while inside",
+        'too close to the sun'
+      ].freeze
+
       def observe(thing)
         output = "observe #{thing} in heavens"
         output = 'observe heavens' if thing.eql?('heavens')
-        DRC.bput(output.to_s, 'Your search for', 'You see nothing regarding the future', 'Clouds obscure', 'Roundtime', 'The following heavenly bodies are visible:', "That's a bit hard to do while inside")
+        DRC.bput(output.to_s, *OBSERVE_MESSAGES)
       end
 
       def predict(thing)
