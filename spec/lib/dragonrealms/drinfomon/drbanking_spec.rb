@@ -14,22 +14,41 @@ class DRBankingTestData
       @game_data = {}
       @messages = []
     end
-
-    def create_mock_game_accessor
-      Object.new.tap do |mock|
-        mock.define_singleton_method(:[]) { |key| DRBankingTestData.game_data[key] }
-        mock.define_singleton_method(:[]=) { |key, value| DRBankingTestData.game_data[key] = value }
-      end
-    end
   end
 end
 
-# Minimal stubs for initial load
+# Game accessor that reads/writes to DRBankingTestData.game_data
+# This class is used at runtime, so it always references current test data
+class TestGameAccessor
+  def [](key)
+    DRBankingTestData.game_data[key]
+  end
+
+  def []=(key, value)
+    DRBankingTestData.game_data[key] = value
+  end
+end
+
+# Mock InstanceSettings module for testing
+module TestInstanceSettings
+  def self.game
+    TestGameAccessor.new
+  end
+end
+
+# Mock Messaging module for testing
+module TestMessaging
+  def self.msg(style, message)
+    DRBankingTestData.messages << { message: message, type: style }
+  end
+end
+
+# Minimal stubs for initial load (if real modules not yet defined)
 module Lich
   module Common
     module InstanceSettings
       def self.game
-        DRBankingTestData.create_mock_game_accessor
+        TestGameAccessor.new
       end
     end
   end unless defined?(Lich::Common::InstanceSettings)
@@ -69,14 +88,10 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     XMLData.room_title = ''
     XMLData.game = 'DRF'
 
-    # Create mock game accessor
-    mock_game = DRBankingTestData.create_mock_game_accessor
-
-    # Stub the real modules (works even when they're already defined in CI)
-    allow(Lich::Common::InstanceSettings).to receive(:game).and_return(mock_game)
-    allow(Lich::Messaging).to receive(:msg) do |style, message|
-      DRBankingTestData.messages << { message: message, type: style }
-    end
+    # Use stub_const to completely replace the modules for this test
+    # This ensures the real modules are not used even if they were loaded by other specs
+    stub_const('Lich::Common::InstanceSettings', TestInstanceSettings)
+    stub_const('Lich::Messaging', TestMessaging)
 
     # Reset DRBanking cache
     described_module.class_variable_set(:@@accounts_cache, nil)
