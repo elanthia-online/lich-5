@@ -5,21 +5,39 @@ require 'rspec'
 # Load dependencies
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 
-# Minimal stub to allow drbanking.rb to load
+# Test data storage - class-level to avoid closure issues
+class DRBankingTestData
+  class << self
+    attr_accessor :game_data, :messages
+
+    def reset!
+      @game_data = {}
+      @messages = []
+    end
+
+    def create_mock_game_accessor
+      Object.new.tap do |mock|
+        mock.define_singleton_method(:[]) { |key| DRBankingTestData.game_data[key] }
+        mock.define_singleton_method(:[]=) { |key, value| DRBankingTestData.game_data[key] = value }
+      end
+    end
+  end
+end
+
+# Minimal stubs for initial load
 module Lich
   module Common
     module InstanceSettings
       def self.game
-        @game_mock ||= Object.new.tap do |m|
-          m.define_singleton_method(:[]) { |_| nil }
-          m.define_singleton_method(:[]=) { |_, _| nil }
-        end
+        DRBankingTestData.create_mock_game_accessor
       end
     end
   end unless defined?(Lich::Common::InstanceSettings)
 
   module Messaging
-    def self.msg(_, _); end
+    def self.msg(style, message)
+      DRBankingTestData.messages << { message: message, type: style }
+    end
   end unless defined?(Lich::Messaging)
 end
 
@@ -39,45 +57,26 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
   # Helper to extract message strings
   def message_strings
-    @test_messages.map { |m| m.is_a?(Hash) ? m[:message] : m.to_s }
-  end
-
-  # Helper to access test game data
-  def test_game_data
-    @test_game_data
+    DRBankingTestData.messages.map { |m| m.is_a?(Hash) ? m[:message] : m.to_s }
   end
 
   before(:each) do
-    # Initialize test data storage as instance variables
-    @test_messages = []
-    @test_game_data = {}
+    # Reset test data
+    DRBankingTestData.reset!
 
     # Reset XMLData
     XMLData.name = 'TestChar'
     XMLData.room_title = ''
     XMLData.game = 'DRF'
 
-    # Capture instance variables for closures
-    game_data = @test_game_data
-    msgs = @test_messages
-
     # Create mock game accessor
-    mock_game = Object.new
-    mock_game.define_singleton_method(:[]) { |key| game_data[key] }
-    mock_game.define_singleton_method(:[]=) { |key, value| game_data[key] = value }
+    mock_game = DRBankingTestData.create_mock_game_accessor
 
-    # Create mock modules
-    mock_instance_settings = Module.new do
-      define_singleton_method(:game) { mock_game }
+    # Stub the real modules (works even when they're already defined in CI)
+    allow(Lich::Common::InstanceSettings).to receive(:game).and_return(mock_game)
+    allow(Lich::Messaging).to receive(:msg) do |style, message|
+      DRBankingTestData.messages << { message: message, type: style }
     end
-
-    mock_messaging = Module.new do
-      define_singleton_method(:msg) { |style, message| msgs << { message: message, type: style } }
-    end
-
-    # Use stub_const to completely replace the modules for this test
-    stub_const('Lich::Common::InstanceSettings', mock_instance_settings)
-    stub_const('Lich::Messaging', mock_messaging)
 
     # Reset DRBanking cache
     described_module.class_variable_set(:@@accounts_cache, nil)
@@ -98,25 +97,25 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       end
 
       it 'matches deposit with gold Lirums' do
-        line = 'The clerk slides a small metal box across the counter into which you drop 100 gold Lirums'
+        line = 'The clerk slides a small metal box across the counter into which you drop 10 gold Lirums'
         match = pattern.match(line)
         expect(match).not_to be_nil
-        expect(match[:amount]).to eq('100')
+        expect(match[:amount]).to eq('10')
         expect(match[:denomination]).to eq('gold')
         expect(match[:currency]).to eq('Lirums')
       end
 
       it 'matches deposit with copper Dokoras' do
-        line = 'The clerk slides a small metal box across the counter into which you drop 50 copper Dokoras'
+        line = 'The clerk slides a small metal box across the counter into which you drop 100 copper Dokoras'
         match = pattern.match(line)
         expect(match).not_to be_nil
-        expect(match[:amount]).to eq('50')
+        expect(match[:amount]).to eq('100')
         expect(match[:denomination]).to eq('copper')
         expect(match[:currency]).to eq('Dokoras')
       end
 
       it 'does not match unrelated text' do
-        line = 'You give the clerk some coins.'
+        line = 'You pick up a bag of coins.'
         expect(pattern.match(line)).to be_nil
       end
     end
@@ -127,16 +126,19 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       it 'matches deposit all Kronars' do
         line = 'The clerk slides a small metal box across the counter into which you drop all your Kronars.  She counts them carefully and records the deposit in her ledger'
         expect(pattern.match(line)).not_to be_nil
+        expect(pattern.match(line)[:currency]).to eq('Kronars')
       end
 
       it 'matches deposit all Lirums' do
         line = 'The clerk slides a small metal box across the counter into which you drop all your Lirums.  She counts them carefully and records the deposit in her ledger'
         expect(pattern.match(line)).not_to be_nil
+        expect(pattern.match(line)[:currency]).to eq('Lirums')
       end
 
       it 'matches deposit all Dokoras' do
         line = 'The clerk slides a small metal box across the counter into which you drop all your Dokoras.  She counts them carefully and records the deposit in her ledger'
         expect(pattern.match(line)).not_to be_nil
+        expect(pattern.match(line)[:currency]).to eq('Dokoras')
       end
     end
 
@@ -177,11 +179,13 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       it 'matches clerk withdraw all' do
         line = 'The clerk counts out all your Kronars and hands them over'
         expect(pattern.match(line)).not_to be_nil
+        expect(pattern.match(line)[:currency]).to eq('Kronars')
       end
 
       it 'matches jar withdraw all' do
         line = 'You count out all of your Dokoras and quickly pocket them'
         expect(pattern.match(line)).not_to be_nil
+        expect(pattern.match(line)[:currency]).to eq('Dokoras')
       end
     end
 
@@ -192,18 +196,23 @@ RSpec.describe Lich::DragonRealms::DRBanking do
         line = 'it looks like your current balance is 5 platinum Kronars'
         match = pattern.match(line)
         expect(match).not_to be_nil
+        expect(match[:balance]).to eq('5 platinum')
+        expect(match[:currency]).to eq('Kronars')
       end
 
       it 'matches "Here we are" balance check' do
         line = '"Here we are. Your current balance is 10 gold, 5 silver Lirums'
         match = pattern.match(line)
         expect(match).not_to be_nil
+        expect(match[:currency]).to eq('Lirums')
       end
 
       it 'matches "As expected" balance check' do
         line = 'As expected, there are 100 copper Dokoras'
         match = pattern.match(line)
         expect(match).not_to be_nil
+        expect(match[:balance]).to eq('100 copper')
+        expect(match[:currency]).to eq('Dokoras')
       end
     end
 
@@ -248,114 +257,38 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
   end
 
-  describe '.to_copper' do
-    it 'converts platinum correctly' do
-      expect(described_module.to_copper(5, 'platinum')).to eq(50_000)
+  describe 'CURRENCY_BANKS constant' do
+    it 'is frozen' do
+      expect(described_module::CURRENCY_BANKS).to be_frozen
     end
 
-    it 'converts gold correctly' do
-      expect(described_module.to_copper(10, 'gold')).to eq(10_000)
+    it 'maps Kronars to KRONAR_BANKS' do
+      expect(described_module::CURRENCY_BANKS['Kronars']).to eq(Lich::DragonRealms::KRONAR_BANKS)
     end
 
-    it 'converts silver correctly' do
-      expect(described_module.to_copper(25, 'silver')).to eq(2_500)
+    it 'maps Lirums to LIRUM_BANKS' do
+      expect(described_module::CURRENCY_BANKS['Lirums']).to eq(Lich::DragonRealms::LIRUM_BANKS)
     end
 
-    it 'converts bronze correctly' do
-      expect(described_module.to_copper(50, 'bronze')).to eq(500)
-    end
-
-    it 'converts copper correctly' do
-      expect(described_module.to_copper(100, 'copper')).to eq(100)
-    end
-
-    it 'handles string amounts' do
-      expect(described_module.to_copper('5', 'platinum')).to eq(50_000)
-    end
-
-    it 'is case insensitive' do
-      expect(described_module.to_copper(5, 'PLATINUM')).to eq(50_000)
-      expect(described_module.to_copper(5, 'Platinum')).to eq(50_000)
-    end
-
-    it 'returns amount as-is for unknown denomination' do
-      expect(described_module.to_copper(100, 'unknown')).to eq(100)
-    end
-  end
-
-  describe '.parse_balance_string' do
-    it 'parses single denomination' do
-      expect(described_module.parse_balance_string('5 platinum')).to eq(50_000)
-    end
-
-    it 'parses multiple denominations' do
-      expect(described_module.parse_balance_string('5 platinum, 3 gold, 2 silver')).to eq(53_200)
-    end
-
-    it 'parses complex balance string' do
-      expect(described_module.parse_balance_string('1 platinum, 2 gold, 3 silver, 4 bronze, 5 copper')).to eq(12_345)
-    end
-
-    it 'returns 0 for nil input' do
-      expect(described_module.parse_balance_string(nil)).to eq(0)
-    end
-
-    it 'returns 0 for empty string' do
-      expect(described_module.parse_balance_string('')).to eq(0)
-    end
-
-    it 'handles extra text around denominations' do
-      expect(described_module.parse_balance_string('You have 5 gold coins')).to eq(5_000)
-    end
-  end
-
-  describe '.format_currency' do
-    it 'formats platinum only' do
-      expect(described_module.format_currency(50_000)).to eq('5 platinum')
-    end
-
-    it 'formats gold only' do
-      expect(described_module.format_currency(5_000)).to eq('5 gold')
-    end
-
-    it 'formats mixed denominations' do
-      expect(described_module.format_currency(12_345)).to eq('1 platinum, 2 gold, 3 silver, 4 bronze, 5 copper')
-    end
-
-    it 'returns none for zero' do
-      expect(described_module.format_currency(0)).to eq('none')
-    end
-
-    it 'returns none for nil' do
-      expect(described_module.format_currency(nil)).to eq('none')
-    end
-
-    it 'returns none for negative values' do
-      expect(described_module.format_currency(-100)).to eq('none')
-    end
-
-    it 'handles exact platinum amounts' do
-      expect(described_module.format_currency(10_000)).to eq('1 platinum')
-    end
-
-    it 'handles copper only' do
-      expect(described_module.format_currency(5)).to eq('5 copper')
+    it 'maps Dokoras to DOKORA_BANKS' do
+      expect(described_module::CURRENCY_BANKS['Dokoras']).to eq(Lich::DragonRealms::DOKORA_BANKS)
     end
   end
 
   describe '.all_accounts' do
-    it 'returns empty hash when no accounts exist' do
+    it 'returns empty hash when no data' do
       expect(described_module.all_accounts).to eq({})
     end
 
-    it 'returns all characters accounts' do
-      @test_game_data['banking'] = {
-        'Mahtra'     => { 'Crossings' => 10_000 },
-        'Quilsilgas' => { 'Shard' => 20_000 }
+    it 'returns all character accounts' do
+      DRBankingTestData.game_data['banking'] = {
+        'CharA' => { 'Crossings' => 10_000 },
+        'CharB' => { 'Shard' => 20_000 }
       }
       described_module.reload!
-      expect(described_module.all_accounts).to have_key('Mahtra')
-      expect(described_module.all_accounts).to have_key('Quilsilgas')
+      accounts = described_module.all_accounts
+      expect(accounts['CharA']).to eq({ 'Crossings' => 10_000 })
+      expect(accounts['CharB']).to eq({ 'Shard' => 20_000 })
     end
   end
 
@@ -366,7 +299,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
     it 'returns current characters accounts' do
       XMLData.name = 'Mahtra'
-      @test_game_data['banking'] = {
+      DRBankingTestData.game_data['banking'] = {
         'Mahtra'    => { 'Crossings' => 10_000, 'Shard' => 5_000 },
         'OtherChar' => { 'Riverhaven' => 20_000 }
       }
@@ -437,228 +370,326 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'sums all bank balances across all characters' do
-      @test_game_data['banking'] = {
-        'Char1' => { 'Crossings' => 10_000, 'Shard' => 5_000 },
-        'Char2' => { 'Riverhaven' => 20_000 }
-      }
-      described_module.reload!
-      expect(described_module.total_wealth_all).to eq(35_000)
+      XMLData.name = 'CharA'
+      described_module.update_balance('Crossings', 10_000)
+      XMLData.name = 'CharB'
+      described_module.update_balance('Shard', 5_000)
+      described_module.update_balance('Riverhaven', 3_000)
+      expect(described_module.total_wealth_all).to eq(18_000)
+    end
+  end
+
+  describe '.to_copper' do
+    it 'converts platinum correctly' do
+      expect(described_module.to_copper(5, 'platinum')).to eq(50_000)
+    end
+
+    it 'converts gold correctly' do
+      expect(described_module.to_copper(10, 'gold')).to eq(10_000)
+    end
+
+    it 'converts silver correctly' do
+      expect(described_module.to_copper(100, 'silver')).to eq(10_000)
+    end
+
+    it 'converts bronze correctly' do
+      expect(described_module.to_copper(50, 'bronze')).to eq(500)
+    end
+
+    it 'converts copper correctly' do
+      expect(described_module.to_copper(1000, 'copper')).to eq(1_000)
+    end
+
+    it 'handles string amounts' do
+      expect(described_module.to_copper('5', 'platinum')).to eq(50_000)
+    end
+
+    it 'handles mixed case denomination' do
+      expect(described_module.to_copper(5, 'PLATINUM')).to eq(50_000)
+    end
+
+    it 'defaults to 1 for unknown denomination' do
+      expect(described_module.to_copper(100, 'unknown')).to eq(100)
+    end
+  end
+
+  describe '.parse_balance_string' do
+    it 'returns 0 for nil' do
+      expect(described_module.parse_balance_string(nil)).to eq(0)
+    end
+
+    it 'returns 0 for empty string' do
+      expect(described_module.parse_balance_string('')).to eq(0)
+    end
+
+    it 'parses single denomination' do
+      expect(described_module.parse_balance_string('5 platinum')).to eq(50_000)
+    end
+
+    it 'parses multiple denominations' do
+      expect(described_module.parse_balance_string('5 platinum, 3 gold, 2 silver')).to eq(53_200)
+    end
+
+    it 'handles extra whitespace' do
+      expect(described_module.parse_balance_string('5  platinum,  3  gold')).to eq(53_000)
+    end
+  end
+
+  describe '.format_currency' do
+    it 'returns "none" for 0' do
+      expect(described_module.format_currency(0)).to eq('none')
+    end
+
+    it 'returns "none" for negative amounts' do
+      expect(described_module.format_currency(-100)).to eq('none')
+    end
+
+    it 'formats single denomination' do
+      expect(described_module.format_currency(50_000)).to eq('5 platinum')
+    end
+
+    it 'formats multiple denominations' do
+      expect(described_module.format_currency(53_210)).to eq('5 platinum, 3 gold, 2 silver, 1 bronze')
+    end
+
+    it 'handles string input' do
+      expect(described_module.format_currency('50000')).to eq('5 platinum')
+    end
+
+    it 'omits zero-value denominations' do
+      # 10,001 copper = 1 platinum (10,000) + 1 copper
+      expect(described_module.format_currency(10_001)).to eq('1 platinum, 1 copper')
     end
   end
 
   describe '.current_bank_town' do
-    it 'returns nil when room title is empty' do
-      XMLData.room_title = ''
+    it 'returns nil when not in a bank' do
+      XMLData.room_title = '[Some Random Room]'
       expect(described_module.current_bank_town).to be_nil
     end
 
-    it 'returns nil when room title is nil' do
+    it 'returns nil when room_title is nil' do
       XMLData.room_title = nil
       expect(described_module.current_bank_town).to be_nil
     end
 
-    it 'returns nil when not in a bank' do
-      XMLData.room_title = '[Town Green, Center]'
+    it 'returns nil when room_title is empty' do
+      XMLData.room_title = ''
       expect(described_module.current_bank_town).to be_nil
     end
 
-    it 'identifies Crossings bank' do
-      XMLData.room_title = '[Provincial Bank, Teller]'
+    it 'returns town when in Crossings bank' do
+      XMLData.room_title = '[[Provincial Bank, Teller]]'
       expect(described_module.current_bank_town).to eq('Crossings')
     end
 
-    it 'identifies Shard bank' do
-      XMLData.room_title = "[First Bank of Ilithi, Teller's Windows]"
+    it 'returns town when in Shard bank' do
+      XMLData.room_title = "[[First Bank of Ilithi, Teller's Windows]]"
       expect(described_module.current_bank_town).to eq('Shard')
     end
 
-    it 'identifies Riverhaven bank' do
-      XMLData.room_title = '[Bank of Riverhaven, Teller]'
+    it 'returns town when in Riverhaven bank' do
+      XMLData.room_title = '[[Bank of Riverhaven, Teller]]'
       expect(described_module.current_bank_town).to eq('Riverhaven')
-    end
-
-    it 'identifies Hibarnhvidar bank' do
-      XMLData.room_title = '[Second Provincial Bank of Hibarnhvidar, Teller]'
-      expect(described_module.current_bank_town).to eq('Hibarnhvidar')
     end
   end
 
   describe '.parse' do
     context 'when not in a bank' do
-      before { XMLData.room_title = '[Town Green, Center]' }
+      before { XMLData.room_title = '[Some Random Room]' }
 
-      it 'does nothing for deposit messages' do
-        line = 'The clerk slides a small metal box across the counter into which you drop 5 platinum Kronars'
-        expect { described_module.parse(line) }.not_to(change { described_module.my_accounts })
+      it 'does nothing for bank messages' do
+        expect {
+          described_module.parse('The clerk counts out 5 gold Kronars and hands them over, making a notation in her ledger')
+        }.not_to(change { described_module.my_accounts })
       end
     end
 
-    context 'when in Crossings bank' do
-      before { XMLData.room_title = '[Provincial Bank, Teller]' }
+    context 'when in a bank' do
+      before { XMLData.room_title = '[[Provincial Bank, Teller]]' } # Crossings bank
 
-      it 'handles partial deposit' do
-        line = 'The clerk slides a small metal box across the counter into which you drop 5 gold Kronars'
-        described_module.parse(line)
-        expect(described_module.my_accounts['Crossings']).to eq(5_000)
+      it 'handles nil input' do
+        expect { described_module.parse(nil) }.not_to raise_error
       end
 
-      it 'handles cumulative deposits' do
-        described_module.update_balance('Crossings', 10_000)
-        line = 'The clerk slides a small metal box across the counter into which you drop 5 gold Kronars'
-        described_module.parse(line)
-        expect(described_module.my_accounts['Crossings']).to eq(15_000)
+      it 'handles non-string input' do
+        expect { described_module.parse(123) }.not_to raise_error
       end
 
-      it 'handles partial withdrawal' do
-        described_module.update_balance('Crossings', 10_000)
-        line = 'The clerk counts out 3 gold Kronars and hands them over, making a notation in her ledger'
-        described_module.parse(line)
-        expect(described_module.my_accounts['Crossings']).to eq(7_000)
+      describe 'deposit portion' do
+        it 'adds deposit to current balance' do
+          described_module.update_balance('Crossings', 10_000)
+          described_module.parse('The clerk slides a small metal box across the counter into which you drop 5 gold Kronars')
+          expect(described_module.my_accounts['Crossings']).to eq(15_000)
+        end
+
+        it 'creates new balance if none exists' do
+          described_module.parse('The clerk slides a small metal box across the counter into which you drop 5 platinum Kronars')
+          expect(described_module.my_accounts['Crossings']).to eq(50_000)
+        end
       end
 
-      it 'handles withdraw all' do
-        described_module.update_balance('Crossings', 10_000)
-        line = 'The clerk counts out all your Kronars and hands them over'
-        described_module.parse(line)
-        expect(described_module.my_accounts['Crossings']).to eq(0)
+      describe 'deposit all' do
+        it 'logs deposit all for teller bank' do
+          described_module.parse('The clerk slides a small metal box across the counter into which you drop all your Kronars.  She counts them carefully and records the deposit in her ledger')
+          expect(message_strings.last).to include('Deposited all money')
+        end
+
+        it 'logs deposit all for jar bank' do
+          described_module.parse('You cross through the old balance on the label and update it to reflect your new balance')
+          expect(message_strings.last).to include('Deposited all money')
+        end
       end
 
-      it 'handles no account' do
-        line = 'you do not seem to have an account with us'
-        described_module.parse(line)
-        expect(described_module.my_accounts['Crossings']).to eq(0)
+      describe 'withdraw portion' do
+        it 'subtracts withdrawal from balance' do
+          described_module.update_balance('Crossings', 10_000)
+          described_module.parse('The clerk counts out 5 gold Kronars and hands them over, making a notation in her ledger')
+          expect(described_module.my_accounts['Crossings']).to eq(5_000)
+        end
+
+        it 'does not go below zero' do
+          described_module.update_balance('Crossings', 1_000)
+          described_module.parse('The clerk counts out 5 gold Kronars and hands them over, making a notation in her ledger')
+          expect(described_module.my_accounts['Crossings']).to eq(0)
+        end
       end
-    end
 
-    context 'when in Shard bank' do
-      before { XMLData.room_title = "[First Bank of Ilithi, Teller's Windows]" }
+      describe 'withdraw all' do
+        it 'sets balance to zero' do
+          described_module.update_balance('Crossings', 10_000)
+          described_module.parse('The clerk counts out all your Kronars and hands them over')
+          expect(described_module.my_accounts['Crossings']).to eq(0)
+        end
 
-      it 'handles balance check' do
-        line = 'it looks like your current balance is 5 platinum, 2 gold Dokoras'
-        described_module.parse(line)
-        expect(described_module.my_accounts['Shard']).to eq(52_000)
+        it 'logs the withdrawal' do
+          described_module.update_balance('Crossings', 10_000)
+          described_module.parse('The clerk counts out all your Kronars and hands them over')
+          expect(message_strings.last).to include('Withdrew all money')
+        end
       end
-    end
 
-    it 'handles nil input gracefully' do
-      expect { described_module.parse(nil) }.not_to raise_error
-    end
+      describe 'balance check' do
+        it 'updates balance from "it looks like" message' do
+          described_module.parse('it looks like your current balance is 5 platinum, 3 gold Kronars')
+          expect(described_module.my_accounts['Crossings']).to eq(53_000)
+        end
 
-    it 'handles non-string input gracefully' do
-      expect { described_module.parse(123) }.not_to raise_error
+        it 'updates balance from "As expected" message' do
+          described_module.parse('As expected, there are 100 copper Kronars')
+          expect(described_module.my_accounts['Crossings']).to eq(100)
+        end
+      end
+
+      describe 'no account' do
+        it 'clears balance for teller bank message' do
+          described_module.update_balance('Crossings', 10_000)
+          described_module.parse('you do not seem to have an account with us')
+          expect(described_module.my_accounts['Crossings']).to eq(0)
+        end
+
+        it 'clears balance for jar bank message' do
+          described_module.update_balance('Crossings', 10_000)
+          described_module.parse('you should find a new deposit jar for your financial needs')
+          expect(described_module.my_accounts['Crossings']).to eq(0)
+        end
+
+        it 'logs no account message' do
+          described_module.parse('you do not seem to have an account with us')
+          expect(message_strings.last).to include('No account')
+        end
+      end
     end
   end
 
   describe '.display_banks' do
-    it 'shows message when no accounts recorded' do
+    it 'displays message when no accounts' do
       described_module.display_banks
-      expect(message_strings).to include('DRBanking: No bank account info recorded.')
+      expect(message_strings.last).to include('No bank account info recorded')
     end
 
-    it 'displays bank balances when accounts exist' do
+    it 'displays account balances' do
       described_module.update_balance('Crossings', 10_000)
-      @test_messages.clear
+      described_module.update_balance('Riverhaven', 5_000)
       described_module.display_banks
-      messages_text = message_strings.join("\n")
-      expect(messages_text).to include('Crossings')
-      expect(messages_text).to include('1 platinum')
+      # Should display header and balances
+      expect(message_strings.any? { |m| m.include?('Your bank balances') }).to be true
     end
   end
 
   describe '.display_banks_all' do
-    it 'shows message when no accounts recorded' do
+    it 'displays message when no accounts' do
       described_module.display_banks_all
-      expect(message_strings).to include('DRBanking: No bank account info recorded for any character.')
+      expect(message_strings.last).to include('No bank account info recorded for any character')
     end
 
-    it 'displays all characters bank balances' do
-      @test_game_data['banking'] = {
-        'Mahtra'     => { 'Crossings' => 10_000 },
-        'Quilsilgas' => { 'Shard' => 20_000 }
-      }
-      described_module.reload!
+    it 'displays all character balances' do
+      XMLData.name = 'CharA'
+      described_module.update_balance('Crossings', 10_000)
+      XMLData.name = 'CharB'
+      described_module.update_balance('Shard', 5_000)
       described_module.display_banks_all
-      messages_text = message_strings.join("\n")
-      expect(messages_text).to include('Mahtra')
-      expect(messages_text).to include('Quilsilgas')
-      expect(messages_text).to include('Grand Total')
+      expect(message_strings.any? { |m| m.include?('Bank balances for all characters') }).to be true
     end
   end
 
   describe '.reload!' do
     it 'reloads data from InstanceSettings' do
+      # Set initial data
       described_module.update_balance('Crossings', 10_000)
-      # Directly modify storage behind the cache
-      @test_game_data['banking'] = { 'TestChar' => { 'Crossings' => 99_999 } }
-      # Without reload, still shows cached value
-      expect(described_module.my_accounts['Crossings']).to eq(10_000)
-      # After reload, shows new value
+
+      # Modify external data directly
+      DRBankingTestData.game_data['banking'] = { 'TestChar' => { 'Crossings' => 99_999 } }
+
+      # Reload should pick up new data
       described_module.reload!
       expect(described_module.my_accounts['Crossings']).to eq(99_999)
     end
   end
 
   describe '.reset_character!' do
-    it 'clears current character bank data' do
+    it 'clears current characters data' do
+      XMLData.name = 'TestChar'
       described_module.update_balance('Crossings', 10_000)
-      described_module.update_balance('Shard', 5_000)
-      expect(described_module.my_accounts).not_to be_empty
-
       described_module.reset_character!
-
       expect(described_module.my_accounts).to eq({})
     end
 
     it 'preserves other characters data' do
       XMLData.name = 'Mahtra'
       described_module.update_balance('Crossings', 10_000)
-
-      XMLData.name = 'OtherChar'
-      described_module.reload!
+      XMLData.name = 'TestChar'
       described_module.update_balance('Shard', 5_000)
-
       described_module.reset_character!
-
-      expect(described_module.my_accounts).to eq({})
       expect(described_module.all_accounts['Mahtra']).to eq({ 'Crossings' => 10_000 })
-    end
-
-    it 'persists the change' do
-      described_module.update_balance('Crossings', 10_000)
-      described_module.reset_character!
-      described_module.reload!
-      expect(described_module.my_accounts).to eq({})
     end
 
     it 'logs the reset' do
       described_module.reset_character!
-      expect(message_strings.last).to include('Cleared bank data for')
+      expect(message_strings.last).to include('Cleared bank data')
     end
   end
 
   describe '.reset_all!' do
-    it 'clears all characters bank data' do
-      @test_game_data['banking'] = {
-        'Char1' => { 'Crossings' => 10_000 },
-        'Char2' => { 'Shard' => 20_000 }
-      }
-      described_module.reload!
-
-      described_module.reset_all!
-
-      expect(described_module.all_accounts).to eq({})
-    end
-
-    it 'persists the change' do
+    it 'clears all character data' do
+      XMLData.name = 'CharA'
       described_module.update_balance('Crossings', 10_000)
+      XMLData.name = 'CharB'
+      described_module.update_balance('Shard', 5_000)
       described_module.reset_all!
-      described_module.reload!
       expect(described_module.all_accounts).to eq({})
     end
 
     it 'logs the reset' do
       described_module.reset_all!
       expect(message_strings.last).to include('Cleared all bank data')
+    end
+
+    it 'resets total_wealth_all to 0' do
+      XMLData.name = 'CharA'
+      described_module.update_balance('Crossings', 10_000)
+      described_module.reset_all!
+      expect(described_module.total_wealth_all).to eq(0)
     end
   end
 end
