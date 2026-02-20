@@ -294,13 +294,14 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'returns current characters accounts' do
-      XMLData.name = 'Mahtra'
-      described_module.update_balance('Crossings', 10_000)
-      described_module.update_balance('Shard', 5_000)
-      XMLData.name = 'OtherChar'
-      described_module.update_balance('Riverhaven', 20_000)
+      # Directly set up multi-character data in storage
+      DRBankingTestData.game_data['banking'] = {
+        'Mahtra'    => { 'Crossings' => 10_000, 'Shard' => 5_000 },
+        'OtherChar' => { 'Riverhaven' => 20_000 }
+      }
+      described_module.reload!
 
-      # Switch back to Mahtra and verify only their accounts
+      # Set current character and verify only their accounts are returned
       XMLData.name = 'Mahtra'
       accounts = described_module.my_accounts
       expect(accounts['Crossings']).to eq(10_000)
@@ -654,17 +655,18 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'preserves other characters data' do
-      # Set up data for two characters
-      XMLData.name = 'Mahtra'
-      described_module.update_balance('Crossings', 10_000)
-
-      XMLData.name = 'TestChar'
-      described_module.update_balance('Shard', 5_000)
+      # Directly set up multi-character data in storage
+      DRBankingTestData.game_data['banking'] = {
+        'Mahtra'   => { 'Crossings' => 10_000 },
+        'TestChar' => { 'Shard' => 5_000 }
+      }
+      described_module.reload!
 
       # Verify both characters have data before reset
       expect(described_module.all_accounts.keys).to include('Mahtra', 'TestChar')
 
-      # Reset current character (TestChar)
+      # Set current character and reset
+      XMLData.name = 'TestChar'
       described_module.reset_character!
 
       # Verify TestChar is cleared but Mahtra still has data
