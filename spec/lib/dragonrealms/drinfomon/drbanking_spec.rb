@@ -2,9 +2,10 @@
 
 require 'rspec'
 
-# Ensure mocks are defined before loading drbanking.rb
-# These minimal stubs allow the file to load without error
+# Load dependencies
+require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 
+# Ensure XMLData exists with necessary accessors
 module XMLData
   class << self
     attr_accessor :name, :room_title, :game
@@ -14,89 +15,35 @@ module XMLData
   self.game = 'DRF'
 end unless defined?(XMLData)
 
+# Define minimal stub modules to allow drbanking.rb to load
+# These will be replaced by stubs in before(:each)
 module Lich
   module Common
     module InstanceSettings
-      @test_game_data = {}
-
       def self.game
         @game_mock ||= Object.new.tap do |mock|
-          data = @test_game_data
-          mock.define_singleton_method(:[]) { |key| data[key] }
-          mock.define_singleton_method(:[]=) { |key, value| data[key] = value }
+          mock.define_singleton_method(:[]) { |_key| nil }
+          mock.define_singleton_method(:[]=) { |_key, _value| nil }
         end
-      end
-
-      def self.test_game_data
-        @test_game_data
-      end
-
-      def self.reset_test_data!
-        @test_game_data = {}
-        @game_mock = nil
       end
     end
   end unless defined?(Lich::Common::InstanceSettings)
 
   module Messaging
-    @test_messages = []
-
-    def self.msg(style, message)
-      @test_messages << { message: message, type: style }
-    end
-
-    def self.test_messages
-      @test_messages
-    end
-
-    def self.reset_test_messages!
-      @test_messages = []
-    end
+    def self.msg(_style, _message); end
   end unless defined?(Lich::Messaging)
 end
 
-# Add test helper methods if they don't exist (e.g., if real module was loaded first)
-unless Lich::Common::InstanceSettings.respond_to?(:test_game_data)
-  Lich::Common::InstanceSettings.instance_variable_set(:@test_game_data, {})
-  Lich::Common::InstanceSettings.define_singleton_method(:test_game_data) { @test_game_data }
-  Lich::Common::InstanceSettings.define_singleton_method(:reset_test_data!) do
-    @test_game_data = {}
-    @game_mock = nil
-  end
-end
-
-unless Lich::Messaging.respond_to?(:test_messages)
-  Lich::Messaging.instance_variable_set(:@test_messages, [])
-  Lich::Messaging.define_singleton_method(:test_messages) { @test_messages }
-  Lich::Messaging.define_singleton_method(:reset_test_messages!) { @test_messages = [] }
-end
-
-# Load dependencies
-require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 require_relative '../../../../lib/dragonrealms/drinfomon/drbanking'
 
 RSpec.describe Lich::DragonRealms::DRBanking do
   let(:described_module) { Lich::DragonRealms::DRBanking }
+  let(:test_messages) { [] }
+  let(:test_game_data) { {} }
 
-  # Helper to get messages - works with both test mock and real module
-  def messages
-    if Lich::Messaging.respond_to?(:test_messages)
-      Lich::Messaging.test_messages
-    elsif Lich::Messaging.respond_to?(:messages)
-      Lich::Messaging.messages
-    else
-      []
-    end
-  end
-
-  # Helper to extract message strings - handles both hash format and plain strings
+  # Helper to extract message strings
   def message_strings
-    messages.map { |m| m.is_a?(Hash) ? m[:message] : m.to_s }
-  end
-
-  # Helper to get game data storage
-  def game_data
-    Lich::Common::InstanceSettings.test_game_data
+    test_messages.map { |m| m.is_a?(Hash) ? m[:message] : m.to_s }
   end
 
   before(:each) do
@@ -105,11 +52,22 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     XMLData.room_title = ''
     XMLData.game = 'DRF'
 
-    # Reset InstanceSettings state
-    Lich::Common::InstanceSettings.reset_test_data!
+    # Capture let variables for closures
+    game_data = test_game_data
+    msgs = test_messages
 
-    # Reset Messaging
-    Lich::Messaging.reset_test_messages!
+    # Create mock game accessor
+    mock_game = Object.new
+    mock_game.define_singleton_method(:[]) { |key| game_data[key] }
+    mock_game.define_singleton_method(:[]=) { |key, value| game_data[key] = value }
+
+    # Stub InstanceSettings.game to return our mock
+    allow(Lich::Common::InstanceSettings).to receive(:game).and_return(mock_game)
+
+    # Stub Lich::Messaging.msg to capture messages
+    allow(Lich::Messaging).to receive(:msg) do |style, message|
+      msgs << { message: message, type: style }
+    end
 
     # Reset DRBanking cache
     described_module.class_variable_set(:@@accounts_cache, nil)
@@ -381,7 +339,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'returns all characters accounts' do
-      game_data['banking'] = {
+      test_game_data['banking'] = {
         'Mahtra'     => { 'Crossings' => 10_000 },
         'Quilsilgas' => { 'Shard' => 20_000 }
       }
@@ -398,7 +356,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
     it 'returns current characters accounts' do
       XMLData.name = 'Mahtra'
-      game_data['banking'] = {
+      test_game_data['banking'] = {
         'Mahtra'    => { 'Crossings' => 10_000, 'Shard' => 5_000 },
         'OtherChar' => { 'Riverhaven' => 20_000 }
       }
@@ -469,7 +427,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'sums all bank balances across all characters' do
-      game_data['banking'] = {
+      test_game_data['banking'] = {
         'Char1' => { 'Crossings' => 10_000, 'Shard' => 5_000 },
         'Char2' => { 'Riverhaven' => 20_000 }
       }
@@ -589,7 +547,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
     it 'displays bank balances when accounts exist' do
       described_module.update_balance('Crossings', 10_000)
-      Lich::Messaging.reset_test_messages!
+      test_messages.clear
       described_module.display_banks
       messages_text = message_strings.join("\n")
       expect(messages_text).to include('Crossings')
@@ -604,7 +562,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'displays all characters bank balances' do
-      game_data['banking'] = {
+      test_game_data['banking'] = {
         'Mahtra'     => { 'Crossings' => 10_000 },
         'Quilsilgas' => { 'Shard' => 20_000 }
       }
@@ -621,7 +579,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     it 'reloads data from InstanceSettings' do
       described_module.update_balance('Crossings', 10_000)
       # Directly modify storage behind the cache
-      game_data['banking'] = { 'TestChar' => { 'Crossings' => 99_999 } }
+      test_game_data['banking'] = { 'TestChar' => { 'Crossings' => 99_999 } }
       # Without reload, still shows cached value
       expect(described_module.my_accounts['Crossings']).to eq(10_000)
       # After reload, shows new value
@@ -670,7 +628,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
   describe '.reset_all!' do
     it 'clears all characters bank data' do
-      game_data['banking'] = {
+      test_game_data['banking'] = {
         'Char1' => { 'Crossings' => 10_000 },
         'Char2' => { 'Shard' => 20_000 }
       }
