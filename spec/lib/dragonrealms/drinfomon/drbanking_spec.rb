@@ -5,7 +5,24 @@ require 'rspec'
 # Load dependencies
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 
-# Ensure XMLData exists with necessary accessors
+# Minimal stub to allow drbanking.rb to load
+module Lich
+  module Common
+    module InstanceSettings
+      def self.game
+        @game_mock ||= Object.new.tap do |m|
+          m.define_singleton_method(:[]) { |_| nil }
+          m.define_singleton_method(:[]=) { |_, _| nil }
+        end
+      end
+    end
+  end unless defined?(Lich::Common::InstanceSettings)
+
+  module Messaging
+    def self.msg(_, _); end
+  end unless defined?(Lich::Messaging)
+end
+
 module XMLData
   class << self
     attr_accessor :name, :room_title, :game
@@ -15,31 +32,32 @@ module XMLData
   self.game = 'DRF'
 end unless defined?(XMLData)
 
-# Define minimal stub modules to allow drbanking.rb to load
-# These will be replaced by stubs in before(:each)
-module Lich
-  module Common
-    module InstanceSettings
-      def self.game
-        @game_mock ||= Object.new.tap do |mock|
-          mock.define_singleton_method(:[]) { |_key| nil }
-          mock.define_singleton_method(:[]=) { |_key, _value| nil }
-        end
-      end
-    end
-  end unless defined?(Lich::Common::InstanceSettings)
-
-  module Messaging
-    def self.msg(_style, _message); end
-  end unless defined?(Lich::Messaging)
-end
-
 require_relative '../../../../lib/dragonrealms/drinfomon/drbanking'
 
 RSpec.describe Lich::DragonRealms::DRBanking do
   let(:described_module) { Lich::DragonRealms::DRBanking }
   let(:test_messages) { [] }
   let(:test_game_data) { {} }
+
+  # Create a fresh mock module for each test
+  let(:mock_instance_settings) do
+    game_data = test_game_data
+    Module.new do
+      define_singleton_method(:game) do
+        @game_mock ||= Object.new.tap do |m|
+          m.define_singleton_method(:[]) { |key| game_data[key] }
+          m.define_singleton_method(:[]=) { |key, value| game_data[key] = value }
+        end
+      end
+    end
+  end
+
+  let(:mock_messaging) do
+    msgs = test_messages
+    Module.new do
+      define_singleton_method(:msg) { |style, message| msgs << { message: message, type: style } }
+    end
+  end
 
   # Helper to extract message strings
   def message_strings
@@ -52,22 +70,9 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     XMLData.room_title = ''
     XMLData.game = 'DRF'
 
-    # Capture let variables for closures
-    game_data = test_game_data
-    msgs = test_messages
-
-    # Create mock game accessor
-    mock_game = Object.new
-    mock_game.define_singleton_method(:[]) { |key| game_data[key] }
-    mock_game.define_singleton_method(:[]=) { |key, value| game_data[key] = value }
-
-    # Stub InstanceSettings.game to return our mock
-    allow(Lich::Common::InstanceSettings).to receive(:game).and_return(mock_game)
-
-    # Stub Lich::Messaging.msg to capture messages
-    allow(Lich::Messaging).to receive(:msg) do |style, message|
-      msgs << { message: message, type: style }
-    end
+    # Use stub_const to completely replace the modules for this test
+    stub_const('Lich::Common::InstanceSettings', mock_instance_settings)
+    stub_const('Lich::Messaging', mock_messaging)
 
     # Reset DRBanking cache
     described_module.class_variable_set(:@@accounts_cache, nil)
