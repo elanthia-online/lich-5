@@ -7,8 +7,8 @@ module Lich
     # Bank balances are tracked passively by parsing game output when players
     # deposit, withdraw, or check their balance at banks across Elanthia.
     #
-    # Data is persisted using Lich::Common::DB_Store (game-scoped) so that the `;banks all`
-    # command can aggregate balances across all characters.
+    # Data is persisted using Lich::Common::InstanceSettings.game (game-scoped) so that
+    # the `;banks all` command can aggregate balances across all characters.
     #
     # Usage:
     #   DRBanking.my_accounts                    # Current character's bank balances
@@ -68,8 +68,8 @@ module Lich
         'Dokoras' => DOKORA_BANKS
       }.freeze
 
-      # DB_Store script name for banking data
-      SCRIPT_NAME = 'drbanking'
+      # Settings key for banking data
+      SETTINGS_KEY = 'banking'
 
       # In-memory cache of accounts data
       @@accounts_cache = nil
@@ -277,14 +277,16 @@ module Lich
           XMLData.name
         end
 
-        # Load accounts from DB_Store (game-scoped)
+        # Load accounts from InstanceSettings (game-scoped)
         def load_accounts
-          @@accounts_cache = Lich::Common::DB_Store.read(XMLData.game, SCRIPT_NAME) || {}
+          @@accounts_cache = Lich::Common::InstanceSettings.game[SETTINGS_KEY] || {}
+          # Convert SettingsProxy to plain hash if needed
+          @@accounts_cache = @@accounts_cache.to_h if @@accounts_cache.respond_to?(:to_h) && !@@accounts_cache.is_a?(Hash)
         end
 
-        # Save accounts to DB_Store (game-scoped)
+        # Save accounts to InstanceSettings (game-scoped)
         def save_accounts
-          Lich::Common::DB_Store.save(XMLData.game, SCRIPT_NAME, @@accounts_cache)
+          Lich::Common::InstanceSettings.game[SETTINGS_KEY] = @@accounts_cache
         end
 
         def handle_deposit_portion(town, match)

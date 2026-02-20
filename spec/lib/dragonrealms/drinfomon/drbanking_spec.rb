@@ -9,26 +9,35 @@ module XMLData
   end
 end unless defined?(XMLData)
 
-# Mock Lich::Common::DB_Store module
+# Mock Lich::Common::InstanceSettings module for game-scoped settings
 module Lich
   module Common
-    module DB_Store
-      @data = {}
+    module InstanceSettings
+      @game_data = {}
 
-      def self.read(scope, script)
-        @data["#{scope}:#{script}"] || {}
+      # Game accessor that provides game-scoped [] and []=
+      def self.game
+        @game_accessor ||= Module.new do
+          def self.[](key)
+            Lich::Common::InstanceSettings.game_data[key]
+          end
+
+          def self.[]=(key, value)
+            Lich::Common::InstanceSettings.game_data[key] = value
+          end
+        end
       end
 
-      def self.save(scope, script, value)
-        @data["#{scope}:#{script}"] = value
+      def self.game_data
+        @game_data
       end
 
       def self.clear_test_data!
-        @data = {}
+        @game_data = {}
       end
     end
   end
-end unless defined?(Lich::Common::DB_Store)
+end unless defined?(Lich::Common::InstanceSettings)
 
 # Mock Lich::Messaging
 module Lich
@@ -58,7 +67,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
   before(:each) do
     # Reset test state
-    Lich::Common::DB_Store.clear_test_data!
+    Lich::Common::InstanceSettings.clear_test_data!
     Lich::Messaging.clear_messages!
     described_module.reload!
 
@@ -333,10 +342,10 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'returns all characters accounts' do
-      Lich::Common::DB_Store.save('DRF', 'drbanking', {
+      Lich::Common::InstanceSettings.game['banking'] = {
         'Mahtra'     => { 'Crossings' => 10_000 },
         'Quilsilgas' => { 'Shard' => 20_000 }
-      })
+      }
       described_module.reload!
       expect(described_module.all_accounts).to have_key('Mahtra')
       expect(described_module.all_accounts).to have_key('Quilsilgas')
@@ -350,10 +359,10 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
     it 'returns current characters accounts' do
       XMLData.name = 'Mahtra'
-      Lich::Common::DB_Store.save('DRF', 'drbanking', {
+      Lich::Common::InstanceSettings.game['banking'] = {
         'Mahtra'    => { 'Crossings' => 10_000, 'Shard' => 5_000 },
         'OtherChar' => { 'Riverhaven' => 20_000 }
-      })
+      }
       described_module.reload!
       accounts = described_module.my_accounts
       expect(accounts['Crossings']).to eq(10_000)
@@ -385,7 +394,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(Lich::Messaging.messages.last).to include('Updated Crossings balance')
     end
 
-    it 'persists to DB_Store' do
+    it 'persists to InstanceSettings' do
       described_module.update_balance('Crossings', 10_000)
       # Reload to verify persistence
       described_module.reload!
@@ -421,10 +430,10 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'sums all bank balances across all characters' do
-      Lich::Common::DB_Store.save('DRF', 'drbanking', {
+      Lich::Common::InstanceSettings.game['banking'] = {
         'Char1' => { 'Crossings' => 10_000, 'Shard' => 5_000 },
         'Char2' => { 'Riverhaven' => 20_000 }
-      })
+      }
       described_module.reload!
       expect(described_module.total_wealth_all).to eq(35_000)
     end
@@ -556,10 +565,10 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     end
 
     it 'displays all characters bank balances' do
-      Lich::Common::DB_Store.save('DRF', 'drbanking', {
+      Lich::Common::InstanceSettings.game['banking'] = {
         'Mahtra'     => { 'Crossings' => 10_000 },
         'Quilsilgas' => { 'Shard' => 20_000 }
-      })
+      }
       described_module.reload!
       described_module.display_banks_all
       messages = Lich::Messaging.messages.join("\n")
@@ -570,10 +579,10 @@ RSpec.describe Lich::DragonRealms::DRBanking do
   end
 
   describe '.reload!' do
-    it 'reloads data from DB_Store' do
+    it 'reloads data from InstanceSettings' do
       described_module.update_balance('Crossings', 10_000)
-      # Directly modify DB_Store behind the cache
-      Lich::Common::DB_Store.save('DRF', 'drbanking', { 'TestChar' => { 'Crossings' => 99_999 } })
+      # Directly modify InstanceSettings behind the cache
+      Lich::Common::InstanceSettings.game['banking'] = { 'TestChar' => { 'Crossings' => 99_999 } }
       # Without reload, still shows cached value
       expect(described_module.my_accounts['Crossings']).to eq(10_000)
       # After reload, shows new value
@@ -622,10 +631,10 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
   describe '.reset_all!' do
     it 'clears all characters bank data' do
-      Lich::Common::DB_Store.save('DRF', 'drbanking', {
+      Lich::Common::InstanceSettings.game['banking'] = {
         'Char1' => { 'Crossings' => 10_000 },
         'Char2' => { 'Shard' => 20_000 }
-      })
+      }
       described_module.reload!
 
       described_module.reset_all!
