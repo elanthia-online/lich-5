@@ -3,12 +3,12 @@
 require 'rspec'
 require 'ostruct'
 
-SPEC_ROOT ||= File.expand_path('../../../..', __dir__)
-DATA_DIR ||= File.join(SPEC_ROOT, 'spec')
-LIB_DIR ||= File.join(SPEC_ROOT, 'lib')
+# Define DATA_DIR before loading settings.rb (it uses DATA_DIR for DatabaseAdapter initialization)
+DATA_DIR ||= File.expand_path('../../../../spec', __dir__)
 
-require_relative File.join(DATA_DIR, 'mock_database_adapter.rb')
-require_relative File.join(LIB_DIR, 'common', 'settings.rb')
+# Use direct relative paths to avoid constant conflicts with other specs
+require_relative '../../../mock_database_adapter'
+require_relative '../../../../lib/common/settings'
 
 # Stub Lich.deprecated if Lich module exists but method doesn't
 module Lich
