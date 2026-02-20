@@ -66,20 +66,17 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     XMLData.room_title = ''
     XMLData.game = 'DRF'
 
-    # Stub Lich::Messaging.msg to capture messages to our test array
-    allow(Lich::Messaging).to receive(:msg) do |style, message|
-      DRBankingTestData.messages << { message: message, type: style }
-    end
-
-    # Stub Lich::Common::InstanceSettings.game to return our test accessor
-    # This is the key stub - we're stubbing the .game method to return an object
-    # that reads/writes to DRBankingTestData.game_data
-    allow(Lich::Common::InstanceSettings).to receive(:game) do
-      # Create a new accessor each time that references current test data
+    # Directly redefine the module methods to use our test data
+    # This is more invasive than allow().to receive() but works reliably in CI
+    Lich::Common::InstanceSettings.define_singleton_method(:game) do
       Object.new.tap do |obj|
         obj.define_singleton_method(:[]) { |key| DRBankingTestData.game_data[key] }
         obj.define_singleton_method(:[]=) { |key, value| DRBankingTestData.game_data[key] = value }
       end
+    end
+
+    Lich::Messaging.define_singleton_method(:msg) do |style, message|
+      DRBankingTestData.messages << { message: message, type: style }
     end
 
     # Reset DRBanking cache
