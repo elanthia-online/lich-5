@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'tempfile'
 require 'json'
 require 'fileutils'
@@ -38,29 +40,115 @@ module Lich
       @frontend_pid = nil
       @pid_mutex = Mutex.new
 
-      # Client version string sent to the game server during handshake
+      # ─── Frontend Registry ─────────────────────────────────────
+      # Each registered frontend has:
+      #   - capabilities: Set of symbols (e.g., :xml, :streams, :mono)
+      #   - metadata: Hash of additional data (e.g., client_string)
+      #
+      # This registry-based approach allows adding new frontends via
+      # configuration without modifying the controller code.
+      @registry = Hash.new { |h, k| h[k] = { capabilities: Set.new, metadata: {} } }
+
+      # Registers a frontend with its capabilities and metadata.
+      # @param name [Symbol, String] The name of the frontend (e.g., :wrayth)
+      # @param capabilities [Array<Symbol>] A list of capabilities (e.g., [:xml, :streams])
+      # @param metadata [Hash] Additional data (e.g., { client_string: "..." })
+      def self.register(name, capabilities: [], metadata: {})
+        entry = @registry[name.to_s.downcase]
+        entry[:capabilities].merge(capabilities.map(&:to_sym))
+        entry[:metadata].merge!(metadata)
+      end
+
+      # Checks if a frontend has a specific capability.
+      # @param frontend_name [String] The name of the frontend to check
+      # @param capability [Symbol] The capability to check for
+      # @return [Boolean]
+      def self.has_capability?(frontend_name, capability)
+        return false if frontend_name.nil?
+
+        @registry[frontend_name.to_s.downcase][:capabilities].include?(capability.to_sym)
+      end
+
+      # Retrieves a metadata value for a given frontend.
+      # @param frontend_name [String] The name of the frontend
+      # @param key [Symbol] The metadata key to retrieve
+      # @return [Object, nil]
+      def self.metadata_for(frontend_name, key)
+        return nil if frontend_name.nil?
+
+        @registry[frontend_name.to_s.downcase][:metadata][key]
+      end
+
+      # Returns all registered frontend names.
+      # @return [Array<String>]
+      def self.registered_frontends
+        @registry.keys
+      end
+
+      # Returns all frontends that have a specific capability.
+      # @param capability [Symbol] The capability to filter by
+      # @return [Array<String>]
+      def self.frontends_with_capability(capability)
+        @registry.select { |_name, data| data[:capabilities].include?(capability.to_sym) }.keys
+      end
+
+      # ─── Default Frontend Registrations ────────────────────────
+      # Ideally this would live in a separate config file loaded during init.
+
+      register(:wrayth,
+               capabilities: %i[xml streams mono room_window])
+
+      register(:stormfront,
+               capabilities: %i[xml streams mono room_window])
+
+      register(:profanity,
+               capabilities: %i[xml streams])
+
+      register(:genie,
+               capabilities: %i[xml mono])
+
+      register(:frostbite,
+               capabilities: %i[xml])
+
+      register(:wizard,
+               capabilities: %i[gsl])
+
+      register(:avalon,
+               capabilities: %i[gsl])
+
+      # ─── Client String ─────────────────────────────────────────
+      # Default client string (Wrayth identity) sent during handshake
       CLIENT_STRING = "/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML"
 
-      # Frontend capability groups
-      XML_FRONTENDS    = %w[stormfront wrayth frostbite profanity genie].freeze
-      GSL_FRONTENDS    = %w[wizard avalon].freeze
-      STREAM_FRONTENDS = %w[stormfront wrayth profanity].freeze
-      MONO_FRONTENDS   = %w[stormfront wrayth genie].freeze
+      # ─── Backward-Compatible Constants ─────────────────────────
+      # These arrays are derived from the registry for backward compatibility.
+      # External code may still reference these constants directly.
+      XML_FRONTENDS    = frontends_with_capability(:xml).freeze
+      GSL_FRONTENDS    = frontends_with_capability(:gsl).freeze
+      STREAM_FRONTENDS = frontends_with_capability(:streams).freeze
+      MONO_FRONTENDS   = frontends_with_capability(:mono).freeze
+
+      # ─── Predicate Methods ─────────────────────────────────────
+      # These now delegate to has_capability? for consistency.
 
       def self.supports_xml?(fe = $frontend)
-        XML_FRONTENDS.include?(fe)
+        has_capability?(fe, :xml)
       end
 
       def self.supports_gsl?(fe = $frontend)
-        GSL_FRONTENDS.include?(fe)
+        has_capability?(fe, :gsl)
       end
 
       def self.supports_streams?(fe = $frontend)
-        STREAM_FRONTENDS.include?(fe)
+        has_capability?(fe, :streams)
       end
 
       def self.supports_mono?(fe = $frontend)
-        MONO_FRONTENDS.include?(fe)
+        has_capability?(fe, :mono)
+      end
+
+      def self.supports_room_window?(fe = $frontend)
+        has_capability?(fe, :room_window)
       end
 
       # Accessor for the current frontend identity ($frontend global)
