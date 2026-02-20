@@ -2419,8 +2419,8 @@ def do_client(client_string)
     elsif cmd =~ /^banks$/ && XMLData.game =~ /^GS/
       Game._puts "<c>bank account"
       $_CLIENTBUFFER_.push "<c>bank account"
-    elsif cmd =~ /^banks(?: (all|reset|reset all))?$/i && XMLData.game =~ /^DR/
-      case Regexp.last_match(1)&.downcase
+    elsif XMLData.game =~ /^DR/ && (banks_match = cmd.match(/^banks(?: (all|reset|reset all))?$/i))
+      case banks_match[1]&.downcase
       when 'all'
         Lich::DragonRealms::DRBanking.display_banks_all
       when 'reset'
