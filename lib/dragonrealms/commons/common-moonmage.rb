@@ -57,11 +57,12 @@ module Lich
       # Expected game responses when observing celestial bodies.
       # Used by `observe` method to match bput responses.
       # Patterns validated via in-game testing with test_observe_comprehensive.lic
+      # Note: Roundtime is intentionally NOT included - every observation that produces
+      # a Roundtime also produces a more specific pattern that matches first.
       OBSERVE_MESSAGES = [
         'Your search for',                           # Covers: fruitless, foiled by daylight/darkness
         'You see nothing regarding the future',      # No vision available
         'Clouds obscure',                            # Weather blocking
-        'Roundtime',                                 # Successful observation
         'The following heavenly bodies are visible:', # Observe heavens listing
         "That's a bit hard to do while inside",      # Indoor blocking
         'too close to the sun',                      # Planet visibility (solar conjunction)
@@ -70,7 +71,8 @@ module Lich
         'below the horizon',                         # Body not visible
         'You have not pondered',                     # Observation cooldown
         'You are unable to make use',                # Cooldown followup
-        'While the sighting'                         # Partial success
+        'While the sighting',                        # Partial success
+        'You learned something useful'               # Full success
       ].freeze
 
       def observe(thing)
