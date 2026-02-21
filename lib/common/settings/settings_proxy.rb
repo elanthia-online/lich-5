@@ -7,16 +7,20 @@ module Lich
       LOG_PREFIX = "[SettingsProxy]".freeze
 
       # Minimal change: add detached flag (default false)
-      def initialize(settings_module, scope, path, target, detached: false)
+      # Added script_name parameter to support InstanceSettings (core Lich functionality
+      # that runs outside of Script context). When script_name is provided, it takes
+      # precedence over Script.current.name in the save path.
+      def initialize(settings_module, scope, path, target, detached: false, script_name: nil)
         @settings_module = settings_module # This should be the Settings module itself
         @scope  = scope
         @path   = path.dup
         @target = target
         @detached = detached
-        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}, detached: #{@detached}" })
+        @script_name = script_name
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}, detached: #{@detached}, script_name: #{@script_name.inspect}" })
       end
 
-      attr_reader :target, :path, :scope
+      attr_reader :target, :path, :scope, :script_name
 
       # Minimal change: expose detached? status
       def detached?
@@ -165,7 +169,7 @@ module Lich
 
       # New method to show the proxy's internal details
       def proxy_details
-        "<SettingsProxy scope=#{@scope.inspect} path=#{@path.inspect} target_class=#{@target.class} target_object_id=#{@target.object_id} detached=#{@detached}>"
+        "<SettingsProxy scope=#{@scope.inspect} path=#{@path.inspect} target_class=#{@target.class} target_object_id=#{@target.object_id} detached=#{@detached} script_name=#{@script_name.inspect}>"
       end
 
       def pretty_print(pp)
@@ -195,7 +199,7 @@ module Lich
         if @target.respond_to?(:each)
           @target.each do |item|
             if @settings_module.container?(item)
-              yield SettingsProxy.new(@settings_module, @scope, [], item, detached: true)
+              yield SettingsProxy.new(@settings_module, @scope, [], item, detached: true, script_name: @script_name)
             else
               yield item
             end
@@ -233,7 +237,7 @@ module Lich
         if @settings_module.container?(value)
           new_path = @path.dup
           new_path << key
-          SettingsProxy.new(@settings_module, @scope, new_path, value)
+          SettingsProxy.new(@settings_module, @scope, new_path, value, script_name: @script_name)
         else
           value
         end
@@ -304,17 +308,17 @@ module Lich
               if !idx.nil?
                 element_path = @path.dup
                 element_path << idx
-                SettingsProxy.new(@settings_module, @scope, element_path, result)
+                SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
               else
                 # Fallback: if we somehow can't locate the element, preserve
                 # the old behavior (path == @path, no index).
                 is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
-                SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view)
+                SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name)
               end
             else
               # Existing behavior for all other non-destructive container methods
               is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
-              SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view)
+              SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name)
             end
           else
             # Non-container results (e.g., Hash#keys) stay as plain values
@@ -329,7 +333,7 @@ module Lich
         elsif @settings_module.container?(result)
           # If a new container is returned (e.g. some destructive methods might return a new object)
           # Wrap it in a new proxy, maintaining the current path and scope.
-          SettingsProxy.new(@settings_module, @scope, @path, result)
+          SettingsProxy.new(@settings_module, @scope, @path, result, script_name: @script_name)
         else
           result
         end
