@@ -37,7 +37,7 @@ module Lich
 
       # Ensure msg method captures messages for testing
       alias_method :original_msg, :msg if method_defined?(:msg) && !method_defined?(:original_msg)
-      def msg(type, message)
+      def msg(type, message, **_opts)
         @messages ||= []
         @messages << { type: type, message: message }
       end
@@ -51,9 +51,16 @@ require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
 # Load the module under test
 require_relative '../../../../lib/dragonrealms/drinfomon/drexpmonitor'
 
-# Create aliases for easier access
-DRExpMonitor = Lich::DragonRealms::DRExpMonitor unless defined?(DRExpMonitor)
-DRSkill = Lich::DragonRealms::DRSkill unless defined?(DRSkill)
+# Force aliases to point to real classes — mock modules from other specs
+# (e.g., common_arcana_spec) may have defined these as top-level modules,
+# shadowing the real Lich::DragonRealms classes.
+%i[DRExpMonitor DRSkill].each do |name|
+  real = Lich::DragonRealms.const_get(name)
+  if Object.const_defined?(name) && Object.const_get(name) != real
+    Object.send(:remove_const, name)
+  end
+  Object.const_set(name, real) unless Object.const_defined?(name)
+end
 
 RSpec.describe Lich::DragonRealms::DRExpMonitor do
   before(:each) do
@@ -165,6 +172,48 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
     it 'persists to database' do
       DRExpMonitor.inline_display = true
       expect(Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_inline_exp'")).to eq('true')
+    end
+  end
+
+  describe 'constants' do
+    describe 'MAX_SQLITE_RETRIES' do
+      it 'is defined as 10 (BUG FIX: prevents infinite retry loops)' do
+        expect(DRExpMonitor::MAX_SQLITE_RETRIES).to eq(10)
+      end
+    end
+
+    describe 'BOOLEAN_TRUE_PATTERN' do
+      it 'matches "on" exactly' do
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('on')).to be true
+      end
+
+      it 'matches "true" exactly' do
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('true')).to be true
+      end
+
+      it 'matches "yes" exactly' do
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('yes')).to be true
+      end
+
+      it 'matches case-insensitively' do
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('ON')).to be true
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('TRUE')).to be true
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('YES')).to be true
+      end
+
+      it 'does not match partial strings (BUG FIX)' do
+        # Before fix, /on|true|yes/ would match "money" or "trust"
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('money')).to be false
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('trust')).to be false
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('yesman')).to be false
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('ongoing')).to be false
+      end
+
+      it 'does not match "off", "false", "no"' do
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('off')).to be false
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('false')).to be false
+        expect(DRExpMonitor::BOOLEAN_TRUE_PATTERN.match?('no')).to be false
+      end
     end
   end
 
@@ -303,7 +352,7 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
 
       DRExpMonitor.report_skill_gains
 
-      expect(Lich::Messaging.messages.last[:message]).to include('Gained:')
+      expect(Lich::Messaging.messages.last[:message]).to include('DRExpMonitor:')
       expect(Lich::Messaging.messages.last[:message]).to include('Evasion(+2)')
       expect(DRSkill.gained_skills).to be_empty
     end

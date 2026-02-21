@@ -24,17 +24,33 @@ rescue LoadError
 end
 
 # Mock global constants used throughout Lich
-XMLData = OpenStruct.new(
-  game: 'DR',
-  name: 'TestChar',
-  room_id: 12345,
-  room_count: 1,
-  room_title: '[Test Room]',
-  room_description: 'A test room description.',
-  room_exits_string: 'Obvious paths: north, south',
-  room_window_disabled: false,
-  previous_nav_rm: 11111
-) unless defined?(XMLData)
+# XMLData uses attr_accessor so tests can override values, with defaults reset before each test.
+XMLData = OpenStruct.new unless defined?(XMLData)
+
+# Define accessors on XMLData singleton class for all commonly used attributes
+XMLData.singleton_class.class_eval do
+  attr_accessor :game, :name, :room_id, :room_count, :room_title, :room_description,
+                :room_exits_string, :room_window_disabled, :previous_nav_rm, :room_exits,
+                :prepared_spell
+end
+
+# Helper method to reset XMLData to default values (called in before(:each))
+def reset_xml_data!
+  XMLData.game = 'DR'
+  XMLData.name = 'TestChar'
+  XMLData.room_id = 12345
+  XMLData.room_count = 1
+  XMLData.room_title = '[Test Room]'
+  XMLData.room_description = 'A test room description.'
+  XMLData.room_exits_string = 'Obvious paths: north, south'
+  XMLData.room_exits = []
+  XMLData.room_window_disabled = false
+  XMLData.previous_nav_rm = 11111
+  XMLData.prepared_spell = nil
+end
+
+# Set initial defaults
+reset_xml_data!
 
 # Mock global variables
 $clean_lich_char = ';' unless defined?($clean_lich_char)
@@ -100,7 +116,7 @@ module Lich
 
   # Mock Messaging module
   module Messaging
-    def self.msg(type, message)
+    def self.msg(type, message, **_opts)
       # Capture messages for test assertions
       @messages ||= []
       @messages << { type: type, message: message }
@@ -220,5 +236,621 @@ module ExecScript
   end
 end unless defined?(ExecScript)
 
-# NOTE: No RSpec.configure block here to avoid affecting other specs in the test suite.
-# This file only provides mock objects and constants needed by drexpmonitor and drskill specs.
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONSOLIDATED MOCKS FOR COMMONS SPECS
+# All commons spec files share these mocks to avoid isolation issues.
+# Individual specs can override methods using allow().to receive() as needed.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─── Global Variables ─────────────────────────────────────────────────────────
+$pause_all_lock ||= Mutex.new
+$safe_pause_lock ||= Mutex.new
+$fake_stormfront ||= false
+
+# ─── Lich::Util ───────────────────────────────────────────────────────────────
+module Lich
+  module Util
+    def self.issue_command(_command, _start, _end_pattern, **_opts)
+      []
+    end
+  end unless defined?(Lich::Util)
+end
+
+# ─── DRC (Common module) ──────────────────────────────────────────────────────
+module DRC
+  class << self
+    attr_accessor :right_hand_item, :left_hand_item
+
+    def bput(_command, *_patterns)
+      nil
+    end
+
+    def right_hand
+      @right_hand_item
+    end
+
+    def left_hand
+      @left_hand_item
+    end
+
+    def get_noun(item)
+      item.to_s.split.last
+    end
+
+    def bold(text)
+      "<pushBold/>#{text}<popBold/>"
+    end
+
+    def retreat(*_args); end
+    def fix_standing; end
+    def release_invisibility; end
+    def set_stance(_stance); end
+    def wait_for_script_to_complete(_name, *_args); end
+    def standing?; true; end
+    def hiding?; false; end
+    def invisible?; false; end
+    def stunned?; false; end
+    def webbed?; false; end
+    def kneeling?; false; end
+
+    def message(text, make_bold = true)
+      Lich::Messaging.msg(make_bold ? 'bold' : 'plain', text)
+    end
+  end
+end unless defined?(DRC)
+
+# DRC::Item class (must be defined separately with its own guard)
+class DRC::Item
+  attr_accessor :name, :adjective, :ranged, :needs_unloading, :wield, :lodges,
+                :bound, :swappable, :skip_repair, :worn
+
+  def initialize(name: nil, adjective: nil, ranged: false, needs_unloading: false)
+    @name = name
+    @adjective = adjective
+    @ranged = ranged
+    @needs_unloading = needs_unloading
+    @worn = false
+    @lodges = true
+    @swappable = false
+    @bound = false
+    @wield = false
+    @skip_repair = false
+  end
+
+  def short_name
+    @adjective ? "#{@adjective} #{@name}" : @name
+  end
+
+  def short_regex
+    Regexp.new(short_name.to_s, Regexp::IGNORECASE)
+  end
+
+  def self.from_text(text)
+    return nil if text.nil? || text.empty?
+    new(name: text.split.last)
+  end
+end unless defined?(DRC::Item)
+
+# ─── DRCI (Common Items module) ───────────────────────────────────────────────
+module DRCI
+  class << self
+    def get_item?(*_args); true; end
+    def put_away_item?(*_args); true; end
+    def stow_item?(*_args); true; end
+    def tie_item?(*_args); true; end
+    def untie_item?(*_args); true; end
+    def wear_item?(*_args); true; end
+    def remove_item?(*_args); true; end
+    def dispose_trash(*_args); end
+    def get_item(*_args); end
+    def get_item_if_not_held?(*_args); true; end
+    def in_hands?(*_args); false; end
+    def in_left_hand?(*_args); false; end
+    def in_right_hand?(*_args); false; end
+    def inside?(*_args); false; end
+    def put_away_item_unsafe?(*_args); true; end
+    def have_item_by_look?(*_args); false; end
+  end
+end unless defined?(DRCI)
+
+# ─── DRRoom (must be class, not module) ───────────────────────────────────────
+class DRRoom
+  @npcs = []
+  @pcs = []
+  @room_objs = []
+  @dead_npcs = []
+  @group_members = []
+
+  class << self
+    attr_accessor :npcs, :pcs, :room_objs, :dead_npcs, :group_members
+
+    def reset!
+      @npcs = []
+      @pcs = []
+      @room_objs = []
+      @dead_npcs = []
+      @group_members = []
+    end
+  end
+end unless defined?(DRRoom)
+
+# ─── DRStats ──────────────────────────────────────────────────────────────────
+module DRStats
+  @guild = 'Warrior Mage'
+  @encumbrance = 'None'
+  @mana = 100
+  @concentration = 100
+
+  class << self
+    attr_accessor :guild, :encumbrance, :mana, :concentration
+
+    def barbarian?; @guild == 'Barbarian'; end
+    def thief?; @guild == 'Thief'; end
+    def trader?; @guild == 'Trader'; end
+    def commoner?; @guild == 'Commoner'; end
+    def moon_mage?; @guild == 'Moon Mage'; end
+    def warrior_mage?; @guild == 'Warrior Mage'; end
+    def empath?; @guild == 'Empath'; end
+    def paladin?; @guild == 'Paladin'; end
+    def ranger?; @guild == 'Ranger'; end
+    def cleric?; @guild == 'Cleric'; end
+    def bard?; @guild == 'Bard'; end
+    def necromancer?; @guild == 'Necromancer'; end
+
+    def reset!
+      @guild = 'Warrior Mage'
+      @encumbrance = 'None'
+      @mana = 100
+      @concentration = 100
+    end
+  end
+end unless defined?(DRStats)
+
+# ─── DRSkill (real implementation with test extensions) ───────────────────────
+# Load the REAL DRSkill from drskill.rb, then add test extensions.
+# Note: drskill.rb depends on drexpmonitor.rb being loaded first
+require_relative '../lib/dragonrealms/drinfomon/drexpmonitor'
+require_relative '../lib/dragonrealms/drinfomon/drskill'
+
+# Alias to top level for test convenience
+DRSkill = Lich::DragonRealms::DRSkill unless defined?(DRSkill)
+
+# Add test extensions - override getxp/getrank to be settable
+class Lich::DragonRealms::DRSkill
+  @xp_overrides = {}
+  @rank_overrides = {}
+
+  class << self
+    # Override getxp: use override if set, otherwise delegate to real implementation
+    alias_method :original_getxp, :getxp
+    def getxp(val)
+      return @xp_overrides[val] if @xp_overrides&.key?(val)
+
+      original_getxp(val)
+    end
+
+    # Override getrank: use override if set, otherwise delegate to real implementation
+    alias_method :original_getrank, :getrank
+    def getrank(val)
+      return @rank_overrides[val] if @rank_overrides&.key?(val)
+
+      original_getrank(val)
+    end
+
+    def set_xp(skill, xp)
+      @xp_overrides ||= {}
+      @xp_overrides[skill] = xp
+    end
+
+    def set_rank(skill, rank)
+      @rank_overrides ||= {}
+      @rank_overrides[skill] = rank
+    end
+
+    def reset!
+      @xp_overrides = {}
+      @rank_overrides = {}
+    end
+  end
+end
+
+# ─── DRSpells ─────────────────────────────────────────────────────────────────
+# DRSpells is now loaded from drspells.rb above (after Flags), with test extensions added.
+# No mock needed here.
+
+# ─── UserVars ─────────────────────────────────────────────────────────────────
+module UserVars
+  @vars = {}
+  @moons = {}
+  @sun = { 'night' => false, 'day' => true }
+
+  class << self
+    attr_accessor :song, :climbing_song, :instrument, :discerns, :avtalia, :moons
+
+    def method_missing(name, *args)
+      name_str = name.to_s
+      if name_str.end_with?('=')
+        @vars[name_str.chomp('=')] = args.first
+      else
+        @vars[name_str]
+      end
+    end
+
+    def respond_to_missing?(_name, _include_private = false)
+      true
+    end
+
+    def sun
+      @sun || { 'night' => false, 'day' => true }
+    end
+
+    def sun=(val)
+      @sun = val
+    end
+
+    def friends
+      @vars['friends'] || []
+    end
+
+    def hunting_nemesis
+      @vars['hunting_nemesis'] || []
+    end
+
+    def reset!
+      @vars = {}
+      @moons = {}
+      @sun = { 'night' => false, 'day' => true }
+      @song = nil
+      @climbing_song = nil
+      @instrument = nil
+    end
+  end
+end unless defined?(UserVars)
+
+# ─── Flags ─────────────────────────────────────────────────────────────────────
+# Load the REAL Flags implementation from events.rb, then add test extensions.
+# This ensures all specs use the same Flags (with @@flags class variables).
+require_relative '../lib/dragonrealms/drinfomon/events'
+
+# Alias to top level for test convenience
+Flags = Lich::DragonRealms::Flags unless defined?(Flags)
+
+# Add test extensions to the real Flags
+class Lich::DragonRealms::Flags
+  @pending = {}
+
+  class << self
+    # Set a flag value that survives add() calls (simulates game triggering flag during bput)
+    def set_pending(name, val)
+      @pending ||= {}
+      @pending[name] = val
+    end
+
+    # Reset all state for test isolation
+    def reset!
+      @@flags = {}
+      @@matchers = {}
+      @pending = {}
+    end
+  end
+
+  # Override add to inject pending values after initialization
+  original_add = method(:add)
+  define_singleton_method(:add) do |name, *patterns|
+    original_add.call(name, *patterns)
+    @pending ||= {}
+    if @pending.key?(name)
+      @@flags[name] = @pending.delete(name)
+    end
+  end
+end
+
+# ─── DRSpells (real implementation with test extensions) ──────────────────────
+# Load the REAL DRSpells from drspells.rb, then add test extensions.
+# The real DRSpells.active_spells delegates to XMLData.dr_active_spells.
+# For testing, we override it to use an instance variable that tests can set.
+require_relative '../lib/dragonrealms/drinfomon/drspells'
+
+# Alias to top level for test convenience
+DRSpells = Lich::DragonRealms::DRSpells unless defined?(DRSpells)
+
+# Add test extensions - override active_spells to be settable while preserving delegation
+module Lich::DragonRealms::DRSpells
+  @active_spells_override = nil
+
+  class << self
+    # Override active_spells: use override if set, otherwise delegate to XMLData
+    # This allows tests to set DRSpells.active_spells = {...} while drspells_spec
+    # can still test the XMLData delegation (when override is nil)
+    def active_spells
+      @active_spells_override.nil? ? XMLData.dr_active_spells : @active_spells_override
+    end
+
+    def active_spells=(val)
+      @active_spells_override = val
+    end
+
+    def reset!
+      @active_spells_override = nil
+      @@known_spells = {}
+      @@known_feats = {}
+      @@spellbook_format = nil
+      @@grabbing_known_spells = false
+      @@grabbing_known_barbarian_abilities = false
+      @@grabbing_known_khri = false
+    end
+  end
+end
+
+# ─── Room ─────────────────────────────────────────────────────────────────────
+class Room
+  class << self
+    def current
+      nil
+    end
+  end
+end unless defined?(Room)
+
+# ─── Map (must be class, not module, for games_spec.rb compatibility) ─────────
+class Map
+  class << self
+    def dijkstra(*_args)
+      [nil, {}]
+    end
+  end
+end unless defined?(Map)
+
+# ─── Frontend ─────────────────────────────────────────────────────────────────
+module Frontend
+  def self.supports_gsl?
+    false
+  end
+
+  def self.client
+    'stormfront'
+  end
+end unless defined?(Frontend)
+
+# ─── Enhanced Script class ────────────────────────────────────────────────────
+# Reopen to add instance methods needed by pause_all tests
+class Script
+  attr_accessor :paused, :no_pause_all, :name
+
+  def paused?
+    @paused || false
+  end
+
+  def pause; end
+  def unpause; end
+
+  class << self
+    def running
+      []
+    end unless method_defined?(:running)
+
+    def exists?(_name)
+      true
+    end unless method_defined?(:exists?)
+
+    def current
+      nil
+    end unless method_defined?(:current)
+
+    def hidden
+      []
+    end unless method_defined?(:hidden)
+  end
+end
+
+# ─── DRCA (Arcana module) - basic mock ────────────────────────────────────────
+module DRCA
+  class << self
+    def perc_mana
+      0
+    end
+  end
+end unless defined?(DRCA)
+
+# ─── DRCM (Money module) - basic mock ─────────────────────────────────────────
+module DRCM
+  class << self
+    def check_wealth(_currency = nil)
+      0
+    end
+  end
+end unless defined?(DRCM)
+
+# ─── DRCMM (Moonmage module) - basic mock ─────────────────────────────────────
+module DRCMM
+  class << self
+    def hold_moon_weapon?
+      false
+    end
+
+    def is_moon_weapon?(*_args)
+      false
+    end
+
+    def update_astral_data(data, _settings)
+      data
+    end
+
+    def set_moon_data(_data); end
+  end
+end unless defined?(DRCMM)
+
+# ─── DRCT (Travel module) - basic mock ────────────────────────────────────────
+module DRCT
+  class << self
+    def walk_to(*_args)
+      true
+    end
+  end
+end unless defined?(DRCT)
+
+# ─── Kernel methods (game engine functions) ───────────────────────────────────
+module Kernel
+  def pause(_seconds = nil); end
+  def waitrt?; end
+  def waitcastrt?; end
+  def fput(_cmd); end
+  def put(_cmd); end
+  def get?; nil; end
+  def echo(_msg); end
+  def standing?; true; end
+  def hiding?; false; end
+  def invisible?; false; end
+  def stunned?; false; end
+  def webbed?; false; end
+  def kneeling?; false; end
+  def checkprep; 'None'; end
+  def checkcastrt; 0; end
+  def reget(*_args); nil; end
+  def start_script(_name, _args = [], _flags = {}); nil; end
+  def kill_script(_handle); end
+  def _respond(*_args); end
+  def custom_require; proc { |_name| nil }; end
+
+  def get_data(key)
+    case key
+    when 'town'
+      { 'Crossing' => { 'locksmithing' => { 'id' => 19_073 } } }
+    when 'spells'
+      OpenStruct.new(
+        prep_messages: ['You begin to', "But you've already prepared", 'Your desire to prepare this offensive spell suddenly slips away', 'Something in the area interferes with your spell preparations'],
+        cast_messages: ['You gesture', 'Your target pattern dissipates'],
+        invoke_messages: ['Your cambrinth absorbs', 'you find it too clumsy', 'Invoke what?'],
+        charge_messages: ['Your cambrinth absorbs all of the energy', 'You are in no condition to do that', "You'll have to hold it", 'you find it too clumsy'],
+        segue_messages: ['You segue', 'You must be performing a cyclic spell to segue from', 'It is too soon to segue'],
+        khri_preps: ['You focus your mind', 'Your mind and body are willing', 'Your body is willing'],
+        spell_data: {},
+        barb_abilities: {
+          'Famine' => { 'type' => 'meditation', 'start_command' => 'meditate famine', 'activated_message' => 'You feel hungry' }
+        }
+      )
+    else
+      OpenStruct.new(spell_data: {}, observe_finished_messages: [], constellations: [])
+    end
+  end
+
+  # clear must be private to avoid interfering with respond_to? checks
+  def clear; end
+  private :clear
+end
+
+# ─── Namespace Aliases ────────────────────────────────────────────────────────
+# Ensure all modules are accessible from both top level and Lich::DragonRealms
+# ALWAYS overwrite to ensure our mocks take precedence over any earlier definitions
+# (e.g., drparser_spec.rb may define incomplete mocks before spec_helper loads)
+module Lich
+  module DragonRealms
+    # Remove existing constants first to avoid "already initialized" warnings
+    remove_const(:DRC) if const_defined?(:DRC, false)
+    remove_const(:DRCI) if const_defined?(:DRCI, false)
+    remove_const(:DRRoom) if const_defined?(:DRRoom, false)
+    remove_const(:DRStats) if const_defined?(:DRStats, false)
+    # DRSkill already set up via require of drskill.rb above
+    # DRSpells already set up via require of drspells.rb above
+    remove_const(:DRCA) if const_defined?(:DRCA, false)
+    remove_const(:DRCM) if const_defined?(:DRCM, false)
+
+    DRC = ::DRC
+    DRCI = ::DRCI
+    DRRoom = ::DRRoom
+    DRStats = ::DRStats
+    # DRSkill already Lich::DragonRealms::DRSkill (loaded from drskill.rb)
+    # DRSpells already Lich::DragonRealms::DRSpells (loaded from drspells.rb)
+    DRCA = ::DRCA
+    DRCM = ::DRCM
+    remove_const(:DRCMM) if const_defined?(:DRCMM, false)
+    remove_const(:DRCT) if const_defined?(:DRCT, false)
+    DRCMM = ::DRCMM
+    DRCT = ::DRCT
+    # Flags is already Lich::DragonRealms::Flags (loaded from events.rb at top of spec_helper)
+
+    # DRSkill set_xp/set_rank methods are added in test extensions above
+
+    # Ensure namespaced DRStats has guild check methods (may have been defined by drparser_spec.rb)
+    unless DRStats.respond_to?(:barbarian?)
+      DRStats.define_singleton_method(:barbarian?) { @guild == 'Barbarian' }
+      DRStats.define_singleton_method(:thief?) { @guild == 'Thief' }
+      DRStats.define_singleton_method(:trader?) { @guild == 'Trader' }
+      DRStats.define_singleton_method(:commoner?) { @guild == 'Commoner' }
+      DRStats.define_singleton_method(:moon_mage?) { @guild == 'Moon Mage' }
+      DRStats.define_singleton_method(:warrior_mage?) { @guild == 'Warrior Mage' }
+      DRStats.define_singleton_method(:empath?) { @guild == 'Empath' }
+      DRStats.define_singleton_method(:paladin?) { @guild == 'Paladin' }
+      DRStats.define_singleton_method(:ranger?) { @guild == 'Ranger' }
+      DRStats.define_singleton_method(:cleric?) { @guild == 'Cleric' }
+      DRStats.define_singleton_method(:bard?) { @guild == 'Bard' }
+      DRStats.define_singleton_method(:necromancer?) { @guild == 'Necromancer' }
+    end
+
+    # Ensure namespaced DRStats has mana accessor (may have been defined by drparser_spec.rb)
+    unless DRStats.respond_to?(:mana)
+      DRStats.instance_variable_set(:@mana, 100)
+      DRStats.define_singleton_method(:mana) { @mana }
+      DRStats.define_singleton_method(:mana=) { |val| @mana = val }
+    end
+
+    # Ensure UserVars has moons accessor (drparser_spec.rb doesn't define it)
+    unless UserVars.respond_to?(:moons=)
+      UserVars.instance_variable_set(:@moons, {})
+      UserVars.define_singleton_method(:moons) { @moons }
+      UserVars.define_singleton_method(:moons=) { |val| @moons = val }
+    end
+
+    # Ensure UserVars has sun accessor (drparser_spec.rb doesn't define it)
+    unless UserVars.respond_to?(:sun=)
+      UserVars.instance_variable_set(:@sun, { 'night' => false, 'day' => true })
+      UserVars.define_singleton_method(:sun) { @sun || { 'night' => false, 'day' => true } }
+      UserVars.define_singleton_method(:sun=) { |val| @sun = val }
+    end
+
+    # Ensure UserVars has song/instrument accessors (drparser_spec.rb doesn't define them)
+    unless UserVars.respond_to?(:song=)
+      UserVars.instance_variable_set(:@song, nil)
+      UserVars.instance_variable_set(:@instrument, nil)
+      UserVars.instance_variable_set(:@climbing_song, nil)
+      UserVars.define_singleton_method(:song) { @song }
+      UserVars.define_singleton_method(:song=) { |val| @song = val }
+      UserVars.define_singleton_method(:instrument) { @instrument }
+      UserVars.define_singleton_method(:instrument=) { |val| @instrument = val }
+      UserVars.define_singleton_method(:climbing_song) { @climbing_song }
+      UserVars.define_singleton_method(:climbing_song=) { |val| @climbing_song = val }
+    end
+
+    # Ensure namespaced DRSpells has active_spells= (may have been defined by drparser_spec.rb)
+    unless DRSpells.respond_to?(:active_spells=)
+      DRSpells.instance_variable_set(:@active_spells, {})
+      DRSpells.define_singleton_method(:active_spells) { @active_spells }
+      DRSpells.define_singleton_method(:active_spells=) { |val| @active_spells = val }
+      DRSpells.define_singleton_method(:reset!) { @active_spells = {} }
+    end
+
+    # Flags is now loaded from events.rb at the top of spec_helper,
+    # with test extensions (set_pending, reset!) added directly.
+    # No additional setup needed here.
+  end
+end
+
+# ─── RSpec Configuration ──────────────────────────────────────────────────────
+RSpec.configure do |config|
+  config.before(:each) do
+    # Reset mutable state before each test
+    reset_xml_data!
+    Lich::Messaging.clear_messages!
+    DRStats.reset! if DRStats.respond_to?(:reset!)
+    DRSkill.reset! if DRSkill.respond_to?(:reset!)
+    DRSpells.reset! if DRSpells.respond_to?(:reset!)
+    Flags.reset! if Flags.respond_to?(:reset!)
+    UserVars.reset! if UserVars.respond_to?(:reset!)
+    DRRoom.reset! if DRRoom.respond_to?(:reset!)
+    DRC.right_hand_item = nil if DRC.respond_to?(:right_hand_item=)
+    DRC.left_hand_item = nil if DRC.respond_to?(:left_hand_item=)
+  end
+end
+
+# NOTE: Individual spec files can still define additional mocks or override
+# methods using allow().to receive(). The mocks above provide a baseline that
+# works for all specs when run together.

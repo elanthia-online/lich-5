@@ -67,9 +67,18 @@ module Lich
         attr_accessor :current_name
 
         def current
-          OpenStruct.new(name: current_name || "test_script")
+          # Return nil for name when current_name is explicitly nil
+          # This allows testing InstanceSettings without Script context
+          OpenStruct.new(name: current_name)
+        end
+
+        def reset!
+          @current_name = nil
         end
       end
+
+      # Set a default for tests that don't set it explicitly
+      self.current_name = 'test_script'
     end
 
     # Mock XMLData module for testing
