@@ -157,7 +157,7 @@ module Lich
         cache_key = "#{script_name}::#{scope}"
         root = @settings_cache[cache_key] ||= @db_adapter.get_settings(script_name, scope)
 
-        SettingsProxy.new(self, scope, [], root)
+        SettingsProxy.new(self, scope, [], root, script_name: script_name)
       end
 
       def self.save_proxy_changes(proxy)
@@ -166,7 +166,8 @@ module Lich
 
         path        = proxy.path
         scope       = proxy.scope
-        script_name = Script.current.name
+        # Use proxy.script_name if available (for InstanceSettings), fall back to Script.current.name
+        script_name = proxy.respond_to?(:script_name) && proxy.script_name ? proxy.script_name : Script.current.name
         cache_key   = "#{script_name || ""}::#{scope}"
 
         # Local helper to keep cache in sync with the just-persisted root
@@ -188,11 +189,18 @@ module Lich
         end
 
         # --- Refresh-before-save to prevent stale-cache overwrites ---
+        # IMPORTANT: If proxy.target IS the cached object, we must NOT replace it
+        # from the database, as that would wipe out the changes we're trying to save.
+        # Only refresh when the proxy is detached or working with a different object.
         fresh_root = @db_adapter.get_settings(script_name, scope)
 
         cached = @settings_cache[cache_key]
         if cached
-          if cached.is_a?(Hash) && fresh_root.is_a?(Hash)
+          # Skip refresh if proxy.target is the same object as cached - we'd wipe out our changes!
+          if cached.equal?(proxy.target)
+            _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Skipping refresh - proxy.target IS the cached object (object_id: #{cached.object_id})" })
+            current_root_for_scope = cached
+          elsif cached.is_a?(Hash) && fresh_root.is_a?(Hash)
             cached.replace(fresh_root)
             current_root_for_scope = cached
           elsif cached.is_a?(Array) && fresh_root.is_a?(Array)
@@ -203,7 +211,7 @@ module Lich
             @settings_cache[cache_key] = fresh_root
             current_root_for_scope = fresh_root
           end
-          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache refreshed from DB for #{cache_key} (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
+          _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Cache state for #{cache_key} (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
         else
           @settings_cache[cache_key] = fresh_root
           current_root_for_scope = fresh_root
@@ -223,7 +231,7 @@ module Lich
 
           if proxy.respond_to?(:detached?) && proxy.detached?
             _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Proxy is detached (view); persisting current root without copying view target." })
-            save_to_database(current_root_for_scope, scope)
+            save_to_database(current_root_for_scope, scope, script_name: script_name)
             sync_cache.call(current_root_for_scope)
             return nil
           end
@@ -242,7 +250,7 @@ module Lich
             end
           end
 
-          save_to_database(current_root_for_scope, scope)
+          save_to_database(current_root_for_scope, scope, script_name: script_name)
           sync_cache.call(current_root_for_scope)
           return nil
         end
@@ -328,12 +336,13 @@ module Lich
         end
 
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: root after update (object_id: #{current_root_for_scope.object_id}): #{current_root_for_scope.inspect}" })
-        save_to_database(current_root_for_scope, scope)
+        save_to_database(current_root_for_scope, scope, script_name: script_name)
         sync_cache.call(current_root_for_scope)
       end
 
-      def self.current_script_settings(scope = DEFAULT_SCOPE)
-        script_name = Script.current.name
+      def self.current_script_settings(scope = DEFAULT_SCOPE, script_name: nil)
+        # Use provided script_name or fall back to Script.current.name
+        script_name = script_name || Script.current.name
         cache_key = "#{script_name || ""}::#{scope}" # Use an empty string if script_name is nil
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "current_script_settings: Request for scope: #{scope.inspect}, cache_key: #{cache_key}" })
 
@@ -351,11 +360,12 @@ module Lich
         end
       end
 
-      def self.save_to_database(data_to_save, scope = DEFAULT_SCOPE)
-        script_name = Script.current.name
+      def self.save_to_database(data_to_save, scope = DEFAULT_SCOPE, script_name: nil)
+        # Use provided script_name or fall back to Script.current.name
+        script_name = script_name || Script.current.name
 
         if script_name.nil? || script_name.empty?
-          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_to_database: Aborting save. Script.current.name is nil or empty. Scope: #{scope.inspect}. Data will NOT be persisted." })
+          _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "save_to_database: Aborting save. script_name is nil or empty. Scope: #{scope.inspect}. Data will NOT be persisted." })
           return nil # Explicitly return nil
         end
 
@@ -411,25 +421,25 @@ module Lich
         [target, root_for_scope]
       end
 
-      def self.set_script_settings(scope = DEFAULT_SCOPE, name, value)
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "set_script_settings: scope: #{scope.inspect}, name: #{name.inspect}, value: #{value.inspect}, current_path: #{@path_navigator.path.inspect}" })
+      def self.set_script_settings(scope = DEFAULT_SCOPE, name, value, script_name: nil)
+        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "set_script_settings: scope: #{scope.inspect}, name: #{name.inspect}, value: #{value.inspect}, script_name: #{script_name.inspect}, current_path: #{@path_navigator.path.inspect}" })
         unwrapped_value = unwrap_proxies(value)
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "set_script_settings: unwrapped_value: #{unwrapped_value.inspect}" })
 
-        current_root = current_script_settings(scope)
+        current_root = current_script_settings(scope, script_name: script_name)
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "set_script_settings: current_root (DUP) for scope #{scope.inspect} (object_id: #{current_root.object_id}): #{current_root.inspect}" })
 
         if @path_navigator.path.empty?
           _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "set_script_settings: Path is empty. Setting '#{name}' on current_root." })
           current_root[name] = unwrapped_value
-          save_to_database(current_root, scope)
+          save_to_database(current_root, scope, script_name: script_name)
         else
           if !@path_navigator.path.empty?
             _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "set_script_settings: WARNING: Called with non-empty path_navigator path: #{@path_navigator.path.inspect}. This is unusual for Char/GameSettings direct assignment." })
           end
           if current_root.is_a?(Hash)
             current_root[name] = unwrapped_value
-            save_to_database(current_root, scope)
+            save_to_database(current_root, scope, script_name: script_name)
           else
             _log(LOG_LEVEL_ERROR, @@log_prefix, -> { "set_script_settings: current_root for scope #{scope.inspect} is not a Hash. Cannot set key '#{name}'. Root class: #{current_root.class}" })
           end
@@ -486,9 +496,9 @@ module Lich
         end
       end
 
-      def self.get_scoped_setting(scope_string, key_name)
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "get_scoped_setting: scope: #{scope_string.inspect}, key: #{key_name.inspect}" })
-        data_for_scope = current_script_settings(scope_string)
+      def self.get_scoped_setting(scope_string, key_name, script_name: nil)
+        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "get_scoped_setting: scope: #{scope_string.inspect}, key: #{key_name.inspect}, script_name: #{script_name.inspect}" })
+        data_for_scope = current_script_settings(scope_string, script_name: script_name)
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "get_scoped_setting: data_for_scope (DUP) (object_id: #{data_for_scope.object_id}): #{data_for_scope.inspect}" })
         value = get_value_from_container(data_for_scope, key_name)
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "get_scoped_setting: value for '#{key_name}': #{value.inspect}" })
@@ -501,13 +511,13 @@ module Lich
             _log(Settings::LOG_LEVEL_INFO, @@log_prefix, -> { "get_scoped_setting: Key '#{key_name}' not found in scope '#{scope_string}'. Value will be nil, supporting '|| default' idiom." })
           end
         end
-        wrap_value_if_container(value, scope_string, key_name ? [key_name] : [])
+        wrap_value_if_container(value, scope_string, key_name ? [key_name] : [], script_name: script_name)
       end
 
-      def self.wrap_value_if_container(value, scope, path_array)
-        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "wrap_value_if_container: value_class: #{value.class}, scope: #{scope.inspect}, path: #{path_array.inspect}" })
+      def self.wrap_value_if_container(value, scope, path_array, script_name: nil)
+        _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "wrap_value_if_container: value_class: #{value.class}, scope: #{scope.inspect}, path: #{path_array.inspect}, script_name: #{script_name.inspect}" })
         if container?(value)
-          proxy = SettingsProxy.new(self, scope, path_array, value)
+          proxy = SettingsProxy.new(self, scope, path_array, value, script_name: script_name)
           _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "wrap_value_if_container: Wrapped in proxy: #{proxy.inspect}" })
           return proxy
         else
@@ -605,3 +615,4 @@ module Lich
 end
 
 require_relative 'settings/settings_proxy'
+require_relative 'settings/instance_settings'
