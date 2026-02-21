@@ -919,12 +919,12 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   # ================================================================
   describe '.observe' do
     it 'observes heavens when thing is "heavens"' do
-      expect(DRC).to receive(:bput).with('observe heavens', anything, anything, anything, anything, anything, anything)
+      expect(DRC).to receive(:bput).with('observe heavens', *described_class::OBSERVE_MESSAGES)
       described_class.observe('heavens')
     end
 
     it 'observes thing in heavens for other arguments' do
-      expect(DRC).to receive(:bput).with('observe katamba in heavens', anything, anything, anything, anything, anything, anything)
+      expect(DRC).to receive(:bput).with('observe katamba in heavens', *described_class::OBSERVE_MESSAGES)
       described_class.observe('katamba')
     end
   end
