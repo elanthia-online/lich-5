@@ -547,6 +547,40 @@ RSpec.describe Lich::DragonRealms::SlackBot do
       described_class.new
     end
 
+    context 'when username is nil' do
+      it 'returns nil without attempting API call' do
+        expect(Net::HTTP::Post).not_to receive(:new).with('/api/chat.postMessage')
+        result = bot.direct_message(nil, 'hello')
+        expect(result).to be_nil
+      end
+
+      it 'sends clear error message about missing setting' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /no username provided.*slackbot_username setting/)
+        bot.direct_message(nil, 'hello')
+      end
+    end
+
+    context 'when username is empty string' do
+      it 'returns nil without attempting API call' do
+        expect(Net::HTTP::Post).not_to receive(:new).with('/api/chat.postMessage')
+        result = bot.direct_message('', 'hello')
+        expect(result).to be_nil
+      end
+
+      it 'sends clear error message about missing setting' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /no username provided/)
+        bot.direct_message('', 'hello')
+      end
+    end
+
+    context 'when username is whitespace only' do
+      it 'returns nil without attempting API call' do
+        expect(Net::HTTP::Post).not_to receive(:new).with('/api/chat.postMessage')
+        result = bot.direct_message('   ', 'hello')
+        expect(result).to be_nil
+      end
+    end
+
     context 'when user exists in users_list' do
       it 'posts to chat.postMessage with correct params' do
         allow(mock_http).to receive(:request).and_return(success_response)
@@ -558,14 +592,14 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'when user not found in users_list' do
-      it 'logs error and sends user-facing messaging' do
-        expect(Lich).to receive(:log).with(/Failed to send Slack message to unknown/)
-        expect(Lich::Messaging).to receive(:msg).with('bold', /Failed to send Slack message to unknown/)
-        bot.direct_message('unknown', 'hello')
+      it 'returns nil without crashing' do
+        result = bot.direct_message('unknown', 'hello')
+        expect(result).to be_nil
       end
 
-      it 'does not crash' do
-        expect { bot.direct_message('unknown', 'hello') }.not_to raise_error
+      it 'sends clear error message about user not found' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /user 'unknown' not found in Slack workspace/)
+        bot.direct_message('unknown', 'hello')
       end
     end
 
