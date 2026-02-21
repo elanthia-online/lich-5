@@ -82,8 +82,16 @@ module Lich
       end
 
       def direct_message(username, message)
+        if username.nil? || username.to_s.strip.empty?
+          Lich::Messaging.msg('bold', 'SlackBot: Cannot send message - no username provided. Check your slackbot_username setting.')
+          return nil
+        end
+
         dm_channel = get_dm_channel(username)
-        raise Error, "Could not find DM channel for #{username}" unless dm_channel
+        unless dm_channel
+          Lich::Messaging.msg('bold', "SlackBot: Cannot send message - user '#{username}' not found in Slack workspace.")
+          return nil
+        end
 
         params = {
           'token'   => UserVars.slack_token,
