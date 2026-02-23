@@ -181,26 +181,21 @@ module Lich
   end unless defined?(Lich::Messaging)
 end
 
-# GameObj mock for inventory clearing tests
-# Use a class with stubbed methods instead of a full implementation
-class GameObj
+# GameObj stub module - we'll dynamically stub methods in tests
+# Don't define a full class to avoid conflicts with qstrike_spec.rb's GameObj
+module GameObjStub
+  @clear_inv_called = false
+  @clear_all_containers_called = false
+
   class << self
     attr_accessor :clear_inv_called, :clear_all_containers_called
 
-    def clear_inv
-      @clear_inv_called = true
-    end
-
-    def clear_all_containers
-      @clear_all_containers_called = true
-    end
-
-    def reset_test_state!
+    def reset!
       @clear_inv_called = false
       @clear_all_containers_called = false
     end
   end
-end unless defined?(GameObj)
+end
 
 # Mock UserVars
 module UserVars
@@ -652,8 +647,13 @@ RSpec.describe Lich::DragonRealms::DRParser do
   end
 
   describe 'inventory search parsing' do
+    # Stub GameObj methods dynamically to avoid conflicts with other specs
     before(:each) do
-      GameObj.reset_test_state!
+      GameObjStub.reset!
+      # Ensure GameObj exists and stub the methods we need
+      stub_const('GameObj', Class.new) unless defined?(GameObj)
+      allow(GameObj).to receive(:clear_inv) { GameObjStub.clear_inv_called = true }
+      allow(GameObj).to receive(:clear_all_containers) { GameObjStub.clear_all_containers_called = true }
     end
 
     describe 'when InventoryGetStart pattern matches' do
@@ -662,13 +662,13 @@ RSpec.describe Lich::DragonRealms::DRParser do
       it 'calls GameObj.clear_inv' do
         DRParser.parse(inv_search_line)
 
-        expect(GameObj.clear_inv_called).to be true
+        expect(GameObjStub.clear_inv_called).to be true
       end
 
       it 'calls GameObj.clear_all_containers' do
         DRParser.parse(inv_search_line)
 
-        expect(GameObj.clear_all_containers_called).to be true
+        expect(GameObjStub.clear_all_containers_called).to be true
       end
 
       it 'sets @parsing_inventory_get to true' do
@@ -684,8 +684,8 @@ RSpec.describe Lich::DragonRealms::DRParser do
         # 3. Start parsing
         DRParser.parse(inv_search_line)
 
-        expect(GameObj.clear_inv_called).to be true
-        expect(GameObj.clear_all_containers_called).to be true
+        expect(GameObjStub.clear_inv_called).to be true
+        expect(GameObjStub.clear_all_containers_called).to be true
         expect(DRParser.instance_variable_get(:@parsing_inventory_get)).to be true
       end
     end
