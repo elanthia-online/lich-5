@@ -244,6 +244,10 @@ module Lich
         @@fam_pcs.clear
       end
 
+      def GameObj.clear_all_containers
+        @@contents.clear
+      end
+
       def GameObj.npcs
         if @@npcs.empty?
           nil

@@ -156,6 +156,38 @@ RSpec.describe Lich::Common::GameObj do
     end
   end
 
+  describe '.clear_all_containers' do
+    it 'clears all containers from @@contents' do
+      described_class.new_inv('123', 'gem', 'ruby', 'container1')
+      described_class.new_inv('456', 'gem', 'sapphire', 'container2')
+      expect(described_class.containers.keys).to contain_exactly('container1', 'container2')
+
+      described_class.clear_all_containers
+
+      expect(described_class.containers).to be_empty
+    end
+
+    it 'does not affect @@inv' do
+      described_class.new_inv('111', 'gem', 'diamond')
+      described_class.new_inv('123', 'gem', 'ruby', 'container1')
+      expect(described_class.inv).not_to be_nil
+
+      described_class.clear_all_containers
+
+      expect(described_class.inv).not_to be_nil
+    end
+
+    it 'allows new containers to be added after clearing' do
+      described_class.new_inv('123', 'gem', 'ruby', 'container1')
+      described_class.clear_all_containers
+
+      obj = described_class.new_inv('456', 'gem', 'sapphire', 'container2')
+
+      expect(described_class.containers).to have_key('container2')
+      expect(described_class.containers['container2']).to include(obj)
+    end
+  end
+
   describe '.inv' do
     it 'returns nil when @@inv is empty' do
       expect(described_class.inv).to be_nil
