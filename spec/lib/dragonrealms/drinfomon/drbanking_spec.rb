@@ -523,9 +523,15 @@ RSpec.describe Lich::DragonRealms::DRBanking do
           expect(described_module.my_accounts['Crossings']).to eq(15_000)
         end
 
-        it 'creates new balance if none exists' do
+        it 'does not update balance when no prior balance exists' do
           described_module.parse('The clerk slides a small metal box across the counter into which you drop 5 platinum Kronars')
-          expect(described_module.my_accounts['Crossings']).to eq(50_000)
+          expect(described_module.my_accounts['Crossings']).to be_nil
+        end
+
+        it 'logs message to check BALANCE when no prior balance exists' do
+          described_module.parse('The clerk slides a small metal box across the counter into which you drop 5 platinum Kronars')
+          expect(message_strings.last).to include('No prior balance recorded')
+          expect(message_strings.last).to include('check BALANCE')
         end
       end
 
@@ -552,6 +558,17 @@ RSpec.describe Lich::DragonRealms::DRBanking do
           described_module.update_balance('Crossings', 1_000)
           described_module.parse('The clerk counts out 5 gold Kronars and hands them over, making a notation in her ledger')
           expect(described_module.my_accounts['Crossings']).to eq(0)
+        end
+
+        it 'does not update balance when no prior balance exists' do
+          described_module.parse('The clerk counts out 5 gold Kronars and hands them over, making a notation in her ledger')
+          expect(described_module.my_accounts['Crossings']).to be_nil
+        end
+
+        it 'logs message to check BALANCE when no prior balance exists' do
+          described_module.parse('The clerk counts out 5 gold Kronars and hands them over, making a notation in her ledger')
+          expect(message_strings.last).to include('No prior balance recorded')
+          expect(message_strings.last).to include('check BALANCE')
         end
       end
 

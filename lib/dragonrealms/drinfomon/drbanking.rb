@@ -294,8 +294,15 @@ module Lich
           denomination = match[:denomination]
           copper = to_copper(amount, denomination)
 
-          current = my_accounts[town].to_i
-          update_balance(town, current + copper)
+          current = my_accounts[town]
+          if current.nil?
+            # No prior balance recorded - can't calculate new balance
+            Lich::Messaging.msg('info', "DRBanking: Deposited #{format_currency(copper)} at #{town}. " \
+                                        'No prior balance recorded - check BALANCE to sync.')
+            return
+          end
+
+          update_balance(town, current.to_i + copper)
         end
 
         def handle_deposit_all(town)
@@ -310,8 +317,15 @@ module Lich
           denomination = match[:denomination]
           copper = to_copper(amount, denomination)
 
-          current = my_accounts[town].to_i
-          new_balance = [current - copper, 0].max
+          current = my_accounts[town]
+          if current.nil?
+            # No prior balance recorded - can't calculate new balance
+            Lich::Messaging.msg('info', "DRBanking: Withdrew #{format_currency(copper)} from #{town}. " \
+                                        'No prior balance recorded - check BALANCE to sync.')
+            return
+          end
+
+          new_balance = [current.to_i - copper, 0].max
           update_balance(town, new_balance)
         end
 
