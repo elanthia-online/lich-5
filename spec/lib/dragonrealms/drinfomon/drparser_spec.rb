@@ -181,9 +181,26 @@ module Lich
   end unless defined?(Lich::Messaging)
 end
 
-# NOTE: Do NOT define GameObj at top level here - it would block qstrike_spec's own GameObj setup.
-# The tests in this file don't trigger GameObj code paths, so no mock is needed.
-# If future tests need GameObj, stub it in a before(:each) block instead.
+# GameObj mock for inventory clearing tests
+# Use a class with stubbed methods instead of a full implementation
+class GameObj
+  class << self
+    attr_accessor :clear_inv_called, :clear_all_containers_called
+
+    def clear_inv
+      @clear_inv_called = true
+    end
+
+    def clear_all_containers
+      @clear_all_containers_called = true
+    end
+
+    def reset_test_state!
+      @clear_inv_called = false
+      @clear_all_containers_called = false
+    end
+  end
+end unless defined?(GameObj)
 
 # Mock UserVars
 module UserVars
@@ -631,6 +648,58 @@ RSpec.describe Lich::DragonRealms::DRParser do
       DRParser.check_events('this is a test pattern here')
 
       expect(Flags.flags[:test_flag]).to be_truthy
+    end
+  end
+
+  describe 'inventory search parsing' do
+    before(:each) do
+      GameObj.reset_test_state!
+    end
+
+    describe 'when InventoryGetStart pattern matches' do
+      let(:inv_search_line) { 'You rummage about your person, looking for' }
+
+      it 'calls GameObj.clear_inv' do
+        DRParser.parse(inv_search_line)
+
+        expect(GameObj.clear_inv_called).to be true
+      end
+
+      it 'calls GameObj.clear_all_containers' do
+        DRParser.parse(inv_search_line)
+
+        expect(GameObj.clear_all_containers_called).to be true
+      end
+
+      it 'sets @parsing_inventory_get to true' do
+        DRParser.parse(inv_search_line)
+
+        expect(DRParser.instance_variable_get(:@parsing_inventory_get)).to be true
+      end
+
+      it 'clears both inv and containers before parsing new items' do
+        # This test ensures the order of operations is correct:
+        # 1. Clear inv
+        # 2. Clear all containers
+        # 3. Start parsing
+        DRParser.parse(inv_search_line)
+
+        expect(GameObj.clear_inv_called).to be true
+        expect(GameObj.clear_all_containers_called).to be true
+        expect(DRParser.instance_variable_get(:@parsing_inventory_get)).to be true
+      end
+    end
+
+    describe 'InventoryGetStart pattern' do
+      it 'matches inv search command output' do
+        line = 'You rummage about your person, looking for'
+        expect(line).to match(DRParser::Pattern::InventoryGetStart)
+      end
+
+      it 'matches partial inv search output' do
+        line = 'You rummage about your person, looking for all items'
+        expect(line).to match(DRParser::Pattern::InventoryGetStart)
+      end
     end
   end
 end
