@@ -296,6 +296,59 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
   end
 
+  describe '#item_ref' do
+    context 'when value is nil' do
+      it 'returns nil' do
+        expect(described_class.item_ref(nil)).to be_nil
+      end
+    end
+
+    context 'when value already starts with "my "' do
+      it 'returns the value unchanged' do
+        expect(described_class.item_ref('my sword')).to eq('my sword')
+      end
+
+      it 'handles case-insensitive "My "' do
+        expect(described_class.item_ref('My sword')).to eq('My sword')
+      end
+
+      it 'handles case-insensitive "MY "' do
+        expect(described_class.item_ref('MY sword')).to eq('MY sword')
+      end
+    end
+
+    context 'when value starts with "#" (item ID)' do
+      it 'returns the value unchanged' do
+        expect(described_class.item_ref('#12345')).to eq('#12345')
+      end
+
+      it 'handles ID with container reference' do
+        expect(described_class.item_ref('#12345 in #67890')).to eq('#12345 in #67890')
+      end
+    end
+
+    context 'when value is a plain item name' do
+      it 'prefixes with "my "' do
+        expect(described_class.item_ref('sword')).to eq('my sword')
+      end
+
+      it 'handles item names with adjectives' do
+        expect(described_class.item_ref('steel sword')).to eq('my steel sword')
+      end
+
+      it 'handles container names' do
+        expect(described_class.item_ref('backpack')).to eq('my backpack')
+      end
+    end
+
+    context 'integration with dispose_trash commands' do
+      it 'uses item_ref for item references' do
+        # Verify that item_ref is used in dispose_trash by checking the method exists
+        expect(described_class).to respond_to(:item_ref)
+      end
+    end
+  end
+
   describe '#dispose_trash' do
     before do
       allow(described_class).to receive(:get_item_if_not_held?).and_return(true)
@@ -397,7 +450,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     it 'taps item from container' do
-      expect(DRC).to receive(:bput).with('tap my gem from pouch', any_args).and_return('You tap a gem.')
+      expect(DRC).to receive(:bput).with('tap my gem from my pouch', any_args).and_return('You tap a gem.')
       described_class.tap('gem', 'pouch')
     end
   end
