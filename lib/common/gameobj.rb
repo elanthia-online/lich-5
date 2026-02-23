@@ -152,6 +152,7 @@ module Lich
       def GameObj.new_inv(id, noun, name, container = nil, before = nil, after = nil)
         obj = GameObj.new(id, noun, name, before, after)
         if container
+          @@contents[container] ||= []
           @@contents[container].push(obj)
         else
           @@inv.push(obj)
@@ -241,6 +242,10 @@ module Lich
 
       def GameObj.clear_fam_pcs
         @@fam_pcs.clear
+      end
+
+      def GameObj.clear_all_containers
+        @@contents.clear
       end
 
       def GameObj.npcs
