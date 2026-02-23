@@ -328,6 +328,7 @@ module Lich
         begin
           if Pattern::InventoryGetStart.match?(line)
             GameObj.clear_inv
+            GameObj.clear_all_containers
             @parsing_inventory_get = true
           elsif (match = line.match(Pattern::GenderAgeCircle))
             DRStats.gender = match[:gender]
