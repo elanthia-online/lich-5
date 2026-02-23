@@ -152,6 +152,7 @@ module Lich
       def GameObj.new_inv(id, noun, name, container = nil, before = nil, after = nil)
         obj = GameObj.new(id, noun, name, before, after)
         if container
+          @@contents[container] ||= []
           @@contents[container].push(obj)
         else
           @@inv.push(obj)
