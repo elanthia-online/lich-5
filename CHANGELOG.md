@@ -1,5 +1,25 @@
 # Changelog
 
+## [5.15.0](https://github.com/elanthia-online/lich-5/compare/v5.14.2...v5.15.0) (2026-02-26)
+
+
+### Features
+
+* **all:** add InstanceSettings for core Settings API access ([#1233](https://github.com/elanthia-online/lich-5/issues/1233)) ([6de17eb](https://github.com/elanthia-online/lich-5/commit/6de17eb36119f78a34b8ba3f6ee4ac16e1071b9e))
+* **gs:** Overwatch module into core ([#1201](https://github.com/elanthia-online/lich-5/issues/1201)) ([70dee4b](https://github.com/elanthia-online/lich-5/commit/70dee4bd617de4ee8c38ec8b585fc9a56fd100b5))
+
+
+### Bug Fixes
+
+* **all:** fix GameObj container initialization and add clear_all_containers ([#1226](https://github.com/elanthia-online/lich-5/issues/1226)) ([2a9a6da](https://github.com/elanthia-online/lich-5/commit/2a9a6daa6a9327e903e8f1dc59d0421b290970bd))
+* **dr:** DR modules fixes and enhancements ([#1232](https://github.com/elanthia-online/lich-5/issues/1232)) ([4c63805](https://github.com/elanthia-online/lich-5/commit/4c63805bb3f5aca6c059d9b3922ce8b85b8fe60d))
+
+
+### Refactoring
+
+* **all:** Add frontend registry for capability-based configuration ([#1223](https://github.com/elanthia-online/lich-5/issues/1223)) ([c1dcc19](https://github.com/elanthia-online/lich-5/commit/c1dcc192233a02d131de19d9723e100876abb862))
+* **dr:** Comprehensive DR modules refactor ([#1231](https://github.com/elanthia-online/lich-5/issues/1231)) ([9bc7914](https://github.com/elanthia-online/lich-5/commit/9bc79144d09bd27aed927044a19c0da575642eab))
+
 ## [5.14.2](https://github.com/elanthia-online/lich-5/compare/v5.14.1...v5.14.2) (2026-02-18)
 
 
