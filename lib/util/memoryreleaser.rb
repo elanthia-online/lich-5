@@ -44,7 +44,7 @@ module Lich
     module MemoryReleaser
       # Default settings for memory releaser
       DEFAULT_SETTINGS = {
-        auto_start: false, # Disabled by default, user must enable
+        auto_start: true, # Disabled by default, user must enable
         interval: 900, # default of 15 minutes
         verbose: false,
       }.freeze
@@ -277,7 +277,6 @@ module Lich
         #
         # @return [void]
         def release
-          log "interval: #{@interval}"
           Lich::Common::GameObj.prune_index!(ttl: @interval, verbose: @verbose)
           run_gc
           release_to_os
