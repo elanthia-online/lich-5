@@ -354,10 +354,10 @@ RSpec.describe Lich::DragonRealms::DRParser do
       end
 
       it 'matches negative modifier' do
-        line = '-10 Evasion'
+        line = '<preset id="thought">--10 Evasion</preset>'
         match = line.strip.match(DRParser::Pattern::ExpModLine)
         expect(match).not_to be_nil
-        expect(match[:sign]).to eq('-')
+        expect(match[:sign]).to eq('--')
         expect(match[:value]).to eq('10')
         expect(match[:skill].strip).to eq('Evasion')
       end
@@ -622,7 +622,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
     end
 
     it 'parses negative modifier' do
-      line = '-10 Evasion'
+      line = '<preset id="thought">--10 Evasion</preset>'
       DRParser.check_exp_mods(line)
 
       expect(DRSkill.exp_modifiers['Evasion']).to eq(-10)
