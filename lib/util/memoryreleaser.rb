@@ -265,12 +265,19 @@ module Lich
 
         # Perform a complete memory release cycle
         #
-        # This runs Ruby's garbage collector with full mark and immediate sweep,
+        # Prunes stale entries from the GameObj shared identity index using the
+        # current interval as the TTL — any index entry not seen within the last
+        # +@interval+ seconds (and not held in an active registry) is evicted
+        # before the GC and OS-level release steps run. This ensures the index
+        # stays lean and the subsequent GC pass has the most to reclaim.
+        #
+        # Runs Ruby's garbage collector with full mark and immediate sweep,
         # attempts to compact the heap if available, and then releases memory
         # back to the operating system using platform-specific methods.
         #
         # @return [void]
         def release
+          Lich::Common::GameObj.prune_index!(ttl: @interval)
           run_gc
           release_to_os
           log "Memory release completed"
