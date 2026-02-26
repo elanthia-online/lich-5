@@ -247,6 +247,7 @@ module Lich
 
           if name == 'nav'
             Lich::Claim.lock if defined?(Lich::Claim)
+            Lich::Gemstone::Overwatch.room_with_hiders_reset if defined?(Lich::Gemstone::Overwatch)
             GameObj.clear_loot
             GameObj.clear_npcs
             GameObj.clear_pcs

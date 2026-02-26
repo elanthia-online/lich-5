@@ -1494,15 +1494,18 @@ def get?
   Script.current.gets?
 end
 
-def reget(*lines)
-  unless (script = Script.current) then respond('--- reget: Unable to identify calling script.'); return false; end
+def reget(*lines, core: false)
+  unless (script = Script.current) || core.eql?(true)
+    respond('--- reget: Unable to identify calling script.')
+    return false
+  end
   lines.flatten!
   if caller.find { |c| c =~ /regetall/ }
     history = ($_SERVERBUFFER_.history + $_SERVERBUFFER_).join("\n")
   else
     history = $_SERVERBUFFER_.dup.join("\n")
   end
-  unless script.want_downstream_xml
+  unless script&.want_downstream_xml || core.eql?(true)
     history.gsub!(/<pushStream id=["'](?:spellfront|inv|bounty|society)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
     history.gsub!(/<stream id="Spells">.*?<\/stream>/m, '')
     history.gsub!(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')

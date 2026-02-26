@@ -100,9 +100,12 @@ module Lich
 
           StatusPrompt = /<prompt time="[0-9]+">/
 
+          # Overwatch patterns - simplified reference to the observer patterns
+          Overwatch_Short = Overwatch::Observer::Term::ANY
+
           All = Regexp.union(NpcDeathMessage, Group_Short, Also_Here_Arrival, StowListOutputStart, StowListContainer, StowSetContainer1, StowSetContainer2,
                              ReadyListOutputStart, ReadyListNormal, ReadyListAmmo2, ReadyListSheathsSet, ReadyListFinished, ReadyItemClear, ReadyItemSet,
-                             ReadyStoreSet, StatusPrompt)
+                             ReadyStoreSet, StatusPrompt, Overwatch_Short)
         end
 
         def self.parse(line)
@@ -121,6 +124,10 @@ module Lich
             when Pattern::Group_Short
               return :noop unless (match_data = Group::Observer.wants?(line))
               Group::Observer.consume(line.strip, match_data)
+              :ok
+            when Pattern::Overwatch_Short
+              return :noop unless (match_data = Overwatch::Observer.wants?(line))
+              Overwatch::Observer.consume(line, match_data)
               :ok
             when Pattern::Also_Here_Arrival
               return :noop unless Lich::Claim::Lock.locked?
