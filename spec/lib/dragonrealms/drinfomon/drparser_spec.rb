@@ -181,9 +181,21 @@ module Lich
   end unless defined?(Lich::Messaging)
 end
 
-# NOTE: Do NOT define GameObj at top level here - it would block qstrike_spec's own GameObj setup.
-# The tests in this file don't trigger GameObj code paths, so no mock is needed.
-# If future tests need GameObj, stub it in a before(:each) block instead.
+# GameObj stub module - we'll dynamically stub methods in tests
+# Don't define a full class to avoid conflicts with qstrike_spec.rb's GameObj
+module GameObjStub
+  @clear_inv_called = false
+  @clear_all_containers_called = false
+
+  class << self
+    attr_accessor :clear_inv_called, :clear_all_containers_called
+
+    def reset!
+      @clear_inv_called = false
+      @clear_all_containers_called = false
+    end
+  end
+end
 
 # Mock UserVars
 module UserVars
@@ -342,10 +354,10 @@ RSpec.describe Lich::DragonRealms::DRParser do
       end
 
       it 'matches negative modifier' do
-        line = '-10 Evasion'
+        line = '<preset id="thought">--10 Evasion</preset>'
         match = line.strip.match(DRParser::Pattern::ExpModLine)
         expect(match).not_to be_nil
-        expect(match[:sign]).to eq('-')
+        expect(match[:sign]).to eq('--')
         expect(match[:value]).to eq('10')
         expect(match[:skill].strip).to eq('Evasion')
       end
@@ -610,7 +622,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
     end
 
     it 'parses negative modifier' do
-      line = '-10 Evasion'
+      line = '<preset id="thought">--10 Evasion</preset>'
       DRParser.check_exp_mods(line)
 
       expect(DRSkill.exp_modifiers['Evasion']).to eq(-10)
@@ -631,6 +643,63 @@ RSpec.describe Lich::DragonRealms::DRParser do
       DRParser.check_events('this is a test pattern here')
 
       expect(Flags.flags[:test_flag]).to be_truthy
+    end
+  end
+
+  describe 'inventory search parsing' do
+    # Stub GameObj methods dynamically to avoid conflicts with other specs
+    before(:each) do
+      GameObjStub.reset!
+      # Ensure GameObj exists and stub the methods we need
+      stub_const('GameObj', Class.new) unless defined?(GameObj)
+      allow(GameObj).to receive(:clear_inv) { GameObjStub.clear_inv_called = true }
+      allow(GameObj).to receive(:clear_all_containers) { GameObjStub.clear_all_containers_called = true }
+    end
+
+    describe 'when InventoryGetStart pattern matches' do
+      let(:inv_search_line) { 'You rummage about your person, looking for' }
+
+      it 'calls GameObj.clear_inv' do
+        DRParser.parse(inv_search_line)
+
+        expect(GameObjStub.clear_inv_called).to be true
+      end
+
+      it 'calls GameObj.clear_all_containers' do
+        DRParser.parse(inv_search_line)
+
+        expect(GameObjStub.clear_all_containers_called).to be true
+      end
+
+      it 'sets @parsing_inventory_get to true' do
+        DRParser.parse(inv_search_line)
+
+        expect(DRParser.instance_variable_get(:@parsing_inventory_get)).to be true
+      end
+
+      it 'clears both inv and containers before parsing new items' do
+        # This test ensures the order of operations is correct:
+        # 1. Clear inv
+        # 2. Clear all containers
+        # 3. Start parsing
+        DRParser.parse(inv_search_line)
+
+        expect(GameObjStub.clear_inv_called).to be true
+        expect(GameObjStub.clear_all_containers_called).to be true
+        expect(DRParser.instance_variable_get(:@parsing_inventory_get)).to be true
+      end
+    end
+
+    describe 'InventoryGetStart pattern' do
+      it 'matches inv search command output' do
+        line = 'You rummage about your person, looking for'
+        expect(line).to match(DRParser::Pattern::InventoryGetStart)
+      end
+
+      it 'matches partial inv search output' do
+        line = 'You rummage about your person, looking for all items'
+        expect(line).to match(DRParser::Pattern::InventoryGetStart)
+      end
     end
   end
 end

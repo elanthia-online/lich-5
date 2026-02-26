@@ -880,6 +880,20 @@ RSpec.describe Lich::DragonRealms::DRC do
       described_class.unpause_all_list(['different'])
       expect(mock_script).not_to have_received(:unpause)
     end
+
+    context 'when list is empty' do
+      it 'logs simple completion message without unpausing' do
+        Lich::Messaging.clear_messages!
+        described_class.unpause_all_list([])
+        expect(Lich::Messaging.messages.any? { |m| m[:message].include?('Unpausing') }).to be false
+        expect(Lich::Messaging.messages.any? { |m| m[:message].include?('has finished') }).to be true
+      end
+
+      it 'does not attempt to unpause scripts' do
+        described_class.unpause_all_list([])
+        expect(mock_script).not_to have_received(:unpause)
+      end
+    end
   end
 
   describe '.safe_pause_list / .safe_unpause_list' do
@@ -916,6 +930,22 @@ RSpec.describe Lich::DragonRealms::DRC do
         described_class.safe_unpause_list(['other'])
         expect(mock_script).to have_received(:unpause)
         expect($safe_pause_lock.owned?).to be false
+      end
+
+      context 'when list is empty' do
+        it 'logs simple completion message without unpausing' do
+          described_class.safe_pause_list
+          Lich::Messaging.clear_messages!
+          described_class.safe_unpause_list([])
+          expect(Lich::Messaging.messages.any? { |m| m[:message].include?('Unpausing') }).to be false
+          expect(Lich::Messaging.messages.any? { |m| m[:message].include?('has finished') }).to be true
+        end
+
+        it 'still releases the lock' do
+          described_class.safe_pause_list
+          described_class.safe_unpause_list([])
+          expect($safe_pause_lock.owned?).to be false
+        end
       end
     end
   end

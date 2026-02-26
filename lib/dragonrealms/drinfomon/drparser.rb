@@ -22,7 +22,7 @@ module Lich
         GroupMembers = %r{<pushStream id="group"/>  (?<member>\w+):}.freeze
         GroupMembersEmpty = %r{<pushStream id="group"/>Members of your group:}.freeze
         ExpModsStart = /^(<.*?\/>)?The following skills are currently under the influence of a modifier/.freeze
-        ExpModLine = /^(?:<preset id="speech">)?(?<sign>[+-])(?<value>\d+)\s+(?<skill>[\w\s]+)(?:<\/preset>)?$/.freeze
+        ExpModLine = /^(?:<preset id="(?:speech|thought)">)?(?<sign>\+|--)(?<value>\d+)\s+(?<skill>[\w\s]+)(?:<\/preset>)?$/.freeze
         KnownSpellsStart = /^You recall the spells you have learned/.freeze
         BarbarianAbilitiesStart = /^You know the (Berserks:)/.freeze
         ThiefKhriStart = /^From the Subtlety tree, you know the following khri:/.freeze
@@ -119,16 +119,17 @@ module Lich
         #       None
         #     <output class=""/>
         #
-        # Example output with modifiers:
+        # Example output with modifiers (XML format):
         #     The following skills are currently under the influence of a modifier:
         #     <output class="mono"/>
-        #     +75 Athletics
-        #     -10 Evasion
+        #     <preset id="speech">+75 Athletics</preset>
+        #     <preset id="thought">--10 Evasion</preset>
         #     <output class=""/>
         #
         # Zero or more skills may be listed between the <output> tags
         # but exactly one skill and its skill modifier are listed per line.
-        # The number is signed to indicate a buff (+) or debuff (-).
+        # Positive modifiers use <preset id="speech"> with single + sign.
+        # Negative modifiers use <preset id="thought"> with double -- sign.
         #
         case server_string
         when %r{^<output class=""/>}
@@ -137,14 +138,14 @@ module Lich
           end
         else
           if @parsing_exp_mods_output
-            # https://rubular.com/r/hg7SFvVNUtdLdh
-            # Sample line
-            # <preset id="speech">+79 Attunement</preset>
+            # Sample lines:
+            # <preset id="speech">+79 Attunement</preset>  (positive, single +)
+            # <preset id="thought">--10 Evasion</preset>   (negative, double --)
             if (match = server_string.strip.match(Pattern::ExpModLine))
               skill = match[:skill].strip
               sign = match[:sign]
               value = match[:value].to_i
-              value = (value * -1) if sign == '-'
+              value = -value if sign == '--'
               DRSkill.update_mods(skill, value)
             end
           end
@@ -328,6 +329,7 @@ module Lich
         begin
           if Pattern::InventoryGetStart.match?(line)
             GameObj.clear_inv
+            GameObj.clear_all_containers
             @parsing_inventory_get = true
           elsif (match = line.match(Pattern::GenderAgeCircle))
             DRStats.gender = match[:gender]
@@ -458,6 +460,9 @@ module Lich
           check_known_barbarian_abilities(line) if DRSpells.check_known_barbarian_abilities
           check_known_thief_khri(line) if DRSpells.grabbing_known_khri
           check_known_spells(line) if DRSpells.grabbing_known_spells
+
+          # Parse bank transactions passively
+          Lich::DragonRealms::DRBanking.parse(line)
         rescue StandardError => e
           Lich::Messaging.msg("bold", "DRParser: error in parse: #{e.message}")
           Lich::Messaging.msg("bold", "DRParser: line: #{line}")

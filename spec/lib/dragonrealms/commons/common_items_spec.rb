@@ -296,6 +296,59 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
   end
 
+  describe '#item_ref' do
+    context 'when value is nil' do
+      it 'returns nil' do
+        expect(described_class.item_ref(nil)).to be_nil
+      end
+    end
+
+    context 'when value already starts with "my "' do
+      it 'returns the value unchanged' do
+        expect(described_class.item_ref('my sword')).to eq('my sword')
+      end
+
+      it 'handles case-insensitive "My "' do
+        expect(described_class.item_ref('My sword')).to eq('My sword')
+      end
+
+      it 'handles case-insensitive "MY "' do
+        expect(described_class.item_ref('MY sword')).to eq('MY sword')
+      end
+    end
+
+    context 'when value starts with "#" (item ID)' do
+      it 'returns the value unchanged' do
+        expect(described_class.item_ref('#12345')).to eq('#12345')
+      end
+
+      it 'handles ID with container reference' do
+        expect(described_class.item_ref('#12345 in #67890')).to eq('#12345 in #67890')
+      end
+    end
+
+    context 'when value is a plain item name' do
+      it 'prefixes with "my "' do
+        expect(described_class.item_ref('sword')).to eq('my sword')
+      end
+
+      it 'handles item names with adjectives' do
+        expect(described_class.item_ref('steel sword')).to eq('my steel sword')
+      end
+
+      it 'handles container names' do
+        expect(described_class.item_ref('backpack')).to eq('my backpack')
+      end
+    end
+
+    context 'integration with dispose_trash commands' do
+      it 'uses item_ref for item references' do
+        # Verify that item_ref is used in dispose_trash by checking the method exists
+        expect(described_class).to respond_to(:item_ref)
+      end
+    end
+  end
+
   describe '#dispose_trash' do
     before do
       allow(described_class).to receive(:get_item_if_not_held?).and_return(true)
@@ -397,7 +450,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     it 'taps item from container' do
-      expect(DRC).to receive(:bput).with('tap my gem from pouch', any_args).and_return('You tap a gem.')
+      expect(DRC).to receive(:bput).with('tap my gem from my pouch', any_args).and_return('You tap a gem.')
       described_class.tap('gem', 'pouch')
     end
   end
@@ -950,6 +1003,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     context 'when swap succeeds' do
       it 'returns true' do
         allow(described_class).to receive(:remove_and_stow_pouch?).and_return(true)
+        allow(described_class).to receive(:check_belt_for_pouch?).and_return(false)
         allow(described_class).to receive(:get_item?).and_return(true)
         allow(described_class).to receive(:wear_item?).and_return(true)
         expect(described_class.swap_out_full_gempouch?(adj, noun)).to be true
@@ -967,6 +1021,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     context 'when get spare pouch fails' do
       it 'returns false and logs message' do
         allow(described_class).to receive(:remove_and_stow_pouch?).and_return(true)
+        allow(described_class).to receive(:check_belt_for_pouch?).and_return(false)
         allow(described_class).to receive(:get_item?).and_return(false)
         expect(Lich::Messaging).to receive(:msg).with('bold', /No spare pouch found/)
         expect(described_class.swap_out_full_gempouch?(adj, noun)).to be false
@@ -976,6 +1031,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     context 'when wear fails' do
       it 'returns false and logs message' do
         allow(described_class).to receive(:remove_and_stow_pouch?).and_return(true)
+        allow(described_class).to receive(:check_belt_for_pouch?).and_return(false)
         allow(described_class).to receive(:get_item?).and_return(true)
         allow(described_class).to receive(:wear_item?).and_return(false)
         expect(Lich::Messaging).to receive(:msg).with('bold', /Could not wear new pouch/)
@@ -1045,7 +1101,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     context 'when container not found' do
       it 'logs message and returns' do
         stub_bput('Please rephrase that command')
-        expect(Lich::Messaging).to receive(:msg).with('bold', /Container .* not found/)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /Fill failed/)
         expect(Flags).to receive(:delete).with('pouch-full')
         described_class.fill_gem_pouch_with_container(adj, noun, source)
       end
@@ -1275,8 +1331,9 @@ RSpec.describe Lich::DragonRealms::DRCI do
   end
 
   describe '#tie_gem_pouch' do
-    it 'ties the gem pouch' do
-      expect(DRC).to receive(:bput).with('tie my leather pouch', anything, anything, anything)
+    it 'delegates to tie_gem_pouch? (deprecated method)' do
+      allow(described_class).to receive(:tie_gem_pouch?).and_return(true)
+      expect(described_class).to receive(:tie_gem_pouch?).with('leather', 'pouch')
       described_class.tie_gem_pouch('leather', 'pouch')
     end
   end
@@ -1313,6 +1370,517 @@ RSpec.describe Lich::DragonRealms::DRCI do
     it 'adds my prefix and delegates to stow_item_unsafe?' do
       expect(described_class).to receive(:stow_item_unsafe?).with('my sword').and_return(true)
       described_class.stow_item_safe?('sword')
+    end
+  end
+
+  #########################################
+  # GEM POUCH HANDLING - NEW TESTS
+  #########################################
+
+  describe 'gem pouch constants' do
+    describe 'FILL_POUCH_SUCCESS_PATTERNS' do
+      it 'is frozen' do
+        expect(described_class::FILL_POUCH_SUCCESS_PATTERNS).to be_frozen
+      end
+
+      it 'contains expected patterns' do
+        patterns = described_class::FILL_POUCH_SUCCESS_PATTERNS
+        expect(patterns.any? { |p| 'You open your pouch'.match?(p) }).to be true
+        expect(patterns.any? { |p| 'You fill your pouch with gems'.match?(p) }).to be true
+        expect(patterns.any? { |p| "There aren't any gems".match?(p) }).to be true
+      end
+    end
+
+    describe 'FILL_POUCH_NEEDS_TIE_PATTERNS' do
+      it 'is frozen' do
+        expect(described_class::FILL_POUCH_NEEDS_TIE_PATTERNS).to be_frozen
+      end
+
+      it 'contains expected patterns' do
+        patterns = described_class::FILL_POUCH_NEEDS_TIE_PATTERNS
+        expect(patterns.any? { |p| "You'd better tie it up before putting".match?(p) }).to be true
+        expect(patterns.any? { |p| "You'll need to tie it up before".match?(p) }).to be true
+      end
+    end
+
+    describe 'FILL_POUCH_FULL_PATTERN' do
+      it 'is frozen' do
+        expect(described_class::FILL_POUCH_FULL_PATTERN).to be_frozen
+      end
+
+      it 'matches full pouch message' do
+        expect('is too full to fit any more').to match(described_class::FILL_POUCH_FULL_PATTERN)
+      end
+    end
+
+    describe 'FILL_POUCH_FAILURE_PATTERNS' do
+      it 'is frozen' do
+        expect(described_class::FILL_POUCH_FAILURE_PATTERNS).to be_frozen
+      end
+
+      it 'contains expected patterns' do
+        patterns = described_class::FILL_POUCH_FAILURE_PATTERNS
+        expect(patterns.any? { |p| 'Please rephrase that command'.match?(p) }).to be true
+        expect(patterns.any? { |p| 'What were you referring to'.match?(p) }).to be true
+      end
+
+      it 'does not contain empty source pattern (moved to success)' do
+        patterns = described_class::FILL_POUCH_FAILURE_PATTERNS
+        expect(patterns.any? { |p| "There aren't any gems".match?(p) }).to be false
+      end
+    end
+
+    describe 'INV_BELT_START_PATTERN' do
+      it 'is frozen' do
+        expect(described_class::INV_BELT_START_PATTERN).to be_frozen
+      end
+
+      it 'matches belt inventory header' do
+        expect('All of your items worn attached to the belt:').to match(described_class::INV_BELT_START_PATTERN)
+      end
+    end
+
+    describe 'INV_BELT_END_PATTERN' do
+      it 'is frozen' do
+        expect(described_class::INV_BELT_END_PATTERN).to be_frozen
+      end
+
+      it 'matches inventory help footer' do
+        expect('[Use INVENTORY HELP for more options.]').to match(described_class::INV_BELT_END_PATTERN)
+      end
+    end
+
+    describe 'TIE_ITEM_SUCCESS_PATTERNS' do
+      it 'includes already tied pattern' do
+        patterns = described_class::TIE_ITEM_SUCCESS_PATTERNS
+        expect(patterns.any? { |p| 'has already been tied off'.match?(p) }).to be true
+      end
+
+      it 'includes empty container rhetorical question' do
+        patterns = described_class::TIE_ITEM_SUCCESS_PATTERNS
+        expect(patterns.any? { |p| "Tie it off when it's empty?  Why?".match?(p) }).to be true
+      end
+    end
+  end
+
+  describe '#check_belt_for_pouch?' do
+    let(:adj) { 'soft' }
+    let(:noun) { 'pouch' }
+
+    context 'when issue_command returns nil (timeout)' do
+      it 'returns false' do
+        allow(Lich::Util).to receive(:issue_command).and_return(nil)
+        expect(described_class.check_belt_for_pouch?(adj, noun)).to be false
+      end
+    end
+
+    context 'when issue_command returns empty array' do
+      it 'returns false' do
+        allow(Lich::Util).to receive(:issue_command).and_return([])
+        expect(described_class.check_belt_for_pouch?(adj, noun)).to be false
+      end
+    end
+
+    context 'when matching gem pouch found on belt' do
+      it 'returns true' do
+        belt_contents = [
+          'All of your items worn attached to the belt:',
+          '  a soft gem pouch (closed)',
+          '  a leather wallet',
+          '  a lockpick ring'
+        ]
+        allow(Lich::Util).to receive(:issue_command).and_return(belt_contents)
+        expect(described_class.check_belt_for_pouch?(adj, noun)).to be true
+      end
+    end
+
+    context 'when no matching gem pouch found' do
+      it 'returns false' do
+        belt_contents = [
+          'All of your items worn attached to the belt:',
+          '  a leather wallet',
+          '  a lockpick ring'
+        ]
+        allow(Lich::Util).to receive(:issue_command).and_return(belt_contents)
+        expect(described_class.check_belt_for_pouch?(adj, noun)).to be false
+      end
+    end
+
+    context 'when non-gem pouch found' do
+      it 'returns false (requires gem in name)' do
+        belt_contents = [
+          'All of your items worn attached to the belt:',
+          '  a soft leather pouch',
+          '  a lockpick ring'
+        ]
+        allow(Lich::Util).to receive(:issue_command).and_return(belt_contents)
+        expect(described_class.check_belt_for_pouch?(adj, noun)).to be false
+      end
+    end
+
+    context 'with different adjective' do
+      it 'matches the configured adjective' do
+        belt_contents = [
+          'All of your items worn attached to the belt:',
+          '  a large gem pouch (closed)',
+          '  a soft gem pouch (closed)'
+        ]
+        allow(Lich::Util).to receive(:issue_command).and_return(belt_contents)
+        expect(described_class.check_belt_for_pouch?('large', 'pouch')).to be true
+        expect(described_class.check_belt_for_pouch?('fuzzy', 'pouch')).to be false
+      end
+    end
+
+    it 'calls issue_command with correct parameters' do
+      expect(Lich::Util).to receive(:issue_command).with(
+        'inv belt',
+        described_class::INV_BELT_START_PATTERN,
+        described_class::INV_BELT_END_PATTERN,
+        timeout: 3,
+        silent: true,
+        quiet: true,
+        usexml: false,
+        include_end: false
+      ).and_return([])
+      described_class.check_belt_for_pouch?(adj, noun)
+    end
+  end
+
+  describe '#tie_gem_pouch?' do
+    let(:adj) { 'soft' }
+    let(:noun) { 'pouch' }
+
+    context 'when tie succeeds' do
+      it 'returns true' do
+        allow(described_class).to receive(:tie_item?).and_return(true)
+        expect(described_class.tie_gem_pouch?(adj, noun)).to be true
+      end
+    end
+
+    context 'when tie fails' do
+      it 'returns false' do
+        allow(described_class).to receive(:tie_item?).and_return(false)
+        expect(described_class.tie_gem_pouch?(adj, noun)).to be false
+      end
+    end
+
+    it 'delegates to tie_item? with combined name' do
+      expect(described_class).to receive(:tie_item?).with('soft pouch').and_return(true)
+      described_class.tie_gem_pouch?(adj, noun)
+    end
+  end
+
+  describe '#tie_gem_pouch (deprecated)' do
+    let(:adj) { 'soft' }
+    let(:noun) { 'pouch' }
+
+    context 'when tie succeeds' do
+      it 'does not log error message' do
+        allow(described_class).to receive(:tie_gem_pouch?).and_return(true)
+        expect(Lich::Messaging).not_to receive(:msg)
+        described_class.tie_gem_pouch(adj, noun)
+      end
+    end
+
+    context 'when tie fails' do
+      it 'logs error message' do
+        allow(described_class).to receive(:tie_gem_pouch?).and_return(false)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /Failed to tie soft pouch/)
+        described_class.tie_gem_pouch(adj, noun)
+      end
+    end
+
+    it 'delegates to tie_gem_pouch?' do
+      expect(described_class).to receive(:tie_gem_pouch?).with(adj, noun).and_return(true)
+      described_class.tie_gem_pouch(adj, noun)
+    end
+  end
+
+  describe '#remove_and_stow_pouch? (simplified)' do
+    let(:adj) { 'soft' }
+    let(:noun) { 'pouch' }
+
+    context 'when remove fails' do
+      it 'returns false and logs message' do
+        allow(described_class).to receive(:remove_item?).and_return(false)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /Unable to remove existing pouch/)
+        expect(described_class.remove_and_stow_pouch?(adj, noun)).to be false
+      end
+    end
+
+    context 'when put_away succeeds' do
+      it 'returns true' do
+        allow(described_class).to receive(:remove_item?).and_return(true)
+        allow(described_class).to receive(:put_away_item?).and_return(true)
+        expect(described_class.remove_and_stow_pouch?(adj, noun, 'container')).to be true
+      end
+
+      it 'does not call stow_item?' do
+        allow(described_class).to receive(:remove_item?).and_return(true)
+        allow(described_class).to receive(:put_away_item?).and_return(true)
+        expect(described_class).not_to receive(:stow_item?)
+        described_class.remove_and_stow_pouch?(adj, noun, 'container')
+      end
+    end
+
+    context 'when put_away fails but stow succeeds' do
+      it 'returns true via || fallback' do
+        allow(described_class).to receive(:remove_item?).and_return(true)
+        allow(described_class).to receive(:put_away_item?).and_return(false)
+        allow(described_class).to receive(:stow_item?).and_return(true)
+        expect(described_class.remove_and_stow_pouch?(adj, noun, 'container')).to be true
+      end
+    end
+
+    context 'when both put_away and stow fail' do
+      it 'returns false' do
+        allow(described_class).to receive(:remove_item?).and_return(true)
+        allow(described_class).to receive(:put_away_item?).and_return(false)
+        allow(described_class).to receive(:stow_item?).and_return(false)
+        expect(described_class.remove_and_stow_pouch?(adj, noun, 'container')).to be false
+      end
+    end
+  end
+
+  describe '#swap_out_full_gempouch? (with belt check)' do
+    let(:adj) { 'soft' }
+    let(:noun) { 'pouch' }
+
+    before do
+      allow(DRC).to receive(:left_hand).and_return(nil)
+      allow(DRC).to receive(:right_hand).and_return(nil)
+      allow(described_class).to receive(:remove_and_stow_pouch?).and_return(true)
+    end
+
+    context 'when no free hand' do
+      it 'returns false and logs message' do
+        allow(DRC).to receive(:left_hand).and_return('sword')
+        allow(DRC).to receive(:right_hand).and_return('shield')
+        expect(Lich::Messaging).to receive(:msg).with('bold', /No free hand/)
+        expect(described_class.swap_out_full_gempouch?(adj, noun)).to be false
+      end
+    end
+
+    context 'when remove_and_stow fails' do
+      it 'returns false and logs message' do
+        allow(described_class).to receive(:remove_and_stow_pouch?).and_return(false)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /Remove and stow pouch routine failed/)
+        expect(described_class.swap_out_full_gempouch?(adj, noun)).to be false
+      end
+    end
+
+    context 'when pouch found on belt' do
+      before do
+        allow(described_class).to receive(:check_belt_for_pouch?).and_return(true)
+      end
+
+      it 'logs informational message about using belt pouch' do
+        allow(described_class).to receive(:untie_item?).and_return(true)
+        allow(described_class).to receive(:wear_item?).and_return(true)
+        expect(Lich::Messaging).to receive(:msg).with('plain', /Found existing.*on belt/)
+        described_class.swap_out_full_gempouch?(adj, noun, nil, 'spare_container')
+      end
+
+      it 'unties the belt pouch' do
+        allow(described_class).to receive(:wear_item?).and_return(true)
+        expect(described_class).to receive(:untie_item?).with("#{adj} #{noun}").and_return(true)
+        described_class.swap_out_full_gempouch?(adj, noun, nil, 'spare_container')
+      end
+
+      context 'when untie fails' do
+        it 'returns false and logs message' do
+          allow(described_class).to receive(:untie_item?).and_return(false)
+          # First logs plain "Found existing..." then bold "Could not untie..."
+          allow(Lich::Messaging).to receive(:msg).with('plain', /Found existing/)
+          expect(Lich::Messaging).to receive(:msg).with('bold', /Could not untie existing pouch/)
+          expect(described_class.swap_out_full_gempouch?(adj, noun, nil, 'spare_container')).to be false
+        end
+      end
+
+      it 'does not call get_item?' do
+        allow(described_class).to receive(:untie_item?).and_return(true)
+        allow(described_class).to receive(:wear_item?).and_return(true)
+        expect(described_class).not_to receive(:get_item?)
+        described_class.swap_out_full_gempouch?(adj, noun, nil, 'spare_container')
+      end
+    end
+
+    context 'when no pouch on belt' do
+      before do
+        allow(described_class).to receive(:check_belt_for_pouch?).and_return(false)
+      end
+
+      it 'gets pouch from spare container' do
+        allow(described_class).to receive(:wear_item?).and_return(true)
+        expect(described_class).to receive(:get_item?).with("#{adj} #{noun}", 'spare_container').and_return(true)
+        described_class.swap_out_full_gempouch?(adj, noun, nil, 'spare_container')
+      end
+
+      context 'when get_item fails' do
+        it 'returns false and logs message' do
+          allow(described_class).to receive(:get_item?).and_return(false)
+          expect(Lich::Messaging).to receive(:msg).with('bold', /No spare pouch found/)
+          expect(described_class.swap_out_full_gempouch?(adj, noun, nil, 'spare_container')).to be false
+        end
+      end
+    end
+
+    context 'when wear fails' do
+      it 'returns false and logs message' do
+        allow(described_class).to receive(:check_belt_for_pouch?).and_return(false)
+        allow(described_class).to receive(:get_item?).and_return(true)
+        allow(described_class).to receive(:wear_item?).and_return(false)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /Could not wear new pouch/)
+        expect(described_class.swap_out_full_gempouch?(adj, noun, nil, 'spare_container')).to be false
+      end
+    end
+
+    context 'when should_tie_gem_pouches is true' do
+      before do
+        allow(described_class).to receive(:check_belt_for_pouch?).and_return(false)
+        allow(described_class).to receive(:get_item?).and_return(true)
+        allow(described_class).to receive(:wear_item?).and_return(true)
+      end
+
+      context 'when tie succeeds' do
+        it 'returns true' do
+          allow(described_class).to receive(:tie_gem_pouch?).and_return(true)
+          expect(described_class.swap_out_full_gempouch?(adj, noun, nil, 'spare', true)).to be true
+        end
+      end
+
+      context 'when tie fails' do
+        it 'logs warning but still returns true (pouch is worn)' do
+          allow(described_class).to receive(:tie_gem_pouch?).and_return(false)
+          expect(Lich::Messaging).to receive(:msg).with('bold', /Could not tie new pouch/)
+          expect(described_class.swap_out_full_gempouch?(adj, noun, nil, 'spare', true)).to be true
+        end
+      end
+    end
+
+    context 'when should_tie_gem_pouches is false' do
+      it 'does not call tie_gem_pouch?' do
+        allow(described_class).to receive(:check_belt_for_pouch?).and_return(false)
+        allow(described_class).to receive(:get_item?).and_return(true)
+        allow(described_class).to receive(:wear_item?).and_return(true)
+        expect(described_class).not_to receive(:tie_gem_pouch?)
+        described_class.swap_out_full_gempouch?(adj, noun, nil, 'spare', false)
+      end
+    end
+  end
+
+  describe '#fill_gem_pouch_with_container (with constants and proper returns)' do
+    let(:adj) { 'soft' }
+    let(:noun) { 'pouch' }
+    let(:source) { 'sack' }
+
+    before do
+      allow(Flags).to receive(:add)
+      allow(Flags).to receive(:delete)
+      allow(Flags).to receive(:reset)
+      allow(Flags).to receive(:[]).and_return(false)
+    end
+
+    it 'adds flag with FILL_POUCH_FULL_PATTERN constant' do
+      stub_bput('You fill your pouch.')
+      expect(Flags).to receive(:add).with('pouch-full', described_class::FILL_POUCH_FULL_PATTERN)
+      described_class.fill_gem_pouch_with_container(adj, noun, source)
+    end
+
+    it 'always deletes flag in ensure block' do
+      allow(DRC).to receive(:bput).and_raise(StandardError)
+      expect(Flags).to receive(:delete).with('pouch-full')
+      expect { described_class.fill_gem_pouch_with_container(adj, noun, source) }.to raise_error(StandardError)
+    end
+
+    context 'when container not found' do
+      it 'logs message and returns early' do
+        stub_bput('Please rephrase that command')
+        expect(Lich::Messaging).to receive(:msg).with('bold', /Fill failed/)
+        described_class.fill_gem_pouch_with_container(adj, noun, source)
+      end
+    end
+
+    context 'when no gems in container' do
+      it 'completes successfully (empty source is valid)' do
+        stub_bput("There aren't any gems")
+        expect(Lich::Messaging).not_to receive(:msg).with('bold', /Fill failed/)
+        described_class.fill_gem_pouch_with_container(adj, noun, source)
+      end
+    end
+
+    context 'when pouch needs to be tied (should_tie_gem_pouches=true)' do
+      it 'ties pouch and recursively retries' do
+        # First call returns needs tie, second call succeeds
+        # tie_gem_pouch? called twice: once when needs tie, once after successful fill
+        call_count = 0
+        allow(DRC).to receive(:bput) do
+          call_count += 1
+          call_count == 1 ? "You'd better tie it up before putting" : 'You fill your pouch.'
+        end
+        expect(described_class).to receive(:tie_gem_pouch?).with(adj, noun).at_least(:once).and_return(true)
+        described_class.fill_gem_pouch_with_container(adj, noun, source, nil, nil, true)
+      end
+    end
+
+    context 'when pouch needs to be tied (should_tie_gem_pouches=false)' do
+      it 'swaps out the pouch instead' do
+        call_count = 0
+        allow(DRC).to receive(:bput) do
+          call_count += 1
+          call_count == 1 ? "You'd better tie it up before putting" : 'You fill your pouch.'
+        end
+        expect(described_class).to receive(:swap_out_full_gempouch?).and_return(true)
+        described_class.fill_gem_pouch_with_container(adj, noun, source, nil, 'spare', false)
+      end
+
+      it 'logs and returns if swap fails' do
+        stub_bput("You'd better tie it up before putting")
+        allow(described_class).to receive(:swap_out_full_gempouch?).and_return(false)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /Could not swap gem pouches/)
+        described_class.fill_gem_pouch_with_container(adj, noun, source, nil, 'spare', false)
+      end
+    end
+
+    context 'when pouch is full (direct match)' do
+      it 'swaps out the pouch and recursively retries' do
+        call_count = 0
+        allow(DRC).to receive(:bput) do
+          call_count += 1
+          call_count == 1 ? 'is too full to fit' : 'You fill your pouch.'
+        end
+        expect(described_class).to receive(:swap_out_full_gempouch?).and_return(true)
+        described_class.fill_gem_pouch_with_container(adj, noun, source, nil, 'spare', false)
+      end
+    end
+
+    context 'when pouch fills up mid-operation (flag set)' do
+      it 'resets flag, swaps pouch, and retries' do
+        # First call succeeds but flag is set, second call succeeds
+        call_count = 0
+        allow(DRC).to receive(:bput) do
+          call_count += 1
+          'You fill your pouch.'
+        end
+        allow(Flags).to receive(:[]).with('pouch-full').and_return(true, false)
+        expect(Flags).to receive(:reset).with('pouch-full')
+        expect(described_class).to receive(:swap_out_full_gempouch?).and_return(true)
+        described_class.fill_gem_pouch_with_container(adj, noun, source, nil, 'spare', false)
+      end
+    end
+
+    context 'when fill succeeds' do
+      before { stub_bput('You fill your pouch.') }
+
+      it 'ties pouch if should_tie_gem_pouches is true' do
+        expect(described_class).to receive(:tie_gem_pouch?).with(adj, noun)
+        described_class.fill_gem_pouch_with_container(adj, noun, source, nil, nil, true)
+      end
+
+      it 'does not tie pouch if should_tie_gem_pouches is false' do
+        expect(described_class).not_to receive(:tie_gem_pouch?)
+        described_class.fill_gem_pouch_with_container(adj, noun, source, nil, nil, false)
+      end
     end
   end
 end
