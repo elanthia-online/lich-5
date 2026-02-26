@@ -905,8 +905,10 @@ module Lich
 
       # Trigger auto-start check on module load
       Thread.new do
-        sleep(1) until (defined?(::XMLData))
-        sleep(1) while XMLData.game.nil? || XMLData.name.nil?
+        sleep(0.5) until (defined?(XMLData))
+        sleep(0.5) until (defined?(DB_Store))
+        sleep(0.5) while XMLData.game.nil? || XMLData.name.nil?
+        sleep(5)
         Lich::Util::MemoryReleaser.instance
       end
     end
