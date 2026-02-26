@@ -7,7 +7,6 @@ module Lich
 
       # Strips XML tags and decodes common HTML entities from game output lines.
       # Returns an array of non-empty, trimmed strings.
-      # lgtm[ruby/incomplete-multi-character-sanitization] - Server-controlled game XML, not HTML rendering
       def strip_xml(lines)
         lines.map { |line| line.gsub(/<[^>]+>/, '').gsub('&gt;', '>').gsub('&lt;', '<').strip }
              .reject(&:empty?)
