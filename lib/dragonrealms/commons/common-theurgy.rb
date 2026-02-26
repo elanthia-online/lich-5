@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Lich
   module DragonRealms
     module DRCTH
@@ -5,13 +7,13 @@ module Lich
 
       CLERIC_ITEMS = [
         'holy water', 'holy oil', 'wine', 'incense', 'flint', 'chamomile', 'sage', 'jalbreth balm'
-      ] unless defined?(CLERIC_ITEMS)
+      ].each(&:freeze).freeze unless defined?(CLERIC_ITEMS)
 
       COMMUNE_ERRORS = [
         'As you commune you sense that the ground is already consecrated.',
         'You stop as you realize that you have attempted a commune',
         'completed this commune too recently'
-      ] unless defined?(COMMUNE_ERRORS)
+      ].each(&:freeze).freeze unless defined?(COMMUNE_ERRORS)
 
       DEVOTION_LEVELS = [
         'You sense nothing special from your communing',
@@ -31,14 +33,39 @@ module Lich
         'After a moment, you see a vision of your god who calls to you by name, "My child, though you may',
         'After a moment, you see a crystal-clear vision of your god who speaks slowly and deliberately',
         'After a moment, you feel a clear presence like a warm blanket covering you'
-      ] unless defined?(DEVOTION_LEVELS)
+      ].each(&:freeze).freeze unless defined?(DEVOTION_LEVELS)
+
+      # Start pattern for commune sense output. Matches the first line of output
+      # which varies depending on active commune state.
+      # Verified in-game 2026-02-07.
+      COMMUNE_SENSE_START = /benevolent eyes|miracle of Tamsine|auspices of Kertigen|influence is woven|not a vessel|will not be able|eager to better/.freeze unless defined?(COMMUNE_SENSE_START)
+
+      # Data class for commune_sense results. Replaces raw hash return.
+      # Supports [] for backward compat with callers using result['key'].
+      class CommuneSenseResult
+        attr_reader :active_communes, :recent_communes, :commune_ready
+
+        def initialize(active_communes: [], recent_communes: [], commune_ready: true)
+          @active_communes = active_communes.freeze
+          @recent_communes = recent_communes.freeze
+          @commune_ready = commune_ready
+        end
+
+        def commune_ready?
+          @commune_ready
+        end
+
+        def [](key)
+          send(key.to_sym)
+        end
+      end
 
       def has_holy_water?(theurgy_supply_container, water_holder)
         return false unless DRCI.get_item?(water_holder, theurgy_supply_container)
 
         has_water = DRCI.inside?('holy water', water_holder)
         DRCI.put_away_item?(water_holder, theurgy_supply_container)
-        return has_water
+        has_water
       end
 
       def has_flint?(theurgy_supply_container)
@@ -64,15 +91,21 @@ module Lich
         item_shop_data = town_theurgy_data["#{item_name}_shop"]
         return if item_shop_data.nil?
 
-        return item_shop_data['needs_bless']
+        item_shop_data['needs_bless']
       end
 
       def buy_cleric_item?(town, item_name, stackable, num_to_buy, theurgy_supply_container)
         town_theurgy_data = get_data('theurgy')[town]
-        return false if town_theurgy_data.nil?
+        if town_theurgy_data.nil?
+          Lich::Messaging.msg("bold", "DRCTH: No theurgy data found for town '#{town}'.")
+          return false
+        end
 
         item_shop_data = town_theurgy_data["#{item_name}_shop"]
-        return false if item_shop_data.nil?
+        if item_shop_data.nil?
+          Lich::Messaging.msg("bold", "DRCTH: No shop data found for '#{item_name}' in '#{town}'.")
+          return false
+        end
 
         DRCT.walk_to(item_shop_data['id'])
         if stackable
@@ -83,7 +116,7 @@ module Lich
             end
             # Put this back in the container each cycle so it doesn't interfere
             # with bless of next purchase.
-            DRCI.put_away_item?(item_name, @theurgy_supply_container)
+            DRCI.put_away_item?(item_name, theurgy_supply_container)
           end
         else
           num_to_buy.times do
@@ -92,7 +125,7 @@ module Lich
           end
         end
 
-        return true
+        true
       end
 
       def buy_single_supply(item_name, shop_data)
@@ -104,7 +137,7 @@ module Lich
 
         return unless shop_data['needs_bless'] && @known_spells.include?('Bless')
 
-        quick_bless_item(item[:name])
+        quick_bless_item(item_name)
       end
 
       def quick_bless_item(item_name)
@@ -147,30 +180,30 @@ module Lich
 
       def sprinkle_holy_water?(theurgy_supply_container, water_holder, target)
         unless DRCI.get_item?(water_holder, theurgy_supply_container)
-          DRC.message("Can't get #{water_holder} to sprinkle.")
+          Lich::Messaging.msg("bold", "DRCTH: Can't get #{water_holder} to sprinkle.")
           return false
         end
         unless sprinkle?(water_holder, target)
           DRCI.put_away_item?(water_holder, theurgy_supply_container)
-          DRC.message("Couldn't sprinkle holy water.")
+          Lich::Messaging.msg("bold", "DRCTH: Couldn't sprinkle holy water.")
           return false
         end
         DRCI.put_away_item?(water_holder, theurgy_supply_container)
-        return true
+        true
       end
 
       def sprinkle_holy_oil?(theurgy_supply_container, target)
         unless DRCI.get_item?("holy oil", theurgy_supply_container)
-          DRC.message("Can't get holy oil to sprinkle.")
+          Lich::Messaging.msg("bold", "DRCTH: Can't get holy oil to sprinkle.")
           return false
         end
         unless sprinkle?("oil", target)
           empty_cleric_hands(theurgy_supply_container)
-          DRC.message("Couldn't sprinkle holy oil.")
+          Lich::Messaging.msg("bold", "DRCTH: Couldn't sprinkle holy oil.")
           return false
         end
         empty_cleric_hands(theurgy_supply_container)
-        return true
+        true
       end
 
       def sprinkle_holy_water(theurgy_supply_container, water_holder, target)
@@ -200,22 +233,22 @@ module Lich
         empty_cleric_hands(theurgy_supply_container)
 
         unless has_flint?(theurgy_supply_container)
-          DRC.message("Can't find flint to light")
+          Lich::Messaging.msg("bold", "DRCTH: Can't find flint to light")
           return false
         end
 
         unless has_incense?(theurgy_supply_container)
-          DRC.message("Can't find incense to light")
+          Lich::Messaging.msg("bold", "DRCTH: Can't find incense to light")
           return false
         end
 
         unless DRCI.get_item?(flint_lighter)
-          DRC.message("Can't get #{flint_lighter} to light incense")
+          Lich::Messaging.msg("bold", "DRCTH: Can't get #{flint_lighter} to light incense")
           return false
         end
 
         unless DRCI.get_item?('incense', theurgy_supply_container)
-          DRC.message("Can't get incense to light")
+          Lich::Messaging.msg("bold", "DRCTH: Can't get incense to light")
           empty_cleric_hands(theurgy_supply_container)
           return false
         end
@@ -225,8 +258,8 @@ module Lich
           waitrt?
 
           lighting_attempts += 1
-          if (lighting_attempts >= 5)
-            DRC.message("Can't light your incense for some reason. Tried 5 times, giving up.")
+          if lighting_attempts >= 5
+            Lich::Messaging.msg("bold", "DRCTH: Can't light your incense for some reason. Tried 5 times, giving up.")
             empty_cleric_hands(theurgy_supply_container)
             return false
           end
@@ -236,23 +269,38 @@ module Lich
 
         DRCI.put_away_item?(flint_lighter)
         empty_cleric_hands(theurgy_supply_container)
-        return true
+        true
       end
 
+      # Issues 'commune sense' and parses the output to determine active/recent communes
+      # and whether the character is ready to commune again.
+      # Returns a CommuneSenseResult (backward-compatible with hash access via []).
       def commune_sense
-        DRC.bput('commune sense', 'Roundtime:')
-        pause 0.5
+        lines = Lich::Util.issue_command(
+          'commune sense',
+          COMMUNE_SENSE_START,
+          /Roundtime/,
+          usexml: false,
+          quiet: true,
+          include_end: false
+        )
+        return CommuneSenseResult.new if lines.nil?
 
+        parse_commune_sense_lines(lines.map(&:strip).reject(&:empty?))
+      end
+
+      # Pure parsing method for commune sense output lines.
+      # Takes an array of plain text strings and returns a CommuneSenseResult.
+      def parse_commune_sense_lines(lines)
         commune_ready = true
         active_communes = []
         recent_communes = []
 
-        theurgy_lines = reget(50).map(&:strip)
-        theurgy_lines.each do |line|
+        lines.each do |line|
           case line
           when /You will not be able to open another divine conduit yet/
             commune_ready = false
-          when /Tamsine\'s benevolent eyes are upon you/, /The miracle of Tamsine has manifested about you/
+          when /Tamsine's benevolent eyes are upon you/, /The miracle of Tamsine has manifested about you/
             active_communes << 'Tamsine'
           when /You are under the auspices of Kertigen/
             active_communes << 'Kertigen'
@@ -262,18 +310,18 @@ module Lich
             recent_communes << 'Eluned'
           when /You have been recently enlightened by Tamsine/
             recent_communes << 'Tamsine'
-          when /The sounds of Kertigen\'s forge still ring in your ears/
+          when /The sounds of Kertigen's forge still ring in your ears/
             recent_communes << 'Kertigen'
-          when /You are still captivated by Truffenyi\'s favor/
+          when /You are still captivated by Truffenyi's favor/
             recent_communes << 'Truffenyi'
           end
         end
 
-        return {
-          'active_communes' => active_communes,
-          'recent_communes' => recent_communes,
-          'commune_ready'   => commune_ready
-        }
+        CommuneSenseResult.new(
+          active_communes: active_communes,
+          recent_communes: recent_communes,
+          commune_ready: commune_ready
+        )
       end
     end
   end
