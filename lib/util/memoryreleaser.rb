@@ -277,7 +277,8 @@ module Lich
         #
         # @return [void]
         def release
-          Lich::Common::GameObj.prune_index!(ttl: @interval)
+          log "interval: #{@interval}"
+          Lich::Common::GameObj.prune_index!(ttl: @interval, verbose: @verbose)
           run_gc
           release_to_os
           log "Memory release completed"
@@ -901,6 +902,13 @@ module Lich
           @instance&.stop
           @instance = nil
         end
+      end
+
+      # Trigger auto-start check on module load
+      Thread.new do 
+        sleep(1) until (defined?(::XMLData))
+        sleep(1) while XMLData.game.nil? || XMLData.name.nil?
+        Lich::Util::MemoryReleaser.instance
       end
     end
   end
