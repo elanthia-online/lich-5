@@ -476,6 +476,173 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
+  # ─── Registry API ────────────────────────────────────────────
+
+  describe '.register' do
+    it 'is defined as a module method' do
+      expect(frontend).to respond_to(:register)
+    end
+
+    it 'accepts name with capabilities and metadata keyword args' do
+      # Verify the method signature: name (required), capabilities/metadata (optional keywords)
+      params = frontend.method(:register).parameters
+      expect(params).to include([:req, :name])
+      expect(params).to include([:key, :capabilities])
+      expect(params).to include([:key, :metadata])
+    end
+  end
+
+  describe '.has_capability?' do
+    it 'returns true for registered capabilities' do
+      expect(frontend.has_capability?('wrayth', :xml)).to be true
+      expect(frontend.has_capability?('wrayth', :streams)).to be true
+      expect(frontend.has_capability?('wrayth', :mono)).to be true
+      expect(frontend.has_capability?('wrayth', :room_window)).to be true
+    end
+
+    it 'returns false for unregistered capabilities' do
+      expect(frontend.has_capability?('wizard', :xml)).to be false
+      expect(frontend.has_capability?('frostbite', :streams)).to be false
+      expect(frontend.has_capability?('profanity', :mono)).to be false
+    end
+
+    it 'returns false for unknown frontends' do
+      expect(frontend.has_capability?('unknown_frontend', :xml)).to be false
+    end
+
+    it 'returns false for nil frontend' do
+      expect(frontend.has_capability?(nil, :xml)).to be false
+    end
+
+    it 'handles string and symbol capabilities equivalently' do
+      expect(frontend.has_capability?('wrayth', :xml)).to be true
+      expect(frontend.has_capability?('wrayth', 'xml')).to be true
+    end
+
+    it 'is case-insensitive for frontend names' do
+      expect(frontend.has_capability?('WRAYTH', :xml)).to be true
+      expect(frontend.has_capability?('Wrayth', :xml)).to be true
+      expect(frontend.has_capability?('wrayth', :xml)).to be true
+    end
+  end
+
+  describe '.metadata_for' do
+    it 'returns nil for unregistered metadata keys' do
+      expect(frontend.metadata_for('wrayth', :nonexistent_key)).to be_nil
+    end
+
+    it 'returns nil for frontends without that metadata' do
+      expect(frontend.metadata_for('stormfront', :client_string)).to be_nil
+    end
+
+    it 'returns nil for nil frontend' do
+      expect(frontend.metadata_for(nil, :client_string)).to be_nil
+    end
+
+    it 'is case-insensitive for frontend names' do
+      # Both should return nil (no metadata set) but should not raise
+      expect(frontend.metadata_for('WRAYTH', :client_string)).to be_nil
+      expect(frontend.metadata_for('Wrayth', :client_string)).to be_nil
+    end
+  end
+
+  describe '.registered_frontends' do
+    it 'returns an array of frontend names' do
+      result = frontend.registered_frontends
+      expect(result).to be_an(Array)
+      expect(result).to include('wrayth', 'stormfront', 'wizard')
+    end
+
+    it 'includes all known frontends' do
+      result = frontend.registered_frontends
+      %w[wrayth stormfront profanity genie frostbite wizard avalon].each do |fe|
+        expect(result).to include(fe)
+      end
+    end
+  end
+
+  describe '.frontends_with_capability' do
+    it 'returns frontends that have :xml capability' do
+      result = frontend.frontends_with_capability(:xml)
+      expect(result).to include('wrayth', 'stormfront', 'profanity', 'genie', 'frostbite')
+      expect(result).not_to include('wizard', 'avalon')
+    end
+
+    it 'returns frontends that have :gsl capability' do
+      result = frontend.frontends_with_capability(:gsl)
+      expect(result).to include('wizard', 'avalon')
+      expect(result).not_to include('wrayth', 'stormfront')
+    end
+
+    it 'returns frontends that have :streams capability' do
+      result = frontend.frontends_with_capability(:streams)
+      expect(result).to include('wrayth', 'stormfront', 'profanity')
+      expect(result).not_to include('genie', 'frostbite', 'wizard')
+    end
+
+    it 'returns frontends that have :room_window capability' do
+      result = frontend.frontends_with_capability(:room_window)
+      expect(result).to include('wrayth', 'stormfront')
+      expect(result).not_to include('wizard', 'profanity')
+    end
+
+    it 'returns empty array for unknown capability' do
+      result = frontend.frontends_with_capability(:nonexistent_capability)
+      expect(result).to be_empty
+    end
+  end
+
+  describe '.supports_room_window?' do
+    it 'returns true for frontends with room_window capability' do
+      expect(frontend.supports_room_window?('wrayth')).to be true
+      expect(frontend.supports_room_window?('stormfront')).to be true
+    end
+
+    it 'returns false for frontends without room_window capability' do
+      expect(frontend.supports_room_window?('profanity')).to be false
+      expect(frontend.supports_room_window?('genie')).to be false
+      expect(frontend.supports_room_window?('wizard')).to be false
+    end
+
+    context 'with $frontend global (default argument)' do
+      around do |example|
+        original = $frontend
+        example.run
+        $frontend = original
+      end
+
+      it 'reads from $frontend when no argument given' do
+        $frontend = 'stormfront'
+        expect(frontend.supports_room_window?).to be true
+      end
+
+      it 'returns false for profanity' do
+        $frontend = 'profanity'
+        expect(frontend.supports_room_window?).to be false
+      end
+    end
+  end
+
+  # ─── Registry-Backed Constants ────────────────────────────────
+
+  describe 'backward-compatible constants are derived from registry' do
+    it 'XML_FRONTENDS matches frontends_with_capability(:xml)' do
+      expect(FE::XML_FRONTENDS.sort).to eq(frontend.frontends_with_capability(:xml).sort)
+    end
+
+    it 'GSL_FRONTENDS matches frontends_with_capability(:gsl)' do
+      expect(FE::GSL_FRONTENDS.sort).to eq(frontend.frontends_with_capability(:gsl).sort)
+    end
+
+    it 'STREAM_FRONTENDS matches frontends_with_capability(:streams)' do
+      expect(FE::STREAM_FRONTENDS.sort).to eq(frontend.frontends_with_capability(:streams).sort)
+    end
+
+    it 'MONO_FRONTENDS matches frontends_with_capability(:mono)' do
+      expect(FE::MONO_FRONTENDS.sort).to eq(frontend.frontends_with_capability(:mono).sort)
+    end
+  end
+
   # ─── Regression: Old Patterns Still Match ──────────────────
 
   describe 'regression: predicate methods match old regex patterns' do
