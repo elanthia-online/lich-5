@@ -153,21 +153,28 @@ class Map
   end
 end unless defined?(Map)
 
-# Mock XMLData — always define needed methods
-module XMLData
-  class << self
-    def room_description
-      ''
-    end
+# Mock XMLData — add needed methods if not defined by spec_helper
+unless defined?(XMLData)
+  module XMLData
+    class << self
+      def room_description
+        ''
+      end
 
-    def room_title
-      ''
-    end
+      def room_title
+        ''
+      end
 
-    def room_exits
-      []
+      def room_exits
+        []
+      end
     end
   end
+else
+  # Add missing methods to existing XMLData
+  XMLData.define_singleton_method(:room_description) { '' } unless XMLData.respond_to?(:room_description)
+  XMLData.define_singleton_method(:room_title) { '' } unless XMLData.respond_to?(:room_title)
+  XMLData.define_singleton_method(:room_exits) { [] } unless XMLData.respond_to?(:room_exits)
 end
 
 # Mock UserVars
