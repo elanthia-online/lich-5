@@ -6,14 +6,13 @@ LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 require_relative File.join(LIB_DIR, 'common', 'settings.rb')
 
 module XMLData
-  @dialogs = {}
-  def self.game
-    "GSIV"
+  class << self
+    attr_accessor :game, :name, :dialogs
   end
 
-  def self.name
-    "TestCharacter"
-  end
+  @dialogs = {}
+  @game = "GSIV"
+  @name = "TestCharacter"
 
   def self.indicator
     { 'IconSTUNNED' => 'n',
@@ -24,10 +23,6 @@ module XMLData
   def self.save_dialogs(kind, attributes)
     @dialogs[kind] ||= {}
     return @dialogs[kind] = attributes
-  end
-
-  def self.dialogs
-    @dialogs ||= {}
   end
 end
 
