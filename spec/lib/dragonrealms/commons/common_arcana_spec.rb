@@ -351,6 +351,8 @@ RSpec.describe Lich::DragonRealms::DRCA do
     Lich::Messaging.clear_messages!
     DRSpells.active_spells = {}
     Flags.reset!
+    allow(DRCMM).to receive(:update_astral_data) { |data, _settings| data }
+    allow(DRC).to receive(:bput).and_return('default')
   end
 
   # ──────────────────────────────────────────────
