@@ -138,7 +138,7 @@ module Lich
               :ok
             when Pattern::StowListContainer, Pattern::StowSetContainer1, Pattern::StowSetContainer2
               match = Regexp.last_match
-              StowList.__send__("#{Lich::Util.normalize_name(match[:type].downcase)}=", GameObj.index_or_create(match[:id], match[:noun], match[:name], (match[:before].nil? ? nil : match[:before].strip), (match[:after].nil? ? nil : match[:after].strip)))
+              StowList.__send__("#{match[:type].downcase}=", GameObj.index_or_create(match[:id], match[:noun], match[:name], (match[:before].nil? ? nil : match[:before].strip), (match[:after].nil? ? nil : match[:after].strip)))
               StowList.checked = true if line =~ Pattern::StowListContainer
               :ok
             when Pattern::ReadyListOutputStart
