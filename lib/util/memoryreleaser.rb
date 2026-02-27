@@ -277,9 +277,12 @@ module Lich
         #
         # @return [void]
         def release
+          before = print_memory_stats if @verbose
           Lich::Common::GameObj.prune_index!(ttl: @interval, verbose: @verbose)
           run_gc
           release_to_os
+          after = print_memory_stats if @verbose
+          print_memory_diff(before, after) if @verbose
           log "Memory release completed"
         end
 
