@@ -3,7 +3,7 @@
 require 'spec_helper'
 require 'tmpdir'
 require 'rexml/document'
-require_relative '../../../lib/common/gameobj'
+require 'common/gameobj'
 
 RSpec.describe Lich::Common::GameObj do
   def reset_gameobj_state!
