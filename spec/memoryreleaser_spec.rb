@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require_relative '../../spec_helper'
-require_relative '../../../lib/util/memoryreleaser'
+require 'spec_helper'
+require 'util/memoryreleaser'
 
 RSpec.describe Lich::Util::MemoryReleaser do
   let(:memory_releaser) { described_class }
