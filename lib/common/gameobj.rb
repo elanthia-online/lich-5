@@ -317,22 +317,77 @@ module Lich
 
       # Sets the right-hand object, replacing any existing one.
       #
+      # Routes through the shared identity index so the same item picked up
+      # again returns the existing +GameObj+ instance rather than allocating
+      # a new one. Replace semantics are preserved — +@@right_hand+ is always
+      # overwritten with the result.
+      #
       # @param id   [Integer, String]
       # @param noun [String, nil]
       # @param name [String, nil]
       # @return [GameObj]
       def self.new_right_hand(id, noun, name)
-        @@right_hand = GameObj.new(id, noun, name)
+        @@right_hand = index_or_create(id, noun, name)
       end
 
       # Sets the left-hand object, replacing any existing one.
+      #
+      # Routes through the shared identity index so the same item picked up
+      # again returns the existing +GameObj+ instance rather than allocating
+      # a new one. Replace semantics are preserved — +@@left_hand+ is always
+      # overwritten with the result.
       #
       # @param id   [Integer, String]
       # @param noun [String, nil]
       # @param name [String, nil]
       # @return [GameObj]
       def self.new_left_hand(id, noun, name)
-        @@left_hand = GameObj.new(id, noun, name)
+        @@left_hand = index_or_create(id, noun, name)
+      end
+
+      # Looks up an existing +GameObj+ in the shared identity index by composite
+      # key (+id+, +noun+, +name+), or creates and indexes a new one.
+      #
+      # Unlike +find_or_create+, this method does *not* push the object into any
+      # registry array. It is intended for callers that manage their own storage
+      # slot (e.g. +new_right_hand+/+new_left_hand+) or for external code that
+      # constructs +GameObj+ instances via +GameObj.new+ but wants to participate
+      # in the shared identity index so objects are reused and tracked for TTL-
+      # based garbage collection.
+      #
+      # When a matching entry is found, +before_name+ and +after_name+ are
+      # backfilled if they were previously +nil+ and the incoming values are
+      # non-nil. Existing non-nil values are never overwritten.
+      #
+      # @example Replace a bare GameObj.new call
+      #   # Before:
+      #   obj = GameObj.new(id, noun, name, before, after)
+      #
+      #   # After — participates in the shared index:
+      #   obj = GameObj.index_or_create(id, noun, name, before, after)
+      #
+      # @param id     [Integer, String]
+      # @param noun   [String, nil]
+      # @param name   [String, nil]
+      # @param before [String, nil]   backfills +before_name+ if previously unset
+      # @param after  [String, nil]   backfills +after_name+ if previously unset
+      # @return [GameObj]
+      def self.index_or_create(id, noun, name, before = nil, after = nil)
+        str_id = id.is_a?(Integer) ? id.to_s : id
+        key    = "#{str_id}|#{noun}|#{name}"
+        now    = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        if (entry = @@index[key])
+          existing, _ts        = entry
+          @@index[key]         = [existing, now]
+          existing.before_name = before if existing.before_name.nil? && !before.nil?
+          existing.after_name  = after  if existing.after_name.nil?  && !after.nil?
+          return existing
+        end
+
+        obj          = GameObj.new(id, noun, name, before, after)
+        @@index[key] = [obj, now]
+        obj
       end
 
       # ---------------------------------------------------------------------------
@@ -949,16 +1004,18 @@ module Lich
         end
 
         # Returns a Set (or Array if Set is unavailable) of all object IDs
-        # currently present in any active registry. Used by +index_stats+ to
-        # determine which index entries are live vs stale.
+        # currently present in any active registry, including the hand slots.
+        # Used by +prune_index!+ as the live-guard check and by +index_stats+
+        # to classify entries as live vs stale.
         #
         # @return [Set<String>, Array<String>]
         def live_registry_ids
           ids = [
             *@@loot, *@@npcs, *@@pcs, *@@inv,
             *@@room_desc, *@@fam_loot, *@@fam_npcs, *@@fam_pcs, *@@fam_room_desc,
-            *@@contents.values.flatten
-          ].map(&:id)
+            *@@contents.values.flatten,
+            @@right_hand, @@left_hand
+          ].compact.map(&:id)
           defined?(Set) ? Set.new(ids) : ids
         end
 
