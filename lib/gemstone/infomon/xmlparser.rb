@@ -138,11 +138,7 @@ module Lich
               :ok
             when Pattern::StowListContainer, Pattern::StowSetContainer1, Pattern::StowSetContainer2
               match = Regexp.last_match
-              if GameObj[match[:id]]
-                StowList.__send__("#{match[:type].downcase}=", GameObj[match[:id]])
-              else
-                StowList.__send__("#{match[:type].downcase}=", GameObj.new(match[:id], match[:noun], match[:name], (match[:before].nil? ? nil : match[:before].strip), (match[:after].nil? ? nil : match[:after].strip)))
-              end
+              StowList.__send__("#{match[:type].downcase}=", GameObj.index_or_create(match[:id], match[:noun], match[:name], (match[:before].nil? ? nil : match[:before].strip), (match[:after].nil? ? nil : match[:after].strip)))
               StowList.checked = true if line =~ Pattern::StowListContainer
               :ok
             when Pattern::ReadyListOutputStart
@@ -151,11 +147,7 @@ module Lich
             when Pattern::ReadyListNormal, Pattern::ReadyListAmmo2, Pattern::ReadyListSheathsSet, Pattern::ReadyItemSet
               match = Regexp.last_match
               unless match[:id].nil?
-                if GameObj[match[:id]]
-                  ReadyList.__send__("#{Lich::Util.normalize_name(match[:type].downcase)}=", GameObj[match[:id]])
-                else
-                  ReadyList.__send__("#{Lich::Util.normalize_name(match[:type].downcase)}=", GameObj.new(match[:id], match[:noun], match[:name], (match[:before].nil? ? nil : match[:before].strip), (match[:after].nil? ? nil : match[:after].strip)))
-                end
+                ReadyList.__send__("#{Lich::Util.normalize_name(match[:type].downcase)}=", GameObj.index_or_create(match[:id], match[:noun], match[:name], (match[:before].nil? ? nil : match[:before].strip), (match[:after].nil? ? nil : match[:after].strip)))
               end
               if match.named_captures.include?("store")
                 ReadyList.__send__("store_#{Lich::Util.normalize_name(match[:type].downcase)}=", match[:store])

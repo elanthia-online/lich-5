@@ -44,7 +44,7 @@ module Lich
     module MemoryReleaser
       # Default settings for memory releaser
       DEFAULT_SETTINGS = {
-        auto_start: false, # Disabled by default, user must enable
+        auto_start: true, # Disabled by default, user must enable
         interval: 900, # default of 15 minutes
         verbose: false,
       }.freeze
@@ -265,14 +265,24 @@ module Lich
 
         # Perform a complete memory release cycle
         #
-        # This runs Ruby's garbage collector with full mark and immediate sweep,
+        # Prunes stale entries from the GameObj shared identity index using the
+        # current interval as the TTL — any index entry not seen within the last
+        # +@interval+ seconds (and not held in an active registry) is evicted
+        # before the GC and OS-level release steps run. This ensures the index
+        # stays lean and the subsequent GC pass has the most to reclaim.
+        #
+        # Runs Ruby's garbage collector with full mark and immediate sweep,
         # attempts to compact the heap if available, and then releases memory
         # back to the operating system using platform-specific methods.
         #
         # @return [void]
         def release
+          before = print_memory_stats if @verbose
+          Lich::Common::GameObj.prune_index!(ttl: @interval, verbose: @verbose)
           run_gc
           release_to_os
+          after = print_memory_stats if @verbose
+          print_memory_diff(before, after) if @verbose
           log "Memory release completed"
         end
 
@@ -894,6 +904,15 @@ module Lich
           @instance&.stop
           @instance = nil
         end
+      end
+
+      # Trigger auto-start check on module load
+      Thread.new do
+        sleep(0.5) until (defined?(XMLData))
+        sleep(0.5) until (defined?(DB_Store))
+        sleep(0.5) while XMLData.game.nil? || XMLData.name.nil?
+        sleep(5)
+        Lich::Util::MemoryReleaser.instance
       end
     end
   end
