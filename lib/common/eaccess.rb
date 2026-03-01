@@ -5,6 +5,16 @@ require_relative 'account'
 module Lich
   module Common
     module EAccess
+      # Authentication error raised when EAccess authentication fails
+      class AuthenticationError < StandardError
+        attr_reader :error_code
+
+        def initialize(error_code)
+          @error_code = error_code
+          super("Error(#{error_code})")
+        end
+      end
+
       PACKET_SIZE = 8192
 
       def self.pem
@@ -71,8 +81,8 @@ module Lich
         conn.puts "A\t#{account}\t#{password}\n"
         response = EAccess.read(conn)
         unless /KEY\t(?<key>.*)\t/.match(response)
-          eaccess_error = "Error(%s)" % response.split(/\s+/).last
-          return eaccess_error
+          error_code = response.split(/\s+/).last
+          raise AuthenticationError, error_code
         end
         # pp "A:response=%s" % response
         conn.puts "M\n"

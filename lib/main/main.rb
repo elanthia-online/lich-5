@@ -35,6 +35,7 @@ reconnect_if_wanted = proc {
 }
 
 @main_thread = Thread.new {
+  Thread.current.abort_on_exception = true # Propagate exceptions to main thread
   test_mode = false
   $SEND_CHARACTER = '>'
   $cmd_prefix = '<c>'
@@ -69,9 +70,10 @@ reconnect_if_wanted = proc {
       Lich.log "info: CLI login successful for #{requested_character}"
       @launch_data = launch_data_array
     else
-      $stdout.puts "error: failed to authenticate for #{requested_character}"
+      $stderr.puts "error: failed to authenticate for #{requested_character}"
       Lich.log "error: CLI login failed for #{requested_character}"
-      exit 1
+      $stderr.flush
+      raise SystemExit.new(1) # With abort_on_exception=true, this propagates to main thread
     end
 
   ## GUI starts here
