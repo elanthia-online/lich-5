@@ -260,7 +260,7 @@ module Lich
           begin
             # Wait for character to be ready and dialogs to load
             Kernel.sleep 0.1 until GameBase::Game.autostarted? && XMLData.name && !XMLData.name.empty? &&
-                            !XMLData.dialogs.empty?
+                                   !XMLData.dialogs.empty?
 
             # Run initial setup if needed (GS-specific only, skip for DR)
             if XMLData.game !~ /^DR/ && db_refresh_needed?
