@@ -28,7 +28,7 @@ module Lich
         line = nil
         loop {
           if (@@index[thread_id] - @@offset) >= @@buffer.length
-            sleep 0.05 while ((@@index[thread_id] - @@offset) >= @@buffer.length)
+            Kernel.sleep 0.05 while ((@@index[thread_id] - @@offset) >= @@buffer.length)
           end
           @@mutex.synchronize {
             if @@index[thread_id] < @@offset

@@ -556,7 +556,7 @@ module Lich
         script = Script.current
         @@cast_lock.push(script)
         until (@@cast_lock.first == script) or @@cast_lock.empty?
-          sleep 0.1
+          Kernel.sleep 0.1
           Script.current # allows this loop to be paused
           @@cast_lock.delete_if { |s| s.paused or not Script.list.include?(s) }
         end
@@ -572,31 +572,31 @@ module Lich
           if Feat.known?(:mental_acuity)
             unless (self.mana_cost <= 0) or Char.stamina >= (self.mana_cost * 2)
               echo 'cast: not enough stamina there, Monk!'
-              sleep 0.1
+              Kernel.sleep 0.1
               return false
             end
           else
             unless (self.mana_cost <= 0) or Char.mana >= self.mana_cost
               echo 'cast: not enough mana'
-              sleep 0.1
+              Kernel.sleep 0.1
               return false
             end
           end
           unless (self.spirit_cost <= 0) or Char.spirit >= (self.spirit_cost + 1 + [9912, 9913, 9914, 9916, 9916, 9916].delete_if { |num| !Spell[num].active? }.length)
             echo 'cast: not enough spirit'
-            sleep 0.1
+            Kernel.sleep 0.1
             return false
           end
           unless (self.stamina_cost <= 0) or Char.stamina >= self.stamina_cost
             echo 'cast: not enough stamina'
-            sleep 0.1
+            Kernel.sleep 0.1
             return false
           end
         }
         script = Script.current
         if @type.nil?
           echo "cast: spell missing type (#{@name})"
-          sleep 0.1
+          Kernel.sleep 0.1
           return false
         end
         check_energy.call
@@ -607,7 +607,7 @@ module Lich
           script.want_downstream_xml = false
           @@cast_lock.push(script)
           until (@@cast_lock.first == script) or @@cast_lock.empty?
-            sleep 0.1
+            Kernel.sleep 0.1
             Script.current # allows this loop to be paused
             @@cast_lock.delete_if { |s| s.paused or not Script.list.include?(s) }
           end
@@ -666,17 +666,17 @@ module Lich
                     dothistimeout 'release', 5, /^You feel the magic of your spell rush away from you\.$|^You don't have a prepared spell to release!$/
                     unless (self.mana_cost <= 0) or Char.mana >= self.mana_cost
                       echo 'cast: not enough mana'
-                      sleep 0.1
+                      Kernel.sleep 0.1
                       return false
                     end
                     unless (self.spirit_cost <= 0) or Char.spirit >= (self.spirit_cost + 1 + (if checkspell(9912) then 1 else 0 end) + (if checkspell(9913) then 1 else 0 end) + (if checkspell(9914) then 1 else 0 end) + (if checkspell(9916) then 5 else 0 end))
                       echo 'cast: not enough spirit'
-                      sleep 0.1
+                      Kernel.sleep 0.1
                       return false
                     end
                     unless (self.stamina_cost <= 0) or Char.stamina >= self.stamina_cost
                       echo 'cast: not enough stamina'
-                      sleep 0.1
+                      Kernel.sleep 0.1
                       return false
                     end
                   end
@@ -690,11 +690,11 @@ module Lich
                       dothistimeout 'release', 5, /^You feel the magic of your spell rush away from you\.$|^You don't have a prepared spell to release!$/
                       unless (self.mana_cost <= 0) or Char.mana >= self.mana_cost
                         echo 'cast: not enough mana'
-                        sleep 0.1
+                        Kernel.sleep 0.1
                         return false
                       end
                     elsif prepare_result =~ /^You can't think clearly enough to prepare a spell!$|^You are concentrating too intently .*?to prepare a spell\.$|^You are too injured to make that dextrous of a movement|^The searing pain in your throat makes that impossible|^But you don't have any mana!\.$|^You can't make that dextrous of a move!$|^As you begin to prepare the spell the wind blows small objects at you thwarting your attempt\.$|^You do not know that spell!$|^All you manage to do is cough up some blood\.$|The incantations of countless spells swirl through your mind as a golden light flashes before your eyes\./
-                      sleep 0.1
+                      Kernel.sleep 0.1
                       return prepare_result
                     end
                   }
@@ -718,11 +718,11 @@ module Lich
               end
               cast_result = dothistimeout cast_cmd, 5, merged_results_regex
               if cast_result == "You don't seem to be able to move to do that."
-                100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
+                100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; Kernel.sleep 0.1 }
                 cast_result = dothistimeout cast_cmd, 5, merged_results_regex
               end
               if cast_cmd =~ /^incant/i && cast_result =~ /^\[Spell preparation time: (\d) seconds?\]$/
-                sleep(Regexp.last_match(1).to_i + 0.5)
+                Kernel.sleep(Regexp.last_match(1).to_i + 0.5)
                 cast_result = dothistimeout cast_cmd, 5, merged_results_regex
               end
               if ((@stance && force_stance != false) || force_stance == true)

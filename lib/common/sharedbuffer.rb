@@ -22,7 +22,7 @@ module Lich
           @buffer_mutex.synchronize { @buffer_index[thread_id] = (@buffer_offset + @buffer.length) }
         end
         if (@buffer_index[thread_id] - @buffer_offset) >= @buffer.length
-          sleep 0.05 while ((@buffer_index[thread_id] - @buffer_offset) >= @buffer.length)
+          Kernel.sleep 0.05 while ((@buffer_index[thread_id] - @buffer_offset) >= @buffer.length)
         end
         line = nil
         @buffer_mutex.synchronize {

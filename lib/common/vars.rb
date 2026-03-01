@@ -52,7 +52,7 @@ module Lich
                 ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8')]
               )
             rescue SQLite3::BusyException
-              sleep 0.1
+              Kernel.sleep 0.1
               retry
             end
 
@@ -87,7 +87,7 @@ module Lich
                   ["#{XMLData.game}:#{XMLData.name}".encode('UTF-8'), blob]
                 )
               rescue SQLite3::BusyException
-                sleep 0.1
+                Kernel.sleep 0.1
                 retry
               end
             end
@@ -99,7 +99,7 @@ module Lich
       # Background thread that auto-saves variables every 5 minutes
       Thread.new {
         loop {
-          sleep 300
+          Kernel.sleep 300
           begin
             @@save.call
           rescue StandardError => e

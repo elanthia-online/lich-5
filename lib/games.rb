@@ -281,7 +281,7 @@ module Lich
             @last_recv = Time.now
             until @@autostarted || (Time.now - @last_recv >= 6)
               break if @@autostarted
-              sleep 0.2
+              Kernel.sleep 0.2
             end
 
             puts 'look' unless @@autostarted
@@ -373,7 +373,7 @@ module Lich
                   end
 
                   # Small sleep before retry
-                  sleep 0.1
+                  Kernel.sleep 0.1
                   retry
                 rescue Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED => conn_error
                   # Connection was reset/broken - these are fatal
@@ -389,7 +389,7 @@ module Lich
               if should_continue && !@socket.closed? && !$_CLIENT_.closed?
                 Lich.log "Retrying server thread after error..."
                 consecutive_timeouts = 0 # Reset counter on retry
-                sleep 1 # Brief pause before retry
+                Kernel.sleep 1 # Brief pause before retry
                 retry
               else
                 Lich.log "Server thread exiting due to unrecoverable error"
@@ -612,7 +612,7 @@ module Lich
         def handle_thread_error(error)
           Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
           $stdout.puts "error: server_thread: #{error}\n\t#{error.backtrace.slice(0..10).join("\n\t")}"
-          sleep 0.2
+          Kernel.sleep 0.2
 
           # Determine if we should retry
           case error
@@ -660,17 +660,17 @@ module Lich
           when 'scar', 'scars'
             unless XMLData.injury_mode == 1
               Game._puts '_injury 1'
-              150.times { sleep 0.05; break if XMLData.injury_mode == 1 }
+              150.times { Kernel.sleep 0.05; break if XMLData.injury_mode == 1 }
             end
           when 'wound', 'wounds' # future proof leaving in place, but this will likely not be used
             unless XMLData.injury_mode == 0
               Game._puts '_injury 0'
-              150.times { sleep 0.05; break if XMLData.injury_mode == 0 }
+              150.times { Kernel.sleep 0.05; break if XMLData.injury_mode == 0 }
             end
           when 'both'
             unless XMLData.injury_mode == 2
               Game._puts '_injury 2'
-              150.times { sleep 0.05; break if XMLData.injury_mode == 2 }
+              150.times { Kernel.sleep 0.05; break if XMLData.injury_mode == 2 }
             end
           else
             raise ArgumentError, "Invalid mode: #{mode}. Use 'scar', 'wound', or 'both'."

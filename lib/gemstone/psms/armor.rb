@@ -246,7 +246,7 @@ module Lich
 
         usage_result = dothistimeout usage_cmd, 5, results_regex
         if usage_result == "You don't seem to be able to move to do that."
-          100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
+          100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; Kernel.sleep 0.1 }
           usage_result = dothistimeout usage_cmd, 5, results_regex
         end
         usage_result

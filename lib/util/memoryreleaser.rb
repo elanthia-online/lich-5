@@ -71,7 +71,7 @@ module Lich
                 command[:manager].enabled = false # Signal graceful stop
                 deadline = Time.now + 2
                 while @worker_thread.alive? && Time.now < deadline
-                  sleep 0.1
+                  Kernel.sleep 0.1
                 end
                 if @worker_thread.alive? # Last resort
                   @worker_thread.kill rescue nil
@@ -95,7 +95,7 @@ module Lich
                   # Sleep in small chunks to be more responsive
                   elapsed = 0
                   while elapsed < interval && manager.enabled
-                    sleep(1)
+                    Kernel.sleep(1)
                     elapsed += 1
                   end
 
@@ -117,7 +117,7 @@ module Lich
                 # Give worker up to 2 seconds to exit gracefully
                 deadline = Time.now + 2
                 while @worker_thread.alive? && Time.now < deadline
-                  sleep 0.1
+                  Kernel.sleep 0.1
                 end
                 # Last resort only
                 if @worker_thread.alive?
@@ -319,7 +319,7 @@ module Lich
           # Wait for worker to start
           timeout = 0
           until running?
-            sleep 0.1
+            Kernel.sleep 0.1
             timeout += 1
             if timeout > 50
               respond "[MemoryReleaser] ERROR: Worker thread failed to start"
@@ -344,7 +344,7 @@ module Lich
             action: :stop_worker
           }
 
-          sleep 0.2
+          Kernel.sleep 0.2
           log "Memory releaser stopped"
         end
 

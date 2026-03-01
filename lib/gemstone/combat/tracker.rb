@@ -326,7 +326,7 @@ module Lich
             return if @initialized
 
             # Wait until XMLData is ready (avoid wrong scope)
-            sleep 0.1 until !XMLData.game.nil? && !XMLData.game.empty? && !XMLData.name.nil? && !XMLData.name.empty?
+            Kernel.sleep 0.1 until !XMLData.game.nil? && !XMLData.game.empty? && !XMLData.name.nil? && !XMLData.name.empty?
 
             @initialized = true
             load_settings

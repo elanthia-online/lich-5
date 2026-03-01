@@ -226,13 +226,13 @@ module Lich
                     progress_bar.fraction = 0.2
                     status_label.text = "Reading existing data..."
                   end
-                  sleep(0.5)
+                  Kernel.sleep(0.5)
 
                   Gtk.queue do
                     progress_bar.fraction = 0.5
                     status_label.text = "Converting data format..."
                   end
-                  sleep(0.5)
+                  Kernel.sleep(0.5)
 
                   # Perform the actual conversion using existing method with selected mode
                   success = YamlState.migrate_from_legacy(data_dir, encryption_mode: selected_mode)
@@ -241,7 +241,7 @@ module Lich
                     progress_bar.fraction = 0.8
                     status_label.text = "Validating conversion..."
                   end
-                  sleep(0.5)
+                  Kernel.sleep(0.5)
 
                   # Update UI based on result
                   Gtk.queue do

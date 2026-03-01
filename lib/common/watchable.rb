@@ -13,7 +13,7 @@
 #
 #     def self.watch!
 #       @thread ||= Thread.new do
-#         sleep 0.1 until conditions_met?
+#         Kernel.sleep 0.1 until conditions_met?
 #         initialize!
 #       end
 #     end

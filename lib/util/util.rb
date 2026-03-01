@@ -207,7 +207,7 @@ module Lich
           line = get?
           break if line && line =~ end_pattern
           break if Time.now > ttl
-          sleep(0.01) # prevent a tight-loop
+          Kernel.sleep(0.01) # prevent a tight-loop
         }
       ensure
         DownstreamHook.remove(name)

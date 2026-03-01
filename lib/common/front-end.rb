@@ -167,7 +167,7 @@ module Lich
         $_CLIENTBUFFER_.push(version_string.dup)
         Game._puts(version_string)
         2.times do
-          sleep 0.3
+          Kernel.sleep 0.3
           $_CLIENTBUFFER_.push("#{$cmd_prefix}\r\n")
           Game._puts($cmd_prefix)
         end

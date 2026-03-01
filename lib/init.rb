@@ -481,7 +481,7 @@ rescue LoadError
           r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --no-ri --no-rdoc')
           if r[:return] > 0
             pid = r[:hProcess]
-            sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
+            Kernel.sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
             r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
           else
             # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
@@ -541,7 +541,7 @@ unless (ARGV.grep(/^--no-(?:gtk|gui)$/).any? || RUBY_PLATFORM !~ /mingw/ && (ENV
               r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install gtk3 --no-ri --no-rdoc')
               if r[:return] > 0
                 pid = r[:hProcess]
-                sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
+                Kernel.sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
                 r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
               else
                 # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
@@ -722,7 +722,7 @@ if (RUBY_VERSION =~ /^2\.[012]\./)
   begin
     did_trusted_defaults = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='did_trusted_defaults';")
   rescue SQLite3::BusyException
-    sleep 0.1
+    Kernel.sleep 0.1
     retry
   end
   if did_trusted_defaults.nil?
@@ -732,7 +732,7 @@ if (RUBY_VERSION =~ /^2\.[012]\./)
     begin
       Lich.db.execute("INSERT INTO lich_settings(name,value) VALUES('did_trusted_defaults', 'yes');")
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end

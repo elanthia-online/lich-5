@@ -149,7 +149,7 @@ module Lich
         @default_icon = GdkPixbuf::Pixbuf.new(:file => 'logo.png')
         # Add a function to call for when GTK is idle
         GLib::Idle.add do
-          sleep 0.01
+          Kernel.sleep 0.01
         end
         @theme_state = Lich.track_dark_mode
       }
