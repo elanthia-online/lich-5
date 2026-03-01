@@ -523,7 +523,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
     context 'when NetworkError occurs' do
       it 'returns false' do
-        allow(bot).to receive(:sleep) # prevent real sleep during retry backoff
+        allow(Kernel).to receive(:sleep) # prevent real sleep during retry backoff
         allow(mock_http).to receive(:request).and_raise(Timeout::Error)
         expect(bot.authed?('some-token')).to be false
       end
@@ -658,11 +658,11 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         allow(ok_resp).to receive(:body).and_return('{"ok":true}')
 
         allow(mock_http).to receive(:request).and_return(throttle_resp, ok_resp)
-        allow(bot).to receive(:sleep)
+        allow(Kernel).to receive(:sleep)
 
         result = bot.send(:post, 'test.method', { 'token' => 'test' })
         expect(result['ok']).to be true
-        expect(bot).to have_received(:sleep).with(5)
+        expect(Kernel).to have_received(:sleep).with(5)
       end
     end
 
@@ -673,7 +673,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         allow(throttle_resp).to receive(:[]).with('Retry-After').and_return('1')
 
         allow(mock_http).to receive(:request).and_return(throttle_resp)
-        allow(bot).to receive(:sleep)
+        allow(Kernel).to receive(:sleep)
 
         expect {
           bot.send(:post, 'test.method', { 'token' => 'test' })
@@ -709,7 +709,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
           ok_resp
         end
-        allow(bot).to receive(:sleep)
+        allow(Kernel).to receive(:sleep)
 
         result = bot.send(:post, 'test.method', { 'token' => 'test' })
         expect(result['ok']).to be true
@@ -720,7 +720,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
       it 'raises NetworkError when delay exceeds maximum' do
         # With BASE_RETRY_DELAY_SECONDS=30, delay at retries=3 is 240 > MAX_RETRY_DELAY_SECONDS(120)
         allow(mock_http).to receive(:request).and_raise(Timeout::Error)
-        allow(bot).to receive(:sleep)
+        allow(Kernel).to receive(:sleep)
 
         expect {
           bot.send(:post, 'test.method', { 'token' => 'test' })
@@ -737,7 +737,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
           call_count += 1
           raise SocketError, 'connection refused'
         end
-        allow(bot).to receive(:sleep)
+        allow(Kernel).to receive(:sleep)
 
         expect {
           bot.send(:post, 'test.method', { 'token' => 'test' })
@@ -780,7 +780,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         allow(resp).to receive(:code).and_return('500')
         allow(resp).to receive(:message).and_return('Internal Server Error')
         allow(mock_http).to receive(:request).and_return(resp)
-        allow(bot).to receive(:sleep)
+        allow(Kernel).to receive(:sleep)
 
         expect {
           bot.send(:post, 'test.method', { 'token' => 'test' })
