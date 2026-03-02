@@ -247,7 +247,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'authenticates with game servers' do
-      allow(Lich::Common::Authentication::Authenticator).to receive(:authenticate)
+      allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([
                       { char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' },
                       { char_name: 'Char2', game_code: 'GS3', game_name: 'GemStone IV' }
@@ -257,7 +257,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
 
       Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', 'wizard')
 
-      expect(Lich::Common::Authentication::Authenticator).to have_received(:authenticate).with(
+      expect(Lich::Common::Authentication).to have_received(:authenticate).with(
         account: 'DOUG',
         password: 'password',
         legacy: true
@@ -265,7 +265,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 2 when authentication fails' do
-      allow(Lich::Common::Authentication::Authenticator).to receive(:authenticate)
+      allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return(nil)
 
       exit_code = Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'wrongpass')
@@ -273,7 +273,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 2 when no characters found' do
-      allow(Lich::Common::Authentication::Authenticator).to receive(:authenticate)
+      allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([])
 
       exit_code = Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password')
@@ -281,7 +281,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'saves account with provided frontend' do
-      allow(Lich::Common::Authentication::Authenticator).to receive(:authenticate)
+      allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' }])
       allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
         .and_return(true)
@@ -293,7 +293,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 0 on success' do
-      allow(Lich::Common::Authentication::Authenticator).to receive(:authenticate)
+      allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' }])
       allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
         .and_return(true)
@@ -303,7 +303,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 1 when AccountManager.add_or_update_account fails' do
-      allow(Lich::Common::Authentication::Authenticator).to receive(:authenticate)
+      allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' }])
       allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
         .and_return(false)
@@ -496,7 +496,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'does not log password values in add_account' do
-      allow(Lich::Common::Authentication::Authenticator).to receive(:authenticate)
+      allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' }])
       allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
         .and_return(true)
@@ -507,7 +507,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'saves YAML with 0600 permissions in add_account' do
-      allow(Lich::Common::Authentication::Authenticator).to receive(:authenticate)
+      allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' }])
       allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
         .and_return(true)

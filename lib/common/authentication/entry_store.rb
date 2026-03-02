@@ -97,7 +97,7 @@ module Lich
           if original_encryption_mode != :plaintext
             master_password = nil
             if original_encryption_mode == :enhanced
-              master_password = MasterPasswordManager.retrieve_master_password
+              master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
               if master_password.nil?
                 Lich.log "error: Enhanced mode enabled but master password not found in Keychain"
                 return false
@@ -242,7 +242,7 @@ module Lich
 
           # For enhanced mode: auto-retrieve from Keychain if not provided
           if mode.to_sym == :enhanced && master_password.nil?
-            master_password = MasterPasswordManager.retrieve_master_password
+            master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
             raise StandardError, "Master password not found in Keychain - cannot decrypt" if master_password.nil?
           end
 
@@ -272,7 +272,7 @@ module Lich
             Lich.log "info: Master password missing from Keychain, attempting recovery via user prompt"
 
             # Show appropriate dialog based on context - use data access for conversion, recovery for actual recovery
-            recovery_result = MasterPasswordPromptUI.show_password_for_data_access(validation_test)
+            recovery_result = Lich::Common::GUI::MasterPasswordPromptUI.show_password_for_data_access(validation_test)
 
             if recovery_result.nil? || recovery_result[:password].nil?
               Lich.log "info: User cancelled master password recovery"
@@ -287,7 +287,7 @@ module Lich
             Lich.log "info: Master password recovered and validated, storing to Keychain"
 
             # Save recovered password to Keychain for future use
-            unless MasterPasswordManager.store_master_password(recovered_password)
+            unless Lich::Common::GUI::MasterPasswordManager.store_master_password(recovered_password)
               Lich.log "warning: Failed to store recovered master password to Keychain"
               # Continue anyway - decryption will still work with in-memory password
             end
@@ -363,7 +363,7 @@ module Lich
           old_master_password = nil
           if current_mode == :enhanced
             # Auto-retrieve from keychain when leaving Enhanced
-            old_master_password = MasterPasswordManager.retrieve_master_password
+            old_master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
             if old_master_password.nil?
               Lich.log "error: Master password not found in keychain for encryption mode change"
               return false
@@ -425,18 +425,18 @@ module Lich
             # Handle Enhanced mode metadata
             if new_mode == :enhanced
               # Create validation test
-              validation_test = MasterPasswordManager.create_validation_test(new_master_password)
+              validation_test = Lich::Common::GUI::MasterPasswordManager.create_validation_test(new_master_password)
               yaml_data['master_password_validation_test'] = validation_test
 
               # Store in keychain
-              unless MasterPasswordManager.store_master_password(new_master_password)
+              unless Lich::Common::GUI::MasterPasswordManager.store_master_password(new_master_password)
                 Lich.log "error: Failed to store master password in keychain"
                 return restore_backup_and_return_false(backup_file, yaml_file)
               end
             elsif current_mode == :enhanced
               # Remove validation test and keychain when leaving Enhanced
               yaml_data.delete('master_password_validation_test')
-              MasterPasswordManager.delete_master_password
+              Lich::Common::GUI::MasterPasswordManager.delete_master_password
             end
 
             # Save YAML with headers
@@ -1030,11 +1030,11 @@ module Lich
         # @return [Hash, String, nil] Hash with {password, validation_test} if new, password string if existing, nil if cancelled
         def self.ensure_master_password_exists
           # Check if master password already in Keychain
-          existing = MasterPasswordManager.retrieve_master_password
+          existing = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
           return existing if !existing.nil? && !existing.empty?
 
           # Show UI prompt to CREATE master password
-          master_password = MasterPasswordPrompt.show_create_master_password_dialog
+          master_password = Lich::Common::GUI::MasterPasswordPrompt.show_create_master_password_dialog
 
           if master_password.nil?
             Lich.log "info: User declined to create master password"
@@ -1042,7 +1042,7 @@ module Lich
           end
 
           # Create validation test (expensive 100k iterations, one-time)
-          validation_test = MasterPasswordManager.create_validation_test(master_password)
+          validation_test = Lich::Common::GUI::MasterPasswordManager.create_validation_test(master_password)
 
           if validation_test.nil?
             Lich.log "error: Failed to create validation test"
@@ -1050,7 +1050,7 @@ module Lich
           end
 
           # Store in Keychain
-          stored = MasterPasswordManager.store_master_password(master_password)
+          stored = Lich::Common::GUI::MasterPasswordManager.store_master_password(master_password)
 
           unless stored
             Lich.log "error: Failed to store master password in Keychain"
@@ -1069,7 +1069,7 @@ module Lich
         # @return [Hash, nil] Hash with {password, validation_test} or nil if error
         def self.get_existing_master_password_for_migration
           # Retrieve existing master password from keychain
-          existing_password = MasterPasswordManager.retrieve_master_password
+          existing_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
 
           if existing_password.nil? || existing_password.empty?
             Lich.log "info: No existing master password found in keychain - user should create one"
@@ -1080,7 +1080,7 @@ module Lich
 
           # Create a NEW validation test with the existing password
           # This is needed because we don't have the old validation test in YAML yet
-          validation_test = MasterPasswordManager.create_validation_test(existing_password)
+          validation_test = Lich::Common::GUI::MasterPasswordManager.create_validation_test(existing_password)
 
           if validation_test.nil?
             Lich.log "error: Failed to create validation test for existing master password"
