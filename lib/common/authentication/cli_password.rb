@@ -23,6 +23,9 @@ module Lich
         # @param new_password [String] New plaintext password
         # @return [Integer] Exit code (0=success, 1=error, 2=not found)
         def self.change_account_password(account, new_password)
+          # Normalize account name to uppercase (accounts are stored uppercase)
+          account = account.upcase
+
           # Validate master password availability before attempting change
           unless validate_master_password_available
             return 1
@@ -106,6 +109,9 @@ module Lich
         # @param frontend [String, nil] Frontend (wizard, stormfront, avalon, or nil)
         # @return [Integer] Exit code (0=success, 1=error, 2=auth failed)
         def self.add_account(account, password, frontend = nil)
+          # Normalize account name to uppercase (accounts are stored uppercase)
+          account = account.upcase
+
           data_dir = DATA_DIR
           yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
