@@ -2,14 +2,10 @@
 
 require 'rspec'
 
-# Mock Lich module before requiring
-module Lich
-  def self.log(_message)
-    # no-op for tests
-  end
-end unless defined?(Lich)
+# Load login_spec_helper FIRST - it sets up Lich::Util and other mocks
+require_relative '../../../login_spec_helper'
 
-# Mock Gtk for testing without GTK installed
+# Add MessageDialog to Gtk module (login_spec_helper defines Gtk but not MessageDialog)
 module Gtk
   class MessageDialog
     def initialize(**_opts); end
@@ -20,9 +16,9 @@ module Gtk
 
     def destroy; end
   end
-end unless defined?(Gtk)
+end unless defined?(Gtk::MessageDialog)
 
-# Define FatalAuthError if not already defined
+# Extend Authentication mocks with additional methods needed for GUI tests
 module Lich
   module Common
     module Authentication

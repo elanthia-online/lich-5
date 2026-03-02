@@ -5,25 +5,17 @@ require 'tmpdir'
 require 'yaml'
 require 'fileutils'
 
-# Mock dependencies before requiring
-DATA_DIR = Dir.mktmpdir unless defined?(DATA_DIR)
+# Load login_spec_helper FIRST - it sets up Lich::Util and other mocks
+# before any source files are required
+require_relative '../../../login_spec_helper'
 
-module Lich
-  def self.log(_message)
-    # no-op for tests
-  end
-end unless defined?(Lich)
+# Now require the source file (after mocks are in place)
+require_relative '../../../../lib/common/authentication/cli'
 
-# Mock the required modules - all with guards to prevent overwriting real implementations
+# Extend mocks with additional methods needed for CLI tests
 module Lich
   module Common
     module Authentication
-      module EntryStore
-        def self.yaml_file_path(data_dir)
-          File.join(data_dir, 'entry.yaml')
-        end
-      end unless defined?(Lich::Common::Authentication::EntryStore)
-
       module CLIPassword
         def self.validate_master_password_available
           true
@@ -31,25 +23,20 @@ module Lich
       end unless defined?(Lich::Common::Authentication::CLIPassword)
 
       module LoginHelpers
-        def self.symbolize_keys(hash)
-          hash
-        end
+        class << self
+          def symbolize_keys(hash)
+            hash
+          end
 
-        def self.find_character_by_name_game_and_frontend(*_args)
-          []
-        end
+          def find_character_by_name_game_and_frontend(*_args)
+            []
+          end
 
-        def self.select_best_fit(*_args)
-          nil
+          def select_best_fit(*_args)
+            nil
+          end
         end
       end unless defined?(Lich::Common::Authentication::LoginHelpers)
-
-      # Only define stub authenticate if not already defined
-      unless respond_to?(:authenticate)
-        def self.authenticate(*_args)
-          { 'key' => 'test123' }
-        end
-      end
 
       module LaunchData
         def self.prepare(*_args)
@@ -59,8 +46,6 @@ module Lich
     end
   end
 end
-
-require_relative '../../../../lib/common/authentication/cli'
 
 RSpec.describe Lich::Common::Authentication::CLI do
   let(:data_dir) { Dir.mktmpdir }

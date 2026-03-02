@@ -5,79 +5,64 @@ require 'tempfile'
 require 'yaml'
 require 'fileutils'
 
-LIB_DIR = File.expand_path("../../../../lib", __dir__)
+# Load login_spec_helper FIRST - it sets up Lich::Util and other mocks
+# before any source files are required
+require_relative '../../../login_spec_helper'
 
-# Define DATA_DIR for test environment
-DATA_DIR = Dir.mktmpdir
+# Now require the source file (after mocks are in place)
+require_relative '../../../../lib/common/authentication/cli_password'
 
-require File.join(LIB_DIR, 'common', 'authentication', 'cli_password.rb')
-
-# Mock Lich module for testing
+# Add any additional mock methods needed for these tests
 module Lich
   class << self
     attr_accessor :datadir
 
-    def log(message); end
     def msgbox(message); end
   end
 end
 
-# Mock GUI dependencies
+# Extend GUI mocks with additional methods needed for CLI password tests
 module Lich
   module Common
-    module Authentication
-      module EntryStore
-        def self.yaml_file_path(data_dir)
-          File.join(data_dir, 'entry.yaml')
-        end
-      end
-    end
-
     module GUI
-      # Only define stub modules if not already defined by other specs
-      unless defined?(Lich::Common::GUI::PasswordCipher)
-        module PasswordCipher
-          def self.encrypt(*_args, **_kwargs); end
+      module PasswordCipher
+        def self.encrypt(*_args, **_kwargs); end
+        def self.decrypt(*_args, **_kwargs); end
+      end unless defined?(Lich::Common::GUI::PasswordCipher)
 
-          def self.decrypt(*_args, **_kwargs); end
-        end
-      end
-
-      unless defined?(Lich::Common::GUI::MasterPasswordManager)
-        module MasterPasswordManager
-          def self.keychain_available?
+      module MasterPasswordManager
+        class << self
+          def keychain_available?
             true
           end
 
-          def self.retrieve_master_password
+          def retrieve_master_password
             nil
           end
 
-          def self.store_master_password(_password)
+          def store_master_password(_password)
             true
           end
 
-          def self.validate_master_password(_password, _validation_test)
+          def validate_master_password(_password, _validation_test)
             true
           end
 
-          def self.create_validation_test(_password)
+          def create_validation_test(_password)
             {}
           end
         end
-      end
+      end unless defined?(Lich::Common::GUI::MasterPasswordManager)
 
-      unless defined?(Lich::Common::GUI::AccountManager)
-        module AccountManager
-          def self.convert_auth_data_to_characters(*_args)
-            []
-          end
-
-          def self.add_or_update_account(*_args)
-            true
-          end
+      module AccountManager
+        def self.convert_auth_data_to_characters(*_args)
+          []
         end
-      end
+
+        def self.add_or_update_account(*_args)
+          true
+        end
+      end unless defined?(Lich::Common::GUI::AccountManager)
     end
   end
 end
