@@ -4,6 +4,7 @@ module Lich
   module Common
     module GameLoader
       def self.common_before
+        require File.join(LIB_DIR, 'common', 'account.rb')
         require File.join(LIB_DIR, 'common', 'log.rb')
         require File.join(LIB_DIR, 'common', 'spell.rb')
         require File.join(LIB_DIR, 'util', 'util.rb')

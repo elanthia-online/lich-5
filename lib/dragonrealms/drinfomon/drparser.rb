@@ -417,15 +417,15 @@ module Lich
             DRSpells.known_spells.clear
             DRSpells.known_feats.clear
           elsif (match = line.match(Pattern::PlayedAccount))
-            if Account.name.nil?
-              Account.name = match[:account].upcase
+            if ::Account.name.nil?
+              ::Account.name = match[:account].upcase
             end
           elsif (match = line.match(Pattern::PlayedSubscription))
-            if Account.subscription.nil?
-              Account.subscription = match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
+            if ::Account.subscription.nil?
+              ::Account.subscription = match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
             end
             UserVars.account_type = match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
-            if Account.subscription == 'PREMIUM' || XMLData.game == 'DRX' || XMLData.game == 'DRF'
+            if ::Account.subscription == 'PREMIUM' || XMLData.game == 'DRX' || XMLData.game == 'DRF'
               UserVars.premium = true
             else
               UserVars.premium = false

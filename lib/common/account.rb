@@ -66,3 +66,5 @@ module Lich
     end
   end
 end
+
+Account = Lich::Common::Account unless defined?(Account)
