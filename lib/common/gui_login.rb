@@ -57,7 +57,7 @@ module Lich
       # Initialize accessibility support
       Lich::Common::GUI::Accessibility.initialize_accessibility if defined?(Lich::Common::GUI::Accessibility)
 
-      # Use YamlState instead of State for loading saved entries
+      # Use EntryStore instead of State for loading saved entries
       @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(DATA_DIR, @autosort_state)
       @launch_data = nil
       @save_entry_data = false

@@ -16,13 +16,13 @@ RSpec.describe Lich::Common::Authentication::LaunchData do
   describe '.prepare' do
     let(:auth_data) do
       {
-        'key' => 'abc123',
-        'server' => 'eaccess.play.net',
-        'gamecode' => 'GS3',
-        'gameport' => '7900',
-        'gamehost' => 'gamer.simutronics.com',
-        'game' => 'STORM',
-        'gamefile' => 'STORMFRONT.EXE',
+        'key'          => 'abc123',
+        'server'       => 'eaccess.play.net',
+        'gamecode'     => 'GS3',
+        'gameport'     => '7900',
+        'gamehost'     => 'gamer.simutronics.com',
+        'game'         => 'STORM',
+        'gamefile'     => 'STORMFRONT.EXE',
         'fullgamename' => 'GemStone IV'
       }
     end

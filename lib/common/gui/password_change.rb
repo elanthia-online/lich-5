@@ -240,7 +240,7 @@ module Lich
               if encryption_mode == :plaintext
                 stored_password == password
               else
-                decrypted = YamlState.decrypt_password(
+                decrypted = Lich::Common::Authentication::EntryStore.decrypt_password(
                   stored_password,
                   mode: encryption_mode,
                   account_name: normalized_username,
@@ -277,7 +277,7 @@ module Lich
             encrypted_password = if encryption_mode == :plaintext
                                    new_password
                                  else
-                                   YamlState.encrypt_password(
+                                   Lich::Common::Authentication::EntryStore.encrypt_password(
                                      new_password,
                                      mode: encryption_mode,
                                      account_name: normalized_username,

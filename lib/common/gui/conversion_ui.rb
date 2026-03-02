@@ -235,7 +235,7 @@ module Lich
                   sleep(0.5)
 
                   # Perform the actual conversion using existing method with selected mode
-                  success = YamlState.migrate_from_legacy(data_dir, encryption_mode: selected_mode)
+                  success = Lich::Common::Authentication::EntryStore.migrate_from_legacy(data_dir, encryption_mode: selected_mode)
 
                   Gtk.queue do
                     progress_bar.fraction = 0.8

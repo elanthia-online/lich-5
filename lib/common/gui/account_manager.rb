@@ -469,7 +469,7 @@ module Lich
 
           begin
             yaml_data = YAML.load_file(yaml_file)
-            YamlState.convert_yaml_to_legacy_format(yaml_data)
+            Lich::Common::Authentication::EntryStore.convert_yaml_to_legacy_format(yaml_data)
           rescue StandardError => e
             Lich.log "error: Error converting to legacy format: #{e.message}"
             []

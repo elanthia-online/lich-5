@@ -8,7 +8,7 @@ module Lich
   module Common
     module CLI
       # Handles encryption mode changes via CLI
-      # Manages prompting for passwords and calls YamlState domain logic
+      # Manages prompting for passwords and calls EntryStore domain logic
       module EncryptionModeChange
         # Change encryption mode for all accounts
         #

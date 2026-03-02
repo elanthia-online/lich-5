@@ -7,7 +7,7 @@ module Lich
   module Common
     module GUI
       # Manages password operations across different encryption modes
-      # Coordinates between YamlState and PasswordCipher for mode-aware password handling
+      # Coordinates between EntryStore and PasswordCipher for mode-aware password handling
       #
       # @example Change password in standard mode
       #   PasswordManager.change_password(

@@ -21,7 +21,7 @@ module Lich
         end
 
         # Performs conversion from entry.dat to entry.yaml
-        # Delegates to YamlState.migrate_from_legacy for actual conversion
+        # Delegates to EntryStore.migrate_from_legacy for actual conversion
         # For enhanced mode, user will be prompted to create a master password interactively
         #
         # @param data_dir [String] Directory containing entry data
@@ -45,12 +45,12 @@ module Lich
             return false
           end
 
-          # Delegate to YamlState for the actual conversion
+          # Delegate to EntryStore for the actual conversion
           # For enhanced mode, migrate_from_legacy will prompt user to create master password
           result = Lich::Common::Authentication::EntryStore.migrate_from_legacy(data_dir, encryption_mode: mode)
 
           unless result
-            Lich.log "error: YamlState.migrate_from_legacy returned false"
+            Lich.log "error: EntryStore.migrate_from_legacy returned false"
           end
 
           result
