@@ -4,7 +4,7 @@ require 'rspec'
 
 # Mock Lich module before requiring
 module Lich
-  def self.log(message)
+  def self.log(_message)
     # no-op for tests
   end
 end unless defined?(Lich)
@@ -13,21 +13,20 @@ end unless defined?(Lich)
 module Gtk
   class MessageDialog
     def initialize(**_opts); end
-    def secondary_text=(text); end
+
+    def secondary_text=(_text); end
+
     def run; end
+
     def destroy; end
   end
 end unless defined?(Gtk)
 
-# Mock dependencies
+# Define FatalAuthError if not already defined
 module Lich
   module Common
     module Authentication
       class FatalAuthError < StandardError; end unless defined?(FatalAuthError)
-
-      def self.authenticate(*_args, **_kwargs)
-        { 'key' => 'test123' }
-      end
 
       module LaunchData
         def self.prepare(*_args)
