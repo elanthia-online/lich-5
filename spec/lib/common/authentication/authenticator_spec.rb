@@ -12,7 +12,9 @@ module Lich
   end
 end unless defined?(Lich)
 
-# Mock EAccess module to avoid actual SSL connections in tests
+# Note: EAccess module is loaded via authenticator.rb -> eaccess.rb
+# Tests use RSpec stubs (allow/expect) to mock EAccess.auth behavior
+# We only need to ensure AuthenticationError is available for tests
 module Lich
   module Common
     module Authentication
@@ -24,12 +26,7 @@ module Lich
             @error_code = error_code
             super("Error(#{error_code})")
           end
-        end
-
-        def self.auth(*_args, **_kwargs)
-          # Stub implementation - will be mocked in tests
-          {}
-        end
+        end unless defined?(Lich::Common::Authentication::EAccess::AuthenticationError)
       end
     end
   end
