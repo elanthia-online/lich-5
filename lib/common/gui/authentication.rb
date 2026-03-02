@@ -8,6 +8,9 @@ module Lich
       # Handles authentication and launch data preparation for the Lich GUI
       # Provides methods for user authentication and preparing launch data for different frontends
       module Authentication
+        # Fatal auth failure - should not be retried
+        class FatalAuthError < StandardError; end
+
         # Retry configuration for transient SSL/network errors
         # These errors are often temporary and resolve on retry:
         # - SSL_read: unexpected eof while reading (server closed connection)
@@ -50,10 +53,15 @@ module Lich
           end
         end
 
+        # Known fatal error codes that should not be retried
+        # REJECT = bad credentials, NORECORD = account not found, INVALID = invalid request
+        FATAL_ERROR_CODES = %w[REJECT NORECORD INVALID].freeze
+
         # Executes a block with retry logic for transient errors
         #
         # @yield The block to execute with retry
         # @return [Object] The result of the block
+        # @raise [FatalAuthError] For fatal auth failures (bad credentials, etc.)
         # @raise [StandardError] Re-raises the last error after all retries exhausted
         def self.with_retry
           last_error = nil
@@ -68,6 +76,25 @@ module Lich
               end
 
               return result
+            rescue EAccess::AuthenticationError => e
+              # Check if this is a fatal auth failure
+              if FATAL_ERROR_CODES.any? { |code| e.error_code&.include?(code) }
+                Lich.log "error: Authentication fatally failed: #{e.message}"
+                raise FatalAuthError, e.message
+              end
+
+              # Transient auth error - allow retry
+              last_error = e
+
+              if attempt < MAX_AUTH_RETRIES - 1
+                delay = AUTH_RETRY_BASE_DELAY * (2**attempt)
+                Lich.log "warn: Authentication attempt #{attempt + 1}/#{MAX_AUTH_RETRIES} failed: " \
+                         "#{e.message}, retrying in #{delay}s..."
+                sleep(delay)
+              end
+            rescue FatalAuthError
+              # Don't retry fatal auth failures - re-raise immediately
+              raise
             rescue StandardError => e
               last_error = e
 
