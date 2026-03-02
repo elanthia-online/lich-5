@@ -14,7 +14,7 @@ module Lich
   end
 end unless defined?(Lich)
 
-# Mock the required modules
+# Mock the required modules - all with guards to prevent overwriting real implementations
 module Lich
   module Common
     module Authentication
@@ -22,13 +22,13 @@ module Lich
         def self.yaml_file_path(data_dir)
           File.join(data_dir, 'entry.yaml')
         end
-      end
+      end unless defined?(Lich::Common::Authentication::EntryStore)
 
       module CLIPassword
         def self.validate_master_password_available
           true
         end
-      end
+      end unless defined?(Lich::Common::Authentication::CLIPassword)
 
       module LoginHelpers
         def self.symbolize_keys(hash)
@@ -42,17 +42,20 @@ module Lich
         def self.select_best_fit(*_args)
           nil
         end
-      end
+      end unless defined?(Lich::Common::Authentication::LoginHelpers)
 
-      def self.authenticate(*_args)
-        { 'key' => 'test123' }
+      # Only define stub authenticate if not already defined
+      unless respond_to?(:authenticate)
+        def self.authenticate(*_args)
+          { 'key' => 'test123' }
+        end
       end
 
       module LaunchData
         def self.prepare(*_args)
           ['GAME=GS3']
         end
-      end
+      end unless defined?(Lich::Common::Authentication::LaunchData)
     end
   end
 end
