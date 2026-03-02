@@ -71,15 +71,15 @@ RSpec.describe Lich::Common::GUI::Authentication do
     end
   end
 
-  describe "PermanentAuthError" do
+  describe "FatalAuthError" do
     it "is a subclass of StandardError" do
-      expect(described_class::PermanentAuthError.superclass).to eq(StandardError)
+      expect(described_class::FatalAuthError.superclass).to eq(StandardError)
     end
 
     it "can be raised with a message" do
       expect {
-        raise described_class::PermanentAuthError, "Error(REJECT)"
-      }.to raise_error(described_class::PermanentAuthError, "Error(REJECT)")
+        raise described_class::FatalAuthError, "Error(REJECT)"
+      }.to raise_error(described_class::FatalAuthError, "Error(REJECT)")
     end
   end
 
@@ -296,44 +296,44 @@ RSpec.describe Lich::Common::GUI::Authentication do
     end
 
     context "when block raises EAccess::AuthenticationError" do
-      it "raises PermanentAuthError for REJECT errors without retry" do
+      it "raises FatalAuthError for REJECT errors without retry" do
         call_count = 0
         expect {
           described_class.with_retry do
             call_count += 1
             raise Lich::Common::EAccess::AuthenticationError, "REJECT"
           end
-        }.to raise_error(described_class::PermanentAuthError, "Error(REJECT)")
+        }.to raise_error(described_class::FatalAuthError, "Error(REJECT)")
         expect(call_count).to eq(1)
       end
 
-      it "raises PermanentAuthError for NORECORD errors without retry" do
+      it "raises FatalAuthError for NORECORD errors without retry" do
         call_count = 0
         expect {
           described_class.with_retry do
             call_count += 1
             raise Lich::Common::EAccess::AuthenticationError, "NORECORD"
           end
-        }.to raise_error(described_class::PermanentAuthError, "Error(NORECORD)")
+        }.to raise_error(described_class::FatalAuthError, "Error(NORECORD)")
         expect(call_count).to eq(1)
       end
 
-      it "raises PermanentAuthError for INVALID errors without retry" do
+      it "raises FatalAuthError for INVALID errors without retry" do
         call_count = 0
         expect {
           described_class.with_retry do
             call_count += 1
             raise Lich::Common::EAccess::AuthenticationError, "INVALID"
           end
-        }.to raise_error(described_class::PermanentAuthError, "Error(INVALID)")
+        }.to raise_error(described_class::FatalAuthError, "Error(INVALID)")
         expect(call_count).to eq(1)
       end
 
-      it "logs permanent auth failure" do
+      it "logs fatal auth failure" do
         expect {
           described_class.with_retry { raise Lich::Common::EAccess::AuthenticationError, "REJECT" }
-        }.to raise_error(described_class::PermanentAuthError)
-        expect(Lich).to have_received(:log).with(/Authentication permanently failed.*Error\(REJECT\)/)
+        }.to raise_error(described_class::FatalAuthError)
+        expect(Lich).to have_received(:log).with(/Authentication fatally failed.*Error\(REJECT\)/)
       end
 
       it "retries transient auth errors" do
@@ -399,8 +399,8 @@ RSpec.describe Lich::Common::GUI::Authentication do
       end
     end
 
-    context "when EAccess.auth raises permanent AuthenticationError" do
-      it "raises PermanentAuthError immediately for REJECT" do
+    context "when EAccess.auth raises fatal AuthenticationError" do
+      it "raises FatalAuthError immediately for REJECT" do
         call_count = 0
         allow(Lich::Common::EAccess).to receive(:auth) do
           call_count += 1
@@ -414,13 +414,13 @@ RSpec.describe Lich::Common::GUI::Authentication do
             character: character,
             game_code: game_code
           )
-        end.to raise_error(described_class::PermanentAuthError, "Error(REJECT)")
+        end.to raise_error(described_class::FatalAuthError, "Error(REJECT)")
 
         # Should not retry - only 1 call
         expect(call_count).to eq(1)
       end
 
-      it "raises PermanentAuthError immediately for NORECORD" do
+      it "raises FatalAuthError immediately for NORECORD" do
         call_count = 0
         allow(Lich::Common::EAccess).to receive(:auth) do
           call_count += 1
@@ -432,18 +432,18 @@ RSpec.describe Lich::Common::GUI::Authentication do
             account: account,
             password: password
           )
-        end.to raise_error(described_class::PermanentAuthError, "Error(NORECORD)")
+        end.to raise_error(described_class::FatalAuthError, "Error(NORECORD)")
 
         expect(call_count).to eq(1)
       end
 
-      it "does not sleep when permanent auth fails" do
+      it "does not sleep when fatal auth fails" do
         allow(Lich::Common::EAccess).to receive(:auth)
           .and_raise(Lich::Common::EAccess::AuthenticationError, "REJECT")
 
         expect do
           described_class.authenticate(account: account, password: password)
-        end.to raise_error(described_class::PermanentAuthError)
+        end.to raise_error(described_class::FatalAuthError)
 
         expect(described_class).not_to have_received(:sleep)
       end
