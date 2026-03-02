@@ -502,7 +502,7 @@ module Lich
                 game_code: selected_iter[0]
               )
 
-              launch_data = Authentication.prepare_launch_data(
+              launch_data = Authentication::LaunchData.prepare(
                 launch_data_hash,
                 frontend,
                 custom_launch,
