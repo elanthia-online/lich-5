@@ -1,4 +1,4 @@
-require 'login_spec_helper'
+require_relative '../../../login_spec_helper'
 
 RSpec.describe Lich::Common::GUI::AccountManager do
   let(:data_dir) { "/tmp/test_data" }

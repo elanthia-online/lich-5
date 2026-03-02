@@ -1,4 +1,4 @@
-require 'login_spec_helper'
+require_relative '../../../login_spec_helper'
 
 RSpec.describe Lich::Common, "#gui_login" do
   # Since gui_login is a complex method with UI interactions,

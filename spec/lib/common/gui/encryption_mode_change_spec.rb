@@ -3,10 +3,10 @@
 require 'rspec'
 require 'tmpdir'
 require 'fileutils'
-require_relative 'login_spec_helper'
-require_relative '../lib/common/gui/encryption_mode_change'
-require_relative '../lib/common/gui/master_password_manager'
-require_relative '../lib/common/authentication/entry_store'
+require_relative '../../../login_spec_helper'
+require_relative '../../../../lib/common/gui/encryption_mode_change'
+require_relative '../../../../lib/common/gui/master_password_manager'
+require_relative '../../../../lib/common/authentication/entry_store'
 
 # Stub GTK components for CI/CD environments without GTK display
 module Gtk

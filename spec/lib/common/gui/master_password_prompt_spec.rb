@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'rspec'
-require_relative 'login_spec_helper'
-require_relative '../lib/common/gui/master_password_prompt'
-require_relative '../lib/common/gui/master_password_manager'
+require_relative '../../../login_spec_helper'
+require_relative '../../../../lib/common/gui/master_password_prompt'
+require_relative '../../../../lib/common/gui/master_password_manager'
 
 # Stub GTK components for CI/CD environments without GTK tools
 module Gtk
