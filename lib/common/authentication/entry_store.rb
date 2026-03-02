@@ -224,7 +224,7 @@ module Lich
         def self.encrypt_password(password, mode:, account_name: nil, master_password: nil)
           return password if mode == :plaintext || mode.to_sym == :plaintext
 
-          PasswordCipher.encrypt(password, mode: mode.to_sym, account_name: account_name, master_password: master_password)
+          Lich::Common::GUI::PasswordCipher.encrypt(password, mode: mode.to_sym, account_name: account_name, master_password: master_password)
         rescue StandardError => e
           Lich.log "error: encrypt_password failed - #{e.class}: #{e.message}"
           raise
@@ -246,7 +246,7 @@ module Lich
             raise StandardError, "Master password not found in Keychain - cannot decrypt" if master_password.nil?
           end
 
-          PasswordCipher.decrypt(encrypted_password, mode: mode.to_sym, account_name: account_name, master_password: master_password)
+          Lich::Common::GUI::PasswordCipher.decrypt(encrypted_password, mode: mode.to_sym, account_name: account_name, master_password: master_password)
         rescue StandardError => e
           Lich.log "error: decrypt_password failed - #{e.class}: #{e.message}"
           raise
