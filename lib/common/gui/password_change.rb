@@ -214,7 +214,7 @@ module Lich
           # @param password [String] Password to verify
           # @return [Boolean] True if password is correct
           def verify_current_password(data_dir, username, password)
-            yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+            yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
             # Check if YAML file exists
             return false unless File.exist?(yaml_file)
@@ -264,7 +264,7 @@ module Lich
           # @param new_password [String] New password
           # @return [Boolean] True if password was changed successfully
           def change_password(data_dir, username, new_password)
-            yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+            yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
             yaml_data = YAML.load_file(yaml_file)
             encryption_mode = (yaml_data['encryption_mode'] || 'plaintext').to_sym
             # Normalize username before passing to AccountManager

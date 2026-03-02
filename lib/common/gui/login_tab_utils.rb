@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../authentication/gui'
+
 module Lich
   module Common
     module GUI
@@ -69,6 +71,7 @@ module Lich
 
         # Sets up the play button handler
         # Configures the click event for the play button to launch the game
+        # Delegates to Authentication::GUI for authentication logic
         #
         # @param button [Gtk::Button] The play button
         # @param login_info [Hash] Login information for the character
@@ -76,46 +79,14 @@ module Lich
         # @return [void]
         def self.setup_play_button_handler(button, login_info, callback)
           button.signal_connect('button-release-event') { |_owner, ev|
-            if (ev.event_type == Gdk::EventType::BUTTON_RELEASE)
-              if (ev.button == 1)
-                button.sensitive = false
-
-                # Authenticate and prepare launch data
-                launch_data_hash = Authentication.authenticate(
-                  account: login_info[:user_id],
-                  password: login_info[:password],
-                  character: login_info[:char_name],
-                  game_code: login_info[:game_code]
-                )
-
-                # Check if authentication succeeded (Hash) or failed (String error message)
-                if launch_data_hash.is_a?(Hash)
-                  launch_data = Authentication.prepare_launch_data(
-                    launch_data_hash,
-                    login_info[:frontend],
-                    login_info[:custom_launch],
-                    login_info[:custom_launch_dir]
-                  )
-
-                  # Call the play callback if provided
-                  callback.call(launch_data) if callback
-                else
-                  # Authentication failed - show error message
-                  error_dialog = Gtk::MessageDialog.new(
-                    parent: button.toplevel,
-                    flags: :modal,
-                    type: :error,
-                    buttons: :ok,
-                    message: "Authentication Failed"
-                  )
-                  error_dialog.secondary_text = launch_data_hash
-                  error_dialog.run
-                  error_dialog.destroy
-                  button.sensitive = true
-                end
-              elsif (ev.button == 3)
-                pp "I would be adding to a team tab"
-              end
+            if ev.event_type == Gdk::EventType::BUTTON_RELEASE && ev.button == 1
+              Lich::Common::Authentication::GUI.authenticate_and_launch(
+                button: button,
+                login_info: login_info,
+                on_success: callback
+              )
+            elsif ev.button == 3
+              pp "I would be adding to a team tab"
             end
           }
         end

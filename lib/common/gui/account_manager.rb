@@ -26,7 +26,7 @@ module Lich
         #   - Account created with normalized username (UPCASE)
         #   - Characters added with normalized names (Title case)
         def self.add_or_update_account(data_dir, username, password, characters = [])
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Normalize username to UPCASE for consistent storage
           normalized_username = username.to_s.upcase
@@ -58,7 +58,7 @@ module Lich
           end
 
           # Encrypt the password based on encryption mode
-          encrypted_password = Lich::Common::GUI::YamlState.encrypt_password(
+          encrypted_password = Lich::Common::Authentication::EntryStore.encrypt_password(
             password,
             mode: encryption_mode,
             account_name: normalized_username,
@@ -134,7 +134,7 @@ module Lich
         # @param username [String] Account username to remove
         # @return [Boolean] True if operation was successful
         def self.remove_account(data_dir, username)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Load existing data
           return false unless File.exist?(yaml_file)
@@ -184,7 +184,7 @@ module Lich
         #   Success: { success: true, message: "Character added successfully" }
         #   Failure: { success: false, message: "Specific reason for failure" }
         def self.add_character(data_dir, username, character_data)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Check if YAML file exists
           unless File.exist?(yaml_file)
@@ -255,7 +255,7 @@ module Lich
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
         # @return [Boolean] True if operation was successful
         def self.remove_character(data_dir, username, char_name, game_code, frontend = nil)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Load existing data
           return false unless File.exist?(yaml_file)
@@ -308,7 +308,7 @@ module Lich
         # @param updates [Hash] Properties to update
         # @return [Boolean] True if operation was successful
         def self.update_character(data_dir, username, char_name, game_code, updates)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Load existing data
           return false unless File.exist?(yaml_file)
@@ -374,7 +374,7 @@ module Lich
         # @param data_dir [String] Directory containing entry data
         # @return [Array] Array of account usernames
         def self.get_accounts(data_dir)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Load existing data
           return [] unless File.exist?(yaml_file)
@@ -394,7 +394,7 @@ module Lich
         # @param data_dir [String] Directory containing entry data
         # @return [Hash] Hash of accounts with their characters
         def self.get_all_accounts(data_dir)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Load existing data
           return {} unless File.exist?(yaml_file)
@@ -431,7 +431,7 @@ module Lich
         # @param username [String] Account username
         # @return [Array] Array of character data hashes
         def self.get_characters(data_dir, username)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Load existing data
           return [] unless File.exist?(yaml_file)
@@ -462,7 +462,7 @@ module Lich
         # @param data_dir [String] Directory containing entry data
         # @return [Array] Array of entry data in legacy format
         def self.to_legacy_format(data_dir)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Load existing data
           return [] unless File.exist?(yaml_file)
@@ -486,7 +486,7 @@ module Lich
         # @return [Boolean] True if write succeeded
         def self.write_yaml_with_headers(yaml_file, yaml_data)
           # Prepare YAML with password preservation (clones to avoid mutation)
-          prepared_yaml = Lich::Common::GUI::YamlState.prepare_yaml_for_serialization(yaml_data)
+          prepared_yaml = Lich::Common::Authentication::EntryStore.prepare_yaml_for_serialization(yaml_data)
 
           content = "# Lich 5 Login Entries - YAML Format\n"
           content += "# Generated: #{Time.now}\n"

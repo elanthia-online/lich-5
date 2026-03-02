@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'password_cipher'
-require_relative 'yaml_state'
+require_relative '../authentication/entry_store'
 
 module Lich
   module Common

@@ -298,7 +298,7 @@ module Lich
         def self.favorites_available?(data_dir)
           return false if data_dir.nil?
 
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
           File.exist?(yaml_file)
         end
       end

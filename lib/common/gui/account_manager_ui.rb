@@ -923,7 +923,7 @@ module Lich
         # @param username [String] Account username to check
         # @return [Boolean] True if account exists
         def account_already_exists?(username)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(@data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(@data_dir)
           return false unless File.exist?(yaml_file)
 
           begin

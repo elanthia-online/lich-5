@@ -3,7 +3,7 @@
 require_relative 'master_password_manager'
 require_relative 'master_password_prompt_ui'
 require_relative 'password_cipher'
-require_relative 'yaml_state'
+require_relative '../authentication/entry_store'
 require_relative 'accessibility'
 
 module Lich
