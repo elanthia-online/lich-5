@@ -3,11 +3,11 @@
 require 'rspec'
 require 'fileutils'
 require 'tmpdir'
-require_relative 'login_spec_helper'
-require_relative '../lib/common/gui/state'
-require_relative '../lib/common/gui/yaml_state'
-require_relative '../lib/common/gui/master_password_manager'
-require_relative '../lib/common/gui/master_password_prompt'
+require_relative '../../../login_spec_helper'
+require_relative '../../../../lib/common/gui/state'
+require_relative '../../../../lib/common/authentication/entry_store'
+require_relative '../../../../lib/common/gui/master_password_manager'
+require_relative '../../../../lib/common/gui/master_password_prompt'
 
 # Alias for easier test access
 State = Lich::Common::GUI::State
@@ -19,7 +19,7 @@ module Lich
   end
 end
 
-RSpec.describe Lich::Common::GUI::YamlState do
+RSpec.describe Lich::Common::Authentication::EntryStore do
   let(:temp_dir) { Dir.mktmpdir }
   let(:data_dir) { temp_dir }
   let(:yaml_file) { File.join(data_dir, 'entry.yaml') }

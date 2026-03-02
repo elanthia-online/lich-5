@@ -65,17 +65,19 @@ end
 # Override EAccess mock in the correct namespace after requires
 module Lich
   module Common
-    module EAccess
-      def self.auth(_options = {})
-        # Mock implementation for testing
-        {
-          "key"          => "test_key",
-          "server"       => "test.example.com",
-          "port"         => "8080",
-          "gamefile"     => "STORM.EXE",
-          "game"         => "STORM",
-          "fullgamename" => "StormFront"
-        }
+    module Authentication
+      module EAccess
+        def self.auth(_options = {})
+          # Mock implementation for testing
+          {
+            "key"          => "test_key",
+            "server"       => "test.example.com",
+            "port"         => "8080",
+            "gamefile"     => "STORM.EXE",
+            "game"         => "STORM",
+            "fullgamename" => "StormFront"
+          }
+        end
       end
     end
   end
@@ -210,5 +212,6 @@ LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 # Require the code to be tested
 require 'common/gui_login'
 require 'common/gui/account_manager'
-require 'common/gui/yaml_state'
-require 'common/gui/authentication'
+require 'common/authentication/entry_store'
+require 'common/authentication/authenticator'
+require 'common/authentication/launch_data'

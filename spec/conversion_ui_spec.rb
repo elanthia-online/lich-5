@@ -4,7 +4,7 @@ require 'rspec'
 require_relative 'login_spec_helper'
 require_relative '../lib/common/gui/conversion_ui'
 require_relative '../lib/common/gui/master_password_manager'
-require_relative '../lib/common/gui/yaml_state'
+require_relative '../lib/common/authentication/entry_store'
 
 # Stub GTK components for CI/CD environments without GTK display
 module Gtk
