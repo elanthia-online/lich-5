@@ -63,20 +63,24 @@ module Lich
 end
 
 # Override EAccess mock in the correct namespace after requires
+# Only define stub auth if EAccess doesn't have a real auth method yet
 module Lich
   module Common
     module Authentication
       module EAccess
-        def self.auth(_options = {})
-          # Mock implementation for testing
-          {
-            "key"          => "test_key",
-            "server"       => "test.example.com",
-            "port"         => "8080",
-            "gamefile"     => "STORM.EXE",
-            "game"         => "STORM",
-            "fullgamename" => "StormFront"
-          }
+        # Only define stub if auth method doesn't exist or doesn't have keyword params
+        unless respond_to?(:auth) && method(:auth).parameters.any? { |type, _| type == :keyreq }
+          def self.auth(_options = {})
+            # Mock implementation for testing
+            {
+              "key"          => "test_key",
+              "server"       => "test.example.com",
+              "port"         => "8080",
+              "gamefile"     => "STORM.EXE",
+              "game"         => "STORM",
+              "fullgamename" => "StormFront"
+            }
+          end
         end
       end
     end
