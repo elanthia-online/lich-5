@@ -53,9 +53,9 @@ module Lich
           end
         end
 
-        # Known permanent error codes that should not be retried
+        # Known fatal error codes that should not be retried
         # REJECT = bad credentials, NORECORD = account not found, INVALID = invalid request
-        PERMANENT_ERROR_CODES = %w[REJECT NORECORD INVALID].freeze
+        FATAL_ERROR_CODES = %w[REJECT NORECORD INVALID].freeze
 
         # Executes a block with retry logic for transient errors
         #
@@ -78,7 +78,7 @@ module Lich
               return result
             rescue EAccess::AuthenticationError => e
               # Check if this is a permanent auth failure
-              if PERMANENT_ERROR_CODES.any? { |code| e.error_code&.include?(code) }
+              if FATAL_ERROR_CODES.any? { |code| e.error_code&.include?(code) }
                 Lich.log "error: Authentication permanently failed: #{e.message}"
                 raise PermanentAuthError, e.message
               end
