@@ -2,6 +2,9 @@
 
 require 'rspec'
 
+# Define DATA_DIR before requiring eaccess.rb
+DATA_DIR = '/tmp/test_data' unless defined?(DATA_DIR)
+
 # Mock Lich module before requiring the actual code
 module Lich
   def self.log(_message)
@@ -9,7 +12,30 @@ module Lich
   end
 end unless defined?(Lich)
 
-# Require the actual authenticator code (which will also load eaccess.rb)
+# Mock EAccess module to avoid actual SSL connections in tests
+module Lich
+  module Common
+    module Authentication
+      module EAccess
+        class AuthenticationError < StandardError
+          attr_reader :error_code
+
+          def initialize(error_code)
+            @error_code = error_code
+            super("Error(#{error_code})")
+          end
+        end
+
+        def self.auth(*_args, **_kwargs)
+          # Stub implementation - will be mocked in tests
+          {}
+        end
+      end
+    end
+  end
+end unless defined?(Lich::Common::Authentication::EAccess)
+
+# Require the actual authenticator code
 require_relative '../../../../lib/common/authentication/authenticator'
 
 RSpec.describe Lich::Common::Authentication do

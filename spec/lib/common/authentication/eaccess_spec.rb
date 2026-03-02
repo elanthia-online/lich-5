@@ -5,19 +5,23 @@ require 'rspec'
 # Mock dependencies before requiring the code
 DATA_DIR = '/tmp/test_data' unless defined?(DATA_DIR)
 
+# Define Lich.log separately
 module Lich
   def self.log(_message)
     # no-op for tests
   end
+end unless defined?(Lich)
 
+# Account module must be defined with separate guard
+module Lich
   module Common
     module Account
       class << self
-        attr_accessor :name, :game_code, :character
+        attr_accessor :name, :game_code, :character, :subscription, :members
       end
     end
   end
-end unless defined?(Lich)
+end unless defined?(Lich::Common::Account)
 
 require_relative '../../../../lib/common/authentication/eaccess'
 
@@ -78,17 +82,31 @@ RSpec.describe Lich::Common::Authentication::EAccess do
     let(:password) { 'testpass' }
 
     before do
-      allow(described_class).to receive(:socket).and_return(mock_socket)
-      allow(mock_socket).to receive(:puts)
-      allow(mock_socket).to receive(:gets)
-      allow(mock_socket).to receive(:close)
+      # Reset Account state before each test
+      Lich::Common::Account.name = nil
+      Lich::Common::Account.game_code = nil
+      Lich::Common::Account.character = nil
     end
 
     it 'sets Account module state when defined' do
-      allow(mock_socket).to receive(:gets).and_return(
-        "A\ttest_account",
-        "M",
-        nil
+      # Stub socket and read to simulate auth protocol
+      allow(described_class).to receive(:socket).and_return(mock_socket)
+      allow(described_class).to receive(:verify_pem).and_return(true)
+      allow(mock_socket).to receive(:puts)
+      allow(mock_socket).to receive(:close)
+      allow(mock_socket).to receive(:closed?).and_return(false)
+
+      # Simulate protocol responses:
+      # K -> hashkey, A -> KEY response, M -> game list, F/G/P/C/L -> game responses
+      allow(described_class).to receive(:read).and_return(
+        "HASHKEY123", # K response - hash key
+        "KEY\tabc123\t", # A response - auth success
+        "M\tGS3\tGemstone IV", # M response - game list
+        "NORMAL", # F response - subscription
+        "G\tOK", # G response
+        "P\tOK", # P response
+        "C\t1\t0\t0\t0\t001\tTestChar", # C response - character list
+        "L\tOK\tGAMEHOST=storm.gs4.game.play.net" # L response - login info
       )
 
       described_class.auth(
