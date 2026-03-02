@@ -34,41 +34,48 @@ module Lich
     end
 
     module GUI
-      module PasswordCipher
-        def self.encrypt(*_args, **_kwargs); end
+      # Only define stub modules if not already defined by other specs
+      unless defined?(Lich::Common::GUI::PasswordCipher)
+        module PasswordCipher
+          def self.encrypt(*_args, **_kwargs); end
 
-        def self.decrypt(*_args, **_kwargs); end
-      end
-
-      module MasterPasswordManager
-        def self.keychain_available?
-          true
-        end
-
-        def self.retrieve_master_password
-          nil
-        end
-
-        def self.store_master_password(_password)
-          true
-        end
-
-        def self.validate_master_password(_password, _validation_test)
-          true
-        end
-
-        def self.create_validation_test(_password)
-          {}
+          def self.decrypt(*_args, **_kwargs); end
         end
       end
 
-      module AccountManager
-        def self.convert_auth_data_to_characters(*_args)
-          []
-        end
+      unless defined?(Lich::Common::GUI::MasterPasswordManager)
+        module MasterPasswordManager
+          def self.keychain_available?
+            true
+          end
 
-        def self.add_or_update_account(*_args)
-          true
+          def self.retrieve_master_password
+            nil
+          end
+
+          def self.store_master_password(_password)
+            true
+          end
+
+          def self.validate_master_password(_password, _validation_test)
+            true
+          end
+
+          def self.create_validation_test(_password)
+            {}
+          end
+        end
+      end
+
+      unless defined?(Lich::Common::GUI::AccountManager)
+        module AccountManager
+          def self.convert_auth_data_to_characters(*_args)
+            []
+          end
+
+          def self.add_or_update_account(*_args)
+            true
+          end
         end
       end
     end
