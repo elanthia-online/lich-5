@@ -56,7 +56,7 @@ module Lich
           elsif File.exist?(dat_file)
             # Fall back to legacy format if YAML doesn't exist
             Lich.log "info: YAML entry file not found, falling back to legacy format"
-            State.load_saved_entries(data_dir, autosort_state)
+            Lich::Common::GUI::State.load_saved_entries(data_dir, autosort_state)
           else
             # No entry file exists
             []
@@ -175,7 +175,7 @@ module Lich
           end
 
           # Load legacy data
-          legacy_entries = State.load_saved_entries(data_dir, false)
+          legacy_entries = Lich::Common::GUI::State.load_saved_entries(data_dir, false)
 
           # Add encryption_mode to entries
           legacy_entries.each do |entry|
@@ -513,7 +513,7 @@ module Lich
             # Save updated data directly without conversion round-trip
             # This preserves the original YAML structure and account ordering
             content = generate_yaml_content(yaml_data)
-            result = Utilities.safe_file_operation(yaml_file, :write, content)
+            result = Lich::Common::GUI::Utilities.safe_file_operation(yaml_file, :write, content)
 
             result ? true : false
           rescue StandardError => e
@@ -556,7 +556,7 @@ module Lich
 
             # Save updated data
             content = generate_yaml_content(yaml_data)
-            result = Utilities.safe_file_operation(yaml_file, :write, content)
+            result = Lich::Common::GUI::Utilities.safe_file_operation(yaml_file, :write, content)
 
             result ? true : false
           rescue StandardError => e
@@ -662,7 +662,7 @@ module Lich
 
             # Save updated data
             content = generate_yaml_content(yaml_data)
-            result = Utilities.safe_file_operation(yaml_file, :write, content)
+            result = Lich::Common::GUI::Utilities.safe_file_operation(yaml_file, :write, content)
 
             result ? true : false
           rescue StandardError => e
