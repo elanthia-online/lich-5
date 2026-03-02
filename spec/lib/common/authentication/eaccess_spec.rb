@@ -77,45 +77,32 @@ RSpec.describe Lich::Common::Authentication::EAccess do
   end
 
   describe '.auth' do
-    let(:mock_socket) { double('ssl_socket') }
     let(:account) { 'testuser' }
     let(:password) { 'testpass' }
 
     before do
-      # Reset Account state before each test
-      Lich::Common::Account.name = nil
-      Lich::Common::Account.game_code = nil
-      Lich::Common::Account.character = nil
+      # Reset Account state before each test (handle both mock and real Account implementations)
+      Lich::Common::Account.name = nil if Lich::Common::Account.respond_to?(:name=)
+      Lich::Common::Account.game_code = nil if Lich::Common::Account.respond_to?(:game_code=)
+      Lich::Common::Account.character = nil if Lich::Common::Account.respond_to?(:character=)
     end
 
     it 'sets Account module state when defined' do
-      # Stub socket and read to simulate auth protocol
-      allow(described_class).to receive(:socket).and_return(mock_socket)
-      allow(described_class).to receive(:verify_pem).and_return(true)
-      allow(mock_socket).to receive(:puts)
-      allow(mock_socket).to receive(:close)
-      allow(mock_socket).to receive(:closed?).and_return(false)
+      # Stub socket to raise early - we just want to verify Account is set first
+      # The auth method sets Account state BEFORE opening the socket
+      allow(described_class).to receive(:socket).and_raise(StandardError, 'Socket stubbed for test')
 
-      # Simulate protocol responses:
-      # K -> hashkey, A -> KEY response, M -> game list, F/G/P/C/L -> game responses
-      allow(described_class).to receive(:read).and_return(
-        "HASHKEY123", # K response - hash key
-        "KEY\tabc123\t", # A response - auth success
-        "M\tGS3\tGemstone IV", # M response - game list
-        "NORMAL", # F response - subscription
-        "G\tOK", # G response
-        "P\tOK", # P response
-        "C\t1\t0\t0\t0\t001\tTestChar", # C response - character list
-        "L\tOK\tGAMEHOST=storm.gs4.game.play.net" # L response - login info
-      )
+      # Call auth and expect it to raise (because socket is stubbed)
+      expect {
+        described_class.auth(
+          account: account,
+          password: password,
+          character: 'TestChar',
+          game_code: 'GS3'
+        )
+      }.to raise_error(StandardError, 'Socket stubbed for test')
 
-      described_class.auth(
-        account: account,
-        password: password,
-        character: 'TestChar',
-        game_code: 'GS3'
-      )
-
+      # Account state should have been set before the socket error
       expect(Lich::Common::Account.name).to eq(account)
       expect(Lich::Common::Account.game_code).to eq('GS3')
       expect(Lich::Common::Account.character).to eq('TestChar')
