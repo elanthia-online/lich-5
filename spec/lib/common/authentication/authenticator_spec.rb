@@ -2,34 +2,14 @@
 
 require 'rspec'
 
-# Mock Lich module and dependencies before requiring
+# Mock Lich module before requiring the actual code
 module Lich
-  def self.log(message)
+  def self.log(_message)
     # no-op for tests
   end
 end unless defined?(Lich)
 
-module Lich
-  module Common
-    module Authentication
-      module EAccess
-        class AuthenticationError < StandardError
-          attr_reader :error_code
-
-          def initialize(error_code)
-            @error_code = error_code
-            super("Error(#{error_code})")
-          end
-        end
-
-        def self.auth(*_args, **_kwargs)
-          { 'key' => 'test123', 'gamecode' => 'GS3' }
-        end
-      end
-    end
-  end
-end unless defined?(Lich::Common::Authentication::EAccess)
-
+# Require the actual authenticator code (which will also load eaccess.rb)
 require_relative '../../../../lib/common/authentication/authenticator'
 
 RSpec.describe Lich::Common::Authentication do
@@ -37,6 +17,7 @@ RSpec.describe Lich::Common::Authentication do
     let(:auth_result) { { 'key' => 'abc123', 'gamecode' => 'GS3' } }
 
     before do
+      # Stub the EAccess.auth method to return our test data
       allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_return(auth_result)
       allow(Lich).to receive(:log)
     end
@@ -102,6 +83,7 @@ RSpec.describe Lich::Common::Authentication do
       result = described_class.with_retry do
         attempts += 1
         raise StandardError, 'Transient error' if attempts < 2
+
         'success'
       end
 
