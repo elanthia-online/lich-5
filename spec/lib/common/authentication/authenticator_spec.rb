@@ -3,7 +3,8 @@
 require 'rspec'
 
 # Define DATA_DIR before requiring eaccess.rb
-DATA_DIR = '/tmp/test_data' unless defined?(DATA_DIR)
+# Use Dir.tmpdir which always exists on all platforms
+DATA_DIR = Dir.tmpdir unless defined?(DATA_DIR)
 
 # Mock Lich module before requiring the actual code
 module Lich

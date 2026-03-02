@@ -3,7 +3,8 @@
 require 'rspec'
 
 # Mock dependencies before requiring the code
-DATA_DIR = '/tmp/test_data' unless defined?(DATA_DIR)
+# Use Dir.tmpdir which always exists on all platforms
+DATA_DIR = Dir.tmpdir unless defined?(DATA_DIR)
 
 # Define Lich.log separately
 module Lich
