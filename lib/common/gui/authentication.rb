@@ -8,8 +8,8 @@ module Lich
       # Handles authentication and launch data preparation for the Lich GUI
       # Provides methods for user authentication and preparing launch data for different frontends
       module Authentication
-        # Permanent auth failure - should not be retried
-        class PermanentAuthError < StandardError; end
+        # Fatal auth failure - should not be retried
+        class FatalAuthError < StandardError; end
 
         # Retry configuration for transient SSL/network errors
         # These errors are often temporary and resolve on retry:
@@ -61,7 +61,7 @@ module Lich
         #
         # @yield The block to execute with retry
         # @return [Object] The result of the block
-        # @raise [PermanentAuthError] For permanent auth failures (bad credentials, etc.)
+        # @raise [FatalAuthError] For fatal auth failures (bad credentials, etc.)
         # @raise [StandardError] Re-raises the last error after all retries exhausted
         def self.with_retry
           last_error = nil
@@ -77,10 +77,10 @@ module Lich
 
               return result
             rescue EAccess::AuthenticationError => e
-              # Check if this is a permanent auth failure
+              # Check if this is a fatal auth failure
               if FATAL_ERROR_CODES.any? { |code| e.error_code&.include?(code) }
-                Lich.log "error: Authentication permanently failed: #{e.message}"
-                raise PermanentAuthError, e.message
+                Lich.log "error: Authentication fatally failed: #{e.message}"
+                raise FatalAuthError, e.message
               end
 
               # Transient auth error - allow retry
@@ -92,8 +92,8 @@ module Lich
                          "#{e.message}, retrying in #{delay}s..."
                 sleep(delay)
               end
-            rescue PermanentAuthError
-              # Don't retry permanent auth failures - re-raise immediately
+            rescue FatalAuthError
+              # Don't retry fatal auth failures - re-raise immediately
               raise
             rescue StandardError => e
               last_error = e
