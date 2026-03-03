@@ -233,7 +233,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       end
 
       it 'returns 1 on general error' do
-        allow(YAML).to receive(:load_file).and_raise(StandardError.new('Write error'))
+        allow(YAML).to receive(:safe_load_file).and_raise(StandardError.new('Write error'))
 
         exit_code = Lich::Common::Authentication::CLIPassword.change_account_password('DOUG', 'newpass')
         expect(exit_code).to eq(1)
