@@ -1,20 +1,21 @@
 # frozen_string_literal: true
 
 require 'yaml'
-require File.join(LIB_DIR, 'common', 'gui', 'yaml_state.rb')
-require File.join(LIB_DIR, 'common', 'gui', 'utilities.rb')
-require File.join(LIB_DIR, 'common', 'gui', 'account_manager.rb')
+require_relative 'entry_store'
+require_relative '../gui/utilities'
+require_relative '../gui/account_manager'
+require_relative 'authenticator'
 
 module Lich
   module Common
-    module CLI
+    module Authentication
       # Headless password management operations for CLI execution
-      # Thin wrapper around YamlState and PasswordCipher
+      # Thin wrapper around EntryStore and PasswordCipher
       # Handles: change account password, add account, change master password
       #
       # @example
-      #   Lich::Common::CLI::PasswordManager.change_account_password('DOUG', 'NewPass123')
-      module PasswordManager
+      #   Lich::Common::Authentication::CLIPassword.change_account_password('DOUG', 'NewPass123')
+      module CLIPassword
         # Changes account password in entry.yaml
         # Handles all encryption modes (plaintext, standard, enhanced)
         #
@@ -22,13 +23,16 @@ module Lich
         # @param new_password [String] New plaintext password
         # @return [Integer] Exit code (0=success, 1=error, 2=not found)
         def self.change_account_password(account, new_password)
+          # Normalize account name to uppercase (accounts are stored uppercase)
+          account = account.upcase
+
           # Validate master password availability before attempting change
           unless validate_master_password_available
             return 1
           end
 
           data_dir = DATA_DIR
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           unless File.exist?(yaml_file)
             puts "error: entry.yaml not found at #{yaml_file}"
@@ -36,7 +40,7 @@ module Lich
           end
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             encryption_mode = (yaml_data['encryption_mode'] || 'plaintext').to_sym
 
             # Find account
@@ -105,13 +109,16 @@ module Lich
         # @param frontend [String, nil] Frontend (wizard, stormfront, avalon, or nil)
         # @return [Integer] Exit code (0=success, 1=error, 2=auth failed)
         def self.add_account(account, password, frontend = nil)
+          # Normalize account name to uppercase (accounts are stored uppercase)
+          account = account.upcase
+
           data_dir = DATA_DIR
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           begin
             # Check if account already exists
             if File.exist?(yaml_file)
-              yaml_data = YAML.load_file(yaml_file)
+              yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
               if yaml_data['accounts'] && yaml_data['accounts'][account]
                 puts "error: Account '#{account}' already exists"
                 puts "Use --change-account-password to update the password."
@@ -125,7 +132,7 @@ module Lich
             # Authenticate with game servers to fetch characters (like GUI does)
             puts "Authenticating with game servers..."
             Lich.log "info: Authenticating account '#{account}' with game servers"
-            auth_data = Lich::Common::GUI::Authentication.authenticate(
+            auth_data = Lich::Common::Authentication.authenticate(
               account: account,
               password: password,
               legacy: true
@@ -194,7 +201,7 @@ module Lich
         # @return [Integer] Exit code (0=success, 1=error, 3=wrong mode)
         def self.change_master_password(old_password, new_password = nil)
           data_dir = DATA_DIR
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           unless File.exist?(yaml_file)
             puts "error: entry.yaml not found at #{yaml_file}"
@@ -202,7 +209,7 @@ module Lich
           end
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             encryption_mode = (yaml_data['encryption_mode'] || 'plaintext').to_sym
 
             unless encryption_mode == :enhanced
@@ -315,7 +322,7 @@ module Lich
         def self.determine_predominant_frontend(yaml_file)
           return nil unless File.exist?(yaml_file)
 
-          yaml_data = YAML.load_file(yaml_file)
+          yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
           return nil unless yaml_data['accounts']
 
           frontend_counts = Hash.new(0)
@@ -368,7 +375,7 @@ module Lich
         # @return [Boolean] true if ready for operations, false if issues found
         def self.validate_master_password_available
           data_dir = DATA_DIR
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           unless File.exist?(yaml_file)
             puts "error: entry.yaml not found"
@@ -376,7 +383,7 @@ module Lich
           end
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             encryption_mode = (yaml_data['encryption_mode'] || 'plaintext').to_sym
 
             # Non-enhanced modes don't need master password
@@ -420,7 +427,7 @@ module Lich
         # @return [Integer] Exit code (0=success, 1=error, 2=not found, 3=wrong mode)
         def self.recover_master_password(master_password = nil)
           data_dir = DATA_DIR
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           unless File.exist?(yaml_file)
             puts "error: entry.yaml not found at #{yaml_file}"
@@ -428,7 +435,7 @@ module Lich
           end
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             encryption_mode = (yaml_data['encryption_mode'] || 'plaintext').to_sym
 
             unless encryption_mode == :enhanced

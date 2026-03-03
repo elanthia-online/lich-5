@@ -44,21 +44,22 @@ reconnect_if_wanted = proc {
   $lich_char_regex = Regexp.union(',', ';')
 
   @launch_data = nil
-  require File.join(LIB_DIR, 'common', 'eaccess.rb')
+  require File.join(LIB_DIR, 'common', 'authentication', 'eaccess.rb')
+  require File.join(LIB_DIR, 'common', 'account.rb')
 
   if ARGV.include?('--login')
     # CLI login flow: character authentication via saved entries
-    require File.join(LIB_DIR, 'common', 'cli', 'cli_login')
+    require File.join(LIB_DIR, 'common', 'authentication', 'cli')
 
     # Extract character name from --login argument
     requested_character = ARGV[ARGV.index('--login') + 1].capitalize
 
     # Parse game code, frontend, and custom_launch from remaining arguments
     modifiers = ARGV.dup
-    requested_instance, requested_fe, requested_custom_launch = Lich::Util::LoginHelpers.resolve_login_args(modifiers)
+    requested_instance, requested_fe, requested_custom_launch = Lich::Common::Authentication::LoginHelpers.resolve_login_args(modifiers)
 
     # Execute CLI login flow and get launch data
-    launch_data_array = Lich::Common::CLI::CLILogin.execute(
+    launch_data_array = Lich::Common::Authentication::CLI.execute(
       requested_character,
       game_code: requested_instance,
       frontend: requested_fe,
@@ -241,7 +242,7 @@ reconnect_if_wanted = proc {
       end
       accept_thread = Thread.new { $_CLIENT_ = SynchronizedSocket.new(listener.accept) }
       localport = listener.addr[1]
-      Frontend.create_session_file(Account.character, listener.addr[2], listener.addr[1], display_session: false)
+      Frontend.create_session_file(Lich::Common::Account.character, listener.addr[2], listener.addr[1], display_session: false)
       if custom_launch
         sal_filename = nil
         launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, game_key.to_s)

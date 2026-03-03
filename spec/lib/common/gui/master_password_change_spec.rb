@@ -4,7 +4,7 @@ require 'spec_helper'
 require 'common/gui/master_password_change'
 require 'common/gui/master_password_manager'
 require 'common/gui/password_cipher'
-require 'common/gui/yaml_state'
+require 'common/authentication/entry_store'
 require 'fileutils'
 
 RSpec.describe Lich::Common::GUI::MasterPasswordChange do
@@ -17,7 +17,7 @@ RSpec.describe Lich::Common::GUI::MasterPasswordChange do
   # Import necessary classes
   let(:master_password_manager) { Lich::Common::GUI::MasterPasswordManager }
   let(:password_cipher) { Lich::Common::GUI::PasswordCipher }
-  let(:yaml_state) { Lich::Common::GUI::YamlState }
+  let(:entry_store) { Lich::Common::Authentication::EntryStore }
 
   before do
     FileUtils.mkdir_p(data_dir)

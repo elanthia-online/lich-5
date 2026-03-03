@@ -1,17 +1,17 @@
 # frozen_string_literal: true
 
-require_relative 'state'
-require_relative 'password_cipher'
-require_relative 'master_password_manager'
-require_relative 'master_password_prompt'
+require_relative '../gui/state'
+require_relative '../gui/password_cipher'
+require_relative '../gui/master_password_manager'
+require_relative '../gui/master_password_prompt'
 
 module Lich
   module Common
-    module GUI
+    module Authentication
       # Handles YAML-based state management for the Lich GUI login system
       # Provides a more maintainable alternative to the Marshal-based state system
       # Enhanced with password encryption support
-      module YamlState
+      module EntryStore
         # Generates the full path to the entry.yaml file.
         #
         # @param data_dir [String] The directory where the entry.yaml file is located.
@@ -31,13 +31,13 @@ module Lich
           # Guard against nil data_dir
           return [] if data_dir.nil?
 
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
           dat_file = File.join(data_dir, "entry.dat")
 
           if File.exist?(yaml_file)
             # Load from YAML format
             begin
-              yaml_data = YAML.load_file(yaml_file)
+              yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
 
               # Migrate data structure if needed to support favorites and encryption
               yaml_data = migrate_to_favorites_format(yaml_data)
@@ -56,7 +56,7 @@ module Lich
           elsif File.exist?(dat_file)
             # Fall back to legacy format if YAML doesn't exist
             Lich.log "info: YAML entry file not found, falling back to legacy format"
-            State.load_saved_entries(data_dir, autosort_state)
+            Lich::Common::GUI::State.load_saved_entries(data_dir, autosort_state)
           else
             # No entry file exists
             []
@@ -72,14 +72,14 @@ module Lich
         # @param entry_data [Array] Array of entry data in legacy format
         # @return [Boolean] True if save was successful
         def self.save_entries(data_dir, entry_data)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Preserve validation test and encryption_mode from existing YAML if it exists
           original_validation_test = nil
           original_encryption_mode = :plaintext
           if File.exist?(yaml_file)
             begin
-              original_data = YAML.load_file(yaml_file)
+              original_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
               if original_data.is_a?(Hash)
                 original_validation_test = original_data['master_password_validation_test']
                 original_encryption_mode = (original_data['encryption_mode'] || 'plaintext').to_sym
@@ -97,7 +97,7 @@ module Lich
           if original_encryption_mode != :plaintext
             master_password = nil
             if original_encryption_mode == :enhanced
-              master_password = MasterPasswordManager.retrieve_master_password
+              master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
               if master_password.nil?
                 Lich.log "error: Enhanced mode enabled but master password not found in Keychain"
                 return false
@@ -140,7 +140,7 @@ module Lich
         # @return [Boolean] True if migration was successful
         def self.migrate_from_legacy(data_dir, encryption_mode: :plaintext)
           dat_file = File.join(data_dir, "entry.dat")
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Skip if YAML file already exists or DAT file doesn't exist
           return false unless File.exist?(dat_file)
@@ -175,7 +175,7 @@ module Lich
           end
 
           # Load legacy data
-          legacy_entries = State.load_saved_entries(data_dir, false)
+          legacy_entries = Lich::Common::GUI::State.load_saved_entries(data_dir, false)
 
           # Add encryption_mode to entries
           legacy_entries.each do |entry|
@@ -201,7 +201,7 @@ module Lich
           if validation_test && encryption_mode == :enhanced
             yaml_file = yaml_file_path(data_dir)
             if File.exist?(yaml_file)
-              yaml_data = YAML.load_file(yaml_file)
+              yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
               yaml_data['master_password_validation_test'] = validation_test
               write_yaml_file(yaml_file, yaml_data)
             end
@@ -224,7 +224,7 @@ module Lich
         def self.encrypt_password(password, mode:, account_name: nil, master_password: nil)
           return password if mode == :plaintext || mode.to_sym == :plaintext
 
-          PasswordCipher.encrypt(password, mode: mode.to_sym, account_name: account_name, master_password: master_password)
+          Lich::Common::GUI::PasswordCipher.encrypt(password, mode: mode.to_sym, account_name: account_name, master_password: master_password)
         rescue StandardError => e
           Lich.log "error: encrypt_password failed - #{e.class}: #{e.message}"
           raise
@@ -242,11 +242,11 @@ module Lich
 
           # For enhanced mode: auto-retrieve from Keychain if not provided
           if mode.to_sym == :enhanced && master_password.nil?
-            master_password = MasterPasswordManager.retrieve_master_password
+            master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
             raise StandardError, "Master password not found in Keychain - cannot decrypt" if master_password.nil?
           end
 
-          PasswordCipher.decrypt(encrypted_password, mode: mode.to_sym, account_name: account_name, master_password: master_password)
+          Lich::Common::GUI::PasswordCipher.decrypt(encrypted_password, mode: mode.to_sym, account_name: account_name, master_password: master_password)
         rescue StandardError => e
           Lich.log "error: decrypt_password failed - #{e.class}: #{e.message}"
           raise
@@ -272,7 +272,7 @@ module Lich
             Lich.log "info: Master password missing from Keychain, attempting recovery via user prompt"
 
             # Show appropriate dialog based on context - use data access for conversion, recovery for actual recovery
-            recovery_result = MasterPasswordPromptUI.show_password_for_data_access(validation_test)
+            recovery_result = Lich::Common::GUI::MasterPasswordPromptUI.show_password_for_data_access(validation_test)
 
             if recovery_result.nil? || recovery_result[:password].nil?
               Lich.log "info: User cancelled master password recovery"
@@ -287,7 +287,7 @@ module Lich
             Lich.log "info: Master password recovered and validated, storing to Keychain"
 
             # Save recovered password to Keychain for future use
-            unless MasterPasswordManager.store_master_password(recovered_password)
+            unless Lich::Common::GUI::MasterPasswordManager.store_master_password(recovered_password)
               Lich.log "warning: Failed to store recovered master password to Keychain"
               # Continue anyway - decryption will still work with in-memory password
             end
@@ -345,7 +345,7 @@ module Lich
 
           # Load YAML
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
           rescue StandardError => e
             Lich.log "error: Failed to load YAML for encryption mode change: #{e.message}"
             return false
@@ -363,7 +363,7 @@ module Lich
           old_master_password = nil
           if current_mode == :enhanced
             # Auto-retrieve from keychain when leaving Enhanced
-            old_master_password = MasterPasswordManager.retrieve_master_password
+            old_master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
             if old_master_password.nil?
               Lich.log "error: Master password not found in keychain for encryption mode change"
               return false
@@ -425,18 +425,18 @@ module Lich
             # Handle Enhanced mode metadata
             if new_mode == :enhanced
               # Create validation test
-              validation_test = MasterPasswordManager.create_validation_test(new_master_password)
+              validation_test = Lich::Common::GUI::MasterPasswordManager.create_validation_test(new_master_password)
               yaml_data['master_password_validation_test'] = validation_test
 
               # Store in keychain
-              unless MasterPasswordManager.store_master_password(new_master_password)
+              unless Lich::Common::GUI::MasterPasswordManager.store_master_password(new_master_password)
                 Lich.log "error: Failed to store master password in keychain"
                 return restore_backup_and_return_false(backup_file, yaml_file)
               end
             elsif current_mode == :enhanced
               # Remove validation test and keychain when leaving Enhanced
               yaml_data.delete('master_password_validation_test')
-              MasterPasswordManager.delete_master_password
+              Lich::Common::GUI::MasterPasswordManager.delete_master_password
             end
 
             # Save YAML with headers
@@ -491,11 +491,11 @@ module Lich
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
         # @return [Boolean] True if operation was successful
         def self.add_favorite(data_dir, username, char_name, game_code, frontend = nil)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
           return false unless File.exist?(yaml_file)
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             yaml_data = migrate_to_favorites_format(yaml_data)
 
             # Find the character with frontend precision
@@ -513,7 +513,7 @@ module Lich
             # Save updated data directly without conversion round-trip
             # This preserves the original YAML structure and account ordering
             content = generate_yaml_content(yaml_data)
-            result = Utilities.safe_file_operation(yaml_file, :write, content)
+            result = Lich::Common::GUI::Utilities.safe_file_operation(yaml_file, :write, content)
 
             result ? true : false
           rescue StandardError => e
@@ -532,11 +532,11 @@ module Lich
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
         # @return [Boolean] True if operation was successful
         def self.remove_favorite(data_dir, username, char_name, game_code, frontend = nil)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
           return false unless File.exist?(yaml_file)
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             yaml_data = migrate_to_favorites_format(yaml_data)
 
             # Find the character with frontend precision
@@ -556,7 +556,7 @@ module Lich
 
             # Save updated data
             content = generate_yaml_content(yaml_data)
-            result = Utilities.safe_file_operation(yaml_file, :write, content)
+            result = Lich::Common::GUI::Utilities.safe_file_operation(yaml_file, :write, content)
 
             result ? true : false
           rescue StandardError => e
@@ -575,11 +575,11 @@ module Lich
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
         # @return [Boolean] True if character is a favorite
         def self.is_favorite?(data_dir, username, char_name, game_code, frontend = nil)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
           return false unless File.exist?(yaml_file)
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             yaml_data = migrate_to_favorites_format(yaml_data)
 
             character = find_character(yaml_data, username, char_name, game_code, frontend)
@@ -596,11 +596,11 @@ module Lich
         # @param data_dir [String] Directory containing entry data
         # @return [Array] Array of favorite character data in legacy format
         def self.get_favorites(data_dir)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
           return [] unless File.exist?(yaml_file)
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             yaml_data = migrate_to_favorites_format(yaml_data)
 
             favorites = []
@@ -638,11 +638,11 @@ module Lich
         # @param ordered_favorites [Array] Array of hashes with username, char_name, game_code, frontend
         # @return [Boolean] True if operation was successful
         def self.reorder_favorites(data_dir, ordered_favorites)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
           return false unless File.exist?(yaml_file)
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             yaml_data = migrate_to_favorites_format(yaml_data)
 
             # Update favorite order for each character in the provided order
@@ -662,7 +662,7 @@ module Lich
 
             # Save updated data
             content = generate_yaml_content(yaml_data)
-            result = Utilities.safe_file_operation(yaml_file, :write, content)
+            result = Lich::Common::GUI::Utilities.safe_file_operation(yaml_file, :write, content)
 
             result ? true : false
           rescue StandardError => e
@@ -1030,11 +1030,11 @@ module Lich
         # @return [Hash, String, nil] Hash with {password, validation_test} if new, password string if existing, nil if cancelled
         def self.ensure_master_password_exists
           # Check if master password already in Keychain
-          existing = MasterPasswordManager.retrieve_master_password
+          existing = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
           return existing if !existing.nil? && !existing.empty?
 
           # Show UI prompt to CREATE master password
-          master_password = MasterPasswordPrompt.show_create_master_password_dialog
+          master_password = Lich::Common::GUI::MasterPasswordPrompt.show_create_master_password_dialog
 
           if master_password.nil?
             Lich.log "info: User declined to create master password"
@@ -1042,7 +1042,7 @@ module Lich
           end
 
           # Create validation test (expensive 100k iterations, one-time)
-          validation_test = MasterPasswordManager.create_validation_test(master_password)
+          validation_test = Lich::Common::GUI::MasterPasswordManager.create_validation_test(master_password)
 
           if validation_test.nil?
             Lich.log "error: Failed to create validation test"
@@ -1050,7 +1050,7 @@ module Lich
           end
 
           # Store in Keychain
-          stored = MasterPasswordManager.store_master_password(master_password)
+          stored = Lich::Common::GUI::MasterPasswordManager.store_master_password(master_password)
 
           unless stored
             Lich.log "error: Failed to store master password in Keychain"
@@ -1069,7 +1069,7 @@ module Lich
         # @return [Hash, nil] Hash with {password, validation_test} or nil if error
         def self.get_existing_master_password_for_migration
           # Retrieve existing master password from keychain
-          existing_password = MasterPasswordManager.retrieve_master_password
+          existing_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
 
           if existing_password.nil? || existing_password.empty?
             Lich.log "info: No existing master password found in keychain - user should create one"
@@ -1080,7 +1080,7 @@ module Lich
 
           # Create a NEW validation test with the existing password
           # This is needed because we don't have the old validation test in YAML yet
-          validation_test = MasterPasswordManager.create_validation_test(existing_password)
+          validation_test = Lich::Common::GUI::MasterPasswordManager.create_validation_test(existing_password)
 
           if validation_test.nil?
             Lich.log "error: Failed to create validation test for existing master password"

@@ -680,7 +680,7 @@ module Lich
           # Check encryption mode and keychain availability
           has_keychain = MasterPasswordManager.keychain_available?
           mode = nil
-          yaml_file = YamlState.yaml_file_path(@data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(@data_dir)
 
           if File.exist?(yaml_file)
             begin
@@ -923,7 +923,7 @@ module Lich
         # @param username [String] Account username to check
         # @return [Boolean] True if account exists
         def account_already_exists?(username)
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(@data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(@data_dir)
           return false unless File.exist?(yaml_file)
 
           begin
@@ -1248,7 +1248,7 @@ module Lich
           end
 
           # Check YAML file and encryption mode
-          yaml_file = YamlState.yaml_file_path(@data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(@data_dir)
           unless File.exist?(yaml_file)
             button.visible = false
             button.sensitive = false
@@ -1283,7 +1283,7 @@ module Lich
           @change_encryption_mode_button.visible = true
 
           # Check if YAML file exists with accounts
-          yaml_file = YamlState.yaml_file_path(@data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(@data_dir)
           unless File.exist?(yaml_file)
             @change_encryption_mode_button.sensitive = false
             return
