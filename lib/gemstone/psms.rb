@@ -215,6 +215,8 @@ module Lich
         /^But your hands are full\!$/,
         /^You are still stunned\.$/,
         /^You lack the momentum to attempt another skill\.$/,
+        /^You can't reach .+!$/,
+        / attempting to .+ would be a rather awkward proposition\.$/,
       )
     end
   end
