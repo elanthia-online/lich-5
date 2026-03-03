@@ -71,6 +71,18 @@ RSpec.describe Lich::Common::GUI::Authentication do
     end
   end
 
+  describe "FatalAuthError" do
+    it "is a subclass of StandardError" do
+      expect(described_class::FatalAuthError.superclass).to eq(StandardError)
+    end
+
+    it "can be raised with a message" do
+      expect {
+        raise described_class::FatalAuthError, "Error(REJECT)"
+      }.to raise_error(described_class::FatalAuthError, "Error(REJECT)")
+    end
+  end
+
   describe "retry configuration constants" do
     it "defines MAX_AUTH_RETRIES" do
       expect(described_class::MAX_AUTH_RETRIES).to eq(3)
@@ -282,6 +294,66 @@ RSpec.describe Lich::Common::GUI::Authentication do
         expect(result).to eq(auth_data)
       end
     end
+
+    context "when block raises EAccess::AuthenticationError" do
+      it "raises FatalAuthError for REJECT errors without retry" do
+        call_count = 0
+        expect {
+          described_class.with_retry do
+            call_count += 1
+            raise Lich::Common::EAccess::AuthenticationError, "REJECT"
+          end
+        }.to raise_error(described_class::FatalAuthError, "Error(REJECT)")
+        expect(call_count).to eq(1)
+      end
+
+      it "raises FatalAuthError for NORECORD errors without retry" do
+        call_count = 0
+        expect {
+          described_class.with_retry do
+            call_count += 1
+            raise Lich::Common::EAccess::AuthenticationError, "NORECORD"
+          end
+        }.to raise_error(described_class::FatalAuthError, "Error(NORECORD)")
+        expect(call_count).to eq(1)
+      end
+
+      it "raises FatalAuthError for INVALID errors without retry" do
+        call_count = 0
+        expect {
+          described_class.with_retry do
+            call_count += 1
+            raise Lich::Common::EAccess::AuthenticationError, "INVALID"
+          end
+        }.to raise_error(described_class::FatalAuthError, "Error(INVALID)")
+        expect(call_count).to eq(1)
+      end
+
+      it "logs fatal auth failure" do
+        expect {
+          described_class.with_retry { raise Lich::Common::EAccess::AuthenticationError, "REJECT" }
+        }.to raise_error(described_class::FatalAuthError)
+        expect(Lich).to have_received(:log).with(/Authentication fatally failed.*Error\(REJECT\)/)
+      end
+
+      it "retries transient auth errors" do
+        call_count = 0
+        result = described_class.with_retry do
+          call_count += 1
+          raise Lich::Common::EAccess::AuthenticationError, "TIMEOUT" if call_count == 1
+
+          auth_data
+        end
+        expect(result).to eq(auth_data)
+        expect(call_count).to eq(2)
+      end
+
+      it "raises AuthenticationError after retries exhausted for transient errors" do
+        expect {
+          described_class.with_retry { raise Lich::Common::EAccess::AuthenticationError, "TIMEOUT" }
+        }.to raise_error(Lich::Common::EAccess::AuthenticationError, "Error(TIMEOUT)")
+      end
+    end
   end
 
   describe ".authenticate with retry behavior" do
@@ -324,6 +396,56 @@ RSpec.describe Lich::Common::GUI::Authentication do
             game_code: game_code
           )
         end.to raise_error(StandardError, "Connection reset by peer")
+      end
+    end
+
+    context "when EAccess.auth raises fatal AuthenticationError" do
+      it "raises FatalAuthError immediately for REJECT" do
+        call_count = 0
+        allow(Lich::Common::EAccess).to receive(:auth) do
+          call_count += 1
+          raise Lich::Common::EAccess::AuthenticationError, "REJECT"
+        end
+
+        expect do
+          described_class.authenticate(
+            account: account,
+            password: password,
+            character: character,
+            game_code: game_code
+          )
+        end.to raise_error(described_class::FatalAuthError, "Error(REJECT)")
+
+        # Should not retry - only 1 call
+        expect(call_count).to eq(1)
+      end
+
+      it "raises FatalAuthError immediately for NORECORD" do
+        call_count = 0
+        allow(Lich::Common::EAccess).to receive(:auth) do
+          call_count += 1
+          raise Lich::Common::EAccess::AuthenticationError, "NORECORD"
+        end
+
+        expect do
+          described_class.authenticate(
+            account: account,
+            password: password
+          )
+        end.to raise_error(described_class::FatalAuthError, "Error(NORECORD)")
+
+        expect(call_count).to eq(1)
+      end
+
+      it "does not sleep when fatal auth fails" do
+        allow(Lich::Common::EAccess).to receive(:auth)
+          .and_raise(Lich::Common::EAccess::AuthenticationError, "REJECT")
+
+        expect do
+          described_class.authenticate(account: account, password: password)
+        end.to raise_error(described_class::FatalAuthError)
+
+        expect(described_class).not_to have_received(:sleep)
       end
     end
   end

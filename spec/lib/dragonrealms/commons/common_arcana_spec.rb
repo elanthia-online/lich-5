@@ -351,6 +351,8 @@ RSpec.describe Lich::DragonRealms::DRCA do
     Lich::Messaging.clear_messages!
     DRSpells.active_spells = {}
     Flags.reset!
+    allow(DRCMM).to receive(:update_astral_data) { |data, _settings| data }
+    allow(DRC).to receive(:bput).and_return('default')
   end
 
   # ──────────────────────────────────────────────
@@ -1007,7 +1009,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
         waggle_spells_mana_threshold: 10,
         waggle_spells_concentration_threshold: 10
       )
-      data = { 'abbrev' => 'fb', 'mana' => 10, 'cambrinth' => [5] }
+      data = { 'abbrev' => 'fb', 'mana' => 10, 'cambrinth' => [5], 'prep_time' => 0 }
       allow(DRCA).to receive(:prepare?).and_return('You begin to')
       allow(DRCA).to receive(:cast?).and_return(true)
       allow(DRCA).to receive(:find_charge_invoke_stow)
