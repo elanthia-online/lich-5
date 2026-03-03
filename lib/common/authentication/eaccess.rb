@@ -76,98 +76,103 @@ module Lich
           end
 
           conn = EAccess.socket()
-          # it is vitally important to verify self-signed certs
-          # because there is no chain-of-trust for them
-          EAccess.verify_pem(conn)
-          conn.puts "K\n"
-          hashkey = EAccess.read(conn)
-          # pp "hash=%s" % hashkey
-          password = password.split('').map { |c| c.getbyte(0) }
-          hashkey = hashkey.split('').map { |c| c.getbyte(0) }
-          password.each_index { |i| password[i] = ((password[i] - 32) ^ hashkey[i]) + 32 }
-          password = password.map { |c| c.chr }.join
-          conn.puts "A\t#{account}\t#{password}\n"
-          response = EAccess.read(conn)
-          unless /KEY\t(?<key>.*)\t/.match(response)
-            error_code = response.split(/\s+/).last
-            raise AuthenticationError, error_code
-          end
-          # pp "A:response=%s" % response
-          conn.puts "M\n"
-          response = EAccess.read(conn)
-          fail StandardError, response unless response =~ /^M\t/
-          # pp "M:response=%s" % response
+          begin
+            # it is vitally important to verify self-signed certs
+            # because there is no chain-of-trust for them
+            EAccess.verify_pem(conn)
+            conn.puts "K\n"
+            hashkey = EAccess.read(conn)
+            # pp "hash=%s" % hashkey
+            password = password.split('').map { |c| c.getbyte(0) }
+            hashkey = hashkey.split('').map { |c| c.getbyte(0) }
+            password.each_index { |i| password[i] = ((password[i] - 32) ^ hashkey[i]) + 32 }
+            password = password.map { |c| c.chr }.join
+            conn.puts "A\t#{account}\t#{password}\n"
+            response = EAccess.read(conn)
+            unless /KEY\t(?<key>.*)\t/.match(response)
+              error_code = response.split(/\s+/).last
+              raise AuthenticationError, error_code
+            end
+            # pp "A:response=%s" % response
+            conn.puts "M\n"
+            response = EAccess.read(conn)
+            raise StandardError, response unless response =~ /^M\t/
+            # pp "M:response=%s" % response
 
-          unless legacy
-            conn.puts "F\t#{game_code}\n"
-            response = EAccess.read(conn)
-            fail StandardError, response unless response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
-            if defined?(Lich::Common::Account)
-              Lich::Common::Account.subscription = response
-            end
-            # pp "F:response=%s" % response
-            conn.puts "G\t#{game_code}\n"
-            EAccess.read(conn)
-            # pp "G:response=%s" % response
-            conn.puts "P\t#{game_code}\n"
-            EAccess.read(conn)
-            # pp "P:response=%s" % response
-            conn.puts "C\n"
-            response = EAccess.read(conn)
-            # pp "C:response=%s" % response
-            if defined?(Lich::Common::Account)
-              Lich::Common::Account.members = response
-            end
-            char_code = response.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '')
-                                .scan(/[^\t]+\t[^\t^\n]+/)
-                                .find { |c| c.split("\t")[1] == character }
-                                .split("\t")[0]
-            conn.puts "L\t#{char_code}\tSTORM\n"
-            response = EAccess.read(conn)
-            fail StandardError, response unless response =~ /^L\t/
-            # pp "L:response=%s" % response
-            conn.close unless conn.closed?
-            login_info = response.sub(/^L\tOK\t/, '')
-                                 .split("\t")
-                                 .map { |kv|
-                                   k, v = kv.split("=")
-                                   [k.downcase, v]
-                                 }.to_h
-          else
-            login_info = Array.new
-            for game in response.sub(/^M\t/, '').scan(/[^\t]+\t[^\t^\n]+/)
-              game_code, game_name = game.split("\t")
-              # pp "M:response = %s" % response
-              conn.puts "N\t#{game_code}\n"
+            unless legacy
+              conn.puts "F\t#{game_code}\n"
               response = EAccess.read(conn)
-              if response =~ /STORM/
-                conn.puts "F\t#{game_code}\n"
+              raise StandardError, response unless response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
+              if defined?(Lich::Common::Account)
+                Lich::Common::Account.subscription = response
+              end
+              # pp "F:response=%s" % response
+              conn.puts "G\t#{game_code}\n"
+              EAccess.read(conn)
+              # pp "G:response=%s" % response
+              conn.puts "P\t#{game_code}\n"
+              EAccess.read(conn)
+              # pp "P:response=%s" % response
+              conn.puts "C\n"
+              response = EAccess.read(conn)
+              # pp "C:response=%s" % response
+              if defined?(Lich::Common::Account)
+                Lich::Common::Account.members = response
+              end
+              char_entry = response.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '')
+                                   .scan(/[^\t]+\t[^\t^\n]+/)
+                                   .find { |c| c.split("\t")[1] == character }
+              unless char_entry
+                raise AuthenticationError, "CHARACTER_NOT_FOUND"
+              end
+              char_code = char_entry.split("\t")[0]
+              conn.puts "L\t#{char_code}\tSTORM\n"
+              response = EAccess.read(conn)
+              raise StandardError, response unless response =~ /^L\t/
+              # pp "L:response=%s" % response
+              login_info = response.sub(/^L\tOK\t/, '')
+                                   .split("\t")
+                                   .map { |kv|
+                                     k, v = kv.split("=")
+                                     [k.downcase, v]
+                                   }.to_h
+            else
+              login_info = Array.new
+              for game in response.sub(/^M\t/, '').scan(/[^\t]+\t[^\t^\n]+/)
+                game_code, game_name = game.split("\t")
+                # pp "M:response = %s" % response
+                conn.puts "N\t#{game_code}\n"
                 response = EAccess.read(conn)
-                if response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
-                  if defined?(Lich::Common::Account)
-                    Lich::Common::Account.subscription = response
-                  end
-                  conn.puts "G\t#{game_code}\n"
-                  EAccess.read(conn)
-                  conn.puts "P\t#{game_code}\n"
-                  EAccess.read(conn)
-                  conn.puts "C\n"
+                if response =~ /STORM/
+                  conn.puts "F\t#{game_code}\n"
                   response = EAccess.read(conn)
-                  if defined?(Lich::Common::Account)
-                    Lich::Common::Account.members = response
-                  end
-                  for code_name in response.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '').scan(/[^\t]+\t[^\t^\n]+/)
-                    char_code, char_name = code_name.split("\t")
-                    hash = { :game_code => "#{game_code}", :game_name => "#{game_name}",
-                            :char_code => "#{char_code}", :char_name => "#{char_name}" }
-                    login_info.push(hash)
+                  if response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
+                    if defined?(Lich::Common::Account)
+                      Lich::Common::Account.subscription = response
+                    end
+                    conn.puts "G\t#{game_code}\n"
+                    EAccess.read(conn)
+                    conn.puts "P\t#{game_code}\n"
+                    EAccess.read(conn)
+                    conn.puts "C\n"
+                    response = EAccess.read(conn)
+                    if defined?(Lich::Common::Account)
+                      Lich::Common::Account.members = response
+                    end
+                    for code_name in response.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '').scan(/[^\t]+\t[^\t^\n]+/)
+                      char_code, char_name = code_name.split("\t")
+                      hash = { :game_code => "#{game_code}", :game_name => "#{game_name}",
+                              :char_code => "#{char_code}", :char_name => "#{char_name}" }
+                      login_info.push(hash)
+                    end
                   end
                 end
               end
             end
+            return login_info
+          ensure
+            conn&.close unless conn&.closed?
           end
-          conn.close unless conn.closed?
-          return login_info
         end
 
         def self.read(conn)

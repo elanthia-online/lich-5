@@ -40,7 +40,7 @@ module Lich
           end
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             encryption_mode = (yaml_data['encryption_mode'] || 'plaintext').to_sym
 
             # Find account
@@ -118,7 +118,7 @@ module Lich
           begin
             # Check if account already exists
             if File.exist?(yaml_file)
-              yaml_data = YAML.load_file(yaml_file)
+              yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
               if yaml_data['accounts'] && yaml_data['accounts'][account]
                 puts "error: Account '#{account}' already exists"
                 puts "Use --change-account-password to update the password."
@@ -209,7 +209,7 @@ module Lich
           end
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             encryption_mode = (yaml_data['encryption_mode'] || 'plaintext').to_sym
 
             unless encryption_mode == :enhanced
@@ -322,7 +322,7 @@ module Lich
         def self.determine_predominant_frontend(yaml_file)
           return nil unless File.exist?(yaml_file)
 
-          yaml_data = YAML.load_file(yaml_file)
+          yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
           return nil unless yaml_data['accounts']
 
           frontend_counts = Hash.new(0)
@@ -383,7 +383,7 @@ module Lich
           end
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             encryption_mode = (yaml_data['encryption_mode'] || 'plaintext').to_sym
 
             # Non-enhanced modes don't need master password
@@ -435,7 +435,7 @@ module Lich
           end
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             encryption_mode = (yaml_data['encryption_mode'] || 'plaintext').to_sym
 
             unless encryption_mode == :enhanced

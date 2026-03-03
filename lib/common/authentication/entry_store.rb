@@ -37,7 +37,7 @@ module Lich
           if File.exist?(yaml_file)
             # Load from YAML format
             begin
-              yaml_data = YAML.load_file(yaml_file)
+              yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
 
               # Migrate data structure if needed to support favorites and encryption
               yaml_data = migrate_to_favorites_format(yaml_data)
@@ -79,7 +79,7 @@ module Lich
           original_encryption_mode = :plaintext
           if File.exist?(yaml_file)
             begin
-              original_data = YAML.load_file(yaml_file)
+              original_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
               if original_data.is_a?(Hash)
                 original_validation_test = original_data['master_password_validation_test']
                 original_encryption_mode = (original_data['encryption_mode'] || 'plaintext').to_sym
@@ -201,7 +201,7 @@ module Lich
           if validation_test && encryption_mode == :enhanced
             yaml_file = yaml_file_path(data_dir)
             if File.exist?(yaml_file)
-              yaml_data = YAML.load_file(yaml_file)
+              yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
               yaml_data['master_password_validation_test'] = validation_test
               write_yaml_file(yaml_file, yaml_data)
             end
@@ -345,7 +345,7 @@ module Lich
 
           # Load YAML
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
           rescue StandardError => e
             Lich.log "error: Failed to load YAML for encryption mode change: #{e.message}"
             return false
@@ -495,7 +495,7 @@ module Lich
           return false unless File.exist?(yaml_file)
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             yaml_data = migrate_to_favorites_format(yaml_data)
 
             # Find the character with frontend precision
@@ -536,7 +536,7 @@ module Lich
           return false unless File.exist?(yaml_file)
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             yaml_data = migrate_to_favorites_format(yaml_data)
 
             # Find the character with frontend precision
@@ -579,7 +579,7 @@ module Lich
           return false unless File.exist?(yaml_file)
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             yaml_data = migrate_to_favorites_format(yaml_data)
 
             character = find_character(yaml_data, username, char_name, game_code, frontend)
@@ -600,7 +600,7 @@ module Lich
           return [] unless File.exist?(yaml_file)
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             yaml_data = migrate_to_favorites_format(yaml_data)
 
             favorites = []
@@ -642,7 +642,7 @@ module Lich
           return false unless File.exist?(yaml_file)
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             yaml_data = migrate_to_favorites_format(yaml_data)
 
             # Update favorite order for each character in the provided order

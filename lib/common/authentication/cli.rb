@@ -49,7 +49,7 @@ module Lich
           end
 
           begin
-            yaml_data = YAML.load_file(yaml_file)
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             entry_data = LoginHelpers.symbolize_keys(yaml_data)
           rescue StandardError => e
             Lich.log "error: Failed to load YAML data: #{e.message}"

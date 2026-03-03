@@ -18,8 +18,8 @@ module Lich
 
       # Known fatal error codes that should not be retried
       # REJECT = bad credentials, NORECORD = account not found, INVALID = invalid request
-      # PASSWORD = wrong password
-      FATAL_ERROR_CODES = %w[REJECT NORECORD INVALID PASSWORD].freeze
+      # PASSWORD = wrong password, CHARACTER_NOT_FOUND = character not in account
+      FATAL_ERROR_CODES = %w[REJECT NORECORD INVALID PASSWORD CHARACTER_NOT_FOUND].freeze
 
       # Authenticates a user with the game server
       # Includes automatic retry with exponential backoff for transient errors
