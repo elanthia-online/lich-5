@@ -158,14 +158,13 @@ module Lich
 
         # Load settings from persistent storage
         #
-        # Settings are stored per-character using the format "game:character_name".
+        # Settings are stored per-character using InstanceSettings.
         # If no stored settings exist, defaults are used.
         #
         # @return [Hash] the loaded settings
         def load_settings
-          # Load from DB_Store with per-character scope
-          scope = "#{XMLData.game}:#{XMLData.name}"
-          stored_settings = Lich::Common::DB_Store.read(scope, 'lich_memory_releaser') || {}
+          # Load from InstanceSettings with per-character scope
+          stored_settings = Lich::Common::InstanceSettings['memoryreleaser'] || {}
           @settings = DEFAULT_SETTINGS.merge(stored_settings)
 
           # Apply loaded settings to instance variables
@@ -184,14 +183,12 @@ module Lich
 
         # Save current settings to persistent storage
         #
-        # Settings are stored per-character using the format "game:character_name".
+        # Settings are stored per-character using InstanceSettings character scope.
         #
         # @return [Hash] the saved settings
         def save_settings
-          # Save current settings to DB_Store with per-character scope
-          scope = "#{XMLData.game}:#{XMLData.name}"
-          Lich::Common::DB_Store.save(scope, 'lich_memory_releaser', @settings)
-          @settings
+          # Save current settings back to InstanceSettings with per-character scope
+          Lich::Common::InstanceSettings['memoryreleaser'] = @settings
         rescue => e
           respond "[MemoryReleaser] Error saving settings: #{e.message}"
           @settings
