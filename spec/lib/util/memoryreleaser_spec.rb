@@ -10,28 +10,47 @@ RSpec.describe Lich::Util::MemoryReleaser do
   before do
     described_class.instance_variable_set(:@instance, nil)
 
-    stub_const('Lich::Common::DB_Store', Module.new)
-    allow(Lich::Common::DB_Store).to receive(:read).and_return({})
-    allow(Lich::Common::DB_Store).to receive(:save).and_return(true)
+    # InstanceSettings is a simple key/value store — stub it as a hash-like
+    # module so tests do not touch real persistent storage.
+    stub_const('Lich::Common::InstanceSettings', Module.new)
+    allow(Lich::Common::InstanceSettings).to receive(:[]).and_return(nil)
+    allow(Lich::Common::InstanceSettings).to receive(:[]=)
 
-    XMLData.game = 'DR'
-    XMLData.name = 'SpecChar'
+    # GameObj.prune_index! is called during release — stub it out so tests
+    # do not depend on the GameObj index being in a known state.
+    stub_const('Lich::Common::GameObj', Module.new)
+    allow(Lich::Common::GameObj).to receive(:prune_index!)
   end
 
   describe 'manager settings lifecycle' do
-    it 'loads defaults merged with stored settings' do
-      allow(Lich::Common::DB_Store).to receive(:read).and_return({ interval: 120, verbose: true, auto_start: true })
+    it 'loads defaults when InstanceSettings returns nil' do
+      allow(Lich::Common::InstanceSettings).to receive(:[]).with('memoryreleaser').and_return(nil)
+
+      manager = manager_class.new
+
+      expect(manager.settings[:interval]).to eq(described_class::DEFAULT_SETTINGS[:interval])
+      expect(manager.settings[:verbose]).to eq(described_class::DEFAULT_SETTINGS[:verbose])
+      expect(manager.settings[:auto_start]).to eq(described_class::DEFAULT_SETTINGS[:auto_start])
+      expect(manager.enabled).to be(true)
+    end
+
+    it 'merges stored settings over defaults' do
+      allow(Lich::Common::InstanceSettings).to receive(:[])
+        .with('memoryreleaser')
+        .and_return({ interval: 120, verbose: true, auto_start: false })
 
       manager = manager_class.new
 
       expect(manager.settings[:interval]).to eq(120)
       expect(manager.settings[:verbose]).to be(true)
-      expect(manager.settings[:auto_start]).to be(true)
+      expect(manager.settings[:auto_start]).to be(false)
       expect(manager.enabled).to be(true)
     end
 
-    it 'falls back to defaults when loading settings fails' do
-      allow(Lich::Common::DB_Store).to receive(:read).and_raise(StandardError, 'db unavailable')
+    it 'falls back to defaults when loading settings raises' do
+      allow(Lich::Common::InstanceSettings).to receive(:[])
+        .with('memoryreleaser')
+        .and_raise(StandardError, 'storage unavailable')
 
       manager = manager_class.new
       allow(manager).to receive(:respond)
@@ -43,24 +62,25 @@ RSpec.describe Lich::Util::MemoryReleaser do
       expect(manager.verbose).to eq(described_class::DEFAULT_SETTINGS[:verbose])
     end
 
-    it 'saves settings with per-character scope' do
+    it 'saves settings via InstanceSettings[]=' do
       manager = manager_class.new
-      manager.interval = 333
-      manager.verbose = true
       manager.settings[:interval] = 333
       manager.settings[:verbose] = true
 
-      expect(Lich::Common::DB_Store).to receive(:save).with('DR:SpecChar', 'lich_memory_releaser', manager.settings)
+      expect(Lich::Common::InstanceSettings).to receive(:[]=)
+        .with('memoryreleaser', manager.settings)
 
       manager.save_settings
     end
 
-    it 'returns current settings when save fails' do
+    it 'reports an error message when save raises' do
       manager = manager_class.new
       allow(manager).to receive(:respond)
-      allow(Lich::Common::DB_Store).to receive(:save).and_raise(StandardError, 'save failed')
+      allow(Lich::Common::InstanceSettings).to receive(:[]=)
+        .and_raise(StandardError, 'save failed')
 
-      expect(manager.save_settings).to eq(manager.settings)
+      manager.save_settings
+
       expect(manager).to have_received(:respond).with(/Error saving settings/)
     end
   end
@@ -113,6 +133,17 @@ RSpec.describe Lich::Util::MemoryReleaser do
   end
 
   describe 'release flow' do
+    it 'release calls prune_index! with the current interval as TTL' do
+      manager = manager_class.new
+      allow(manager).to receive(:run_gc)
+      allow(manager).to receive(:release_to_os)
+
+      manager.release
+
+      expect(Lich::Common::GameObj).to have_received(:prune_index!)
+        .with(ttl: manager.interval, verbose: manager.verbose)
+    end
+
     it 'release runs gc and os release steps' do
       manager = manager_class.new
       allow(manager).to receive(:run_gc)
@@ -122,6 +153,37 @@ RSpec.describe Lich::Util::MemoryReleaser do
 
       expect(manager).to have_received(:run_gc)
       expect(manager).to have_received(:release_to_os)
+    end
+
+    it 'release prints memory stats before and after when verbose' do
+      manager = manager_class.new
+      manager.verbose = true
+
+      stats = { heap_total_slots: 100, heap_allocated_pages: 10,
+                malloc_increase_bytes: 1000, rss_mb: 50.0 }
+
+      allow(manager).to receive(:run_gc)
+      allow(manager).to receive(:release_to_os)
+      allow(manager).to receive(:print_memory_stats).and_return(stats, stats)
+      allow(manager).to receive(:print_memory_diff)
+
+      manager.release
+
+      expect(manager).to have_received(:print_memory_stats).twice
+      expect(manager).to have_received(:print_memory_diff)
+    end
+
+    it 'release does not print memory stats when not verbose' do
+      manager = manager_class.new
+      manager.verbose = false
+
+      allow(manager).to receive(:run_gc)
+      allow(manager).to receive(:release_to_os)
+      allow(manager).to receive(:print_memory_stats)
+
+      manager.release
+
+      expect(manager).not_to have_received(:print_memory_stats)
     end
 
     it 'run_gc calls full mark + immediate sweep and compacts when supported' do
@@ -266,7 +328,7 @@ RSpec.describe Lich::Util::MemoryReleaser do
       allow(manager).to receive(:respond)
 
       before_stats = { heap_total_slots: 100, heap_allocated_pages: 10, malloc_increase_bytes: 1000, rss_mb: 50.0 }
-      after_stats = { heap_total_slots: 90, heap_allocated_pages: 9, malloc_increase_bytes: 500, rss_mb: 45.0 }
+      after_stats  = { heap_total_slots: 90,  heap_allocated_pages: 9,  malloc_increase_bytes: 500,  rss_mb: 45.0 }
 
       manager.send(:print_memory_diff, before_stats, after_stats)
 
@@ -282,7 +344,7 @@ RSpec.describe Lich::Util::MemoryReleaser do
       allow(manager).to receive(:release)
       allow(manager).to receive(:print_memory_stats).and_return(
         { heap_total_slots: 100, heap_allocated_pages: 10, malloc_increase_bytes: 1000, rss_mb: 50.0 },
-        { heap_total_slots: 90, heap_allocated_pages: 9, malloc_increase_bytes: 500, rss_mb: 45.0 }
+        { heap_total_slots: 90,  heap_allocated_pages: 9,  malloc_increase_bytes: 500,  rss_mb: 45.0 }
       )
 
       manager.benchmark
