@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rspec'
+require 'tmpdir'
 
 # Define DATA_DIR before requiring eaccess.rb
 # Use Dir.tmpdir which always exists on all platforms
@@ -139,6 +140,22 @@ RSpec.describe Lich::Common::Authentication do
       }.to raise_error(Lich::Common::Authentication::FatalAuthError, /INVALID/)
     end
 
+    it 'raises FatalAuthError on PASSWORD error' do
+      error = Lich::Common::Authentication::EAccess::AuthenticationError.new('PASSWORD')
+
+      expect {
+        described_class.with_retry { raise error }
+      }.to raise_error(Lich::Common::Authentication::FatalAuthError, /PASSWORD/)
+    end
+
+    it 'raises FatalAuthError on CHARACTER_NOT_FOUND error' do
+      error = Lich::Common::Authentication::EAccess::AuthenticationError.new('CHARACTER_NOT_FOUND')
+
+      expect {
+        described_class.with_retry { raise error }
+      }.to raise_error(Lich::Common::Authentication::FatalAuthError, /CHARACTER_NOT_FOUND/)
+    end
+
     it 're-raises after max retries exhausted' do
       expect {
         described_class.with_retry { raise StandardError, 'Persistent error' }
@@ -164,7 +181,9 @@ RSpec.describe Lich::Common::Authentication do
     end
 
     it 'defines FATAL_ERROR_CODES' do
-      expect(Lich::Common::Authentication::FATAL_ERROR_CODES).to include('REJECT', 'NORECORD', 'INVALID')
+      expect(Lich::Common::Authentication::FATAL_ERROR_CODES).to include(
+        'REJECT', 'NORECORD', 'INVALID', 'PASSWORD', 'CHARACTER_NOT_FOUND'
+      )
     end
   end
 end
