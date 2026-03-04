@@ -435,7 +435,7 @@ module Lich
         return unless tools.size > 0 # skips the whole method if no tools are eligible for repairs
 
         DRCC.check_consumables('oil', info['finisher-room'], info['finisher-number'], bag, bag_items, belt, tools.size) # checks intelligently for enough oil uses to repair the number of tools eligible for repair
-        DRCC.check_consumables('wire brush', info['finisher-room'], 10, bag, bag_items, belt, tools.size) # checks intelligently for enough brush uses to repair the number of tools eligible for repair
+        DRCC.check_consumables('wire brush', info['finisher-room'], info['wire-brush-number'] || 10, bag, bag_items, belt, tools.size) # checks intelligently for enough brush uses to repair the number of tools eligible for repair
         repair_tool = ['wire brush', 'oil']
         tools.each do |tool_name| # begins repair cycle for each tool
           DRCC.get_crafting_item(tool_name, bag, bag_items, belt, true) # attempts to fetch the next tool, with the option (true) to continue if fetch fails
