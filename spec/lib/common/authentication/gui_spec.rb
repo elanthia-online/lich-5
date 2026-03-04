@@ -117,6 +117,17 @@ RSpec.describe Lich::Common::Authentication::GUI do
       expect(callback_data).to eq(launch_data)
     end
 
+    it 'handles nil on_success callback gracefully (no-op)' do
+      # This should not raise an error - the safe navigation operator handles nil
+      expect {
+        described_class.authenticate_and_launch(
+          button: mock_button,
+          login_info: login_info,
+          on_success: nil
+        )
+      }.not_to raise_error
+    end
+
     context 'when authentication fails with FatalAuthError' do
       before do
         allow(Lich::Common::Authentication).to receive(:authenticate)
