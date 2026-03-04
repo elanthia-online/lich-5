@@ -136,7 +136,7 @@ module Lich
         # Converts entry.dat to entry.yaml format for improved maintainability
         #
         # @param data_dir [String] Directory containing entry data
-        # @param encryption_mode [Symbol] Encryption mode (:plaintext, :account_name, :enhanced)
+        # @param encryption_mode [Symbol] Encryption mode (:plaintext, :standard, :enhanced)
         # @return [Boolean] True if migration was successful
         def self.migrate_from_legacy(data_dir, encryption_mode: :plaintext)
           dat_file = File.join(data_dir, "entry.dat")
@@ -217,8 +217,8 @@ module Lich
         # Encrypts a password based on the current encryption mode
         #
         # @param password [String] Plaintext password
-        # @param mode [Symbol] Encryption mode (:plaintext, :account_name, :enhanced)
-        # @param account_name [String, nil] Account name for :account_name mode
+        # @param mode [Symbol] Encryption mode (:plaintext, :standard, :enhanced)
+        # @param account_name [String, nil] Account name for :standard mode
         # @param master_password [String, nil] Master password for :enhanced mode
         # @return [String] Encrypted password or plaintext if mode is :plaintext
         def self.encrypt_password(password, mode:, account_name: nil, master_password: nil)
@@ -233,8 +233,8 @@ module Lich
         # Decrypts a password based on the current encryption mode
         #
         # @param encrypted_password [String] Encrypted password
-        # @param mode [Symbol] Encryption mode (:plaintext, :account_name, :enhanced)
-        # @param account_name [String, nil] Account name for :account_name mode
+        # @param mode [Symbol] Encryption mode (:plaintext, :standard, :enhanced)
+        # @param account_name [String, nil] Account name for :standard mode
         # @param master_password [String, nil] Master password for :enhanced mode
         # @return [String] Decrypted plaintext password
         def self.decrypt_password(encrypted_password, mode:, account_name: nil, master_password: nil)
@@ -257,8 +257,8 @@ module Lich
         # prompts user to re-enter master password, validates it, and saves to Keychain
         #
         # @param encrypted_password [String] Encrypted password to decrypt
-        # @param mode [Symbol] Encryption mode (:plaintext, :account_name, :enhanced)
-        # @param account_name [String] Account name for account_name mode
+        # @param mode [Symbol] Encryption mode (:plaintext, :standard, :enhanced)
+        # @param account_name [String] Account name for :standard mode
         # @param master_password [String, nil] Master password if already known
         # @param validation_test [Hash, nil] Validation test hash from YAML (optional)
         # @return [String] Decrypted password
