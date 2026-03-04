@@ -9,7 +9,7 @@ module Lich
     # This module uses a singleton pattern to manage a background thread that periodically
     # releases memory back to the operating system after running Ruby's garbage collector.
     #
-    # Settings are persisted per-character using Lich::Common::DB_Store and include:
+    # Settings are persisted per-character using InstanceSettings and include:
     # - auto_start: automatically start the memory releaser on module load
     # - interval: time in seconds between memory releases
     # - verbose: enable detailed logging
@@ -906,7 +906,7 @@ module Lich
       # Trigger auto-start check on module load
       Thread.new do
         sleep(0.5) until (defined?(XMLData))
-        sleep(0.5) until (defined?(DB_Store))
+        sleep(0.5) until (defined?(InstanceSettings))
         sleep(0.5) while XMLData.game.nil? || XMLData.name.nil?
         sleep(5)
         Lich::Util::MemoryReleaser.instance
