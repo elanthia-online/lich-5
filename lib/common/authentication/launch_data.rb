@@ -5,6 +5,7 @@ module Lich
     module Authentication
       # Handles formatting of launch data for different game frontends
       module LaunchData
+        # @api private
         # Prepares launch data from authentication result
         # Formats the authentication data for use with different frontends
         #
@@ -42,6 +43,7 @@ module Lich
           launch_data
         end
 
+        # @api private
         # Creates a hash entry for saved login data
         # This standardizes the format of saved login entries
         #
