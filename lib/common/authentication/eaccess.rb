@@ -21,14 +21,17 @@ module Lich
 
         PACKET_SIZE = 8192
 
+        # @api private
         def self.pem
           @pem ||= File.join(DATA_DIR, "simu.pem")
         end
 
+        # @api private
         def self.pem_exist?
           File.exist? pem
         end
 
+        # @api private
         def self.download_pem(hostname = "eaccess.play.net", port = 7910)
           # Create an OpenSSL context
           ctx = OpenSSL::SSL::SSLContext.new
@@ -42,6 +45,7 @@ module Lich
           File.write(pem, ssl.peer_cert)
         end
 
+        # @api private
         def self.verify_pem(conn)
           # return if conn.peer_cert.to_s = File.read(pem)
           if !(conn.peer_cert.to_s == File.read(pem))
@@ -53,6 +57,7 @@ module Lich
           #     fail Exception, "\nssl peer certificate did not match #{pem}\nwas:\n#{conn.peer_cert}"
         end
 
+        # @api private
         def self.socket(hostname = "eaccess.play.net", port = 7910)
           download_pem unless pem_exist?
           socket = TCPSocket.open(hostname, port)
@@ -175,6 +180,7 @@ module Lich
           end
         end
 
+        # @api private
         def self.read(conn)
           conn.sysread(PACKET_SIZE)
         end

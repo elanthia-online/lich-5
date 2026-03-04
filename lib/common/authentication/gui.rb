@@ -14,7 +14,8 @@ module Lich
         #
         # @param button [Gtk::Button] The play button (for state management)
         # @param login_info [Hash] Character login info (user_id, password, char_name, game_code, frontend)
-        # @param on_success [Proc] Callback with launch_data on successful auth
+        # @param on_success [Proc] Callback with launch_data on successful auth.
+        #   WARNING: This parameter is required and MUST NOT be nil. Passing nil will raise NoMethodError.
         # @param on_error [Proc, nil] Optional callback for error handling (default: show dialog)
         def self.authenticate_and_launch(button:, login_info:, on_success:, on_error: nil)
           button.sensitive = false
@@ -44,6 +45,7 @@ module Lich
           end
         end
 
+        # @api private
         # Handles authentication errors by re-enabling button and showing error
         #
         # @param button [Gtk::Button] The play button to re-enable
@@ -59,6 +61,7 @@ module Lich
           end
         end
 
+        # @api private
         # Shows an error dialog for authentication failures
         #
         # @param button [Gtk::Button] Parent button for dialog positioning

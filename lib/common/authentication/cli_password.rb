@@ -315,6 +315,7 @@ module Lich
           end
         end
 
+        # @api private
         # Determines predominant frontend from existing YAML accounts
         #
         # @param yaml_file [String] Path to entry.yaml
@@ -340,6 +341,7 @@ module Lich
           frontend_counts.max_by { |_fe, count| count }&.first
         end
 
+        # @api private
         # Prompts user for frontend selection
         #
         # @return [String, nil] Selected frontend or nil (user skipped)
@@ -501,6 +503,7 @@ module Lich
           end
         end
 
+        # @api private
         # Helper: Prompts user for a password with confirmation
         # Used for creating new master passwords or changing existing ones
         #
@@ -545,6 +548,7 @@ module Lich
           nil
         end
 
+        # @api private
         # Gets master password from keychain or prompts user if not available
         # Used when entering Enhanced mode - checks keychain first, prompts if missing
         #
@@ -559,6 +563,7 @@ module Lich
           prompt_and_confirm_password("Enter new master password")
         end
 
+        # @api private
         # Prompts for master password (single prompt, no confirmation)
         # Used when validating current password when leaving Enhanced mode
         #

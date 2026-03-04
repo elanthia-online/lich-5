@@ -453,8 +453,8 @@ module Lich
           end
         end
 
+        # @api private
         # Restores backup and returns false
-        # @private
         def self.restore_backup_and_return_false(backup_file, yaml_file)
           if File.exist?(backup_file)
             FileUtils.cp(backup_file, yaml_file)
@@ -464,6 +464,7 @@ module Lich
           false
         end
 
+        # @api private
         # Migrates YAML data to support encryption format
         # Adds encryption_mode field if not present
         #
@@ -671,6 +672,7 @@ module Lich
           end
         end
 
+        # @api private
         # Converts YAML data structure to legacy format
         # Transforms the YAML structure into the format expected by existing code
         # Maintains normalized case formatting from YAML storage
@@ -722,6 +724,7 @@ module Lich
           entries
         end
 
+        # @api private
         # Converts legacy format to YAML data structure
         # Transforms legacy entry data into the YAML structure for storage
         # Enhanced with case normalization to prevent duplicate accounts and ensure consistent formatting
@@ -784,6 +787,7 @@ module Lich
           yaml_data
         end
 
+        # @api private
         # Sorts entries with favorites priority based on autosort setting
         # When autosort is enabled, favorites are placed first and all entries are sorted
         # When autosort is disabled, original order is preserved without reordering
@@ -812,6 +816,7 @@ module Lich
           favorites + sorted_non_favorites
         end
 
+        # @api private
         # Migrates YAML data to support favorites format
         # Adds favorites fields to existing character records if not present
         #
@@ -833,6 +838,7 @@ module Lich
           yaml_data
         end
 
+        # @api private
         # Finds a character in the YAML data with precise matching
         # Prioritizes exact frontend matches for newly added characters
         #
@@ -891,6 +897,7 @@ module Lich
 
         # Finds an entry in legacy format array using the same matching logic as find_character
         # Searches for an entry based on key identifying fields rather than exact hash equality
+        # @api private
         # This method reuses the proven matching logic from find_character for consistency
         #
         # @param entry_data [Array] Array of entry data in legacy format
@@ -917,6 +924,7 @@ module Lich
           end
         end
 
+        # @api private
         # Reorders all favorites to have consecutive order numbers
         # Ensures favorite_order values are consecutive starting from 1
         #
@@ -943,6 +951,7 @@ module Lich
           end
         end
 
+        # @api private
         # Prepares YAML data for serialization with password preservation
         # Ensures encrypted passwords are serialized as quoted strings to prevent YAML multiline formatting
         # Clones the data to avoid mutating the caller's object
@@ -972,6 +981,7 @@ module Lich
           prepared_data
         end
 
+        # @api private
         # Normalizes account names to UPCASE for consistent storage and comparison
         # Prevents duplicate accounts due to case variations
         #
@@ -982,6 +992,7 @@ module Lich
           name.to_s.strip.upcase
         end
 
+        # @api private
         # Normalizes character names to Title case (first letter capitalized)
         # Ensures consistent character name formatting across the application
         #
@@ -992,6 +1003,7 @@ module Lich
           name.to_s.strip.capitalize
         end
 
+        # @api private
         # Generates YAML file content with standard header and dumped data
         # Reduces code duplication by providing a common method for formatting YAML output
         #
@@ -1007,6 +1019,7 @@ module Lich
           return content
         end
 
+        # @api private
         # Writes YAML data to file with standard headers and secure permissions
         # Handles preparation and formatting of YAML data for all save operations
         #
@@ -1023,6 +1036,7 @@ module Lich
           end
         end
 
+        # @api private
         # Ensures master password exists for master_password mode conversions
         # Shows UI prompt to user if not found in Keychain
         # Creates validation test and stores in Keychain
@@ -1062,6 +1076,7 @@ module Lich
           { password: master_password, validation_test: validation_test }
         end
 
+        # @api private
         # Gets existing master password and creates validation test for migration scenarios
         # Used when converting DAT to YAML and a master password already exists in keychain
         # This handles the case: no YAML, DAT exists, master password in keychain
