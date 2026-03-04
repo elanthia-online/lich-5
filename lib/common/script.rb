@@ -287,7 +287,7 @@ module Lich
       @@running = Array.new
 
       attr_reader :name, :vars, :safe, :file_name, :label_order, :at_exit_procs
-      attr_accessor :quiet, :no_echo, :jump_label, :current_label, :want_downstream, :want_downstream_xml, :want_upstream, :want_script_output, :hidden, :paused, :silent, :no_pause_all, :no_kill_all, :downstream_buffer, :upstream_buffer, :unique_buffer, :die_with, :match_stack_labels, :match_stack_strings, :watchfor, :command_line, :ignore_pause
+      attr_accessor :quiet, :no_echo, :jump_label, :current_label, :want_downstream, :want_downstream_xml, :want_upstream, :want_script_output, :hidden, :paused, :silent, :no_pause_all, :no_kill_all, :downstream_buffer, :upstream_buffer, :unique_buffer, :die_with, :match_stack_labels, :match_stack_strings, :watchfor, :command_line, :ignore_pause, :killed_externally, :kill_source
 
       class JumpError < StandardError; end
       JUMP = JumpError.exception('JUMP')
@@ -382,6 +382,8 @@ module Lich
 
       def Script.kill(name)
         if (s = (@@running.find { |i| i.name == name }) || (@@running.find { |i| i.name =~ /^#{name}$/i }))
+          s.killed_externally = true
+          s.kill_source = caller[0..2]
           s.kill
           true
         else
@@ -614,6 +616,8 @@ module Lich
         @label_order = Array.new
         @labels = Hash.new
         @killer_mutex = Mutex.new
+        @killed_externally = false
+        @kill_source = nil
         @ignore_pause = false
         data = nil
         if @file_name =~ /\.gz$/i
@@ -652,6 +656,7 @@ module Lich
       end
 
       def kill
+        source = @kill_source || caller[0..2]
         Thread.new {
           @killer_mutex.synchronize {
             if @@running.include?(self)
@@ -667,7 +672,13 @@ module Lich
                 @at_exit_procs.each { |p| report_errors { p.call } }
                 @die_with = @at_exit_procs = @downstream_buffer = @upstream_buffer = @match_stack_labels = @match_stack_strings = nil
                 @@running.delete(self)
-                respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} has exited.") unless @quiet
+                unless @quiet
+                  if @killed_externally
+                    respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} was killed. (#{source.first})")
+                  else
+                    respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} has exited.")
+                  end
+                end
                 GC.start
               rescue
                 respond "--- Lich: error: #{$!}"
