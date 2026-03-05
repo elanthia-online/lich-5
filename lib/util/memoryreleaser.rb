@@ -778,11 +778,13 @@ module Lich
       @instance = nil
 
       class << self
-        # @api private
+        # @api private Internal plumbing for Manager → launcher communication.
+        #   No compatibility guarantee. Do not call from external scripts.
         # @return [Queue] the command queue for communicating with the launcher thread
         attr_reader :command_queue
 
-        # @api private
+        # @api private Internal plumbing for Manager → launcher communication.
+        #   No compatibility guarantee. Do not call from external scripts.
         # @return [Thread, nil] the current worker thread
         attr_reader :worker_thread
 
