@@ -1,5 +1,33 @@
 # Changelog
 
+## [5.15.0](https://github.com/elanthia-online/lich-5/compare/v5.14.2...v5.15.0) (2026-03-05)
+
+
+### Features
+
+* **all:** add InstanceSettings for core Settings API access ([#1233](https://github.com/elanthia-online/lich-5/issues/1233)) ([6de17eb](https://github.com/elanthia-online/lich-5/commit/6de17eb36119f78a34b8ba3f6ee4ac16e1071b9e))
+* **gs:** Overwatch module into core ([#1201](https://github.com/elanthia-online/lich-5/issues/1201)) ([70dee4b](https://github.com/elanthia-online/lich-5/commit/70dee4bd617de4ee8c38ec8b585fc9a56fd100b5))
+
+
+### Bug Fixes
+
+* **all:** Exit quickly on CLI authentication failure ([#1237](https://github.com/elanthia-online/lich-5/issues/1237)) ([f177cd0](https://github.com/elanthia-online/lich-5/commit/f177cd0f5434139767d0b3494a4640bf1d480a1d))
+* **all:** fix GameObj container initialization and add clear_all_containers ([#1226](https://github.com/elanthia-online/lich-5/issues/1226)) ([2a9a6da](https://github.com/elanthia-online/lich-5/commit/2a9a6daa6a9327e903e8f1dc59d0421b290970bd))
+* **all:** GameObj object dedupe & GC ([#1234](https://github.com/elanthia-online/lich-5/issues/1234)) ([6a48812](https://github.com/elanthia-online/lich-5/commit/6a4881280aa7f656aee103fdd92c37e72fd5dfe2))
+* **all:** script.rb show Script.kill source ([#1235](https://github.com/elanthia-online/lich-5/issues/1235)) ([fbbf04c](https://github.com/elanthia-online/lich-5/commit/fbbf04cf02cdbb3cabda3f163d6094c6bcd78d36))
+* **all:** suppress wine detection noise and skip when unneeded ([#1244](https://github.com/elanthia-online/lich-5/issues/1244)) ([dfcd813](https://github.com/elanthia-online/lich-5/commit/dfcd81395d7a827d088654579e810924a28c283a))
+* **dr:** DR modules fixes and enhancements ([#1232](https://github.com/elanthia-online/lich-5/issues/1232)) ([4c63805](https://github.com/elanthia-online/lich-5/commit/4c63805bb3f5aca6c059d9b3922ce8b85b8fe60d))
+* **gs:** Bounty parser fix regex pattern for skin retrieval task ([#1242](https://github.com/elanthia-online/lich-5/issues/1242)) ([d480143](https://github.com/elanthia-online/lich-5/commit/d4801435018b6f988ab5db4b3d74318f11668205))
+* **gs:** psms.rb add additional failure matches ([#1238](https://github.com/elanthia-online/lich-5/issues/1238)) ([4ce94d2](https://github.com/elanthia-online/lich-5/commit/4ce94d247132a9c26dd4285f30e048ee3702e769))
+
+
+### Refactoring
+
+* **all:** Add frontend registry for capability-based configuration ([#1223](https://github.com/elanthia-online/lich-5/issues/1223)) ([c1dcc19](https://github.com/elanthia-online/lich-5/commit/c1dcc192233a02d131de19d9723e100876abb862))
+* **all:** Consolidate authentication code under lib/common/authentication ([#1240](https://github.com/elanthia-online/lich-5/issues/1240)) ([14a2ce3](https://github.com/elanthia-online/lich-5/commit/14a2ce3c59fbacdfc5e43793ea98a332b9de7430))
+* **dr:** Comprehensive DR modules refactor ([#1231](https://github.com/elanthia-online/lich-5/issues/1231)) ([9bc7914](https://github.com/elanthia-online/lich-5/commit/9bc79144d09bd27aed927044a19c0da575642eab))
+* **dr:** use yaml wire-brush-number in repair_own_tools ([#1241](https://github.com/elanthia-online/lich-5/issues/1241)) ([931a579](https://github.com/elanthia-online/lich-5/commit/931a579db0412f683577c927248db87baeb4819e))
+
 ## [5.14.2](https://github.com/elanthia-online/lich-5/compare/v5.14.1...v5.14.2) (2026-02-18)
 
 
