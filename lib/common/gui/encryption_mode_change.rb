@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative 'yaml_state'
+require_relative '../authentication/entry_store'
 require_relative 'master_password_manager'
 require_relative 'master_password_prompt_ui'
 require_relative 'accessibility'
@@ -20,7 +20,7 @@ module Lich
         # @param on_completion [Proc, nil] Optional callback to call when mode change completes successfully
         # @return [Boolean] true if mode changed successfully, false if cancelled
         def self.show_change_mode_dialog(parent, data_dir, on_completion = nil)
-          yaml_file = YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Load current mode
           begin
@@ -237,8 +237,8 @@ module Lich
                 if validation_passed
                   Lich.log "debug: all validations passed, queuing mode change"
                   Gtk.queue do
-                    Lich.log "debug: in Gtk.queue, calling YamlState.change_encryption_mode"
-                    success = YamlState.change_encryption_mode(
+                    Lich.log "debug: in Gtk.queue, calling Lich::Common::Authentication::EntryStore.change_encryption_mode"
+                    success = Lich::Common::Authentication::EntryStore.change_encryption_mode(
                       data_dir,
                       selected_mode,
                       new_master_password

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require 'login_spec_helper'
-require_relative '../lib/common/gui/password_cipher'
+require_relative '../../../login_spec_helper'
+require_relative '../../../../lib/common/gui/password_cipher'
 
 RSpec.describe Lich::Common::GUI::PasswordCipher do
   let(:password) { 'MySecurePassword123!' }

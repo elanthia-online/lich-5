@@ -3,7 +3,9 @@
 require_relative 'gui/accessibility'
 require_relative 'gui/account_manager'
 require_relative 'gui/account_manager_ui'
-require_relative 'gui/authentication'
+require_relative 'authentication/authenticator'
+require_relative 'authentication/entry_store'
+require_relative 'authentication/gui'
 require_relative 'gui/components'
 require_relative 'gui/conversion_ui'
 require_relative 'gui/favorites_manager'
@@ -16,7 +18,6 @@ require_relative 'gui/saved_login_tab'
 require_relative 'gui/state'
 require_relative 'gui/theme_utils'
 require_relative 'gui/utilities'
-require_relative 'gui/yaml_state'
 require_relative 'gui/tab_communicator'
 require_relative 'gui/window_settings'
 
@@ -56,8 +57,8 @@ module Lich
       # Initialize accessibility support
       Lich::Common::GUI::Accessibility.initialize_accessibility if defined?(Lich::Common::GUI::Accessibility)
 
-      # Use YamlState instead of State for loading saved entries
-      @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(DATA_DIR, @autosort_state)
+      # Use EntryStore instead of State for loading saved entries
+      @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(DATA_DIR, @autosort_state)
       @launch_data = nil
       @save_entry_data = false
       @done = false
@@ -80,7 +81,7 @@ module Lich
     def refresh_window_after_conversion
       begin
         # Reload entry data from newly created YAML file
-        @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(DATA_DIR, @autosort_state)
+        @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(DATA_DIR, @autosort_state)
 
         # Enable favorites in saved login tab if YAML file now exists
         if @saved_login_tab
@@ -120,7 +121,7 @@ module Lich
         end
 
         # Notify via tab communicator that conversion refresh occurred
-        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(DATA_DIR)
+        yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(DATA_DIR)
         encryption_mode = nil
         if File.exist?(yaml_file)
           yaml_data = YAML.load_file(yaml_file)
@@ -255,7 +256,7 @@ module Lich
       # Register saved login tab for data change notifications
       @tab_communicator.register_data_change_callback(->(change_type, data) {
         # Refresh main GUI entry data cache to prevent stale data issues
-        @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(DATA_DIR, @autosort_state)
+        @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(DATA_DIR, @autosort_state)
 
         # Refresh saved login tab for all data changes to ensure synchronization
         @saved_login_tab.refresh_data if @saved_login_tab
@@ -312,7 +313,7 @@ module Lich
           )
             # Reload entry_data from updated YAML to stay in sync
             begin
-              new_entry_data = GUI::YamlState.load_saved_entries(DATA_DIR, @autosort_state)
+              new_entry_data = Authentication::EntryStore.load_saved_entries(DATA_DIR, @autosort_state)
               @entry_data = new_entry_data
 
               # Create sanitized entry for notification (without password)
@@ -381,7 +382,7 @@ module Lich
         on_save: ->(launch_data) {
           # Only refresh cache if we don't already have the latest data
           # This prevents redundant file I/O operations
-          @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(DATA_DIR, @autosort_state)
+          @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(DATA_DIR, @autosort_state)
           # commenting out to assess impact, remove when cleared
           # @save_entry_data = true
 
@@ -606,7 +607,7 @@ module Lich
     def save_entry_data_if_needed
       if @save_entry_data
         # Save entry data - optimized to avoid redundant cache refresh
-        Lich::Common::GUI::YamlState.save_entries(DATA_DIR, @entry_data)
+        Lich::Common::Authentication::EntryStore.save_entries(DATA_DIR, @entry_data)
         @save_entry_data = false
       end
     end

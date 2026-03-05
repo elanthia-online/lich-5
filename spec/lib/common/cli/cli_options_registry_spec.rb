@@ -3,7 +3,7 @@
 require 'rspec'
 require 'ostruct'
 
-LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
+LIB_DIR = File.expand_path('../../../../lib', __dir__)
 
 require File.join(LIB_DIR, 'common', 'cli', 'cli_options_registry.rb')
 

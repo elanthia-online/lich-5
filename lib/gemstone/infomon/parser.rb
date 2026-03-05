@@ -517,16 +517,16 @@ module Lich
               Infomon.set('currency.silver_container', match[:silver].delete(',').to_i)
               :ok
             when Pattern::AccountName
-              if Account.name.nil?
+              if Lich::Common::Account.name.nil?
                 match = Regexp.last_match
-                Account.name = match[:name].upcase
+                Lich::Common::Account.name = match[:name].upcase
                 :ok
               else
                 :noop
               end
             when Pattern::AccountSubscription
               match = Regexp.last_match
-              Account.subscription = match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
+              Lich::Common::Account.subscription = match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
               Infomon.set('account.type', match[:subscription].gsub('Standard', 'Normal').gsub('F2P', 'Free').upcase)
               :ok
             when Pattern::ProfileStart

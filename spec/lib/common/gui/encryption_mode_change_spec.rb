@@ -3,10 +3,10 @@
 require 'rspec'
 require 'tmpdir'
 require 'fileutils'
-require_relative 'login_spec_helper'
-require_relative '../lib/common/gui/encryption_mode_change'
-require_relative '../lib/common/gui/master_password_manager'
-require_relative '../lib/common/gui/yaml_state'
+require_relative '../../../login_spec_helper'
+require_relative '../../../../lib/common/gui/encryption_mode_change'
+require_relative '../../../../lib/common/gui/master_password_manager'
+require_relative '../../../../lib/common/authentication/entry_store'
 
 # Stub GTK components for CI/CD environments without GTK display
 module Gtk
@@ -154,7 +154,7 @@ RSpec.describe Lich::Common::GUI::EncryptionModeChange do
 
     before do
       # Create a valid YAML file with encryption mode
-      yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(test_data_dir)
+      yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(test_data_dir)
       yaml_content = {
         'encryption_mode'                 => 'standard',
         'master_password_validation_test' => 'test_hash'
@@ -194,7 +194,7 @@ RSpec.describe Lich::Common::GUI::EncryptionModeChange do
     context 'YAML load error handling' do
       it 'shows error dialog when YAML file cannot be loaded' do
         # Corrupt the YAML file
-        yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(test_data_dir)
+        yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(test_data_dir)
         File.write(yaml_file, 'invalid: yaml: content:')
 
         allow(Lich).to receive(:log)
@@ -226,7 +226,7 @@ RSpec.describe Lich::Common::GUI::EncryptionModeChange do
 
     before do
       # Create a valid YAML file with encryption mode
-      yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(test_data_dir)
+      yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(test_data_dir)
       yaml_content = {
         'encryption_mode'                 => 'standard',
         'master_password_validation_test' => 'test_hash'
@@ -257,7 +257,7 @@ RSpec.describe Lich::Common::GUI::EncryptionModeChange do
 
     before do
       # Create a valid YAML file with encryption mode
-      yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(test_data_dir)
+      yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(test_data_dir)
       yaml_content = {
         'encryption_mode'                 => 'standard',
         'master_password_validation_test' => 'test_hash'
@@ -271,7 +271,7 @@ RSpec.describe Lich::Common::GUI::EncryptionModeChange do
     end
 
     it 'correctly identifies when current mode is plaintext' do
-      yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(test_data_dir)
+      yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(test_data_dir)
       yaml_content = YAML.load_file(yaml_file)
       yaml_content['encryption_mode'] = 'plaintext'
       File.write(yaml_file, YAML.dump(yaml_content))
@@ -281,7 +281,7 @@ RSpec.describe Lich::Common::GUI::EncryptionModeChange do
     end
 
     it 'correctly identifies when current mode is enhanced' do
-      yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(test_data_dir)
+      yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(test_data_dir)
       yaml_content = YAML.load_file(yaml_file)
       yaml_content['encryption_mode'] = 'enhanced'
       File.write(yaml_file, YAML.dump(yaml_content))

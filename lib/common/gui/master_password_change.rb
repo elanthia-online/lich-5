@@ -3,7 +3,7 @@
 require_relative 'master_password_manager'
 require_relative 'master_password_prompt_ui'
 require_relative 'password_cipher'
-require_relative 'yaml_state'
+require_relative '../authentication/entry_store'
 require_relative 'accessibility'
 
 module Lich
@@ -167,7 +167,7 @@ module Lich
               end
 
               # Validate current password
-              yaml_file = YamlState.yaml_file_path(data_dir)
+              yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
               unless File.exist?(yaml_file)
                 status_label.set_markup("<span foreground='red'>No account data found.</span>")
                 next
@@ -256,7 +256,7 @@ module Lich
           # @param new_password [String] New master password
           # @return [Boolean] true if re-encryption successful
           def re_encrypt_all_accounts(yaml_data, data_dir, old_password, new_password)
-            yaml_file = YamlState.yaml_file_path(data_dir)
+            yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
             # Create backup first
             backup_file = "#{yaml_file}.backup"
@@ -299,7 +299,7 @@ module Lich
               yaml_data['master_password_validation_test'] = new_validation
 
               # Save YAML with password preservation
-              content = YamlState.generate_yaml_content(yaml_data)
+              content = Lich::Common::Authentication::EntryStore.generate_yaml_content(yaml_data)
               File.open(yaml_file, 'w', 0600) do |file|
                 file.write(content)
               end

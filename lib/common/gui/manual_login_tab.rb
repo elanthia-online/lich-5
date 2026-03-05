@@ -78,7 +78,7 @@ module Lich
         def refresh_entry_data
           begin
             # Reload data from YAML file using consistent autosort state
-            @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, @autosort_state)
+            @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, @autosort_state)
           rescue StandardError => e
             Lich.log "error: Failed to refresh entry data in ManualLoginTab: #{e.message}"
             # Fallback to empty array to prevent crashes
@@ -502,7 +502,7 @@ module Lich
                 game_code: selected_iter[0]
               )
 
-              launch_data = Authentication.prepare_launch_data(
+              launch_data = Authentication::LaunchData.prepare(
                 launch_data_hash,
                 frontend,
                 custom_launch,
@@ -548,21 +548,21 @@ module Lich
                     existing_entry[:custom_launch_dir] = entry_data[:custom_launch_dir]
                     @save_entry_data = true
 
-                    save_success = Lich::Common::GUI::YamlState.save_entries(@data_dir, @entry_data)
+                    save_success = Lich::Common::Authentication::EntryStore.save_entries(@data_dir, @entry_data)
                   end
                 else
                   @entry_data.push entry_data
                   @save_entry_data = true
 
                   # Trigger save through main GUI's save mechanism with synchronization
-                  save_success = Lich::Common::GUI::YamlState.save_entries(@data_dir, @entry_data)
+                  save_success = Lich::Common::Authentication::EntryStore.save_entries(@data_dir, @entry_data)
                 end
 
                 if save_success
                   # Reset save flag to prevent duplicate save on window destruction
                   @save_entry_data = false
                   # Refresh local cache with normalized data after successful save
-                  @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, @autosort_state)
+                  @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, @autosort_state)
                   # Trigger main GUI cache refresh only once after successful save
                   @callbacks.on_save.call(entry_data) if @callbacks.on_save
                 else
@@ -580,7 +580,7 @@ module Lich
                   if favorite_success
                     # Single optimized cache refresh after favorite marking
                     # This replaces multiple redundant refresh operations
-                    @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, @autosort_state)
+                    @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, @autosort_state)
 
                     # Critical: Trigger on_save callback again to refresh main GUI cache with favorite data
                     # This ensures the main GUI cache contains the updated favorite information
