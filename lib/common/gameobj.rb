@@ -372,6 +372,7 @@ module Lich
       # @param before [String, nil]   backfills +before_name+ if previously unset
       # @param after  [String, nil]   backfills +after_name+ if previously unset
       # @return [GameObj]
+      # @api private Internal identity-index plumbing. No compatibility guarantee.
       def self.index_or_create(id, noun, name, before = nil, after = nil)
         str_id = id.is_a?(Integer) ? id.to_s : id
         key    = "#{str_id}|#{noun}|#{name}"
@@ -624,6 +625,7 @@ module Lich
       #   - +:heap_bytes_after+     [Integer] — Ruby heap size after GC hint
       #   - +:heap_bytes_freed+     [Integer] — difference (before - after)
       #   - +:elapsed_ms+           [Float]   — wall time of the prune operation
+      # @api private Operational maintenance hook. No compatibility guarantee across versions.
       def self.prune_index!(ttl: 900, verbose: false)
         require 'objspace'
         t_start   = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -725,6 +727,7 @@ module Lich
       #   - +:gameobj_bytes+        [Integer] — estimated memory held by all indexed
       #       GameObj instances (via +ObjectSpace.memsize_of+)
       #   - +:heap_bytes+           [Integer] — current Ruby heap size
+      # @api private Diagnostics-only surface. No compatibility guarantee across versions.
       def self.index_stats(verbose: false)
         require 'objspace'
         return empty_index_stats if @@index.empty?
@@ -1154,6 +1157,8 @@ module Lich
     #   combinations. 2,000 is generous for normal play; raise to 5,000+ for
     #   marathon scripts that sweep large areas. Memory cost per entry is
     #   negligible (the key string + a two-element array).
+    #
+    # @api private Optional implementation detail. No compatibility guarantee across versions.
     # ---------------------------------------------------------------------------
     class LruIndex
       # @param capacity [Integer] maximum number of entries before LRU eviction
