@@ -96,7 +96,7 @@ RSpec.describe Lich::Common::GUI::Authentication do
   describe ".with_retry" do
     before do
       # Stub sleep to avoid actual delays in tests
-      allow(described_class).to receive(:sleep)
+      allow(Kernel).to receive(:sleep)
       # Stub Lich.log to capture log messages
       allow(Lich).to receive(:log)
     end
@@ -117,7 +117,7 @@ RSpec.describe Lich::Common::GUI::Authentication do
       it "does not call sleep" do
         described_class.with_retry { auth_data }
 
-        expect(described_class).not_to have_received(:sleep)
+        expect(Kernel).not_to have_received(:sleep)
       end
     end
 
@@ -168,7 +168,7 @@ RSpec.describe Lich::Common::GUI::Authentication do
         end
 
         # First retry uses base delay (5 seconds)
-        expect(described_class).to have_received(:sleep).with(5)
+        expect(Kernel).to have_received(:sleep).with(5)
       end
     end
 
@@ -196,8 +196,8 @@ RSpec.describe Lich::Common::GUI::Authentication do
 
         # First retry: 5 * 2^0 = 5 seconds
         # Second retry: 5 * 2^1 = 10 seconds
-        expect(described_class).to have_received(:sleep).with(5).ordered
-        expect(described_class).to have_received(:sleep).with(10).ordered
+        expect(Kernel).to have_received(:sleep).with(5).ordered
+        expect(Kernel).to have_received(:sleep).with(10).ordered
       end
 
       it "logs success on third attempt" do
@@ -358,7 +358,7 @@ RSpec.describe Lich::Common::GUI::Authentication do
 
   describe ".authenticate with retry behavior" do
     before do
-      allow(described_class).to receive(:sleep)
+      allow(Kernel).to receive(:sleep)
       allow(Lich).to receive(:log)
     end
 

@@ -630,9 +630,9 @@ module Lich
             end
             if Frontend.supports_gsl?
               Game._puts "#{$cmd_prefix}_flag Display Dialog Boxes 0"
-              sleep 0.05
+              Kernel.sleep 0.05
               Game._puts "#{$cmd_prefix}_injury 2"
-              sleep 0.05
+              Kernel.sleep 0.05
               # fixme: game name hardcoded as Gemstone IV; maybe doesn't make any difference to the client
               $_CLIENT_.puts "\034GSB0000000000#{attributes['char']}\r\n\034GSA#{Time.now.to_i}GemStone IV\034GSD\r\n"
               # Sending fake GSL tags to the Wizard FE is disabled until now, because it doesn't accept the tags and just gives errors until initialized with the above line
@@ -660,7 +660,7 @@ module Lich
         rescue
           $stdout.puts "--- error: XMLParser.tag_start: #{$!}"
           Lich.log "error: XMLParser.tag_start: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          sleep 0.1
+          Kernel.sleep 0.1
           reset
         end
       end
@@ -880,7 +880,7 @@ module Lich
         rescue
           $stdout.puts "--- error: XMLParser.text: #{$!}"
           Lich.log "error: XMLParser.text: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          sleep 0.1
+          Kernel.sleep 0.1
           reset
         end
       end
@@ -944,7 +944,7 @@ module Lich
         rescue
           $stdout.puts "--- error: XMLParser.tag_end: #{$!}"
           Lich.log "error: XMLParser.tag_end: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          sleep 0.1
+          Kernel.sleep 0.1
           reset
         end
       end

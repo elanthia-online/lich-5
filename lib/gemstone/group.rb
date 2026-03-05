@@ -260,7 +260,7 @@ module Lich
       #
       # @return [Boolean] true if group state is inconsistent
       def self.broken?
-        sleep(0.1) while Lich::Gemstone::Claim::Lock.locked?
+        Kernel.sleep(0.1) while Lich::Gemstone::Claim::Lock.locked?
         if Group.leader?
           return true if (GameObj.pcs.empty? || GameObj.pcs.nil?) && !@@members.empty?
           return false if (GameObj.pcs.empty? || GameObj.pcs.nil?) && @@members.empty?

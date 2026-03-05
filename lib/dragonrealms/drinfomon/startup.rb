@@ -31,7 +31,7 @@ module Lich
         @startup_thread ||= Thread.new do
           begin
             # Wait for character to be ready
-            sleep 0.1 until GameBase::Game.autostarted? && XMLData.name && !XMLData.name.empty?
+            Kernel.sleep 0.1 until GameBase::Game.autostarted? && XMLData.name && !XMLData.name.empty?
 
             # Run startup once
             startup

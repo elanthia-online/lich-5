@@ -15,7 +15,7 @@ end
 def start_scripts(*script_names)
   script_names.flatten.each { |script_name|
     start_script(script_name)
-    sleep 0.02
+    Kernel.sleep 0.02
   }
 end
 
@@ -91,7 +91,7 @@ end
 def silence_me
   unless (script = Script.current) then echo 'silence_me: cannot identify calling script.'; return nil; end
   if script.safe? then echo("WARNING: 'safe' script attempted to silence itself.  Ignoring the request.")
-                       sleep 1
+                       Kernel.sleep 1
                        return true
   end
   script.silent = !script.silent
@@ -116,7 +116,7 @@ def upstream_get
   unless (script = Script.current) then echo 'upstream_get: cannot identify calling script.'; return nil; end
   unless script.want_upstream
     echo("This script wants to listen to the upstream, but it isn't set as receiving the upstream! This will cause a permanent hang, aborting (ask for the upstream with 'toggle_upstream' in the script)")
-    sleep 0.3
+    Kernel.sleep 0.3
     return false
   end
   script.upstream_gets
@@ -184,7 +184,7 @@ end
 def fix_injury_mode
   unless XMLData.injury_mode == 2
     Game._puts '_injury 2'
-    150.times { sleep 0.05; break if XMLData.injury_mode == 2 }
+    150.times { Kernel.sleep 0.05; break if XMLData.injury_mode == 2 }
   end
 end
 
@@ -203,12 +203,12 @@ end
 
 def waitrt
   wait_until { (XMLData.roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f) > 0 }
-  sleep checkrt
+  Kernel.sleep checkrt
 end
 
 def waitcastrt
   wait_until { (XMLData.cast_roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f) > 0 }
-  sleep checkcastrt
+  Kernel.sleep checkcastrt
 end
 
 def checkrt
@@ -220,16 +220,16 @@ def checkcastrt
 end
 
 def waitrt?
-  sleep checkrt
+  Kernel.sleep checkrt
   return true if checkrt > 0.0
   return false if checkrt == 0
 end
 
 def waitcastrt?
-  #  sleep checkcastrt
+  #  Kernel.sleep checkcastrt
   current_castrt = checkcastrt
   if current_castrt.to_f > 0.0
-    sleep(current_castrt)
+    Kernel.sleep(current_castrt)
     return true
   else
     return false
@@ -365,7 +365,7 @@ def selectput(string, success, failure, timeout = nil)
   thr = Thread.current
 
   timethr = Thread.new {
-    timeout -= sleep("0.1".to_f) until timeout <= 0
+    timeout -= Kernel.sleep("0.1".to_f) until timeout <= 0
     thr.raise(StandardError)
   } if timeout
 
@@ -531,7 +531,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       line_count += 1
     end
     if line.nil?
-      sleep 0.1
+      Kernel.sleep 0.1
     elsif line =~ /^You realize that would be next to impossible while in combat.|^You can't do that while engaged!|^You are engaged to |^You need to retreat out of combat first!|^You try to move, but you're engaged|^While in combat\?  You'll have better luck if you first retreat/
       # DragonRealms
       fput 'retreat'
@@ -564,11 +564,11 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       # return nil instead of false to show the direction shouldn't be removed from the map database
       return nil
     elsif line =~ /^You grab [A-Z][a-z]+ and try to drag h(?:im|er), but s?he (?:is too heavy|doesn't budge)\.$|^Tentatively, you attempt to swim through the nook\.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!$|^Guards(?:wo)?man [A-Z][a-z]+ stops you and says, "(?:Stop\.|Halt!)  You need to make sure you check in|^You step into the root, but can see no way to climb the slippery tendrils inside\.  After a moment, you step back out\.$|^As you start .*? back to safe ground\.$|^You stumble a bit as you try to enter the pool but feel that your persistence will pay off\.$|^A shimmering field of magical crimson and gold energy flows through the area\.$|^You attempt to navigate your way through the fog, but (?:quickly become entangled|get turned around)|^Trying to judge the climb, you peer over the edge\.\s*A wave of dizziness hits you, and you back away from the .*\.$|^You approach the .*, but the steepness is intimidating\.$|^You make your way (?:up|down) the .*\.\s*Partway (?:up|down), you make the mistake of looking down\. Struck by vertigo, you cling to the .* for a few moments, then slowly climb back (?:up|down)\.$|^You pick your way up the .*, but reach a point where your footing is questionable.\s*Reluctantly, you climb back down.$/
-      sleep 1
+      Kernel.sleep 1
       waitrt?
       put_dir.call
     elsif line =~ /^Climbing.*(?:plunge|fall)|^Tentatively, you attempt to climb.*(?:fall|slip)|^You start up the .* but slip after a few feet and fall to the ground|^You start.*but quickly realize|^You.*drop back to the ground|^You leap .* fall unceremoniously to the ground in a heap\.$|^You search for a way to make the climb .*? but without success\.$|^You start to climb .* you fall to the ground|^You attempt to climb .* wrong approach|^You run towards .*? slowly retreat back, reassessing the situation\.|^You attempt to climb down the .*, but you can't seem to find purchase\.|^You start down the .*, but you find it hard going.\s*Rather than risking a fall, you make your way back up\./
-      sleep 1
+      Kernel.sleep 1
       waitrt?
       fput 'stand' unless standing?
       waitrt?
@@ -577,7 +577,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       # swims in Sailor's Grief
       return true
     elsif line =~ /^You begin to climb up the silvery thread.* you tumble to the ground/
-      sleep 0.5
+      Kernel.sleep 0.5
       waitrt?
       fput 'stand' unless standing?
       waitrt?
@@ -635,9 +635,9 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       end
     elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
       if $2.to_i > 1
-        sleep($2.to_i - "0.2".to_f)
+        Kernel.sleep($2.to_i - "0.2".to_f)
       else
-        sleep 0.3
+        Kernel.sleep 0.3
       end
       put_dir.call
     elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down|^You must be standing/
@@ -645,18 +645,18 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       waitrt?
       put_dir.call
     elsif line =~ /^You're still recovering from your recent/
-      sleep 2
+      Kernel.sleep 2
       put_dir.call
     elsif line =~ /^The ground approaches you at an alarming rate/
-      sleep 1
+      Kernel.sleep 1
       fput 'stand' unless standing?
       put_dir.call
     elsif line =~ /You go flying down several feet, landing with a/
-      sleep 1
+      Kernel.sleep 1
       fput 'stand' unless standing?
       put_dir.call
     elsif line =~ /^Sorry, you may only type ahead/
-      sleep 1
+      Kernel.sleep 1
       put_dir.call
     elsif line == 'You are still stunned.'
       wait_while { stunned? }
@@ -673,10 +673,10 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       put_dir.call
     elsif line =~ /^(You notice .* at your feet, and do not wish to leave it behind|As you prepare to move away, you remember)/
       fput "stow feet"
-      sleep 1
+      Kernel.sleep 1
       put_dir.call
     elsif line =~ /The electricity courses through you in a raging torrent, its power singing in your veins!  Spent, the boltstone apparatus shatters into glinting fragments\.|The lightning strikes you in an agonizing eruption of liquid radiance!/
-      sleep(0.5)
+      Kernel.sleep(0.5)
       wait_while { stunned? }
       waitrt?
       fput 'stand' unless standing?
@@ -686,7 +686,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       30.times {
         break if clear.include?('You regain control of your senses!')
 
-        sleep 0.1
+        Kernel.sleep 0.1
       }
       put_dir.call
     elsif line =~ /^It's pitch dark and you can't see a thing!/
@@ -739,7 +739,7 @@ def wait_until(announce = nil)
     respond(announce)
   end
   until yield
-    sleep 0.25
+    Kernel.sleep 0.25
   end
   Thread.current.priority = priosave
 end
@@ -751,7 +751,7 @@ def wait_while(announce = nil)
     respond(announce)
   end
   while yield
-    sleep 0.25
+    Kernel.sleep 0.25
   end
   Thread.current.priority = priosave
 end
@@ -836,7 +836,7 @@ def check_mind(string = nil)
   elsif string.to_i.between?(0, 100)
     return string.to_i <= XMLData.mind_value.to_i
   else
-    echo("check_mind error! You must provide an integer ranging from 0-100, the common abbreviation of how full your head is, or provide no input to have check_mind return an abbreviation of how filled your head is."); sleep 1
+    echo("check_mind error! You must provide an integer ranging from 0-100, the common abbreviation of how full your head is, or provide no input to have check_mind return an abbreviation of how filled your head is."); Kernel.sleep 1
     return false
   end
 end
@@ -860,7 +860,7 @@ def checkmind(string = nil)
       nil
     end
   else
-    echo("Checkmind error! You must provide an integer ranging from 1-8 (7 is fried, 8 is 100% fried), the common abbreviation of how full your head is, or provide no input to have checkmind return an abbreviation of how filled your head is."); sleep 1
+    echo("Checkmind error! You must provide an integer ranging from 1-8 (7 is fried, 8 is 100% fried), the common abbreviation of how full your head is, or provide no input to have checkmind return an abbreviation of how filled your head is."); Kernel.sleep 1
     return false
   end
 end
@@ -1330,13 +1330,13 @@ end
 
 def pause(num = 1)
   if num.to_s =~ /m/
-    sleep((num.sub(/m/, '').to_f * 60))
+    Kernel.sleep((num.sub(/m/, '').to_f * 60))
   elsif num.to_s =~ /h/
-    sleep((num.sub(/h/, '').to_f * 3600))
+    Kernel.sleep((num.sub(/h/, '').to_f * 3600))
   elsif num.to_s =~ /d/
-    sleep((num.sub(/d/, '').to_f * 86400))
+    Kernel.sleep((num.sub(/d/, '').to_f * 86400))
   else
-    sleep(num.to_f)
+    Kernel.sleep(num.to_f)
   end
 end
 
@@ -1364,7 +1364,7 @@ def match(label, string)
   strings = [label, string]
   strings.flatten!
   unless (script = Script.current) then echo("An unknown script thread tried to fetch a game line from the queue, but Lich can't process the call without knowing which script is calling! Aborting..."); Thread.current.kill; return false end
-  if strings.empty? then echo("Error! 'match' was given no strings to look for!"); sleep 1; return false end
+  if strings.empty? then echo("Error! 'match' was given no strings to look for!"); Kernel.sleep 1; return false end
   unless strings.length == 2
     while (line_in = script.gets)
       strings.each { |string|
@@ -1390,7 +1390,7 @@ def matchtimeout(secs, *strings)
   strings.flatten!
   if strings.empty?
     echo("matchtimeout without any strings to wait for!")
-    sleep 1
+    Kernel.sleep 1
     return false
   end
   regexpstr = strings.join('|')
@@ -1398,7 +1398,7 @@ def matchtimeout(secs, *strings)
   loop {
     line = get?
     if line.nil?
-      sleep 0.1
+      Kernel.sleep 0.1
     elsif line =~ /#{regexpstr}/i
       return line
     end
@@ -1458,7 +1458,7 @@ end
 
 def waitforre(regexp)
   unless (script = Script.current) then respond('--- waitforre: Unable to identify calling script.'); return false; end
-  unless regexp.is_a?(Regexp) then echo("Script error! You have given 'waitforre' something to wait for, but it isn't a Regular Expression! Use 'waitfor' if you want to wait for a string."); sleep 1; return nil end
+  unless regexp.is_a?(Regexp) then echo("Script error! You have given 'waitforre' something to wait for, but it isn't a Regular Expression! Use 'waitfor' if you want to wait for a string."); Kernel.sleep 1; return nil end
   regobj = regexp.match(script.gets) until regobj
 end
 
@@ -1545,7 +1545,7 @@ def fput(message, *waitingfor)
   while (string = get)
     if string =~ /(?:\.\.\.wait |Wait )(?<wait_time>[0-9]+)/
       hold_up = Regexp.last_match[:wait_time].to_i
-      sleep(hold_up) unless hold_up.nil?
+      Kernel.sleep(hold_up) unless hold_up.nil?
       clear
       put(message)
       next
@@ -1556,21 +1556,21 @@ def fput(message, *waitingfor)
     elsif string =~ /stunned|can't do that while|cannot seem|^(?!You rummage).*can't seem|don't seem|Sorry, you may only type ahead/
       if dead?
         echo "You're dead...! You can't do that!"
-        sleep 1
+        Kernel.sleep 1
         script.downstream_buffer.unshift(string)
         return false
       elsif checkstunned
         while checkstunned
-          sleep("0.25".to_f)
+          Kernel.sleep("0.25".to_f)
         end
       elsif checkwebbed
         while checkwebbed
-          sleep("0.25".to_f)
+          Kernel.sleep("0.25".to_f)
         end
       elsif string =~ /Sorry, you may only type ahead/
-        sleep 1
+        Kernel.sleep 1
       else
-        sleep 0.1
+        Kernel.sleep 0.1
         script.downstream_buffer.unshift(string)
         return false
       end
@@ -1586,7 +1586,7 @@ def fput(message, *waitingfor)
           script.downstream_buffer.unshift(string)
           return foundit
         end
-        sleep 1
+        Kernel.sleep 1
         clear
         put(message)
         next
@@ -1607,7 +1607,7 @@ end
 def matchfindexact(*strings)
   strings.flatten!
   unless (script = Script.current) then echo("An unknown script thread tried to fetch a game line from the queue, but Lich can't process the call without knowing which script is calling! Aborting..."); Thread.current.kill; return false end
-  if strings.empty? then echo("error! 'matchfind' with no strings to look for!"); sleep 1; return false end
+  if strings.empty? then echo("error! 'matchfind' with no strings to look for!"); Kernel.sleep 1; return false end
   looking = Array.new
   strings.each { |str| looking.push(str.gsub('?', '(\b.+\b)')) }
   if looking.empty? then echo("matchfind without any strings to wait for!"); return false end
@@ -1869,13 +1869,13 @@ def dothis(action, success_line)
         return line
       elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
         if $2.to_i > 1
-          sleep($2.to_i - "0.5".to_f)
+          Kernel.sleep($2.to_i - "0.5".to_f)
         else
-          sleep 0.3
+          Kernel.sleep 0.3
         end
         break
       elsif line == 'Sorry, you may only type ahead 1 command.'
-        sleep 1
+        Kernel.sleep 1
         break
       elsif line == 'You are still stunned.'
         wait_while { stunned? }
@@ -1883,7 +1883,7 @@ def dothis(action, success_line)
       elsif line == 'That is impossible to do while unconscious!'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Kernel.sleep 0.1
           else
             break if line =~ /Your thoughts slowly come back to you as you find yourself lying on the ground\.  You must have been sleeping\.$|^You wake up from your slumber\.$/
           end
@@ -1892,7 +1892,7 @@ def dothis(action, success_line)
       elsif line == "You don't seem to be able to move to do that."
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Kernel.sleep 0.1
           else
             break if line == 'The restricting force that envelops you dissolves away.'
           end
@@ -1904,7 +1904,7 @@ def dothis(action, success_line)
       elsif line == 'You find that impossible under the effects of the lullabye.'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Kernel.sleep 0.1
           else
             # fixme
             break if line == 'You shake off the effects of the lullabye.'
@@ -1925,19 +1925,19 @@ def dothistimeout(action, timeout, success_line)
     loop {
       line = get?
       if line.nil?
-        sleep 0.1
+        Kernel.sleep 0.1
       elsif line =~ success_line
         return line
       elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
         if $2.to_i > 1
-          sleep($2.to_i - "0.5".to_f)
+          Kernel.sleep($2.to_i - "0.5".to_f)
         else
-          sleep 0.3
+          Kernel.sleep 0.3
         end
         end_time = Time.now.to_f + timeout
         break
       elsif line == 'Sorry, you may only type ahead 1 command.'
-        sleep 1
+        Kernel.sleep 1
         end_time = Time.now.to_f + timeout
         break
       elsif line == 'You are still stunned.'
@@ -1947,7 +1947,7 @@ def dothistimeout(action, timeout, success_line)
       elsif line == 'That is impossible to do while unconscious!'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Kernel.sleep 0.1
           else
             break if line =~ /Your thoughts slowly come back to you as you find yourself lying on the ground\.  You must have been sleeping\.$|^You wake up from your slumber\.$/
           end
@@ -1956,7 +1956,7 @@ def dothistimeout(action, timeout, success_line)
       elsif line == "You don't seem to be able to move to do that."
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Kernel.sleep 0.1
           else
             break if line == 'The restricting force that envelops you dissolves away.'
           end
@@ -1968,7 +1968,7 @@ def dothistimeout(action, timeout, success_line)
       elsif line == 'You find that impossible under the effects of the lullabye.'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Kernel.sleep 0.1
           else
             # fixme
             break if line == 'You shake off the effects of the lullabye.'
@@ -2276,7 +2276,7 @@ def do_client(client_string)
         Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values(?,?);", [toggle_var.to_s.encode('UTF-8'), set_state.to_s.encode('UTF-8')])
         did_something = true
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
       respond("--- Lich: toggle #{toggle_var} set #{set_state}") if did_something

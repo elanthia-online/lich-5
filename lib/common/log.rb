@@ -15,7 +15,7 @@ module Lich
           Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('log_enabled',?);", [@@log_enabled.to_s.encode('UTF-8')])
           Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('log_filter',?);", [@@log_filter.to_s.encode('UTF-8')])
         rescue SQLite3::BusyException
-          sleep 0.1
+          Kernel.sleep 0.1
           retry
         end
         return nil
@@ -28,7 +28,7 @@ module Lich
           Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('log_enabled',?);", [@@log_enabled.to_s.encode('UTF-8')])
           Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('log_filter',?);", [@@log_filter.to_s.encode('UTF-8')])
         rescue SQLite3::BusyException
-          sleep 0.1
+          Kernel.sleep 0.1
           retry
         end
         return nil
@@ -39,7 +39,7 @@ module Lich
           begin
             val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='log_enabled';")
           rescue SQLite3::BusyException
-            sleep 0.1
+            Kernel.sleep 0.1
             retry
           end
           val = false if val.nil?
@@ -53,7 +53,7 @@ module Lich
           begin
             val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='log_filter';")
           rescue SQLite3::BusyException
-            sleep 0.1
+            Kernel.sleep 0.1
             retry
           end
           val = // if val.nil?

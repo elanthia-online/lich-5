@@ -102,7 +102,7 @@ module Lich
                 delay = AUTH_RETRY_BASE_DELAY * (2**attempt)
                 Lich.log "warn: Authentication attempt #{attempt + 1}/#{MAX_AUTH_RETRIES} failed: " \
                          "#{e.message}, retrying in #{delay}s..."
-                sleep(delay)
+                Kernel.sleep(delay)
               end
             end
           end

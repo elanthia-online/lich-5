@@ -61,11 +61,11 @@ module Lich
 
               begin
                 report_skill_gains
-                sleep @@report_interval
+                Kernel.sleep @@report_interval
               rescue StandardError => e
                 Lich::Messaging.msg('error', "DRExpMonitor: Error: #{e.message}") if $DREXPMONITOR_DEBUG
                 Lich.log "DRExpMonitor error: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
-                sleep @@report_interval
+                Kernel.sleep @@report_interval
               end
             end
           ensure
@@ -112,7 +112,7 @@ module Lich
               @@inline_display = false
               return @@inline_display
             end
-            sleep 0.1
+            Kernel.sleep 0.1
             retry
           end
           # Default to false - inline display must be explicitly enabled
@@ -136,7 +136,7 @@ module Lich
             Lich::Messaging.msg('error', "DRExpMonitor: SQLite busy after #{MAX_SQLITE_RETRIES} retries, inline_display setting may not be persisted")
             return
           end
-          sleep 0.1
+          Kernel.sleep 0.1
           retry
         end
       end

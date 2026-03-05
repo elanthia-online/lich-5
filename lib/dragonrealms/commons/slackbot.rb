@@ -225,7 +225,7 @@ module Lich
           end
 
           Lich.log "SlackBot: Throttled by Slack API. Retrying in #{delay} seconds..."
-          sleep delay
+          Kernel.sleep delay
           retries += 1
           retry
         rescue Timeout::Error, Errno::EINVAL, Errno::ECONNRESET, EOFError,
@@ -238,7 +238,7 @@ module Lich
           end
 
           Lich.log "SlackBot: Network error: #{e.message}. Retrying in #{delay} seconds..."
-          sleep delay
+          Kernel.sleep delay
           retries += 1
           retry
         end

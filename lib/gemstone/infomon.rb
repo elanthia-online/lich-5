@@ -120,7 +120,7 @@ module Lich
       end
 
       def self.cache_load
-        sleep(0.01) if XMLData.name.empty?
+        Kernel.sleep(0.01) if XMLData.name.empty?
         dataset = Infomon.table
         h = dataset.map(:key).zip(dataset.map(:value)).to_h
         self.cache.merge!(h)
@@ -147,7 +147,7 @@ module Lich
         self.cache_load if !@cache_loaded
         key = self._key(key)
         val = self.cache.get(key) {
-          sleep 0.01 until self.queue.empty?
+          Kernel.sleep 0.01 until self.queue.empty?
           begin
             self.mutex.synchronize do
               begin
@@ -259,8 +259,8 @@ module Lich
         @init_thread ||= Thread.new do
           begin
             # Wait for character to be ready and dialogs to load
-            sleep 0.1 until GameBase::Game.autostarted? && XMLData.name && !XMLData.name.empty? &&
-                            !XMLData.dialogs.empty?
+            Kernel.sleep 0.1 until GameBase::Game.autostarted? && XMLData.name && !XMLData.name.empty? &&
+                                   !XMLData.dialogs.empty?
 
             # Run initial setup if needed (GS-specific only, skip for DR)
             if XMLData.game !~ /^DR/ && db_refresh_needed?

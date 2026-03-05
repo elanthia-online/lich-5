@@ -102,7 +102,7 @@ module Lich
         end
         script_obj.quiet = true if options[:quiet]
         new_thread = Thread.new {
-          100.times { break if Script.current == script_obj; sleep 0.01 }
+          100.times { break if Script.current == script_obj; Kernel.sleep 0.01 }
 
           if (script = Script.current)
             eval('script = Script.current', script_binding, script.name)
@@ -336,7 +336,7 @@ module Lich
 
       def Script.current
         if (script = @@running.find { |s| s.has_thread?(Thread.current) })
-          sleep 0.2 while script.paused? and not script.ignore_pause
+          Kernel.sleep 0.2 while script.paused? and not script.ignore_pause
           script
         else
           nil
@@ -349,7 +349,7 @@ module Lich
 
       def Script.run(*args)
         if (s = @@elevated_script_start.call(args))
-          sleep 0.1 while @@running.include?(s)
+          Kernel.sleep 0.1 while @@running.include?(s)
         end
       end
 
@@ -422,7 +422,7 @@ module Lich
             script.watchfor.each_pair { |trigger, action|
               if line =~ trigger
                 new_thread = Thread.new {
-                  sleep 0.011 until Script.current
+                  Kernel.sleep 0.011 until Script.current
                   begin
                     action.call
                   rescue
@@ -517,7 +517,7 @@ module Lich
             begin
               Lich.db.execute('INSERT OR REPLACE INTO trusted_scripts(name) values(?);', [script_name.encode('UTF-8')])
             rescue SQLite3::BusyException
-              sleep 0.1
+              Kernel.sleep 0.1
               retry
             end
             true
@@ -531,14 +531,14 @@ module Lich
           begin
             there = Lich.db.get_first_value('SELECT name FROM trusted_scripts WHERE name=?;', [script_name.encode('UTF-8')])
           rescue SQLite3::BusyException
-            sleep 0.1
+            Kernel.sleep 0.1
             retry
           end
           if there
             begin
               Lich.db.execute('DELETE FROM trusted_scripts WHERE name=?;', [script_name.encode('UTF-8')])
             rescue SQLite3::BusyException
-              sleep 0.1
+              Kernel.sleep 0.1
               retry
             end
             true
@@ -552,7 +552,7 @@ module Lich
           begin
             Lich.db.execute('SELECT name FROM trusted_scripts;').each { |name| list.push(name[0]) }
           rescue SQLite3::BusyException
-            sleep 0.1
+            Kernel.sleep 0.1
             retry
           end
           list
@@ -784,11 +784,11 @@ module Lich
       def gets
         # fixme: no xml gets
         if @want_downstream or @want_downstream_xml or @want_script_output
-          sleep 0.05 while @downstream_buffer.empty?
+          Kernel.sleep 0.05 while @downstream_buffer.empty?
           @downstream_buffer.shift
         else
           echo 'this script is set as unique but is waiting for game data...'
-          sleep 2
+          Kernel.sleep 2
           false
         end
       end
@@ -802,13 +802,13 @@ module Lich
           end
         else
           echo 'this script is set as unique but is waiting for game data...'
-          sleep 2
+          Kernel.sleep 2
           false
         end
       end
 
       def upstream_gets
-        sleep 0.05 while @upstream_buffer.empty?
+        Kernel.sleep 0.05 while @upstream_buffer.empty?
         @upstream_buffer.shift
       end
 
@@ -821,7 +821,7 @@ module Lich
       end
 
       def unique_gets
-        sleep 0.05 while @unique_buffer.empty?
+        Kernel.sleep 0.05 while @unique_buffer.empty?
         @unique_buffer.shift
       end
 
@@ -867,7 +867,7 @@ module Lich
           return false
         end
         new_thread = Thread.new {
-          100.times { break if Script.current == new_script; sleep 0.01 }
+          100.times { break if Script.current == new_script; Kernel.sleep 0.01 }
 
           if (script = Script.current)
             Thread.current.priority = 1

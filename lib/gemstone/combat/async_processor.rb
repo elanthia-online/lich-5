@@ -26,7 +26,7 @@ module Lich
 
           # Wait if at capacity
           while @active_count.value >= @max_threads
-            sleep(0.01)
+            Kernel.sleep(0.01)
           end
 
           @active_count.increment

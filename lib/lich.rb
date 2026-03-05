@@ -12,7 +12,7 @@ module Lich
     begin
       ts = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='db_maint_last_at';")
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     rescue => e
       Lich.log "db_maint_last_at error: #{e}"
@@ -26,7 +26,7 @@ module Lich
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name, value) VALUES('db_maint_last_at', ?);", [iso_utc])
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name, value) VALUES('db_maint_last_note', ?);", [note.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     rescue => e
       Lich.log "db_maint_set! error: #{e}"
@@ -62,12 +62,12 @@ module Lich
       end
       unless got
         while (Time.now - start) < lock_timeout_s && !got
-          sleep 0.1
+          Kernel.sleep 0.1
           begin
             got = f.flock(File::LOCK_EX | File::LOCK_NB)
           rescue SystemCallError, IOError
             # Transient error acquiring lock on some filesystems; back off and retry.
-            sleep 0.05
+            Kernel.sleep 0.05
           end
         end
       end
@@ -182,7 +182,7 @@ module Lich
       Lich.db.execute("CREATE TABLE IF NOT EXISTS simu_game_entry (character TEXT NOT NULL, game_code TEXT NOT NULL, data BLOB, PRIMARY KEY(character, game_code));")
       Lich.db.execute("CREATE TABLE IF NOT EXISTS enable_inventory_boxes (player_id INTEGER NOT NULL, PRIMARY KEY(player_id));")
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end
@@ -343,11 +343,11 @@ module Lich
           r = Win32.ShellExecuteEx(:lpVerb => 'runas', :lpFile => file, :lpDirectory => LICH_DIR.tr("/", "\\"), :lpParameters => params, :fMask => Win32::SEE_MASK_NOCLOSEPROCESS)
           if r[:return] > 0
             process_id = r[:hProcess]
-            sleep 0.2 while Win32.GetExitCodeProcess(:hProcess => process_id)[:lpExitCode] == Win32::STILL_ACTIVE
-            sleep 3
+            Kernel.sleep 0.2 while Win32.GetExitCodeProcess(:hProcess => process_id)[:lpExitCode] == Win32::STILL_ACTIVE
+            Kernel.sleep 3
           else
             Win32.ShellExecute(:lpOperation => 'runas', :lpFile => file, :lpDirectory => LICH_DIR.tr("/", "\\"), :lpParameters => params)
-            sleep 6
+            Kernel.sleep 6
           end
         rescue
           Lich.msgbox(:message => $!)
@@ -402,11 +402,11 @@ module Lich
           r = Win32.ShellExecuteEx(:lpVerb => 'runas', :lpFile => file, :lpDirectory => LICH_DIR.tr("/", "\\"), :lpParameters => params, :fMask => Win32::SEE_MASK_NOCLOSEPROCESS)
           if r[:return] > 0
             process_id = r[:hProcess]
-            sleep 0.2 while Win32.GetExitCodeProcess(:hProcess => process_id)[:lpExitCode] == Win32::STILL_ACTIVE
-            sleep 3
+            Kernel.sleep 0.2 while Win32.GetExitCodeProcess(:hProcess => process_id)[:lpExitCode] == Win32::STILL_ACTIVE
+            Kernel.sleep 3
           else
             Win32.ShellExecute(:lpOperation => 'runas', :lpFile => file, :lpDirectory => LICH_DIR.tr("/", "\\"), :lpParameters => params)
-            sleep 6
+            Kernel.sleep 6
           end
         rescue
           Lich.msgbox(:message => $!)
@@ -462,11 +462,11 @@ module Lich
           r = Win32.ShellExecuteEx(:lpVerb => 'runas', :lpFile => file, :lpDirectory => LICH_DIR.tr("/", "\\"), :lpParameters => params, :fMask => Win32::SEE_MASK_NOCLOSEPROCESS)
           if r[:return] > 0
             process_id = r[:hProcess]
-            sleep 0.2 while Win32.GetExitCodeProcess(:hProcess => process_id)[:lpExitCode] == Win32::STILL_ACTIVE
-            sleep 3
+            Kernel.sleep 0.2 while Win32.GetExitCodeProcess(:hProcess => process_id)[:lpExitCode] == Win32::STILL_ACTIVE
+            Kernel.sleep 3
           else
             Win32.ShellExecute(:lpOperation => 'runas', :lpFile => file, :lpDirectory => LICH_DIR.tr("/", "\\"), :lpParameters => params)
-            sleep 6
+            Kernel.sleep 6
           end
         rescue
           Lich.msgbox(:message => $!)
@@ -521,11 +521,11 @@ module Lich
           r = Win32.ShellExecuteEx(:lpVerb => 'runas', :lpFile => file, :lpDirectory => LICH_DIR.tr("/", "\\"), :lpParameters => params, :fMask => Win32::SEE_MASK_NOCLOSEPROCESS)
           if r[:return] > 0
             process_id = r[:hProcess]
-            sleep 0.2 while Win32.GetExitCodeProcess(:hProcess => process_id)[:lpExitCode] == Win32::STILL_ACTIVE
-            sleep 3
+            Kernel.sleep 0.2 while Win32.GetExitCodeProcess(:hProcess => process_id)[:lpExitCode] == Win32::STILL_ACTIVE
+            Kernel.sleep 3
           else
             Win32.ShellExecute(:lpOperation => 'runas', :lpFile => file, :lpDirectory => LICH_DIR.tr("/", "\\"), :lpParameters => params)
-            sleep 6
+            Kernel.sleep 6
           end
         rescue
           Lich.msgbox(:message => $!)
@@ -632,7 +632,7 @@ module Lich
     begin
       v = Lich.db.get_first_value('SELECT player_id FROM enable_inventory_boxes WHERE player_id=?;', [player_id.to_i])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
     if v
@@ -647,14 +647,14 @@ module Lich
       begin
         Lich.db.execute('INSERT OR REPLACE INTO enable_inventory_boxes values(?);', [player_id.to_i])
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
     else
       begin
         Lich.db.execute('DELETE FROM enable_inventory_boxes where player_id=?;', [player_id.to_i])
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
     end
@@ -665,7 +665,7 @@ module Lich
     begin
       val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='win32_launch_method';")
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
     val
@@ -675,7 +675,7 @@ module Lich
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('win32_launch_method',?);", [val.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end
@@ -721,7 +721,7 @@ module Lich
       begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='debug_messaging';")
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
       @@debug_messaging = (val.to_s =~ /on|true|yes/ ? true : false)
@@ -735,7 +735,7 @@ module Lich
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('debug_messaging',?);", [@@debug_messaging.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end
@@ -745,7 +745,7 @@ module Lich
       begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_lichid';")
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
       val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != ""; # default false if DR, otherwise default true
@@ -759,7 +759,7 @@ module Lich
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_lichid',?);", [@@display_lichid.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end
@@ -769,7 +769,7 @@ module Lich
       begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='hide_uid_flag';")
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
       val = false if val.nil? and XMLData.game != ""; # default false
@@ -783,7 +783,7 @@ module Lich
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('hide_uid_flag',?);", [@@hide_uid_flag.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end
@@ -792,7 +792,7 @@ module Lich
     begin
       val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='core_updated_with_lich_version';")
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
     return val.to_s
@@ -802,7 +802,7 @@ module Lich
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('core_updated_with_lich_version',?);", [val.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end
@@ -812,7 +812,7 @@ module Lich
       begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_uid';")
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
       val = (XMLData.game =~ /^GS/ ? true : false) if val.nil? and XMLData.game != ""; # default false if DR, otherwise default true
@@ -826,7 +826,7 @@ module Lich
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_uid',?);", [@@display_uid.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end
@@ -836,7 +836,7 @@ module Lich
       begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_exits';")
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
       val = false if val.nil? and XMLData.game != ""; # default false
@@ -850,7 +850,7 @@ module Lich
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_exits',?);", [@@display_exits.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end
@@ -860,7 +860,7 @@ module Lich
       begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_stringprocs';")
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
       val = false if val.nil? and XMLData.game != ""; # default false
@@ -874,7 +874,7 @@ module Lich
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_stringprocs',?);", [@@display_stringprocs.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end
@@ -884,7 +884,7 @@ module Lich
       begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_expgains';")
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
       # Default to true for non-Genie frontends (Genie has built-in exp tracking)
@@ -902,7 +902,7 @@ module Lich
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_expgains',?);", [@@display_expgains.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end
@@ -912,7 +912,7 @@ module Lich
       begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_autosort_state';")
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
       @@track_autosort_state = (val.to_s =~ /on|true|yes/ ? true : false)
@@ -925,7 +925,7 @@ module Lich
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_autosort_state',?);", [@@track_autosort_state.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end
@@ -935,7 +935,7 @@ module Lich
       begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_dark_mode';")
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
       @@track_dark_mode = (val.to_s =~ /on|true|yes/ ? true : false)
@@ -948,7 +948,7 @@ module Lich
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_dark_mode',?);", [@@track_dark_mode.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end
@@ -958,7 +958,7 @@ module Lich
       begin
         val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_layout_state';")
       rescue SQLite3::BusyException
-        sleep 0.1
+        Kernel.sleep 0.1
         retry
       end
       @@track_layout_state = (val.to_s =~ /on|true|yes/ ? true : false)
@@ -971,7 +971,7 @@ module Lich
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_layout_state',?);", [@@track_layout_state.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
-      sleep 0.1
+      Kernel.sleep 0.1
       retry
     end
   end

@@ -73,7 +73,7 @@ unless $wine_bin.nil?
             filename = "#{TEMP_DIR}/wine-#{Time.now.to_i}.reg"
             File.open(filename, 'w') { |f| f.write(regedit_data) }
             system("#{BIN} regedit #{filename}")
-            sleep 0.2
+            Kernel.sleep 0.2
             File.delete(filename)
           rescue
             return false

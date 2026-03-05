@@ -53,7 +53,7 @@ module Lich
           return true if ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) && @weapon_displayer.include?(bag.id)
           return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) && bag.contents.to_a.map(&:id).include?(item.id))
           return true if item.name =~ /^ethereal \w+$/ && ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id)
-          sleep 0.1
+          Kernel.sleep 0.1
         }
         return false
       end
@@ -64,7 +64,7 @@ module Lich
         20.times {
           return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) && GameObj.inv.to_a.map(&:id).include?(item.id))
           return true if item.name =~ /^ethereal \w+$/ && ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id)
-          sleep 0.1
+          Kernel.sleep 0.1
         } unless result =~ /You can only wear two items in that location\./
 
         return @worn_items[item.name] = false
@@ -173,7 +173,7 @@ module Lich
         if (left_hand.noun =~ /shield|buckler|targe|heater|parma|aegis|scutum|greatshield|mantlet|pavis|arbalest|bow|crossbow|yumi|arbalest/) && @worn_items[left_hand.name] != false && Lich::Stash::wear_to_inv(left_hand)
           actions.unshift proc {
             fput "remove ##{left_hand.id}"
-            20.times { break if GameObj.left_hand.id == left_hand.id || GameObj.right_hand.id == left_hand.id; sleep 0.1 }
+            20.times { break if GameObj.left_hand.id == left_hand.id || GameObj.right_hand.id == left_hand.id; Kernel.sleep 0.1 }
 
             if GameObj.right_hand.id == left_hand.id
               dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
@@ -183,13 +183,13 @@ module Lich
           actions.unshift proc {
             if left_hand.name =~ /^ethereal \w+$/
               fput "rub #{left_hand.noun} tattoo"
-              20.times { break if (GameObj.left_hand.name == left_hand.name) || (GameObj.right_hand.name == left_hand.name); sleep 0.1 }
+              20.times { break if (GameObj.left_hand.name == left_hand.name) || (GameObj.right_hand.name == left_hand.name); Kernel.sleep 0.1 }
             elsif @bandolier_weapon[left_hand.name]
               fput "rub ##{find_bandolier_bag(left_hand)}"
-              20.times { break if (GameObj.left_hand.name == left_hand.name) || (GameObj.right_hand.name == left_hand.name); sleep 0.1 }
+              20.times { break if (GameObj.left_hand.name == left_hand.name) || (GameObj.right_hand.name == left_hand.name); Kernel.sleep 0.1 }
             else
               fput "get ##{left_hand.id}"
-              20.times { break if (GameObj.left_hand.id == left_hand.id) || (GameObj.right_hand.id == left_hand.id); sleep 0.1 }
+              20.times { break if (GameObj.left_hand.id == left_hand.id) || (GameObj.right_hand.id == left_hand.id); Kernel.sleep 0.1 }
             end
 
             if GameObj.right_hand.id == left_hand.id || (GameObj.right_hand.name == left_hand.name && left_hand.name =~ /^ethereal \w+$/)
@@ -222,13 +222,13 @@ module Lich
         actions.unshift proc {
           if right_hand.name =~ /^ethereal \w+$/
             fput "rub #{right_hand.noun} tattoo"
-            20.times { break if GameObj.left_hand.name == right_hand.name || GameObj.right_hand.name == right_hand.name; sleep 0.1 }
+            20.times { break if GameObj.left_hand.name == right_hand.name || GameObj.right_hand.name == right_hand.name; Kernel.sleep 0.1 }
           elsif @bandolier_weapon[right_hand.name]
             fput "rub ##{find_bandolier_bag(right_hand)}"
-            20.times { break if GameObj.left_hand.name == right_hand.name || GameObj.right_hand.name == right_hand.name; sleep 0.1 }
+            20.times { break if GameObj.left_hand.name == right_hand.name || GameObj.right_hand.name == right_hand.name; Kernel.sleep 0.1 }
           else
             fput "get ##{right_hand.id}"
-            20.times { break if GameObj.left_hand.id == right_hand.id || GameObj.right_hand.id == right_hand.id; sleep 0.1 }
+            20.times { break if GameObj.left_hand.id == right_hand.id || GameObj.right_hand.id == right_hand.id; Kernel.sleep 0.1 }
           end
 
           if GameObj.left_hand.id == right_hand.id || (GameObj.left_hand.name == right_hand.name && right_hand.name =~ /^ethereal \w+$/)
@@ -248,7 +248,7 @@ module Lich
         else
           result = nil
         end
-        sleep 0.1
+        Kernel.sleep 0.1
         if result.nil? || !result
           for container in other_containers.call
             result = Lich::Stash::add_to_bag(container, GameObj.right_hand)

@@ -12,7 +12,7 @@ reconnect_if_wanted = proc {
       reconnect_step = 0
     end
     Lich.log "info: waiting #{reconnect_delay} seconds to reconnect..."
-    sleep reconnect_delay
+    Kernel.sleep reconnect_delay
     Lich.log 'info: reconnecting...'
     if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       if Frontend.client.eql?('stormfront')
@@ -274,7 +274,7 @@ reconnect_if_wanted = proc {
         Lich.msgbox(:message => "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}", :icon => :error)
       end
       Lich.log 'info: waiting for client to connect...'
-      300.times { sleep 0.1; break unless accept_thread.status }
+      300.times { Kernel.sleep 0.1; break unless accept_thread.status }
       accept_thread.kill if accept_thread.status
       Dir.chdir(LICH_DIR)
       unless $_CLIENT_
@@ -310,7 +310,7 @@ reconnect_if_wanted = proc {
         Game.open(gamehost, gameport)
       }
       300.times {
-        sleep 0.1
+        Kernel.sleep 0.1
         break unless connect_thread.status
       }
       if connect_thread.status
@@ -326,7 +326,7 @@ reconnect_if_wanted = proc {
           Game.open(gamehost, gameport)
         }
         300.times {
-          sleep 0.1
+          Kernel.sleep 0.1
           break unless connect_thread.status
         }
         if connect_thread.status
@@ -359,7 +359,7 @@ reconnect_if_wanted = proc {
         Lich.log "warning: setsockopt with SO_REUSEADDR failed: #{$!}"
       end
     rescue
-      sleep 1
+      Kernel.sleep 1
       if (error_count += 1) >= 30
         $stdout.puts 'error: failed to bind to the proper port'
         Lich.log 'error: failed to bind to the proper port'
@@ -378,7 +378,7 @@ reconnect_if_wanted = proc {
     Lich.log "info: waiting for the client to connect..."
 
     timeout_thread = Thread.new {
-      sleep 120
+      Kernel.sleep 120
       listener.close rescue nil
       $stdout.puts 'error: timed out waiting for client to connect'
       Lich.log 'error: timed out waiting for client to connect'
@@ -400,7 +400,7 @@ reconnect_if_wanted = proc {
       @argv_options[:game_host], @argv_options[:game_port] = Lich.fix_game_host_port(@argv_options[:game_host], @argv_options[:game_port])
       begin
         timeout_thread = Thread.new {
-          sleep 30
+          Kernel.sleep 30
           Lich.log "error: timed out connecting to #{@argv_options[:game_host]}:#{@argv_options[:game_port]}"
           $stdout.puts "error: timed out connecting to #{@argv_options[:game_host]}:#{@argv_options[:game_port]}"
           exit
@@ -445,7 +445,7 @@ reconnect_if_wanted = proc {
       # tell the server we're ready
       #
       2.times {
-        sleep 0.3
+        Kernel.sleep 0.3
         $_CLIENTBUFFER_.push("<c>\r\n")
         Game._puts("<c>")
       }
@@ -465,7 +465,7 @@ reconnect_if_wanted = proc {
       if (error_count += 1) > 20
         Lich.log 'warning: giving up...'
       else
-        sleep 0.05
+        Kernel.sleep 0.05
         retry
       end
     end
@@ -518,7 +518,7 @@ reconnect_if_wanted = proc {
           Game._puts(client_string)
 
           2.times {
-            sleep 0.3
+            Kernel.sleep 0.3
             $_CLIENTBUFFER_.push("<c>\r\n")
             Game._puts("<c>")
           }
@@ -597,7 +597,7 @@ reconnect_if_wanted = proc {
         respond "--- Lich: error: client_thread: #{$!}"
         respond $!.backtrace.first
         Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-        sleep 0.2
+        Kernel.sleep 0.2
         retry unless $_CLIENT_.closed? or Game.closed? or !Game.thread.alive? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed/i)
       ensure
         Frontend.cleanup_session_file
@@ -621,7 +621,7 @@ reconnect_if_wanted = proc {
           server.close rescue nil
           $_DETACHABLE_CLIENT_.close rescue nil
           $_DETACHABLE_CLIENT_ = nil
-          sleep 5
+          Kernel.sleep 5
           next
         ensure
           server.close rescue nil
@@ -632,7 +632,7 @@ reconnect_if_wanted = proc {
             unless ARGV.include?('--genie')
               Frontend.client = 'profanity'
               Thread.new {
-                100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
+                100.times { Kernel.sleep 0.1; break if XMLData.indicator['IconJOINED'] }
                 init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
                 init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
                 init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
@@ -695,7 +695,7 @@ reconnect_if_wanted = proc {
             $_DETACHABLE_CLIENT_ = nil
           end
         end
-        sleep 0.1
+        Kernel.sleep 0.1
       }
     }
   else
@@ -722,19 +722,19 @@ reconnect_if_wanted = proc {
   Lich.log 'info: stopping scripts...'
   Script.running.each { |script| script.kill }
   Script.hidden.each { |script| script.kill }
-  200.times { sleep 0.1; break if Script.running.empty? and Script.hidden.empty? }
+  200.times { Kernel.sleep 0.1; break if Script.running.empty? and Script.hidden.empty? }
   Lich.log 'info: saving script settings...'
   Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
   Settings.save
   Vars.save
   Lich.log 'info: closing connections...'
   Game.close
-  200.times { sleep 0.1; break if Game.closed? }
+  200.times { Kernel.sleep 0.1; break if Game.closed? }
   pause 0.5
   $_CLIENT_.close
-  200.times { sleep 0.1; break if $_CLIENT_.closed? }
+  200.times { Kernel.sleep 0.1; break if $_CLIENT_.closed? }
   Lich.db.close
-  200.times { sleep 0.1; break if Lich.db.closed? }
+  200.times { Kernel.sleep 0.1; break if Lich.db.closed? }
   reconnect_if_wanted.call # taking this out of play but may need to see if anyone's using it
   Lich.log "info: exiting..."
   Gtk.queue { Gtk.main_quit } if defined?(Gtk)

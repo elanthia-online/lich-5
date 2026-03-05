@@ -337,7 +337,7 @@ module Lich
             break if usage_result =~ /^#{name} what\?$/i
             break if usage_result =~ in_cooldown_regex
             break if Time.now() > break_out
-            sleep 0.25
+            Kernel.sleep 0.25
           }
         else
           results_regex = Regexp.union(results_regex, technique[:regex], /^Roundtime: [0-9]+ sec\.$/)
@@ -351,7 +351,7 @@ module Lich
 
           usage_result = dothistimeout(usage_cmd, 5, results_regex)
           if usage_result == "You don't seem to be able to move to do that."
-            100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
+            100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; Kernel.sleep 0.1 }
             usage_result = dothistimeout(usage_cmd, 5, results_regex)
           end
         end
