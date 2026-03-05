@@ -71,6 +71,9 @@ module Lich
       # Settings key for banking data
       SETTINGS_KEY = 'banking'
 
+      # Pattern for parsing balance amounts from strings
+      BALANCE_AMOUNT_PATTERN = /(\d+)\s+(platinum|gold|silver|bronze|copper)/i.freeze
+
       # In-memory cache of accounts data
       @@accounts_cache = nil
 
@@ -132,7 +135,7 @@ module Lich
           return 0 if balance_string.nil? || balance_string.empty?
 
           copper = 0
-          balance_string.scan(/(\d+)\s+(platinum|gold|silver|bronze|copper)/i) do |amount, denom|
+          balance_string.scan(BALANCE_AMOUNT_PATTERN) do |amount, denom|
             copper += to_copper(amount, denom)
           end
           copper
@@ -171,24 +174,25 @@ module Lich
         # Parses a line of game output for bank transactions
         # Called by DRParser for each line of server output
         # @param line [String] A line of game output
+        # @note Uses explicit match variables instead of Regexp.last_match for reliability
         def parse(line)
           return unless line.is_a?(String)
 
           town = current_bank_town
           return unless town
 
-          case line
-          when Pattern::DEPOSIT_PORTION
-            handle_deposit_portion(town, Regexp.last_match)
-          when Pattern::DEPOSIT_ALL_TELLER, Pattern::DEPOSIT_ALL_JAR
+          # Use explicit match variables instead of Regexp.last_match (more reliable)
+          if (match = line.match(Pattern::DEPOSIT_PORTION))
+            handle_deposit_portion(town, match)
+          elsif line.match?(Pattern::DEPOSIT_ALL_TELLER) || line.match?(Pattern::DEPOSIT_ALL_JAR)
             handle_deposit_all(town)
-          when Pattern::WITHDRAW_PORTION
-            handle_withdraw_portion(town, Regexp.last_match)
-          when Pattern::WITHDRAW_ALL
+          elsif (match = line.match(Pattern::WITHDRAW_PORTION))
+            handle_withdraw_portion(town, match)
+          elsif line.match?(Pattern::WITHDRAW_ALL)
             handle_withdraw_all(town)
-          when Pattern::BALANCE_CHECK
-            handle_balance_check(town, Regexp.last_match)
-          when Pattern::NO_ACCOUNT
+          elsif (match = line.match(Pattern::BALANCE_CHECK))
+            handle_balance_check(town, match)
+          elsif line.match?(Pattern::NO_ACCOUNT)
             handle_no_account(town)
           end
         end
