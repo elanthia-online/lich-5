@@ -20,7 +20,7 @@ module Lich
           return false if data_dir.nil? || username.nil? || char_name.nil? || game_code.nil?
 
           begin
-            result = YamlState.add_favorite(data_dir, username, char_name, game_code, frontend)
+            result = Lich::Common::Authentication::EntryStore.add_favorite(data_dir, username, char_name, game_code, frontend)
 
             if result
               frontend_info = frontend ? " (#{frontend})" : ""
@@ -50,7 +50,7 @@ module Lich
           return false if data_dir.nil? || username.nil? || char_name.nil? || game_code.nil?
 
           begin
-            result = YamlState.remove_favorite(data_dir, username, char_name, game_code, frontend)
+            result = Lich::Common::Authentication::EntryStore.remove_favorite(data_dir, username, char_name, game_code, frontend)
 
             if result
               frontend_info = frontend ? " (#{frontend})" : ""
@@ -106,7 +106,7 @@ module Lich
           return false if data_dir.nil? || username.nil? || char_name.nil? || game_code.nil?
 
           begin
-            YamlState.is_favorite?(data_dir, username, char_name, game_code, frontend)
+            Lich::Common::Authentication::EntryStore.is_favorite?(data_dir, username, char_name, game_code, frontend)
           rescue StandardError => e
             Lich.log "error: Error in FavoritesManager.is_favorite?: #{e.message}"
             false
@@ -122,7 +122,7 @@ module Lich
           return [] if data_dir.nil?
 
           begin
-            YamlState.get_favorites(data_dir)
+            Lich::Common::Authentication::EntryStore.get_favorites(data_dir)
           rescue StandardError => e
             Lich.log "error: Error in FavoritesManager.get_all_favorites: #{e.message}"
             []
@@ -139,7 +139,7 @@ module Lich
           return false if data_dir.nil? || ordered_favorites.nil?
 
           begin
-            result = YamlState.reorder_favorites(data_dir, ordered_favorites)
+            result = Lich::Common::Authentication::EntryStore.reorder_favorites(data_dir, ordered_favorites)
 
             if result
               Lich.log "info: Successfully reordered #{ordered_favorites.length} favorites"
@@ -216,7 +216,7 @@ module Lich
 
           begin
             # Load all entry data to validate against
-            entry_data = YamlState.load_saved_entries(data_dir, false)
+            entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(data_dir, false)
             favorites = get_all_favorites(data_dir)
 
             cleaned_count = 0
@@ -298,7 +298,7 @@ module Lich
         def self.favorites_available?(data_dir)
           return false if data_dir.nil?
 
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
           File.exist?(yaml_file)
         end
       end

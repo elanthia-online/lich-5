@@ -66,7 +66,7 @@ module Lich
           saved_state = save_current_ui_state
 
           # Reload data from YAML
-          @entry_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, @ui_config.autosort_state)
+          @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, @ui_config.autosort_state)
 
           # Rebuild the tab content with new data
           rebuild_tab_content
@@ -358,7 +358,7 @@ module Lich
 
           # Process each unique account in original order (not affected by favorites sorting)
           # Load unsorted data to get original account order
-          unsorted_data = Lich::Common::GUI::YamlState.load_saved_entries(@data_dir, false)
+          unsorted_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, false)
           account_array = unsorted_data.map { |x| x[:user_id] }.uniq
           account_array.each { |account|
             last_game_name = nil

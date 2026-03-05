@@ -1,4 +1,4 @@
-require 'login_spec_helper'
+require_relative '../../login_spec_helper'
 
 RSpec.describe Lich::Common, "#gui_login" do
   # Since gui_login is a complex method with UI interactions,
@@ -46,10 +46,10 @@ RSpec.describe Lich::Common, "#gui_login" do
     stub_const("LICH_VERSION", "5.0.0")
 
     # Mock YamlState.load_saved_entries
-    allow(Lich::Common::GUI::YamlState).to receive(:load_saved_entries).and_return(entry_data)
+    allow(Lich::Common::Authentication::EntryStore).to receive(:load_saved_entries).and_return(entry_data)
 
     # Mock YamlState.save_entries
-    allow(Lich::Common::GUI::YamlState).to receive(:save_entries).and_return(true)
+    allow(Lich::Common::Authentication::EntryStore).to receive(:save_entries).and_return(true)
 
     # Mock Accessibility as a module
     stub_const("Lich::Common::GUI::Accessibility", Module.new)
@@ -181,7 +181,7 @@ RSpec.describe Lich::Common, "#gui_login" do
 
     it "loads saved entries from YamlState" do
       # Test that YamlState.load_saved_entries is called with correct parameters
-      expect(Lich::Common::GUI::YamlState).to receive(:load_saved_entries).with(DATA_DIR, anything)
+      expect(Lich::Common::Authentication::EntryStore).to receive(:load_saved_entries).with(DATA_DIR, anything)
 
       # Call method under test, but rescue exit
       begin
@@ -211,7 +211,7 @@ RSpec.describe Lich::Common, "#gui_login" do
       test_instance.instance_variable_set(:@entry_data, entry_data)
 
       # Test that YamlState.save_entries is called when @save_entry_data is true
-      expect(Lich::Common::GUI::YamlState).to receive(:save_entries).with(DATA_DIR, entry_data)
+      expect(Lich::Common::Authentication::EntryStore).to receive(:save_entries).with(DATA_DIR, entry_data)
 
       # Call method under test, but rescue exit
       begin
@@ -226,7 +226,7 @@ RSpec.describe Lich::Common, "#gui_login" do
       test_instance.instance_variable_set(:@save_entry_data, false)
 
       # Test that YamlState.save_entries is not called when @save_entry_data is false
-      expect(Lich::Common::GUI::YamlState).not_to receive(:save_entries)
+      expect(Lich::Common::Authentication::EntryStore).not_to receive(:save_entries)
 
       # Call method under test, but rescue exit
       begin

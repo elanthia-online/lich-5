@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 require_relative 'cli_options_registry'
-require_relative 'cli_password_manager'
+require_relative '../authentication/cli_password'
 require_relative 'cli_conversion'
 require_relative 'cli_encryption_mode_change'
-require_relative 'cli_login'
+require_relative '../authentication/cli'
 
 module Lich
   module Common
@@ -62,7 +62,7 @@ module Lich
             exit 1
           end
 
-          exit Lich::Common::CLI::PasswordManager.change_account_password(account, new_password)
+          exit Lich::Common::Authentication::CLIPassword.change_account_password(account, new_password)
         end
 
         def self.handle_add_account
@@ -79,7 +79,7 @@ module Lich
           end
 
           # Check if YAML file exists; if not, check for DAT and auto-convert to plaintext
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(DATA_DIR)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(DATA_DIR)
           unless File.exist?(yaml_file)
             if Lich::Common::CLI::CLIConversion.conversion_needed?(DATA_DIR)
               $stdout.puts ''
@@ -105,11 +105,11 @@ module Lich
               end
               # Continue with add-account operation below
             end
-            # No DAT file either - PasswordManager.add_account will create new YAML
+            # No DAT file either - CLIPassword.add_account will create new YAML
           end
 
           frontend = ARGV[ARGV.index('--frontend') + 1] if ARGV.include?('--frontend')
-          exit Lich::Common::CLI::PasswordManager.add_account(account, password, frontend)
+          exit Lich::Common::Authentication::CLIPassword.add_account(account, password, frontend)
         end
 
         def self.handle_change_master_password
@@ -126,7 +126,7 @@ module Lich
             exit 1
           end
 
-          exit Lich::Common::CLI::PasswordManager.change_master_password(old_password, new_password)
+          exit Lich::Common::Authentication::CLIPassword.change_master_password(old_password, new_password)
         end
 
         def self.handle_recover_master_password
@@ -134,7 +134,7 @@ module Lich
           new_password = ARGV[idx + 1]
 
           # new_password is optional - if not provided, user will be prompted interactively
-          exit Lich::Common::CLI::PasswordManager.recover_master_password(new_password)
+          exit Lich::Common::Authentication::CLIPassword.recover_master_password(new_password)
         end
 
         def self.handle_convert_entries
@@ -157,7 +157,7 @@ module Lich
           # For enhanced mode, prompt for master password and store in keychain before conversion
           # This way migrate_from_legacy will find it in keychain and not try to show GUI dialog
           if encryption_mode_str == 'enhanced'
-            master_password = Lich::Common::CLI::PasswordManager.prompt_and_confirm_password('Enter new master password for enhanced encryption')
+            master_password = Lich::Common::Authentication::CLIPassword.prompt_and_confirm_password('Enter new master password for enhanced encryption')
             if master_password.nil?
               puts 'error: Master password creation cancelled'
               exit 1

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative '../gui/yaml_state'
+require_relative '../authentication/entry_store'
 
 module Lich
   module Common
@@ -15,13 +15,13 @@ module Lich
         # @return [Boolean] True if conversion is needed
         def self.conversion_needed?(data_dir)
           dat_file = File.join(data_dir, 'entry.dat')
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           File.exist?(dat_file) && !File.exist?(yaml_file)
         end
 
         # Performs conversion from entry.dat to entry.yaml
-        # Delegates to YamlState.migrate_from_legacy for actual conversion
+        # Delegates to EntryStore.migrate_from_legacy for actual conversion
         # For enhanced mode, user will be prompted to create a master password interactively
         #
         # @param data_dir [String] Directory containing entry data
@@ -33,7 +33,7 @@ module Lich
 
           # Validate preconditions
           dat_file = File.join(data_dir, 'entry.dat')
-          yaml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           unless File.exist?(dat_file)
             Lich.log "error: entry.dat not found at #{dat_file}"
@@ -45,12 +45,12 @@ module Lich
             return false
           end
 
-          # Delegate to YamlState for the actual conversion
+          # Delegate to EntryStore for the actual conversion
           # For enhanced mode, migrate_from_legacy will prompt user to create master password
-          result = Lich::Common::GUI::YamlState.migrate_from_legacy(data_dir, encryption_mode: mode)
+          result = Lich::Common::Authentication::EntryStore.migrate_from_legacy(data_dir, encryption_mode: mode)
 
           unless result
-            Lich.log "error: YamlState.migrate_from_legacy returned false"
+            Lich.log "error: EntryStore.migrate_from_legacy returned false"
           end
 
           result

@@ -302,9 +302,9 @@ module Lich
             handle_shattered_connection(processed_options)
           elsif ARGV.include?('--fallen')
             handle_fallen_connection(processed_options)
-          elsif Lich::Util::LoginHelpers.gemstone_flag?(ARGV)
+          elsif Lich::Common::Authentication::LoginHelpers.gemstone_flag?(ARGV)
             handle_gemstone_connection(processed_options)
-          elsif Lich::Util::LoginHelpers.dragonrealms_flag?(ARGV)
+          elsif Lich::Common::Authentication::LoginHelpers.dragonrealms_flag?(ARGV)
             handle_dragonrealms_connection(processed_options)
           else
             processed_options[:game_host] = nil

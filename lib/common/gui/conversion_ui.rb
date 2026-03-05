@@ -16,7 +16,7 @@ module Lich
         # @return [Boolean] True if conversion is needed (entry.dat exists but entry.yaml doesn't)
         def self.conversion_needed?(data_dir)
           dat_file = File.join(data_dir, "entry.dat")
-          yml_file = Lich::Common::GUI::YamlState.yaml_file_path(data_dir)
+          yml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # TODO: need a guard for new installs with no dat_file
           File.exist?(dat_file) && !File.exist?(yml_file)
@@ -69,7 +69,7 @@ module Lich
           info_text = "<span size='large'>Your existing saved entries data will be converted to a new format. This is a one-time process and your original saved entries data will be retained unmodified."
 
           # Only show entry.dat file info if conversion hasn't happened yet
-          unless File.exist?(Lich::Common::GUI::YamlState.yaml_file_path(DATA_DIR))
+          unless File.exist?(Lich::Common::Authentication::EntryStore.yaml_file_path(DATA_DIR))
             info_text += "\n\nExisting:\t\t#{DATA_DIR}/entry.dat\n" +
                          "Converted:\t#{DATA_DIR}/entry.yaml\n\n" +
                          "entry.dat will no longer be used, and may be deleted at your convenience"
@@ -235,7 +235,7 @@ module Lich
                   sleep(0.5)
 
                   # Perform the actual conversion using existing method with selected mode
-                  success = YamlState.migrate_from_legacy(data_dir, encryption_mode: selected_mode)
+                  success = Lich::Common::Authentication::EntryStore.migrate_from_legacy(data_dir, encryption_mode: selected_mode)
 
                   Gtk.queue do
                     progress_bar.fraction = 0.8

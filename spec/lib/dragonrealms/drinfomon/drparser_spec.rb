@@ -208,15 +208,19 @@ module UserVars
   end
 end unless defined?(UserVars)
 
-# Mock Account
-module Account
-  @name = nil
-  @subscription = nil
+# Mock Account in proper namespace
+module Lich
+  module Common
+    module Account
+      @name = nil
+      @subscription = nil
 
-  class << self
-    attr_accessor :name, :subscription
+      class << self
+        attr_accessor :name, :subscription
+      end
+    end
   end
-end unless defined?(Account)
+end unless defined?(Lich::Common::Account)
 
 # Mock XMLData
 module XMLData
@@ -292,8 +296,8 @@ RSpec.describe Lich::DragonRealms::DRParser do
     DRSpells.grabbing_known_spells = false
     DRSpells.grabbing_known_khri = false
     DRSpells.check_known_barbarian_abilities = false
-    Account.name = nil
-    Account.subscription = nil
+    Lich::Common::Account.name = nil
+    Lich::Common::Account.subscription = nil
     DRSkill.exp_modifiers.clear
   end
 
@@ -553,35 +557,35 @@ RSpec.describe Lich::DragonRealms::DRParser do
 
     describe 'account parsing' do
       it 'sets account name' do
-        Account.name = nil
+        Lich::Common::Account.name = nil
         line = "Account Info for TESTACCOUNT:"
         DRParser.parse(line)
 
-        expect(Account.name).to eq('TESTACCOUNT')
+        expect(Lich::Common::Account.name).to eq('TESTACCOUNT')
       end
 
       it 'sets subscription type' do
-        Account.subscription = nil
+        Lich::Common::Account.subscription = nil
         line = "Current Account Status: Premium"
         DRParser.parse(line)
 
-        expect(Account.subscription).to eq('PREMIUM')
+        expect(Lich::Common::Account.subscription).to eq('PREMIUM')
       end
 
       it 'normalizes Basic to Normal' do
-        Account.subscription = nil
+        Lich::Common::Account.subscription = nil
         line = "Current Account Status: Basic"
         DRParser.parse(line)
 
-        expect(Account.subscription).to eq('NORMAL')
+        expect(Lich::Common::Account.subscription).to eq('NORMAL')
       end
 
       it 'normalizes F2P to Free' do
-        Account.subscription = nil
+        Lich::Common::Account.subscription = nil
         line = "Current Account Status: F2P"
         DRParser.parse(line)
 
-        expect(Account.subscription).to eq('FREE')
+        expect(Lich::Common::Account.subscription).to eq('FREE')
       end
     end
 
