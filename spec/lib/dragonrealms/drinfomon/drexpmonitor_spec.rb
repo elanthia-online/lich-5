@@ -365,4 +365,54 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
       expect(Lich::Messaging.messages).to be_empty
     end
   end
+
+  describe 'thread safety' do
+    it 'handles concurrent start calls without error' do
+      threads = 5.times.map do
+        Thread.new { DRExpMonitor.start }
+      end
+
+      expect { threads.each(&:join) }.not_to raise_error
+      expect(DRExpMonitor.active?).to be true
+    end
+
+    it 'handles concurrent stop calls without error' do
+      DRExpMonitor.start
+      expect(DRExpMonitor.active?).to be true
+
+      threads = 5.times.map do
+        Thread.new { DRExpMonitor.stop }
+      end
+
+      expect { threads.each(&:join) }.not_to raise_error
+      expect(DRExpMonitor.active?).to be false
+    end
+
+    it 'handles concurrent start and stop calls without error' do
+      threads = []
+
+      # Alternate start/stop calls from different threads
+      5.times do |i|
+        threads << Thread.new do
+          if i.even?
+            DRExpMonitor.start
+          else
+            DRExpMonitor.stop
+          end
+        end
+      end
+
+      expect { threads.each(&:join) }.not_to raise_error
+    end
+
+    it 'does not leave mutex locked after exception in start' do
+      # Stub Script.running? to raise an exception
+      allow(Script).to receive(:running?).and_raise(StandardError.new("test error"))
+
+      expect { DRExpMonitor.start rescue nil }.not_to raise_error
+
+      # Should be able to call stop without deadlock
+      expect { DRExpMonitor.stop }.not_to raise_error
+    end
+  end
 end

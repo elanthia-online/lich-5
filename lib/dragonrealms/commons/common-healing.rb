@@ -6,10 +6,11 @@ module Lich
       module_function
 
       # Strips XML tags and decodes common HTML entities from game output lines.
-      # Returns an array of non-empty, trimmed strings.
+      # @param lines [Array<String>] Array of raw game output lines
+      # @return [Array<String>] Array of non-empty, trimmed strings with XML removed
+      # @see DRC.strip_xml Delegates to shared utility
       def strip_xml(lines)
-        lines.map { |line| line.gsub(/<[^>]+>/, '').gsub('&gt;', '>').gsub('&lt;', '<').strip }
-             .reject(&:empty?)
+        DRC.strip_xml(lines)
       end
 
       def has_tendable_bleeders?

@@ -5,6 +5,8 @@ module Lich
     module DRCT
       module_function
 
+      # Direction reversal mapping for path reversal
+      # Note: With frozen_string_literal: true, string literals are already frozen
       DIRECTION_REVERSE = {
         'northeast' => 'southwest',
         'southwest' => 'northeast',
@@ -16,18 +18,20 @@ module Lich
         'west'      => 'east',
         'up'        => 'down',
         'down'      => 'up'
-      }.each_value(&:freeze).freeze unless defined?(DIRECTION_REVERSE)
+      }.freeze unless defined?(DIRECTION_REVERSE)
 
+      # Patterns indicating successful sale at a merchant
       SELL_SUCCESS_PATTERNS = [
         /hands? you \d+ (?:kronars|lirums|dokoras)/i
-      ].each(&:freeze).freeze unless defined?(SELL_SUCCESS_PATTERNS)
+      ].freeze unless defined?(SELL_SUCCESS_PATTERNS)
 
+      # Patterns indicating failed sale attempt
       SELL_FAILURE_PATTERNS = [
         /I need to examine the merchandise first/,
         /That's not worth anything/,
         /I only deal in pelts/,
         /There's folk around here that'd slit a throat for this/
-      ].each(&:freeze).freeze unless defined?(SELL_FAILURE_PATTERNS)
+      ].freeze unless defined?(SELL_FAILURE_PATTERNS)
 
       BUY_PRICE_PATTERNS = [
         /prepared to offer it to you for (?<amount>.*) (?:kronar|lirum|dokora)s?/,
@@ -52,23 +56,26 @@ module Lich
         /I would suggest (?<amount>.*) (?:kronar|lirum|dokora)s?/i,
         /to you for (?<amount>.*) (?:kronar|lirum|dokora)s?/i,
         /asking (?<amount>.*) (?:kronar|lirum|dokora)s?/i
-      ].each(&:freeze).freeze unless defined?(BUY_PRICE_PATTERNS)
+      ].freeze unless defined?(BUY_PRICE_PATTERNS)
 
+      # Patterns indicating buy action without price info
       BUY_NON_PRICE_PATTERNS = [
         'You decide to purchase',
         'Buy what'
-      ].each(&:freeze).freeze unless defined?(BUY_NON_PRICE_PATTERNS)
+      ].freeze unless defined?(BUY_NON_PRICE_PATTERNS)
 
+      # Patterns indicating successful ASK request
       ASK_SUCCESS_PATTERNS = [
         /hands you/
-      ].each(&:freeze).freeze unless defined?(ASK_SUCCESS_PATTERNS)
+      ].freeze unless defined?(ASK_SUCCESS_PATTERNS)
 
+      # Patterns indicating failed ASK request
       ASK_FAILURE_PATTERNS = [
         /does not seem to know anything about that/,
         /All I know about/,
         /To whom are you speaking/,
         /Usage: ASK/
-      ].each(&:freeze).freeze unless defined?(ASK_FAILURE_PATTERNS)
+      ].freeze unless defined?(ASK_FAILURE_PATTERNS)
 
       # Visit a merchant and sell an item.
       # Usually to sell junk at pawn shops.

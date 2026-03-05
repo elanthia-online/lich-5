@@ -837,4 +837,102 @@ RSpec.describe Lich::DragonRealms do
       expect(helper.clean_npc_string([])).to eq([])
     end
   end
+
+  describe '#extract_pcs (DRY helper)' do
+    context 'with default parameters' do
+      it 'extracts all player names' do
+        result = helper.extract_pcs('Mahtra and Quilsilgas')
+        expect(result).to contain_exactly('Mahtra', 'Quilsilgas')
+      end
+
+      it 'returns empty array for nil input' do
+        expect(helper.extract_pcs(nil)).to eq([])
+      end
+
+      it 'returns empty array for empty string' do
+        expect(helper.extract_pcs('')).to eq([])
+      end
+    end
+
+    context 'with filter_pattern' do
+      it 'filters to only lying down players' do
+        result = helper.extract_pcs(
+          'Mahtra who is lying down and Quilsilgas',
+          filter_pattern: Lich::DragonRealms::DRDefsPattern::LYING_DOWN
+        )
+        expect(result).to eq(['Mahtra'])
+      end
+
+      it 'filters to only sitting players' do
+        result = helper.extract_pcs(
+          'Mahtra who is sitting and Quilsilgas who is lying down',
+          filter_pattern: Lich::DragonRealms::DRDefsPattern::SITTING
+        )
+        expect(result).to eq(['Mahtra'])
+      end
+
+      it 'returns empty when no matches' do
+        result = helper.extract_pcs(
+          'Mahtra and Quilsilgas',
+          filter_pattern: Lich::DragonRealms::DRDefsPattern::LYING_DOWN
+        )
+        expect(result).to eq([])
+      end
+    end
+
+    context 'with custom status_pattern' do
+      it 'uses custom pattern to strip status' do
+        result = helper.extract_pcs(
+          'Mahtra who is lying down',
+          filter_pattern: Lich::DragonRealms::DRDefsPattern::LYING_DOWN,
+          status_pattern: Lich::DragonRealms::DRDefsPattern::WHO_STATUS
+        )
+        expect(result).to eq(['Mahtra'])
+      end
+    end
+  end
+
+  describe '#extract_npcs (DRY helper)' do
+    context 'with select_dead: false (default)' do
+      it 'extracts only living NPCs' do
+        room_objs = "You also see a <pushBold/>goblin<popBold/> and a <pushBold/>spider<popBold/> which appears dead."
+        result = helper.extract_npcs(room_objs, select_dead: false)
+        expect(result).to include('goblin')
+        expect(result).not_to include('spider')
+      end
+    end
+
+    context 'with select_dead: true' do
+      it 'extracts only dead NPCs' do
+        room_objs = "You also see a <pushBold/>goblin<popBold/> and a <pushBold/>spider<popBold/> which appears dead."
+        result = helper.extract_npcs(room_objs, select_dead: true)
+        expect(result).to include('spider')
+        expect(result).not_to include('goblin')
+      end
+
+      it 'handles (dead) format' do
+        room_objs = "You also see a <pushBold/>goblin<popBold/> (dead)."
+        result = helper.extract_npcs(room_objs, select_dead: true)
+        expect(result).to include('goblin')
+      end
+    end
+
+    context 'edge cases' do
+      it 'handles empty room objects' do
+        result = helper.extract_npcs('')
+        expect(result).to eq([])
+      end
+
+      it 'handles room with no NPCs' do
+        result = helper.extract_npcs('You also see a sword and a shield.')
+        expect(result).to eq([])
+      end
+
+      it 'adds ordinals to duplicate NPCs' do
+        room_objs = "You also see a <pushBold/>goblin<popBold/> and a <pushBold/>goblin<popBold/>."
+        result = helper.extract_npcs(room_objs, select_dead: false)
+        expect(result).to contain_exactly('goblin', 'second goblin')
+      end
+    end
+  end
 end

@@ -11,8 +11,7 @@ module Lich
       @@dead_npcs ||= []
       @@room_objs ||= []
       @@exits ||= []
-      @@title = ''
-      @@description = ''
+      # NOTE: @@title and @@description removed - getters delegate to XMLData
 
       def self.npcs
         @@npcs
