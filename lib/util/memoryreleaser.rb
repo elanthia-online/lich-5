@@ -9,7 +9,7 @@ module Lich
     # This module uses a singleton pattern to manage a background thread that periodically
     # releases memory back to the operating system after running Ruby's garbage collector.
     #
-    # Settings are persisted per-character using Lich::Common::DB_Store and include:
+    # Settings are persisted per-character using InstanceSettings and include:
     # - auto_start: automatically start the memory releaser on module load
     # - interval: time in seconds between memory releases
     # - verbose: enable detailed logging
@@ -44,7 +44,7 @@ module Lich
     module MemoryReleaser
       # Default settings for memory releaser
       DEFAULT_SETTINGS = {
-        auto_start: false, # Disabled by default, user must enable
+        auto_start: true, # Disabled by default, user must enable
         interval: 900, # default of 15 minutes
         verbose: false,
       }.freeze
@@ -158,14 +158,13 @@ module Lich
 
         # Load settings from persistent storage
         #
-        # Settings are stored per-character using the format "game:character_name".
+        # Settings are stored per-character using InstanceSettings.
         # If no stored settings exist, defaults are used.
         #
         # @return [Hash] the loaded settings
         def load_settings
-          # Load from DB_Store with per-character scope
-          scope = "#{XMLData.game}:#{XMLData.name}"
-          stored_settings = Lich::Common::DB_Store.read(scope, 'lich_memory_releaser') || {}
+          # Load from InstanceSettings with per-character scope
+          stored_settings = Lich::Common::InstanceSettings['memoryreleaser'] || {}
           @settings = DEFAULT_SETTINGS.merge(stored_settings)
 
           # Apply loaded settings to instance variables
@@ -184,14 +183,12 @@ module Lich
 
         # Save current settings to persistent storage
         #
-        # Settings are stored per-character using the format "game:character_name".
+        # Settings are stored per-character using InstanceSettings character scope.
         #
         # @return [Hash] the saved settings
         def save_settings
-          # Save current settings to DB_Store with per-character scope
-          scope = "#{XMLData.game}:#{XMLData.name}"
-          Lich::Common::DB_Store.save(scope, 'lich_memory_releaser', @settings)
-          @settings
+          # Save current settings back to InstanceSettings with per-character scope
+          Lich::Common::InstanceSettings['memoryreleaser'] = @settings
         rescue => e
           respond "[MemoryReleaser] Error saving settings: #{e.message}"
           @settings
@@ -265,14 +262,24 @@ module Lich
 
         # Perform a complete memory release cycle
         #
-        # This runs Ruby's garbage collector with full mark and immediate sweep,
+        # Prunes stale entries from the GameObj shared identity index using the
+        # current interval as the TTL — any index entry not seen within the last
+        # +@interval+ seconds (and not held in an active registry) is evicted
+        # before the GC and OS-level release steps run. This ensures the index
+        # stays lean and the subsequent GC pass has the most to reclaim.
+        #
+        # Runs Ruby's garbage collector with full mark and immediate sweep,
         # attempts to compact the heap if available, and then releases memory
         # back to the operating system using platform-specific methods.
         #
         # @return [void]
         def release
+          before = print_memory_stats if @verbose
+          Lich::Common::GameObj.prune_index!(ttl: @interval, verbose: @verbose)
           run_gc
           release_to_os
+          after = print_memory_stats if @verbose
+          print_memory_diff(before, after) if @verbose
           log "Memory release completed"
         end
 
@@ -771,11 +778,13 @@ module Lich
       @instance = nil
 
       class << self
-        # @api private
+        # @api private Internal plumbing for Manager → launcher communication.
+        #   No compatibility guarantee. Do not call from external scripts.
         # @return [Queue] the command queue for communicating with the launcher thread
         attr_reader :command_queue
 
-        # @api private
+        # @api private Internal plumbing for Manager → launcher communication.
+        #   No compatibility guarantee. Do not call from external scripts.
         # @return [Thread, nil] the current worker thread
         attr_reader :worker_thread
 
@@ -894,6 +903,15 @@ module Lich
           @instance&.stop
           @instance = nil
         end
+      end
+
+      # Trigger auto-start check on module load
+      Thread.new do
+        sleep(0.5) until (defined?(XMLData))
+        sleep(0.5) until (defined?(InstanceSettings))
+        sleep(0.5) while XMLData.game.nil? || XMLData.name.nil?
+        sleep(5)
+        Lich::Util::MemoryReleaser.instance
       end
     end
   end
