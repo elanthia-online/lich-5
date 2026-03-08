@@ -136,9 +136,10 @@ module Lich
         # @param theme_state [Boolean] Current theme state
         # @param tab_layout_state [Boolean] Current tab layout state
         # @param autosort_state [Boolean] Current autosort state
+        # @param persistent_launcher_state [Boolean] Current persistent launcher mode state
         # @param callbacks [Hash] Callbacks for settings changes
         # @return [Hash] Hash containing created UI elements
-        def self.create_global_settings_components(parent_container, theme_state, tab_layout_state, autosort_state, callbacks)
+        def self.create_global_settings_components(parent_container, theme_state, tab_layout_state, autosort_state, persistent_launcher_state, callbacks)
           # Create toggle button styling
           togglebutton_provider = create_toggle_button_css_provider
 
@@ -147,12 +148,16 @@ module Lich
           theme_select = Gtk::Switch.new
           tab_select = Gtk::Switch.new
           sort_select = Gtk::Switch.new
+          persistent_launcher_select = Gtk::Switch.new
           theme_select_label = Gtk::Label.new('Dark Theme')
           tab_select_label = Gtk::Label.new('Tab Layout')
           sort_select_label = Gtk::Label.new('AutoSort')
+          persistent_launcher_label = Gtk::Label.new('Multi-Launch')
           theme_select.set_active(true) if theme_state == true
           tab_select.set_active(true) if tab_layout_state == true
           sort_select.set_active(true) if autosort_state == true
+          # Keep the helper pure/testable by taking this state as input.
+          persistent_launcher_select.set_active(true) if persistent_launcher_state == true
 
           # Add switches to slider box
           # slider_box = Gtk::Box.new(:vertical, 5)
@@ -166,6 +171,8 @@ module Lich
           # row2 = Gtk::Box.new(:horizontal, 10)
           row1.pack_start(sort_select, expand: false, fill: false, padding: 0)
           row1.pack_start(sort_select_label, expand: false, fill: false, padding: 0)
+          row1.pack_start(persistent_launcher_select, expand: false, fill: false, padding: 0)
+          row1.pack_start(persistent_launcher_label, expand: false, fill: false, padding: 0)
 
           slider_box.pack_start(row1, expand: false, fill: false, padding: 0)
           # slider_box.pack_start(row2, expand: false, fill: false, padding: 0)
@@ -212,6 +219,13 @@ module Lich
             false
           }
 
+          # Persistent launcher switch handler
+          persistent_launcher_select.signal_connect('state-set') { |_widget, state|
+            Lich.track_persistent_launcher_mode = state
+            callbacks[:on_persistent_launcher_change]&.call(state)
+            false
+          }
+
           # Initially hide the slider box
           slider_box.visible = false
 
@@ -221,7 +235,8 @@ module Lich
             settings_option: settings_option,
             theme_select: theme_select,
             tab_select: tab_select,
-            sort_select: sort_select
+            sort_select: sort_select,
+            persistent_launcher_select: persistent_launcher_select
           }
         end
 
