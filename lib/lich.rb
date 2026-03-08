@@ -177,6 +177,12 @@ module Lich
       Lich.db.execute("CREATE TABLE IF NOT EXISTS script_auto_settings (script TEXT NOT NULL, scope TEXT, hash BLOB, PRIMARY KEY(script, scope));")
       Lich.db.execute("CREATE TABLE IF NOT EXISTS lich_settings (name TEXT NOT NULL, value TEXT, PRIMARY KEY(name));")
       Lich.db.execute("CREATE TABLE IF NOT EXISTS uservars (scope TEXT NOT NULL, hash BLOB, PRIMARY KEY(scope));")
+      # Session summary reporting table for process-level heartbeat metadata.
+      # This schema is initialized with the rest of core DB setup to avoid
+      # runtime DDL lock contention on first adapter access.
+      Lich.db.execute("CREATE TABLE IF NOT EXISTS session_summary_state (pid INTEGER PRIMARY KEY, ppid INTEGER, session_name TEXT, role TEXT, state TEXT, frontend TEXT, game_code TEXT, hidden INTEGER DEFAULT 0, started_at INTEGER, last_heartbeat_at INTEGER, last_utilization_at INTEGER, metadata_json TEXT);")
+      Lich.db.execute("CREATE INDEX IF NOT EXISTS idx_session_summary_state_session_name ON session_summary_state(session_name);")
+      Lich.db.execute("CREATE INDEX IF NOT EXISTS idx_session_summary_state_heartbeat ON session_summary_state(last_heartbeat_at);")
       if (RUBY_VERSION =~ /^2\.[012]\./)
         Lich.db.execute("CREATE TABLE IF NOT EXISTS trusted_scripts (name TEXT NOT NULL);")
       end

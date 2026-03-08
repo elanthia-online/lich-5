@@ -616,3 +616,4 @@ end
 
 require_relative 'settings/settings_proxy'
 require_relative 'settings/instance_settings'
+require_relative 'settings/sessions_settings'

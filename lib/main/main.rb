@@ -46,6 +46,7 @@ reconnect_if_wanted = proc {
   @launch_data = nil
   require File.join(LIB_DIR, 'common', 'authentication', 'eaccess.rb')
   require File.join(LIB_DIR, 'common', 'account.rb')
+  require File.join(LIB_DIR, 'common', 'session_lifecycle.rb')
 
   if ARGV.include?('--login')
     # CLI login flow: character authentication via saved entries
@@ -703,6 +704,16 @@ reconnect_if_wanted = proc {
     detachable_client_thread = nil
   end
 
+  session_name = Lich::Common::SessionLifecycle.resolve_session_name(
+    argv: ARGV,
+    account_character: (Lich::Common::Account.character rescue nil)
+  )
+  session_role = Lich::Common::SessionLifecycle.resolve_role(
+    argv: ARGV,
+    detachable_client_port: @argv_options[:detachable_client_port]
+  )
+  Lich::Common::SessionLifecycle.start(session_name: session_name, role: session_role)
+
   wait_while { $offline_mode }
 
   if Frontend.client.eql?('wizard')
@@ -728,6 +739,7 @@ reconnect_if_wanted = proc {
   Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
   Settings.save
   Vars.save
+  Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
   Lich.log 'info: closing connections...'
   Game.close
   200.times { sleep 0.1; break if Game.closed? }
