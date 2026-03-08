@@ -52,6 +52,12 @@ module Lich
     false
   end
 
+  def self.track_persistent_launcher_mode
+    # Default launcher mode state for tests: preserve existing single-launch behavior
+    # unless a spec explicitly overrides this to exercise persistent mode.
+    false
+  end
+
   module Util
     def self.install_gem_requirements(*)
       # Mock implementation for testing (for login = 'os' and 'ffi'

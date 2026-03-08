@@ -112,7 +112,7 @@ module Lich
       class CallbackParams
         attr_accessor :on_play, :on_remove, :on_save, :on_error,
                       :on_theme_change, :on_layout_change, :on_sort_change,
-                      :on_add_character, :on_favorites_change, :on_favorites_reorder
+                      :on_persistent_launcher_change, :on_add_character, :on_favorites_change, :on_favorites_reorder
 
         # Initializes a new CallbackParams instance with favorites support
         #
@@ -124,6 +124,7 @@ module Lich
         # @option params [Proc] :on_theme_change Callback for theme changes
         # @option params [Proc] :on_layout_change Callback for layout changes
         # @option params [Proc] :on_sort_change Callback for sort changes
+        # @option params [Proc] :on_persistent_launcher_change Callback for persistent launcher mode changes
         # @option params [Proc] :on_add_character Callback for adding characters
         # @option params [Proc] :on_favorites_change Callback for favorites status changes
         # @option params [Proc] :on_favorites_reorder Callback for favorites reordering
@@ -136,6 +137,7 @@ module Lich
           @on_theme_change = params[:on_theme_change]
           @on_layout_change = params[:on_layout_change]
           @on_sort_change = params[:on_sort_change]
+          @on_persistent_launcher_change = params[:on_persistent_launcher_change]
           @on_add_character = params[:on_add_character]
           @on_favorites_change = params[:on_favorites_change]
           @on_favorites_reorder = params[:on_favorites_reorder]
@@ -153,6 +155,7 @@ module Lich
             on_theme_change: @on_theme_change,
             on_layout_change: @on_layout_change,
             on_sort_change: @on_sort_change,
+            on_persistent_launcher_change: @on_persistent_launcher_change,
             on_add_character: @on_add_character,
             on_favorites_change: @on_favorites_change,
             on_favorites_reorder: @on_favorites_reorder
