@@ -6,6 +6,7 @@ require_relative 'gui/account_manager_ui'
 require_relative 'authentication/authenticator'
 require_relative 'authentication/entry_store'
 require_relative 'authentication/gui'
+require_relative 'session_launcher'
 require_relative 'gui/components'
 require_relative 'gui/conversion_ui'
 require_relative 'gui/favorites_manager'
@@ -53,6 +54,7 @@ module Lich
       @autosort_state = Lich.track_autosort_state
       @tab_layout_state = Lich.track_layout_state
       @theme_state = Lich.track_dark_mode
+      @persistent_launcher_mode = Lich.track_persistent_launcher_mode
 
       # Initialize accessibility support
       Lich::Common::GUI::Accessibility.initialize_accessibility if defined?(Lich::Common::GUI::Accessibility)
@@ -294,12 +296,7 @@ module Lich
       # Create callbacks for saved login tab
       saved_login_callbacks = {
         on_play: ->(launch_data) {
-          @launch_data = launch_data
-          # Wrap window destruction in Gtk.queue to ensure it runs on the GTK main thread
-          Gtk.queue {
-            @window.destroy unless @window.destroyed?
-            @done = true
-          }
+          handle_play_action(launch_data)
         },
         on_remove: ->(login_info) {
           # Use AccountManager to remove character directly from YAML to preserve encryption
@@ -354,6 +351,9 @@ module Lich
         on_sort_change: ->(state) {
           # Handle sort change
         },
+        on_persistent_launcher_change: ->(state) {
+          @persistent_launcher_mode = state
+        },
         on_favorites_change: ->(username:, char_name:, game_code:, is_favorite:) {
           # Handle favorite status change - notify other tabs
           @tab_communicator.notify_data_changed(:favorite_toggled, {
@@ -368,12 +368,7 @@ module Lich
       # Create callbacks for manual login tab
       manual_login_callbacks = {
         on_play: ->(launch_data) {
-          @launch_data = launch_data
-          # Wrap window destruction in Gtk.queue to ensure it runs on the GTK main thread
-          Gtk.queue {
-            @window.destroy unless @window.destroyed?
-            @done = true
-          }
+          handle_play_action(launch_data)
         },
         # Handles successful login data saving from manual login tab
         # Optimized to reduce redundant cache refreshes
@@ -596,6 +591,29 @@ module Lich
       @slider_box.visible = false
 
       @notebook.set_page(1) if @entry_data.empty?
+    end
+
+    # Handles launch action for both saved and manual tabs.
+    # In persistent launcher mode the GUI stays open and launches a child process.
+    # In default mode behavior remains unchanged (single launch and close).
+    #
+    # @param launch_data [Array<String>] Prepared launch data from auth flow
+    # @return [void]
+    def handle_play_action(launch_data)
+      if @persistent_launcher_mode
+        # Persistent mode: launch child session, keep the launcher window active.
+        launch_result = Lich::Common::SessionLauncher.launch(launch_data)
+        unless launch_result[:ok]
+          @msgbox.call("Failed to launch session: #{launch_result[:error]}") if @msgbox
+        end
+      else
+        # Regression-safe default path: preserve single-launch behavior exactly.
+        @launch_data = launch_data
+        Gtk.queue {
+          @window.destroy unless @window.destroyed?
+          @done = true
+        }
+      end
     end
 
     # Saves entry data if needed
