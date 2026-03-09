@@ -620,7 +620,12 @@ module Lich
               # Call the play callback if provided
               if @callbacks.on_play
 
-                @callbacks.on_play.call(launch_data) # (login_params)
+                @callbacks.on_play.call(launch_data, {
+                  char_name: normalized_character,
+                  game_code: selected_iter[0],
+                  frontend: frontend,
+                  custom_launch: custom_launch
+                })
               end
 
             end
