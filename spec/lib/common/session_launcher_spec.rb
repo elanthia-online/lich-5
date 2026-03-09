@@ -112,8 +112,8 @@ RSpec.describe Lich::Common::SessionLauncher do
       '--home=/tmp/lich-home',
       '--data=/tmp/lich-data',
       '--scripts=/tmp/lich-scripts',
-      '--lib=/Users/doug/dev/test/lich-5/lib',
-      hash_including(chdir: anything)
+      "--lib=#{LIB_DIR}",
+      hash_including(chdir: '/tmp/lich-home')
     )
   end
 end
