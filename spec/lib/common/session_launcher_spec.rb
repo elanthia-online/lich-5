@@ -17,6 +17,8 @@ RSpec.describe Lich::Common::SessionLauncher do
     allow(Lich::Common::Authentication::LoginHelpers).to receive(:format_launch_flag).and_return('--GST')
     allow(described_class).to receive(:windows?).and_return(false)
     allow(RbConfig).to receive(:ruby).and_return('/usr/bin/ruby')
+    # Keep legacy spawn assertions stable unless explicitly testing optional passthrough.
+    allow(described_class).to receive(:optional_spawn_flags).and_return([])
     allow(Process).to receive(:detach)
     allow(described_class).to receive(:spawn).and_return(1234)
   end
@@ -82,5 +84,36 @@ RSpec.describe Lich::Common::SessionLauncher do
     allow(RbConfig).to receive(:ruby).and_return('C:/Ruby/bin/ruby.exe')
 
     expect(described_class.send(:ruby_binary)).to eq('C:/Ruby/bin/rubyw.exe')
+  end
+
+  it 'forwards optional dark mode and directory flags only when defined' do
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(true)
+    stub_const('LICH_DIR', '/tmp/lich-home')
+    stub_const('DATA_DIR', '/tmp/lich-data')
+    stub_const('SCRIPT_DIR', '/tmp/lich-scripts')
+
+    result = described_class.launch(
+      launch_data + ['CHARACTER=Tsetem'],
+      launch_context: {
+        frontend: 'stormfront'
+      }
+    )
+
+    expect(result).to eq({ ok: true, pid: 1234 })
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      '--dark-mode=true',
+      '--home=/tmp/lich-home',
+      '--data=/tmp/lich-data',
+      '--scripts=/tmp/lich-scripts',
+      '--lib=/Users/doug/dev/test/lich-5/lib',
+      hash_including(chdir: anything)
+    )
   end
 end
