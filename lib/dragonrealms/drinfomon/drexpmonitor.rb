@@ -37,53 +37,60 @@ module Lich
       @@running = false
       @@report_interval = 1 # Hard-coded 1 second for real-time reporting
       @@inline_display = nil # Lazy-loaded from DB, defaults to true
+      @@mutex = Mutex.new # Thread safety for start/stop operations
 
       # Start the background reporter thread
+      # Thread-safe: uses mutex to prevent race conditions
       def self.start
-        if @@running
-          Lich::Messaging.msg('info', 'DRExpMonitor: Experience gain reporting is already active')
-          return
-        end
+        @@mutex.synchronize do
+          if @@running
+            Lich::Messaging.msg('info', 'DRExpMonitor: Experience gain reporting is already active')
+            return
+          end
 
-        # Check for exp-monitor.lic conflict
-        if Script.running?('exp-monitor')
-          Lich::Messaging.msg('error', 'DRExpMonitor: Cannot start: exp-monitor.lic script is running')
-          Lich::Messaging.msg('error', "DRExpMonitor: Stop it first with: #{$clean_lich_char}kill exp-monitor")
-          return
-        end
+          # Check for exp-monitor.lic conflict
+          if Script.running?('exp-monitor')
+            Lich::Messaging.msg('error', 'DRExpMonitor: Cannot start: exp-monitor.lic script is running')
+            Lich::Messaging.msg('error', "DRExpMonitor: Stop it first with: #{$clean_lich_char}kill exp-monitor")
+            return
+          end
 
-        @@running = true
+          @@running = true
 
-        @@reporter_thread = Thread.new do
-          begin
-            loop do
-              break unless @@running
+          @@reporter_thread = Thread.new do
+            begin
+              loop do
+                break unless @@running
 
-              begin
-                report_skill_gains
-                sleep @@report_interval
-              rescue StandardError => e
-                Lich::Messaging.msg('error', "DRExpMonitor: Error: #{e.message}") if $DREXPMONITOR_DEBUG
-                Lich.log "DRExpMonitor error: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
-                sleep @@report_interval
+                begin
+                  report_skill_gains
+                  sleep @@report_interval
+                rescue StandardError => e
+                  Lich::Messaging.msg('error', "DRExpMonitor: Error: #{e.message}") if $DREXPMONITOR_DEBUG
+                  Lich.log "DRExpMonitor error: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
+                  sleep @@report_interval
+                end
               end
+            ensure
+              @@running = false
             end
-          ensure
-            @@running = false
           end
         end
       end
 
       # Stop the background reporter thread
+      # Thread-safe: uses mutex to prevent race conditions
       def self.stop
-        unless @@running
-          Lich::Messaging.msg('info', 'DRExpMonitor: Experience gain reporting is already inactive')
-          return
-        end
+        @@mutex.synchronize do
+          unless @@running
+            Lich::Messaging.msg('info', 'DRExpMonitor: Experience gain reporting is already inactive')
+            return
+          end
 
-        @@running = false
-        @@reporter_thread&.kill
-        @@reporter_thread = nil
+          @@running = false
+          @@reporter_thread&.kill
+          @@reporter_thread = nil
+        end
       end
 
       # Check if reporter is running
@@ -92,10 +99,13 @@ module Lich
       end
 
       # Reset state (for testing)
+      # Thread-safe: uses mutex to prevent race conditions
       def self.reset!
-        @@inline_display = nil
-        @@running = false
-        @@reporter_thread = nil
+        @@mutex.synchronize do
+          @@inline_display = nil
+          @@running = false
+          @@reporter_thread = nil
+        end
       end
 
       # Check if inline display is enabled (lazy-loaded from DB, defaults to false)
@@ -162,7 +172,10 @@ module Lich
         line.sub(/(%\s+)(#{Regexp.escape(rate_word)})/, "\\1#{padded_rate} #{format('%0.2f', gained)}")
       end
 
-      # Format skill gains array to display strings
+      # Aggregates and formats skill gains for display.
+      # Combines multiple pulses of the same skill into single entries.
+      # @param gains_array [Array<Hash>] Array of { skill:, change: } hashes
+      # @return [Array<String>] Array of "Skill(+N)" formatted strings
       def self.format_gains(gains_array)
         # Aggregate multiple pulses of same skill
         aggregated = gains_array.reduce(Hash.new(0)) do |result, gain|
@@ -174,7 +187,9 @@ module Lich
         aggregated.keys.sort.map { |skill| "#{skill}(+#{aggregated[skill]})" }
       end
 
-      # Report aggregated skill gains
+      # Reports aggregated skill gains to the user.
+      # Drains the DRSkill.gained_skills array and displays formatted gains.
+      # @return [void]
       def self.report_skill_gains
         # Drain the gained_skills array
         new_skills = DRSkill.gained_skills.shift(DRSkill.gained_skills.size)
