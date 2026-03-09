@@ -7,7 +7,7 @@ module Lich
     # Minimal lifecycle coordinator for session summary reporting.
     # Registers a session, emits periodic heartbeats, and unregisters on clean shutdown.
     module SessionLifecycle
-      REGISTRATION_DELAY_SECONDS = 15
+      REGISTRATION_DELAY_SECONDS = 5
 
       @heartbeat_thread = nil
       @running = false
@@ -37,10 +37,12 @@ module Lich
         @mutex.synchronize do
           return false if @started
 
+          frontend = resolve_frontend
           started_epoch = Time.now.to_i
           started_iso = Time.at(started_epoch).utc.iso8601
           scheduled_register_epoch = started_epoch + registration_delay.to_i
           scheduled_register_iso = Time.at(scheduled_register_epoch).utc.iso8601
+          registration_complete = false
 
           @running = true
           @started = true
@@ -56,28 +58,20 @@ module Lich
             sleep registration_delay
             break unless @running
 
-            begin
-              Lich.log(
-                "info: SessionLifecycle deferred register attempt " \
-                "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
-                "attempt_epoch=#{Time.now.to_i}"
-              ) if Lich.respond_to?(:log)
-              SessionsSettings.register_session(
-                pid: Process.pid,
+            if game_context_ready?
+              registration_complete = attempt_register(
                 session_name: session_name,
                 role: role,
-                state: 'running'
+                frontend: frontend,
+                started_epoch: started_epoch,
+                started_iso: started_iso,
+                registration_delay: registration_delay
               )
+            else
               Lich.log(
-                "info: SessionLifecycle deferred register success " \
+                "info: SessionLifecycle deferred register postponed " \
                 "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
-                "success_epoch=#{Time.now.to_i}"
-              ) if Lich.respond_to?(:log)
-            rescue StandardError => e
-              Lich.log(
-                "warning: SessionLifecycle deferred register failed: #{e.class}: #{e.message} " \
-                "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
-                "started_epoch=#{started_epoch} started_iso=#{started_iso} delay=#{registration_delay}s"
+                "reason=xmldata_game_unavailable attempt_epoch=#{Time.now.to_i}"
               ) if Lich.respond_to?(:log)
             end
 
@@ -85,12 +79,31 @@ module Lich
               sleep heartbeat_interval
               break unless @running
 
+              game_code = resolve_game_code
+              if !registration_complete && !game_code.nil?
+                registration_complete = attempt_register(
+                  session_name: session_name,
+                  role: role,
+                  frontend: frontend,
+                  started_epoch: started_epoch,
+                  started_iso: started_iso,
+                  registration_delay: registration_delay
+                )
+              end
+
               Lich.log(
                 "debug: SessionLifecycle heartbeat tick " \
                 "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
                 "tick_epoch=#{Time.now.to_i}"
               ) if Lich.respond_to?(:log)
-              SessionsSettings.heartbeat(pid: Process.pid, state: 'running')
+              SessionsSettings.heartbeat(
+                pid: Process.pid,
+                state: 'running',
+                session_name: session_name,
+                role: role,
+                frontend: frontend,
+                game_code: game_code
+              )
             end
           rescue StandardError => e
             Lich.log("warning: SessionLifecycle heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
@@ -116,6 +129,56 @@ module Lich
       rescue StandardError => e
         Lich.log("warning: SessionLifecycle stop failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
         false
+      end
+
+      def self.resolve_frontend
+        return $frontend if defined?($frontend) && !$frontend.nil? && !$frontend.to_s.empty?
+
+        nil
+      end
+
+      def self.resolve_game_code
+        return XMLData.game if defined?(XMLData) && XMLData.respond_to?(:game) && !XMLData.game.nil?
+
+        nil
+      end
+
+      def self.game_context_ready?
+        !resolve_game_code.nil?
+      end
+
+      def self.attempt_register(session_name:, role:, frontend:, started_epoch:, started_iso:, registration_delay:)
+        begin
+          game_code = resolve_game_code
+          return false if game_code.nil?
+
+          Lich.log(
+            "info: SessionLifecycle deferred register attempt " \
+            "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
+            "attempt_epoch=#{Time.now.to_i}"
+          ) if Lich.respond_to?(:log)
+          SessionsSettings.register_session(
+            pid: Process.pid,
+            session_name: session_name,
+            role: role,
+            state: 'running',
+            frontend: frontend,
+            game_code: game_code
+          )
+          Lich.log(
+            "info: SessionLifecycle deferred register success " \
+            "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
+            "success_epoch=#{Time.now.to_i}"
+          ) if Lich.respond_to?(:log)
+          true
+        rescue StandardError => e
+          Lich.log(
+            "warning: SessionLifecycle deferred register failed: #{e.class}: #{e.message} " \
+            "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
+            "started_epoch=#{started_epoch} started_iso=#{started_iso} delay=#{registration_delay}s"
+          ) if Lich.respond_to?(:log)
+          false
+        end
       end
     end
   end

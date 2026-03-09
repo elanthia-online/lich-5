@@ -10,6 +10,7 @@ RSpec.describe Lich::Common::SessionLifecycle do
     allow(Lich::Common::SessionsSettings).to receive(:register_session)
     allow(Lich::Common::SessionsSettings).to receive(:heartbeat)
     allow(Lich::Common::SessionsSettings).to receive(:unregister_session)
+    allow(Lich::Common::SessionsSettings).to receive(:HEARTBEAT_INTERVAL_SECONDS).and_return(90)
     stub_const('Lich', Lich) unless defined?(Lich)
     allow(Lich).to receive(:log) if Lich.respond_to?(:log)
 
@@ -45,10 +46,18 @@ RSpec.describe Lich::Common::SessionLifecycle do
     end
   end
 
+  describe 'registration delay' do
+    it 'defaults to 5 seconds for faster startup registration' do
+      expect(described_class::REGISTRATION_DELAY_SECONDS).to eq(5)
+    end
+  end
+
   describe '.start / .stop' do
     it 'starts once and unregisters on stop (registration is deferred)' do
       fake_thread = instance_double(Thread, kill: true)
       allow(Thread).to receive(:new).and_return(fake_thread)
+      allow(described_class).to receive(:resolve_frontend).and_return('stormfront')
+      allow(described_class).to receive(:resolve_game_code).and_return('DR')
 
       expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 999)).to be true
       expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 999)).to be false
