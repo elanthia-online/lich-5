@@ -603,6 +603,11 @@ module Lich
     def handle_play_action(launch_data, login_context = nil)
       if @persistent_launcher_mode
         # Persistent mode: launch child session, keep the launcher window active.
+        if login_context.is_a?(Hash) && !login_context.key?(:dark_mode)
+          # Propagate the current launcher theme state into detached child startup.
+          login_context = login_context.merge(dark_mode: Lich.track_dark_mode)
+        end
+
         launch_result = if login_context.nil?
                           Lich::Common::SessionLauncher.launch(launch_data)
                         else

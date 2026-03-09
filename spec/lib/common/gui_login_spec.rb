@@ -303,9 +303,16 @@ RSpec.describe Lich::Common, "#gui_login" do
       test_instance.instance_variable_set(:@persistent_launcher_mode, true)
       test_instance.send(:create_tab_instances)
 
-      captured_manual_callbacks.fetch(:on_play).call(launch_data)
+      captured_manual_callbacks.fetch(:on_play).call(launch_data, { char_name: 'Tsetem', game_code: 'GST' })
 
-      expect(Lich::Common::SessionLauncher).to have_received(:launch).with(launch_data)
+      expect(Lich::Common::SessionLauncher).to have_received(:launch).with(
+        launch_data,
+        launch_context: hash_including(
+          char_name: 'Tsetem',
+          game_code: 'GST',
+          dark_mode: false
+        )
+      )
       expect(window).not_to have_received(:destroy)
       expect(test_instance.instance_variable_get(:@done)).to be false
     end
