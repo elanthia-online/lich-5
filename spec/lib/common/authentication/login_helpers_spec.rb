@@ -415,6 +415,18 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     it 'returns :__unset when no instance flags present' do
       expect(described_class.resolve_instance(['--stormfront'])).to eq(:__unset)
     end
+
+    it 'ignores bare --login and dark-mode modifiers when resolving instance' do
+      expect(described_class.resolve_instance(['--login', 'Tsetem', '--dark-mode=true'])).to eq(:__unset)
+    end
+
+    it 'ignores optional path modifiers used by persistent launcher child sessions' do
+      expect(described_class.resolve_instance(['--home=/tmp/lich', '--data=/tmp/data'])).to eq(:__unset)
+    end
+
+    it 'returns nil for unknown option-like flags (probable invalid instance intent)' do
+      expect(described_class.resolve_instance(['--invalid-instance-flag'])).to be_nil
+    end
   end
 
   describe '.resolve_login_args' do

@@ -32,6 +32,19 @@ module Lich
         # Custom launch pattern for regex matching
         CUSTOM_LAUNCH_PATTERN = /^--custom-launch=(?<cl>.+)$/i.freeze
 
+        # CLI flags that should never be interpreted as game-instance selectors.
+        NON_INSTANCE_FLAGS = %w[
+          login gui no-gui without-frontend reconnect reconnected save
+        ].freeze
+
+        # CLI options (key portion before '=') that are non-instance modifiers.
+        NON_INSTANCE_OPTION_KEYS = %w[
+          start-scripts custom-launch dark-mode
+          home data scripts temp maps logs backup lib
+          hosts-dir hosts-file account password character frontend frontend-command
+          detachable-client reconnect-delay game wine wine-prefix
+        ].freeze
+
         # Game code to realm mappings
         GAME_CODE_TO_REALM = {
           'GSX' => 'platinum',
@@ -364,7 +377,8 @@ module Lich
 
         # Resolves the game instance from command line arguments
         # @param argv [Array<String>] command line arguments
-        # @return [String, nil] game instance code or nil if no valid pattern found
+        # @return [String, Symbol, nil] game instance code, :__unset when no instance
+        #   selector is present, or nil for probable invalid instance intent.
         #
         # Supports shorthand aliases:
         #   --gs  → equivalent to --gemstone
@@ -401,9 +415,9 @@ module Lich
             resolved_instance ||= 'DRF'
           end
 
-          # Check for direct instance codes (GS3, GS4, GST, GSX, etc.)
-          # this filter ignores --login, --start-scripts=, and captures valid game codes
-          # if anything else is sent with a --flag, it is processed as an incorrect instance
+          # Check for direct instance codes (GS3, GS4, GST, GSX, etc.).
+          # Non-instance flags are ignored so CLI modifiers do not force invalid-instance
+          # handling when the user did not request an explicit instance.
           if resolved_instance.nil?
             argv.each do |arg|
               next unless arg.start_with?('--')
@@ -412,9 +426,7 @@ module Lich
                 instance_flags_seen = true
                 resolved_instance = flag.upcase
                 break
-              elsif VALID_FRONTENDS.include?(flag) # ignore anything else that isn't a valid game code
-                next
-              elsif flag =~ /^(?:start-scripts|login|custom-launch)=/
+              elsif non_instance_option_flag?(flag)
                 next
               else
                 instance_flags_seen = true # set to true so that we fall through to returning nil
@@ -425,6 +437,18 @@ module Lich
           return resolved_instance unless resolved_instance.nil?
           return :__unset unless instance_flags_seen
           nil
+        end
+
+        # Determines whether a CLI flag should be ignored by instance resolution.
+        #
+        # @param flag [String] argument content without leading "--"
+        # @return [Boolean]
+        def self.non_instance_option_flag?(flag)
+          return true if VALID_FRONTENDS.include?(flag)
+          return true if NON_INSTANCE_FLAGS.include?(flag)
+
+          option_key = flag.split('=', 2).first
+          NON_INSTANCE_OPTION_KEYS.include?(option_key)
         end
 
         # Checks if any Gemstone game flag (including aliases) is present in argv
