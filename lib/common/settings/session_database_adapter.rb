@@ -18,12 +18,11 @@ module Lich
         with_retry do
           @db.execute(<<~SQL, bind_params(payload))
             INSERT INTO #{@table_name} (
-              pid, ppid, session_name, role, state, frontend, game_code, hidden,
-              started_at, last_heartbeat_at, last_utilization_at, metadata_json
+              pid, session_name, role, state, frontend, game_code, hidden,
+              started_at, last_heartbeat_at, os_seen_at, os_seen, os_name, last_utilization_at, metadata_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(pid) DO UPDATE SET
-              ppid = COALESCE(excluded.ppid, #{@table_name}.ppid),
               session_name = COALESCE(excluded.session_name, #{@table_name}.session_name),
               role = COALESCE(excluded.role, #{@table_name}.role),
               state = COALESCE(excluded.state, #{@table_name}.state),
@@ -32,6 +31,9 @@ module Lich
               hidden = COALESCE(excluded.hidden, #{@table_name}.hidden),
               started_at = COALESCE(excluded.started_at, #{@table_name}.started_at),
               last_heartbeat_at = COALESCE(excluded.last_heartbeat_at, #{@table_name}.last_heartbeat_at),
+              os_seen_at = COALESCE(excluded.os_seen_at, #{@table_name}.os_seen_at),
+              os_seen = COALESCE(excluded.os_seen, #{@table_name}.os_seen),
+              os_name = COALESCE(excluded.os_name, #{@table_name}.os_name),
               last_utilization_at = COALESCE(excluded.last_utilization_at, #{@table_name}.last_utilization_at),
               metadata_json = COALESCE(excluded.metadata_json, #{@table_name}.metadata_json);
           SQL
@@ -47,6 +49,12 @@ module Lich
       def delete_session(pid:)
         with_retry do
           @db.execute("DELETE FROM #{@table_name} WHERE pid = ?;", [pid])
+        end
+      end
+
+      def find_session(pid:)
+        with_retry do
+          rows_as_hashes("SELECT * FROM #{@table_name} WHERE pid = #{pid.to_i} LIMIT 1;").first
         end
       end
 
@@ -68,7 +76,6 @@ module Lich
       def bind_params(payload)
         [
           payload[:pid],
-          payload[:ppid],
           payload[:session_name],
           payload[:role],
           payload[:state],
@@ -77,6 +84,9 @@ module Lich
           payload.key?(:hidden) ? payload[:hidden] : nil,
           payload[:started_at],
           payload[:last_heartbeat_at],
+          payload[:os_seen_at],
+          payload.key?(:os_seen) ? payload[:os_seen] : nil,
+          payload.key?(:os_name) ? payload[:os_name] : nil,
           payload[:last_utilization_at],
           payload[:metadata_json]
         ]

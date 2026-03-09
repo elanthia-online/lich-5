@@ -30,7 +30,6 @@ RSpec.describe Lich::Common::SessionDatabaseAdapter do
     db.execute(<<~SQL)
       CREATE TABLE IF NOT EXISTS session_summary_state (
         pid INTEGER PRIMARY KEY,
-        ppid INTEGER,
         session_name TEXT,
         role TEXT,
         state TEXT,
@@ -39,6 +38,9 @@ RSpec.describe Lich::Common::SessionDatabaseAdapter do
         hidden INTEGER DEFAULT 0,
         started_at INTEGER,
         last_heartbeat_at INTEGER,
+        os_seen_at INTEGER,
+        os_seen INTEGER,
+        os_name INTEGER,
         last_utilization_at INTEGER,
         metadata_json TEXT
       );
@@ -61,29 +63,34 @@ RSpec.describe Lich::Common::SessionDatabaseAdapter do
 
       adapter.upsert_session(
         pid: 11_111,
-        ppid: 10_000,
         session_name: 'Tsetem',
         role: 'session',
         state: 'running',
         started_at: 1_700_000_000,
+        os_seen_at: 1_700_000_001,
+        os_seen: 1,
+        os_name: 1,
         last_heartbeat_at: 1_700_000_005
       )
 
       row = sqlite_db.get_first_row('SELECT * FROM session_summary_state WHERE pid = ?;', [11_111])
       expect(row['session_name']).to eq('Tsetem')
       expect(row['state']).to eq('running')
+      expect(row['os_seen']).to eq(1)
+      expect(row['os_name']).to eq(1)
       expect(row['pid']).to eq(11_111)
     end
 
     it 'updates an existing row with the same pid' do
       adapter = described_class.new(db: sqlite_db)
 
-      adapter.upsert_session(pid: 22_222, session_name: 'Initial', role: 'session', state: 'starting', started_at: 10, last_heartbeat_at: 10)
-      adapter.upsert_session(pid: 22_222, session_name: 'Updated', role: 'session', state: 'running', started_at: 10, last_heartbeat_at: 20)
+      adapter.upsert_session(pid: 22_222, session_name: 'Initial', role: 'session', state: 'starting', started_at: 10, last_heartbeat_at: 10, os_seen: 1)
+      adapter.upsert_session(pid: 22_222, session_name: 'Updated', role: 'session', state: 'running', started_at: 10, last_heartbeat_at: 20, os_seen: 0)
 
       row = sqlite_db.get_first_row('SELECT * FROM session_summary_state WHERE pid = ?;', [22_222])
       expect(row['session_name']).to eq('Updated')
       expect(row['state']).to eq('running')
+      expect(row['os_seen']).to eq(0)
       expect(row['last_heartbeat_at']).to eq(20)
     end
   end
@@ -100,15 +107,15 @@ RSpec.describe Lich::Common::SessionDatabaseAdapter do
     end
   end
 
-  describe '#delete_session' do
-    it 'removes a row by pid (clean deregistration path)' do
+  describe '#find_session' do
+    it 'returns a single row by pid when present' do
       adapter = described_class.new(db: sqlite_db)
 
       adapter.upsert_session(pid: 3, session_name: 'Three', role: 'session', state: 'running', started_at: 1, last_heartbeat_at: 1)
-      adapter.delete_session(pid: 3)
+      row = adapter.find_session(pid: 3)
 
-      row = sqlite_db.get_first_row('SELECT pid FROM session_summary_state WHERE pid = ?;', [3])
-      expect(row).to be_nil
+      expect(row).not_to be_nil
+      expect(row['pid']).to eq(3)
     end
   end
 
