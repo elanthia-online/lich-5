@@ -295,8 +295,8 @@ module Lich
     def create_tab_instances
       # Create callbacks for saved login tab
       saved_login_callbacks = {
-        on_play: ->(launch_data) {
-          handle_play_action(launch_data)
+        on_play: ->(launch_data, login_context = nil) {
+          handle_play_action(launch_data, login_context)
         },
         on_remove: ->(login_info) {
           # Use AccountManager to remove character directly from YAML to preserve encryption
@@ -367,8 +367,8 @@ module Lich
 
       # Create callbacks for manual login tab
       manual_login_callbacks = {
-        on_play: ->(launch_data) {
-          handle_play_action(launch_data)
+        on_play: ->(launch_data, login_context = nil) {
+          handle_play_action(launch_data, login_context)
         },
         # Handles successful login data saving from manual login tab
         # Optimized to reduce redundant cache refreshes
@@ -598,11 +598,16 @@ module Lich
     # In default mode behavior remains unchanged (single launch and close).
     #
     # @param launch_data [Array<String>] Prepared launch data from auth flow
+    # @param login_context [Hash, nil] Optional launch context from GUI tabs
     # @return [void]
-    def handle_play_action(launch_data)
+    def handle_play_action(launch_data, login_context = nil)
       if @persistent_launcher_mode
         # Persistent mode: launch child session, keep the launcher window active.
-        launch_result = Lich::Common::SessionLauncher.launch(launch_data)
+        launch_result = if login_context.nil?
+                          Lich::Common::SessionLauncher.launch(launch_data)
+                        else
+                          Lich::Common::SessionLauncher.launch(launch_data, launch_context: login_context)
+                        end
         unless launch_result[:ok]
           @msgbox.call("Failed to launch session: #{launch_result[:error]}") if @msgbox
         end

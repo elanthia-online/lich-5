@@ -1,100 +1,101 @@
 # frozen_string_literal: true
 
 require 'rbconfig'
+require_relative 'authentication/login_helpers'
 
 module Lich
   module Common
-    # Launches independent child Lich sessions using prepared launch_data.
-    # Returns structured status hashes so GUI callers can display outcomes.
+    # Launches independent child Lich sessions using prepared launch_data
+    # mapped to CLI-style argv.
     module SessionLauncher
-      # Grace period before parent attempts to delete SAL file.
-      SAL_DELETE_GRACE_SECONDS = 5
-      # Maximum parent-side retry window for SAL deletion.
-      SAL_DELETE_RETRY_SECONDS = 5
-      # Delay between SAL deletion retries.
-      SAL_DELETE_RETRY_INTERVAL = 0.25
-
       class << self
-        # Launches a child Lich process from prebuilt launch data.
+        # Launches a detached child Lich process from prebuilt launch data.
         #
-        # @param launch_data [Array<String>] Launch lines compatible with SAL format
+        # @param launch_data [Array<String>] Launch lines from Authentication::LaunchData.prepare
+        # @param launch_context [Hash, nil] Optional context keys:
+        #   :char_name, :game_code, :frontend, :custom_launch
         # @return [Hash] Structured result:
-        #   - success: { ok: true, pid: Integer, sal_path: String }
+        #   - success: { ok: true, pid: Integer }
         #   - failure: { ok: false, error: String }
-        def launch(launch_data)
+        def launch(launch_data, launch_context: nil)
           unless launch_data.is_a?(Array) && launch_data.any?
             return { ok: false, error: 'launch_data must be a non-empty Array' }
           end
 
-          sal_path = write_sal_file(launch_data)
-          pid = spawn_process(sal_path)
-          cleanup_sal_file_async(sal_path, grace_seconds: SAL_DELETE_GRACE_SECONDS)
-          { ok: true, pid: pid, sal_path: sal_path }
+          pid = spawn_process(launch_data, launch_context: launch_context)
+          { ok: true, pid: pid }
         rescue StandardError => e
-          cleanup_sal_file_async(sal_path, grace_seconds: 0) if sal_path
           { ok: false, error: e.message }
         end
 
         private
 
-        # Writes launch data to a SAL file in temp storage.
+        # Spawns a detached child process using the same CLI footprint as direct login.
         #
         # @param launch_data [Array<String>]
-        # @return [String] Absolute SAL path
-        def write_sal_file(launch_data)
-          temp_dir = defined?(TEMP_DIR) ? TEMP_DIR : '/tmp'
-          sal_path = File.join(temp_dir, "lich-session-#{Time.now.to_i}-#{rand(10000)}.sal")
-          File.open(sal_path, 'w') { |f| f.puts launch_data }
-          sal_path
-        end
-
-        # Spawns a new Lich process using positional SAL arg parsing semantics.
-        #
-        # @param sal_path [String]
+        # @param launch_context [Hash, nil]
         # @return [Integer] Child PID
-        def spawn_process(sal_path)
-          ruby_bin = RbConfig.ruby
+        def spawn_process(launch_data, launch_context: nil)
+          ruby_bin = ruby_binary
           entrypoint = File.expand_path($PROGRAM_NAME)
           working_dir = defined?(LICH_DIR) ? LICH_DIR : Dir.pwd
+          launch_map = parse_launch_data(launch_data)
+          spawn_args = build_spawn_args(entrypoint, launch_map, launch_context)
 
-          # Argv parser detects launch files by "*.sal" positional argument.
-          spawn(ruby_bin, entrypoint, sal_path, chdir: working_dir)
+          pid = spawn(ruby_bin, *spawn_args, chdir: working_dir)
+          Process.detach(pid)
+          pid
         end
 
-        # Starts asynchronous SAL cleanup to avoid blocking launch callbacks.
-        #
-        # @param sal_path [String]
-        # @param grace_seconds [Numeric]
-        # @return [Thread]
-        def cleanup_sal_file_async(sal_path, grace_seconds:)
-          Thread.new do
-            cleanup_sal_file_with_retry(sal_path, grace_seconds: grace_seconds)
+        def build_spawn_args(entrypoint, launch_map, launch_context)
+          context = launch_context || {}
+          character = context[:char_name] || launch_map['CHARACTER'] || launch_map['NAME']
+          game_code = context[:game_code] || launch_map['GAMECODE']
+          frontend = context[:frontend] || frontend_from_launch(launch_map)
+          custom_launch = context[:custom_launch] || launch_map['CUSTOMLAUNCH']
+
+          raise ArgumentError, 'missing character for launcher spawn' if character.to_s.empty?
+
+          args = [entrypoint, '--login', character.to_s]
+          if game_code && !game_code.to_s.empty?
+            game_flag = Lich::Common::Authentication::LoginHelpers.format_launch_flag(game_code)
+            args << game_flag if game_flag
+          end
+          args << "--#{frontend}" if frontend && !frontend.to_s.empty?
+          args << "--custom-launch=#{custom_launch}" if custom_launch && !custom_launch.to_s.empty?
+          args
+        end
+
+        def parse_launch_data(launch_data)
+          launch_data.each_with_object({}) do |line, data|
+            next unless line.include?('=')
+
+            key, value = line.split('=', 2)
+            data[key.to_s.upcase] = value.to_s
           end
         end
 
-        # Parent-side SAL cleanup with grace+retry window to avoid deleting
-        # before a child process has fully started reading the launch file.
-        #
-        # @param sal_path [String]
-        # @param grace_seconds [Numeric]
-        # @return [void]
-        def cleanup_sal_file_with_retry(sal_path, grace_seconds:)
-          return unless sal_path
-
-          sleep(grace_seconds) if grace_seconds.positive?
-          deadline = Time.now + SAL_DELETE_RETRY_SECONDS
-
-          loop do
-            begin
-              File.delete(sal_path)
-              return
-            rescue Errno::ENOENT
-              return
-            rescue StandardError
-              return if Time.now >= deadline
-              sleep(SAL_DELETE_RETRY_INTERVAL)
-            end
+        def frontend_from_launch(launch_map)
+          case launch_map['GAME'].to_s.upcase
+          when 'STORM' then 'stormfront'
+          when 'WIZ' then 'wizard'
+          when 'AVALON' then 'avalon'
+          when 'SUKS' then 'suks'
+          else nil
           end
+        end
+
+        # Mirrors existing CLI spawn behavior: use rubyw on Windows to avoid console.
+        def ruby_binary
+          if windows?
+            RbConfig.ruby.sub(/ruby(?:\.exe)?$/i, 'rubyw.exe')
+          else
+            RbConfig.ruby
+          end
+        end
+
+        def windows?
+          RUBY_PLATFORM =~ /mingw|mswin|cygwin/i
         end
       end
     end
