@@ -23,7 +23,7 @@ validate_json_syntax() {
     if ! jq empty "$file" >/dev/null 2>&1; then
       echo "::error file=$file::JSON syntax error in $file"
       jq empty "$file" || true
-      ((errors++))
+      ((++errors))
     fi
   done < <(find . -name "*.json" -not -path "./.git/*" -type f)
 

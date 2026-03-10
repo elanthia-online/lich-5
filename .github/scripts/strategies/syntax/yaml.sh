@@ -16,7 +16,7 @@ validate_yaml_syntax() {
 
     if ! ruby -e "require 'yaml'; YAML.load_file('$file')" >/dev/null 2>&1; then
       log_warn "file=$file::Potential YAML syntax issue in $file"
-      ((warnings++))
+      ((++warnings))
     fi
   done < <(find . \( -name "*.yml" -o -name "*.yaml" \) -not -path "./.git/*" -type f)
 
