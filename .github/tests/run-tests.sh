@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
 # run-tests.sh - Test runner for all tests
+# Shell compatibility: intended to run under macOS's default Bash 3.2 and the
+# newer Bash versions available on GitHub-hosted runners.
 # =============================================================================
 
 set -euo pipefail
@@ -27,11 +29,11 @@ run_test_suite() {
   if bash "$test_file"; then
     echo "✓ $test_name PASSED"
     echo
-    ((TOTAL_PASSED++))
+    ((++TOTAL_PASSED))
   else
     echo "✗ $test_name FAILED"
     echo
-    ((TOTAL_FAILED++))
+    ((++TOTAL_FAILED))
   fi
 }
 

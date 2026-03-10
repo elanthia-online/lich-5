@@ -13,10 +13,6 @@
 ##   more brittle. If you keep (|) for readability, ensure the expression remains
 ##   valid across newlines.
 ##
-## Wait behavior:
-## - The composite action's default wait_seconds is 60s, but workflows pass 0 here
-##   for fast feedback (no polling for Ellipsis). The workflow input overrides the
-##   action default.
 ## -----------------------------------------------------------------------------
 name: Format Release PR Body (Stable)
 
@@ -28,9 +24,6 @@ on:
   workflow_run:
     workflows: ["Prepare Stable Release"]
     types: [completed]
-  # Manual escape hatch
-  # workflow_dispatch: {}
-
 permissions:
   pull-requests: write
   contents: read
@@ -64,8 +57,6 @@ jobs:
         uses: ./.github/actions/format-body
         with:
           mode: stable
-          wait_seconds: 0   # Override action default (60s). 0 = no polling for Ellipsis; fastest feedback.
-          wait_interval_seconds: 5
 
 
   format_from_release_please_run:
@@ -110,6 +101,4 @@ jobs:
         uses: ./.github/actions/format-body
         with:
           mode: stable
-          wait_seconds: 0   # Override action default (60s). 0 = no polling for Ellipsis; fastest feedback.
-          wait_interval_seconds: 5
           pr_number: ${{ steps.find.outputs.number }}

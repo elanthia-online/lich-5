@@ -17,7 +17,7 @@ validate_ruby_syntax() {
     if ! ruby -c "$file" >/dev/null 2>&1; then
       echo "::error file=$file::Ruby syntax error in $file"
       ruby -c "$file" || true
-      ((errors++))
+      ((++errors))
     fi
   done < <(find . -name "*.rb" -not -path "./.git/*" -type f)
 

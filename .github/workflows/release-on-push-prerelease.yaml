@@ -164,7 +164,7 @@ jobs:
 
       # FORMATTER SCOPE (no network):
       # - Write first non-empty line: 'Lich v{version} (YYYY-MM-DD)'
-      # - Strip RP/ellipsis boilerplate
+      # - Strip RP boilerplate
       # - Convert [#123](...) -> #123 (plain PR numbers)
       # - Append project-specific install footer
       # Any data fetching must stay in earlier steps. Keep this pure and deterministic.
@@ -190,9 +190,7 @@ jobs:
             let i = 0; while (i < lines.length && /^\s*$/.test(lines[i])) i++;
             if (i >= lines.length) lines.push(headerLine); else lines[i] = headerLine;
             let body = lines.join('\n');
-            body = body.replace(/<!--\s*ELLIPSIS_HIDDEN\s*-->[\s\S]*?<!--\s*ELLIPSIS_HIDDEN\s*-->/g, '');
             body = body.replace(/\n?(?:---|\* \* \*)\nThis PR was generated with \[Release Please\][\s\S]*?(\n{2,}|\s*$)/g, '\n');
-            body = body.replace(/\n?This description was created by .*?ellipsis[\s\S]*?(\n{2,}|\s*$)/gi, '\n');
             body = body.replace(/\[#(\d+)\]\([^)]+\)/g, '#$1'); // PR link → plain #N
             const footer = [
               '',

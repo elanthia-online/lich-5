@@ -210,7 +210,7 @@ jobs:
             const seed = (ev === 'release' && action === 'edited') ? (rel || prb) : (prb || rel);
             core.setOutput('body', seed);
 
-      - name: Transform body (normalize header, drop RP/Ellipsis, plain PR refs, append footer + sentinel)
+      - name: Transform body (normalize header, drop RP boilerplate, plain PR refs, append footer + sentinel)
         if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
         id: transform
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
@@ -253,19 +253,13 @@ jobs:
             else lines[i] = headerLine;
             let body = lines.join('\n');
 
-            // 4) Drop Ellipsis block(s) if present
-            body = body.replace(/<!--\s*ELLIPSIS_HIDDEN\s*-->[\s\S]*?<!--\s*ELLIPSIS_HIDDEN\s*-->/g, '');
-
-            // 5) Drop RP credit/footer regardless of hr style (--- or * * *)
+            // 4) Drop RP credit/footer regardless of hr style (--- or * * *)
             body = body.replace(/\n?(?:---|\* \* \*)\nThis PR wa...generated with \[Release Please\][\s\S]*?(\n{2,}|\s*$)/g, '\n');
 
-            // 6) Drop "This description was created by Ellipsis..." blocks if present
-            body = body.replace(/\n?This description was created by .*?ellipsis[\s\S]*?(\n{2,}|\s*$)/gi, '\n');
-
-            // 7) Convert PR links to plain (#123)
+            // 5) Convert PR links to plain (#123)
             body = body.replace(/\[#(\d+)\]\([^)]+\)/g, '#$1');
 
-            // 8) Append custom footer (sentinel placed at top)
+            // 6) Append custom footer (sentinel placed at top)
             const footer = [
               '',
               'For additional usage/install instructions, please visit one of the following:',

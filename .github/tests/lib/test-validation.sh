@@ -8,14 +8,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="${SCRIPT_DIR}/../../scripts/lib"
 
-# Mock die() for testing (override before sourcing)
+# shellcheck source=.github/scripts/lib/validation.sh
+source "${LIB_DIR}/validation.sh"
+
+# Mock die() for testing after sourcing so core.sh does not overwrite it.
 die() {
   echo "ERROR: $*" >&2
   return 1
 }
-
-# shellcheck source=.github/scripts/lib/validation.sh
-source "${LIB_DIR}/validation.sh"
 
 # Test framework
 TESTS_RUN=0
@@ -24,30 +24,30 @@ TESTS_FAILED=0
 
 assert_equals() {
   local expected="$1" actual="$2" test_name="$3"
-  ((TESTS_RUN++))
+  ((++TESTS_RUN))
 
   if [[ "$expected" == "$actual" ]]; then
     echo "✓ $test_name"
-    ((TESTS_PASSED++))
+    ((++TESTS_PASSED))
   else
     echo "✗ $test_name"
     echo "  Expected: $expected"
     echo "  Got: $actual"
-    ((TESTS_FAILED++))
+    ((++TESTS_FAILED))
   fi
 }
 
 assert_dies() {
   local test_name="$1"
   shift
-  ((TESTS_RUN++))
+  ((++TESTS_RUN))
 
   if "$@" 2>/dev/null; then
     echo "✗ $test_name (should have failed)"
-    ((TESTS_FAILED++))
+    ((++TESTS_FAILED))
   else
     echo "✓ $test_name"
-    ((TESTS_PASSED++))
+    ((++TESTS_PASSED))
   fi
 }
 
