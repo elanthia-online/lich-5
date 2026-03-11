@@ -6,34 +6,8 @@ require 'rexml/document'
 require_relative '../../../lib/common/gameobj'
 
 RSpec.describe Lich::Common::GameObj do
-  # NOTE: This helper uses class_variable_set for test isolation because GameObj
-  # doesn't have a public reset! method. This is acceptable for test helpers but
-  # IDEALLY a reset! method should be added to the production class to decouple
-  # tests from internal implementation. This helper must be updated if class
-  # variables are renamed or added.
-  # TODO: Add reset! method to Lich::Common::GameObj and replace this helper.
-  def reset_gameobj_state!
-    described_class.send(:class_variable_set, :@@loot, [])
-    described_class.send(:class_variable_set, :@@npcs, [])
-    described_class.send(:class_variable_set, :@@npc_status, {})
-    described_class.send(:class_variable_set, :@@pcs, [])
-    described_class.send(:class_variable_set, :@@pc_status, {})
-    described_class.send(:class_variable_set, :@@inv, [])
-    described_class.send(:class_variable_set, :@@contents, {})
-    described_class.send(:class_variable_set, :@@right_hand, nil)
-    described_class.send(:class_variable_set, :@@left_hand, nil)
-    described_class.send(:class_variable_set, :@@room_desc, [])
-    described_class.send(:class_variable_set, :@@fam_loot, [])
-    described_class.send(:class_variable_set, :@@fam_npcs, [])
-    described_class.send(:class_variable_set, :@@fam_pcs, [])
-    described_class.send(:class_variable_set, :@@fam_room_desc, [])
-    described_class.send(:class_variable_set, :@@type_data, {})
-    described_class.send(:class_variable_set, :@@type_cache, {})
-    described_class.send(:class_variable_set, :@@sellable_data, {})
-  end
-
   before do
-    reset_gameobj_state!
+    described_class.reset!
 
     described_class.new_right_hand('r1', 'empty', 'Empty')
     described_class.new_left_hand('l1', 'empty', 'Empty')
