@@ -49,30 +49,8 @@ module QStrikeTestHelper
   end
 end
 
-# Extend the existing GameObj class (defined in spec_helper as a class, not module)
-# with test helper methods for hand management
-class << GameObj
-  # Use QStrikeTestHelper's storage for hands
-  def right_hand
-    QStrikeTestHelper.right_hand || MockGameObj.new
-  end
-
-  def left_hand
-    QStrikeTestHelper.left_hand || MockGameObj.new
-  end
-
-  def set_right_hand(obj)
-    QStrikeTestHelper.right_hand = obj
-  end
-
-  def set_left_hand(obj)
-    QStrikeTestHelper.left_hand = obj
-  end
-
-  def clear_hands
-    QStrikeTestHelper.clear_hands
-  end
-end
+# NOTE: GameObj hand methods are stubbed in the before(:each) hook below
+# to avoid polluting other specs. Using RSpec stubs ensures test isolation.
 
 # Mock CMan module for attack cost and rank lookups
 # When running with other specs, Lich::Gemstone::CMan may already be defined
@@ -131,6 +109,14 @@ require 'gemstone/psms/qstrike'
 
 describe Lich::Gemstone::QStrike do
   before(:each) do
+    # Stub GameObj hand methods to use QStrikeTestHelper storage.
+    # This isolates qstrike tests from other specs that depend on GameObj behavior.
+    allow(GameObj).to receive(:right_hand) { (QStrikeTestHelper.right_hand || MockGameObj.new).dup }
+    allow(GameObj).to receive(:left_hand) { (QStrikeTestHelper.left_hand || MockGameObj.new).dup }
+    allow(GameObj).to receive(:set_right_hand) { |obj| QStrikeTestHelper.right_hand = obj }
+    allow(GameObj).to receive(:set_left_hand) { |obj| QStrikeTestHelper.left_hand = obj }
+    allow(GameObj).to receive(:clear_hands) { QStrikeTestHelper.clear_hands }
+
     GameObj.clear_hands
     Char.set_stamina(100)
     QStrikeTestHelper.clear_buffs
