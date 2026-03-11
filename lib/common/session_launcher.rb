@@ -51,13 +51,26 @@ module Lich
         def spawn_process(launch_data, launch_context: nil)
           ruby_bin = ruby_binary
           entrypoint = File.expand_path($PROGRAM_NAME)
-          working_dir = defined?(LICH_DIR) ? LICH_DIR : Dir.pwd
+          context = launch_context || {}
+          working_dir = resolve_working_dir(context)
           launch_map = parse_launch_data(launch_data)
           spawn_args = build_spawn_args(entrypoint, launch_map, launch_context)
 
           pid = spawn(ruby_bin, *spawn_args, chdir: working_dir)
           Process.detach(pid)
           pid
+        end
+
+        # Resolves child process working directory.
+        # Priority: explicit per-launch :home_dir, then global LICH_DIR, then cwd.
+        #
+        # @param context [Hash]
+        # @return [String]
+        def resolve_working_dir(context)
+          home_dir = context[:home_dir]
+          return File.expand_path(home_dir) unless home_dir.to_s.empty?
+
+          defined?(LICH_DIR) ? LICH_DIR : Dir.pwd
         end
 
         def build_spawn_args(entrypoint, launch_map, launch_context)

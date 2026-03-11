@@ -13,8 +13,10 @@ module Lich
         # Valid game codes
         VALID_GAME_CODES = %w[GS3 GS4 GSX GSF GST DR DRX DRF DRT].freeze
 
-        # Valid frontend flags
-        VALID_FRONTENDS = %w[avalon stormfront wizard].freeze
+        # Valid frontend flags accepted by CLI login argument parsing.
+        # Note: only wizard/stormfront/avalon affect protocol path selection;
+        # other values are treated as frontend launch selectors/modifiers.
+        VALID_FRONTENDS = %w[avalon stormfront wizard genie frostbite wrayth].freeze
 
         # Valid realms for elogin support
         VALID_REALMS = %w[prime platinum shattered test].freeze
@@ -26,7 +28,7 @@ module Lich
         DRAGONREALMS_FLAGS = %w[--dragonrealms --dr].freeze
 
         # Frontend pattern for regex matching
-        FRONTEND_PATTERN = /^--(?<fe>avalon|stormfront|wizard)$/i.freeze
+        FRONTEND_PATTERN = /^--(?<fe>avalon|stormfront|wizard|genie|frostbite|wrayth)$/i.freeze
         INSTANCE_PATTERN = /^--(?<inst>GS.?$|DR.?$)/i.freeze
 
         # Custom launch pattern for regex matching
@@ -35,12 +37,14 @@ module Lich
         # CLI flags that should never be interpreted as game-instance selectors.
         NON_INSTANCE_FLAGS = %w[
           login gui no-gui without-frontend reconnect reconnected save
+          genie frostbite wrayth
         ].freeze
 
         # CLI options (key portion before '=') that are non-instance modifiers.
         NON_INSTANCE_OPTION_KEYS = %w[
           start-scripts custom-launch dark-mode
           home data scripts temp maps logs backup lib
+          script-dir data-dir temp-dir
           hosts-dir hosts-file account password character frontend frontend-command
           detachable-client reconnect-delay game wine wine-prefix
         ].freeze
