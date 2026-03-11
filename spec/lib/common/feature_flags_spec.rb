@@ -80,6 +80,12 @@ RSpec.describe Lich::Common::FeatureFlags do
       expect(described_class.set(:cli_hello_world_demo, true)).to be(true)
     end
 
+    it 'returns false when db is unavailable and does not raise' do
+      allow(Lich).to receive(:db).and_return(nil)
+
+      expect(described_class.set(:cli_hello_world_demo, true)).to be(false)
+    end
+
     it 'logs and does not raise when db write fails' do
       allow(db).to receive(:execute).and_raise(StandardError, 'write failed')
       allow(Lich).to receive(:log)

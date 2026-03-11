@@ -41,7 +41,6 @@ module Lich
 
         begin
           write_flag(flag_name, value)
-          true
         rescue StandardError => e
           Lich.log("warning: FeatureFlags write failed for #{flag_name}: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
           false
@@ -75,10 +74,11 @@ module Lich
 
       def self.write_flag(flag_name, value)
         db = fetch_db
-        return unless db
+        return false unless db
 
         db.execute('INSERT OR REPLACE INTO lich_settings(name, value) VALUES(?, ?);',
                    ["#{SETTINGS_PREFIX}#{flag_name}", value.to_s])
+        true
       end
       private_class_method :write_flag
 
