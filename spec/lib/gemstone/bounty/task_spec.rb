@@ -155,6 +155,8 @@ RSpec.describe Lich::Gemstone::Bounty::Task do
         :taskmaster
       ]
     }
+
+    include_examples "task predicate examples"
   end
 
   describe "#guard?" do

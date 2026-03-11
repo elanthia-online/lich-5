@@ -74,7 +74,7 @@ end
 
 RSpec.describe Lich::Gemstone::PSMS, "assess(name, type)" do
   context "<psm>.name should return rank known" do
-    it "parses request and determines resopnse" do
+    it "parses request and determines response" do
       expect(Lich::Gemstone::CMan[:vaultkick]).to eq(1)
       expect(Lich::Gemstone::Weapon["Twin Hammerfists"]).to eq(1)
       expect(Lich::Gemstone::Armor["reinforcement"]).to eq(0)

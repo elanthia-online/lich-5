@@ -29,7 +29,7 @@ run, which:
 
 The authoritative version lives in the elanthia-online/scripts repository:
 
-```
+```text
 https://github.com/elanthia-online/scripts/blob/master/scripts/effect-list.xml
 ```
 
