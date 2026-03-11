@@ -33,6 +33,7 @@
 
 require 'rspec'
 require 'tmpdir'
+require 'ostruct'
 
 # =============================================================================
 # Path Constants
@@ -181,25 +182,89 @@ end
 # Core Lich namespace. Only define if not already defined (allows real code to load).
 
 module Lich
+  # Mock database for testing
+  class MockDB
+    def initialize
+      @data = {}
+    end
+
+    def reset!
+      @data = {}
+    end
+
+    def get_first_value(query)
+      # Extract key from query like "SELECT value FROM lich_settings WHERE name='display_inline_exp'"
+      if (match = query.match(/WHERE name\s*=\s*'([^']+)'/))
+        @data[match[1]]
+      end
+    end
+
+    def execute(query, params = [])
+      # Handle INSERT INTO lich_settings VALUES ('key', ?)
+      if query.include?('INSERT INTO lich_settings VALUES')
+        if (match = query.match(/VALUES\s*\('([^']+)'/))
+          key = match[1]
+          value = params[0]
+          @data[key] = value
+        end
+      # Handle INSERT OR REPLACE INTO lich_settings(name,value) values('key',?)
+      elsif query.include?('INSERT OR REPLACE')
+        if (match = query.match(/values\s*\('([^']+)'/i))
+          key = match[1]
+          value = params[0]
+          @data[key] = value
+        elsif params.length >= 2
+          # Format: execute(query, [name, value])
+          @data[params[0]] = params[1]
+        end
+      end
+    end
+  end
+
+  @db = MockDB.new
+
   class << self
     attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits
+    attr_accessor :display_expgains
+
+    def db
+      @db ||= MockDB.new
+    end
 
     def log(msg)
       puts "[Lich.log] #{msg}" if ENV['DEBUG']
     end
+
+    def reset_display_expgains!
+      @display_expgains = nil
+    end
   end
 
   module Messaging
-    def self.msg_format(_format, _msg)
-      # Mock implementation
-    end
+    @messages = []
 
-    def self.mono(_msg)
-      # Mock implementation
-    end
+    class << self
+      def msg_format(_format, _msg)
+        # Mock implementation
+      end
 
-    def self.msg(_type, msg)
-      puts "[Lich::Messaging] #{msg}" if ENV['DEBUG']
+      def mono(_msg)
+        # Mock implementation
+      end
+
+      def msg(type, message)
+        @messages ||= []
+        @messages << { type: type, message: message }
+        puts "[Lich::Messaging] #{message}" if ENV['DEBUG']
+      end
+
+      def messages
+        @messages ||= []
+      end
+
+      def clear_messages!
+        @messages = []
+      end
     end
   end
 end unless defined?(Lich) && Lich.respond_to?(:log)
@@ -406,10 +471,24 @@ end unless defined?(Lich::Gemstone::Spellsong)
 # =============================================================================
 # Game object tracking (NPCs, items, etc.).
 
+# Mock hand item for testing
+class MockGameObj
+  attr_accessor :id, :noun, :name, :type
+
+  def initialize(id: nil, noun: nil, name: nil, type: nil)
+    @id = id
+    @noun = noun
+    @name = name || "Empty"
+    @type = type
+  end
+end
+
 module Lich
   module Common
     class GameObj
       @@npcs = []
+      @right_hand = MockGameObj.new
+      @left_hand = MockGameObj.new
 
       def initialize(id, noun, name, before = nil, after = nil)
         @id = id
@@ -419,14 +498,36 @@ module Lich
         @after_name = after
       end
 
-      def self.npcs
-        @@npcs.empty? ? nil : @@npcs.dup
-      end
+      class << self
+        attr_accessor :right_hand, :left_hand
 
-      def self.clear_npcs
-        @@npcs = []
+        def npcs
+          @@npcs.empty? ? nil : @@npcs.dup
+        end
+
+        def clear_npcs
+          @@npcs = []
+        end
+
+        def set_right_hand(obj)
+          @right_hand = obj
+        end
+
+        def set_left_hand(obj)
+          @left_hand = obj
+        end
+
+        def clear_hands
+          @right_hand = MockGameObj.new
+          @left_hand = MockGameObj.new
+        end
       end
     end
+  end
+
+  # Gemstone uses the same GameObj class
+  module Gemstone
+    GameObj = Lich::Common::GameObj
   end
 end unless defined?(Lich::Common::GameObj)
 

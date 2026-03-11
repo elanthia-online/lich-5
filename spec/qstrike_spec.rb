@@ -1,147 +1,39 @@
 # frozen_string_literal: true
 
-# Minimal mocks for QStrike testing
-# QStrike only needs: Char.stamina, GameObj hands, Armaments::WeaponStats, Effects::Buffs
+require_relative 'spec_helper'
 
-# Mock Script class
-class Script
-  def self.current
-    nil
-  end
-end
+# QStrike-specific mocks extending spec_helper
+# QStrike needs: Char.stamina, GameObj hands, Armaments::WeaponStats, Effects::Buffs
 
-# Mock Lich module
-module Lich
-  def self.log(_msg)
-    # Suppress logging in tests
-  end
-end
-
-# Mock NilClass for safe method chaining
-class NilClass
-  def method_missing(*)
-    nil
-  end
-end
-
-# Mock XMLData
-module XMLData
-  def self.game
-    "GS"
-  end
-
-  def self.name
-    "testing"
-  end
-end
-
-# Mock Char module
+# Extend Char with stamina methods for QStrike testing
 module Char
   @stamina = 100
 
-  def self.stamina
-    @stamina
-  end
+  class << self
+    attr_accessor :stamina
 
-  def self.set_stamina(value)
-    @stamina = value
-  end
-end
-
-# Mock GameObj hand items
-class MockGameObj
-  attr_accessor :id, :noun, :name, :type
-
-  def initialize(id: nil, noun: nil, name: nil, type: nil)
-    @id = id
-    @noun = noun
-    @name = name || "Empty"
-    @type = type
-  end
-end
-
-# Mock GameObj - add to Lich::Gemstone::GameObj for compatibility with other specs
-module Lich
-  module Gemstone
-    class GameObj
-      @right_hand = MockGameObj.new
-      @left_hand = MockGameObj.new
-
-      def self.right_hand
-        @right_hand
-      end
-
-      def self.left_hand
-        @left_hand
-      end
-
-      def self.set_right_hand(obj)
-        @right_hand = obj
-      end
-
-      def self.set_left_hand(obj)
-        @left_hand = obj
-      end
-
-      def self.clear_hands
-        @right_hand = MockGameObj.new
-        @left_hand = MockGameObj.new
-      end
+    def set_stamina(value)
+      @stamina = value
     end
   end
-end
+end unless Char.respond_to?(:stamina)
 
-# Top-level alias for GameObj (as used by the main codebase)
-GameObj = Lich::Gemstone::GameObj unless defined?(GameObj)
-
-# Effects module - only define if not already defined by infomon_spec
-unless defined?(Effects::Buffs)
-  module Effects
-    class MockRegistry
-      def initialize
-        @effects = {}
-      end
-
-      def active?(effect)
-        @effects[effect] == true
-      end
-
-      def set_active(effect, active)
-        @effects[effect] = active
-      end
-
-      def clear
-        @effects.clear
-      end
-    end
-
-    Buffs = MockRegistry.new
-  end
-end
+# GameObj with hand tracking is defined in spec_helper
+# MockGameObj is also defined in spec_helper
 
 # Helper module to set Effects::Buffs state for testing
-# Works with both standalone MockRegistry and infomon_spec's Registry
+# Uses spec_helper's Effects::Registry which reads from XMLData.dialogs
 module QStrikeTestHelper
   def self.set_buff_active(effect, active)
-    if Effects::Buffs.respond_to?(:set_active)
-      # Standalone MockRegistry
-      Effects::Buffs.set_active(effect, active)
+    if active
+      XMLData.save_dialogs("Buffs", { effect => Time.now.to_f + 3600 })
     else
-      # infomon_spec's Registry - uses XMLData.dialogs
-      if active
-        XMLData.save_dialogs("Buffs", { effect => Time.now.to_f + 3600 })
-      else
-        XMLData.save_dialogs("Buffs", {})
-      end
+      XMLData.save_dialogs("Buffs", {})
     end
   end
 
   def self.clear_buffs
-    if Effects::Buffs.respond_to?(:clear)
-      Effects::Buffs.clear
-    else
-      XMLData.save_dialogs("Buffs", {})
-    end
+    XMLData.save_dialogs("Buffs", {})
   end
 end
 
@@ -192,8 +84,6 @@ end
 
 # Ensure CMan constant is available at top level
 CMan = Lich::Gemstone::CMan if defined?(Lich::Gemstone::CMan) && !defined?(CMan)
-
-LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
 
 # Load util first (required by armaments)
 require 'util/util'

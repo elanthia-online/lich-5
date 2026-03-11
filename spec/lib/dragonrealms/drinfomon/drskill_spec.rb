@@ -6,21 +6,28 @@ require_relative '../../../spec_helper'
 module Lich
   module DragonRealms
     module DRStats
+      @guild_set = false
+
       def self.guild
-        @guild || 'Warrior Mage'
+        @guild_set ? @guild : 'Warrior Mage'
       end
 
       def self.guild=(val)
         @guild = val
+        @guild_set = true
+      end
+
+      def self.reset_guild!
+        @guild = nil
+        @guild_set = false
       end
     end
   end
 end
 
-# Load the real DRExpMonitor (needed for DRSkill.handle_exp_change)
+# Load dependencies in correct order
+require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 require_relative '../../../../lib/dragonrealms/drinfomon/drexpmonitor'
-
-# Load the module under test
 require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
 
 # Force aliases to point to real classes — mock modules from other specs
@@ -41,6 +48,7 @@ RSpec.describe Lich::DragonRealms::DRSkill do
     DRSkill.class_variable_set(:@@list, [])
     DRSkill.class_variable_set(:@@start_time, Time.now)
     Lich.reset_display_expgains!
+    DRStats.reset_guild! if DRStats.respond_to?(:reset_guild!)
   end
 
   describe '.gained_skills' do

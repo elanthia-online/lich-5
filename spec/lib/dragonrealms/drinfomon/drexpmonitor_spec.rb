@@ -45,7 +45,8 @@ module Lich
   end
 end
 
-# Load the real DRSkill first (if not already loaded by drskill_spec)
+# Load dependencies in correct order
+require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
 
 # Load the module under test
