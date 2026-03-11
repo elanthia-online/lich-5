@@ -10,9 +10,26 @@
 #
 # Usage: Add `require 'spec_helper'` at the top of each spec file
 #
-# To update effect-list.xml fixture:
+# =============================================================================
+# FIXTURE: effect-list.xml
+# =============================================================================
+# The effect-list.xml file in spec/fixtures/ is a LOCAL COPY of the upstream
+# file from elanthia-online/scripts. This eliminates network dependencies
+# during test runs.
+#
+# IMPORTANT: This file must be kept in sync with upstream!
+#
+# The canonical source is:
+#   https://github.com/elanthia-online/scripts/blob/master/scripts/effect-list.xml
+#
+# To update the fixture manually:
 #   curl -o spec/fixtures/effect-list.xml \
 #     https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml
+#
+# TODO: Set up automated sync via GitHub Actions or pre-commit hook to ensure
+# the fixture stays current with upstream changes. See spec/fixtures/README.md
+# for detailed update procedures.
+# =============================================================================
 
 require 'rspec'
 require 'tmpdir'
@@ -337,6 +354,19 @@ $_DETACHABLE_CLIENT_ ||= nil
 # =============================================================================
 # Load effect-list.xml from fixtures for realistic spell testing.
 # This file is committed to the repo to avoid network dependencies.
+#
+# KNOWN LIMITATION: As of 2026-03, Spell.load() fails silently due to a
+# compatibility issue between spell.rb and effect-list.xml:
+# - spell.rb expects `cast-type` attributes on <cost> elements (line 88)
+# - effect-list.xml only has `cast-type` on <duration> elements
+# - This causes: undefined method 'downcase' for nil
+#
+# The fixture is still valuable for:
+# - Eliminating network dependencies in existing tests
+# - Future use once the compatibility bug is fixed
+# - Reference for the expected XML structure
+#
+# See spec/fixtures/README.md for update procedures.
 
 def load_spell_data
   require 'rexml/document'
