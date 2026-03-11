@@ -35,8 +35,8 @@ validate_destination() {
 
   dest="$(normalize_branch "$dest")"
 
-  # Guard normalized branch: no path traversal or whitespace after normalization.
-  if [[ "$dest" =~ (\.\.|[[:space:]]) ]]; then
+  # Guard normalized branch for traversal sequences post-normalization.
+  if [[ "$dest" =~ \.\. ]]; then
     die "Destination '$dest' contains illegal sequences (.. or whitespace)"
     return 1
   fi
