@@ -616,4 +616,7 @@ end
 
 require_relative 'settings/settings_proxy'
 require_relative 'settings/instance_settings'
+# Loads row-oriented session summary reporting facade.
+# Kept at top-level require boundary so consumers can call
+# `Lich::Common::SessionsSettings` without separately requiring internals.
 require_relative 'settings/sessions_settings'

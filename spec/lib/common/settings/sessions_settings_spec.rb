@@ -79,6 +79,7 @@ RSpec.describe Lich::Common::SessionsSettings do
   end
 
   describe '.snapshot' do
+    # Snapshot examples assert reporting-schema stability and marker semantics.
     it 'returns stable report schema with aggregated counters' do
       allow(Time).to receive(:now).and_return(Time.at(1_000))
       allow(adapter).to receive(:active_sessions).and_return([
@@ -143,6 +144,7 @@ RSpec.describe Lich::Common::SessionsSettings do
 
       expect(snapshot[:source]).to eq('SessionSettings')
       expect(snapshot[:total]).to eq(0)
+      expect(snapshot[:stale]).to eq(0)
       expect(snapshot[:sessions]).to eq([])
       expect(snapshot[:error]).to include('db busy')
     end

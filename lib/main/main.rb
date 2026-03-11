@@ -46,6 +46,8 @@ reconnect_if_wanted = proc {
   @launch_data = nil
   require File.join(LIB_DIR, 'common', 'authentication', 'eaccess.rb')
   require File.join(LIB_DIR, 'common', 'account.rb')
+  # Lifecycle tracker is loaded here because startup context (argv/account)
+  # and shutdown sequencing both live in main runtime orchestration.
   require File.join(LIB_DIR, 'common', 'session_lifecycle.rb')
 
   if ARGV.include?('--login')
@@ -704,6 +706,8 @@ reconnect_if_wanted = proc {
     detachable_client_thread = nil
   end
 
+  # Start process lifecycle reporting after core sockets/threads are initialized.
+  # Registration itself is deferred by SessionLifecycle to wait for XML game context.
   session_name = Lich::Common::SessionLifecycle.resolve_session_name(
     argv: ARGV,
     account_character: (Lich::Common::Account.character rescue nil)
@@ -739,6 +743,8 @@ reconnect_if_wanted = proc {
   Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
   Settings.save
   Vars.save
+  # Stop lifecycle reporting during orderly shutdown so session rows are marked
+  # as clean exits instead of lingering as running/stale in reports.
   Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
   Lich.log 'info: closing connections...'
   Game.close

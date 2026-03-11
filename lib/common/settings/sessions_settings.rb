@@ -11,11 +11,32 @@ module Lich
       HEARTBEAT_INTERVAL_SECONDS = 90
       STALE_THRESHOLD_SECONDS = 360
       IDLE_OVER_30M_SECONDS = 1800
+      ADAPTER_MUTEX = Mutex.new
 
+      # Returns the row-oriented session adapter.
+      # Uses synchronized lazy initialization to avoid duplicate adapter creation
+      # under concurrent access during startup/reporting.
+      #
+      # @return [Lich::Common::SessionDatabaseAdapter]
       def self.adapter
-        @adapter ||= SessionDatabaseAdapter.new(db: Lich.db)
+        return @adapter if @adapter
+
+        ADAPTER_MUTEX.synchronize do
+          @adapter ||= SessionDatabaseAdapter.new(db: Lich.db)
+        end
       end
 
+      # Registers a process as a tracked session row.
+      #
+      # @param pid [Integer]
+      # @param session_name [String]
+      # @param role [String]
+      # @param state [String]
+      # @param frontend [String, nil]
+      # @param game_code [String, nil]
+      # @param hidden [Boolean]
+      # @param metadata_json [String, nil]
+      # @return [void]
       def self.register_session(pid:, session_name:, role:, state:, frontend: nil, game_code: nil, hidden: false, metadata_json: nil)
         now = Time.now.to_i
         os_presence_state = os_presence(pid: pid, session_name: session_name, now: now)
@@ -36,6 +57,17 @@ module Lich
         )
       end
 
+      # Updates heartbeat and runtime fields for a tracked session.
+      #
+      # @param pid [Integer]
+      # @param state [String, nil]
+      # @param hidden [Boolean, nil]
+      # @param session_name [String, nil]
+      # @param role [String, nil]
+      # @param frontend [String, nil]
+      # @param game_code [String, nil]
+      # @param last_utilization_at [Integer, nil]
+      # @return [void]
       def self.heartbeat(pid:, state: nil, hidden: nil, session_name: nil, role: nil, frontend: nil, game_code: nil, last_utilization_at: nil)
         now = Time.now.to_i
         session_name = session_name || adapter.find_session(pid: pid)&.fetch('session_name', nil)
@@ -56,6 +88,10 @@ module Lich
         )
       end
 
+      # Marks a tracked session as cleanly exited.
+      #
+      # @param pid [Integer]
+      # @return [void]
       def self.unregister_session(pid:)
         now = Time.now.to_i
         adapter.upsert_session(
@@ -67,6 +103,9 @@ module Lich
         )
       end
 
+      # Builds a normalized reporting snapshot from tracked session rows.
+      #
+      # @return [Hash] deterministic schema consumed by reporting callers
       def self.snapshot
         rows = adapter.active_sessions
         now = Time.now.to_i
@@ -110,10 +149,13 @@ module Lich
           sessions: sessions
         }
       rescue StandardError => e
+        # Keep the same response shape as success payload so consumers can
+        # rely on deterministic keys during adapter/runtime failure states.
         {
           source: 'SessionSettings',
           total: 0,
           idle_over_30m: 0,
+          stale: 0,
           running: 0,
           sleeping: 0,
           hidden: 0,
@@ -122,6 +164,11 @@ module Lich
         }
       end
 
+      # Converts a utilization timestamp into age-in-seconds.
+      #
+      # @param last_utilization_at [Integer, nil]
+      # @param now_epoch [Integer]
+      # @return [Integer, nil]
       def self.format_last_utilization(last_utilization_at, now_epoch)
         return nil if last_utilization_at.nil?
 
@@ -130,6 +177,11 @@ module Lich
       end
       private_class_method :format_last_utilization
 
+      # Computes heartbeat age in seconds.
+      #
+      # @param last_heartbeat_at [Integer, nil]
+      # @param now_epoch [Integer]
+      # @return [Integer, nil]
       def self.heartbeat_age(last_heartbeat_at, now_epoch)
         return nil if last_heartbeat_at.nil?
 
@@ -138,12 +190,23 @@ module Lich
       end
       private_class_method :heartbeat_age
 
+      # Classifies whether a heartbeat timestamp is stale.
+      #
+      # @param last_heartbeat_at [Integer, nil]
+      # @param now_epoch [Integer]
+      # @return [Boolean]
       def self.stale?(last_heartbeat_at, now_epoch)
         age = heartbeat_age(last_heartbeat_at, now_epoch)
         !age.nil? && age > STALE_THRESHOLD_SECONDS
       end
       private_class_method :stale?
 
+      # Performs non-mutating OS visibility checks used by reporting.
+      #
+      # @param pid [Integer]
+      # @param session_name [String, nil]
+      # @param now [Integer]
+      # @return [Hash] os_seen_at, os_seen, and os_name fields
       def self.os_presence(pid:, session_name:, now: Time.now.to_i)
         seen = process_alive?(pid)
         name_match = if seen
@@ -158,6 +221,10 @@ module Lich
         }
       end
 
+      # Checks whether pid is currently visible to the OS process table.
+      #
+      # @param pid [Integer]
+      # @return [Boolean]
       def self.process_alive?(pid)
         Process.kill(0, pid.to_i)
         true
@@ -170,6 +237,11 @@ module Lich
       end
       private_class_method :process_alive?
 
+      # Compares expected session name with process command line when available.
+      #
+      # @param pid [Integer]
+      # @param session_name [String, nil]
+      # @return [Integer, nil] 1 match, 0 mismatch, nil unavailable
       def self.name_matches_process?(pid, session_name)
         return nil if session_name.to_s.strip.empty?
 
@@ -183,6 +255,10 @@ module Lich
       private_class_method :name_matches_process?
       private_class_method :os_presence
 
+      # Returns OS command line string for a process when supported by platform.
+      #
+      # @param pid [Integer]
+      # @return [String, nil]
       def self.process_command_line(pid)
         case RbConfig::CONFIG['host_os']
         when /linux/, /darwin|mac os/

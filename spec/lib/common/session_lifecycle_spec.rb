@@ -5,6 +5,8 @@ require 'rspec'
 require_relative '../../../lib/common/session_lifecycle'
 
 RSpec.describe Lich::Common::SessionLifecycle do
+  # Resets module-level state between examples because lifecycle behavior is
+  # implemented as module singleton state, not per-instance objects.
   before(:each) do
     stub_const('Lich::Common::SessionsSettings', Module.new)
     allow(Lich::Common::SessionsSettings).to receive(:register_session)
@@ -21,6 +23,7 @@ RSpec.describe Lich::Common::SessionLifecycle do
   end
 
   describe '.resolve_session_name' do
+    # Validates deterministic fallback order for session naming.
     it 'uses --login character when present' do
       result = described_class.resolve_session_name(argv: ['--login', 'tsetem'], account_character: nil)
       expect(result).to eq('Tsetem')
@@ -30,9 +33,25 @@ RSpec.describe Lich::Common::SessionLifecycle do
       result = described_class.resolve_session_name(argv: [], account_character: 'Abyran')
       expect(result).to eq('Abyran')
     end
+
+    it 'falls back to XMLData.name when argv and account character are absent' do
+      stub_const('XMLData', double('XMLData', name: 'FromXmlData'))
+
+      result = described_class.resolve_session_name(argv: [], account_character: nil)
+      expect(result).to eq('FromXmlData')
+    end
+
+    it 'falls back to pid format when XMLData.name is unavailable' do
+      stub_const('XMLData', double('XMLData', name: nil))
+      allow(Process).to receive(:pid).and_return(1234)
+
+      result = described_class.resolve_session_name(argv: [], account_character: nil)
+      expect(result).to eq('pid-1234')
+    end
   end
 
   describe '.resolve_role' do
+    # Ensures role classification reflects launch mode and detachable behavior.
     it 'returns headless for --without-frontend' do
       expect(described_class.resolve_role(argv: ['--without-frontend'], detachable_client_port: nil)).to eq('headless')
     end
@@ -53,6 +72,7 @@ RSpec.describe Lich::Common::SessionLifecycle do
   end
 
   describe '.start / .stop' do
+    # Verifies idempotent lifecycle transitions and clean unregister semantics.
     it 'starts once and unregisters on stop (registration is deferred)' do
       fake_thread = instance_double(Thread, kill: true)
       allow(Thread).to receive(:new).and_return(fake_thread)
