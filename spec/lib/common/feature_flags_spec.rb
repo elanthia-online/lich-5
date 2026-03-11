@@ -14,6 +14,12 @@ RSpec.describe Lich::Common::FeatureFlags do
   end
 
   describe '.enabled?' do
+    it 'returns default false when Lich.db is nil' do
+      allow(Lich).to receive(:db).and_return(nil)
+
+      expect(described_class.enabled?(:cli_hello_world_demo)).to be(false)
+    end
+
     it 'uses default false when no value exists for a known flag' do
       allow(db).to receive(:get_first_value).and_return(nil)
 
@@ -36,6 +42,14 @@ RSpec.describe Lich::Common::FeatureFlags do
       allow(db).to receive(:get_first_value).and_return(nil)
 
       expect(described_class.enabled?(:nonexistent_flag)).to be(false)
+    end
+
+    it 'returns default false and logs when db read raises an error' do
+      allow(db).to receive(:get_first_value).and_raise(StandardError, 'read failed')
+      allow(Lich).to receive(:log)
+
+      expect(described_class.enabled?(:cli_hello_world_demo)).to be(false)
+      expect(Lich).to have_received(:log).with(/FeatureFlags read failed/)
     end
   end
 

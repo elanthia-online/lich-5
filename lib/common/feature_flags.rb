@@ -11,7 +11,7 @@ module Lich
         cli_hello_world_demo: false
       }.freeze
 
-      SETTINGS_PREFIX = 'feature_flag:'.freeze
+      SETTINGS_PREFIX = 'feature_flag:'
 
       # Returns whether the given feature flag is enabled.
       #
