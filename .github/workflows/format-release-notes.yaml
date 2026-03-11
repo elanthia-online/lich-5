@@ -253,8 +253,10 @@ jobs:
             else lines[i] = headerLine;
             let body = lines.join('\n');
 
-            // 4) Drop RP credit/footer regardless of hr style (--- or * * *)
-            body = body.replace(/\n?(?:---|\* \* \*)\nThis PR wa...generated with \[Release Please\][\s\S]*?(\n{2,}|\s*$)/g, '\n');
+            // 4) Drop RP credit/footer regardless of hr style (--- or * * *).
+            // Match the standard Release Please footer line exactly ("was generated")
+            // so cleanup remains deterministic across release-body variants.
+            body = body.replace(/\n?(?:---|\* \* \*)\nThis PR was generated with \[Release Please\][\s\S]*?(\n{2,}|\s*$)/g, '\n');
 
             // 5) Convert PR links to plain (#123)
             body = body.replace(/\[#(\d+)\]\([^)]+\)/g, '#$1');

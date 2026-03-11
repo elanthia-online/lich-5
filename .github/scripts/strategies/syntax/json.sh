@@ -6,6 +6,8 @@
 # shellcheck source=.github/scripts/lib/core.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../lib/core.sh"
 
+# Validate JSON files in-repo using jq.
+# Returns non-zero only when syntax errors are detected.
 validate_json_syntax() {
   local errors=0
 

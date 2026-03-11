@@ -27,14 +27,15 @@ validate_destination() {
   local raw_dest="$1"
   local dest="$raw_dest"
 
+  # Guard raw input first so callers get a precise message before normalization.
   if [[ "$raw_dest" =~ [[:space:]] ]]; then
-    die "Destination '$raw_dest' contains illegal sequences (.. or whitespace)"
+    die "Destination '$raw_dest' contains illegal whitespace"
     return 1
   fi
 
   dest="$(normalize_branch "$dest")"
 
-  # Guard: no path traversal or whitespace
+  # Guard normalized branch: no path traversal or whitespace after normalization.
   if [[ "$dest" =~ (\.\.|[[:space:]]) ]]; then
     die "Destination '$dest' contains illegal sequences (.. or whitespace)"
     return 1

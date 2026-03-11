@@ -17,6 +17,7 @@ export GITHUB_STEP_SUMMARY="${GITHUB_STEP_SUMMARY:-/dev/null}"
 TOTAL_PASSED=0
 TOTAL_FAILED=0
 
+# Execute one test suite script and track aggregate outcome counters.
 run_test_suite() {
   local test_file="$1"
   local test_name
@@ -37,6 +38,7 @@ run_test_suite() {
   fi
 }
 
+# Entry point: discover test-* scripts and run each under bash.
 main() {
   echo "Starting test suite..."
   echo

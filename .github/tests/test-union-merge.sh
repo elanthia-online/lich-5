@@ -12,6 +12,9 @@ echo "Testing union merge conflict resolution..."
 echo
 
 # Extract parse function for standalone testing
+# Parses conflict markers and resolves with "union" semantics:
+# keep all unique lines from ours + theirs in encounter order.
+# Writes a sidecar audit file mirroring original conflict chunks.
 parse_and_resolve_conflicts() {
   local file="$1"
   local temp_resolved temp_audit

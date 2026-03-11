@@ -22,6 +22,7 @@ TESTS_RUN=0
 TESTS_PASSED=0
 TESTS_FAILED=0
 
+# Assert exact equality and record pass/fail in shared counters.
 assert_equals() {
   local expected="$1" actual="$2" test_name="$3"
   ((++TESTS_RUN))
@@ -37,6 +38,7 @@ assert_equals() {
   fi
 }
 
+# Assert a command exits non-zero (validation failure path).
 assert_dies() {
   local test_name="$1"
   shift
@@ -125,7 +127,7 @@ test_validate_bool() {
   assert_dies "validate_bool: rejects 1" validate_bool "1" "test"
 }
 
-# Run all tests
+# Run all validation unit tests and emit aggregate summary.
 main() {
   echo "=========================================="
   echo "Running validation tests"
