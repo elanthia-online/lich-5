@@ -76,6 +76,8 @@ RSpec.describe Lich::Common::SessionLifecycle do
     it 'starts once and unregisters on stop (registration is deferred)' do
       fake_thread = instance_double(Thread, kill: true)
       allow(Thread).to receive(:new).and_return(fake_thread)
+      allow(fake_thread).to receive(:join).with(0.5)
+      allow(fake_thread).to receive(:alive?).and_return(true)
       allow(described_class).to receive(:resolve_frontend).and_return('stormfront')
       allow(described_class).to receive(:resolve_game_code).and_return('DR')
 
@@ -86,6 +88,40 @@ RSpec.describe Lich::Common::SessionLifecycle do
       expect(described_class.stop).to be true
       expect(described_class.stop).to be false
       expect(Lich::Common::SessionsSettings).to have_received(:unregister_session).with(pid: Process.pid).once
+    end
+
+    it 'prefers cooperative heartbeat shutdown before hard kill' do
+      heartbeat_thread = instance_double(Thread)
+      allow(heartbeat_thread).to receive(:join).with(0.5)
+      allow(heartbeat_thread).to receive(:alive?).and_return(false)
+      allow(heartbeat_thread).to receive(:kill)
+
+      allow(Thread).to receive(:new).and_return(heartbeat_thread)
+      allow(described_class).to receive(:resolve_frontend).and_return('stormfront')
+      allow(described_class).to receive(:resolve_game_code).and_return('DR')
+
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 999)).to be(true)
+      expect(described_class.stop).to be(true)
+
+      expect(heartbeat_thread).to have_received(:join).with(0.5)
+      expect(heartbeat_thread).not_to have_received(:kill)
+    end
+
+    it 'uses hard kill when cooperative join times out' do
+      heartbeat_thread = instance_double(Thread)
+      allow(heartbeat_thread).to receive(:join).with(0.5)
+      allow(heartbeat_thread).to receive(:alive?).and_return(true)
+      allow(heartbeat_thread).to receive(:kill)
+
+      allow(Thread).to receive(:new).and_return(heartbeat_thread)
+      allow(described_class).to receive(:resolve_frontend).and_return('stormfront')
+      allow(described_class).to receive(:resolve_game_code).and_return('DR')
+
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 999)).to be(true)
+      expect(described_class.stop).to be(true)
+
+      expect(heartbeat_thread).to have_received(:join).with(0.5)
+      expect(heartbeat_thread).to have_received(:kill)
     end
   end
 end

@@ -123,6 +123,20 @@ RSpec.describe Lich::Common::SessionDatabaseAdapter do
     end
   end
 
+  describe '#rows_as_hashes behavior' do
+    it 'returns string-keyed hashes without toggling results_as_hash mode' do
+      adapter = described_class.new(db: sqlite_db)
+      sqlite_db.results_as_hash = false
+
+      adapter.upsert_session(pid: 301, session_name: 'Alpha', role: 'session', state: 'running', started_at: 1, last_heartbeat_at: 1)
+      rows = adapter.active_sessions
+
+      expect(rows.first).to include('pid' => 301, 'session_name' => 'Alpha')
+      expect(rows.first.keys).to all(be_a(String))
+      expect(sqlite_db.results_as_hash).to be(false)
+    end
+  end
+
   describe '#find_session' do
     it 'returns a single row by pid when present' do
       adapter = described_class.new(db: sqlite_db)
@@ -148,6 +162,16 @@ RSpec.describe Lich::Common::SessionDatabaseAdapter do
       tsetem = duplicates.find { |row| row['session_name'] == 'Tsetem' }
       expect(tsetem).not_to be_nil
       expect(tsetem['duplicate_count']).to eq(2)
+    end
+
+    it 'ignores rows marked as exited when counting duplicates' do
+      adapter = described_class.new(db: sqlite_db)
+
+      adapter.upsert_session(pid: 201, session_name: 'Tsetem', role: 'session', state: 'running', started_at: 1, last_heartbeat_at: 1)
+      adapter.upsert_session(pid: 202, session_name: 'Tsetem', role: 'session', state: 'exited', started_at: 1, last_heartbeat_at: 1)
+
+      duplicates = adapter.duplicate_active_session_names
+      expect(duplicates.map { |row| row['session_name'] }).not_to include('Tsetem')
     end
   end
 end
