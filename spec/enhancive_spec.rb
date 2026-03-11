@@ -45,6 +45,7 @@ unless Lich::Gemstone::Infomon.respond_to?(:respond)
       module Infomon
         def self.respond(msg)
           puts msg if ENV['DEBUG']
+          msg # Return msg for specs that depend on return value (e.g., Infomon.show)
         end
       end
     end

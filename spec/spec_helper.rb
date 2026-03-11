@@ -764,7 +764,16 @@ module Lich
       end
 
       class << self
-        attr_accessor :right_hand, :left_hand
+        attr_writer :right_hand, :left_hand
+
+        # Match production: return .dup to prevent mutation of shared state
+        def right_hand
+          @right_hand&.dup
+        end
+
+        def left_hand
+          @left_hand&.dup
+        end
 
         def npcs
           @@npcs.empty? ? nil : @@npcs.dup
