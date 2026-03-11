@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative 'spec_helper'
+require_relative '../../../spec_helper'
 
 # QStrike-specific mocks extending spec_helper
 # QStrike needs: Char.stamina, GameObj hands, Armaments::WeaponStats, Effects::Buffs

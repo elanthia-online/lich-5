@@ -39,10 +39,10 @@ require 'ostruct'
 # =============================================================================
 # Path Constants
 # =============================================================================
-SPEC_ROOT = File.expand_path(__dir__)
-LIB_DIR = File.join(SPEC_ROOT, '..', 'lib')
-FIXTURE_DIR = File.join(SPEC_ROOT, 'fixtures')
-DATA_DIR = Dir.tmpdir # Used by settings.rb for database storage
+SPEC_ROOT = File.expand_path(__dir__) unless defined?(SPEC_ROOT)
+LIB_DIR = File.join(SPEC_ROOT, '..', 'lib') unless defined?(LIB_DIR)
+FIXTURE_DIR = File.join(SPEC_ROOT, 'fixtures') unless defined?(FIXTURE_DIR)
+DATA_DIR = Dir.tmpdir unless defined?(DATA_DIR) # Used by settings.rb for database storage
 
 # Add lib directory to load path for require statements
 $LOAD_PATH.unshift(LIB_DIR) unless $LOAD_PATH.include?(LIB_DIR)
@@ -515,6 +515,134 @@ module Lich
     end
   end
 end unless defined?(Lich) && Lich.respond_to?(:log)
+
+# Ensure critical Lich methods are defined even if login_spec_helper loaded Lich first
+unless Lich.respond_to?(:reset_display_expgains!)
+  module Lich
+    class << self
+      def reset_display_expgains!
+        @display_expgains = nil
+      end
+
+      def display_expgains
+        @display_expgains
+      end
+
+      def display_expgains=(value)
+        @display_expgains = value
+      end
+
+      def display_lichid
+        @display_lichid
+      end
+
+      def display_lichid=(value)
+        @display_lichid = value
+      end
+
+      def display_uid
+        @display_uid
+      end
+
+      def display_uid=(value)
+        @display_uid = value
+      end
+
+      def hide_uid_flag
+        @hide_uid_flag
+      end
+
+      def hide_uid_flag=(value)
+        @hide_uid_flag = value
+      end
+
+      def display_stringprocs
+        @display_stringprocs
+      end
+
+      def display_stringprocs=(value)
+        @display_stringprocs = value
+      end
+
+      def display_exits
+        @display_exits
+      end
+
+      def display_exits=(value)
+        @display_exits = value
+      end
+
+      def db
+        @db ||= MockDB.new
+      end
+    end
+
+    # Mock database for testing - only define if not present
+    unless const_defined?(:MockDB)
+      class MockDB
+        def initialize
+          @data = {}
+        end
+
+        def reset!
+          @data = {}
+        end
+
+        def get_first_value(query)
+          if (match = query.match(/WHERE name\s*=\s*'([^']+)'/))
+            @data[match[1]]
+          end
+        end
+
+        def execute(query, params = [])
+          if query.include?('INSERT INTO lich_settings VALUES')
+            if (match = query.match(/VALUES\s*\('([^']+)'/))
+              @data[match[1]] = params[0]
+            end
+          elsif query.include?('INSERT OR REPLACE')
+            if (match = query.match(/values\s*\('([^']+)'/i))
+              @data[match[1]] = params[0]
+            elsif params.length >= 2
+              @data[params[0]] = params[1]
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
+unless defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:clear_messages!)
+  module Lich
+    module Messaging
+      @messages = []
+
+      class << self
+        def msg_format(_format, _msg)
+          # Mock implementation
+        end
+
+        def mono(_msg)
+          # Mock implementation
+        end
+
+        def msg(type, message, **_opts)
+          @messages ||= []
+          @messages << { type: type, message: message }
+          puts "[Lich::Messaging] #{message}" if ENV['DEBUG']
+        end
+
+        def messages
+          @messages ||= []
+        end
+
+        def clear_messages!
+          @messages = []
+        end
+      end
+    end
+  end
+end
 
 # =============================================================================
 # Effects Mock

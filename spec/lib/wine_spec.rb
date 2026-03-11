@@ -6,7 +6,7 @@ require 'fileutils'
 # These tests verify wine.rb behavior using file content analysis
 # and targeted load tests where stubbing works reliably.
 RSpec.describe 'wine.rb' do
-  let(:wine_file_path) { File.expand_path('../lib/wine.rb', __dir__) }
+  let(:wine_file_path) { File.expand_path('../../lib/wine.rb', __dir__) }
   let(:wine_file_content) { File.read(wine_file_path) }
 
   describe 'file content verification' do
