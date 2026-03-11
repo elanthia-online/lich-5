@@ -116,4 +116,25 @@ RSpec.describe Lich::Common::SessionLauncher do
       hash_including(chdir: '/tmp/lich-home')
     )
   end
+
+  it 'uses per-launch home_dir for chdir when provided in launch_context' do
+    launch_data_with_name = launch_data + ['CHARACTER=Tsetem']
+
+    described_class.launch(
+      launch_data_with_name,
+      launch_context: {
+        home_dir: '/tmp/override-home'
+      }
+    )
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      hash_including(chdir: '/tmp/override-home')
+    )
+  end
 end
