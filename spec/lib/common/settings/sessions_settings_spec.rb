@@ -89,7 +89,7 @@ RSpec.describe Lich::Common::SessionsSettings do
 
       snapshot = described_class.snapshot
 
-      expect(snapshot[:source]).to eq('SessionSettings')
+      expect(snapshot[:source]).to eq('SessionsSettings')
       expect(snapshot[:total]).to eq(2)
       expect(snapshot[:stale]).to eq(1)
       expect(snapshot[:running]).to eq(1)
@@ -142,7 +142,7 @@ RSpec.describe Lich::Common::SessionsSettings do
 
       snapshot = described_class.snapshot
 
-      expect(snapshot[:source]).to eq('SessionSettings')
+      expect(snapshot[:source]).to eq('SessionsSettings')
       expect(snapshot[:total]).to eq(0)
       expect(snapshot[:stale]).to eq(0)
       expect(snapshot[:sessions]).to eq([])

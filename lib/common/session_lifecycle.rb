@@ -30,7 +30,7 @@ module Lich
           argv[login_idx + 1].capitalize
         elsif account_character && !account_character.to_s.empty?
           account_character
-        elsif defined?(XMLData) && XMLData.respond_to?(:name) && XMLData.name
+        elsif defined?(XMLData) && XMLData.respond_to?(:name) && !XMLData.name.to_s.empty?
           XMLData.name
         else
           "pid-#{Process.pid}"
@@ -68,43 +68,22 @@ module Lich
           scheduled_register_iso = Time.at(scheduled_register_epoch).utc.iso8601
           registration_complete = false
 
-          @running = true
-          @started = true
-          Lich.log(
-            "info: SessionLifecycle start scheduled " \
-            "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
-            "started_epoch=#{started_epoch} started_iso=#{started_iso} " \
-            "register_at_epoch=#{scheduled_register_epoch} register_at_iso=#{scheduled_register_iso} " \
-            "heartbeat_interval=#{heartbeat_interval}s"
-          ) if Lich.respond_to?(:log)
+          begin
+            @running = true
+            @started = true
+            Lich.log(
+              "info: SessionLifecycle start scheduled " \
+              "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
+              "started_epoch=#{started_epoch} started_iso=#{started_iso} " \
+              "register_at_epoch=#{scheduled_register_epoch} register_at_iso=#{scheduled_register_iso} " \
+              "heartbeat_interval=#{heartbeat_interval}s"
+            ) if Lich.respond_to?(:log)
 
-          @heartbeat_thread = Thread.new do
-            sleep registration_delay
-            Thread.exit unless @running
+            @heartbeat_thread = Thread.new do
+              sleep registration_delay
+              Thread.exit unless @running
 
-            if game_context_ready?
-              registration_complete = attempt_register(
-                session_name: session_name,
-                role: role,
-                frontend: frontend,
-                started_epoch: started_epoch,
-                started_iso: started_iso,
-                registration_delay: registration_delay
-              )
-            else
-              Lich.log(
-                "info: SessionLifecycle deferred register postponed " \
-                "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
-                "reason=xmldata_game_unavailable attempt_epoch=#{Time.now.to_i}"
-              ) if Lich.respond_to?(:log)
-            end
-
-            loop do
-              sleep heartbeat_interval
-              break unless @running
-
-              game_code = resolve_game_code
-              if !registration_complete && !game_code.nil?
+              if game_context_ready?
                 registration_complete = attempt_register(
                   session_name: session_name,
                   role: role,
@@ -113,24 +92,52 @@ module Lich
                   started_iso: started_iso,
                   registration_delay: registration_delay
                 )
+              else
+                Lich.log(
+                  "info: SessionLifecycle deferred register postponed " \
+                  "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
+                  "reason=xmldata_game_unavailable attempt_epoch=#{Time.now.to_i}"
+                ) if Lich.respond_to?(:log)
               end
 
-              Lich.log(
-                "debug: SessionLifecycle heartbeat tick " \
-                "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
-                "tick_epoch=#{Time.now.to_i}"
-              ) if Lich.respond_to?(:log)
-              SessionsSettings.heartbeat(
-                pid: Process.pid,
-                state: 'running',
-                session_name: session_name,
-                role: role,
-                frontend: frontend,
-                game_code: game_code
-              )
+              loop do
+                sleep heartbeat_interval
+                break unless @running
+
+                game_code = resolve_game_code
+                if !registration_complete && !game_code.nil?
+                  registration_complete = attempt_register(
+                    session_name: session_name,
+                    role: role,
+                    frontend: frontend,
+                    started_epoch: started_epoch,
+                    started_iso: started_iso,
+                    registration_delay: registration_delay
+                  )
+                end
+
+                Lich.log(
+                  "debug: SessionLifecycle heartbeat tick " \
+                  "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
+                  "tick_epoch=#{Time.now.to_i}"
+                ) if Lich.respond_to?(:log)
+                SessionsSettings.heartbeat(
+                  pid: Process.pid,
+                  state: 'running',
+                  session_name: session_name,
+                  role: role,
+                  frontend: frontend,
+                  game_code: game_code
+                )
+              end
+            rescue StandardError => e
+              Lich.log("warning: SessionLifecycle heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
             end
-          rescue StandardError => e
-            Lich.log("warning: SessionLifecycle heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+          rescue StandardError
+            @running = false
+            @started = false
+            @heartbeat_thread = nil
+            raise
           end
         end
         true
@@ -181,7 +188,7 @@ module Lich
       #
       # @return [String, nil] game code when XML context is ready
       def self.resolve_game_code
-        return XMLData.game if defined?(XMLData) && XMLData.respond_to?(:game) && !XMLData.game.nil?
+        return XMLData.game if defined?(XMLData) && XMLData.respond_to?(:game) && !XMLData.game.to_s.empty?
 
         nil
       end

@@ -48,6 +48,14 @@ RSpec.describe Lich::Common::SessionLifecycle do
       result = described_class.resolve_session_name(argv: [], account_character: nil)
       expect(result).to eq('pid-1234')
     end
+
+    it 'falls back to pid format when XMLData.name is empty' do
+      stub_const('XMLData', double('XMLData', name: ''))
+      allow(Process).to receive(:pid).and_return(5678)
+
+      result = described_class.resolve_session_name(argv: [], account_character: nil)
+      expect(result).to eq('pid-5678')
+    end
   end
 
   describe '.resolve_role' do
@@ -164,6 +172,24 @@ RSpec.describe Lich::Common::SessionLifecycle do
       ).at_least(:once)
 
       expect(described_class.stop).to be(true)
+    end
+
+    it 'resets lifecycle state when thread creation raises' do
+      allow(described_class).to receive(:resolve_frontend).and_return('stormfront')
+      allow(Thread).to receive(:new).and_raise(StandardError, 'thread create failed')
+
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 999)).to be(false)
+      expect(described_class.instance_variable_get(:@running)).to be(false)
+      expect(described_class.instance_variable_get(:@started)).to be(false)
+      expect(described_class.instance_variable_get(:@heartbeat_thread)).to be_nil
+    end
+  end
+
+  describe '.resolve_game_code' do
+    it 'returns nil when XMLData.game is an empty string' do
+      stub_const('XMLData', double('XMLData', game: ''))
+
+      expect(described_class.resolve_game_code).to be_nil
     end
   end
 end
