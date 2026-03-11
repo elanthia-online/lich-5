@@ -1222,6 +1222,10 @@ module Frontend
     def supports_gsl?
       false
     end
+
+    def client
+      'profanity'
+    end
   end
 end unless defined?(Frontend)
 

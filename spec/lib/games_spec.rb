@@ -206,8 +206,7 @@ RSpec.describe Lich::DragonRealms::GameInstance do
       Lich.display_lichid = true
       Lich.display_uid = true
       XMLData.room_id = 789
-      # Stub Frontend.client for the conditional check in process_room_display
-      allow(Frontend).to receive(:client).and_return('profanity')
+      # Frontend.client is mocked in spec_helper
 
       # Use +@ to unfreeze string for in-place modification
       alt_string = +"Room prompt"
