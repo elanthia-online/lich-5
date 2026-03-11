@@ -56,6 +56,13 @@ validate_destination() {
       die "Destination '$dest' must be 'pre/beta' or 'pre/beta/<slug>'"
       return 1
     fi
+  elif [[ "$dest" == pre/beta/* ]]; then
+    # For already-prefixed destinations, validate slug/path segment contract.
+    local slug="${dest#pre/beta/}"
+    if [[ -z "$slug" || ! "$slug" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$ ]]; then
+      die "Destination '$dest' must be 'pre/beta' or 'pre/beta/<slug>'"
+      return 1
+    fi
   fi
 
   echo "$dest"
@@ -71,7 +78,7 @@ validate_pr_list() {
   fi
 
   # Must be comma-separated digits only
-  if ! printf '%s' "$raw_prs" | grep -Eq '^[0-9]+( *[,]+ *[0-9]+)*$'; then
+  if ! printf '%s' "$raw_prs" | grep -Eq '^[0-9]+( *, *[0-9]+)*$'; then
     die "PR list must be comma-separated numbers (e.g., '12,27,43')"
     return 1
   fi
