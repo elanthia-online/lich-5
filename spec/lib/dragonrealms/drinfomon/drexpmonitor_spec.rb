@@ -316,37 +316,43 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
   end
 
   describe 'thread safety' do
+    # Use fully qualified name inside threads since described_class isn't available in thread scope
+    let(:expmonitor) { Lich::DragonRealms::DRExpMonitor }
+
     it 'handles concurrent start calls without error' do
+      klass = expmonitor
       threads = 5.times.map do
-        Thread.new { DRExpMonitor.start }
+        Thread.new { klass.start }
       end
 
       expect { threads.each(&:join) }.not_to raise_error
-      expect(DRExpMonitor.active?).to be true
+      expect(described_class.active?).to be true
     end
 
     it 'handles concurrent stop calls without error' do
-      DRExpMonitor.start
-      expect(DRExpMonitor.active?).to be true
+      described_class.start
+      expect(described_class.active?).to be true
 
+      klass = expmonitor
       threads = 5.times.map do
-        Thread.new { DRExpMonitor.stop }
+        Thread.new { klass.stop }
       end
 
       expect { threads.each(&:join) }.not_to raise_error
-      expect(DRExpMonitor.active?).to be false
+      expect(described_class.active?).to be false
     end
 
     it 'handles concurrent start and stop calls without error' do
+      klass = expmonitor
       threads = []
 
       # Alternate start/stop calls from different threads
       5.times do |i|
         threads << Thread.new do
           if i.even?
-            DRExpMonitor.start
+            klass.start
           else
-            DRExpMonitor.stop
+            klass.stop
           end
         end
       end
@@ -358,10 +364,10 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
       # Stub Script.running? to raise an exception
       allow(Script).to receive(:running?).and_raise(StandardError.new("test error"))
 
-      expect { DRExpMonitor.start rescue nil }.not_to raise_error
+      expect { described_class.start rescue nil }.not_to raise_error
 
       # Should be able to call stop without deadlock
-      expect { DRExpMonitor.stop }.not_to raise_error
+      expect { described_class.stop }.not_to raise_error
     end
   end
 end

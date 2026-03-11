@@ -88,7 +88,12 @@ RSpec.describe Lich::Gemstone::PSMS, ".name_normal(name)" do
 end
 
 RSpec.describe Lich::Gemstone::PSMS, "assess(name, type)" do
-  before { setup_psm_test_data }
+  before do
+    setup_psm_test_data
+    # Stub Script.current for error handling in PSMS.assess
+    script_double = double('Script', name: 'test_script')
+    allow(Script).to receive(:current).and_return(script_double)
+  end
 
   context "<psm>.name should return rank known" do
     it "parses request and determines response" do
@@ -113,7 +118,12 @@ end
 RSpec.describe Lich::Gemstone::PSMS, ".affordable?(name)" do
   # Set stamina before each test - some PSMs require 30+ stamina
   # so stamina=20 allows testing both affordable and unaffordable cases
-  before { XMLData.stamina = 20 }
+  before do
+    XMLData.stamina = 20
+    # Stub Script.current for error handling in PSMS.assess
+    script_double = double('Script', name: 'test_script')
+    allow(Script).to receive(:current).and_return(script_double)
+  end
 
   context "<psm>, name should determine available (cost < stamina)" do
     it "checks to see if the PSM cost < current stamina" do

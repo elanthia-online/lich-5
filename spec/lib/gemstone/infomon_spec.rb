@@ -600,6 +600,8 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       Lich::Gemstone::Infomon.set('skill.ambush', 1)
       Lich::Gemstone::Infomon.set('skill.swimming', 0)
       Lich::Gemstone::Infomon.set('society.status', 'None')
+      # Explicit flush to ensure async writes complete before reading
+      Lich::Gemstone::Infomon.flush
       test_results = Lich::Gemstone::Infomon.show(true)
       expect(test_results.any? { |s| s.include?('cman.krynch : 1') }).to be(true)
       expect(test_results.any? { |s| s.include?('skill.swimming : 0') }).to be(true)
