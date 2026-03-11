@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+# NOTE: This spec intentionally does NOT require spec_helper.
+# It tests InstanceSettings with a custom MockDatabaseAdapter to verify
+# database operations in isolation from other Settings infrastructure.
+
 require 'rspec'
 require 'ostruct'
 

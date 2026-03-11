@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+# NOTE: This spec intentionally does NOT require spec_helper.
+# It tests SettingsProxy script_name propagation with a custom MockDatabaseAdapter
+# to verify database path handling in isolation from other Settings specs.
+
 require 'rspec'
 require 'ostruct'
 

@@ -8,25 +8,10 @@ RSpec.describe Lich::DragonRealms::DRStats do
   include_context 'XMLData stubs'
 
   before(:each) do
-    # Reset all class variables to defaults before each test
-    described_class.race = nil
-    described_class.guild = nil
-    described_class.gender = nil
-    described_class.age = 0
-    described_class.circle = 0
-    described_class.strength = 0
-    described_class.stamina = 0
-    described_class.reflex = 0
-    described_class.agility = 0
-    described_class.intelligence = 0
-    described_class.wisdom = 0
-    described_class.discipline = 0
-    described_class.charisma = 0
-    described_class.favors = 0
-    described_class.tdps = 0
-    described_class.luck = 0
-    described_class.encumbrance = nil
-    described_class.balance = 8
+    # Use public reset! API instead of manual attribute resets (SOLID: DIP).
+    # The reset! method in production code resets all 18 attributes to defaults,
+    # preventing test coupling to internal implementation details.
+    described_class.reset!
   end
 
   describe 'attribute accessors' do

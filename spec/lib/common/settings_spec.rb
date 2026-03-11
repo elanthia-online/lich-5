@@ -506,8 +506,9 @@ RSpec.describe Lich::Common::Settings do
   describe "Real-world Examples" do
     it "handles the complete updatable scripts example" do
       upd     = Lich::Common::Settings[:updatable] || {}
-      scripts = upd[:scripts] || []
-      mapdb   = upd[:mapdb]   || {}
+      # Start with fresh arrays to ensure test isolation with random ordering
+      scripts = []
+      mapdb   = {}
 
       # Seed expected entry at index 0
       scripts << { filename: "test.lic", game: "gs" }
@@ -594,8 +595,16 @@ describe 'SettingsProxy#rebind_to_live!' do
     path  = [:updatable, :scripts]
     initial = []
 
-    proxy = Lich::Common::SettingsProxy.new(settings_module, scope, path, initial, detached: true) rescue Lich::Common::SettingsProxy.new(settings_module, scope, path, initial)
-    live  = [{ filename: 'x.lic' }]
+    # Create proxy with explicit version detection instead of inline rescue.
+    # The rescue pattern could mask real errors - this makes version handling explicit.
+    proxy = begin
+      # Try new API with detached keyword argument
+      Lich::Common::SettingsProxy.new(settings_module, scope, path, initial, detached: true)
+    rescue ArgumentError
+      # Fall back to old API without detached keyword
+      Lich::Common::SettingsProxy.new(settings_module, scope, path, initial)
+    end
+    live = [{ filename: 'x.lic' }]
 
     old_oid = proxy.target.object_id
     proxy.send(:rebind_to_live!, live)
@@ -682,11 +691,11 @@ describe Lich::Common::SettingsProxy do
 
     settings_module = Object.new
     def settings_module._log(*); end
-    unless defined?(Settings::LOG_LEVEL_DEBUG)
-      module Settings
-        LOG_LEVEL_DEBUG = 0 unless const_defined?(:LOG_LEVEL_DEBUG)
-      end
-    end
+
+    # Use stub_const to safely provide LOG_LEVEL_DEBUG without leaking to other tests.
+    # This replaces the previous pattern that defined the constant inside the test,
+    # which could persist and affect other tests with random ordering.
+    stub_const('Settings::LOG_LEVEL_DEBUG', 0) unless defined?(Settings::LOG_LEVEL_DEBUG)
 
     proxy.instance_variable_set(:@settings_module, settings_module)
     proxy.instance_variable_set(:@scope, ':')

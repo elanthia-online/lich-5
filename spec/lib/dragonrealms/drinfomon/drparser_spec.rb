@@ -25,84 +25,13 @@ DRParser = Lich::DragonRealms::DRParser unless defined?(DRParser)
 DRRoom = Lich::DragonRealms::DRRoom unless defined?(DRRoom)
 
 RSpec.describe Lich::DragonRealms::DRParser do
-  # Reference production classes for stubs
-  let(:drstats_class) { Lich::DragonRealms::DRStats }
-  let(:drspells_class) { Lich::DragonRealms::DRSpells }
-  let(:drroom_class) { Lich::DragonRealms::DRRoom }
-  let(:drskill_class) { Lich::DragonRealms::DRSkill }
-  let(:drexpmonitor_class) { Lich::DragonRealms::DRExpMonitor }
+  # Use shared context from spec_helper for common DRParser test setup.
+  # This extracts ~70 lines of stub setup into a reusable shared context (DRY).
+  include_context 'DRParser stubs'
 
   before(:each) do
-    # Reset module-level state (uses class variables in production)
-    described_class.class_variable_set(:@@parsing_exp_mods_output, false)
-    described_class.class_variable_set(:@@parsing_inventory_get, false)
-
-    # Stub DRStats setters
-    allow(drstats_class).to receive(:gender=)
-    allow(drstats_class).to receive(:age=)
-    allow(drstats_class).to receive(:circle=)
-    allow(drstats_class).to receive(:race=)
-    allow(drstats_class).to receive(:guild=)
-    allow(drstats_class).to receive(:encumbrance=)
-    allow(drstats_class).to receive(:luck=)
-    allow(drstats_class).to receive(:tdps=)
-    allow(drstats_class).to receive(:favors=)
-    allow(drstats_class).to receive(:balance=)
-    allow(drstats_class).to receive(:strength=)
-    allow(drstats_class).to receive(:agility=)
-    allow(drstats_class).to receive(:discipline=)
-    allow(drstats_class).to receive(:intelligence=)
-    allow(drstats_class).to receive(:reflex=)
-    allow(drstats_class).to receive(:charisma=)
-    allow(drstats_class).to receive(:wisdom=)
-    allow(drstats_class).to receive(:stamina=)
-
-    # Stub DRSpells
-    allow(drspells_class).to receive(:grabbing_known_spells).and_return(false)
-    allow(drspells_class).to receive(:grabbing_known_spells=)
-    allow(drspells_class).to receive(:grabbing_known_khri).and_return(false)
-    allow(drspells_class).to receive(:grabbing_known_khri=)
-    allow(drspells_class).to receive(:check_known_barbarian_abilities).and_return(false)
-    allow(drspells_class).to receive(:check_known_barbarian_abilities=)
-
-    # Stub DRRoom
-    allow(drroom_class).to receive(:pcs).and_return([])
-    allow(drroom_class).to receive(:pcs=)
-    allow(drroom_class).to receive(:pcs_prone).and_return([])
-    allow(drroom_class).to receive(:pcs_prone=)
-    allow(drroom_class).to receive(:pcs_sitting).and_return([])
-    allow(drroom_class).to receive(:pcs_sitting=)
-    allow(drroom_class).to receive(:npcs).and_return([])
-    allow(drroom_class).to receive(:npcs=)
-    allow(drroom_class).to receive(:dead_npcs).and_return([])
-    allow(drroom_class).to receive(:dead_npcs=)
-    allow(drroom_class).to receive(:room_objs).and_return([])
-    allow(drroom_class).to receive(:room_objs=)
-    allow(drroom_class).to receive(:group_members).and_return([])
-    allow(drroom_class).to receive(:group_members=)
-
-    # Stub DRSkill
-    allow(drskill_class).to receive(:update)
-    allow(drskill_class).to receive(:clear_mind)
-    allow(drskill_class).to receive(:update_mods)
-    allow(drskill_class).to receive(:update_rested_exp)
-    allow(drskill_class).to receive(:exp_modifiers).and_return({})
-
-    # Stub DRExpMonitor
-    allow(drexpmonitor_class).to receive(:inline_display?).and_return(false)
-    allow(drexpmonitor_class).to receive(:format_briefexp_on) { |line, _skill| line }
-    allow(drexpmonitor_class).to receive(:format_briefexp_off) { |line, _skill, _rate| line }
-
-    # Stub Lich::Common::Account
-    allow(Lich::Common::Account).to receive(:name=) if defined?(Lich::Common::Account)
-    allow(Lich::Common::Account).to receive(:subscription=) if defined?(Lich::Common::Account)
-
-    # Stub Flags
-    allow(Flags).to receive(:flags).and_return({})
-    allow(Flags).to receive(:matchers).and_return({})
-
-    # Stub XMLData
-    allow(XMLData).to receive(:game).and_return('DR')
+    # Reset module-level state via public reset! API (SOLID: DIP - no class_variable_set)
+    described_class.reset!
   end
 
   describe 'Pattern constants' do
@@ -391,8 +320,10 @@ RSpec.describe Lich::DragonRealms::DRParser do
   end
 
   describe '.check_exp_mods' do
+    # NOTE: class_variable_set/get is acceptable here because we're testing
+    # internal state transitions of the parser. These tests verify the state
+    # machine behavior, which requires setting up specific internal states.
     before(:each) do
-      # Use class_variable_set for module-level state (production uses @@ class variables)
       described_class.class_variable_set(:@@parsing_exp_mods_output, true)
       allow(drskill_class).to receive(:exp_modifiers).and_return({})
     end
@@ -450,7 +381,8 @@ RSpec.describe Lich::DragonRealms::DRParser do
       it 'sets @@parsing_inventory_get to true' do
         described_class.parse(inv_search_line)
 
-        # Use class_variable_get for module-level state (production uses @@ class variables)
+        # NOTE: class_variable_get is acceptable here - we're verifying the parser
+        # correctly transitions to inventory parsing state after matching the trigger line.
         expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be true
       end
     end

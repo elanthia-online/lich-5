@@ -6,6 +6,12 @@ require 'rexml/document'
 require_relative '../../../lib/common/gameobj'
 
 RSpec.describe Lich::Common::GameObj do
+  # NOTE: This helper uses class_variable_set for test isolation because GameObj
+  # doesn't have a public reset! method. This is acceptable for test helpers but
+  # IDEALLY a reset! method should be added to the production class to decouple
+  # tests from internal implementation. This helper must be updated if class
+  # variables are renamed or added.
+  # TODO: Add reset! method to Lich::Common::GameObj and replace this helper.
   def reset_gameobj_state!
     described_class.send(:class_variable_set, :@@loot, [])
     described_class.send(:class_variable_set, :@@npcs, [])
@@ -259,8 +265,7 @@ RSpec.describe Lich::Common::GameObj do
       expect(described_class.loot.map(&:id)).to eq(['30'])
     end
 
-    # TODO: Production code returns same object, not duplicate. Fix in GameObj.right_hand/left_hand.
-    xit 'returns duplicate hand objects from right_hand/left_hand readers' do
+    it 'returns duplicate hand objects from right_hand/left_hand readers' do
       described_class.new_right_hand('41', 'sword', 'a longsword')
       described_class.new_left_hand('42', 'shield', 'a shield')
 

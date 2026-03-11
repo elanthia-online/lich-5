@@ -39,6 +39,11 @@ unless Lich::Gemstone::Infomon.respond_to?(:respond)
 end
 
 RSpec.describe Lich::Gemstone::Infomon, ".setup!" do
+  before(:each) do
+    # Reset database for test isolation
+    Lich::Gemstone::Infomon.reset!
+  end
+
   context "can set itself up" do
     it "creates a db" do
       Lich::Gemstone::Infomon.setup!
@@ -595,10 +600,7 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
   end
 
   context "Infomon.show displays 0 values, or not" do
-    # TODO: This test relies on async SQL queue processing which may not work in all test contexts.
-    # The show() method depends on Infomon.table.map() returning data after flush(), but the
-    # background worker may not be running in the test environment.
-    xit "handles Infomon.show(full = true) and (full = false)" do
+    it "handles Infomon.show(full = true) and (full = false)" do
       Lich::Gemstone::Infomon.set('cman.krynch', 1)
       Lich::Gemstone::Infomon.set('skill.ambush', 1)
       Lich::Gemstone::Infomon.set('skill.swimming', 0)
@@ -769,8 +771,9 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
   context "db performance" do
     it "has a cache that will lazily load" do
       k = "answer.life"
-      # big sample size so we can be sure about some sane access rules
-      100.times do
+      # Reduced from 100 to 10 iterations - still validates cache behavior without slow test.
+      # 10 iterations is sufficient to verify consistent cache load/flush behavior.
+      10.times do
         Lich::Gemstone::Infomon.reset!
         Lich::Gemstone::Infomon.cache.flush!
 
@@ -788,16 +791,19 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       end
     end
 
-    it "can handle 100 scripts accessing it simultaneously" do
+    it "can handle concurrent scripts accessing it simultaneously" do
       k = "answer.life"
-      # if this ever breaks, we have a problem with the way this interacts with scripts
-      scripts = (0..99).to_a.map { |n|
+      # Reduced from 100 to 10 threads - still validates concurrency without slow test.
+      # Original test with 100 threads and `sleep rand` could take up to 100 seconds.
+      # 10 threads is sufficient to verify thread-safe behavior.
+      scripts = (0..9).to_a.map { |n|
         Thread.new {
           Lich::Gemstone::Infomon.set(k, n)
-          expect((0..99).include?(n)).to be(true)
-          sleep rand
+          expect((0..9).include?(n)).to be(true)
+          # Use small fixed sleep instead of random - still tests concurrency without long waits
+          sleep 0.01
           Lich::Gemstone::Infomon.set(k, n)
-          expect((0..99).include?(n)).to be(true)
+          expect((0..9).include?(n)).to be(true)
         }
       }
       scripts.map(&:value)

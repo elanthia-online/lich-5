@@ -282,3 +282,166 @@ Lich::DragonRealms::MyModule = ::MyModule
 **Cause**: Production code relies on NilClass `method_missing` monkey-patch.
 
 **Fix**: Mock the specific method or stub the dependency.
+
+### Missing Standard Library
+
+**Symptom**: `NameError: uninitialized constant SomeModule::Date` (or `Time`, `JSON`, etc.)
+
+**Cause**: Production code uses a standard library class that isn't loaded in test context.
+
+**Fix**: Add the require to `spec_helper.rb`:
+```ruby
+require 'date'
+require 'json'
+require 'time'
+```
+
+## Test Design Principles
+
+### DAMP vs DRY
+
+Tests prioritize **DAMP** (Descriptive And Meaningful Phrases) over DRY (Don't Repeat Yourself).
+
+**DAMP is preferred when:**
+- Test intent should be immediately obvious
+- Each test should be self-contained and readable
+- Duplication makes the test easier to understand
+
+```ruby
+# Good - DAMP: clear what each test does
+it 'returns nil for non-Moon Mage guilds' do
+  described_class.guild = 'Barbarian'
+  expect(described_class.native_mana).to be_nil
+end
+
+it 'returns lunar for Moon Mage guild' do
+  described_class.guild = 'Moon Mage'
+  expect(described_class.native_mana).to eq('lunar')
+end
+```
+
+**DRY is preferred when:**
+- Multiple tests share identical setup (use `shared_context`)
+- Testing the same behavior with different inputs (use `shared_examples`)
+- Repetitive assertions follow a clear pattern
+
+```ruby
+# Good - DRY: shared example for 12 identical guild predicate tests
+RSpec.shared_examples 'guild predicate' do |guild_name, method_name|
+  it "returns true when guild is #{guild_name}" do
+    described_class.guild = guild_name
+    expect(described_class.send(method_name)).to be true
+  end
+end
+
+# Usage
+include_examples 'guild predicate', 'Barbarian', :barbarian?
+include_examples 'guild predicate', 'Moon Mage', :moon_mage?
+```
+
+### SOLID Principles in Tests
+
+#### Dependency Inversion (DIP)
+
+**Prefer public `reset!` APIs over `class_variable_set`:**
+
+```ruby
+# Good - uses public API
+before(:each) do
+  described_class.reset!
+end
+
+# Avoid - couples to internal implementation
+before(:each) do
+  described_class.class_variable_set(:@@some_var, [])
+end
+```
+
+**When `class_variable_set` is acceptable:**
+1. Testing the class variable implementation itself
+2. No `reset!` method exists (add TODO to create one)
+3. Document the reason with a comment
+
+```ruby
+# NOTE: class_variable_set acceptable here because we're testing
+# the class variable refactoring from @ to @@. This tests the
+# implementation detail by design.
+```
+
+#### Single Responsibility (SRP)
+
+Each test should verify one behavior:
+
+```ruby
+# Good - single responsibility
+it 'sets the guild' do
+  described_class.guild = 'Moon Mage'
+  expect(described_class.guild).to eq('Moon Mage')
+end
+
+# Bad - tests multiple unrelated things
+it 'sets guild and race and age' do
+  described_class.guild = 'Moon Mage'
+  described_class.race = 'Elf'
+  described_class.age = 30
+  expect(described_class.guild).to eq('Moon Mage')
+  expect(described_class.race).to eq('Elf')
+  expect(described_class.age).to eq(30)
+end
+```
+
+### Documenting Skipped Tests
+
+When using `xit` or `skip`, always document:
+1. **Why** it's skipped
+2. **What fix** is needed
+3. **Severity** of the test gap
+4. **Tracking** reference (or TODO to create issue)
+
+```ruby
+# ISSUE: Production bug - GameObj.right_hand returns same instance.
+# Fix: Add .dup call in the reader method.
+# Severity: Low - scripts rarely mutate hand objects.
+# Tracking: Create GitHub issue when addressing this.
+xit 'returns duplicate hand objects' do
+  # test code...
+end
+```
+
+For environment-dependent skips:
+
+```ruby
+it 'requires full game environment' do
+  skip 'Requires network connection and game client'
+  # integration test code...
+end
+```
+
+### Test Isolation Checklist
+
+Before submitting a spec file, verify:
+
+- [ ] `before(:each)` calls appropriate `reset!` methods
+- [ ] Global variables (`$foo`) are reset if modified
+- [ ] Class variables are reset via `reset!` or documented `class_variable_set`
+- [ ] Tests pass with `--order random` (run 3+ times)
+- [ ] Tests pass in isolation: `rspec path/to/specific_spec.rb`
+- [ ] Tests pass when run with full suite: `rspec`
+
+### Production Code Requirements for Testability
+
+When writing production code, include:
+
+1. **`reset!` method** for any class with mutable state
+2. **Frozen constants** for immutable data (`FREEZE` pattern constants)
+3. **Dependency injection** where practical (pass dependencies as args)
+
+```ruby
+module MyModule
+  @@some_state = []
+
+  def self.reset!
+    @@some_state = []
+  end
+end
+```

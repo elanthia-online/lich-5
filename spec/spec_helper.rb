@@ -32,6 +32,7 @@
 # =============================================================================
 
 require 'rspec'
+require 'date'
 require 'tmpdir'
 require 'ostruct'
 
@@ -89,6 +90,9 @@ RSpec.configure do |config|
     DRSkill.reset! if defined?(DRSkill) && DRSkill.respond_to?(:reset!)
     DRSpells.reset! if defined?(DRSpells) && DRSpells.respond_to?(:reset!)
     DRRoom.reset! if defined?(DRRoom) && DRRoom.respond_to?(:reset!)
+
+    # DR production classes (only if loaded - may override mocks)
+    Lich::DragonRealms::DRParser.reset! if defined?(Lich::DragonRealms::DRParser) && Lich::DragonRealms::DRParser.respond_to?(:reset!)
   end
 
   # Random ordering now enabled - the before hook resets shared state
@@ -140,6 +144,118 @@ RSpec.shared_context 'DRSpells XMLData stubs' do
     allow(XMLData).to receive(:dr_active_spells).and_return({ 'Protection' => 120, 'Shield' => 60 })
     allow(XMLData).to receive(:dr_active_spells_slivers).and_return(3)
     allow(XMLData).to receive(:dr_active_spells_stellar_percentage).and_return(45)
+  end
+end
+
+# Gemstone injury data for Wounds/Scars specs
+# Extracts duplicated injury hash setup from games_spec.rb
+RSpec.shared_context 'Gemstone injury data' do
+  let(:base_injuries) do
+    {
+      'leftEye'   => { 'wound' => 0, 'scar' => 0 },
+      'rightEye'  => { 'wound' => 0, 'scar' => 0 },
+      'head'      => { 'wound' => 0, 'scar' => 0 },
+      'neck'      => { 'wound' => 0, 'scar' => 0 },
+      'back'      => { 'wound' => 0, 'scar' => 0 },
+      'chest'     => { 'wound' => 0, 'scar' => 0 },
+      'abdomen'   => { 'wound' => 0, 'scar' => 0 },
+      'leftArm'   => { 'wound' => 0, 'scar' => 0 },
+      'rightArm'  => { 'wound' => 0, 'scar' => 0 },
+      'leftHand'  => { 'wound' => 0, 'scar' => 0 },
+      'rightHand' => { 'wound' => 0, 'scar' => 0 },
+      'leftLeg'   => { 'wound' => 0, 'scar' => 0 },
+      'rightLeg'  => { 'wound' => 0, 'scar' => 0 },
+      'leftFoot'  => { 'wound' => 0, 'scar' => 0 },
+      'rightFoot' => { 'wound' => 0, 'scar' => 0 },
+      'nsys'      => { 'wound' => 0, 'scar' => 0 }
+    }
+  end
+
+  # Helper to set specific injury values on top of base
+  def set_injuries(overrides = {})
+    injuries = base_injuries.dup
+    overrides.each do |location, values|
+      injuries[location] = injuries[location].merge(values)
+    end
+    XMLData.injuries = injuries
+  end
+end
+
+# DRParser stub context for common parser test setup
+RSpec.shared_context 'DRParser stubs' do
+  let(:drstats_class) { Lich::DragonRealms::DRStats }
+  let(:drspells_class) { Lich::DragonRealms::DRSpells }
+  let(:drroom_class) { Lich::DragonRealms::DRRoom }
+  let(:drskill_class) { Lich::DragonRealms::DRSkill }
+  let(:drexpmonitor_class) { Lich::DragonRealms::DRExpMonitor }
+
+  before do
+    # Stub DRStats setters
+    allow(drstats_class).to receive(:gender=)
+    allow(drstats_class).to receive(:age=)
+    allow(drstats_class).to receive(:circle=)
+    allow(drstats_class).to receive(:race=)
+    allow(drstats_class).to receive(:guild=)
+    allow(drstats_class).to receive(:encumbrance=)
+    allow(drstats_class).to receive(:luck=)
+    allow(drstats_class).to receive(:tdps=)
+    allow(drstats_class).to receive(:favors=)
+    allow(drstats_class).to receive(:balance=)
+    allow(drstats_class).to receive(:strength=)
+    allow(drstats_class).to receive(:agility=)
+    allow(drstats_class).to receive(:discipline=)
+    allow(drstats_class).to receive(:intelligence=)
+    allow(drstats_class).to receive(:reflex=)
+    allow(drstats_class).to receive(:charisma=)
+    allow(drstats_class).to receive(:wisdom=)
+    allow(drstats_class).to receive(:stamina=)
+
+    # Stub DRSpells
+    allow(drspells_class).to receive(:grabbing_known_spells).and_return(false)
+    allow(drspells_class).to receive(:grabbing_known_spells=)
+    allow(drspells_class).to receive(:grabbing_known_khri).and_return(false)
+    allow(drspells_class).to receive(:grabbing_known_khri=)
+    allow(drspells_class).to receive(:check_known_barbarian_abilities).and_return(false)
+    allow(drspells_class).to receive(:check_known_barbarian_abilities=)
+
+    # Stub DRRoom
+    allow(drroom_class).to receive(:pcs).and_return([])
+    allow(drroom_class).to receive(:pcs=)
+    allow(drroom_class).to receive(:pcs_prone).and_return([])
+    allow(drroom_class).to receive(:pcs_prone=)
+    allow(drroom_class).to receive(:pcs_sitting).and_return([])
+    allow(drroom_class).to receive(:pcs_sitting=)
+    allow(drroom_class).to receive(:npcs).and_return([])
+    allow(drroom_class).to receive(:npcs=)
+    allow(drroom_class).to receive(:dead_npcs).and_return([])
+    allow(drroom_class).to receive(:dead_npcs=)
+    allow(drroom_class).to receive(:room_objs).and_return([])
+    allow(drroom_class).to receive(:room_objs=)
+    allow(drroom_class).to receive(:group_members).and_return([])
+    allow(drroom_class).to receive(:group_members=)
+
+    # Stub DRSkill
+    allow(drskill_class).to receive(:update)
+    allow(drskill_class).to receive(:clear_mind)
+    allow(drskill_class).to receive(:update_mods)
+    allow(drskill_class).to receive(:update_rested_exp)
+    allow(drskill_class).to receive(:exp_modifiers).and_return({})
+
+    # Stub DRExpMonitor
+    allow(drexpmonitor_class).to receive(:inline_display?).and_return(false)
+    allow(drexpmonitor_class).to receive(:format_briefexp_on) { |line, _skill| line }
+    allow(drexpmonitor_class).to receive(:format_briefexp_off) { |line, _skill, _rate| line }
+
+    # Stub Lich::Common::Account
+    allow(Lich::Common::Account).to receive(:name=) if defined?(Lich::Common::Account)
+    allow(Lich::Common::Account).to receive(:subscription=) if defined?(Lich::Common::Account)
+
+    # Stub Flags
+    allow(Flags).to receive(:flags).and_return({})
+    allow(Flags).to receive(:matchers).and_return({})
+
+    # Stub XMLData
+    allow(XMLData).to receive(:game).and_return('DR')
   end
 end
 
@@ -1183,6 +1299,29 @@ module DRCTH
   # Minimal mock - extend as needed
 end unless defined?(DRCTH)
 
+# -----------------------------------------------------------------------------
+# DRExpMonitor - Experience monitor module
+# -----------------------------------------------------------------------------
+module DRExpMonitor
+  class << self
+    def inline_display?
+      false
+    end
+
+    def format_briefexp_on(line, _skill)
+      line
+    end
+
+    def format_briefexp_off(line, _skill, _rate)
+      line
+    end
+
+    def reset!
+      # No state to reset
+    end
+  end
+end unless defined?(DRExpMonitor)
+
 # =============================================================================
 # Namespace Aliases
 # =============================================================================
@@ -1195,6 +1334,7 @@ Lich::DragonRealms::DRStats = DRStats unless defined?(Lich::DragonRealms::DRStat
 Lich::DragonRealms::DRSkill = DRSkill unless defined?(Lich::DragonRealms::DRSkill)
 Lich::DragonRealms::DRSpells = DRSpells unless defined?(Lich::DragonRealms::DRSpells)
 Lich::DragonRealms::DRRoom = DRRoom unless defined?(Lich::DragonRealms::DRRoom)
+Lich::DragonRealms::DRExpMonitor = DRExpMonitor unless defined?(Lich::DragonRealms::DRExpMonitor)
 Lich::DragonRealms::DRCA = DRCA unless defined?(Lich::DragonRealms::DRCA)
 Lich::DragonRealms::DRCT = DRCT unless defined?(Lich::DragonRealms::DRCT)
 Lich::DragonRealms::DRCMM = DRCMM unless defined?(Lich::DragonRealms::DRCMM)
@@ -1238,7 +1378,10 @@ class StringProc
   end
 
   def call(*_args)
-    # Evaluate the string expression and return the result
+    # Evaluate the string expression and return the result.
+    # WARNING: This uses eval() which is a security risk if passed untrusted input.
+    # This is safe in test context but MUST NOT be used with user-provided strings
+    # in production code. The production StringProc has additional safeguards.
     eval(@string)
   end
 

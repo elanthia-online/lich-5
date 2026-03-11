@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+# NOTE: This spec intentionally does NOT require spec_helper.
+# It tests LaunchData parsing in isolation to verify the data structure
+# is correctly populated from launch parameters without game dependencies.
+
 require 'rspec'
 
 # Mock Lich module before requiring the file

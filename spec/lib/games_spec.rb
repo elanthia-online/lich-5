@@ -249,26 +249,16 @@ RSpec.describe Lich::DragonRealms::Game do
 end
 
 RSpec.describe Lich::Gemstone::Wounds do
+  # Use shared injury context from spec_helper (DRY)
+  include_context 'Gemstone injury data'
+
   before do
     XMLData.reset
-    XMLData.injuries = {
-      'leftEye'   => { 'wound' => 0, 'scar' => 1 },
-      'rightEye'  => { 'wound' => 2, 'scar' => 3 },
-      'head'      => { 'wound' => 0, 'scar' => 0 },
-      'neck'      => { 'wound' => 0, 'scar' => 0 },
-      'back'      => { 'wound' => 0, 'scar' => 0 },
-      'chest'     => { 'wound' => 0, 'scar' => 0 },
-      'abdomen'   => { 'wound' => 0, 'scar' => 0 },
-      'leftArm'   => { 'wound' => 0, 'scar' => 0 },
-      'rightArm'  => { 'wound' => 0, 'scar' => 0 },
-      'leftHand'  => { 'wound' => 0, 'scar' => 0 },
-      'rightHand' => { 'wound' => 0, 'scar' => 0 },
-      'leftLeg'   => { 'wound' => 0, 'scar' => 0 },
-      'rightLeg'  => { 'wound' => 0, 'scar' => 0 },
-      'leftFoot'  => { 'wound' => 0, 'scar' => 0 },
-      'rightFoot' => { 'wound' => 0, 'scar' => 0 },
-      'nsys'      => { 'wound' => 0, 'scar' => 0 }
-    }
+    # Set specific injury values for wound tests
+    set_injuries(
+      'leftEye'  => { 'wound' => 0, 'scar' => 1 },
+      'rightEye' => { 'wound' => 2, 'scar' => 3 }
+    )
   end
 
   it 'returns correct wound values' do
@@ -294,26 +284,19 @@ RSpec.describe Lich::Gemstone::Wounds do
 end
 
 RSpec.describe Lich::Gemstone::Scars do
+  # Use shared injury context from spec_helper (DRY)
+  include_context 'Gemstone injury data'
+
   before do
     XMLData.reset
-    XMLData.injuries = {
+    # Set specific injury values for scar tests
+    set_injuries(
       'leftEye'   => { 'wound' => 0, 'scar' => 1 },
       'rightEye'  => { 'wound' => 2, 'scar' => 3 },
-      'head'      => { 'wound' => 0, 'scar' => 0 },
-      'neck'      => { 'wound' => 0, 'scar' => 0 },
-      'back'      => { 'wound' => 0, 'scar' => 0 },
-      'chest'     => { 'wound' => 0, 'scar' => 0 },
-      'abdomen'   => { 'wound' => 0, 'scar' => 0 },
-      'leftArm'   => { 'wound' => 0, 'scar' => 0 },
       'rightArm'  => { 'wound' => 0, 'scar' => 1 },
-      'leftHand'  => { 'wound' => 0, 'scar' => 0 },
       'rightHand' => { 'wound' => 0, 'scar' => 1 },
-      'leftLeg'   => { 'wound' => 0, 'scar' => 0 },
-      'rightLeg'  => { 'wound' => 0, 'scar' => 2 },
-      'leftFoot'  => { 'wound' => 0, 'scar' => 0 },
-      'rightFoot' => { 'wound' => 0, 'scar' => 0 },
-      'nsys'      => { 'wound' => 0, 'scar' => 0 }
-    }
+      'rightLeg'  => { 'wound' => 0, 'scar' => 2 }
+    )
   end
 
   it 'returns correct scar values' do
@@ -386,10 +369,14 @@ RSpec.describe Lich::Gemstone::Gift do
 end
 
 # Tests for GameBase::Game class variable refactoring (from main)
+# NOTE: class_variable_set/get is acceptable in these tests because they are
+# specifically verifying the class variable implementation itself - the refactor
+# from instance variables (@) to class variables (@@). This is testing the
+# implementation detail by design, not testing through public API.
 RSpec.describe Lich::GameBase::Game do
   describe '.autostarted?' do
     before do
-      # Reset the class variable
+      # Reset the class variable for test isolation
       described_class.class_variable_set(:@@autostarted, false) if described_class.class_variable_defined?(:@@autostarted)
     end
 
@@ -425,10 +412,14 @@ RSpec.describe Lich::GameBase::Game do
       end
 
       it 'becomes true after handle_autostart is called' do
-        skip 'Requires full Game environment to test handle_autostart'
-        # This would need the full Lich environment loaded
-        # described_class.send(:handle_autostart)
-        # expect(described_class.autostarted?).to be true
+        # Stub dependencies to isolate the state transition
+        stub_const('LICH_VERSION', '5.0.0')
+        stub_const('RECOMMENDED_RUBY', '3.0.0')
+        allow(Lich).to receive(:core_updated_with_lich_version).and_return('5.0.0')
+        allow(Script).to receive(:exists?).and_return(false) if defined?(Script)
+
+        described_class.send(:handle_autostart)
+        expect(described_class.autostarted?).to be true
       end
     end
   end
