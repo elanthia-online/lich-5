@@ -58,11 +58,20 @@ RSpec.configure do |config|
   # Enable more verbose output when running a single spec file
   config.default_formatter = 'doc' if config.files_to_run.one?
 
-  # NOTE: Random ordering disabled due to pre-existing order-dependent tests.
-  # The settings and PSMS specs have shared state issues that cause failures
-  # when run in certain orders. These should be fixed separately.
-  # config.order = :random
-  # Kernel.srand config.seed
+  # Reset shared state before each example to ensure test isolation.
+  # This prevents state leakage between tests and allows random ordering.
+  config.before do
+    XMLData.reset
+    Script.current = nil
+    $_SERVERBUFFER_.clear
+    $_CLIENTBUFFER_.clear
+    $_LASTUPSTREAM_ = nil
+    Lich::Common::GameObj.clear_npcs if defined?(Lich::Common::GameObj)
+  end
+
+  # Random ordering now enabled - the before hook resets shared state
+  config.order = :random
+  Kernel.srand config.seed
 end
 
 # =============================================================================

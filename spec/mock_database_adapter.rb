@@ -3,6 +3,8 @@
 # This file implements an in-memory database adapter for testing the Settings module
 # without requiring an actual SQLite database.
 
+require 'ostruct'
+
 module Lich
   module Common
     # Mock database adapter that simulates database operations using in-memory storage

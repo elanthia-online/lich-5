@@ -427,12 +427,15 @@ RSpec.describe Lich::Common::Settings do
 
   describe "Real-world Examples" do
     it "handles the complete updatable scripts example" do
-      # Initialize with ||= operator - expected that this will retain prior values (filename: "test.lic")
+      # Initialize the structure - with random test ordering, we set up all state ourselves
       Lich::Common::Settings[:updatable] ||= {}
       Lich::Common::Settings[:updatable][:scripts] ||= []
       Lich::Common::Settings[:updatable][:mapdb] ||= {}
 
-      # Add scripts
+      # Add the initial "test.lic" entry first
+      Lich::Common::Settings[:updatable][:scripts].push({ filename: "test.lic", game: "gs" })
+
+      # Add additional scripts
       Lich::Common::Settings[:updatable][:scripts].push({ filename: "alias.lic", game: "gs",
                                                           author: "elanthia-online" })
       Lich::Common::Settings[:updatable][:scripts].push({ filename: "autostart.lic", game: "gs",
@@ -450,7 +453,7 @@ RSpec.describe Lich::Common::Settings do
 
       # Verify the structure
       expect(Lich::Common::Settings[:updatable][:scripts].length).to eq(4)
-      # Reminder that index 0 of array is pre-existsing - test.lic
+      # First element is test.lic (set up above)
       expect(Lich::Common::Settings[:updatable][:scripts][0][:filename]).to eq("test.lic")
       expect(Lich::Common::Settings[:updatable][:scripts][1][:filename]).to eq("alias.lic")
       expect(Lich::Common::Settings[:updatable][:scripts][2][:filename]).to eq("autostart.lic")

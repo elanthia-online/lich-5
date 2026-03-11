@@ -14,37 +14,51 @@ require 'attributes/skills'
 # Alias Skills at top level for psms.rb max_forcert_count which uses unqualified Skills
 Skills = Lich::Gemstone::Skills unless defined?(Skills)
 
-# Set up test data for PSM specs
+# =============================================================================
+# Shared PSM test data setup
+# =============================================================================
+# Helper to set up Infomon PSM data. Must be called in `before` blocks because
+# other specs (infomon_spec.rb) call `Infomon.reset!` which wipes the database.
+# With random test ordering, we can't rely on file load order.
+
+def setup_psm_test_data
+  Lich::Gemstone::Infomon.setup!
+  Lich::Gemstone::Infomon.set("cman.acrobatsleap", 0)
+  Lich::Gemstone::Infomon.set("cman.bearhug", 0)
+  Lich::Gemstone::Infomon.set("cman.berserk", 0)
+  Lich::Gemstone::Infomon.set("weapon.reactiveshot", 0)
+  Lich::Gemstone::Infomon.set("weapon.reversestrike", 0)
+  Lich::Gemstone::Infomon.set("weapon.spinkick", 0)
+  Lich::Gemstone::Infomon.set("weapon.thrash", 0)
+  Lich::Gemstone::Infomon.set("weapon.twinhammer", 1)
+  Lich::Gemstone::Infomon.set("weapon.volley", 0)
+  Lich::Gemstone::Infomon.set("weapon.wblade", 0)
+  Lich::Gemstone::Infomon.set("weapon.whirlwind", 0)
+  Lich::Gemstone::Infomon.set("armor.blessing", 0)
+  Lich::Gemstone::Infomon.set("armor.reinforcement", 0)
+  Lich::Gemstone::Infomon.set("armor.support", 0)
+  Lich::Gemstone::Infomon.set("shield.tfocus", 0)
+  Lich::Gemstone::Infomon.set("cman.krynch", 1)
+  Lich::Gemstone::Infomon.set("cman.mongoose", 1)
+  Lich::Gemstone::Infomon.set("cman.vaultkick", 1)
+  Lich::Gemstone::Infomon.set("feat.martialmastery", 1)
+  Lich::Gemstone::Infomon.set("feat.tattoo", 1)
+  Lich::Gemstone::Infomon.flush
+end
+
 RSpec.describe Lich::Gemstone::Infomon, ".setup!" do
+  before { setup_psm_test_data }
+
   context "can set itself up" do
     it "creates a db" do
-      Lich::Gemstone::Infomon.setup!
       File.exist?(Lich::Gemstone::Infomon.file) or fail("infomon sqlite db was not created")
     end
   end
 
-  context "can set up data" do
-    it "creates key/value pair for our testing" do
-      Lich::Gemstone::Infomon.set("cman.acrobatsleap", 0)
-      Lich::Gemstone::Infomon.set("cman.bearhug", 0)
-      Lich::Gemstone::Infomon.set("cman.berserk", 0)
-      Lich::Gemstone::Infomon.set("weapon.reactiveshot", 0)
-      Lich::Gemstone::Infomon.set("weapon.reversestrike", 0)
-      Lich::Gemstone::Infomon.set("weapon.spinkick", 0)
-      Lich::Gemstone::Infomon.set("weapon.thrash", 0)
-      Lich::Gemstone::Infomon.set("weapon.twinhammer", 1)
-      Lich::Gemstone::Infomon.set("weapon.volley", 0)
-      Lich::Gemstone::Infomon.set("weapon.wblade", 0)
-      Lich::Gemstone::Infomon.set("weapon.whirlwind", 0)
-      Lich::Gemstone::Infomon.set("armor.blessing", 0)
-      Lich::Gemstone::Infomon.set("armor.reinforcement", 0)
-      Lich::Gemstone::Infomon.set("armor.support", 0)
-      Lich::Gemstone::Infomon.set("shield.tfocus", 0)
-      Lich::Gemstone::Infomon.set("cman.krynch", 1)
-      Lich::Gemstone::Infomon.set("cman.mongoose", 1)
-      Lich::Gemstone::Infomon.set("cman.vaultkick", 1)
-      Lich::Gemstone::Infomon.set("feat.martialmastery", 1)
-      Lich::Gemstone::Infomon.set("feat.tattoo", 1)
+  context "can manipulate data" do
+    it "creates key/value pair" do
+      expect(Lich::Gemstone::Infomon.get("cman.krynch")).to eq(1)
+      expect(Lich::Gemstone::Infomon.get("weapon.twinhammer")).to eq(1)
     end
   end
 end
@@ -73,6 +87,8 @@ RSpec.describe Lich::Gemstone::PSMS, ".name_normal(name)" do
 end
 
 RSpec.describe Lich::Gemstone::PSMS, "assess(name, type)" do
+  before { setup_psm_test_data }
+
   context "<psm>.name should return rank known" do
     it "parses request and determines response" do
       expect(Lich::Gemstone::CMan[:vaultkick]).to eq(1)
@@ -111,23 +127,41 @@ RSpec.describe Lich::Gemstone::PSMS, ".affordable?(name)" do
 end
 
 RSpec.describe Lich::Gemstone::PSMS, ".can_forcert?(times)" do
+  before do
+    setup_psm_test_data
+    # Ensure clean state for MOC skill - previous tests may have set different values
+    Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 0)
+    Lich::Gemstone::Infomon.flush
+  end
+
   context "<psm>, times should determine if forced roundtime (forcert) rounds can be performed" do
     it "checks to see if the character can perform the given number of forcert rounds" do
       Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 10)
+      Lich::Gemstone::Infomon.flush
       expect(Lich::Gemstone::PSMS.can_forcert?(1)).to be(true)
       expect(Lich::Gemstone::PSMS.can_forcert?(4)).to be(false)
       Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 200)
+      Lich::Gemstone::Infomon.flush
       expect(Lich::Gemstone::PSMS.can_forcert?(4)).to be(true)
     end
   end
 end
 
 RSpec.describe Lich::Gemstone::PSMS, ".max_forcert_count" do
+  before do
+    setup_psm_test_data
+    # Ensure clean state for MOC skill - previous tests may have set different values
+    Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 0)
+    Lich::Gemstone::Infomon.flush
+  end
+
   context "<psm>, times should determine the maximum number of forced roundtime (forcert) rounds" do
     it "checks to see if the character can perform the given number of forcert rounds" do
       Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 10)
+      Lich::Gemstone::Infomon.flush
       expect(Lich::Gemstone::PSMS.max_forcert_count).to eq(1)
       Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 200)
+      Lich::Gemstone::Infomon.flush
       expect(Lich::Gemstone::PSMS.max_forcert_count).to eq(4)
     end
   end

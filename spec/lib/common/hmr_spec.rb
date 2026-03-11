@@ -1,13 +1,17 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require 'securerandom'
 
 # Load production code
 require "common/hmr"
 
 module HMR
   module Helpers
-    Filename = File.join(Dir.tmpdir, "hmr-test.rb")
+    # Use unique filenames per test to avoid $LOADED_FEATURES pollution
+    def self.unique_filename(suffix)
+      File.join(Dir.tmpdir, "hmr-test-#{suffix}-#{::SecureRandom.hex(4)}.rb")
+    end
 
     First = <<~RUBY
       module HMR
@@ -30,12 +34,13 @@ RSpec.describe HMR, "#loaded" do
     end
 
     it "can tell something has been freshly loaded" do
-      expect(Lich::Common::HMR.loaded.any?(HMR::Helpers::Filename)).to be_falsy
+      filename = HMR::Helpers.unique_filename("freshly-loaded")
+      expect(Lich::Common::HMR.loaded.any?(filename)).to be_falsy
 
-      File.write(HMR::Helpers::Filename, HMR::Helpers::First)
-      require(HMR::Helpers::Filename)
+      File.write(filename, HMR::Helpers::First)
+      require(filename)
 
-      expect(Lich::Common::HMR.loaded.any?(HMR::Helpers::Filename)).to be_truthy
+      expect(Lich::Common::HMR.loaded.any?(filename)).to be_truthy
     end
   end
 end
@@ -43,12 +48,13 @@ end
 RSpec.describe HMR, "#reload" do
   context "can reload a module" do
     it "can find itself loaded" do
-      File.write(HMR::Helpers::Filename, HMR::Helpers::First)
-      require(HMR::Helpers::Filename)
-      expect(Lich::Common::HMR.loaded.any?(HMR::Helpers::Filename)).to be_truthy
+      filename = HMR::Helpers.unique_filename("reload")
+      File.write(filename, HMR::Helpers::First)
+      require(filename)
+      expect(Lich::Common::HMR.loaded.any?(filename)).to be_truthy
       expect(HMR::Test).to eq(1)
-      File.write(HMR::Helpers::Filename, HMR::Helpers::Second)
-      Lich::Common::HMR.reload(HMR::Helpers::Filename)
+      File.write(filename, HMR::Helpers::Second)
+      Lich::Common::HMR.reload(filename)
       expect(HMR::Test).to eq(2)
     end
   end
