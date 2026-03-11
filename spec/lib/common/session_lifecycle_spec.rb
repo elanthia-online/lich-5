@@ -123,5 +123,47 @@ RSpec.describe Lich::Common::SessionLifecycle do
       expect(heartbeat_thread).to have_received(:join).with(0.5)
       expect(heartbeat_thread).to have_received(:kill)
     end
+
+    it 'executes deferred register and one heartbeat iteration from captured thread block' do
+      heartbeat_thread = instance_double(Thread)
+      allow(heartbeat_thread).to receive(:join).with(0.5)
+      allow(heartbeat_thread).to receive(:alive?).and_return(false)
+      allow(heartbeat_thread).to receive(:kill)
+
+      captured_block = nil
+      allow(Thread).to receive(:new) do |&blk|
+        captured_block = blk
+        heartbeat_thread
+      end
+
+      allow(described_class).to receive(:resolve_frontend).and_return('stormfront')
+      allow(described_class).to receive(:resolve_game_code).and_return('DR')
+      allow(described_class).to receive(:attempt_register).and_return(true)
+
+      sleep_calls = 0
+      allow(described_class).to receive(:sleep) do |_seconds|
+        sleep_calls += 1
+        described_class.instance_variable_set(:@running, false) if sleep_calls >= 3
+      end
+
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 1, registration_delay: 0)).to be(true)
+      expect(captured_block).not_to be_nil
+
+      captured_block.call
+
+      expect(described_class).to have_received(:attempt_register).at_least(:once)
+      expect(Lich::Common::SessionsSettings).to have_received(:heartbeat).with(
+        hash_including(
+          pid: Process.pid,
+          state: 'running',
+          session_name: 'Tsetem',
+          role: 'session',
+          frontend: 'stormfront',
+          game_code: 'DR'
+        )
+      ).at_least(:once)
+
+      expect(described_class.stop).to be(true)
+    end
   end
 end
