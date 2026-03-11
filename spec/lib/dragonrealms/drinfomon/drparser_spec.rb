@@ -256,6 +256,17 @@ def find_objects(_objs)
   []
 end
 
+# Stub DRBanking to avoid loading its dependencies
+module Lich
+  module DragonRealms
+    module DRBanking
+      def self.parse(_line)
+        # No-op stub for testing
+      end
+    end
+  end
+end unless defined?(Lich::DragonRealms::DRBanking)
+
 # Load the module under test
 require_relative '../../../../lib/dragonrealms/drinfomon/drparser'
 
@@ -270,8 +281,9 @@ Flags = Lich::DragonRealms::Flags unless defined?(Flags)
 
 RSpec.describe Lich::DragonRealms::DRParser do
   before(:each) do
-    DRParser.instance_variable_set(:@parsing_exp_mods_output, false)
-    DRParser.instance_variable_set(:@parsing_inventory_get, false)
+    # Use class_variable_set for module-level state (changed from @ to @@ in code)
+    DRParser.class_variable_set(:@@parsing_exp_mods_output, false)
+    DRParser.class_variable_set(:@@parsing_inventory_get, false)
     DRStats.gender = nil
     DRStats.age = 0
     DRStats.circle = 0
@@ -611,11 +623,43 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect { DRParser.parse(line) }.not_to raise_error
       end
     end
+
+    describe 'nil guards' do
+      it 'handles nil players capture group gracefully' do
+        # Simulates a malformed room players line where capture fails
+        line = "'room players'>Also here: </component>"
+        expect { DRParser.parse(line) }.not_to raise_error
+      end
+
+      it 'handles nil objs capture group gracefully' do
+        # Simulates a malformed room objs line where capture fails
+        line = "'room objs'></component>"
+        expect { DRParser.parse(line) }.not_to raise_error
+        expect(DRRoom.npcs).to eq([])
+      end
+
+      it 'skips unrecognized weekday in LastLogoff parsing' do
+        # Invalid weekday "Xyz" should not crash
+        line = "   Logoff :  Xyz Feb 10 15:30:45 ET 2026"
+        expect { DRParser.parse(line) }.not_to raise_error
+        # $last_logoff should not be updated for invalid weekday
+      end
+
+      it 'handles valid weekday in LastLogoff parsing' do
+        line = "   Logoff :  Mon Feb 10 15:30:45 ET 2026"
+        expect { DRParser.parse(line) }.not_to raise_error
+        expect($last_logoff).to be_a(Time)
+        expect($last_logoff.mon).to eq(2)
+        # Day may be 10 or 11 depending on timezone conversion to local time
+        expect($last_logoff.day).to be_between(9, 11)
+      end
+    end
   end
 
   describe '.check_exp_mods' do
     before(:each) do
-      DRParser.instance_variable_set(:@parsing_exp_mods_output, true)
+      # Use class_variable_set for module-level state (changed from @ to @@ in code)
+      DRParser.class_variable_set(:@@parsing_exp_mods_output, true)
     end
 
     it 'parses positive modifier' do
@@ -635,7 +679,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
     it 'stops parsing on output class end tag' do
       DRParser.check_exp_mods('<output class=""/>')
 
-      expect(DRParser.instance_variable_get(:@parsing_exp_mods_output)).to be false
+      expect(DRParser.class_variable_get(:@@parsing_exp_mods_output)).to be false
     end
   end
 
@@ -675,10 +719,11 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(GameObjStub.clear_all_containers_called).to be true
       end
 
-      it 'sets @parsing_inventory_get to true' do
+      it 'sets @@parsing_inventory_get to true' do
         DRParser.parse(inv_search_line)
 
-        expect(DRParser.instance_variable_get(:@parsing_inventory_get)).to be true
+        # Use class_variable_get for module-level state (changed from @ to @@ in code)
+        expect(DRParser.class_variable_get(:@@parsing_inventory_get)).to be true
       end
 
       it 'clears both inv and containers before parsing new items' do
@@ -690,7 +735,8 @@ RSpec.describe Lich::DragonRealms::DRParser do
 
         expect(GameObjStub.clear_inv_called).to be true
         expect(GameObjStub.clear_all_containers_called).to be true
-        expect(DRParser.instance_variable_get(:@parsing_inventory_get)).to be true
+        # Use class_variable_get for module-level state (changed from @ to @@ in code)
+        expect(DRParser.class_variable_get(:@@parsing_inventory_get)).to be true
       end
     end
 
