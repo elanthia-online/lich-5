@@ -22,3 +22,4 @@ scripts
 .vscode
 .claude
 *.md
+spec/.rspec_status

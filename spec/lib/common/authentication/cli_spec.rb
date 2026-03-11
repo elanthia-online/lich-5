@@ -143,5 +143,52 @@ RSpec.describe Lich::Common::Authentication::CLI do
         expect(Lich).to have_received(:log).with(/Failed to load YAML data/)
       end
     end
+
+    context 'with successful authentication' do
+      let(:char_entry) do
+        {
+          username: 'TESTUSER',
+          password: 'encrypted-pass',
+          char_name: 'TestChar',
+          game_code: 'GS3',
+          frontend: 'stormfront',
+          custom_launch: nil,
+          custom_launch_dir: nil
+        }
+      end
+
+      before do
+        File.write(yaml_file, { 'accounts' => {} }.to_yaml)
+
+        allow(Lich).to receive(:log)
+        allow(Lich::Common::Authentication::CLIPassword).to receive(:validate_master_password_available).and_return(true)
+        allow(Lich::Common::Authentication::LoginHelpers).to receive(:symbolize_keys).and_return({})
+        allow(Lich::Common::Authentication::LoginHelpers).to receive(:find_character_by_name_game_and_frontend).and_return([char_entry])
+        allow(Lich::Common::Authentication::LoginHelpers).to receive(:select_best_fit).and_return(char_entry)
+        allow(Lich::Common::Authentication::EntryStore).to receive(:decrypt_password).and_return('plain-pass')
+        allow(Lich::Common::Authentication).to receive(:authenticate).and_return('ok' => true)
+        allow(Lich::Common::Authentication::LaunchData).to receive(:prepare).and_return(['GAME=GS3'])
+      end
+
+      it 'does not emit Hello World when cli_hello_world_demo is disabled' do
+        allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:cli_hello_world_demo).and_return(false)
+        expect(described_class).not_to receive(:puts).with('Hello World')
+
+        result = described_class.execute('TestChar', data_dir: data_dir)
+
+        expect(result).to eq(['GAME=GS3'])
+        expect(Lich).not_to have_received(:log).with('info: Hello World')
+      end
+
+      it 'emits Hello World when cli_hello_world_demo is enabled' do
+        allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:cli_hello_world_demo).and_return(true)
+        expect(described_class).to receive(:puts).with('Hello World')
+
+        result = described_class.execute('TestChar', data_dir: data_dir)
+
+        expect(result).to eq(['GAME=GS3'])
+        expect(Lich).to have_received(:log).with('info: Hello World')
+      end
+    end
   end
 end

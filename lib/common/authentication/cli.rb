@@ -5,6 +5,7 @@ require_relative 'authenticator'
 require_relative 'launch_data'
 require_relative 'login_helpers'
 require_relative 'cli_password'
+require_relative '../feature_flags'
 
 module Lich
   module Common
@@ -118,17 +119,29 @@ module Lich
             )
 
             # Format and return launch data
-            LaunchData.prepare(
+            launch_data = LaunchData.prepare(
               auth_data,
               char_entry[:frontend],
               char_entry[:custom_launch],
               char_entry[:custom_launch_dir]
             )
+
+            emit_cli_hello_world_demo if launch_data
+            launch_data
           rescue StandardError => e
             Lich.log "error: Authentication failed: #{e.message}"
             return nil
           end
         end
+
+        # Emits a simple message used to validate feature-flag behavior in CLI flows.
+        def self.emit_cli_hello_world_demo
+          return unless FeatureFlags.enabled?(:cli_hello_world_demo)
+
+          Lich.log 'info: Hello World'
+          puts 'Hello World'
+        end
+        private_class_method :emit_cli_hello_world_demo
       end
     end
   end
