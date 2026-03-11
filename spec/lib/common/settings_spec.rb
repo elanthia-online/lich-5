@@ -1,37 +1,12 @@
-require 'rspec'
-require 'ostruct'
-DATA_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'spec')
-require_relative File.join(DATA_DIR, 'mock_database_adapter.rb')
-LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
-require_relative File.join(LIB_DIR, 'common', 'settings.rb')
+# frozen_string_literal: true
 
-module XMLData
-  @dialogs = {}
-  def self.game
-    "GSIV"
-  end
+require_relative '../../spec_helper'
 
-  def self.name
-    "TestCharacter"
-  end
+# Load mock database adapter (specific to settings tests)
+require_relative File.join(SPEC_ROOT, 'mock_database_adapter.rb')
 
-  def self.indicator
-    # shimming together a hash to test 'muckled?' results
-    { 'IconSTUNNED' => 'n',
-      'IconDEAD'    => 'n',
-      'IconWEBBED'  => false }
-  end
-
-  def self.save_dialogs(kind, attributes)
-    # shimming together response for testing status checks
-    @dialogs[kind] ||= {}
-    return @dialogs[kind] = attributes
-  end
-
-  def self.dialogs
-    @dialogs ||= {}
-  end
-end
+# Load production code
+require 'common/settings'
 
 RSpec.describe Lich::Common::Settings do
   before(:each) do

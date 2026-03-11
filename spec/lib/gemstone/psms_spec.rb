@@ -1,65 +1,24 @@
-class Script
-  def Script.current
-    nil
-  end
-end
+# frozen_string_literal: true
 
-module Lich
-  def self.log(msg)
-    debug_filename = "debug-#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}.log"
-    $stderr = File.open(debug_filename, 'w')
-    begin
-      $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"
-    end
-  end
-end
+require_relative '../../spec_helper'
 
-class NilClass
-  def method_missing(*)
-    nil
-  end
-end
+# Load spell data for realistic testing
+load_spell_data
 
-require 'rexml/document'
-require 'rexml/streamlistener'
-require 'open-uri'
-require "common/spell"
-require 'tmpdir'
-
-Dir.mktmpdir do |dir|
-  local_filename = File.join(dir, "effect-list.xml")
-  print "Downloading effect-list.xml..."
-  download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml').read
-  File.write(local_filename, download)
-  Lich::Common::Spell.load(local_filename)
-  puts " Done!"
-end
-
-LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
-
+# Load production code
 require 'util/util'
 require 'gemstone/psms'
 require 'gemstone/infomon'
 require 'attributes/skills'
 
-module Char
-  def self.name
-    "testing"
-  end
-end
+# Alias Skills at top level for psms.rb max_forcert_count which uses unqualified Skills
+Skills = Lich::Gemstone::Skills unless defined?(Skills)
 
-module XMLData
-  def self.game
-    "rspec"
-  end
+# Set default stamina for PSM affordability tests
+XMLData.stamina = 20 # some PSM require 30, so we should have negative testing ability
 
-  def self.stamina
-    return 20 # some PSM require 30, so we should have negative testing ability
-  end
-end
-
-# we need to set up some test data, stealing from infomon_spec.rb
-describe Lich::Gemstone::Infomon, ".setup!" do
+# Set up test data for PSM specs
+RSpec.describe Lich::Gemstone::Infomon, ".setup!" do
   context "can set itself up" do
     it "creates a db" do
       Lich::Gemstone::Infomon.setup!
@@ -93,7 +52,7 @@ describe Lich::Gemstone::Infomon, ".setup!" do
   end
 end
 
-describe Lich::Gemstone::PSMS, ".name_normal(name)" do
+RSpec.describe Lich::Gemstone::PSMS, ".name_normal(name)" do
   context "it normalizes PSM name requests" do
     it "normalizes text full name PSM requests" do
       expect(Lich::Gemstone::PSMS.name_normal("Rolling Krynch Stance")).to eq("rolling_krynch_stance")
@@ -116,8 +75,7 @@ describe Lich::Gemstone::PSMS, ".name_normal(name)" do
   end
 end
 
-## FIXME: Error out due to name CMan in psms.rb not fully qualified / works in prod
-describe Lich::Gemstone::PSMS, "assess(name, type)" do
+RSpec.describe Lich::Gemstone::PSMS, "assess(name, type)" do
   context "<psm>.name should return rank known" do
     it "parses request and determines resopnse" do
       expect(Lich::Gemstone::CMan[:vaultkick]).to eq(1)
@@ -138,7 +96,7 @@ describe Lich::Gemstone::PSMS, "assess(name, type)" do
   end
 end
 
-describe Lich::Gemstone::PSMS, ".affordable?(name)" do
+RSpec.describe Lich::Gemstone::PSMS, ".affordable?(name)" do
   context "<psm>, name should determine available (cost < stamina)" do
     it "checks to see if the PSM cost < current stamina" do
       # it does not distinguish at this phase if PSM is known or not known
@@ -151,7 +109,7 @@ describe Lich::Gemstone::PSMS, ".affordable?(name)" do
   end
 end
 
-describe Lich::Gemstone::PSMS, ".can_forcert?(times)" do
+RSpec.describe Lich::Gemstone::PSMS, ".can_forcert?(times)" do
   context "<psm>, times should determine if forced roundtime (forcert) rounds can be performed" do
     it "checks to see if the character can perform the given number of forcert rounds" do
       Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 10)
@@ -163,7 +121,7 @@ describe Lich::Gemstone::PSMS, ".can_forcert?(times)" do
   end
 end
 
-describe Lich::Gemstone::PSMS, ".max_forcert_count" do
+RSpec.describe Lich::Gemstone::PSMS, ".max_forcert_count" do
   context "<psm>, times should determine the maximum number of forced roundtime (forcert) rounds" do
     it "checks to see if the character can perform the given number of forcert rounds" do
       Lich::Gemstone::Infomon.set("skill.multi_opponent_combat", 10)

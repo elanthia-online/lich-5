@@ -1,156 +1,40 @@
-require 'rspec'
+# frozen_string_literal: true
 
-LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
+require_relative '../spec_helper'
 
-require File.join(LIB_DIR, "common", "sharedbuffer.rb")
-require File.join(LIB_DIR, "games.rb")
-require File.join(LIB_DIR, "gemstone", "wounds.rb")
-require File.join(LIB_DIR, "gemstone", "scars.rb")
-require File.join(LIB_DIR, "gemstone", "gift.rb")
-
-# Mock classes and modules needed for testing
-module XMLData
-  class << self
-    attr_accessor :game, :injuries, :name, :dialogs, :room_id, :room_title, :injury_mode
-
-    def reset
-      @game = nil
-      @injuries = {}
-      @name = nil
-      @dialogs = {}
-      @room_id = 0
-      @room_title = nil
-      @injury_mode ||= 2
-    end
-  end
-end
-
-module Lich
-  class << self
-    attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits
-
-    def log(msg)
-      # Mock implementation for testing - Lich.log(msg) calls respond with success returning nil
-    end
-  end
-  module Messaging
-    def self.msg_format(format, msg)
-      # Mock implementation for testing - Lich::Messaging.monsterbold(msg) calls _respond with success returning nil
-    end
-
-    def self.mono(msg)
-      # Mock implementation for testing - Lich::Messaging.mono(msg) calls _respond with success returning nil
-    end
-  end
-end
-
-class Script
-  class << self
-    attr_accessor :current
-
-    def exist?(_name)
-      false
-    end
-
-    def start(name)
-      # Mock implementation
-    end
-
-    def new_downstream_xml(data)
-      # Mock implementation
-    end
-
-    def new_downstream(data)
-      # Mock implementation
-    end
-  end
-end
-
-class Room
-  class << self
-    def current
-      self
-    end
-
-    def id
-      1234
-    end
-
-    def [](_key)
-      self
-    end
-  end
-end
-
-class Map
-  class << self
-    def current
-      self
-    end
-
-    def [](_key)
-      self
-    end
-
-    def id
-      1234
-    end
-
-    def wayto
-      { 1 => 'north', 2 => 'south', 3 => Proc.new {} }
-    end
-
-    def timeto
-      { 1 => 10, 2 => 20, 3 => 30 }
-    end
-
-    def title
-      ['[Test Room]']
-    end
-  end
-end
-
-module DownstreamHook
-  def self.run(data)
-    data
-  end
-end
-
-# Global variables needed for testing
-$_SERVERBUFFER_ = []
-$_CLIENTBUFFER_ = []
-$_LASTUPSTREAM_ = nil
-$SEND_CHARACTER = '>'
-$cmd_prefix = ''
-$frontend = 'stormfront'
-$_CLIENT_ = Object.new.tap do |obj|
-  def obj.write(data); end
-  def obj.closed?; false; end
-end
-$_DETACHABLE_CLIENT_ = nil
+# Load production code
+require "common/sharedbuffer"
+require "games"
+require "gemstone/wounds"
+require "gemstone/scars"
+require "gemstone/gift"
 
 RSpec.describe Lich::GameBase do
   describe Lich::GameBase::XMLCleaner do
     it 'cleans nested single quotes' do
-      input = "<link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />"
+      # Use +@ to unfreeze string for in-place modification
+      input = +"<link id='2' value='Ever wondered about the time you've spent in Elanthia?  Check the PLAYED verb!' cmd='played' echo='played' />"
       output = Lich::GameBase::XMLCleaner.clean_nested_quotes(input)
       expect(output).to include("&apos;ve")
     end
 
     it 'cleans nested double quotes' do
-      input = '<subtitle=" - [Avlea\'s Bows, "The Straight and Arrow"]">'
+      # Use +@ to unfreeze string for in-place modification
+      input = +'<subtitle=" - [Avlea\'s Bows, "The Straight and Arrow"]">'
       output = Lich::GameBase::XMLCleaner.clean_nested_quotes(input)
       expect(output).to include('&quot;The')
     end
 
     it 'fixes invalid ampersands' do
-      input = 'You also see a large bin labeled "Lost & Found"'
+      # Use +@ to unfreeze string for in-place modification
+      input = +'You also see a large bin labeled "Lost & Found"'
       output = Lich::GameBase::XMLCleaner.fix_invalid_characters(input)
       expect(output).to include('&amp;')
     end
 
     it 'removes bell characters' do
-      input = "\aYOU HAVE BEEN IDLE TOO LONG. PLEASE RESPOND.\a\n"
+      # Use +@ to unfreeze string for in-place modification
+      input = +"\aYOU HAVE BEEN IDLE TOO LONG. PLEASE RESPOND.\a\n"
       output = Lich::GameBase::XMLCleaner.fix_invalid_characters(input)
       expect(output).not_to include("\a")
     end
@@ -163,13 +47,15 @@ RSpec.describe Lich::GameBase do
     # end
 
     it 'fixes open-ended XML tags' do
-      input = "<component id='room objs'>  You also see a granite altar with several candles and a water jug on it, and a granite font.\r\n"
+      # Use +@ to unfreeze string for in-place modification
+      input = +"<component id='room objs'>  You also see a granite altar with several candles and a water jug on it, and a granite font.\r\n"
       output = Lich::GameBase::XMLCleaner.fix_xml_tags(input)
       expect(output).to include("</component>")
     end
 
     it 'removes dangling closing tags' do
-      input = "</component>\r\n"
+      # Use +@ to unfreeze string for in-place modification
+      input = +"</component>\r\n"
       output = Lich::GameBase::XMLCleaner.fix_xml_tags(input)
       expect(output).to eq("")
     end
@@ -207,13 +93,14 @@ RSpec.describe Lich::Gemstone::GameInstance do
 
   describe '#clean_serverstring' do
     it 'fixes The Rift, Scatter issue' do
-      input = "Some room description  <compDef id='room text'></compDef>"
+      # Use +@ to unfreeze string for in-place modification
+      input = +"Some room description  <compDef id='room text'></compDef>"
       output = game_instance.clean_serverstring(input)
       expect(output).to include("<compDef id='room desc'>Some room description</compDef>")
     end
 
     it 'returns the string unchanged if no issues' do
-      input = "Normal string with no issues"
+      input = +"Normal string with no issues"
       output = game_instance.clean_serverstring(input)
       expect(output).to eq(input)
     end
@@ -221,13 +108,13 @@ RSpec.describe Lich::Gemstone::GameInstance do
 
   describe '#handle_combat_tags' do
     it 'tracks combat count correctly' do
-      # Increase combat count
-      input1 = "Combat text<pushStream id=\"combat\" />more combat"
+      # Use +@ to unfreeze strings for in-place modification
+      input1 = +"Combat text<pushStream id=\"combat\" />more combat"
       game_instance.handle_combat_tags(input1)
       expect(game_instance.combat_count).to eq(1)
 
       # Check if combat tags are handled correctly
-      input2 = "End combat<prompt>prompt</prompt>"
+      input2 = +"End combat<prompt>prompt</prompt>"
       output2 = game_instance.handle_combat_tags(input2)
       expect(output2).to include("<popStream id=\"combat\" />")
       expect(game_instance.combat_count).to eq(0)
@@ -236,14 +123,13 @@ RSpec.describe Lich::Gemstone::GameInstance do
 
   describe '#handle_atmospherics' do
     it 'handles atmospherics correctly' do
-      # Set atmospherics to true
-      input1 = "Some text<pushStream id=\"atmospherics\" />atmospheric text"
-      # output1 = @game_instance.handle_atmospherics(input1)
+      # Use +@ to unfreeze strings for in-place modification
+      input1 = +"Some text<pushStream id=\"atmospherics\" />atmospheric text"
       game_instance.handle_atmospherics(input1)
       expect(game_instance.atmospherics).to be true
 
       # Check if the next string gets the popStream
-      input2 = "More text without popStream"
+      input2 = +"More text without popStream"
       output2 = game_instance.handle_atmospherics(input2)
       expect(output2).to include("<popStream id=\"atmospherics\" />")
       expect(game_instance.atmospherics).to be false
@@ -261,10 +147,10 @@ RSpec.describe Lich::Gemstone::GameInstance do
       Lich.display_lichid = true
       Lich.display_uid = true
 
-      alt_string = "[Test Room] (123)"
-      # lichid_from_uid_string = 456 cannot be tested, modify_room_display takes alt_string only and generates uid / lichid
+      # Use +@ to unfreeze string for in-place modification
+      alt_string = +"[Test Room] (123)"
 
-      result = game_instance.modify_room_display(alt_string) # , uid_from_string, lichid_from_uid_string)
+      result = game_instance.modify_room_display(alt_string)
       expect(result).to include(" - 1234]") # why 1234?
     end
   end
@@ -274,6 +160,7 @@ RSpec.describe Lich::DragonRealms::GameInstance do
   before do
     XMLData.reset
     XMLData.game = 'DR'
+    XMLData.name = 'testing'
     XMLData.room_title = "[Test DR Room]"
   end
 
@@ -281,13 +168,15 @@ RSpec.describe Lich::DragonRealms::GameInstance do
 
   describe '#clean_serverstring' do
     it 'removes superfluous tags' do
-      input = "Some text<pushStream id=\"combat\" /><popStream id=\"combat\" />more text"
+      # Use +@ to unfreeze string for in-place modification
+      input = +"Some text<pushStream id=\"combat\" /><popStream id=\"combat\" />more text"
       output = game_instance.clean_serverstring(input)
       expect(output).to eq("Some textmore text")
     end
 
     it 'fixes combat wrapping components' do
-      input = "Some text<pushStream id=\"combat\" /><component id='test'>content</component>"
+      # Use +@ to unfreeze string for in-place modification
+      input = +"Some text<pushStream id=\"combat\" /><component id='test'>content</component>"
       output = game_instance.clean_serverstring(input)
       expect(output).to include("<component id='test'>")
       expect(output).not_to include("<pushStream id=\"combat\" />")
@@ -304,11 +193,10 @@ RSpec.describe Lich::DragonRealms::GameInstance do
     it 'modifies room display correctly for DragonRealms' do
       Lich.display_uid = true
 
-      alt_string = "Room [Test Room] (**)"
-      # uid_from_string = nil
-      # lichid_from_uid_string = 456
+      # Use +@ to unfreeze string for in-place modification
+      alt_string = +"Room [Test Room] (**)"
 
-      result = game_instance.modify_room_display(alt_string) # , uid_from_string, lichid_from_uid_string)
+      result = game_instance.modify_room_display(alt_string)
       expect(result).not_to include("(**)")
     end
   end
@@ -319,7 +207,8 @@ RSpec.describe Lich::DragonRealms::GameInstance do
       Lich.display_uid = true
       XMLData.room_id = 789
 
-      alt_string = "Room prompt"
+      # Use +@ to unfreeze string for in-place modification
+      alt_string = +"Room prompt"
       result = game_instance.process_room_display(alt_string)
 
       expect(result).to include("Room Number: 1234 - (u789)")

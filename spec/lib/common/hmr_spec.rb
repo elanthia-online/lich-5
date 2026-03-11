@@ -1,43 +1,32 @@
-def respond(first = "", *messages)
-  str = ''
-  if first.class == Array
-    first.flatten.each { |ln| str += sprintf("%s\r\n", ln.to_s.chomp) }
-  else
-    str += sprintf("%s\r\n", first.to_s.chomp)
-  end
-  messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
-  puts str
-end
+# frozen_string_literal: true
 
-def _respond(first = "", *messages)
-  respond(first, messages)
-end
+require_relative '../../spec_helper'
 
-require 'tmpdir'
+# Load production code
 require "common/hmr"
 
 module HMR
   module Helpers
     Filename = File.join(Dir.tmpdir, "hmr-test.rb")
 
-    First = <<~Ruby
+    First = <<~RUBY
       module HMR
         Test = 1
       end
-    Ruby
+    RUBY
 
-    Second = <<~Ruby
+    Second = <<~RUBY
       module HMR
         Test = 2
       end
-    Ruby
+    RUBY
   end
 end
 
-describe HMR, "#loaded" do
+RSpec.describe HMR, "#loaded" do
   context "can tell what has been loaded" do
     it "can find itself loaded" do
-      expect(Lich::Common::HMR.loaded.any?(%r[lich-5/lib/common/hmr.rb$])).to be_truthy
+      expect(Lich::Common::HMR.loaded.any?(%r{lich-5/lib/common/hmr.rb$})).to be_truthy
     end
 
     it "can tell something has been freshly loaded" do
@@ -51,7 +40,7 @@ describe HMR, "#loaded" do
   end
 end
 
-describe HMR, "#reload" do
+RSpec.describe HMR, "#reload" do
   context "can reload a module" do
     it "can find itself loaded" do
       File.write(HMR::Helpers::Filename, HMR::Helpers::First)
