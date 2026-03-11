@@ -304,8 +304,9 @@ RSpec.describe Lich::Common::Settings do
 
     it "handles the updatable scripts example" do
       upd     = Lich::Common::Settings[:updatable] || {}
-      scripts = upd[:scripts] || []
-      mapdb   = upd[:mapdb]   || {}
+      # Start with a fresh scripts array to ensure test isolation with random ordering
+      scripts = []
+      mapdb   = upd[:mapdb] || {}
 
       scripts << { filename: "alias.lic", game: "gs", author: "elanthia-online" }
       mapdb["GSIV"] = true

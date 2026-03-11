@@ -1233,12 +1233,21 @@ class StringProc
     @string = string
   end
 
-  def call
-    # Mock - does nothing in tests
+  def call(*_args)
+    # Evaluate the string expression and return the result
+    eval(@string)
   end
 
   def to_s
     @string
+  end
+
+  def _dump(_level = nil)
+    @string
+  end
+
+  def to_json(*args)
+    ";e #{_dump}".to_json(args)
   end
 end unless defined?(StringProc)
 
