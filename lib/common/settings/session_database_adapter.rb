@@ -87,7 +87,9 @@ module Lich
           rows_as_hashes(<<~SQL)
             SELECT session_name, COUNT(*) AS duplicate_count
             FROM #{@table_name}
-            WHERE session_name IS NOT NULL AND session_name != ''
+            WHERE session_name IS NOT NULL
+              AND session_name != ''
+              AND COALESCE(state, '') != 'exited'
             GROUP BY session_name
             HAVING COUNT(*) > 1
             ORDER BY session_name ASC;
@@ -125,18 +127,19 @@ module Lich
       # @param sql [String]
       # @return [Array<Hash>]
       def rows_as_hashes(sql)
-        original_mode = @db.results_as_hash
-        @db.results_as_hash = true
-        raw_rows = @db.execute(sql)
-        raw_rows.map do |row|
-          # SQLite3::Database with results_as_hash=true returns both numeric and
-          # string keys in each row hash. Filter to string keys for deterministic output.
-          row.each_with_object({}) do |(key, value), cleaned|
-            cleaned[key] = value if key.is_a?(String)
+        rows_with_headers = @db.execute2(sql)
+        headers = rows_with_headers.shift || []
+        rows_with_headers.map do |row|
+          if row.is_a?(Array)
+            headers.each_with_index.with_object({}) do |(column, idx), cleaned|
+              cleaned[column] = row[idx]
+            end
+          else
+            headers.each_with_object({}) do |column, cleaned|
+              cleaned[column] = row[column]
+            end
           end
         end
-      ensure
-        @db.results_as_hash = original_mode
       end
 
       # Retries DB work for transient sqlite busy locks.

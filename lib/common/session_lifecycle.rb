@@ -143,11 +143,21 @@ module Lich
       #
       # @return [Boolean] true when stop/unregister succeeded, false when not running or failed
       def self.stop
+        heartbeat_thread = nil
         @mutex.synchronize do
           return false unless @started
 
           @running = false
-          @heartbeat_thread&.kill
+          heartbeat_thread = @heartbeat_thread
+          @heartbeat_thread = nil
+        end
+
+        # Cooperative shutdown first: allow the heartbeat loop to observe
+        # @running=false and exit naturally before using hard-kill fallback.
+        heartbeat_thread&.join(0.5)
+        heartbeat_thread&.kill if heartbeat_thread&.alive?
+
+        @mutex.synchronize do
           @heartbeat_thread = nil
           SessionsSettings.unregister_session(pid: Process.pid)
           @started = false
