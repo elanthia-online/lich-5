@@ -20,6 +20,10 @@ end unless defined?(Lich::DragonRealms::DRBanking)
 # Load the module under test
 require_relative '../../../../lib/dragonrealms/drinfomon/drparser'
 
+# Top-level aliases for tests that use unqualified constant names
+DRParser = Lich::DragonRealms::DRParser unless defined?(DRParser)
+DRRoom = Lich::DragonRealms::DRRoom unless defined?(DRRoom)
+
 RSpec.describe Lich::DragonRealms::DRParser do
   # Reference production classes for stubs
   let(:drstats_class) { Lich::DragonRealms::DRStats }

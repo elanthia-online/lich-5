@@ -611,12 +611,10 @@ describe 'SettingsProxy#rebind_to_live!' do
 end
 
 describe 'Settings#save_proxy_changes refresh-before-save' do
-  # Minimal Script stub for Settings.save_proxy_changes
-  unless defined?(::Script)
-    module ::Script
-      def self.current; self; end
-      def self.name; 'test_script'; end
-    end
+  # Use RSpec stubs to ensure Script.current.name works regardless of other specs
+  before do
+    script_double = double('Script', name: 'test_script')
+    allow(Script).to receive(:current).and_return(script_double)
   end
 
   it 'refreshes from DB to prevent stale-cache overwrites' do
