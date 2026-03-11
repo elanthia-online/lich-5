@@ -139,7 +139,7 @@ module Lich
         end
 
         {
-          source: 'SessionSettings',
+          source: 'SessionsSettings',
           total: sessions.length,
           idle_over_30m: sessions.count { |s| !s[:heartbeat_age].nil? && s[:heartbeat_age] > IDLE_OVER_30M_SECONDS },
           stale: sessions.count { |s| s[:stale] },
@@ -152,7 +152,7 @@ module Lich
         # Keep the same response shape as success payload so consumers can
         # rely on deterministic keys during adapter/runtime failure states.
         {
-          source: 'SessionSettings',
+          source: 'SessionsSettings',
           total: 0,
           idle_over_30m: 0,
           stale: 0,
