@@ -47,7 +47,7 @@ parse_and_resolve_conflicts() {
       done
 
       for theirs_line in "${theirs_lines[@]}"; do
-        if ! echo "$seen" | grep -Fx "$theirs_line" >/dev/null 2>&1; then
+        if ! echo "$seen" | grep -Fx -- "$theirs_line" >/dev/null 2>&1; then
           echo "$theirs_line" >> "$temp_resolved"
         fi
       done
