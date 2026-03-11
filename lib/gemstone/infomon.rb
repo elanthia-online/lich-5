@@ -14,6 +14,7 @@
 require 'sequel'
 require 'tmpdir'
 require 'logger'
+require 'timeout'
 require_relative 'infomon/cache'
 
 module Lich
@@ -131,7 +132,8 @@ module Lich
         self.cache_load if !@cache_loaded
         key = self._key(key)
         val = self.cache.get(key) {
-          sleep 0.01 until self.queue.empty?
+          # Flush queue before reading from DB to ensure we see latest writes
+          self.flush
           begin
             self.mutex.synchronize do
               begin
@@ -186,6 +188,26 @@ module Lich
         self.queue << "DELETE FROM %s WHERE key = (%s);" % [self.db.literal(self.table_name), self.db.literal(key)]
       end
 
+      # Flush all pending SQL operations and wait for completion.
+      # This is a barrier that ensures all queued writes have been executed.
+      # Returns true on success, false on timeout.
+      def self.flush(timeout_seconds: 5)
+        return true if self.queue.empty?
+
+        # Create a barrier token - a Queue that the worker will signal when reached
+        barrier = ::Queue.new
+        self.queue << barrier
+
+        # Wait for the worker to signal completion (with timeout)
+        begin
+          ::Timeout.timeout(timeout_seconds) { barrier.pop }
+          true
+        rescue ::Timeout::Error
+          Lich.log "warning: Infomon.flush timed out after #{timeout_seconds}s"
+          false
+        end
+      end
+
       def self.upsert_batch(*blob)
         updated = (blob.first.map { |k, v| [self._key(k), self._validate!(k, v)] } - self.cache.to_a)
         return :noop if updated.empty?
@@ -202,11 +224,18 @@ module Lich
 
       Thread.new do
         loop do
-          sql_statement = Infomon.queue.pop
+          item = Infomon.queue.pop
           begin
+            # Handle flush barrier tokens - signal completion and continue
+            if item.is_a?(Queue)
+              item << :flushed
+              next
+            end
+
+            # Normal SQL statement processing
             Infomon.mutex.synchronize do
               begin
-                Infomon.db.run(sql_statement)
+                Infomon.db.run(item)
               rescue StandardError => e
                 pp(e)
               end

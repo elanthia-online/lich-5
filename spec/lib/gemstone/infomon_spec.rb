@@ -748,6 +748,37 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       scripts.map(&:value)
     end
   end
+
+  context "flush barrier" do
+    it "returns true immediately when queue is empty" do
+      # Ensure queue is empty first
+      Lich::Gemstone::Infomon.flush
+      expect(Lich::Gemstone::Infomon.flush).to be(true)
+    end
+
+    it "waits for pending writes to complete" do
+      k = "flush.test"
+      Lich::Gemstone::Infomon.set(k, 123)
+      # Flush ensures the write is complete before we proceed
+      result = Lich::Gemstone::Infomon.flush
+      expect(result).to be(true)
+      # Now we can safely read from DB (bypassing cache)
+      Lich::Gemstone::Infomon.cache.flush!
+      expect(Lich::Gemstone::Infomon.get(k)).to eq(123)
+    end
+
+    it "handles multiple rapid writes followed by flush" do
+      10.times do |i|
+        Lich::Gemstone::Infomon.set("rapid.#{i}", i * 10)
+      end
+      expect(Lich::Gemstone::Infomon.flush).to be(true)
+      # Verify all writes completed
+      Lich::Gemstone::Infomon.cache.flush!
+      10.times do |i|
+        expect(Lich::Gemstone::Infomon.get("rapid.#{i}")).to eq(i * 10)
+      end
+    end
+  end
 end
 
 RSpec.describe Lich::Gemstone::Infomon::XMLParser, ".parse" do
