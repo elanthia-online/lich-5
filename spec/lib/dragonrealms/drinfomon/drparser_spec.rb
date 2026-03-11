@@ -6,6 +6,17 @@ require_relative '../../../spec_helper'
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
 
+# Stub DRBanking to avoid loading its dependencies
+module Lich
+  module DragonRealms
+    module DRBanking
+      def self.parse(_line)
+        # No-op stub for testing
+      end
+    end
+  end
+end unless defined?(Lich::DragonRealms::DRBanking)
+
 # Load the module under test
 require_relative '../../../../lib/dragonrealms/drinfomon/drparser'
 
@@ -18,8 +29,9 @@ RSpec.describe Lich::DragonRealms::DRParser do
   let(:drexpmonitor_class) { Lich::DragonRealms::DRExpMonitor }
 
   before(:each) do
-    described_class.instance_variable_set(:@parsing_exp_mods_output, false)
-    described_class.instance_variable_set(:@parsing_inventory_get, false)
+    # Reset module-level state (uses class variables in production)
+    described_class.class_variable_set(:@@parsing_exp_mods_output, false)
+    described_class.class_variable_set(:@@parsing_inventory_get, false)
 
     # Stub DRStats setters
     allow(drstats_class).to receive(:gender=)
@@ -341,11 +353,43 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect { described_class.parse(line) }.not_to raise_error
       end
     end
+
+    describe 'nil guards' do
+      it 'handles nil players capture group gracefully' do
+        # Simulates a malformed room players line where capture fails
+        line = "'room players'>Also here: </component>"
+        expect { DRParser.parse(line) }.not_to raise_error
+      end
+
+      it 'handles nil objs capture group gracefully' do
+        # Simulates a malformed room objs line where capture fails
+        line = "'room objs'></component>"
+        expect { DRParser.parse(line) }.not_to raise_error
+        expect(DRRoom.npcs).to eq([])
+      end
+
+      it 'skips unrecognized weekday in LastLogoff parsing' do
+        # Invalid weekday "Xyz" should not crash
+        line = "   Logoff :  Xyz Feb 10 15:30:45 ET 2026"
+        expect { DRParser.parse(line) }.not_to raise_error
+        # $last_logoff should not be updated for invalid weekday
+      end
+
+      it 'handles valid weekday in LastLogoff parsing' do
+        line = "   Logoff :  Mon Feb 10 15:30:45 ET 2026"
+        expect { DRParser.parse(line) }.not_to raise_error
+        expect($last_logoff).to be_a(Time)
+        expect($last_logoff.mon).to eq(2)
+        # Day may be 10 or 11 depending on timezone conversion to local time
+        expect($last_logoff.day).to be_between(9, 11)
+      end
+    end
   end
 
   describe '.check_exp_mods' do
     before(:each) do
-      described_class.instance_variable_set(:@parsing_exp_mods_output, true)
+      # Use class_variable_set for module-level state (production uses @@ class variables)
+      described_class.class_variable_set(:@@parsing_exp_mods_output, true)
       allow(drskill_class).to receive(:exp_modifiers).and_return({})
     end
 
@@ -366,7 +410,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
     it 'stops parsing on output class end tag' do
       described_class.check_exp_mods('<output class=""/>')
 
-      expect(described_class.instance_variable_get(:@parsing_exp_mods_output)).to be false
+      expect(described_class.class_variable_get(:@@parsing_exp_mods_output)).to be false
     end
   end
 
@@ -399,10 +443,11 @@ RSpec.describe Lich::DragonRealms::DRParser do
         described_class.parse(inv_search_line)
       end
 
-      it 'sets @parsing_inventory_get to true' do
+      it 'sets @@parsing_inventory_get to true' do
         described_class.parse(inv_search_line)
 
-        expect(described_class.instance_variable_get(:@parsing_inventory_get)).to be true
+        # Use class_variable_get for module-level state (production uses @@ class variables)
+        expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be true
       end
     end
 

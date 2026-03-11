@@ -5,16 +5,20 @@ module Lich
     module DRCTH
       module_function
 
+      # Items used by clerics for theurgy rituals
+      # Note: With frozen_string_literal: true, string literals are already frozen
       CLERIC_ITEMS = [
         'holy water', 'holy oil', 'wine', 'incense', 'flint', 'chamomile', 'sage', 'jalbreth balm'
-      ].each(&:freeze).freeze unless defined?(CLERIC_ITEMS)
+      ].freeze unless defined?(CLERIC_ITEMS)
 
+      # Error messages when attempting commune rituals
       COMMUNE_ERRORS = [
         'As you commune you sense that the ground is already consecrated.',
         'You stop as you realize that you have attempted a commune',
         'completed this commune too recently'
-      ].each(&:freeze).freeze unless defined?(COMMUNE_ERRORS)
+      ].freeze unless defined?(COMMUNE_ERRORS)
 
+      # Devotion level messages from commune sense, ordered from lowest to highest
       DEVOTION_LEVELS = [
         'You sense nothing special from your communing',
         'You feel unclean and unworthy',
@@ -33,7 +37,7 @@ module Lich
         'After a moment, you see a vision of your god who calls to you by name, "My child, though you may',
         'After a moment, you see a crystal-clear vision of your god who speaks slowly and deliberately',
         'After a moment, you feel a clear presence like a warm blanket covering you'
-      ].each(&:freeze).freeze unless defined?(DEVOTION_LEVELS)
+      ].freeze unless defined?(DEVOTION_LEVELS)
 
       # Start pattern for commune sense output. Matches the first line of output
       # which varies depending on active commune state.
