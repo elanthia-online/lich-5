@@ -2,6 +2,20 @@
 
 This directory contains static test fixtures used by the RSpec test suite.
 
+## lich.db3
+
+### What is it?
+
+`lich.db3` is a sample SQLite database file added with the Settings module
+(PR #591). It serves as a reference fixture for database schema and structure.
+
+### Current Status
+
+**Note:** The Settings specs currently use `mock_database_adapter.rb` for
+in-memory testing rather than this file. This fixture is retained for:
+- Schema reference when developing database-related features
+- Potential future integration tests that need a real database
+
 ## effect-list.xml
 
 ### What is it?
