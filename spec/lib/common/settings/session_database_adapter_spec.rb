@@ -107,6 +107,22 @@ RSpec.describe Lich::Common::SessionDatabaseAdapter do
     end
   end
 
+  describe '#delete_session' do
+    # Added for regression coverage of explicit row deletion behavior.
+    it 'removes the requested pid from row and duplicate reports' do
+      adapter = described_class.new(db: sqlite_db)
+
+      adapter.upsert_session(pid: 201, session_name: 'Tsetem', role: 'session', state: 'running', started_at: 1, last_heartbeat_at: 1)
+      adapter.upsert_session(pid: 202, session_name: 'Tsetem', role: 'session', state: 'running', started_at: 1, last_heartbeat_at: 1)
+
+      adapter.delete_session(pid: 201)
+
+      expect(adapter.find_session(pid: 201)).to be_nil
+      expect(adapter.active_sessions.map { |r| r['pid'] }).not_to include(201)
+      expect(adapter.duplicate_active_session_names.map { |r| r['session_name'] }).not_to include('Tsetem')
+    end
+  end
+
   describe '#find_session' do
     it 'returns a single row by pid when present' do
       adapter = described_class.new(db: sqlite_db)

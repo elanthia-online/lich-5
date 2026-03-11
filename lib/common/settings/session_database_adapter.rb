@@ -9,11 +9,20 @@ module Lich
     class SessionDatabaseAdapter
       DEFAULT_TABLE_NAME = 'session_summary_state'
 
+      # Builds an adapter bound to a row-oriented session summary table.
+      #
+      # @param db [SQLite3::Database, nil] optional injected database connection
+      # @param data_dir [String] directory containing lich.db3 when db is not injected
+      # @param table_name [String] session summary table name
       def initialize(db: nil, data_dir: DATA_DIR, table_name: DEFAULT_TABLE_NAME)
         @db = db || SQLite3::Database.new(File.join(data_dir, 'lich.db3'))
         @table_name = table_name
       end
 
+      # Inserts or updates a session row by pid.
+      #
+      # @param payload [Hash] row fields for insert/update
+      # @return [void]
       def upsert_session(payload)
         with_retry do
           @db.execute(<<~SQL, bind_params(payload))
@@ -40,24 +49,39 @@ module Lich
         end
       end
 
+      # Returns all rows currently tracked in the session summary table.
+      #
+      # @return [Array<Hash>] rows sorted by pid
       def active_sessions
         with_retry do
           rows_as_hashes("SELECT * FROM #{@table_name} ORDER BY pid ASC;")
         end
       end
 
+      # Deletes a row for the provided pid.
+      #
+      # @param pid [Integer]
+      # @return [void]
       def delete_session(pid:)
         with_retry do
           @db.execute("DELETE FROM #{@table_name} WHERE pid = ?;", [pid])
         end
       end
 
+      # Finds one row by pid.
+      #
+      # @param pid [Integer]
+      # @return [Hash, nil]
       def find_session(pid:)
         with_retry do
           rows_as_hashes("SELECT * FROM #{@table_name} WHERE pid = #{pid.to_i} LIMIT 1;").first
         end
       end
 
+      # Returns names that currently appear more than once.
+      # Duplicate names are treated as data points, not enforcement failures.
+      #
+      # @return [Array<Hash>] rows containing `session_name` and `duplicate_count`
       def duplicate_active_session_names
         with_retry do
           rows_as_hashes(<<~SQL)
@@ -73,6 +97,10 @@ module Lich
 
       private
 
+      # Binds payload values in stable column order for upsert SQL.
+      #
+      # @param payload [Hash]
+      # @return [Array]
       def bind_params(payload)
         [
           payload[:pid],
@@ -92,6 +120,10 @@ module Lich
         ]
       end
 
+      # Executes a query and normalizes sqlite hash rows to string-keyed hashes.
+      #
+      # @param sql [String]
+      # @return [Array<Hash>]
       def rows_as_hashes(sql)
         original_mode = @db.results_as_hash
         @db.results_as_hash = true
@@ -107,6 +139,11 @@ module Lich
         @db.results_as_hash = original_mode
       end
 
+      # Retries DB work for transient sqlite busy locks.
+      #
+      # @param max_attempts [Integer]
+      # @yieldreturn [Object]
+      # @return [Object]
       def with_retry(max_attempts = 5)
         attempts = 0
         begin

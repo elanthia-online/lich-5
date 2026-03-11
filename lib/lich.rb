@@ -183,6 +183,9 @@ module Lich
       Lich.db.execute("CREATE TABLE IF NOT EXISTS session_summary_state (pid INTEGER PRIMARY KEY, session_name TEXT, role TEXT, state TEXT, frontend TEXT, game_code TEXT, hidden INTEGER DEFAULT 0, started_at INTEGER, last_heartbeat_at INTEGER, os_seen_at INTEGER, os_seen INTEGER, os_name INTEGER, last_utilization_at INTEGER, metadata_json TEXT);")
       Lich.db.execute("CREATE INDEX IF NOT EXISTS idx_session_summary_state_session_name ON session_summary_state(session_name);")
       Lich.db.execute("CREATE INDEX IF NOT EXISTS idx_session_summary_state_heartbeat ON session_summary_state(last_heartbeat_at);")
+      # Backward-compatible migration guards:
+      # In dev/test transitions, older local tables may be missing newer columns.
+      # We keep these ALTER blocks idempotent by tolerating duplicate-column errors.
       begin
         Lich.db.execute("ALTER TABLE session_summary_state ADD COLUMN os_seen_at INTEGER;")
       rescue SQLite3::SQLException => e

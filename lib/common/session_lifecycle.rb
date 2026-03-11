@@ -14,6 +14,17 @@ module Lich
       @started = false
       @mutex = Mutex.new
 
+      # Resolves the reporting session name from launch/runtime context.
+      #
+      # Resolution order:
+      # 1) `--login <name>` CLI argument
+      # 2) account character provided by auth layer
+      # 3) `XMLData.name` when available after parser initialization
+      # 4) deterministic PID fallback (`pid-<pid>`)
+      #
+      # @param argv [Array<String>] process argument vector
+      # @param account_character [String, nil] resolved account character name
+      # @return [String] normalized session identifier used in session summary state
       def self.resolve_session_name(argv:, account_character: nil)
         if (login_idx = argv.index('--login')) && argv[login_idx + 1]
           argv[login_idx + 1].capitalize
@@ -26,6 +37,11 @@ module Lich
         end
       end
 
+      # Resolves the logical runtime role used for reporting.
+      #
+      # @param argv [Array<String>] process argument vector
+      # @param detachable_client_port [Integer, nil] configured detachable client port
+      # @return [String] one of `headless`, `detachable`, or `session`
       def self.resolve_role(argv:, detachable_client_port:)
         return 'headless' if argv.include?('--without-frontend')
         return 'detachable' unless detachable_client_port.nil?
@@ -33,6 +49,14 @@ module Lich
         'session'
       end
 
+      # Starts lifecycle tracking and heartbeat emission for the current process.
+      # Registration is intentionally deferred to allow XMLData game context to initialize.
+      #
+      # @param session_name [String] resolved session identifier
+      # @param role [String] runtime role (`session`, `detachable`, `headless`)
+      # @param heartbeat_interval [Integer] heartbeat interval in seconds
+      # @param registration_delay [Integer] initial registration delay in seconds
+      # @return [Boolean] true when started, false when already started or failed
       def self.start(session_name:, role:, heartbeat_interval: SessionsSettings::HEARTBEAT_INTERVAL_SECONDS, registration_delay: REGISTRATION_DELAY_SECONDS)
         @mutex.synchronize do
           return false if @started
@@ -115,6 +139,9 @@ module Lich
         false
       end
 
+      # Stops lifecycle tracking and unregisters the current process.
+      #
+      # @return [Boolean] true when stop/unregister succeeded, false when not running or failed
       def self.stop
         @mutex.synchronize do
           return false unless @started
@@ -131,22 +158,40 @@ module Lich
         false
       end
 
+      # Resolves frontend identifier for session reporting.
+      #
+      # @return [String, nil] resolved frontend value or nil when unavailable
       def self.resolve_frontend
         return $frontend if defined?($frontend) && !$frontend.nil? && !$frontend.to_s.empty?
 
         nil
       end
 
+      # Resolves game code from XML runtime state.
+      #
+      # @return [String, nil] game code when XML context is ready
       def self.resolve_game_code
         return XMLData.game if defined?(XMLData) && XMLData.respond_to?(:game) && !XMLData.game.nil?
 
         nil
       end
 
+      # Indicates whether XML runtime context is sufficient for registration.
+      #
+      # @return [Boolean]
       def self.game_context_ready?
         !resolve_game_code.nil?
       end
 
+      # Performs deferred register attempt once game context is available.
+      #
+      # @param session_name [String]
+      # @param role [String]
+      # @param frontend [String, nil]
+      # @param started_epoch [Integer]
+      # @param started_iso [String]
+      # @param registration_delay [Integer]
+      # @return [Boolean] true when register call succeeds, false otherwise
       def self.attempt_register(session_name:, role:, frontend:, started_epoch:, started_iso:, registration_delay:)
         begin
           game_code = resolve_game_code
