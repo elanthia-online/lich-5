@@ -6,6 +6,8 @@
 # shellcheck source=.github/scripts/lib/core.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../lib/core.sh"
 
+# Validate YAML parseability using Ruby's YAML loader.
+# Emits warnings for invalid files but does not fail the build.
 validate_yaml_syntax() {
   local warnings=0
 
