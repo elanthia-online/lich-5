@@ -74,7 +74,7 @@ module Lich
       # @return [Hash, nil]
       def find_session(pid:)
         with_retry do
-          rows_as_hashes("SELECT * FROM #{@table_name} WHERE pid = #{pid.to_i} LIMIT 1;").first
+          rows_as_hashes("SELECT * FROM #{@table_name} WHERE pid = ? LIMIT 1;", [pid.to_i]).first
         end
       end
 
@@ -125,9 +125,10 @@ module Lich
       # Executes a query and normalizes sqlite hash rows to string-keyed hashes.
       #
       # @param sql [String]
+      # @param binds [Array] optional bind values used for placeholders in +sql+
       # @return [Array<Hash>]
-      def rows_as_hashes(sql)
-        rows_with_headers = @db.execute2(sql)
+      def rows_as_hashes(sql, binds = [])
+        rows_with_headers = @db.execute2(sql, binds)
         headers = rows_with_headers.shift || []
         rows_with_headers.map do |row|
           if row.is_a?(Array)

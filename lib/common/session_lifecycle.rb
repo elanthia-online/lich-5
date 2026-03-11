@@ -80,7 +80,7 @@ module Lich
 
           @heartbeat_thread = Thread.new do
             sleep registration_delay
-            break unless @running
+            Thread.exit unless @running
 
             if game_context_ready?
               registration_complete = attempt_register(
