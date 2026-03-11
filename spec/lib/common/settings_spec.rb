@@ -429,8 +429,9 @@ RSpec.describe Lich::Common::Settings do
 
     it "clobbers previously built updatable structure when the root is reassigned with =" do
       upd     = Lich::Common::Settings[:updatable] || {}
-      scripts = upd[:scripts] || []
-      mapdb   = upd[:mapdb]   || {}
+      # Start with a fresh scripts array to ensure test isolation with random ordering
+      scripts = []
+      mapdb   = upd[:mapdb] || {}
 
       scripts << { filename: "test.lic", game: "gs" }
       mapdb["GSIV"] = true
