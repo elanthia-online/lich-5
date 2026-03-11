@@ -1,86 +1,12 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
-require 'rspec'
 require 'json'
 require 'net/http'
 require 'openssl'
 require 'uri'
 
-# Setup load path (standalone spec, no spec_helper dependency)
-LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
-
-# Mock dependencies — define at top level, alias into namespace
-
-# Script mock (class — game engine class)
-class Script
-  def self.running(*_args)
-    []
-  end
-
-  def self.hidden(*_args)
-    []
-  end
-
-  def self.running?(*_args)
-    false
-  end
-
-  def self.exists?(*_args)
-    false
-  end
-end unless defined?(Script)
-
-# Add methods defensively if another spec defined Script first
-Script.define_singleton_method(:running?) { |*_args| false } unless Script.respond_to?(:running?)
-Script.define_singleton_method(:exists?) { |*_args| false } unless Script.respond_to?(:exists?)
-
-# UserVars mock (module — uses method_missing in real code)
-module UserVars
-  @slack_token = nil
-
-  def self.slack_token
-    @slack_token
-  end
-
-  def self.slack_token=(value)
-    @slack_token = value
-  end
-end unless defined?(UserVars)
-
-# Add slack_token accessors defensively
-unless UserVars.respond_to?(:slack_token)
-  UserVars.instance_variable_set(:@slack_token, nil)
-  UserVars.define_singleton_method(:slack_token) { @slack_token }
-end
-unless UserVars.respond_to?(:slack_token=)
-  UserVars.define_singleton_method(:slack_token=) { |val| @slack_token = val }
-end
-
-# Lich module mocks
-module Lich
-  def self.log(*_args); end unless respond_to?(:log)
-
-  module Messaging
-    def self.msg(*_args); end
-  end unless defined?(Lich::Messaging)
-end
-
-# Namespace aliases — MUST be BEFORE require so code resolves correctly
-module Lich
-  module DragonRealms; end
-end
-
-# Kernel methods needed by the class
-module Kernel
-  def start_script(*_args); end unless method_defined?(:start_script)
-  def pause(*_args); end unless method_defined?(:pause)
-  def get(*_args); nil; end unless method_defined?(:get)
-  def echo(*_args); end unless method_defined?(:echo)
-  def checkname(*_args); 'TestChar'; end unless method_defined?(:checkname)
-end
-
-# Load the module under test (AFTER mocks + aliases)
+# Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'slackbot.rb')
 
 RSpec.describe Lich::DragonRealms::SlackBot do

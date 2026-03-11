@@ -1,63 +1,10 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
-require 'rspec'
 
-LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
-
+# Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-healing-data.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-healing.rb')
-
-# --- Mock setup ---
-# DRSkill must be a class (not module) to match real definition.
-class DRSkill
-  def self.getrank(*_args)
-    0
-  end
-end unless defined?(DRSkill)
-Lich::DragonRealms::DRSkill = ::DRSkill unless defined?(Lich::DragonRealms::DRSkill)
-
-# DRStats is a module in real code.
-module DRStats
-  def self.empath?(*_args)
-    false
-  end
-end unless defined?(DRStats)
-Lich::DragonRealms::DRStats = ::DRStats unless defined?(Lich::DragonRealms::DRStats)
-
-# DRC is a module in real code.
-module DRC
-  def self.bput(*_args)
-    ''
-  end
-end unless defined?(DRC)
-Lich::DragonRealms::DRC = ::DRC unless defined?(Lich::DragonRealms::DRC)
-
-# DRCI is a module in real code.
-module DRCI
-  def self.dispose_trash(*_args)
-    true
-  end
-end unless defined?(DRCI)
-Lich::DragonRealms::DRCI = ::DRCI unless defined?(Lich::DragonRealms::DRCI)
-
-# Lich::Util for issue_command
-module Lich
-  module Util
-    def self.issue_command(*_args, **_kwargs)
-      []
-    end
-  end unless defined?(Lich::Util)
-end
-
-# Lich::Messaging for messaging
-module Lich
-  module Messaging
-    def self.msg(*_args)
-      nil
-    end
-  end unless defined?(Lich::Messaging)
-end
 
 RSpec.describe Lich::DragonRealms::DRCH do
   # ─── Wound class ──────────────────────────────────────────────────────

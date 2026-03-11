@@ -117,11 +117,11 @@ module Gtk
   end
 
   class ResponseType
-    OK = 0
-    CANCEL = 1
-    APPLY = 2
-    YES = 3
-    NO = 4
+    OK = 0 unless defined?(OK)
+    CANCEL = 1 unless defined?(CANCEL)
+    APPLY = 2 unless defined?(APPLY)
+    YES = 3 unless defined?(YES)
+    NO = 4 unless defined?(NO)
   end
 
   def self.queue

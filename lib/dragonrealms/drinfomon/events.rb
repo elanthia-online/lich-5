@@ -5,8 +5,13 @@ module Lich
     class Flags
       @@flags = {}
       @@matchers = {}
+      @@pending = {}
 
       def self.[](key)
+        # Move pending value to flags on first access (for testing)
+        if @@pending.key?(key)
+          @@flags[key] = @@pending.delete(key)
+        end
         @@flags[key]
       end
 
@@ -34,6 +39,19 @@ module Lich
 
       def self.matchers
         @@matchers
+      end
+
+      # For testing: set a flag value that survives Flags.add calls
+      # The value is moved from pending to flags on first access via Flags[]
+      def self.set_pending(key, value)
+        @@pending[key] = value
+      end
+
+      # Full reset for test isolation - clears all state
+      def self.reset!
+        @@flags = {}
+        @@matchers = {}
+        @@pending = {}
       end
     end
   end

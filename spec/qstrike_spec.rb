@@ -21,19 +21,56 @@ end unless Char.respond_to?(:stamina)
 # GameObj with hand tracking is defined in spec_helper
 # MockGameObj is also defined in spec_helper
 
-# Helper module to set Effects::Buffs state for testing
+# Helper module for QStrike testing
 # Uses spec_helper's Effects::Registry which reads from XMLData.dialogs
 module QStrikeTestHelper
-  def self.set_buff_active(effect, active)
-    if active
-      XMLData.save_dialogs("Buffs", { effect => Time.now.to_f + 3600 })
-    else
+  @right_hand = nil
+  @left_hand = nil
+
+  class << self
+    attr_accessor :right_hand, :left_hand
+
+    def set_buff_active(effect, active)
+      if active
+        XMLData.save_dialogs("Buffs", { effect => Time.now.to_f + 3600 })
+      else
+        XMLData.save_dialogs("Buffs", {})
+      end
+    end
+
+    def clear_buffs
       XMLData.save_dialogs("Buffs", {})
     end
+
+    def clear_hands
+      @right_hand = MockGameObj.new
+      @left_hand = MockGameObj.new
+    end
+  end
+end
+
+# Extend the existing GameObj class (defined in spec_helper as a class, not module)
+# with test helper methods for hand management
+class << GameObj
+  # Use QStrikeTestHelper's storage for hands
+  def right_hand
+    QStrikeTestHelper.right_hand || MockGameObj.new
   end
 
-  def self.clear_buffs
-    XMLData.save_dialogs("Buffs", {})
+  def left_hand
+    QStrikeTestHelper.left_hand || MockGameObj.new
+  end
+
+  def set_right_hand(obj)
+    QStrikeTestHelper.right_hand = obj
+  end
+
+  def set_left_hand(obj)
+    QStrikeTestHelper.left_hand = obj
+  end
+
+  def clear_hands
+    QStrikeTestHelper.clear_hands
   end
 end
 
@@ -288,7 +325,8 @@ describe Lich::Gemstone::QStrike do
 
     it "returns correct multiplier based on rank when active" do
       QStrikeTestHelper.set_buff_active('Striking Asp', true)
-      # CMan mock returns rank 2 for striking_asp
+      # Stub striking_asp_rank to return 2 directly
+      allow(Lich::Gemstone::QStrike).to receive(:striking_asp_rank).and_return(2)
       expect(Lich::Gemstone::QStrike.striking_asp_multiplier).to eq(0.5)
     end
   end
@@ -360,6 +398,8 @@ describe Lich::Gemstone::QStrike do
 
     it "applies Striking Asp discount when active" do
       QStrikeTestHelper.set_buff_active('Striking Asp', true)
+      # Stub striking_asp_rank to return 2 directly
+      allow(Lich::Gemstone::QStrike).to receive(:striking_asp_rank).and_return(2)
       Lich::Gemstone::QStrike.clear_cache
 
       result = Lich::Gemstone::QStrike.calculate(reserve: 1)

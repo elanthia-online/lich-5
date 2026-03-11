@@ -1,54 +1,10 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
-require 'rspec'
 
-LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
-
+# Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-money-data.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-money.rb')
-
-# Mock Lich::Messaging for warning tests
-module Lich
-  module Messaging
-    @messages = []
-
-    class << self
-      def msg(type, message, **_opts)
-        @messages << { type: type, message: message }
-      end
-
-      def messages
-        @messages
-      end
-
-      def clear_messages!
-        @messages = []
-      end
-    end
-  end
-end unless defined?(Lich::Messaging)
-
-# Mock DRC module
-module DRC
-  def self.bput(*_args)
-    ''
-  end
-
-  def self.release_invisibility(*_args); end
-end unless defined?(DRC)
-
-# Mock DRCT module
-module DRCT
-  def self.walk_to(*_args); end
-end unless defined?(DRCT)
-
-# Mock DRRoom module
-module DRRoom
-  def self.pcs
-    []
-  end
-end unless defined?(DRRoom)
 
 DRCM = Lich::DragonRealms::DRCM unless defined?(DRCM)
 

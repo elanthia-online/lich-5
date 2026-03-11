@@ -81,6 +81,20 @@ module Lich
       def self.room_objs=(val)
         @@room_objs = val
       end
+
+      # Full reset for test isolation - clears all state
+      def self.reset!
+        @@npcs = []
+        @@pcs = []
+        @@group_members = []
+        @@pcs_prone = []
+        @@pcs_sitting = []
+        @@dead_npcs = []
+        @@room_objs = []
+        @@exits = []
+        @@title = ''
+        @@description = ''
+      end
     end
   end
 end

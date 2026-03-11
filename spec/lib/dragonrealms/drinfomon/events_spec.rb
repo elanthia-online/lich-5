@@ -1,16 +1,13 @@
 # frozen_string_literal: true
 
-require 'rspec'
+require_relative '../../../spec_helper'
 
 require_relative '../../../../lib/dragonrealms/drinfomon/events'
 
 RSpec.describe Lich::DragonRealms::Flags do
-  let(:described_class) { Lich::DragonRealms::Flags }
-
   before(:each) do
-    # Reset flags state
-    described_class.class_variable_set(:@@flags, {})
-    described_class.class_variable_set(:@@matchers, {})
+    # Reset flags state using production reset! method
+    described_class.reset!
   end
 
   describe '.add' do
@@ -162,6 +159,58 @@ RSpec.describe Lich::DragonRealms::Flags do
       expect('You hit the troll!').to match(matcher)
       expect('You miss!').to match(matcher)
       expect('You dodge the attack!').to match(matcher)
+    end
+  end
+
+  describe '.set_pending (test helper)' do
+    it 'stores value in pending hash' do
+      described_class.set_pending('test_flag', ['matched value'])
+
+      # Value should be returned on first access
+      expect(described_class['test_flag']).to eq(['matched value'])
+    end
+
+    it 'survives Flags.add calls' do
+      described_class.set_pending('test_flag', 'pre-set value')
+      described_class.add('test_flag', 'pattern')
+
+      # set_pending value should override the false from add
+      expect(described_class['test_flag']).to eq('pre-set value')
+    end
+
+    it 'is consumed on first access' do
+      described_class.set_pending('test_flag', 'value')
+      described_class['test_flag'] # First access consumes it
+
+      # Second access returns from flags hash
+      expect(described_class['test_flag']).to eq('value')
+    end
+  end
+
+  describe '.reset!' do
+    it 'clears all flags' do
+      described_class.add('flag1', 'pattern1')
+      described_class['flag1'] = true
+
+      described_class.reset!
+
+      expect(described_class.flags).to be_empty
+    end
+
+    it 'clears all matchers' do
+      described_class.add('flag1', 'pattern1')
+
+      described_class.reset!
+
+      expect(described_class.matchers).to be_empty
+    end
+
+    it 'clears pending values' do
+      described_class.set_pending('flag1', 'value')
+
+      described_class.reset!
+
+      expect(described_class['flag1']).to be_nil
     end
   end
 end

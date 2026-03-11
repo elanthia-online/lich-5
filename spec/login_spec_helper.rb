@@ -211,7 +211,7 @@ end
 $LOAD_PATH.unshift(File.expand_path('../lib', __FILE__))
 
 # Define LIB_DIR for code that references it
-LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
+LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib') unless defined?(LIB_DIR)
 
 # Require the code to be tested
 require 'common/gui_login'

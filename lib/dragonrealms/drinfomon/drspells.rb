@@ -62,6 +62,16 @@ module Lich
       def self.spellbook_format=(val)
         @@spellbook_format = val
       end
+
+      # Full reset for test isolation - clears all state
+      def self.reset!
+        @@known_spells = {}
+        @@known_feats = {}
+        @@spellbook_format = nil
+        @@grabbing_known_spells = false
+        @@grabbing_known_barbarian_abilities = false
+        @@grabbing_known_khri = false
+      end
     end
   end
 end

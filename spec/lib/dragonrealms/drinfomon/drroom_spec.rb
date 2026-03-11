@@ -1,19 +1,12 @@
 # frozen_string_literal: true
 
-require 'rspec'
-
-# Define XMLData module if not already defined
-module XMLData
-end unless defined?(XMLData)
+require_relative '../../../spec_helper'
 
 require_relative '../../../../lib/dragonrealms/drinfomon/drroom'
 
 RSpec.describe Lich::DragonRealms::DRRoom do
-  let(:described_class) { Lich::DragonRealms::DRRoom }
-
   before(:each) do
     # Use RSpec stubs for XMLData methods - automatically cleaned up after each test
-    # This prevents polluting global state that breaks other specs
     allow(XMLData).to receive(:room_exits).and_return(['north', 'south'])
     allow(XMLData).to receive(:room_title).and_return('[Test Room]')
     allow(XMLData).to receive(:room_description).and_return('A test room description.')

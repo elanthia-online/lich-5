@@ -1,131 +1,14 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
-require 'rspec'
 
-# NilClass monkey-patch (matches lich runtime behavior where nil.method returns nil)
-class NilClass
-  def method_missing(*)
-    nil
-  end
-end
-
-# Mock DRC (module) — define at top level with *_args for cross-spec compat
-module DRC
-  def self.bput(*_args)
-    nil
-  end
-
-  def self.left_hand
-    nil
-  end
-
-  def self.right_hand
-    nil
-  end
-
-  def self.message(*_args)
-    nil
-  end
-end unless defined?(DRC)
-
-# Defensive method additions for methods other specs may not define
-DRC.define_singleton_method(:left_hand) { nil } unless DRC.respond_to?(:left_hand)
-DRC.define_singleton_method(:right_hand) { nil } unless DRC.respond_to?(:right_hand)
-DRC.define_singleton_method(:message) { |*_args| nil } unless DRC.respond_to?(:message)
-
-# Mock DRCI (module)
-module DRCI
-  def self.in_hands?(*_args)
-    false
-  end
-
-  def self.inside?(*_args)
-    false
-  end
-
-  def self.get_item?(*_args)
-    true
-  end
-
-  def self.put_away_item?(*_args)
-    true
-  end
-
-  def self.have_item_by_look?(*_args)
-    false
-  end
-end unless defined?(DRCI)
-
-DRCI.define_singleton_method(:in_hands?) { |*_args| false } unless DRCI.respond_to?(:in_hands?)
+# Add methods needed by this spec (not in base spec_helper mocks)
 DRCI.define_singleton_method(:inside?) { |*_args| false } unless DRCI.respond_to?(:inside?)
-
-# Mock DRCT (module)
-module DRCT
-  def self.walk_to(*_args)
-    nil
-  end
-
-  def self.buy_item(*_args)
-    nil
-  end
-end unless defined?(DRCT)
-
-DRCT.define_singleton_method(:walk_to) { |*_args| nil } unless DRCT.respond_to?(:walk_to)
+DRCI.define_singleton_method(:have_item_by_look?) { |*_args| false } unless DRCI.respond_to?(:have_item_by_look?)
 DRCT.define_singleton_method(:buy_item) { |*_args| nil } unless DRCT.respond_to?(:buy_item)
-
-# Mock DRCA (module)
-module DRCA
-  def self.cast_spell(*_args)
-    nil
-  end
-end unless defined?(DRCA)
-
 DRCA.define_singleton_method(:cast_spell) { |*_args| nil } unless DRCA.respond_to?(:cast_spell)
 
-# Mock Lich::Messaging (separate guard from Lich::Util)
-module Lich
-  module Messaging
-    def self.msg(*_args)
-      nil
-    end
-  end unless defined?(Lich::Messaging)
-
-  module Util
-    def self.issue_command(*_args, **_kwargs)
-      nil
-    end
-  end unless defined?(Lich::Util)
-end
-
-# Namespace aliases — MUST be BEFORE require so namespaced code resolves to same objects
-module Lich
-  module DragonRealms
-    DRC = ::DRC unless defined?(Lich::DragonRealms::DRC)
-    DRCI = ::DRCI unless defined?(Lich::DragonRealms::DRCI)
-    DRCT = ::DRCT unless defined?(Lich::DragonRealms::DRCT)
-    DRCA = ::DRCA unless defined?(Lich::DragonRealms::DRCA)
-  end
-end
-
-# Kernel mocks for global methods used by module_function code
-# Note: get_data is provided by spec_helper.rb — do not redefine here
-module Kernel
-  def waitrt?
-    nil
-  end
-  unless method_defined?(:waitrt?)
-    define_method(:waitrt?) { nil }
-  end
-
-  def pause(*_args)
-    nil
-  end
-  unless method_defined?(:pause)
-    define_method(:pause) { |*_args| nil }
-  end
-end
-
+# Load production code
 require_relative '../../../../lib/dragonrealms/commons/common-theurgy'
 
 RSpec.describe Lich::DragonRealms::DRCTH do
@@ -655,12 +538,25 @@ RSpec.describe Lich::DragonRealms::DRCTH do
       end
     end
 
-    context 'when needs_bless is true but @known_spells is nil (module_function context)' do
+    context 'when needs_bless is true but Bless spell is not known' do
       let(:shop_data) { { 'id' => 1234, 'needs_bless' => true } }
 
-      it 'does not call quick_bless_item (known_spells is nil in module_function)' do
+      it 'does not call quick_bless_item when DRSpells.known_spells is empty' do
         allow(DRCT).to receive(:buy_item)
+        allow(DRSpells).to receive(:known_spells).and_return({})
         expect(described_class).not_to receive(:quick_bless_item)
+        described_class.buy_single_supply('incense', shop_data)
+      end
+    end
+
+    context 'when needs_bless is true and Bless spell is known' do
+      let(:shop_data) { { 'id' => 1234, 'needs_bless' => true } }
+
+      it 'calls quick_bless_item' do
+        allow(DRCT).to receive(:buy_item)
+        allow(DRSpells).to receive(:known_spells).and_return({ 'Bless' => true })
+        allow(described_class).to receive(:quick_bless_item)
+        expect(described_class).to receive(:quick_bless_item).with('incense')
         described_class.buy_single_supply('incense', shop_data)
       end
     end

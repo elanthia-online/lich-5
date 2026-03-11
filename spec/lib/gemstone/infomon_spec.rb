@@ -25,12 +25,14 @@ require "gemstone/psms/ascension"
 Skills = Lich::Gemstone::Skills unless defined?(Skills)
 
 # Mock respond method in Infomon module for cli.rb methods that use it
-module Lich
-  module Gemstone
-    module Infomon
-      def self.respond(msg)
-        pp msg if ENV['DEBUG']
-        msg # Return the message so Infomon.show returns the array
+unless Lich::Gemstone::Infomon.respond_to?(:respond)
+  module Lich
+    module Gemstone
+      module Infomon
+        def self.respond(msg)
+          pp msg if ENV['DEBUG']
+          msg # Return the message so Infomon.show returns the array
+        end
       end
     end
   end
