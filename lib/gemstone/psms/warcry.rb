@@ -13,49 +13,55 @@ module Lich
     class Warcry
       # Internal table of all warcry abilities.
       #
-      # @return [Hash<String, Hash>] Mapping from short name to metadata, including:
+      # @return [Hash<String, Hash>] Mapping from long name to metadata, including:
       #   - `:long_name` [String]
       #   - `:short_name` [String]
       #   - `:cost` [Integer]
       #   - `:regex` [Regexp]
       #   - `:buff` [String, optional]
       @@warcries = {
-        "bellow" => {
+        "bertrandts_bellow" => {
           :long_name  => "bertrandts_bellow",
           :short_name => "bellow",
-          :cost       => 20, # @todo only 10 for single
+          :type       => :setup,
+          :cost       => { stamina: 20 }, # @todo only 10 for single
           :regex      => /You glare at .+ and let out a nerve-shattering bellow!/,
         },
-        "yowlp"  => {
+        "yerties_yowlp"     => {
           :long_name  => "yerties_yowlp",
           :short_name => "yowlp",
-          :cost       => 20,
+          :type       => :buff,
+          :cost       => { stamina: 20 },
           :regex      => /You throw back your shoulders and let out a resounding yowlp!/,
           :buff       => "Yertie's Yowlp",
         },
-        "growl"  => {
+        "gerrelles_growl"   => {
           :long_name  => "gerrelles_growl",
           :short_name => "growl",
-          :cost       => 14, # @todo only 7 for single
+          :type       => :setup,
+          :cost       => { stamina: 14 }, # @todo only 7 for single
           :regex      => /Your face contorts as you unleash a guttural, deep-throated growl at .+!/,
         },
-        "shout"  => {
+        "seanettes_shout"   => {
           :long_name  => "seanettes_shout",
           :short_name => "shout",
-          :cost       => 20,
+          :type       => :buff,
+          :cost       => { stamina: 20 },
           :regex      => /You let loose an echoing shout!/,
           :buff       => 'Empowered (+20)',
         },
-        "cry"    => {
+        "carns_cry"         => {
           :long_name  => "carns_cry",
           :short_name => "cry",
-          :cost       => 20,
+          :type       => :setup,
+          :cost       => { stamina: 20 },
           :regex      => /You stare down .+ and let out an eerie, modulating cry!/,
         },
-        "holler" => {
+        "horlands_holler"   => {
           :long_name  => "horlands_holler",
           :short_name => "holler",
-          :cost       => 20,
+          :type       => :buff,
+          :cost       => { stamina: 20 },
           :regex      => /You throw back your head and let out a thundering holler!/,
           :buff       => 'Enh. Health (+20)',
         },
@@ -65,10 +71,10 @@ module Lich
       #
       # @return [Array<Hash>] Each hash has :long_name, :short_name, :cost
       def self.warcry_lookups
-        @@warcries.map do |short_name, psm|
+        @@warcries.map do |long_name, psm|
           {
-            long_name: psm[:long_name],
-            short_name: short_name,
+            long_name: long_name,
+            short_name: psm[:short_name],
             cost: psm[:cost]
           }
         end
@@ -151,7 +157,7 @@ module Lich
       # @param name [String] Warcry name
       # @return [Boolean] True if buff is already active
       def Warcry.buff_active?(name)
-        buff = @@warcries.fetch(PSMS.name_normal(name))[:buff]
+        buff = @@warcries.fetch(PSMS.find_name(name, "Warcry")[:long_name])[:buff]
         return false if buff.nil?
         Lich::Util.normalize_lookup('Buffs', buff)
       end
@@ -171,7 +177,7 @@ module Lich
         return if Warcry.buff_active?(name)
 
         name_normalized = PSMS.name_normal(name)
-        technique = @@warcries.fetch(name_normalized)
+        technique = @@warcries.fetch(PSMS.find_name(name_normalized, "Warcry")[:long_name])
         usage = name_normalized
         return if usage.nil?
 
@@ -221,7 +227,7 @@ module Lich
       # @example
       #   Warcry.regexp("holler") => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i
       def Warcry.regexp(name)
-        @@warcries.fetch(PSMS.name_normal(name))[:regex]
+        @@warcries.fetch(PSMS.find_name(name, "Warcry")[:long_name])[:regex]
       end
 
       # Defines dynamic getter methods for both long and short names of each warcry.

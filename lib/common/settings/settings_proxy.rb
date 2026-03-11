@@ -6,15 +6,26 @@ module Lich
     class SettingsProxy
       LOG_PREFIX = "[SettingsProxy]".freeze
 
-      def initialize(settings_module, scope, path, target)
+      # Minimal change: add detached flag (default false)
+      # Added script_name parameter to support InstanceSettings (core Lich functionality
+      # that runs outside of Script context). When script_name is provided, it takes
+      # precedence over Script.current.name in the save path.
+      def initialize(settings_module, scope, path, target, detached: false, script_name: nil)
         @settings_module = settings_module # This should be the Settings module itself
-        @scope = scope
-        @path = path.dup
+        @scope  = scope
+        @path   = path.dup
         @target = target
-        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}" })
+        @detached = detached
+        @script_name = script_name
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "INIT scope: #{@scope.inspect}, path: #{@path.inspect}, target_class: #{@target.class}, target_object_id: #{@target.object_id}, detached: #{@detached}, script_name: #{@script_name.inspect}" })
       end
 
-      attr_reader :target, :path, :scope
+      attr_reader :target, :path, :scope, :script_name
+
+      # Minimal change: expose detached? status
+      def detached?
+        !!@detached
+      end
 
       def nil?
         @target.nil?
@@ -51,6 +62,19 @@ module Lich
             options[:default]
           end
         end
+      end
+
+      # Internal: rebind this proxy to the live container and clear detached state.
+      # This centralizes target swaps so invariants/logging stay consistent.
+      # @param new_target [Hash, Array] the live container resolved from root+path
+      # @return [self]
+      private def rebind_to_live!(new_target)
+        @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> {
+          "REBIND to live: old_target_oid=#{@target&.object_id}, new_target_oid=#{new_target&.object_id}, scope=#{@scope.inspect}, path=#{@path.inspect}"
+        })
+        @target = new_target
+        @detached = false if instance_variable_defined?(:@detached)
+        self
       end
 
       # String conversions
@@ -104,6 +128,16 @@ module Lich
         delegate_conversion(:to_hash, strict: true)
       end
 
+      # added 20250620 for JSON.pretty_generate
+      def to_json(*args)
+        if @target.respond_to?(:to_json)
+          @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "to_json: delegating with args" })
+          @target.to_json(*args)
+        else
+          raise NoMethodError, "undefined method :to_json for #{@target.inspect}:#{@target.class}"
+        end
+      end
+
       # Other common conversions
       def to_proc
         delegate_conversion(:to_proc, strict: true)
@@ -135,7 +169,7 @@ module Lich
 
       # New method to show the proxy's internal details
       def proxy_details
-        "<SettingsProxy scope=#{@scope.inspect} path=#{@path.inspect} target_class=#{@target.class} target_object_id=#{@target.object_id}>"
+        "<SettingsProxy scope=#{@scope.inspect} path=#{@path.inspect} target_class=#{@target.class} target_object_id=#{@target.object_id} detached=#{@detached} script_name=#{@script_name.inspect}>"
       end
 
       def pretty_print(pp)
@@ -158,12 +192,14 @@ module Lich
         super || @target.respond_to?(method, include_private)
       end
 
+      # Minimal change: items yielded from #each are "views" over the container.
+      # Mark them detached so mutations during a derived iteration won't clobber root.
       def each(&_block)
         return enum_for(:each) unless block_given?
         if @target.respond_to?(:each)
           @target.each do |item|
             if @settings_module.container?(item)
-              yield SettingsProxy.new(@settings_module, @scope, [], item)
+              yield SettingsProxy.new(@settings_module, @scope, [], item, detached: true, script_name: @script_name)
             else
               yield item
             end
@@ -175,7 +211,7 @@ module Lich
       NON_DESTRUCTIVE_METHODS = [
         :+, :-, :&, :|, :*,
         :all?, :any?, :assoc, :at, :bsearch, :bsearch_index, :chunk, :chunk_while,
-        :collect, :collect_concat, :combination, :compact, :compare_by_identity?, :count, :cycle,
+        :collect, :collect_concat, :compact, :compare_by_identity?, :count, :cycle,
         :default, :default_proc, :detect, :dig, :drop, :drop_while,
         :each_cons, :each_entry, :each_slice, :each_with_index, :each_with_object, :empty?,
         :entries, :except, :fetch, :fetch_values, :filter, :find, :find_all, :find_index,
@@ -189,13 +225,19 @@ module Lich
         :uniq, :values, :values_at, :zip
       ].freeze
 
+      # Subset of non-destructive methods that return container "views"
+      NON_DESTRUCTIVE_CONTAINER_VIEWS = [
+        :map, :collect, :select, :filter, :reject, :find_all, :grep, :grep_v,
+        :sort, :sort_by, :uniq, :compact, :flatten, :slice, :take, :drop, :values
+      ].freeze
+
       def [](key)
         @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "GET scope: #{@scope.inspect}, path: #{@path.inspect}, key: #{key.inspect}, target_object_id: #{@target.object_id}" })
         value = @target[key]
         if @settings_module.container?(value)
           new_path = @path.dup
           new_path << key
-          SettingsProxy.new(@settings_module, @scope, new_path, value)
+          SettingsProxy.new(@settings_module, @scope, new_path, value, script_name: @script_name)
         else
           value
         end
@@ -223,9 +265,20 @@ module Lich
             target_dup = @target.dup
             unwrapped_args = args.map { |arg| arg.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(arg) : arg } # Corrected
             result = target_dup.send(method, *unwrapped_args, &block)
-            return handle_non_destructive_result(result)
+            # Minimal change: pass method name so we can tag views as detached and keep path
+            return handle_non_destructive_result(method, result)
           else
             @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   destructive method: #{method}" })
+
+            # NEW (5.12.7+): auto-reattach derived views before mutating
+            # ensure destructive methods (.push) do not target a proxy non-destructive method (.sort)
+            if detached?
+              unless @settings_module._reattach_live!(self)
+                @settings_module._log(Settings::LOG_LEVEL_ERROR, LOG_PREFIX, -> { "CALL   reattach failed; aborting destructive op #{method} on detached view" })
+                return self
+              end
+            end
+
             unwrapped_args = args.map { |arg| arg.is_a?(SettingsProxy) ? @settings_module.unwrap_proxies(arg) : arg } # Corrected
             @settings_module._log(Settings::LOG_LEVEL_DEBUG, LOG_PREFIX, -> { "CALL   target_before_op: #{@target.inspect}" })
             result = @target.send(method, *unwrapped_args, &block)
@@ -239,11 +292,36 @@ module Lich
         end
       end
 
-      def handle_non_destructive_result(result)
+      # Minimal change: keep path (not []), and tag view proxies as detached.
+      # NEW: when a non-destructive method like `find` / `detect` on an Array
+      # returns an element that is itself a container (e.g., a Hash),
+      # return a proxy whose path includes the array index so that mutations
+      # save back to that element instead of clobbering the entire array.
+      def handle_non_destructive_result(method, result)
         @settings_module.reset_path_and_return(
           if @settings_module.container?(result)
-            SettingsProxy.new(@settings_module, @scope, [], result)
+            if @target.is_a?(Array) && [:find, :detect].include?(method)
+              # For Array#find / Array#detect, identify the element index in the
+              # original array and create a proxy that points to that element.
+              idx = @target.index(result)
+
+              if !idx.nil?
+                element_path = @path.dup
+                element_path << idx
+                SettingsProxy.new(@settings_module, @scope, element_path, result, script_name: @script_name)
+              else
+                # Fallback: if we somehow can't locate the element, preserve
+                # the old behavior (path == @path, no index).
+                is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
+                SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name)
+              end
+            else
+              # Existing behavior for all other non-destructive container methods
+              is_view = NON_DESTRUCTIVE_CONTAINER_VIEWS.include?(method)
+              SettingsProxy.new(@settings_module, @scope, @path.dup, result, detached: is_view, script_name: @script_name)
+            end
           else
+            # Non-container results (e.g., Hash#keys) stay as plain values
             result
           end
         )
@@ -255,7 +333,7 @@ module Lich
         elsif @settings_module.container?(result)
           # If a new container is returned (e.g. some destructive methods might return a new object)
           # Wrap it in a new proxy, maintaining the current path and scope.
-          SettingsProxy.new(@settings_module, @scope, @path, result)
+          SettingsProxy.new(@settings_module, @scope, @path, result, script_name: @script_name)
         else
           result
         end

@@ -27,6 +27,12 @@ module Lich
         @@subscription
       end
 
+      def self.type
+        if XMLData.game.is_a?(String) && XMLData.game =~ /^GS/
+          Infomon.get("account.type")
+        end
+      end
+
       def self.subscription=(value)
         if value =~ /(NORMAL|PREMIUM|TRIAL|INTERNAL|FREE)/
           @@subscription = Regexp.last_match(1)

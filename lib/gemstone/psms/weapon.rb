@@ -24,139 +24,163 @@ module Lich
       @@weapon_techniques = {
         "barrage"          => {
           :short_name => "barrage",
-          :cost       => 15,
+          :type       => :assault,
+          :cost       => { stamina: 15 },
           :regex      => /Drawing several (?:arrows|bolts) from your .+, you grip them loosely between your fingers in preparation for a rapid barrage\./,
           :assault_rx => /Your satisfying display of dexterity bolsters you and inspires those around you\!/,
           :buff       => "Enh. Dexterity (+10)"
         },
         "charge"           => {
           :short_name => "charge",
-          :cost       => 14,
+          :type       => :setup,
+          :cost       => { stamina: 14 },
           :regex      => /You rush forward at .+ with your .+ and attempt a charge\!/
         },
         "clash"            => {
           :short_name => "clash",
-          :cost       => 20,
+          :type       => :area_of_effect,
+          :cost       => { stamina: 20 },
           :regex      => /Steeling yourself for a brawl, you plunge into the fray\!/
         },
         "clobber"          => {
           :short_name => "clobber",
-          :cost       => 0,
+          :type       => :reaction,
+          :cost       => { stamina: 0 },
           :regex      => /You redirect the momentum of your parry, hauling your .+ around to clobber .+\!/
         },
         "cripple"          => {
           :short_name => "cripple",
-          :cost       => 7,
+          :type       => :setup,
+          :cost       => { stamina: 7 },
           :regex      => /You reverse your grip on your .+ and dart toward .+ at an angle\!/
         },
         "cyclone"          => {
           :short_name => "cyclone",
-          :cost       => 20,
+          :type       => :area_of_effect,
+          :cost       => { stamina: 20 },
           :regex      => /You weave your .+ in an under arm spin, swiftly picking up speed until it becomes a blurred cyclone of .+\!/
         },
         "dizzying_swing"   => {
           :short_name => "dizzyingswing",
-          :cost       => 7,
+          :type       => :setup,
+          :cost       => { stamina: 7 },
           :regex      => /You heft your .+ and, looping it once to build momentum, lash out in a strike at .+ head\!/,
           :usage      => "dizzyingswing"
         },
         "flurry"           => {
           :short_name => "flurry",
-          :cost       => 15,
+          :type       => :assault,
+          :cost       => { stamina: 15 },
           :regex      => /You rotate your wrist, your .+ executing a casual spin to establish your flow as you advance upon .+\!/,
           :assault_rx => /The mesmerizing sway of body and blade glides to its inevitable end with one final twirl of your .+\!/,
           :buff       => "Slashing Strikes"
         },
         "fury"             => {
           :short_name => "fury",
-          :cost       => 15,
+          :type       => :assault,
+          :cost       => { stamina: 15 },
           :regex      => /With a percussive snap, you shake out your arms in quick succession and bear down on .+ in a fury\!/,
           :assault_rx => /Your furious assault bolsters you and inspires those around you\!/,
           :buff       => "Enh. Constitution (+10)"
         },
         "guardant_thrusts" => {
           :short_name => "gthrusts",
-          :cost       => 15,
+          :type       => :assault,
+          :cost       => { stamina: 15 },
           :regex      => /Retaining a defensive profile, you raise your .+ in a hanging guard and prepare to unleash a barrage of guardant thrusts upon .+\!/,
           :usage      => "gthrusts"
         },
         "overpower"        => {
           :short_name => "overpower",
-          :cost       => 0,
+          :type       => :reaction,
+          :cost       => { stamina: 0 },
           :regex      => /On the heels of .+ parry, you erupt into motion, determined to overpower .+ defenses\!/
         },
         "pin_down"         => {
           :short_name => "pindown",
-          :cost       => 14,
+          :type       => :area_of_effect,
+          :cost       => { stamina: 14 },
           :regex      => /You take quick assessment and raise your .+, several (?:arrows|bolts) nocked to your string in parallel\./,
           :usage      => "pindown"
         },
         "pulverize"        => {
           :short_name => "pulverize",
-          :cost       => 20,
+          :type       => :area_of_effect,
+          :cost       => { stamina: 20 },
           :regex      => /You wheel your .+ overhead before slamming it around in a wide arc to pulverize your foes\!/
         },
         "pummel"           => {
           :short_name => "pummel",
-          :cost       => 15,
+          :type       => :assault,
+          :cost       => { stamina: 15 },
           :regex      => /You take a menacing step toward .+, sweeping your .+ out low to your side in your advance\./,
           :assault_rx => /With a final snap of your wrist, you sweep your .+ back to the ready, your assault complete\./,
           :buff       => "Concussive Blows"
         },
         "radial_sweep"     => {
           :short_name => "radialsweep",
-          :cost       => 0,
+          :type       => :reaction,
+          :cost       => { stamina: 0 },
           :regex      => /Crouching low, you sweep your .+ in a broad arc\!/,
           :usage      => "radialsweep"
         },
         "reactive_shot"    => {
           :short_name => "reactiveshot",
-          :cost       => 0,
+          :type       => :reaction,
+          :cost       => { stamina: 0 },
           :regex      => /You fire off a quick shot at the .+, then make a hasty retreat\!/,
           :usage      => "reactiveshot"
         },
         "reverse_strike"   => {
           :short_name => "reversestrike",
-          :cost       => 0,
+          :type       => :reaction,
+          :cost       => { stamina: 0 },
           :regex      => /Spotting an opening in .+ defenses, you quickly reverse the direction of your .+ and strike from a different angle\!/,
           :usage      => "reversestrike"
         },
         "riposte"          => {
           :short_name => "riposte",
-          :cost       => 0,
+          :type       => :reaction,
+          :cost       => { stamina: 0 },
           :regex      => /Before .+ can recover, you smoothly segue from parry to riposte\!/
         },
         "spin_kick"        => {
           :short_name => "spinkick",
-          :cost       => 0,
+          :type       => :reaction,
+          :cost       => { stamina: 0 },
           :regex      => /Stepping with deliberation, you wheel into a leaping spin\!/,
           :usage      => "spinkick"
         },
         "thrash"           => {
           :short_name => "thrash",
-          :cost       => 15,
+          :type       => :assault,
+          :cost       => { stamina: 15 },
           :regex      => /You rush .+, raising your .+ high to deliver a sound thrashing\!/
         },
         "twin_hammerfists" => {
           :short_name => "twinhammer",
-          :cost       => 7,
+          :type       => :setup,
+          :cost       => { stamina: 7 },
           :regex      => /You raise your hands high, lace them together and bring them crashing down towards the .+\!/,
           :usage      => "twinhammer"
         },
         "volley"           => {
           :short_name => "volley",
-          :cost       => 20,
+          :type       => :area_of_effect,
+          :cost       => { stamina: 20 },
           :regex      => /Raising your .+ high, you loose (?:arrow|bolt) after (?:arrow|bolt) as fast as you can, filling the sky with a volley of deadly projectiles\!/
         },
         "whirling_blade"   => {
           :short_name => "wblade",
-          :cost       => 20,
+          :type       => :area_of_effect,
+          :cost       => { stamina: 20 },
           :regex      => /With a broad flourish, you sweep your .+ into a whirling display of keen-edged menace\!/,
           :usage      => "wblade"
         },
         "whirlwind"        => {
           :short_name => "whirlwind",
-          :cost       => 20,
+          :type       => :area_of_effect,
+          :cost       => { stamina: 20 },
           :regex      => /Twisting and spinning among your foes, you lash out again and again with the force of a reaping whirlwind\!/
         }
       }
@@ -209,6 +233,7 @@ module Lich
       #   Weapon.affordable?("Weapon_blessing") => true # if enough skill and stamina
       #   Weapon.affordable?("Weapon_blessing", forcert_count: 1) => false  # if not enough skill or stamina
       def Weapon.affordable?(name, forcert_count: 0)
+        return true if @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:type] == :area_of_effect && Effects::Buffs.active?("Glorious Momentum")
         return PSMS.assess(name, 'Weapon', true, forcert_count: forcert_count)
       end
 
@@ -227,9 +252,16 @@ module Lich
       # @example
       #   Weapon.available?("Weapon_blessing") => true # if known, affordable, not on cooldown, and not overexerted
       def Weapon.available?(name, min_rank: 1, forcert_count: 0)
-        Weapon.known?(name, min_rank: min_rank) &&
-          Weapon.affordable?(name, forcert_count: forcert_count) &&
-          PSMS.available?(name)
+        return false unless Weapon.known?(name, min_rank: min_rank)
+        return false unless Weapon.affordable?(name, forcert_count: forcert_count)
+        if @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:type] == :area_of_effect && Effects::Buffs.active?("Glorious Momentum")
+          return false unless PSMS.available?(name, true)
+        elsif @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:type] == :assault && Effects::Buffs.active?("Ardor of the Scourge")
+          return false unless PSMS.available?(name, true)
+        else
+          return false unless PSMS.available?(name)
+        end
+        return true
       end
 
       # DEPRECATED: Use {#buff_active?} instead.
@@ -248,9 +280,9 @@ module Lich
       # @param name [String] The technique's name
       # @return [Boolean] True if buff is already active
       def Weapon.buff_active?(name)
-        buff = @@weapon_techniques.fetch(PSMS.name_normal(name))[:buff]
+        buff = @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:buff]
         return false if buff.nil?
-        Effects::Buffs.active?(@@weapon_techniques.fetch(name)[:buff])
+        Effects::Buffs.active?(@@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:buff])
       end
 
       # Attempts to use a Weapon technique, optionally on a target.
@@ -267,7 +299,7 @@ module Lich
         return unless Weapon.available?(name, forcert_count: forcert_count)
 
         name_normalized = PSMS.name_normal(name)
-        technique = @@weapon_techniques.fetch(name_normalized)
+        technique = @@weapon_techniques.fetch(PSMS.find_name(name_normalized, "Weapon")[:long_name])
         usage = technique.key?(:usage) ? technique[:usage] : name_normalized
         return if usage.nil?
 
@@ -299,11 +331,12 @@ module Lich
             if usage_result =~ /\.\.\.wait/i
               waitrt?
               next
-            elsif usage_result =~ technique[:assault_rx] || Time.now() > break_out
-              break
-            elsif usage_result == false || usage_result =~ in_cooldown_regex
-              break
             end
+            break if usage_result.eql?(false)
+            break if usage_result =~ technique[:assault_rx]
+            break if usage_result =~ /^#{name} what\?$/i
+            break if usage_result =~ in_cooldown_regex
+            break if Time.now() > break_out
             sleep 0.25
           }
         else
@@ -336,7 +369,7 @@ module Lich
       # @example
       #   Weapon.regexp("Weapon_blessing") => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i
       def Weapon.regexp(name)
-        @@weapon_techniques.fetch(PSMS.name_normal(name))[:regex]
+        @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:regex]
       end
 
       # Defines dynamic getter methods for both long and short names of each Weapon technique.

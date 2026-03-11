@@ -20,7 +20,7 @@ def start_scripts(*script_names)
 end
 
 def force_start_script(script_name, cli_vars = [], flags = {})
-  flags = Hash.new unless flags.class == Hash
+  flags = Hash.new unless flags.is_a?(Hash)
   flags[:force] = true
   start_script(script_name, cli_vars, flags)
 end
@@ -135,7 +135,7 @@ def echo(*messages)
   respond if messages.empty?
   if (script = Script.current)
     unless script.no_echo
-      messages.each { |message| respond("[#{script.name}: #{message.to_s.chomp}]") }
+      messages.each { |message| respond("[#{script.custom? ? 'custom/' : ''}#{script.name}: #{message.to_s.chomp}]") }
     end
   else
     messages.each { |message| respond("[(unknown script): #{message.to_s.chomp}]") }
@@ -147,7 +147,7 @@ def _echo(*messages)
   _respond if messages.empty?
   if (script = Script.current)
     unless script.no_echo
-      messages.each { |message| _respond("[#{script.name}: #{message.to_s.chomp}]") }
+      messages.each { |message| _respond("[#{script.custom? ? 'custom/' : ''}#{script.name}: #{message.to_s.chomp}]") }
     end
   else
     messages.each { |message| _respond("[(unknown script): #{message.to_s.chomp}]") }
@@ -157,7 +157,7 @@ end
 
 def goto(label)
   Script.current.jump_label = label.to_s
-  raise JUMP
+  raise Lich::Common::Script::JUMP
 end
 
 def pause_script(*names)
@@ -573,6 +573,9 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       fput 'stand' unless standing?
       waitrt?
       put_dir.call
+    elsif line =~ /^(?:You swim .*, (?:cutting through|navigating)|You swim .*, struggling against|Your lungs burn and your muscles ache)/
+      # swims in Sailor's Grief
+      return true
     elsif line =~ /^You begin to climb up the silvery thread.* you tumble to the ground/
       sleep 0.5
       waitrt?
@@ -637,7 +640,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
         sleep 0.3
       end
       put_dir.call
-    elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down/
+    elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down|^You must be standing/
       fput 'stand'
       waitrt?
       put_dir.call
@@ -671,6 +674,13 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /^(You notice .* at your feet, and do not wish to leave it behind|As you prepare to move away, you remember)/
       fput "stow feet"
       sleep 1
+      put_dir.call
+    elsif line =~ /The electricity courses through you in a raging torrent, its power singing in your veins!  Spent, the boltstone apparatus shatters into glinting fragments\.|The lightning strikes you in an agonizing eruption of liquid radiance!/
+      sleep(0.5)
+      wait_while { stunned? }
+      waitrt?
+      fput 'stand' unless standing?
+      waitrt?
       put_dir.call
     elsif line == "You don't seem to be able to move to do that."
       30.times {
@@ -817,7 +827,7 @@ end
 def check_mind(string = nil)
   if string.nil?
     return XMLData.mind_text
-  elsif (string.class == String) and (string.to_i == 0)
+  elsif (string.is_a?(String)) and (string.to_i == 0)
     if string =~ /#{XMLData.mind_text}/i
       return true
     else
@@ -834,7 +844,7 @@ end
 def checkmind(string = nil)
   if string.nil?
     return XMLData.mind_text
-  elsif string.class == String and string.to_i == 0
+  elsif string.is_a?(String) and string.to_i == 0
     if string =~ /#{XMLData.mind_text}/i
       return true
     else
@@ -1002,7 +1012,7 @@ def checkstance(num = nil)
   Lich.deprecated('checkstance', 'Char.stance')
   if num.nil?
     XMLData.stance_text
-  elsif (num.class == String) and (num.to_i == 0)
+  elsif (num.is_a?(String)) and (num.to_i == 0)
     if num =~ /off/i
       XMLData.stance_value == 0
     elsif num =~ /adv/i
@@ -1019,7 +1029,7 @@ def checkstance(num = nil)
       echo "checkstance: invalid argument (#{num}).  Must be off/adv/for/neu/gua/def or 0-100"
       nil
     end
-  elsif (num.class == Integer) or (num =~ /^[0-9]+$/ and (num = num.to_i))
+  elsif (num.is_a?(Integer)) or (num =~ /^[0-9]+$/ and (num = num.to_i))
     XMLData.stance_value == num.to_i
   else
     echo "checkstance: invalid argument (#{num}).  Must be off/adv/for/neu/gua/def or 0-100"
@@ -1040,7 +1050,7 @@ def checkencumbrance(string = nil)
   Lich.deprecated('checkencumbrance', 'Char.encumbrance')
   if string.nil?
     XMLData.encumbrance_text
-  elsif (string.class == Integer) or (string =~ /^[0-9]+$/ and (string = string.to_i))
+  elsif (string.is_a?(Integer)) or (string =~ /^[0-9]+$/ and (string = string.to_i))
     string <= XMLData.encumbrance_value
   else
     # fixme
@@ -1235,7 +1245,7 @@ end
 def checkprep(spell = nil)
   if spell.nil?
     XMLData.prepared_spell
-  elsif spell.class != String
+  elsif !spell.is_a?(String)
     echo("Checkprep error, spell # not implemented!  You must use the spell name")
     false
   else
@@ -1331,11 +1341,11 @@ def pause(num = 1)
 end
 
 def cast(spell, target = nil, results_of_interest = nil)
-  if spell.class == Spell
+  if spell.is_a?(Spell)
     spell.cast(target, results_of_interest)
-  elsif ((spell.class == Integer) or (spell.to_s =~ /^[0-9]+$/)) and (find_spell = Spell[spell.to_i])
+  elsif ((spell.is_a?(Integer)) or (spell.to_s =~ /^[0-9]+$/)) and (find_spell = Spell[spell.to_i])
     find_spell.cast(target, results_of_interest)
-  elsif (spell.class == String) and (find_spell = Spell[spell])
+  elsif (spell.is_a?(String)) and (find_spell = Spell[spell])
     find_spell.cast(target, results_of_interest)
   else
     echo "cast: invalid spell (#{spell})"
@@ -1373,7 +1383,7 @@ end
 
 def matchtimeout(secs, *strings)
   unless (Script.current) then echo("An unknown script thread tried to fetch a game line from the queue, but Lich can't process the call without knowing which script is calling! Aborting..."); Thread.current.kill; return false end
-  unless (secs.class == Float || secs.class == Integer)
+  unless (secs.is_a?(Float) || secs.is_a?(Integer))
     echo('matchtimeout error! You appear to have given it a string, not a #! Syntax:  matchtimeout(30, "You stand up")')
     return false
   end
@@ -1448,14 +1458,14 @@ end
 
 def waitforre(regexp)
   unless (script = Script.current) then respond('--- waitforre: Unable to identify calling script.'); return false; end
-  unless regexp.class == Regexp then echo("Script error! You have given 'waitforre' something to wait for, but it isn't a Regular Expression! Use 'waitfor' if you want to wait for a string."); sleep 1; return nil end
+  unless regexp.is_a?(Regexp) then echo("Script error! You have given 'waitforre' something to wait for, but it isn't a Regular Expression! Use 'waitfor' if you want to wait for a string."); sleep 1; return nil end
   regobj = regexp.match(script.gets) until regobj
 end
 
 def waitfor(*strings)
   unless (script = Script.current) then respond('--- waitfor: Unable to identify calling script.'); return false; end
   strings.flatten!
-  if (script.class == WizardScript) and (strings.length == 1) and (strings.first.strip == '>')
+  if (script.is_a?(WizardScript)) and (strings.length == 1) and (strings.first.strip == '>')
     return script.gets
   end
 
@@ -1484,15 +1494,18 @@ def get?
   Script.current.gets?
 end
 
-def reget(*lines)
-  unless (script = Script.current) then respond('--- reget: Unable to identify calling script.'); return false; end
+def reget(*lines, core: false)
+  unless (script = Script.current) || core.eql?(true)
+    respond('--- reget: Unable to identify calling script.')
+    return false
+  end
   lines.flatten!
   if caller.find { |c| c =~ /regetall/ }
     history = ($_SERVERBUFFER_.history + $_SERVERBUFFER_).join("\n")
   else
     history = $_SERVERBUFFER_.dup.join("\n")
   end
-  unless script.want_downstream_xml
+  unless script&.want_downstream_xml || core.eql?(true)
     history.gsub!(/<pushStream id=["'](?:spellfront|inv|bounty|society)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
     history.gsub!(/<stream id="Spells">.*?<\/stream>/m, '')
     history.gsub!(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
@@ -1683,7 +1696,7 @@ end
 def respond(first = "", *messages)
   str = ''
   begin
-    if first.class == Array
+    if first.is_a?(Array)
       first.flatten.each { |ln| str += sprintf("%s\r\n", ln.to_s.chomp) }
     else
       str += sprintf("%s\r\n", first.to_s.chomp)
@@ -1691,9 +1704,9 @@ def respond(first = "", *messages)
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
     # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
-    if $frontend == 'stormfront' || $frontend == 'genie'
+    if Frontend.supports_mono?
       str = "<output class=\"mono\"/>\r\n#{str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')}<output class=\"\"/>\r\n"
-    elsif $frontend == 'profanity'
+    elsif Frontend.client.eql?('profanity')
       str = str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
     end
     # Double-checked locking to avoid interrupting a stream and crashing the client
@@ -1724,7 +1737,7 @@ end
 def _respond(first = "", *messages)
   str = ''
   begin
-    if first.class == Array
+    if first.is_a?(Array)
       first.flatten.each { |ln| str += sprintf("%s\r\n", ln.to_s.chomp) }
     else
       str += sprintf("%s\r\n", first.to_s.chomp)
@@ -1992,23 +2005,25 @@ def fb_to_sf(line)
   end
 end
 
-def sf_to_wiz(line)
+def sf_to_wiz(line, bypass_multiline: false)
   begin
     return line if line == "\r\n"
 
-    if $sftowiz_multiline
-      $sftowiz_multiline = $sftowiz_multiline + line
-      line = $sftowiz_multiline
+    unless bypass_multiline
+      if $sftowiz_multiline
+        $sftowiz_multiline = $sftowiz_multiline + line
+        line = $sftowiz_multiline
+      end
+      if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
+        $sftowiz_multiline = line
+        return nil
+      end
+      if (line.scan(/<style id="\w+"[^>]*\/>/).length > line.scan(/<style id=""[^>]*\/>/).length)
+        $sftowiz_multiline = line
+        return nil
+      end
+      $sftowiz_multiline = nil
     end
-    if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
-      $sftowiz_multiline = line
-      return nil
-    end
-    if (line.scan(/<style id="\w+"[^>]*\/>/).length > line.scan(/<style id=""[^>]*\/>/).length)
-      $sftowiz_multiline = line
-      return nil
-    end
-    $sftowiz_multiline = nil
     if line =~ /<LaunchURL src="(.*?)" \/>/
       $_CLIENT_.puts "\034GSw00005\r\nhttps://www.play.net#{$1}\r\n"
     end
@@ -2092,9 +2107,9 @@ def strip_xml(line, type: 'main')
 end
 
 def monsterbold_start
-  if $frontend =~ /^(?:wizard|avalon)$/
+  if Frontend.supports_gsl?
     "\034GSL\r\n"
-  elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/
+  elsif Frontend.supports_xml?
     '<pushBold/>'
   else
     ''
@@ -2102,9 +2117,9 @@ def monsterbold_start
 end
 
 def monsterbold_end
-  if $frontend =~ /^(?:wizard|avalon)$/
+  if Frontend.supports_gsl?
     "\034GSM\r\n"
-  elsif $frontend =~ /^(?:stormfront|frostbite|wrayth|profanity|genie)$/
+  elsif Frontend.supports_xml?
     '<popBold/>'
   else
     ''
@@ -2353,6 +2368,52 @@ def do_client(client_string)
       end
       respond "Changing Lich to display Room Exits of StringProcs to #{new_value}"
       Lich.display_stringprocs = new_value
+    elsif XMLData.game =~ /^DR/ && (expgains_match = cmd.match(/^display expgains?(?: (?<toggle>true|false|on|off))?$/i))
+      if running?('exp-monitor')
+        respond "Error: exp-monitor.lic script is currently running"
+        respond "Stop it first with: #{$clean_lich_char}kill exp-monitor"
+      else
+        new_value = !Lich.display_expgains
+        case expgains_match[:toggle]
+        when 'true', 'on'
+          new_value = true
+        when 'false', 'off'
+          new_value = false
+        end
+        Lich.display_expgains = new_value
+        if new_value
+          respond "Enabling real-time experience gain reporting"
+          DRExpMonitor.start
+        else
+          respond "Disabling real-time experience gain reporting"
+          DRExpMonitor.stop
+        end
+      end
+    elsif XMLData.game =~ /^DR/ && (inlineexp_match = cmd.match(/^display inlineexp(?: (?<toggle>true|false|on|off))?$/i))
+      new_value = !DRExpMonitor.inline_display?
+      case inlineexp_match[:toggle]
+      when 'true', 'on'
+        new_value = true
+      when 'false', 'off'
+        new_value = false
+      end
+      DRExpMonitor.inline_display = new_value
+      if new_value
+        respond "Enabling inline experience display (gained ranks shown in exp window)"
+      else
+        respond "Disabling inline experience display"
+      end
+    elsif XMLData.game =~ /^DR/ && cmd =~ /^display exp-status$/i
+      respond
+      respond "DragonRealms Experience Monitor Status:"
+      respond "  expgains:   #{Lich.display_expgains ? 'ON' : 'OFF'}  (real-time gain messages)"
+      respond "  inlineexp:  #{DRExpMonitor.inline_display? ? 'ON' : 'OFF'}  (cumulative gains in EXP window)"
+      respond "  reporter:   #{DRExpMonitor.active? ? 'RUNNING' : 'STOPPED'}"
+      respond
+      respond "Commands:"
+      respond "  #{$clean_lich_char}display expgains [on|off]    toggle gain messages"
+      respond "  #{$clean_lich_char}display inlineexp [on|off]   toggle inline display"
+      respond
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
       Lich::Util::Update.request("#{update_parameter}")
@@ -2361,6 +2422,17 @@ def do_client(client_string)
     elsif cmd =~ /^banks$/ && XMLData.game =~ /^GS/
       Game._puts "<c>bank account"
       $_CLIENTBUFFER_.push "<c>bank account"
+    elsif XMLData.game =~ /^DR/ && (banks_match = cmd.match(/^banks(?: (all|reset|reset all))?$/i))
+      case banks_match[1]&.downcase
+      when 'all'
+        Lich::DragonRealms::DRBanking.display_banks_all
+      when 'reset'
+        Lich::DragonRealms::DRBanking.reset_character!
+      when 'reset all'
+        Lich::DragonRealms::DRBanking.reset_all!
+      else
+        Lich::DragonRealms::DRBanking.display_banks
+      end
     elsif cmd =~ /^magic$/ && XMLData.game =~ /^GS/
       Effects.display
     elsif cmd =~ /^help$/i
@@ -2427,6 +2499,15 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"
       respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
       respond "   #{$clean_lich_char}display stringprocs       toggle display of StringProc exits known for room in mapdb if timeto is valid"
+      if XMLData.game =~ /^DR/
+        respond "   #{$clean_lich_char}display expgains          toggle real-time experience gain reporting (DragonRealms only)"
+        respond "   #{$clean_lich_char}display inlineexp         toggle inline exp display in EXP window (DragonRealms only)"
+        respond "   #{$clean_lich_char}display exp-status        show experience monitor status (DragonRealms only)"
+        respond "   #{$clean_lich_char}banks                     show your bank balances (DragonRealms only)"
+        respond "   #{$clean_lich_char}banks all                 show bank balances for all characters (DragonRealms only)"
+        respond "   #{$clean_lich_char}banks reset               clear your bank data (DragonRealms only)"
+        respond "   #{$clean_lich_char}banks reset all           clear all characters' bank data (DragonRealms only)"
+      end
       respond
       respond 'If you liked this help message, you might also enjoy:'
       respond "   #{$clean_lich_char}lnet help" if defined?(LNet)
@@ -2447,7 +2528,7 @@ def do_client(client_string)
     if $offline_mode
       respond "--- Lich: offline mode: ignoring #{client_string}"
     else
-      client_string = "#{$cmd_prefix}bbs" if ($frontend =~ /^(?:wizard|avalon)$/) and (client_string == "#{$cmd_prefix}\egbbk\n") # launch forum
+      client_string = "#{$cmd_prefix}bbs" if Frontend.supports_gsl? and (client_string == "#{$cmd_prefix}\egbbk\n") # launch forum
       Game._puts client_string
     end
     $_CLIENTBUFFER_.push client_string
@@ -2500,7 +2581,7 @@ end
 
 ## Alias block from Lich (needs further cleanup)
 
-undef :abort
+undef :abort if respond_to?(:abort)
 alias :mana :checkmana
 alias :mana? :checkmana
 alias :max_mana :maxmana

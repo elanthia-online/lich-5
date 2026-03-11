@@ -10,28 +10,36 @@ module Lich
         NameRaceGuild = /^Name:\s+\b(?<name>.+)\b\s+Race:\s+\b(?<race>.+)\b\s+Guild:\s+\b(?<guild>.+)\b\s+/.freeze
         GenderAgeCircle = /^Gender:\s+\b(?<gender>.+)\b\s+Age:\s+\b(?<age>.+)\b\s+Circle:\s+\b(?<circle>.+)/.freeze
         StatValue = /(?<stat>Strength|Agility|Discipline|Intelligence|Reflex|Charisma|Wisdom|Stamina|Favors|TDPs)\s+:\s+(?<value>\d+)/.freeze
-        TDPValue = /You have (\d+) TDPs\./.freeze
+        TDPValue = /You have (?<tdp>\d+) TDPs\./.freeze
         EncumbranceValue = /^\s*Encumbrance\s+:\s+(?<encumbrance>[\w\s'?!]+)$/.freeze
         LuckValue = /^\s*Luck\s+:\s+.*\((?<luck>[-\d]+)\/3\)/.freeze
         BalanceValue = /^(?:You are|\[You're) (?<balance>#{Regexp.union(DR_BALANCE_VALUES)}) balanced?/.freeze
         ExpClearMindstate = %r{<component id='exp (?<skill>[a-zA-Z\s]+)'><\/component>}.freeze
-        RoomPlayers = %r{\'room players\'>Also here: (.*)\.</component>}.freeze
+        RoomPlayers = %r{\'room players\'>Also here: (?<players>.*)\.</component>}.freeze
         RoomPlayersEmpty = %r{\'room players\'></component>}.freeze
-        RoomObjs = %r{\'room objs\'>(.*)</component>}.freeze
+        RoomObjs = %r{\'room objs\'>(?<objs>.*)</component>}.freeze
         RoomObjsEmpty = %r{\'room objs\'></component>}.freeze
-        GroupMembers = %r{<pushStream id="group"/>  (\w+):}.freeze
+        GroupMembers = %r{<pushStream id="group"/>  (?<member>\w+):}.freeze
         GroupMembersEmpty = %r{<pushStream id="group"/>Members of your group:}.freeze
         ExpModsStart = /^(<.*?\/>)?The following skills are currently under the influence of a modifier/.freeze
+        ExpModLine = /^(?:<preset id="(?:speech|thought)">)?(?<sign>\+|--)(?<value>\d+)\s+(?<skill>[\w\s]+)(?:<\/preset>)?$/.freeze
         KnownSpellsStart = /^You recall the spells you have learned/.freeze
         BarbarianAbilitiesStart = /^You know the (Berserks:)/.freeze
         ThiefKhriStart = /^From the Subtlety tree, you know the following khri:/.freeze
         SpellBookFormat = /^You will .* (?<format>column-formatted|non-column) output for the SPELLS verb/.freeze
         PlayedAccount = /^(?:<.*?\/>)?Account Info for (?<account>.+):/.freeze
-        PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium)/.freeze
+        PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium|Platinum)/.freeze
         LastLogoff = /^\s+Logoff :  (?<weekday>[A-Z][a-z]{2}) (?<month>[A-Z][a-z]{2}) (?<day>[\s\d]{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2}) ET (?<year>\d{4})/.freeze
+        RoomIDOff = /^You will no longer see room IDs when LOOKing in the game and room windows\./.freeze
+        Rested_EXP = %r{^<component id='exp rexp'>Rested EXP Stored:\s*(?<stored>.*?)\s*Usable This Cycle:\s*(?<usable>.*?)\s*Cycle Refreshes:\s*(?<refresh>.*)</component>}.freeze
+        Rested_EXP_F2P = %r{^<component id='exp rexp'>\[Unlock Rested Experience}.freeze
+        TDPValue_XPWindow = %r{^<component id='exp tdp'>\s*TDPs:\s*(?<tdp>\d+)</component>}.freeze
+        FavorValue_XPWindow = %r{^<component id='exp favor'>\s*Favors:\s*(?<favor>\d+)</component>}.freeze
+        InventoryGetStart = %r{You rummage about your person, looking for}.freeze
       end
 
       @parsing_exp_mods_output = false
+      @parsing_inventory_get = false
 
       def self.check_events(server_string)
         Flags.matchers.each do |key, regexes|
@@ -39,6 +47,61 @@ module Lich
             if (matches = server_string.match(regex))
               Flags.flags[key] = matches
               break
+            end
+          end
+        end
+        server_string
+      end
+
+      def self.populate_inventory_get(server_string)
+        case server_string
+        when %r{^<output class=""/>}
+          if @parsing_inventory_get
+            @parsing_inventory_get = false
+          end
+        else
+          # This block parses a single line from the output of the `inv search <string>` verb,
+          # which lists items on your character. Each line is an XML-like string.
+          # Example: <d cmd='get #12345'>a small pouch</d>
+          if @parsing_inventory_get && server_string.strip.start_with?('<d cmd=')
+            # The server string is an XML fragment, so we wrap it in a root element to make it parsable.
+            document = REXML::Document.new("<root>#{server_string.strip}</root>")
+            d_element = document.root.elements["d"]
+
+            return unless d_element
+
+            # Extract the item name from the text inside the <d> tag.
+            # Normalize it by lowercasing and removing leading articles ('a', 'an', 'some').
+            item_name = d_element.text.sub(/^(?:a|an|some)\s/, '').strip
+
+            # Extract the command and the unique item ID from the 'cmd' attribute.
+            cmd = d_element.attributes["cmd"].downcase.strip
+            id_match = /get (?<itemID>#\d+)(?: in (?<container1>#\d+|[^']+))?(?: in (?<container2>#\d+|[^']+))?/.match(cmd)
+            # <!-- Regex to capture item and container IDs: cmd='get (?<itemID>#\d+)(?: in (?<container1>#\d+|[^']+))?(?: in (?<container2>#\d+|[^']+))?' -->
+            # <d cmd='get #8286821 in #8286816 in #8286762'>A papyrus parchment</d> is in a black winter cloak crafted from thick cashmere, which is in a scuffed traveler's pack.
+            # <d cmd='get #8735861 in #8735860 in watery portal'>Some arzumodine cloth</d> is in a lumpy canvas sack, which is in an effervescent eddy of honey-hued light captured by a sungold frame.
+            # <d cmd='get #8761784'>A seagull feather quill with dyed snowy white barbs</d> is lying at your feet.
+            # <d cmd='get #8761784'>A seagull feather quill with dyed snowy white barbs</d> is in your right hand.
+
+            if id_match
+              id = id_match[:itemID].strip.delete('#').to_s
+              noun = nil # This isn't exposed in the DR XML stream
+              name = item_name
+              container1 = id_match[:container1].strip.delete('#') if id_match[:container1]
+              container2 = id_match[:container2].strip.delete('#') if id_match[:container2]
+              container = container1 || nil
+              before = cmd
+              after = nil
+
+              # Store the parsed item information.
+              # DRItems.update_item(item, id, cmd, full_description)
+              Lich.log("DRParser: Adding inventory item - ID: #{id}, Noun: #{noun}, Name: #{name}, Container: #{container}, Before: #{before}, After: #{after}")
+              GameObj.new_inv(id, noun, name, container, before, after)
+              if container2
+                before = cmd.sub(/get \#\d+ in/, "get")
+                name = nil # We don't know the name of the item in container2
+                GameObj.new_inv(container1, noun, name, container2, before, after)
+              end
             end
           end
         end
@@ -56,16 +119,17 @@ module Lich
         #       None
         #     <output class=""/>
         #
-        # Example output with modifiers:
+        # Example output with modifiers (XML format):
         #     The following skills are currently under the influence of a modifier:
         #     <output class="mono"/>
-        #     +75 Athletics
-        #     -10 Evasion
+        #     <preset id="speech">+75 Athletics</preset>
+        #     <preset id="thought">--10 Evasion</preset>
         #     <output class=""/>
         #
         # Zero or more skills may be listed between the <output> tags
         # but exactly one skill and its skill modifier are listed per line.
-        # The number is signed to indicate a buff (+) or debuff (-).
+        # Positive modifiers use <preset id="speech"> with single + sign.
+        # Negative modifiers use <preset id="thought"> with double -- sign.
         #
         case server_string
         when %r{^<output class=""/>}
@@ -74,13 +138,14 @@ module Lich
           end
         else
           if @parsing_exp_mods_output
-            # https://regex101.com/r/5ZE8lq/1
-            match = /^(?<sign>[+-])(?<value>\d+)\s+(?<skill>[\w\s]+)$/.match(server_string)
-            if match
+            # Sample lines:
+            # <preset id="speech">+79 Attunement</preset>  (positive, single +)
+            # <preset id="thought">--10 Evasion</preset>   (negative, double --)
+            if (match = server_string.strip.match(Pattern::ExpModLine))
               skill = match[:skill].strip
               sign = match[:sign]
               value = match[:value].to_i
-              value = (value * -1) if sign == '-'
+              value = -value if sign == '--'
               DRSkill.update_mods(skill, value)
             end
           end
@@ -262,118 +327,150 @@ module Lich
       def self.parse(line)
         check_events(line)
         begin
-          case line
-          when Pattern::GenderAgeCircle
-            DRStats.gender = Regexp.last_match[:gender]
-            DRStats.age = Regexp.last_match[:age].to_i
-            DRStats.circle = Regexp.last_match[:circle].to_i
-          when Pattern::NameRaceGuild
-            DRStats.race = Regexp.last_match[:race]
-            DRStats.guild = Regexp.last_match[:guild]
-          when Pattern::EncumbranceValue
-            DRStats.encumbrance = Regexp.last_match[:encumbrance]
-          when Pattern::LuckValue
-            DRStats.luck = Regexp.last_match[:luck].to_i
-          when Pattern::StatValue
+          if Pattern::InventoryGetStart.match?(line)
+            GameObj.clear_inv
+            GameObj.clear_all_containers
+            @parsing_inventory_get = true
+          elsif (match = line.match(Pattern::GenderAgeCircle))
+            DRStats.gender = match[:gender]
+            DRStats.age = match[:age].to_i
+            DRStats.circle = match[:circle].to_i
+          elsif (match = line.match(Pattern::NameRaceGuild))
+            DRStats.race = match[:race]
+            DRStats.guild = match[:guild]
+          elsif (match = line.match(Pattern::EncumbranceValue))
+            DRStats.encumbrance = match[:encumbrance]
+          elsif (match = line.match(Pattern::LuckValue))
+            DRStats.luck = match[:luck].to_i
+          elsif Pattern::StatValue.match?(line)
             line.scan(Pattern::StatValue) do |stat, value|
               DRStats.send("#{stat.downcase}=", value.to_i)
             end
-          when Pattern::TDPValue
-            DRStats.tdps = Regexp.last_match(1).to_i
-            # CharSettings['Stats'] = DRStats.serialize
-          when Pattern::BalanceValue
-            DRStats.balance = DR_BALANCE_VALUES.index(Regexp.last_match[:balance])
-          when Pattern::RoomPlayersEmpty
+          elsif (match = line.match(Pattern::TDPValue))
+            DRStats.tdps = match[:tdp].to_i
+          elsif (match = line.match(Pattern::BalanceValue))
+            DRStats.balance = DR_BALANCE_VALUES.index(match[:balance])
+          elsif Pattern::RoomPlayersEmpty.match?(line)
             DRRoom.pcs = []
-          when Pattern::RoomPlayers
-            DRRoom.pcs = find_pcs(Regexp.last_match(1).dup)
-            DRRoom.pcs_prone = find_pcs_prone(Regexp.last_match(1).dup)
-            DRRoom.pcs_sitting = find_pcs_sitting(Regexp.last_match(1).dup)
-          when Pattern::RoomObjs
-            DRRoom.npcs = find_npcs(Regexp.last_match(1).dup)
+          elsif (match = line.match(Pattern::RoomPlayers))
+            players = match[:players].dup
+            DRRoom.pcs = find_pcs(players)
+            DRRoom.pcs_prone = find_pcs_prone(players)
+            DRRoom.pcs_sitting = find_pcs_sitting(players)
+          elsif (match = line.match(Pattern::RoomObjs))
+            objs = match[:objs].dup
+            DRRoom.npcs = find_npcs(objs)
             UserVars.npcs = DRRoom.npcs
-            DRRoom.dead_npcs = find_dead_npcs(Regexp.last_match(1).dup)
-            DRRoom.room_objs = find_objects(Regexp.last_match(1).dup)
-          when Pattern::RoomObjsEmpty
+            DRRoom.dead_npcs = find_dead_npcs(objs)
+            DRRoom.room_objs = find_objects(objs)
+          elsif Pattern::RoomObjsEmpty.match?(line)
             DRRoom.npcs = []
             DRRoom.dead_npcs = []
             DRRoom.room_objs = []
-          when Pattern::GroupMembersEmpty
+          elsif Pattern::GroupMembersEmpty.match?(line)
             DRRoom.group_members = []
-          when Pattern::GroupMembers
-            DRRoom.group_members << Regexp.last_match(1)
-          when Pattern::BriefExpOn, Pattern::BriefExpOff
-            skill   = Regexp.last_match[:skill]
-            rank    = Regexp.last_match[:rank].to_i
-            rate    = Regexp.last_match[:rate].to_i > 0 ? Regexp.last_match[:rate] : DR_LEARNING_RATES.index(Regexp.last_match[:rate])
-            percent = Regexp.last_match[:percent]
+          elsif (match = line.match(Pattern::GroupMembers))
+            DRRoom.group_members << match[:member]
+          elsif (match = line.match(Pattern::BriefExpOn)) || (match = line.match(Pattern::BriefExpOff))
+            skill    = match[:skill]
+            rank     = match[:rank].to_i
+            rate_raw = match[:rate]
+            rate     = rate_raw.to_i > 0 ? rate_raw : DR_LEARNING_RATES.index(rate_raw)
+            percent  = match[:percent]
             DRSkill.update(skill, rank, rate, percent)
-          when Pattern::ExpClearMindstate
-            skill = Regexp.last_match[:skill]
+
+            # Inline display of cumulative gained experience (from DRExpMonitor)
+            if DRExpMonitor.inline_display?
+              if rate_raw.to_i > 0
+                # BRIEFEXP ON format (rate is numeric)
+                line.replace(DRExpMonitor.format_briefexp_on(line, skill))
+              else
+                # BRIEFEXP OFF format (rate is word like "learning", "pondering")
+                line.replace(DRExpMonitor.format_briefexp_off(line, skill, rate_raw.strip))
+              end
+            end
+          elsif (match = line.match(Pattern::ExpClearMindstate))
+            skill = match[:skill]
             DRSkill.clear_mind(skill)
-          when Pattern::ExpColumns
+          elsif Pattern::ExpColumns.match?(line)
             line.scan(Pattern::ExpColumns) do |skill_value, rank_value, percent_value, rate_as_word|
               rate_as_number = DR_LEARNING_RATES.index(rate_as_word) # convert word to number
               DRSkill.update(skill_value, rank_value, rate_as_number, percent_value)
             end
-          when Pattern::ExpModsStart
+          elsif Pattern::ExpModsStart.match?(line)
             @parsing_exp_mods_output = true
             DRSkill.exp_modifiers.clear
-          when Pattern::SpellBookFormat
+          elsif (match = line.match(Pattern::SpellBookFormat))
             # Parse `toggle spellbook` command
-            DRSpells.spellbook_format = Regexp.last_match[:format]
-          when Pattern::KnownSpellsStart
+            DRSpells.spellbook_format = match[:format]
+          elsif Pattern::KnownSpellsStart.match?(line)
             DRSpells.grabbing_known_spells = true
-            DRSpells.known_spells.clear()
-            DRSpells.known_feats.clear()
+            DRSpells.known_spells.clear
+            DRSpells.known_feats.clear
             DRSpells.spellbook_format = 'non-column' # assume original format
-          when Pattern::BarbarianAbilitiesStart
+          elsif Pattern::BarbarianAbilitiesStart.match?(line)
             DRSpells.check_known_barbarian_abilities = true
-            DRSpells.known_spells.clear()
-            DRSpells.known_feats.clear()
-          when Pattern::ThiefKhriStart
+            DRSpells.known_spells.clear
+            DRSpells.known_feats.clear
+          elsif Pattern::ThiefKhriStart.match?(line)
             DRSpells.grabbing_known_khri = true
-            DRSpells.known_spells.clear()
-            DRSpells.known_feats.clear()
-          when Pattern::PlayedAccount
-            if Account.name.nil?
-              Account.name = Regexp.last_match[:account].upcase
+            DRSpells.known_spells.clear
+            DRSpells.known_feats.clear
+          elsif (match = line.match(Pattern::PlayedAccount))
+            if Lich::Common::Account.name.nil?
+              Lich::Common::Account.name = match[:account].upcase
             end
-          when Pattern::PlayedSubscription
-            if Account.subscription.nil?
-              Account.subscription = Regexp.last_match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
+          elsif (match = line.match(Pattern::PlayedSubscription))
+            if Lich::Common::Account.subscription.nil?
+              Lich::Common::Account.subscription = match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').gsub('Platinum', 'Premium').upcase
             end
-            if Account.subscription == 'PREMIUM' || XMLData.game == 'DRF'
+            UserVars.account_type = match[:subscription].gsub('Basic', 'Normal').gsub('F2P', 'Free').upcase
+            if Lich::Common::Account.subscription == 'PREMIUM' || XMLData.game == 'DRX' || XMLData.game == 'DRF'
               UserVars.premium = true
             else
               UserVars.premium = false
             end
-          when Pattern::LastLogoff
-            matches = Regexp.last_match
-            month = Date::ABBR_MONTHNAMES.find_index(matches[:month])
+          elsif (match = line.match(Pattern::LastLogoff))
+            month = Date::ABBR_MONTHNAMES.find_index(match[:month])
             weekdays = [nil, 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-            dst_check = matches[:day].to_i - weekdays.find_index(matches[:weekday])
+            dst_check = match[:day].to_i - weekdays.find_index(match[:weekday])
             if month.between?(4, 10) || (month == 3 && dst_check >= 7) || (month == 11 && dst_check < 0)
               tz = '-0400'
             else
               tz = '-0500'
             end
-            $last_logoff = Time.new(matches[:year].to_i, month, matches[:day].to_i, matches[:hour].to_i, matches[:minute].to_i, matches[:second].to_i, tz).getlocal
-          else
-            :noop
+            $last_logoff = Time.new(match[:year].to_i, month, match[:day].to_i, match[:hour].to_i, match[:minute].to_i, match[:second].to_i, tz).getlocal
+          elsif Pattern::RoomIDOff.match?(line)
+            put("flag showroomid on")
+            Lich::Messaging.msg("bold", "DRParser: Lich requires ShowRoomID to be ON for mapping to work, please do not turn this off.")
+            Lich::Messaging.msg("plain", "DRParser: If you wish to hide the Real ID#, you can toggle it off by doing ;display flaguid")
+          elsif (match = line.match(Pattern::Rested_EXP))
+            DRSkill.update_rested_exp(match[:stored].strip, match[:usable].strip, match[:refresh].strip)
+          elsif Pattern::Rested_EXP_F2P.match?(line)
+            # f2p characters without brain boost don't get rested exp
+            DRSkill.update_rested_exp('none', 'none', 'none')
+          elsif (match = line.match(Pattern::TDPValue_XPWindow))
+            DRStats.tdps = match[:tdp].to_i
+          elsif (match = line.match(Pattern::FavorValue_XPWindow))
+            DRStats.favors = match[:favor].to_i
           end
 
+          populate_inventory_get(line) if @parsing_inventory_get
           check_exp_mods(line) if @parsing_exp_mods_output
           check_known_barbarian_abilities(line) if DRSpells.check_known_barbarian_abilities
           check_known_thief_khri(line) if DRSpells.grabbing_known_khri
           check_known_spells(line) if DRSpells.grabbing_known_spells
-        rescue StandardError
-          respond "--- Lich: error: DRParser.parse: #{$!}"
-          respond "--- Lich: error: line: #{line}"
-          Lich.log "error: DRParser.parse: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+
+          # Parse bank transactions passively
+          Lich::DragonRealms::DRBanking.parse(line)
+        rescue StandardError => e
+          Lich::Messaging.msg("bold", "DRParser: error in parse: #{e.message}")
+          Lich::Messaging.msg("bold", "DRParser: line: #{line}")
+          Lich.log "error: DRParser.parse: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
           Lich.log "error: line: #{line}\n\t"
         end
       end
+      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
     end
   end
 end

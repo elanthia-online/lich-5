@@ -1,6 +1,6 @@
 AllCops:
   SuggestExtensions: false
-  TargetRubyVersion: 3.4
+  TargetRubyVersion: 4.0
   NewCops: disable
   Include:
     - '**/*.lic'

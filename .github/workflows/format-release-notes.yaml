@@ -1,0 +1,320 @@
+name: format-release-notes
+
+concurrency:
+  group: format-release-notes-${{ github.event.release.tag_name || github.run_id }}
+  cancel-in-progress: true
+
+on:
+  # Fires on publish/edit of a release in the UI (not suppressed), for prerelease and stable.
+  release:
+    types: [published, edited, prereleased, released]
+
+  # Fires after Release Please workflows complete (created via GITHUB_TOKEN typically won't trigger 'release').
+  workflow_run:
+    workflows:
+      - release-please (prerelease on push)
+      - release-please (stable on push)
+    types: [completed]
+
+  # Allow manual runs; pass a tag to target prerelease on pre/beta.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to format (e.g., v5.13.0-beta.0). Optional; without it we use latest stable."
+        required: false
+        type: string
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    # Only proceed on successful upstream runs OR on direct release events.
+    if: >
+      github.event_name != 'workflow_run' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+
+    steps:
+      - name: Seed current release
+        id: seed
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const ev    = context.eventName;
+            const inputTag = core.getInput('tag') || '';
+            const wfName = context.payload && context.payload.workflow_run ? (context.payload.workflow_run.name || '') : '';
+
+            // Determine default branch (stable base) for fallback
+            const { data: repoData } = await github.rest.repos.get({ owner, repo });
+            const defaultBranch = repoData.default_branch || 'main';
+
+            async function byTag(tag) {
+              const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              return data;
+            }
+            async function latestStable() {
+              const { data } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 });
+              const hit = (data || []).find(r => !r.draft && !r.prerelease);
+              if (!hit) throw new Error('No stable release found');
+              return hit;
+            }
+            async function latestPrerelease() {
+              const { data } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 });
+              const hit = (data || []).find(r => !r.draft && !!r.prerelease);
+              if (!hit) throw new Error('No prerelease found');
+              return hit;
+            }
+
+            let rel = null;
+            if (ev === 'release' && context.payload && context.payload.release) {
+              rel = context.payload.release;
+            } else if (inputTag) {
+              try { rel = await byTag(inputTag); } catch {
+                core.setFailed(`No release found for tag '${inputTag}'.`); return;
+              }
+            } else if (ev === 'workflow_run') {
+              // Infer target channel from the upstream workflow name
+              const wantPrerelease = /prerelease/i.test(wfName);
+              try { rel = wantPrerelease ? await latestPrerelease() : await latestStable(); } catch (e) {
+                core.setFailed(`Could not resolve a ${wantPrerelease ? 'prerelease' : 'stable'} release: ${e.message}`); return;
+              }
+            } else {
+              try { rel = await latestStable(); } catch (e) {
+                core.setFailed(`No release payload and no tag provided; could not resolve a release: ${e.message}`); return;
+              }
+            }
+
+            const tag = (rel && rel.tag_name) || inputTag || '';
+            const mv = tag.match(/^v?(\d+(?:\.\d+){1,2}(?:-[0-9A-Za-z.\-]+)?)/); // e.g., v5.13.0-beta.0
+            const isBeta = !!(rel && (rel.prerelease || /-beta(\b|\.)/i.test(tag)));
+
+            core.setOutput('release_id', String(rel.id));
+            core.setOutput('tag', tag);
+            core.setOutput('name', rel.name || '');
+            core.setOutput('body', rel.body || '');
+            core.setOutput('published_at', rel.published_at || rel.created_at || '');
+            core.setOutput('version', mv ? mv[1] : '');
+            core.setOutput('mode', isBeta ? 'beta' : 'stable');
+
+            // Choose base branch for PR discovery: prerelease -> pre/beta, else default
+            const base = isBeta ? 'pre/beta' : 'main';
+            core.setOutput('base', base);
+
+      - name: Skip if already formatted (channel sentinel present)
+        id: guard
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          BODY: ${{ steps.seed.outputs.body }}
+          MODE: ${{ steps.seed.outputs.mode }}
+          TAG:  ${{ steps.seed.outputs.tag }}
+        with:
+          script: |
+            const mode = (process.env.MODE || 'stable').trim();
+            const tag  = (process.env.TAG || '').trim();
+            const CONTRACT_SHA = '95f8f517411f9058bc92706310677db8cbba97fbd296bc853f2181274cb0e8bb';
+            const expected = `<!-- FORMATTER:v1 sha=${CONTRACT_SHA} mode=${mode} tag=${tag} -->`;
+            // Skip only if this exact release-scoped sentinel is present
+            const already = (process.env.BODY || '').includes(expected);
+            core.setOutput('skip', already ? 'true' : 'false');
+
+      # Robust PR lookup for the Release Please PR that produced this tag.
+      - name: Find merged Release Please PR for this tag
+        if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
+        id: findpr
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          VERSION: ${{ steps.seed.outputs.version }}
+          BASE: ${{ steps.seed.outputs.base }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const rawVersion = process.env.VERSION || '';
+            const base = process.env.BASE || 'main';
+
+            // Escape VERSION for use in RegExp
+            const v = rawVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');
+
+            async function listClosed(opts) {
+              return github.rest.pulls.list({ owner, repo, state: 'closed', per_page: 100, ...opts }).then(r => r.data || []);
+            }
+            const head = `${owner}:release-please--branches--${base}`;
+            let pulls = await listClosed({ base, head });
+            if (!pulls || !pulls.length) { pulls = await listClosed({ base }); }
+            let hit = (pulls || []).find(pr =>
+              pr.merged_at &&
+              titleRe.test(pr.title || '')
+            );
+
+            // Fallback A: search API across repo (merged PRs, title contains version and/or 'release')
+            if (!hit) {
+              const q = `repo:${owner}/${repo} is:pr is:merged "${rawVersion}" in:title` + (base ? ` base:${base}` : '');
+              try {
+                const search = await github.rest.search.issuesAndPullRequests({ q, per_page: 10, sort: 'updated', order: 'desc' });
+                const item = (search.data.items || [])[0];
+                if (item) {
+                  const pr = await github.rest.pulls.get({ owner, repo, pull_number: item.number }).then(r => r.data);
+                  hit = pr;
+                }
+              } catch (e) { /* ignore search failures */ }
+            }
+
+            // Fallback B: heuristic by head ref naming (Release Please head branch)
+            if (!hit) {
+              pulls = await listClosed({}); // no base filter
+              hit = (pulls || []).find(pr =>
+                pr.merged_at &&
+                /release-please--branches--/.test(pr.head && pr.head.ref || '') &&
+                titleRe.test(pr.title || '')
+              );
+            }
+
+            core.setOutput('found', hit ? 'true' : 'false');
+            if (hit) {
+              core.setOutput('number', String(hit.number));
+              core.setOutput('version', rawVersion);
+            }
+
+      # Read PR body only when found.
+      - name: Read PR body (seed text)
+        if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true' && steps.findpr.outputs.found == 'true'
+        id: readpr
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          NUMBER: ${{ steps.findpr.outputs.number }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const number = parseInt(process.env.NUMBER || '0', 10);
+            const pr = await github.rest.pulls.get({ owner, repo, pull_number: number }).then(r => r.data);
+            core.setOutput('body', pr.body || '');
+
+      # Choose the source body (PR body when present; else release body). No heredoc.
+      - name: Choose seed body
+        if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
+        id: choose
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          PR_BODY: ${{ steps.readpr.outputs.body }}
+          REL_BODY: ${{ steps.seed.outputs.body }}
+        with:
+          script: |
+            const ev = context.eventName;
+            const action = (context.payload && context.payload.action) || '';
+            const prb = process.env.PR_BODY || '';
+            const rel = process.env.REL_BODY || '';
+
+            // On manual edit, prefer the current release body; otherwise prefer PR body.
+            const seed = (ev === 'release' && action === 'edited') ? (rel || prb) : (prb || rel);
+            core.setOutput('body', seed);
+
+      - name: Transform body (normalize header, drop RP/Ellipsis, plain PR refs, append footer + sentinel)
+        if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
+        id: transform
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+        # Prefer PR body when a matching RP PR was found; otherwise, use the release body.
+          PR_BODY: ${{ steps.choose.outputs.body }}
+          VERSION: ${{ steps.seed.outputs.version }}
+          PUBLISHED_AT: ${{ steps.seed.outputs.published_at }}
+          MODE: ${{ steps.seed.outputs.mode }}
+          TAG: ${{ steps.seed.outputs.tag }}
+        with:
+          script: |
+            const CONTRACT_SHA = '95f8f517411f9058bc92706310677db8cbba97fbd296bc853f2181274cb0e8bb';
+            const seedIn = process.env.PR_BODY || '';
+            const version = process.env.VERSION || '';
+            const mode = (process.env.MODE || 'stable').trim();
+            const tag  = (process.env.TAG || '').trim();
+            const dt = process.env.PUBLISHED_AT ? new Date(process.env.PUBLISHED_AT) : new Date();
+            const yyyy = dt.getUTCFullYear();
+            const mm = String(dt.getUTCMonth()+1).padStart(2,'0');
+            const dd = String(dt.getUTCDate()).padStart(2,'0');
+            const headerLine = `Lich v${version} (${yyyy}-${mm}-${dd})`;
+
+            // 1) Remove any existing formatter sentinels and helper instruction (wherever they appear)
+            let cleaned = seedIn
+              .replace(/<!--\s*FORMATTER:v1[\s\S]*?-->/g, '')
+              .replace(/<!--\s*To force a manual edit update,[\s\S]*?-->/g, '');
+
+            // 2) Prepend release-scoped sentinel + human hint
+            const sentinel  = `<!-- FORMATTER:v1 sha=${CONTRACT_SHA} mode=${mode} tag=${tag} -->`;
+            const forceHint = `<!-- To force a manual edit update, remove the preceding sentinel line and save -->`;
+            const lines = cleaned.split(/\r?\n/);
+            lines.unshift(forceHint);
+            lines.unshift(sentinel);
+
+            // 3) Normalize first *content* line (skip blanks & HTML comments) to header
+            let i = 0;
+            while (i < lines.length && (/^\s*$/.test(lines[i]) || /^<!--.*-->\s*$/.test(lines[i]))) i++;
+            if (i >= lines.length) lines.push(headerLine);
+            else lines[i] = headerLine;
+            let body = lines.join('\n');
+
+            // 4) Drop Ellipsis block(s) if present
+            body = body.replace(/<!--\s*ELLIPSIS_HIDDEN\s*-->[\s\S]*?<!--\s*ELLIPSIS_HIDDEN\s*-->/g, '');
+
+            // 5) Drop RP credit/footer regardless of hr style (--- or * * *)
+            body = body.replace(/\n?(?:---|\* \* \*)\nThis PR wa...generated with \[Release Please\][\s\S]*?(\n{2,}|\s*$)/g, '\n');
+
+            // 6) Drop "This description was created by Ellipsis..." blocks if present
+            body = body.replace(/\n?This description was created by .*?ellipsis[\s\S]*?(\n{2,}|\s*$)/gi, '\n');
+
+            // 7) Convert PR links to plain (#123)
+            body = body.replace(/\[#(\d+)\]\([^)]+\)/g, '#$1');
+
+            // 8) Append custom footer (sentinel placed at top)
+            const footer = [
+              '',
+              'For additional usage/install instructions, please visit one of the following:',
+              '',
+              'DragonRealms - https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich',
+              'Gemstone IV - https://gswiki.play.net/Lich:Software/Installation',
+              '',
+            ].join('\n');
+
+            // Trim trailing whitespace/newlines before appending
+            body = body.replace(/\s+$/,'') + '\n\n' + footer + '\n';
+            core.setOutput('final', body);
+
+      - name: Update release title (Lich v{version})
+        if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          RELEASE_ID: ${{ steps.seed.outputs.release_id }}
+          VERSION: ${{ steps.seed.outputs.version }}
+          CUR_NAME: ${{ steps.seed.outputs.name }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const release_id = parseInt(process.env.RELEASE_ID, 10);
+            const version = process.env.VERSION || '';
+            const desired = `Lich v${version}`;
+            const current = process.env.CUR_NAME || '';
+            if (desired && desired !== current) {
+              await github.rest.repos.updateRelease({ owner, repo, release_id, name: desired });
+            }
+
+      - name: Update release body
+        if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          RELEASE_ID: ${{ steps.seed.outputs.release_id }}
+          FINAL: ${{ steps.transform.outputs.final }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const release_id = parseInt(process.env.RELEASE_ID, 10);
+            await github.rest.repos.updateRelease({ owner, repo, release_id, body: process.env.FINAL });
+
+      - name: Already formatted (noop)
+        if: steps.guard.outputs.skip == 'true'
+        run: echo "Release body already contains channel-specific sentinel; skipping."
+
+      - name: No release to format (noop)
+        if: steps.seed.outputs.skip == 'true'
+        run: echo "No release resolved (zero releases or upstream didn't publish); formatter exiting cleanly."

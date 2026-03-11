@@ -1,0 +1,35 @@
+name: Rubocop
+on: 
+  push:
+    branches:
+      - master
+      - staging
+      - main
+    paths:
+      - "**/*.lic"
+      - "**/*.rb"
+      - "lich.rbw"
+  pull_request:
+    paths:
+      - "**/*.lic"
+      - "**/*.rb"
+      - "lich.rbw"
+
+jobs:
+  rubocop:
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
+    name: Run Rubocop on Ruby
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.2
+        with:
+          fetch-depth: 0
+      
+      - uses: ruby/setup-ruby@708024e6c902387ab41de36e1669e43b5ee7085e # v1.283.0
+        with:
+          bundler-cache: true
+
+      - name: Rubocop
+        run: |
+          bundle exec rubocop

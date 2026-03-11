@@ -28,20 +28,38 @@ module Lich
       end
 
       def save_settings(script_name, settings, scope = ":")
-        blob = Sequel::SQL::Blob.new(Marshal.dump(settings))
-
-        if @table.where(script: script_name, scope: scope).count > 0
-          @table
-            .where(script: script_name, scope: scope)
-            .insert_conflict(:replace)
-            .update(hash: blob)
-        else
-          @table.insert(
-            script: script_name,
-            scope: scope,
-            hash: blob
-          )
+        unless settings.is_a?(Hash)
+          Lich::Messaging.msg("error", "--- Error: Report this - settings must be a Hash, got #{settings.class} ---")
+          Lich.log("--- Error: settings must be a Hash, got #{settings.class} from call initiated by #{script_name} ---")
+          Lich.log(settings.inspect)
+          return false
         end
+
+        begin
+          blob = Sequel::SQL::Blob.new(Marshal.dump(settings))
+        rescue => e
+          Lich::Messaging.msg("error", "--- Error: failed to serialize settings ---")
+          Lich.log("--- Error: failed to serialize settings ---")
+          Lich.log("#{e.message}\n#{e.backtrace.join("\n")}")
+          return false
+        end
+
+        begin
+          @table
+            .insert_conflict(target: [:script, :scope], update: { hash: blob })
+            .insert(script: script_name, scope: scope, hash: blob)
+          return true
+        rescue Sequel::DatabaseError => db_err
+          Lich::Messaging.msg("error", "--- Database error while saving settings ---")
+          Lich.log("--- Database error while saving settings ---")
+          Lich.log("#{db_err.message}\n#{db_err.backtrace.join("\n")}")
+        rescue => e
+          Lich::Messaging.msg("error", "--- Unexpected error while saving settings ---")
+          Lich.log("--- Unexpected error while saving settings ---")
+          Lich.log("#{e.message}\n#{e.backtrace.join("\n")}")
+        end
+
+        false
       end
     end
   end

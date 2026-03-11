@@ -2,11 +2,11 @@
 # segment of code unmodified from Lich4 (Tillmen)
 if (arg = ARGV.find { |a| a =~ /^--wine=.+$/i })
   $wine_bin = arg.sub(/^--wine=/, '')
-elsif ARGV.find { |a| a =~ /^--no-wine$/i }
+elsif ARGV.find { |a| a =~ /^--no-wine$/i } || ARGV.include?('--without-frontend')
   $wine_bin = nil
 else
   begin
-    $wine_bin = `which wine`.strip
+    $wine_bin = `which wine 2>/dev/null`.strip
   rescue
     $wine_bin = nil
   end

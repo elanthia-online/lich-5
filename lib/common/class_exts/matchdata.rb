@@ -6,8 +6,8 @@ class MatchData
   end
 
   def to_hash
-    Hash[self.names.zip(self.captures.map(&:strip).map do |capture|
+    self.names.zip(self.captures.map(&:strip).map do |capture|
       if capture.is_i? then capture.to_i else capture end
-    end)]
+    end).to_h
   end
 end

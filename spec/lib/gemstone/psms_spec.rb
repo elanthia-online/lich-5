@@ -8,6 +8,7 @@ load_spell_data
 # Load production code
 require 'util/util'
 require 'gemstone/psms'
+require "gemstone/overwatch"
 require 'gemstone/infomon'
 require 'attributes/skills'
 

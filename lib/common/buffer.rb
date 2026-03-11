@@ -124,11 +124,11 @@ module Lich
       end
 
       def Buffer.streams=(val)
-        if (val.class != Integer) or ((val & 63) == 0)
+        if (!val.is_a?(Integer)) or ((val & 63) == 0)
           respond "--- Lich: error: invalid streams value\n\t#{$!.caller[0..2].join("\n\t")}"
-          return nil
+        else
+          @@streams[Thread.current.object_id] = val
         end
-        @@streams[Thread.current.object_id] = val
       end
 
       # rubocop:enable Lint/HashCompareByIdentity

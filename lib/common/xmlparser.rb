@@ -82,7 +82,7 @@ module Lich
         @nerve_tracker_num = 0
         @nerve_tracker_active = 'no'
         @server_time = Time.now.to_i
-        @server_time_offset = 0
+        @server_time_offset = 0.0
         @roundtime_end = 0
         @cast_roundtime_end = 0
         @last_pulse = Time.now.to_i
@@ -106,6 +106,8 @@ module Lich
         @society_task = String.new
 
         @dr_active_spells = Hash.new
+        @dr_active_spells_clear = false
+        @dr_active_spells_tmp = Hash.new
         @dr_active_spell_tracking = false
         @dr_active_spells_stellar_percentage = 0
         @dr_active_spells_slivers = false
@@ -245,6 +247,7 @@ module Lich
 
           if name == 'nav'
             Lich::Claim.lock if defined?(Lich::Claim)
+            Lich::Gemstone::Overwatch.room_with_hiders_reset if defined?(Lich::Gemstone::Overwatch)
             GameObj.clear_loot
             GameObj.clear_npcs
             GameObj.clear_pcs
@@ -276,15 +279,6 @@ module Lich
             elsif @room_window_disabled
               @room_exits = Array.new
             end
-          end
-
-          if (name == 'clearStream' && attributes['id'] == 'percWindow')
-            @dr_active_spells = {}
-            @dr_active_spells_slivers = false
-          end
-
-          if (name == 'pushStream' && attributes['id'] == 'percWindow')
-            @dr_active_spell_tracking = true
           end
 
           if (name == 'compDef') or (name == 'component')
@@ -332,7 +326,9 @@ module Lich
           if name == 'pushStream'
             @in_stream = true
             @current_stream = attributes['id'].to_s
-            GameObj.clear_inv if attributes['id'].to_s == 'inv'
+            if XMLData.game =~ /^GS/
+              GameObj.clear_inv if attributes['id'].to_s == 'inv'
+            end
           end
           if name == 'popStream'
             if attributes['id'] == 'room'
@@ -375,11 +371,30 @@ module Lich
           if name == 'style'
             @current_style = attributes['id']
           end
+          if (name == 'clearStream' && attributes['id'] == 'percWindow')
+            @dr_active_spells_clear = true
+          end
+
+          if (name == 'pushStream' && attributes['id'] == 'percWindow')
+            @dr_active_spell_tracking = true
+            @dr_active_spells_clear = false
+          end
+
           if name == 'prompt'
             @server_time = attributes['time'].to_i
-            @server_time_offset = (Time.now.to_i - @server_time)
+            @server_time_offset = (Time.now.to_f - @server_time)
             $_CLIENT_.puts "\034GSq#{sprintf('%010d', @server_time)}\r\n" if @send_fake_tags
+
+            if @dr_active_spell_tracking
+              @dr_active_spell_tracking = false
+              @dr_active_spells_slivers = false
+              @dr_active_spells = @dr_active_spells_tmp
+              @dr_active_spells_tmp = {}
+            elsif @dr_active_spells_clear
+              @dr_active_spells = {}
+            end
           end
+
           if name == 'clearContainer'
             if attributes['id'] == 'stow'
               GameObj.clear_container(@stow_container_id)
@@ -586,7 +601,7 @@ module Lich
           end
           if (name == 'playerID')
             @player_id = attributes['id']
-            unless $frontend =~ /^(?:wizard|avalon)$/
+            unless Frontend.supports_gsl?
               if Lich.inventory_boxes(@player_id)
                 DownstreamHook.remove('inventory_boxes_off')
               end
@@ -613,7 +628,7 @@ module Lich
             unless File.exist?("#{DATA_DIR}/#{@game}/#{@name}")
               Dir.mkdir("#{DATA_DIR}/#{@game}/#{@name}")
             end
-            if $frontend =~ /^(?:wizard|avalon)$/
+            if Frontend.supports_gsl?
               Game._puts "#{$cmd_prefix}_flag Display Dialog Boxes 0"
               sleep 0.05
               Game._puts "#{$cmd_prefix}_injury 2"
@@ -671,7 +686,7 @@ module Lich
               # Osrel Meraud  (94%)
               # Landslide (4 roisaen)
               # Khri Sagacity  (1 roisan)
-              spell = Regexp.last_match[:spell].strip
+              spell = Regexp.last_match[:spell]
               duration = Regexp.last_match[:duration]
 
               if duration.match?(/Indefinite|OM/)
@@ -694,19 +709,15 @@ module Lich
             when /(?<spell>^[^\(]+)\(.+\)/i
               # Spells with inexact duration verbiage, such as with
               # Barbarians without knowledge of Power Monger mastery
-              spell = Regexp.last_match[:spell].strip
+              spell = Regexp.last_match[:spell]
               duration = 1000
             when /.*orbiting sliver.*/i
               # Moon Mage slivers
               @dr_active_spells_slivers = true
-            when /^(.*)$/
-              # No idea what we received, just a general catch all
-              spell = Regexp.last_match(1)
-              duration = 1000
             end
             spell.strip!
             if spell
-              @dr_active_spells[spell] = duration
+              @dr_active_spells_tmp[spell] = duration
             end
           end
 
@@ -738,6 +749,7 @@ module Lich
               if @active_tags.include?('a')
                 if @bold
                   GameObj.new_npc(@obj_exist, @obj_noun, text_string)
+                  Creature.register(text_string, @obj_exist, @obj_noun) if XMLData.current_target_ids.include?(@obj_exist)
                 else
                   GameObj.new_loot(@obj_exist, @obj_noun, text_string)
                 end
@@ -890,10 +902,6 @@ module Lich
             end
           end
 
-          if (name == 'popStream')
-            @dr_active_spell_tracking = false if @dr_active_spell_tracking
-          end
-
           if name == 'inv'
             if @obj_exist == @obj_location
               if @obj_after_name == 'is closed.'
@@ -922,10 +930,12 @@ module Lich
             end
             @room_description = @room_description.strip
             @room_exits_string.concat " #{@room_exits.join(', ')}" unless @room_exits.empty?
-            gsl_exits = String.new
-            @room_exits.each { |exit| gsl_exits.concat(DIRMAP[SHORTDIR[exit]].to_s) }
-            $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
-            gsl_exits = nil
+            if @send_fake_tags
+              gsl_exits = String.new
+              @room_exits.each { |exit| gsl_exits.concat(DIRMAP[SHORTDIR[exit]].to_s) }
+              $_CLIENT_.puts "\034GSj#{sprintf('%-20s', gsl_exits)}\r\n"
+              gsl_exits = nil
+            end
             @room_count += 1
             $room_count += 1
           end
