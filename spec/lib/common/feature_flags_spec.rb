@@ -14,6 +14,14 @@ RSpec.describe Lich::Common::FeatureFlags do
   end
 
   describe '.enabled?' do
+    it 'raises ArgumentError for empty flag names' do
+      expect { described_class.enabled?('   ') }.to raise_error(ArgumentError, /non-empty/)
+    end
+
+    it 'raises ArgumentError for nil flag names' do
+      expect { described_class.enabled?(nil) }.to raise_error(ArgumentError, /non-empty/)
+    end
+
     it 'returns default false when Lich.db is nil' do
       allow(Lich).to receive(:db).and_return(nil)
 
@@ -54,6 +62,14 @@ RSpec.describe Lich::Common::FeatureFlags do
   end
 
   describe '.set' do
+    it 'raises ArgumentError for empty flag names' do
+      expect { described_class.set(' ', true) }.to raise_error(ArgumentError, /non-empty/)
+    end
+
+    it 'raises ArgumentError for nil flag names' do
+      expect { described_class.set(nil, true) }.to raise_error(ArgumentError, /non-empty/)
+    end
+
     it 'writes the feature flag key/value to lich_settings' do
       expect(db).to receive(:execute).with(
         'INSERT OR REPLACE INTO lich_settings(name, value) VALUES(?, ?);',
@@ -61,6 +77,14 @@ RSpec.describe Lich::Common::FeatureFlags do
       )
 
       described_class.set(:cli_hello_world_demo, true)
+    end
+
+    it 'logs and does not raise when db write fails' do
+      allow(db).to receive(:execute).and_raise(StandardError, 'write failed')
+      allow(Lich).to receive(:log)
+
+      expect { described_class.set(:cli_hello_world_demo, true) }.not_to raise_error
+      expect(Lich).to have_received(:log).with(/FeatureFlags write failed/)
     end
   end
 end

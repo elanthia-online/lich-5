@@ -18,15 +18,17 @@ module Lich
       # @param name [String, Symbol] feature flag name
       # @return [Boolean]
       def self.enabled?(name)
-        flag_name = normalize_name(name)
-        stored = read_flag(flag_name)
+        flag_name = validate_flag_name!(normalize_name(name))
 
-        return DEFAULTS.fetch(flag_name.to_sym, false) if stored.nil?
+        begin
+          stored = read_flag(flag_name)
+          return DEFAULTS.fetch(flag_name.to_sym, false) if stored.nil?
 
-        truthy?(stored)
-      rescue StandardError => e
-        Lich.log("warning: FeatureFlags read failed for #{flag_name}: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
-        DEFAULTS.fetch(flag_name.to_sym, false)
+          truthy?(stored)
+        rescue StandardError => e
+          Lich.log("warning: FeatureFlags read failed for #{flag_name}: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+          DEFAULTS.fetch(flag_name.to_sym, false)
+        end
       end
 
       # Sets a feature flag value in persistent settings.
@@ -35,16 +37,26 @@ module Lich
       # @param value [Object] value to persist
       # @return [void]
       def self.set(name, value)
-        flag_name = normalize_name(name)
-        write_flag(flag_name, value)
-      rescue StandardError => e
-        Lich.log("warning: FeatureFlags write failed for #{flag_name}: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+        flag_name = validate_flag_name!(normalize_name(name))
+
+        begin
+          write_flag(flag_name, value)
+        rescue StandardError => e
+          Lich.log("warning: FeatureFlags write failed for #{flag_name}: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+        end
       end
 
       def self.normalize_name(name)
         name.to_s.strip.downcase
       end
       private_class_method :normalize_name
+
+      def self.validate_flag_name!(flag_name)
+        raise ArgumentError, 'feature flag name must be non-empty' if flag_name.empty?
+
+        flag_name
+      end
+      private_class_method :validate_flag_name!
 
       def self.truthy?(value)
         value.to_s.match?(/\A(?:1|true|on|yes)\z/i)
