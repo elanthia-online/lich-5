@@ -35,14 +35,16 @@ module Lich
       #
       # @param name [String, Symbol] feature flag name
       # @param value [Object] value to persist
-      # @return [void]
+      # @return [Boolean] true when persisted successfully, false when write fails
       def self.set(name, value)
         flag_name = validate_flag_name!(normalize_name(name))
 
         begin
           write_flag(flag_name, value)
+          true
         rescue StandardError => e
           Lich.log("warning: FeatureFlags write failed for #{flag_name}: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+          false
         end
       end
 

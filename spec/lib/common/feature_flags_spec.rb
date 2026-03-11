@@ -34,10 +34,11 @@ RSpec.describe Lich::Common::FeatureFlags do
       expect(described_class.enabled?(:cli_hello_world_demo)).to be(false)
     end
 
-    it 'returns true for truthy persisted values' do
-      allow(db).to receive(:get_first_value).and_return('true')
-
-      expect(described_class.enabled?(:cli_hello_world_demo)).to be(true)
+    it 'returns true for accepted truthy persisted values' do
+      %w[1 true on yes TRUE ON YES].each do |truthy_value|
+        allow(db).to receive(:get_first_value).and_return(truthy_value)
+        expect(described_class.enabled?(:cli_hello_world_demo)).to be(true)
+      end
     end
 
     it 'returns false for falsey persisted values' do
@@ -76,14 +77,14 @@ RSpec.describe Lich::Common::FeatureFlags do
         ['feature_flag:cli_hello_world_demo', 'true']
       )
 
-      described_class.set(:cli_hello_world_demo, true)
+      expect(described_class.set(:cli_hello_world_demo, true)).to be(true)
     end
 
     it 'logs and does not raise when db write fails' do
       allow(db).to receive(:execute).and_raise(StandardError, 'write failed')
       allow(Lich).to receive(:log)
 
-      expect { described_class.set(:cli_hello_world_demo, true) }.not_to raise_error
+      expect(described_class.set(:cli_hello_world_demo, true)).to be(false)
       expect(Lich).to have_received(:log).with(/FeatureFlags write failed/)
     end
   end
