@@ -84,16 +84,21 @@ module Lich
         @channel = ((xml_spell.attributes['channel'] =~ /^(yes|true)$/i) ? true : false)
         @cost = Hash.new
         xml_spell.elements.find_all { |e| e.name == 'cost' }.each { |xml_cost|
-          @cost[xml_cost.attributes['type'].downcase] ||= Hash.new
-          if xml_cost.attributes['cast-type'].downcase == 'target'
-            @cost[xml_cost.attributes['type'].downcase]['target'] = xml_cost.text
+          cost_type = xml_cost.attributes['type']&.downcase
+          next unless cost_type # skip malformed cost elements
+
+          @cost[cost_type] ||= Hash.new
+          # cast-type defaults to 'self' if not specified (most cost elements omit it)
+          if xml_cost.attributes['cast-type']&.downcase == 'target'
+            @cost[cost_type]['target'] = xml_cost.text
           else
-            @cost[xml_cost.attributes['type'].downcase]['self'] = xml_cost.text
+            @cost[cost_type]['self'] = xml_cost.text
           end
         }
         @duration = Hash.new
         xml_spell.elements.find_all { |e| e.name == 'duration' }.each { |xml_duration|
-          if xml_duration.attributes['cast-type'].downcase == 'target'
+          # cast-type defaults to 'self' if not specified
+          if xml_duration.attributes['cast-type']&.downcase == 'target'
             cast_type = 'target'
           else
             cast_type = 'self'
@@ -105,8 +110,9 @@ module Lich
           end
           @duration[cast_type] = Hash.new
           @duration[cast_type][:duration] = xml_duration.text
-          @duration[cast_type][:stackable] = (xml_duration.attributes['span'].downcase == 'stackable')
-          @duration[cast_type][:refreshable] = (xml_duration.attributes['span'].downcase == 'refreshable')
+          span = xml_duration.attributes['span']&.downcase
+          @duration[cast_type][:stackable] = (span == 'stackable')
+          @duration[cast_type][:refreshable] = (span == 'refreshable')
           if xml_duration.attributes['multicastable'] =~ /^(yes|true)$/i
             @duration[cast_type][:multicastable] = true
           else
@@ -123,7 +129,7 @@ module Lich
             @duration[cast_type][:max_duration] = 250.0
           end
         }
-        @cast_proc = xml_spell.elements['cast-proc'].text
+        @cast_proc = xml_spell.elements['cast-proc']&.text
         @timestamp = Time.now
         @timeleft = 0
         @active = false

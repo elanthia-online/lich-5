@@ -354,18 +354,6 @@ $_DETACHABLE_CLIENT_ ||= nil
 # =============================================================================
 # Load effect-list.xml from fixtures for realistic spell testing.
 # This file is committed to the repo to avoid network dependencies.
-#
-# KNOWN LIMITATION: As of 2026-03, Spell.load() fails silently due to a
-# compatibility issue between spell.rb and effect-list.xml:
-# - spell.rb expects `cast-type` attributes on <cost> elements (line 88)
-# - effect-list.xml only has `cast-type` on <duration> elements
-# - This causes: undefined method 'downcase' for nil
-#
-# The fixture is still valuable for:
-# - Eliminating network dependencies in existing tests
-# - Future use once the compatibility bug is fixed
-# - Reference for the expected XML structure
-#
 # See spec/fixtures/README.md for update procedures.
 
 def load_spell_data

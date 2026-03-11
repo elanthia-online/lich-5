@@ -14,9 +14,6 @@ require 'attributes/skills'
 # Alias Skills at top level for psms.rb max_forcert_count which uses unqualified Skills
 Skills = Lich::Gemstone::Skills unless defined?(Skills)
 
-# Set default stamina for PSM affordability tests
-XMLData.stamina = 20 # some PSM require 30, so we should have negative testing ability
-
 # Set up test data for PSM specs
 RSpec.describe Lich::Gemstone::Infomon, ".setup!" do
   context "can set itself up" do
@@ -97,6 +94,10 @@ RSpec.describe Lich::Gemstone::PSMS, "assess(name, type)" do
 end
 
 RSpec.describe Lich::Gemstone::PSMS, ".affordable?(name)" do
+  # Set stamina before each test - some PSMs require 30+ stamina
+  # so stamina=20 allows testing both affordable and unaffordable cases
+  before { XMLData.stamina = 20 }
+
   context "<psm>, name should determine available (cost < stamina)" do
     it "checks to see if the PSM cost < current stamina" do
       # it does not distinguish at this phase if PSM is known or not known

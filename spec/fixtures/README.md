@@ -76,16 +76,3 @@ Until automation is in place, maintainers should periodically check for
 upstream changes, especially after major GemStone IV updates that add new
 spells or modify existing ones.
 
-### Known Limitations
-
-As of this writing, there is a compatibility issue between `effect-list.xml`
-and `lib/common/spell.rb`:
-
-- `spell.rb` expects `cast-type` attributes on `<cost>` elements
-- `effect-list.xml` only has `cast-type` on `<duration>` elements
-- This causes `Spell.load()` to fail with `undefined method 'downcase' for nil`
-
-This is tracked as a separate issue. The fixture is still valuable for:
-- Documenting the expected XML structure
-- Future use once the compatibility bug is fixed
-- Reference for spell data in other tests
