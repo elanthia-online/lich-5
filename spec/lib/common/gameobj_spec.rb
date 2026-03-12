@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
+require_relative '../../spec_helper'
 require 'tmpdir'
 require 'rexml/document'
 require_relative '../../../lib/common/gameobj'

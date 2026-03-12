@@ -17,6 +17,9 @@ RSpec.describe Lich::DragonRealms::DRExpMonitor do
     # Reset state before each test
     described_class.stop if described_class.active?
     described_class.reset!
+    # NOTE: class_variable_set is acceptable here because drskill_class.reset! also clears
+    # @@list (all skill definitions), which would break tests that rely on real DRSkill data.
+    # We only need to clear @@gained_skills to isolate the DRExpMonitor tests.
     drskill_class.class_variable_set(:@@gained_skills, [])
     Lich::Messaging.clear_messages!
     Lich.db.reset! if Lich.db.respond_to?(:reset!)
