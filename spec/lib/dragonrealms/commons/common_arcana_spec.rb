@@ -139,7 +139,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       DRCA.infuse_om(true, nil)
     end
 
-    it 'breaks on success' do
+    it 'stops infusing after a successful full-capacity response without looping' do
       DRSpells.active_spells = { 'Osrel Meraud' => 50 }
       allow(DRStats).to receive(:mana).and_return(100)
       allow(DRC).to receive(:bput).with(/infuse om/, anything, anything).and_return('having reached its full capacity')

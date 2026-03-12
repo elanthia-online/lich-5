@@ -38,7 +38,7 @@ RSpec.describe Lich::DragonRealms::DRSkill do
       expect(described_class.gained_skills).to eq([])
     end
 
-    it 'resets start_time' do
+    it 'resets start_time to the current time when reset is called' do
       old_time = described_class.start_time
       # Advance the mocked clock so the new start_time is guaranteed to differ.
       # Using allow(Time).to receive(:now) avoids a real sleep and makes the test deterministic.
@@ -269,7 +269,7 @@ RSpec.describe Lich::DragonRealms::DRSkill do
       expect(skill.current).to eq(100.50)
     end
 
-    it 'looks up skillset' do
+    it 'looks up and assigns the correct skillset category for the skill name' do
       skill = described_class.new('Evasion', 100, 10, 50)
 
       expect(skill.skillset).to eq('Survival')
@@ -284,11 +284,11 @@ RSpec.describe Lich::DragonRealms::DRSkill do
   end
 
   describe '.convert_rexp_str_to_seconds' do
-    it 'handles nil' do
+    it 'returns 0 seconds when given nil input' do
       expect(described_class.convert_rexp_str_to_seconds(nil)).to eq(0)
     end
 
-    it 'handles "none"' do
+    it 'returns 0 seconds when given the string "none"' do
       expect(described_class.convert_rexp_str_to_seconds('none')).to eq(0)
     end
 
@@ -296,7 +296,7 @@ RSpec.describe Lich::DragonRealms::DRSkill do
       expect(described_class.convert_rexp_str_to_seconds('less than a minute')).to eq(0)
     end
 
-    it 'parses minutes' do
+    it 'converts a minutes-only string like "38 minutes" to total seconds' do
       expect(described_class.convert_rexp_str_to_seconds('38 minutes')).to eq(38 * 60)
     end
 

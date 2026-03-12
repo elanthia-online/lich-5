@@ -231,7 +231,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
   end
 
   describe 'DENOMINATION_VALUES constant' do
-    it 'is frozen' do
+    it 'DENOMINATION_VALUES hash is frozen to prevent modification' do
       expect(described_module::DENOMINATION_VALUES).to be_frozen
     end
 
@@ -257,7 +257,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
   end
 
   describe 'CURRENCY_BANKS constant' do
-    it 'is frozen' do
+    it 'CURRENCY_BANKS hash is frozen to prevent modification' do
       expect(described_module::CURRENCY_BANKS).to be_frozen
     end
 
@@ -332,7 +332,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(described_module.my_accounts['Crossings']).to eq(25_000)
     end
 
-    it 'logs the update' do
+    it 'logs a message confirming the balance update for the town' do
       described_module.update_balance('Crossings', 10_000)
       expect(message_strings.last).to include('Updated Crossings balance')
     end
@@ -417,7 +417,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
   end
 
   describe '.parse_balance_string' do
-    it 'returns 0 for nil' do
+    it 'returns 0 when given nil input instead of raising an error' do
       expect(described_module.parse_balance_string(nil)).to eq(0)
     end
 
@@ -511,7 +511,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     context 'when in a bank' do
       before { XMLData.room_title = '[[Provincial Bank, Teller]]' } # Crossings bank
 
-      it 'handles nil input' do
+      it 'does not raise an error when parse receives nil input while in a bank' do
         expect { described_module.parse(nil) }.not_to raise_error
       end
 
@@ -701,7 +701,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(described_module.all_accounts['Mahtra']['Crossings']).to eq(10_000)
     end
 
-    it 'logs the reset' do
+    it 'logs a message confirming the character bank data was cleared' do
       described_module.reset_character!
       expect(message_strings.last).to include('Cleared bank data')
     end
@@ -717,7 +717,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(described_module.all_accounts).to eq({})
     end
 
-    it 'logs the reset' do
+    it 'logs a message confirming all character bank data was cleared' do
       described_module.reset_all!
       expect(message_strings.last).to include('Cleared all bank data')
     end

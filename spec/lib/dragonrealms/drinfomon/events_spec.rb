@@ -79,7 +79,7 @@ RSpec.describe Lich::DragonRealms::Flags do
   end
 
   describe '.[]=' do
-    it 'sets flag value' do
+    it 'sets the flag value to the assigned string or object' do
       described_class.add('test_flag', 'pattern')
       described_class['test_flag'] = 'matched text'
 
@@ -188,7 +188,7 @@ RSpec.describe Lich::DragonRealms::Flags do
   end
 
   describe '.reset!' do
-    it 'clears all flags' do
+    it 'clears all flags from the flags hash leaving it empty' do
       described_class.add('flag1', 'pattern1')
       described_class['flag1'] = true
 

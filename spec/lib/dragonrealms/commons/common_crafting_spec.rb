@@ -45,7 +45,7 @@ describe DRCC do
     end
 
     context 'when work order has expired' do
-      it 'disposes the item' do
+      it 'disposes the crafted item via dispose_trash when work order has expired' do
         allow(DRC).to receive(:bput).and_return('This work order has expired')
 
         expect(DRCI).to receive(:dispose_trash).with('rucksack')
@@ -55,7 +55,7 @@ describe DRCC do
     end
 
     context 'when item quality is too low' do
-      it 'disposes the item' do
+      it 'disposes the crafted item via dispose_trash when quality is below work order requirements' do
         allow(DRC).to receive(:bput).and_return('The work order requires items of a higher quality')
 
         expect(DRCI).to receive(:dispose_trash).with('rucksack')
@@ -65,7 +65,7 @@ describe DRCC do
     end
 
     context 'when item is wrong type' do
-      it 'disposes the item' do
+      it 'disposes the crafted item via dispose_trash when item type does not match work order' do
         allow(DRC).to receive(:bput).and_return("That isn't the correct type of item for this work order.")
 
         expect(DRCI).to receive(:dispose_trash).with('rucksack')

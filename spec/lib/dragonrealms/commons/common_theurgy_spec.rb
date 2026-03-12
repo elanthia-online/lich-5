@@ -16,7 +16,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
 
   describe 'constants' do
     describe 'CLERIC_ITEMS' do
-      it 'is frozen' do
+      it 'is an immutable constant' do
         expect(described_class::CLERIC_ITEMS).to be_frozen
       end
 
@@ -32,7 +32,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
 
     describe 'COMMUNE_ERRORS' do
-      it 'is frozen' do
+      it 'is an immutable constant' do
         expect(described_class::COMMUNE_ERRORS).to be_frozen
       end
 
@@ -50,7 +50,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
 
     describe 'DEVOTION_LEVELS' do
-      it 'is frozen' do
+      it 'is an immutable constant' do
         expect(described_class::DEVOTION_LEVELS).to be_frozen
       end
 
@@ -66,7 +66,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
 
     describe 'COMMUNE_SENSE_START' do
-      it 'is frozen' do
+      it 'is an immutable regex constant' do
         expect(described_class::COMMUNE_SENSE_START).to be_frozen
       end
 
@@ -104,7 +104,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         expect(result.commune_ready).to be false
       end
 
-      it 'freezes arrays' do
+      it 'freezes the active_communes and recent_communes arrays on creation' do
         result = described_class.new(active_communes: ['Tamsine'])
         expect(result.active_communes).to be_frozen
         expect(result.recent_communes).to be_frozen
@@ -320,7 +320,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(DRCI).to receive(:get_item?).with('chalice', 'portal').and_return(false)
       end
 
-      it 'returns false' do
+      it 'returns false when the water holder cannot be retrieved from the container' do
         expect(described_class.has_holy_water?(container, water_holder)).to be false
       end
 
@@ -337,7 +337,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(DRCI).to receive(:put_away_item?).and_return(true)
       end
 
-      it 'returns true' do
+      it 'returns true when the water holder contains holy water' do
         expect(described_class.has_holy_water?(container, water_holder)).to be true
       end
 
@@ -354,7 +354,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(DRCI).to receive(:put_away_item?).and_return(true)
       end
 
-      it 'returns false' do
+      it 'returns false when the water holder is empty of holy water' do
         expect(described_class.has_holy_water?(container, water_holder)).to be false
       end
 
@@ -407,7 +407,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         { 'Crossing' => { 'incense_shop' => { 'needs_bless' => true, 'id' => 1234 } } }
       end
 
-      it 'returns true' do
+      it 'returns true when the shop requires blessing after purchase' do
         expect(described_class.buying_cleric_item_requires_bless?('Crossing', 'incense')).to be true
       end
     end
@@ -417,7 +417,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         { 'Crossing' => { 'incense_shop' => { 'id' => 1234 } } }
       end
 
-      it 'returns nil' do
+      it 'returns nil when the shop has no needs_bless setting' do
         expect(described_class.buying_cleric_item_requires_bless?('Crossing', 'incense')).to be_nil
       end
     end
@@ -425,7 +425,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     context 'when town data does not exist' do
       let(:theurgy_data) { {} }
 
-      it 'returns nil' do
+      it 'returns nil when the town has no theurgy data' do
         expect(described_class.buying_cleric_item_requires_bless?('UnknownTown', 'incense')).to be_nil
       end
     end
@@ -435,7 +435,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         { 'Crossing' => {} }
       end
 
-      it 'returns nil' do
+      it 'returns nil when the item shop is not configured for the town' do
         expect(described_class.buying_cleric_item_requires_bless?('Crossing', 'unknown_item')).to be_nil
       end
     end
@@ -602,11 +602,11 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(Lich::Messaging).to receive(:msg)
       end
 
-      it 'returns false' do
+      it 'returns false when the water holder cannot be retrieved' do
         expect(described_class.sprinkle_holy_water?(container, water_holder, target)).to be false
       end
 
-      it 'logs a message' do
+      it 'warns that the water holder could not be retrieved for sprinkling' do
         expect(Lich::Messaging).to receive(:msg).with('bold', "DRCTH: Can't get chalice to sprinkle.")
         described_class.sprinkle_holy_water?(container, water_holder, target)
       end
@@ -652,11 +652,11 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(Lich::Messaging).to receive(:msg)
       end
 
-      it 'returns false' do
+      it 'returns false when holy oil cannot be retrieved' do
         expect(described_class.sprinkle_holy_oil?(container, target)).to be false
       end
 
-      it 'logs a message' do
+      it 'warns that holy oil could not be retrieved for sprinkling' do
         expect(Lich::Messaging).to receive(:msg).with('bold', "DRCTH: Can't get holy oil to sprinkle.")
         described_class.sprinkle_holy_oil?(container, target)
       end
@@ -684,7 +684,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(DRC).to receive(:left_hand).and_return(nil)
       end
 
-      it 'returns true' do
+      it 'returns true after successfully sprinkling holy oil on the target' do
         expect(described_class.sprinkle_holy_oil?(container, target)).to be true
       end
     end
@@ -807,7 +807,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
       described_class.empty_cleric_hands(container)
     end
 
-    it 'does nothing when both hands are empty' do
+    it 'skips put_away_item when both hands are already empty' do
       expect(DRCI).not_to receive(:put_away_item?)
       described_class.empty_cleric_hands(container)
     end
@@ -821,7 +821,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     context 'when right hand is empty' do
       before { allow(DRC).to receive(:right_hand).and_return(nil) }
 
-      it 'does nothing' do
+      it 'skips put_away_item when the right hand is already empty' do
         expect(DRCI).not_to receive(:put_away_item?)
         described_class.empty_cleric_right_hand(container)
       end
@@ -861,7 +861,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     context 'when left hand is empty' do
       before { allow(DRC).to receive(:left_hand).and_return(nil) }
 
-      it 'does nothing' do
+      it 'skips put_away_item when the left hand is already empty' do
         expect(DRCI).not_to receive(:put_away_item?)
         described_class.empty_cleric_left_hand(container)
       end
@@ -1021,7 +1021,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(DRCI).to receive(:put_away_item?).and_return(true)
       end
 
-      it 'returns true' do
+      it 'returns true after successfully lighting and waving incense' do
         expect(described_class.wave_incense?(container, flint_lighter, target)).to be true
       end
 

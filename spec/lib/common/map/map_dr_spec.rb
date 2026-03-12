@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'json'
 
 # Mock StringProc
 class StringProc
@@ -387,6 +388,100 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
         expect(map_class).to receive(:clear).ordered
         expect(map_class).to receive(:load).ordered
         map_class.reload
+      end
+    end
+  end
+
+  describe 'Genie field support' do
+    describe '#initialize' do
+      it 'accepts genie fields as parameters' do
+        room = map_class.new(
+          1, ['Title'], ['Desc'], ['path'], [1], nil, nil, nil, {}, {}, nil, nil, [], nil, nil, nil,
+          'node42', 'zone7', 'pos1'
+        )
+
+        expect(room.genie_id).to eq('node42')
+        expect(room.genie_zone).to eq('zone7')
+        expect(room.genie_pos).to eq('pos1')
+      end
+
+      it 'defaults genie fields to nil' do
+        room = map_class.new(1, ['Title'], ['Desc'], ['path'])
+
+        expect(room.genie_id).to be_nil
+        expect(room.genie_zone).to be_nil
+        expect(room.genie_pos).to be_nil
+      end
+    end
+
+    describe '#json_extra_fields' do
+      it 'returns genie fields hash' do
+        room = map_class.new(
+          1, ['Title'], ['Desc'], ['path'], [1], nil, nil, nil, {}, {}, nil, nil, [], nil, nil, nil,
+          'node42', 'zone7', 'pos1'
+        )
+
+        extra = room.json_extra_fields
+        expect(extra[:genie_id]).to eq('node42')
+        expect(extra[:genie_zone]).to eq('zone7')
+        expect(extra[:genie_pos]).to eq('pos1')
+      end
+    end
+
+    describe '#to_json with genie fields' do
+      it 'includes genie fields when present' do
+        room = map_class.new(
+          1, ['Title'], ['Desc'], ['path'], [1], nil, nil, nil, {}, {}, nil, nil, [], nil, nil, nil,
+          'node42', 'zone7', nil
+        )
+
+        json = room.to_json
+        parsed = JSON.parse(json)
+        expect(parsed['genie_id']).to eq('node42')
+        expect(parsed['genie_zone']).to eq('zone7')
+      end
+
+      it 'excludes genie fields when nil' do
+        room = map_class.new(1, ['Title'], ['Desc'], ['path'])
+
+        json = room.to_json
+        parsed = JSON.parse(json)
+        expect(parsed).not_to have_key('genie_id')
+        expect(parsed).not_to have_key('genie_zone')
+        expect(parsed).not_to have_key('genie_pos')
+      end
+    end
+
+    describe '.by_genie_ref' do
+      before do
+        map_class.class_variable_set(:@@loaded, true)
+        map_class.new(
+          1, ['Room A'], ['desc'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, [], nil, nil, nil,
+          '42', '7', nil
+        )
+        map_class.new(
+          2, ['Room B'], ['desc'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, [], nil, nil, nil,
+          '99', '7', nil
+        )
+        map_class.new(
+          3, ['Room C'], ['desc'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, [], nil, nil, nil,
+          '42', '10', nil
+        )
+      end
+
+      it 'finds room by zone and node id' do
+        room = map_class.by_genie_ref('7', '42')
+        expect(room.id).to eq(1)
+      end
+
+      it 'returns nil for nonexistent reference' do
+        room = map_class.by_genie_ref('999', '999')
+        expect(room).to be_nil
+      end
+
+      it 'converts integer arguments to strings for comparison' do
+        room = map_class.by_genie_ref(7, 42)
+        expect(room.id).to eq(1)
       end
     end
   end

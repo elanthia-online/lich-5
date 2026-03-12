@@ -951,7 +951,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         allow(described_class).to receive(:get_telescope?).with('telescope', { 'container' => 'backpack' }).and_return(false)
       end
 
-      it 'returns nil' do
+      it 'returns nil when the telescope cannot be retrieved from the container' do
         result = described_class.find_visible_planets(%w[Yavash Xibar], settings)
         expect(result).to be_nil
       end

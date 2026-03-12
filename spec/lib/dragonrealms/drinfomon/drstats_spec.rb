@@ -253,7 +253,7 @@ RSpec.describe Lich::DragonRealms::DRStats do
   end
 
   describe 'GUILD_MANA_TYPES constant' do
-    it 'is frozen' do
+    it 'GUILD_MANA_TYPES hash is frozen to prevent modification' do
       expect(described_class::GUILD_MANA_TYPES).to be_frozen
     end
 
@@ -265,7 +265,7 @@ RSpec.describe Lich::DragonRealms::DRStats do
       expect(described_class::GUILD_MANA_TYPES['Barbarian']).to be_nil
     end
 
-    it 'maps Thief to nil' do
+    it 'maps Thief to nil because Thieves have no native mana type' do
       expect(described_class::GUILD_MANA_TYPES['Thief']).to be_nil
     end
 

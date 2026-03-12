@@ -17,6 +17,40 @@ module Lich
   end
 end unless defined?(Lich::DragonRealms::DRBanking)
 
+# Stub Account for subscription/account name parsing tests
+module Lich
+  module Common
+    module Account
+      @name = nil
+      @subscription = nil
+
+      class << self
+        attr_accessor :name, :subscription
+      end
+    end
+  end
+end unless defined?(Lich::Common::Account)
+
+# Stub UserVars for room parsing (npcs assignment)
+module UserVars
+  @npcs = []
+
+  class << self
+    attr_accessor :npcs
+  end
+end unless defined?(UserVars)
+
+# Stub top-level helper methods called by DRParser.parse for room parsing.
+# These are defined in drdefs.rb and made available at parse-time.
+unless respond_to?(:find_pcs, true)
+  def find_pcs(_players) = []
+  def find_pcs_prone(_players) = []
+  def find_pcs_sitting(_players) = []
+  def find_npcs(_objs)       = []
+  def find_dead_npcs(_objs)  = []
+  def find_objects(_objs)    = []
+end
+
 # Load the module under test
 require_relative '../../../../lib/dragonrealms/drinfomon/drparser'
 
@@ -48,11 +82,11 @@ RSpec.describe Lich::DragonRealms::DRParser do
 
     describe 'NameRaceGuild' do
       it 'matches name/race/guild line from INFO' do
-        line = "Name:  Mahtra Lansen             Race:  Elothean         Guild:  Moon Mage  "
+        line = "Name: Emerald Knight Mahtra Rotschreck   Race: Elf   Guild: Ranger  "
         match = line.match(described_class::Pattern::NameRaceGuild)
         expect(match).not_to be_nil
-        expect(match[:race].strip).to eq('Elothean')
-        expect(match[:guild].strip).to eq('Moon Mage')
+        expect(match[:race].strip).to eq('Elf')
+        expect(match[:guild].strip).to eq('Ranger')
       end
     end
 
@@ -190,10 +224,35 @@ RSpec.describe Lich::DragonRealms::DRParser do
     describe 'name/race/guild parsing' do
       it 'sets DRStats values from INFO output' do
         # Real code strips whitespace
-        expect(drstats_class).to receive(:race=).with('Elothean')
-        expect(drstats_class).to receive(:guild=).with('Moon Mage')
+        expect(drstats_class).to receive(:race=).with('Elf')
+        expect(drstats_class).to receive(:guild=).with('Ranger')
 
-        line = "Name:  Mahtra Lansen             Race:  Elothean         Guild:  Moon Mage  "
+        line = "Name: Emerald Knight Mahtra Rotschreck   Race: Elf   Guild: Ranger  "
+        described_class.parse(line)
+      end
+    end
+
+    describe 'encumbrance parsing' do
+      it 'sets encumbrance from INFO output' do
+        expect(drstats_class).to receive(:encumbrance=).with('Light Burden')
+
+        line = "   Encumbrance    :  Light Burden"
+        described_class.parse(line)
+      end
+    end
+
+    describe 'luck parsing' do
+      it 'sets luck from INFO output' do
+        expect(drstats_class).to receive(:luck=).with(2)
+
+        line = "   Luck           :  Average (2/3)"
+        described_class.parse(line)
+      end
+
+      it 'handles negative luck' do
+        expect(drstats_class).to receive(:luck=).with(-1)
+
+        line = "   Luck           :  Bad (-1/3)"
         described_class.parse(line)
       end
     end
@@ -224,28 +283,77 @@ RSpec.describe Lich::DragonRealms::DRParser do
     end
 
     describe 'room players parsing' do
-      it 'parses empty room without error' do
+      it 'clears PCs on empty room' do
         line = "'room players'></component>"
-        expect { described_class.parse(line) }.not_to raise_error
+        expect(drroom_class).to receive(:pcs=).with([])
+        described_class.parse(line)
       end
     end
 
     describe 'room objects parsing' do
-      it 'parses empty room without error' do
+      it 'clears room data on empty room' do
+        # RoomObjs pattern matches before RoomObjsEmpty, calling find_* helpers
+        # which return [] for empty input, effectively clearing all room data.
         line = "'room objs'></component>"
-        expect { described_class.parse(line) }.not_to raise_error
+        expect(drroom_class).to receive(:npcs=)
+        expect(drroom_class).to receive(:dead_npcs=)
+        expect(drroom_class).to receive(:room_objs=)
+        described_class.parse(line)
       end
     end
 
     describe 'group members parsing' do
-      it 'parses group header without error' do
+      it 'clears group on group header' do
         line = '<pushStream id="group"/>Members of your group:'
-        expect { described_class.parse(line) }.not_to raise_error
+        expect(drroom_class).to receive(:group_members=).with([])
+        described_class.parse(line)
       end
 
-      it 'parses group member without error' do
+      it 'adds group member from group stream' do
+        # Override the default stub to return a mutable array we can track
+        members = []
+        allow(drroom_class).to receive(:group_members).and_return(members)
+
         line = '<pushStream id="group"/>  Mahtra:'
-        expect { described_class.parse(line) }.not_to raise_error
+        described_class.parse(line)
+        expect(members).to include('Mahtra')
+      end
+    end
+
+    describe 'account parsing' do
+      before do
+        # Override shared context stubs FIRST to allow real state changes
+        allow(Lich::Common::Account).to receive(:name).and_call_original
+        allow(Lich::Common::Account).to receive(:name=).and_call_original
+        allow(Lich::Common::Account).to receive(:subscription).and_call_original
+        allow(Lich::Common::Account).to receive(:subscription=).and_call_original
+        # THEN reset state (must happen after stubs are restored)
+        Lich::Common::Account.name = nil
+        Lich::Common::Account.subscription = nil
+      end
+
+      it 'sets account name' do
+        line = "Account Info for TESTACCOUNT:"
+        described_class.parse(line)
+        expect(Lich::Common::Account.name).to eq('TESTACCOUNT')
+      end
+
+      it 'sets subscription type' do
+        line = "Current Account Status: Premium"
+        described_class.parse(line)
+        expect(Lich::Common::Account.subscription).to eq('PREMIUM')
+      end
+
+      it 'normalizes Basic to Normal' do
+        line = "Current Account Status: Basic"
+        described_class.parse(line)
+        expect(Lich::Common::Account.subscription).to eq('NORMAL')
+      end
+
+      it 'normalizes F2P to Free' do
+        line = "Current Account Status: F2P"
+        described_class.parse(line)
+        expect(Lich::Common::Account.subscription).to eq('FREE')
       end
     end
 
@@ -350,10 +458,14 @@ RSpec.describe Lich::DragonRealms::DRParser do
   end
 
   describe '.check_events' do
-    it 'processes events without error' do
-      # The check_events method iterates over Flags.matchers and sets matching flags
-      # This test verifies the method can be called without error
-      expect { described_class.check_events('this is a test pattern here') }.not_to raise_error
+    it 'matches flags and sets values' do
+      flags = {}
+      matchers = { test_flag: [/test pattern/] }
+      allow(Flags).to receive(:flags).and_return(flags)
+      allow(Flags).to receive(:matchers).and_return(matchers)
+
+      described_class.check_events('this is a test pattern here')
+      expect(flags[:test_flag]).to be_truthy
     end
   end
 

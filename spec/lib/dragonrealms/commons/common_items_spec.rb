@@ -16,7 +16,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe 'constants' do
     describe 'TRASH_STORAGE' do
-      it 'is frozen' do
+      it 'is a frozen constant' do
         expect(described_class::TRASH_STORAGE).to be_frozen
       end
 
@@ -65,7 +65,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
         BRAID_TOO_LONG_PATTERN
         ACCEPT_SUCCESS_PATTERN
       ].each do |const_name|
-        it "#{const_name} is frozen" do
+        it "#{const_name} is a frozen constant" do
           expect(described_class.const_get(const_name)).to be_frozen
         end
       end
@@ -74,7 +74,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#item_ref' do
     context 'when value is nil' do
-      it 'returns nil' do
+      it 'returns nil for nil input' do
         expect(described_class.item_ref(nil)).to be_nil
       end
     end
@@ -133,13 +133,13 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when item is nil' do
-      it 'returns nil' do
+      it 'returns nil for nil item' do
         expect(described_class.dispose_trash(nil)).to be_nil
       end
     end
 
     context 'when dropping succeeds' do
-      it 'returns true' do
+      it 'returns true when drop succeeds' do
         stub_bput('You drop a rock.')
         expect(described_class.dispose_trash('rock')).to be true
       end
@@ -215,7 +215,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#tap' do
     context 'when item is nil' do
-      it 'returns nil' do
+      it 'returns nil for nil item' do
         expect(described_class.tap(nil)).to be_nil
       end
     end
@@ -299,14 +299,14 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when item is nil' do
-      it 'returns false' do
+      it 'returns false for nil item' do
         expect(described_class.in_hand?(nil)).to be false
       end
     end
   end
 
   describe '#count_items' do
-    it 'returns 0 when tap returns no container' do
+    it 'returns 0 when item has no container' do
       allow(described_class).to receive(:tap).and_return('You tap a rock.')
       expect(described_class.count_items('rock')).to eq(0)
     end
@@ -343,7 +343,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#stow_hand' do
     context 'when stow succeeds' do
-      it 'returns true' do
+      it 'returns true when hand stows successfully' do
         stub_bput('You put your sword in your pack.')
         expect(described_class.stow_hand('left')).to be true
       end
@@ -359,7 +359,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when stow fails' do
-      it 'returns false' do
+      it 'returns false when nothing to stow' do
         stub_bput("Stow what?")
         expect(described_class.stow_hand('left')).to be false
       end
@@ -368,7 +368,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#get_item_if_not_held?' do
     context 'when item is nil' do
-      it 'returns false' do
+      it 'returns false for nil item' do
         expect(described_class.get_item_if_not_held?(nil)).to be false
       end
     end
@@ -382,7 +382,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when not holding item' do
-      it 'gets the item' do
+      it 'retrieves item and returns true' do
         allow(described_class).to receive(:in_hands?).and_return(false)
         expect(described_class).to receive(:get_item).with('sword', nil).and_return(true)
         expect(described_class.get_item_if_not_held?('sword')).to be true
@@ -425,14 +425,14 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#get_item_unsafe' do
     context 'when get succeeds' do
-      it 'returns true' do
+      it 'returns true when item is retrieved' do
         stub_bput('You get a sword.')
         expect(described_class.get_item_unsafe('sword', nil)).to be true
       end
     end
 
     context 'when get fails' do
-      it 'returns false' do
+      it 'returns false when item not found' do
         stub_bput('Get what?')
         expect(described_class.get_item_unsafe('sword', nil)).to be false
       end
@@ -441,21 +441,21 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#tie_item?' do
     context 'when tie succeeds' do
-      it 'returns true' do
+      it 'returns true when item ties to container' do
         stub_bput('You carefully tie your rope to your belt.')
         expect(described_class.tie_item?('rope', 'belt')).to be true
       end
     end
 
     context 'when attach succeeds' do
-      it 'returns true' do
+      it 'returns true when item attaches' do
         stub_bput('You attach your rope to your belt.')
         expect(described_class.tie_item?('rope', 'belt')).to be true
       end
     end
 
     context 'when tie fails' do
-      it 'returns false' do
+      it 'returns false when no free ties' do
         stub_bput("There's no more free ties.")
         expect(described_class.tie_item?('rope', 'belt')).to be false
       end
@@ -464,14 +464,14 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#untie_item?' do
     context 'when untie succeeds' do
-      it 'returns true' do
+      it 'returns true when item unties' do
         stub_bput('You untie your rope from your belt.')
         expect(described_class.untie_item?('rope', 'belt')).to be true
       end
     end
 
     context 'when untie fails' do
-      it 'returns false' do
+      it 'returns false when item not found' do
         stub_bput('Untie what?')
         expect(described_class.untie_item?('rope', 'belt')).to be false
       end
@@ -480,14 +480,14 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#wear_item?' do
     context 'when wear succeeds' do
-      it 'returns true' do
+      it 'returns true when item is worn' do
         stub_bput('You put on your cloak.')
         expect(described_class.wear_item?('cloak')).to be true
       end
     end
 
     context 'when wear fails' do
-      it 'returns false' do
+      it 'returns false when item cannot be worn' do
         stub_bput("You can't wear that.")
         expect(described_class.wear_item?('cloak')).to be false
       end
@@ -496,14 +496,14 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#remove_item?' do
     context 'when remove succeeds' do
-      it 'returns true' do
+      it 'returns true when item is removed' do
         stub_bput('You remove a cloak.')
         expect(described_class.remove_item?('cloak')).to be true
       end
     end
 
     context 'when remove fails' do
-      it 'returns false' do
+      it 'returns false when not wearing item' do
         stub_bput("You aren't wearing that.")
         expect(described_class.remove_item?('cloak')).to be false
       end
@@ -512,21 +512,21 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#stow_item?' do
     context 'when stow succeeds' do
-      it 'returns true' do
+      it 'returns true when item stows successfully' do
         stub_bput('You put your sword in your pack.')
         expect(described_class.stow_item?('sword')).to be true
       end
     end
 
     context 'when stow fails' do
-      it 'returns false' do
+      it 'returns false when nothing to stow' do
         stub_bput('Stow what?')
         expect(described_class.stow_item?('sword')).to be false
       end
     end
 
     context 'with retry pattern' do
-      it 'retries the stow' do
+      it 'retries and succeeds after transient failure' do
         allow(DRC).to receive(:bput).and_return('Something appears different about', 'You put your sword in your pack.')
         expect(described_class.stow_item?('sword')).to be true
       end
@@ -535,14 +535,14 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#lower_item?' do
     context 'when item not in hands' do
-      it 'returns false' do
+      it 'returns false when item not held' do
         allow(described_class).to receive(:in_hands?).and_return(false)
         expect(described_class.lower_item?('sword')).to be false
       end
     end
 
     context 'when lower succeeds' do
-      it 'returns true' do
+      it 'returns true when item lowered to ground' do
         allow(described_class).to receive(:in_hands?).and_return(true)
         allow(DRC).to receive(:left_hand).and_return('sword')
         stub_bput('You lower your sword to the ground.')
@@ -551,7 +551,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when lower fails' do
-      it 'returns false' do
+      it 'returns false when not holding anything' do
         allow(described_class).to receive(:in_hands?).and_return(true)
         allow(DRC).to receive(:left_hand).and_return('sword')
         stub_bput("But you aren't holding anything.")
@@ -562,14 +562,14 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#lift?' do
     context 'when lift succeeds' do
-      it 'returns true' do
+      it 'returns true when item picked up' do
         stub_bput('You pick up a sword.')
         expect(described_class.lift?('sword')).to be true
       end
     end
 
     context 'when lift fails' do
-      it 'returns false' do
+      it 'returns false when no items at feet' do
         stub_bput('There are no items lying at your feet.')
         expect(described_class.lift?('sword')).to be false
       end
@@ -584,7 +584,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'with stow parameter as true' do
-      it 'calls stow_item?' do
+      it 'stows item after lifting when stow is true' do
         allow(DRC).to receive(:bput).and_return('You pick up a sword.')
         expect(described_class).to receive(:stow_item?).with('sword').and_return(true)
         described_class.lift?('sword', true)
@@ -658,14 +658,14 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when put succeeds' do
-      it 'returns true' do
+      it 'returns true when item put in container' do
         stub_bput('You put your sword in your pack.')
         expect(described_class.put_away_item?('sword', 'pack')).to be true
       end
     end
 
     context 'when put fails' do
-      it 'returns false' do
+      it 'returns false when container is full' do
         stub_bput("There isn't any more room in your pack.")
         expect(described_class.put_away_item?('sword', 'pack')).to be false
       end
@@ -674,21 +674,21 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#open_container?' do
     context 'when open succeeds' do
-      it 'returns true' do
+      it 'returns true when container opens' do
         stub_bput('You open your pack.')
         expect(described_class.open_container?('pack')).to be true
       end
     end
 
     context 'when already open' do
-      it 'returns true' do
+      it 'returns true when container already open' do
         stub_bput("It's already open.")
         expect(described_class.open_container?('pack')).to be true
       end
     end
 
     context 'when open fails' do
-      it 'returns false' do
+      it 'returns false when container not found' do
         stub_bput('Open what?')
         expect(described_class.open_container?('pack')).to be false
       end
@@ -697,14 +697,14 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#close_container?' do
     context 'when close succeeds' do
-      it 'returns true' do
+      it 'returns true when container closes' do
         stub_bput('You close your pack.')
         expect(described_class.close_container?('pack')).to be true
       end
     end
 
     context 'when close fails' do
-      it 'returns false' do
+      it 'returns false when close is not possible' do
         stub_bput("You can't do that.")
         expect(described_class.close_container?('pack')).to be false
       end
@@ -713,21 +713,21 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#give_item?' do
     context 'when give succeeds' do
-      it 'returns true' do
+      it 'returns true when offer accepted' do
         stub_bput('Playerone has accepted your offer.')
         expect(described_class.give_item?('Playerone', 'sword')).to be true
       end
     end
 
     context 'when give fails' do
-      it 'returns false' do
+      it 'returns false when offer declined' do
         stub_bput('Playerone has declined the offer.')
         expect(described_class.give_item?('Playerone', 'sword')).to be false
       end
     end
 
     context 'with retry pattern' do
-      it 'retries the give' do
+      it 'retries and succeeds on second attempt' do
         allow(DRC).to receive(:bput).and_return('GIVE it again', 'Playerone has accepted your offer.')
         allow(described_class).to receive(:waitrt)
         expect(described_class.give_item?('Playerone', 'sword')).to be true
@@ -744,14 +744,14 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when no offers' do
-      it 'returns false' do
+      it 'returns false when no pending offers' do
         stub_bput('You have no offers')
         expect(described_class.accept_item?).to be false
       end
     end
 
     context 'when hands full' do
-      it 'returns false' do
+      it 'returns false when hands are full' do
         stub_bput('Both of your hands are full')
         expect(described_class.accept_item?).to be false
       end
@@ -777,7 +777,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when swap succeeds' do
-      it 'returns true' do
+      it 'returns true when pouch swapped successfully' do
         allow(described_class).to receive(:remove_and_stow_pouch?).and_return(true)
         allow(described_class).to receive(:check_belt_for_pouch?).and_return(false)
         allow(described_class).to receive(:get_item?).and_return(true)
@@ -829,7 +829,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when put_away succeeds' do
-      it 'returns true' do
+      it 'returns true when put away works' do
         allow(described_class).to receive(:remove_item?).and_return(true)
         allow(described_class).to receive(:put_away_item?).and_return(true)
         expect(described_class.remove_and_stow_pouch?(adj, noun, 'container')).to be true
@@ -837,7 +837,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when put_away fails but stow succeeds' do
-      it 'returns true' do
+      it 'returns true via stow fallback' do
         allow(described_class).to receive(:remove_item?).and_return(true)
         allow(described_class).to receive(:put_away_item?).and_return(false)
         allow(described_class).to receive(:stow_item?).and_return(true)
@@ -846,7 +846,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when both put_away and stow fail' do
-      it 'returns false' do
+      it 'returns false when all storage fails' do
         allow(described_class).to receive(:remove_item?).and_return(true)
         allow(described_class).to receive(:put_away_item?).and_return(false)
         allow(described_class).to receive(:stow_item?).and_return(false)
@@ -890,7 +890,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when item not found' do
-      it 'returns 0' do
+      it 'returns 0 when item not found' do
         stub_bput('I could not find what you were referring to.')
         expect(described_class.count_item_parts('ingot')).to eq(0)
       end
@@ -1058,20 +1058,20 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#have_item_by_look?' do
     context 'when item is nil' do
-      it 'returns false' do
+      it 'returns false for nil item' do
         expect(described_class.have_item_by_look?(nil, 'pack')).to be false
       end
     end
 
     context 'when item exists' do
-      it 'returns true' do
+      it 'returns true when item found in container' do
         stub_bput('You see nothing unusual about the sword.')
         expect(described_class.have_item_by_look?('sword', 'pack')).to be true
       end
     end
 
     context 'when item not found' do
-      it 'returns false' do
+      it 'returns false when item not in container' do
         stub_bput('I could not find what you were referring to.')
         expect(described_class.have_item_by_look?('sword', 'pack')).to be false
       end
@@ -1085,21 +1085,21 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when eddy cannot be opened' do
-      it 'returns false' do
+      it 'returns false when portal fails to open' do
         allow(described_class).to receive(:open_container?).and_return(false)
         expect(described_class.get_item_from_eddy_portal?('gem', 'portal')).to be false
       end
     end
 
     context 'when get succeeds' do
-      it 'returns true' do
+      it 'returns true when item retrieved from portal' do
         stub_bput('You get a gem from the portal.')
         expect(described_class.get_item_from_eddy_portal?('gem', 'portal')).to be true
       end
     end
 
     context 'when get fails' do
-      it 'returns false' do
+      it 'returns false when item not in portal' do
         stub_bput('Get what?')
         expect(described_class.get_item_from_eddy_portal?('gem', 'portal')).to be false
       end
@@ -1155,7 +1155,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe 'gem pouch constants' do
     describe 'FILL_POUCH_SUCCESS_PATTERNS' do
-      it 'is frozen' do
+      it 'is a frozen constant' do
         expect(described_class::FILL_POUCH_SUCCESS_PATTERNS).to be_frozen
       end
 
@@ -1168,7 +1168,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     describe 'FILL_POUCH_NEEDS_TIE_PATTERNS' do
-      it 'is frozen' do
+      it 'is a frozen constant' do
         expect(described_class::FILL_POUCH_NEEDS_TIE_PATTERNS).to be_frozen
       end
 
@@ -1180,7 +1180,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     describe 'FILL_POUCH_FULL_PATTERN' do
-      it 'is frozen' do
+      it 'is a frozen constant' do
         expect(described_class::FILL_POUCH_FULL_PATTERN).to be_frozen
       end
 
@@ -1190,7 +1190,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     describe 'FILL_POUCH_FAILURE_PATTERNS' do
-      it 'is frozen' do
+      it 'is a frozen constant' do
         expect(described_class::FILL_POUCH_FAILURE_PATTERNS).to be_frozen
       end
 
@@ -1207,7 +1207,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     describe 'INV_BELT_START_PATTERN' do
-      it 'is frozen' do
+      it 'is a frozen constant' do
         expect(described_class::INV_BELT_START_PATTERN).to be_frozen
       end
 
@@ -1217,7 +1217,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     describe 'INV_BELT_END_PATTERN' do
-      it 'is frozen' do
+      it 'is a frozen constant' do
         expect(described_class::INV_BELT_END_PATTERN).to be_frozen
       end
 
@@ -1244,21 +1244,21 @@ RSpec.describe Lich::DragonRealms::DRCI do
     let(:noun) { 'pouch' }
 
     context 'when issue_command returns nil (timeout)' do
-      it 'returns false' do
+      it 'returns false on timeout' do
         allow(Lich::Util).to receive(:issue_command).and_return(nil)
         expect(described_class.check_belt_for_pouch?(adj, noun)).to be false
       end
     end
 
     context 'when issue_command returns empty array' do
-      it 'returns false' do
+      it 'returns false when belt is empty' do
         allow(Lich::Util).to receive(:issue_command).and_return([])
         expect(described_class.check_belt_for_pouch?(adj, noun)).to be false
       end
     end
 
     context 'when matching gem pouch found on belt' do
-      it 'returns true' do
+      it 'returns true when pouch found on belt' do
         belt_contents = [
           'All of your items worn attached to the belt:',
           '  a soft gem pouch (closed)',
@@ -1271,7 +1271,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when no matching gem pouch found' do
-      it 'returns false' do
+      it 'returns false when no matching pouch' do
         belt_contents = [
           'All of your items worn attached to the belt:',
           '  a leather wallet',
@@ -1327,14 +1327,14 @@ RSpec.describe Lich::DragonRealms::DRCI do
     let(:noun) { 'pouch' }
 
     context 'when tie succeeds' do
-      it 'returns true' do
+      it 'returns true when pouch ties' do
         allow(described_class).to receive(:tie_item?).and_return(true)
         expect(described_class.tie_gem_pouch?(adj, noun)).to be true
       end
     end
 
     context 'when tie fails' do
-      it 'returns false' do
+      it 'returns false when pouch tie fails' do
         allow(described_class).to receive(:tie_item?).and_return(false)
         expect(described_class.tie_gem_pouch?(adj, noun)).to be false
       end
@@ -1385,7 +1385,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when put_away succeeds' do
-      it 'returns true' do
+      it 'returns true when put away works' do
         allow(described_class).to receive(:remove_item?).and_return(true)
         allow(described_class).to receive(:put_away_item?).and_return(true)
         expect(described_class.remove_and_stow_pouch?(adj, noun, 'container')).to be true
@@ -1400,7 +1400,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when put_away fails but stow succeeds' do
-      it 'returns true via || fallback' do
+      it 'returns true via stow fallback' do
         allow(described_class).to receive(:remove_item?).and_return(true)
         allow(described_class).to receive(:put_away_item?).and_return(false)
         allow(described_class).to receive(:stow_item?).and_return(true)
@@ -1409,7 +1409,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
 
     context 'when both put_away and stow fail' do
-      it 'returns false' do
+      it 'returns false when all storage fails' do
         allow(described_class).to receive(:remove_item?).and_return(true)
         allow(described_class).to receive(:put_away_item?).and_return(false)
         allow(described_class).to receive(:stow_item?).and_return(false)
@@ -1519,7 +1519,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
       end
 
       context 'when tie succeeds' do
-        it 'returns true' do
+        it 'returns true after tying new pouch' do
           allow(described_class).to receive(:tie_gem_pouch?).and_return(true)
           expect(described_class.swap_out_full_gempouch?(adj, noun, nil, 'spare', true)).to be true
         end
