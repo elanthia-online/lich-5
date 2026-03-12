@@ -52,7 +52,7 @@ These methods are the public API that script authors depend on.
 # @example Get from specific container
 #   DRCI.get_item?("bandages", "backpack")
 #
-# @see #put_away_item? Inverse operation
+# @see .put_away_item? Inverse operation
 def self.get_item?(item, container = nil)
 ```
 
@@ -116,12 +116,33 @@ The following do not require YARD documentation:
 | Tag | Format | When |
 |-----|--------|------|
 | `@example` | Code block follows on next line(s) | Encouraged for consumer-facing methods |
-| `@see` | `@see #method` or `@see ClassName` | Cross-reference related methods or constants |
+| `@see` | `@see .class_method` or `@see #instance_method` or `@see ClassName` | Cross-reference related methods or constants |
 | `@note` | `@note text` | Important caveats or gotchas |
 | `@raise` | `@raise [ExceptionType] when...` | Only if the method raises exceptions |
-| `@deprecated` | `@deprecated Use {#new_method} instead` | Marks superseded code |
+| `@deprecated` | `@deprecated Use {.new_method} instead` | Marks superseded code |
 | `@api` | `@api private` | Marks methods that are public but internal |
 | `@since` | `@since 5.15.0` | Version a new public API was introduced |
+
+### Method Reference Syntax
+
+YARD uses different prefixes for class methods vs instance methods:
+
+- **`.method_name`** — class/module methods (`def self.method_name`)
+- **`#method_name`** — instance methods (`def method_name`)
+
+Most methods in the commons modules are `def self.` class methods. Use `.method_name`
+in `@see` tags and `{.method_name}` in inline references.
+
+```ruby
+# Class method reference (most commons methods)
+# @see .put_away_item?
+
+# Instance method reference (e.g., EquipmentManager instances)
+# @see #wield_weapon?
+
+# Inline reference in description text
+# Works like {.get_item?} but skips error messaging.
+```
 
 ### Do Not Use
 
@@ -181,7 +202,7 @@ Pattern constants (arrays of `Regexp`) should document what strings they match.
 #   "With fluid and stealthy movements you slip the sabre into your harness."
 #
 # @see SHEATH_ITEM_FAILURE_PATTERNS
-# @see #sheath_item?
+# @see .sheath_item?
 SHEATH_ITEM_SUCCESS_PATTERNS = [
   /^You sheathe/,
   /^You slip/,
@@ -268,7 +289,7 @@ When multiple tags appear on a method, use this order:
 #
 # @note Returns false if hands are injured or character is immobilized.
 #
-# @see #wield_item? Inverse operation
+# @see .wield_item? Inverse operation
 # @since 5.15.0
 def self.sheath_item?(item, sheath = nil)
 ```
