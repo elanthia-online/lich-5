@@ -237,7 +237,7 @@ RSpec.describe 'wine.rb' do
       end
 
       it 'returns false when regedit command returns non-zero' do
-        allow(Wine).to receive(:system).and_return(false)
+        allow(Kernel).to receive(:system).and_return(false)
         result = Wine.registry_puts('HKEY_LOCAL_MACHINE\\Software\\Test\\Value', 'test')
         expect(result).to eq(false)
       end
