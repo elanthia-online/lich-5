@@ -220,10 +220,10 @@ RSpec.describe 'wine.rb' do
 
       it 'returns false when prefix does not exist' do
         FileUtils.rm_rf(temp_wine_prefix)
-        # Re-stub BIN constant since module was loaded with valid prefix
+        # Re-stub PREFIX constant to force missing-prefix branch in registry_puts.
         stub_const('Wine::PREFIX', '/nonexistent/path')
         result = Wine.registry_puts('HKEY_LOCAL_MACHINE\\Software\\Test\\Value', 'test')
-        expect(result).to eq(false).or be_nil
+        expect(result).to eq(false)
       end
     end
   end
