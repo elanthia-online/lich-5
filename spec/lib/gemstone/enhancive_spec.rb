@@ -206,7 +206,7 @@ RSpec.describe Lich::Gemstone::Enhancive do
       Lich::Gemstone::Infomon.set("enhancive.stats.item_count", 42)
 
       Lich::Gemstone::Enhancive.reset_all
-      sleep 0.1 # Allow async queue to process
+      Lich::Gemstone::Infomon.flush # Drain async SQL queue before reading results
 
       expect(Lich::Gemstone::Enhancive.strength.value).to eq(0)
       expect(Lich::Gemstone::Enhancive.ambush.bonus).to eq(0)
@@ -277,7 +277,7 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, "enhancive patterns" do
       EnhanciveTotals
 
       output.split("\n").each { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
-      sleep 0.1 # Allow async queue to process
+      Lich::Gemstone::Infomon.flush # Drain async SQL queue before reading results
 
       # Check stats
       expect(Lich::Gemstone::Enhancive.strength.value).to eq(41)
@@ -344,7 +344,7 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, "enhancive patterns" do
       MinimalOutput
 
       output.split("\n").each { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
-      sleep 0.1
+      Lich::Gemstone::Infomon.flush # Drain async SQL queue before reading results
 
       # New value should be set
       expect(Lich::Gemstone::Enhancive.strength.value).to eq(10)

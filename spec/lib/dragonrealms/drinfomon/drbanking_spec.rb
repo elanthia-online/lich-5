@@ -45,19 +45,14 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     Lich::Messaging.messages.map { |m| m.is_a?(Hash) ? m[:message] : m.to_s }
   end
 
-  before(:all) do
-    # Save original InstanceSettings.game method to restore after tests
-    @original_game_method = Lich::Common::InstanceSettings.method(:game)
-  end
-
-  after(:all) do
-    # Restore original InstanceSettings.game method
-    if @original_game_method
-      Lich::Common::InstanceSettings.define_singleton_method(:game, @original_game_method)
-    end
-  end
-
+  # Capture and restore InstanceSettings.game per-example using around(:each) semantics
+  # via before/after(:each) so that any test failure cannot leave the shared singleton
+  # method permanently redefined. (before/after(:all) would share @original_game_method
+  # across all examples but runs outside the normal per-example ivar scope, which is
+  # confusing and prevents proper cleanup on early failures.)
   before(:each) do
+    @original_game_method = Lich::Common::InstanceSettings.method(:game)
+
     # Reset test data
     DRBankingTestData.reset!
     Lich::Messaging.clear_messages!
@@ -80,6 +75,11 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     # ensuring each test starts with a clean state. TODO: add DRBanking.reset! to production code.
     described_module.class_variable_set(:@@accounts_cache, nil)
     described_module.reload!
+  end
+
+  after(:each) do
+    # Restore the real InstanceSettings.game singleton method after each test
+    Lich::Common::InstanceSettings.define_singleton_method(:game, @original_game_method) if @original_game_method
   end
 
   describe 'Pattern constants' do

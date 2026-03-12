@@ -38,6 +38,15 @@ RSpec.describe Lich::DragonRealms::CharacterValidator do
         expect(validator.send(:lnet_available?)).to be true
       end
 
+      # NOTE: The three tests below use expect_any_instance_of / not_to receive to verify
+      # that Kernel methods (waitrt?, fput) are called during initialize. This is the only
+      # available RSpec mechanism for asserting on instance methods before the instance
+      # exists: we cannot get a reference to the instance before `new` runs, so we cannot
+      # use `allow(instance).to receive(...)`. The tests are isolated to this describe block
+      # and no other instances of described_class are created concurrently, so any_instance_of
+      # does not cause cross-test pollution. TODO: if CharacterValidator is refactored to
+      # accept dependencies as constructor arguments, replace with ordinary instance stubs.
+
       it 'calls waitrt? on init' do
         expect_any_instance_of(described_class).to receive(:waitrt?)
         described_class.new(false, false, false, 'TestBot')

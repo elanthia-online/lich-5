@@ -239,8 +239,9 @@ RSpec.describe DRCT do
     let(:town_data) { { 'Crossing' => { 'locksmithing' => { 'id' => 19_073 } } } }
 
     before(:each) do
-      # Stub get_data to return proper town data (get_data is a Kernel function from dependency.lic)
-      allow_any_instance_of(Object).to receive(:get_data).with('town').and_return(town_data)
+      # get_data is called as self.get_data inside DRCT module methods, so stub on DRCT directly.
+      # (This matches the pattern used by the .get_hometown_target_id tests further below.)
+      allow(DRCT).to receive(:get_data).with('town').and_return(town_data)
       allow(DRCT).to receive(:walk_to).and_return(true)
       allow(DRCT).to receive(:buy_item)
       allow(DRC).to receive(:fix_standing)
@@ -291,9 +292,8 @@ RSpec.describe DRCT do
     end
 
     it 'logs error when no locksmith location found' do
-      # Provide data where locksmithing id is explicitly nil
       nil_town_data = { 'Crossing' => { 'locksmithing' => { 'id' => nil } } }
-      allow_any_instance_of(Object).to receive(:get_data).with('town').and_return(nil_town_data)
+      allow(DRCT).to receive(:get_data).with('town').and_return(nil_town_data)
 
       DRCT.refill_lockpick_container(lockpick_type, hometown, container, 1)
 

@@ -1,35 +1,21 @@
+# frozen_string_literal: true
+
 require 'yaml'
 require 'fileutils'
 
-# This file is copied to spec/ when you run 'rspec' from the command line.
-# It loads the code needed for testing and configures RSpec.
-
-# Configure RSpec
-RSpec.configure do |config|
-  # Enable flags like --only-failures and --next-failure
-  config.example_status_persistence_file_path = "spec/.rspec_status"
-
-  # Disable RSpec exposing methods globally on `Module` and `main`
-  # This is a desirable configuration, but requires updating prior specs
-  # to operate correctly since our early efforts basically did exactly this
-  # config.disable_monkey_patching!
-
-  # Use the specified formatter
-  config.formatter = :documentation
-
-  # Run specs in random order to surface order dependencies
-  # This is a desirable configuration, but requires updating prior specs
-  # to operate correctly since order dependencies do exist in some tests
-  # config.order = :random
-
-  # Seed global randomization in this process using the `--seed` CLI option
-  Kernel.srand config.seed
-
-  # Clean up test directories after each test
-  config.after(:each) do
-    # Add any cleanup code here if needed
-  end
-end
+# login_spec_helper.rb - GUI and authentication test support
+#
+# Provides mocks for Gtk, Gdk, and login-related Lich infrastructure that
+# cannot run without a display/OS GUI. Required by specs under:
+#   spec/lib/common/gui/          - GUI component specs
+#   spec/lib/common/authentication/ - login flow specs
+#   spec/lib/common/gui_login_spec.rb
+#
+# Always require AFTER spec_helper so that spec_helper's RSpec.configure
+# (which enables random ordering and global state resets) takes precedence.
+#
+# NOTE: This file intentionally does NOT define an RSpec.configure block.
+# All RSpec configuration lives in spec/spec_helper.rb.
 
 # Mock classes and modules needed for testing
 module Lich

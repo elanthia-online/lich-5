@@ -40,11 +40,14 @@ RSpec.describe Lich::DragonRealms::DRSkill do
 
     it 'resets start_time' do
       old_time = described_class.start_time
-      sleep 0.01
+      # Advance the mocked clock so the new start_time is guaranteed to differ.
+      # Using allow(Time).to receive(:now) avoids a real sleep and makes the test deterministic.
+      future = old_time + 1
+      allow(Time).to receive(:now).and_return(future)
 
       described_class.reset
 
-      expect(described_class.start_time).to be > old_time
+      expect(described_class.start_time).to eq(future)
     end
   end
 
