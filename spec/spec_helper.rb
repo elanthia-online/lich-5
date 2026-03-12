@@ -968,6 +968,11 @@ module DRC
       []
     end
 
+    def strip_xml(lines)
+      lines.map { |line| line.gsub(/<[^>]+>/, '').gsub('&gt;', '>').gsub('&lt;', '<').strip }
+           .reject(&:empty?)
+    end
+
     def reset!
       @right_hand = nil
       @left_hand = nil
