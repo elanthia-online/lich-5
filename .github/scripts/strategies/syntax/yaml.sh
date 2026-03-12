@@ -6,6 +6,8 @@
 # shellcheck source=.github/scripts/lib/core.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../lib/core.sh"
 
+# Validate YAML parseability using Ruby's YAML loader.
+# Emits warnings for invalid files but does not fail the build.
 validate_yaml_syntax() {
   local warnings=0
 
@@ -16,7 +18,7 @@ validate_yaml_syntax() {
 
     if ! ruby -e "require 'yaml'; YAML.load_file('$file')" >/dev/null 2>&1; then
       log_warn "file=$file::Potential YAML syntax issue in $file"
-      ((warnings++))
+      ((++warnings))
     fi
   done < <(find . \( -name "*.yml" -o -name "*.yaml" \) -not -path "./.git/*" -type f)
 

@@ -15,23 +15,36 @@ validate_base() {
 
   case "$base" in
     main) echo "$base" ;;
-    *) die "Invalid base '$base'. Only 'main' is allowed." ;;
+    *)
+      die "Invalid base '$base'. Only 'main' is allowed."
+      return 1
+      ;;
   esac
 }
 
 # Validate and normalize destination branch
 validate_destination() {
-  local dest="$1"
+  local raw_dest="$1"
+  local dest="$raw_dest"
+
+  # Guard raw input first so callers get a precise message before normalization.
+  if [[ "$raw_dest" =~ [[:space:]] ]]; then
+    die "Destination '$raw_dest' contains illegal whitespace"
+    return 1
+  fi
+
   dest="$(normalize_branch "$dest")"
 
-  # Guard: no path traversal or whitespace
-  if [[ "$dest" =~ (\.\.|[[:space:]]) ]]; then
-    die "Destination '$dest' contains illegal sequences (.. or whitespace)"
+  # Guard normalized branch for traversal sequences post-normalization.
+  if [[ "$dest" =~ \.\. ]]; then
+    die "Destination '$dest' contains illegal traversal sequence ('..')"
+    return 1
   fi
 
   # Guard: cannot target main
   if [[ "$dest" == "main" ]]; then
     die "Cannot curate into 'main' branch"
+    return 1
   fi
 
   # Normalize: auto-prefix with pre/beta/ if needed
@@ -41,6 +54,14 @@ validate_destination() {
       dest="pre/beta/$dest"
     else
       die "Destination '$dest' must be 'pre/beta' or 'pre/beta/<slug>'"
+      return 1
+    fi
+  elif [[ "$dest" == pre/beta/* ]]; then
+    # For already-prefixed destinations, validate slug/path segment contract.
+    local slug="${dest#pre/beta/}"
+    if [[ -z "$slug" || ! "$slug" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$ ]]; then
+      die "Destination '$dest' must be 'pre/beta' or 'pre/beta/<slug>'"
+      return 1
     fi
   fi
 
@@ -53,11 +74,13 @@ validate_pr_list() {
 
   if [[ -z "$raw_prs" ]]; then
     die "PR list is required"
+    return 1
   fi
 
   # Must be comma-separated digits only
-  if ! printf '%s' "$raw_prs" | grep -Eq '^[0-9]+( *[,]+ *[0-9]+)*$'; then
+  if ! printf '%s' "$raw_prs" | grep -Eq '^[0-9]+( *, *[0-9]+)*$'; then
     die "PR list must be comma-separated numbers (e.g., '12,27,43')"
+    return 1
   fi
 
   # Normalize: remove spaces and deduplicate
@@ -82,7 +105,10 @@ validate_mode() {
   local mode="$1"
   case "$mode" in
     auto|merged|head) echo "$mode" ;;
-    *) die "Invalid mode '$mode'. Must be: auto, merged, or head" ;;
+    *)
+      die "Invalid mode '$mode'. Must be: auto, merged, or head"
+      return 1
+      ;;
   esac
 }
 
@@ -91,7 +117,10 @@ validate_bool() {
   local value="$1" name="$2"
   case "$value" in
     true|false) echo "$value" ;;
-    *) die "Invalid $name '$value'. Must be: true or false" ;;
+    *)
+      die "Invalid $name '$value'. Must be: true or false"
+      return 1
+      ;;
   esac
 }
 
@@ -100,6 +129,9 @@ validate_conflict_strategy() {
   local strategy="$1"
   case "$strategy" in
     abort|ours|theirs|union) echo "$strategy" ;;
-    *) die "Invalid conflict_strategy '$strategy'. Must be: abort, ours, theirs, or union" ;;
+    *)
+      die "Invalid conflict_strategy '$strategy'. Must be: abort, ours, theirs, or union"
+      return 1
+      ;;
   esac
 }

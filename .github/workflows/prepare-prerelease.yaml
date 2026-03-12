@@ -88,6 +88,12 @@ jobs:
             printf 'target_safe=%s\n' "$TARGET" >> "$GITHUB_OUTPUT"
             printf 'base_safe=%s\n'   "$BASE"   >> "$GITHUB_OUTPUT"
 
+      - name: Checkout base branch
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.2
+        with:
+          ref: ${{ steps.guard_validate.outputs.base_safe }}
+          fetch-depth: 0
+
       - name: Detect destination existence on origin
         id: dest_state
         shell: bash
@@ -99,31 +105,6 @@ jobs:
           else
             echo "existed=false" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Checkout prerelease branch
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.2
-        with:
-          ref: ${{ steps.guard_validate.outputs.target_safe }}
-          fetch-depth: 0
-
-      - name: Derive prerelease anchor sha
-        id: derive_anchor
-        shell: bash
-        env:
-          TARGET_SAFE: ${{ steps.guard_validate.outputs.target_safe }}
-        run: |
-          set -euo pipefail
-          git fetch --tags origin
-          if git rev-parse -q --verify "refs/tags/prebeta-base/${TARGET_SAFE}" >/dev/null; then
-            ANCHOR_SHA=$(git rev-parse "refs/tags/prebeta-base/${TARGET_SAFE}")
-            echo "Using tag anchor: $ANCHOR_SHA"
-          else
-            echo "Tag not found; falling back to merge-base with origin/main"
-            git fetch origin main
-            ANCHOR_SHA=$(git merge-base "origin/${TARGET_SAFE}" origin/main)
-            echo "Fallback anchor: $ANCHOR_SHA"
-          fi
-          printf 'anchor_sha=%s\n' "$ANCHOR_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Git LF config (stabilize EOL)
         run: |
@@ -162,6 +143,25 @@ jobs:
             git checkout -b "$TARGET" "$BASE"
             git push -u origin "$TARGET"
           fi
+
+      - name: Derive prerelease anchor sha
+        id: derive_anchor
+        shell: bash
+        env:
+          TARGET_SAFE: ${{ steps.guard_validate.outputs.target_safe }}
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+          if git rev-parse -q --verify "refs/tags/prebeta-base/${TARGET_SAFE}" >/dev/null; then
+            ANCHOR_SHA=$(git rev-parse "refs/tags/prebeta-base/${TARGET_SAFE}")
+            echo "Using tag anchor: $ANCHOR_SHA"
+          else
+            echo "Tag not found; falling back to merge-base with origin/main"
+            git fetch origin main
+            ANCHOR_SHA=$(git merge-base "origin/${TARGET_SAFE}" origin/main)
+            echo "Fallback anchor: $ANCHOR_SHA"
+          fi
+          printf 'anchor_sha=%s\n' "$ANCHOR_SHA" >> "$GITHUB_OUTPUT"
 
       # This step should be unnecessary but may be useful in diagnostics so keeping as comment
       # - name: Fetch tags
