@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
+require_relative '../../../spec_helper'
 require 'common/gui/master_password_manager'
 require 'common/gui/windows_credential_manager'
 

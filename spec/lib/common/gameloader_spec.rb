@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
+require_relative '../../spec_helper'
+
+# Load the gameloader module
+require 'common/gameloader'
 
 RSpec.describe Lich::Common::GameLoader do
   describe '.dragon_realms' do
@@ -12,9 +15,14 @@ RSpec.describe Lich::Common::GameLoader do
     end
 
     it 'loads DragonRealms-specific modules' do
-      skip 'Requires LIB_DIR to be defined'
-      # expect(described_class).to receive(:require).with(/drinfomon/)
-      # described_class.dragon_realms
+      stub_const('DRInfomon', Class.new do
+        def self.watch!
+          # no-op
+        end
+      end)
+
+      expect(described_class).to receive(:require).with(/drinfomon/)
+      described_class.dragon_realms
     end
 
     it 'calls DRInfomon.watch!' do

@@ -1,7 +1,18 @@
-# Mock Database Adapter for Settings Module Testing
+# frozen_string_literal: true
 
-# This file implements an in-memory database adapter for testing the Settings module
-# without requiring an actual SQLite database.
+# mock_database_adapter.rb - In-memory test doubles for the Settings module
+#
+# Deliberately NOT auto-required via spec_helper. The Settings specs under
+# spec/lib/common/settings/ intentionally skip spec_helper and require this
+# file directly to test database and path-navigation logic in strict isolation
+# from the broader game-object mock environment.
+#
+# Contains three test doubles:
+#   MockDatabaseAdapter - in-memory Settings storage (no SQLite)
+#   MockScript          - minimal Script.current stub for Settings path resolution
+#   MockXMLData         - minimal XMLData stub for game/character name resolution
+
+require 'ostruct'
 
 module Lich
   module Common
@@ -81,18 +92,27 @@ module Lich
       self.current_name = 'test_script'
     end
 
-    # Mock XMLData module for testing
+    # Minimal XMLData stub for settings tests — just game and name, with sensible defaults.
     module MockXMLData
       class << self
-        attr_accessor :game, :name
+        attr_writer :game, :name
 
-        # def game
-        @game || "GSIV"
-        # end
+        def game
+          @game || "GSIV"
+        end
 
-        # def name
-        @name || "TestCharacter"
-        # end
+        def name
+          @name || "TestCharacter"
+        end
+
+        # NOTE: spec_helper's global before hook resets the real XMLData module,
+        # not this stub (which is injected via stub_const only in settings specs).
+        # Settings specs manage their own state in per-example before blocks, so
+        # this method exists for explicit call-sites, not automatic reset.
+        def reset!
+          @game = nil
+          @name = nil
+        end
       end
     end
   end

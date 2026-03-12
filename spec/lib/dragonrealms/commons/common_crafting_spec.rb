@@ -1,52 +1,8 @@
+# frozen_string_literal: true
+
 require_relative '../../../spec_helper'
-require 'rspec'
 
-# Setup load path
-LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
-$LOAD_PATH.unshift(LIB_DIR) unless $LOAD_PATH.include?(LIB_DIR)
-
-# Ensure Lich::DragonRealms namespace exists
-module Lich; module DragonRealms; end; end
-
-# Mock NilClass method_missing (matches Lich runtime behavior)
-class NilClass
-  def method_missing(*)
-    nil
-  end
-end
-
-# Mock dependencies — define at top level, then alias into namespace
-# so that code inside Lich::DragonRealms and specs target the same object.
-module DRC
-  def self.bput(*_args)
-    nil
-  end
-end unless defined?(DRC)
-
-module DRCI
-  def self.get_item?(*_args)
-    true
-  end
-
-  def self.put_away_item?(*_args)
-    true
-  end
-
-  def self.dispose_trash(*_args)
-    nil
-  end
-end unless defined?(DRCI)
-
-# Namespace aliases — MUST be BEFORE require so code resolves correctly.
-# When common_spec.rb loads common.rb later, it reopens the SAME object,
-# ensuring stubs on ::DRC also affect Lich::DragonRealms::DRC.
-module Lich
-  module DragonRealms
-    DRC = ::DRC unless defined?(Lich::DragonRealms::DRC)
-    DRCI = ::DRCI unless defined?(Lich::DragonRealms::DRCI)
-  end
-end
-
+# Load production code
 require 'dragonrealms/commons/common-crafting'
 
 DRCC = Lich::DragonRealms::DRCC unless defined?(DRCC)
@@ -89,7 +45,7 @@ describe DRCC do
     end
 
     context 'when work order has expired' do
-      it 'disposes the item' do
+      it 'disposes the crafted item via dispose_trash when work order has expired' do
         allow(DRC).to receive(:bput).and_return('This work order has expired')
 
         expect(DRCI).to receive(:dispose_trash).with('rucksack')
@@ -99,7 +55,7 @@ describe DRCC do
     end
 
     context 'when item quality is too low' do
-      it 'disposes the item' do
+      it 'disposes the crafted item via dispose_trash when quality is below work order requirements' do
         allow(DRC).to receive(:bput).and_return('The work order requires items of a higher quality')
 
         expect(DRCI).to receive(:dispose_trash).with('rucksack')
@@ -109,7 +65,7 @@ describe DRCC do
     end
 
     context 'when item is wrong type' do
-      it 'disposes the item' do
+      it 'disposes the crafted item via dispose_trash when item type does not match work order' do
         allow(DRC).to receive(:bput).and_return("That isn't the correct type of item for this work order.")
 
         expect(DRCI).to receive(:dispose_trash).with('rucksack')

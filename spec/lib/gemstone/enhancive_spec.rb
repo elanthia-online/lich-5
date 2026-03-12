@@ -1,34 +1,16 @@
 # frozen_string_literal: true
 
-class Script
-  def Script.current
-    nil
-  end
-end
-
-module Lich
-  def self.log(msg)
-    debug_filename = "debug-#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}.log"
-    $stderr = File.open(debug_filename, 'w')
-    begin
-      $stderr.puts "#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}: #{msg}"
-    end
-  end
-end
-
-class NilClass
-  def method_missing(*)
-    nil
-  end
-end
+require_relative '../../spec_helper'
 
 require 'rexml/document'
 require 'rexml/streamlistener'
-require 'open-uri'
 require "common/spell"
 require "attributes/skills"
-require 'tmpdir'
 
+# Load spell data from fixture (spec_helper provides the path)
+load_spell_data
+
+# Spellsong mock for Gemstone testing
 module Lich
   module Common
     class Spell
@@ -38,97 +20,7 @@ module Lich
         end
       end
     end
-  end
-end
-
-Dir.mktmpdir do |dir|
-  local_filename = File.join(dir, "effect-list.xml")
-  print "Downloading effect-list.xml..."
-  download = URI.open('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml').read
-  File.write(local_filename, download)
-  Lich::Common::Spell.load(local_filename)
-  puts " Done!"
-end
-
-LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
-
-module XMLData
-  @dialogs = {}
-  def self.game
-    "rspec"
-  end
-
-  def self.name
-    "testing"
-  end
-
-  def self.indicator
-    { 'IconSTUNNED' => 'n',
-      'IconDEAD'    => 'n',
-      'IconWEBBED'  => false }
-  end
-
-  def self.save_dialogs(kind, attributes)
-    @dialogs[kind] ||= {}
-    return @dialogs[kind] = attributes
-  end
-
-  def self.dialogs
-    @dialogs ||= {}
-  end
-end
-
-# stub in Effects module for testing
-module Effects
-  class Registry
-    include Enumerable
-
-    def initialize(dialog)
-      @dialog = dialog
-    end
-
-    def to_h
-      XMLData.dialogs.fetch(@dialog, {})
-    end
-
-    def each()
-      to_h.each { |k, v| yield(k, v) }
-    end
-
-    def active?(effect)
-      expiry = to_h.fetch(effect, 0)
-      expiry.to_f > Time.now.to_f
-    end
-
-    def time_left(effect)
-      expiry = to_h.fetch(effect, 0)
-      if to_h.fetch(effect, 0) != 0
-        ((expiry - Time.now) / 60.to_f)
-      else
-        expiry
-      end
-    end
-  end
-
-  Spells    = Registry.new("Active Spells")
-  Buffs     = Registry.new("Buffs")
-  Debuffs   = Registry.new("Debuffs")
-  Cooldowns = Registry.new("Cooldowns")
-end
-
-module Lich
-  module Gemstone
-    class Spellsong
-      @@renewed ||= Time.at(Time.now.to_i - 1200)
-      def Spellsong.renewed
-        @@renewed = Time.now
-      end
-
-      def Spellsong.timeleft
-        8
-      end
-    end
-  end
+  end unless defined?(Lich::Common::Spell::Spellsong)
 end
 
 require "common/sharedbuffer"
@@ -146,17 +38,21 @@ require "util/util"
 require "gemstone/psms"
 require "gemstone/psms/ascension"
 
-module Lich
-  module Gemstone
-    module Infomon
-      def self.respond(msg)
-        pp msg
+# Add respond method to Infomon for tests (only if not already defined)
+unless Lich::Gemstone::Infomon.respond_to?(:respond)
+  module Lich
+    module Gemstone
+      module Infomon
+        def self.respond(msg)
+          puts msg if ENV['DEBUG']
+          msg # Return msg for specs that depend on return value (e.g., Infomon.show)
+        end
       end
     end
   end
 end
 
-describe Lich::Gemstone::Enhancive do
+RSpec.describe Lich::Gemstone::Enhancive do
   before(:each) do
     Lich::Gemstone::Infomon.reset!
   end
@@ -310,7 +206,7 @@ describe Lich::Gemstone::Enhancive do
       Lich::Gemstone::Infomon.set("enhancive.stats.item_count", 42)
 
       Lich::Gemstone::Enhancive.reset_all
-      sleep 0.1 # Allow async queue to process
+      Lich::Gemstone::Infomon.flush # Drain async SQL queue before reading results
 
       expect(Lich::Gemstone::Enhancive.strength.value).to eq(0)
       expect(Lich::Gemstone::Enhancive.ambush.bonus).to eq(0)
@@ -321,7 +217,7 @@ describe Lich::Gemstone::Enhancive do
   end
 end
 
-describe Lich::Gemstone::Infomon::Parser, "enhancive patterns" do
+RSpec.describe Lich::Gemstone::Infomon::Parser, "enhancive patterns" do
   before(:each) do
     Lich::Gemstone::Infomon.reset!
   end
@@ -381,7 +277,7 @@ describe Lich::Gemstone::Infomon::Parser, "enhancive patterns" do
       EnhanciveTotals
 
       output.split("\n").each { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
-      sleep 0.1 # Allow async queue to process
+      Lich::Gemstone::Infomon.flush # Drain async SQL queue before reading results
 
       # Check stats
       expect(Lich::Gemstone::Enhancive.strength.value).to eq(41)
@@ -448,7 +344,7 @@ describe Lich::Gemstone::Infomon::Parser, "enhancive patterns" do
       MinimalOutput
 
       output.split("\n").each { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
-      sleep 0.1
+      Lich::Gemstone::Infomon.flush # Drain async SQL queue before reading results
 
       # New value should be set
       expect(Lich::Gemstone::Enhancive.strength.value).to eq(10)

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'json'
 
 # Mock StringProc
 class StringProc
@@ -80,9 +81,13 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
   let(:map_class) { Lich::Common::Map }
 
   before(:each) do
-    # Clear class state before each test
+    # Clear room registry via the public API
     map_class.clear rescue nil
-    # Reset additional class variables not handled by clear
+    # NOTE: class_variable_set is acceptable here because Map has no reset! method.
+    # map_class.clear handles @@rooms but leaves @@uids and the room-navigation class
+    # variables (@@previous_room_id, @@current_room_id, @@current_room_count) at their
+    # last values, which would bleed across tests. Reset them directly until a reset!
+    # method is added to Map. TODO: add Map.reset! to production code.
     map_class.class_variable_set(:@@uids, {})
     map_class.class_variable_set(:@@previous_room_id, -1)
     map_class.class_variable_set(:@@current_room_id, -1)
@@ -231,6 +236,11 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
     end
   end
 
+  # NOTE: Several nested before blocks below use class_variable_set(:@@loaded, true).
+  # This is acceptable because Map has no reset! or public setter for the @@loaded guard.
+  # Setting @@loaded=true is the only way to put the map into a testable "loaded" state
+  # without loading an actual map file. The outer before(:each) calls map_class.clear
+  # which resets @@loaded back to false between tests.
   describe 'class methods' do
     describe '.loaded?' do
       it 'returns false initially' do
@@ -240,7 +250,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.get_free_id' do
       before do
-        # Manually mark loaded and add some rooms
+        # Set @@loaded=true so methods that guard on loaded? are accessible (see NOTE above)
         map_class.class_variable_set(:@@loaded, true)
         map_class.new(1, ['A'], ['a'], ['path'])
         map_class.new(5, ['B'], ['b'], ['path'])
@@ -254,7 +264,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.[]' do
       before do
-        map_class.class_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true) # see NOTE above
         map_class.new(1, ['Title A'], ['Description A'], ['path'])
         map_class.new(2, ['Title B'], ['Description B'], ['path'])
       end
@@ -287,9 +297,11 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.previous' do
       before do
-        map_class.class_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true) # see NOTE above
         map_class.new(1, ['Room A'], ['desc'], ['path'])
         map_class.new(2, ['Room B'], ['desc'], ['path'])
+        # NOTE: @@previous_room_id has no public setter; class_variable_set is the only
+        # way to simulate a previous-room navigation state for this test.
         map_class.class_variable_set(:@@previous_room_id, 1)
       end
 
@@ -339,7 +351,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.tags' do
       before do
-        map_class.class_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true) # see NOTE above
         map_class.new(1, ['A'], ['a'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['tag1', 'tag2'])
         map_class.new(2, ['B'], ['b'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['tag2', 'tag3'])
       end
@@ -355,7 +367,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.clear' do
       before do
-        map_class.class_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true) # see NOTE above
         map_class.new(1, ['A'], ['a'], ['path'])
       end
 
@@ -376,6 +388,100 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
         expect(map_class).to receive(:clear).ordered
         expect(map_class).to receive(:load).ordered
         map_class.reload
+      end
+    end
+  end
+
+  describe 'Genie field support' do
+    describe '#initialize' do
+      it 'accepts genie fields as parameters' do
+        room = map_class.new(
+          1, ['Title'], ['Desc'], ['path'], [1], nil, nil, nil, {}, {}, nil, nil, [], nil, nil, nil,
+          'node42', 'zone7', 'pos1'
+        )
+
+        expect(room.genie_id).to eq('node42')
+        expect(room.genie_zone).to eq('zone7')
+        expect(room.genie_pos).to eq('pos1')
+      end
+
+      it 'defaults genie fields to nil' do
+        room = map_class.new(1, ['Title'], ['Desc'], ['path'])
+
+        expect(room.genie_id).to be_nil
+        expect(room.genie_zone).to be_nil
+        expect(room.genie_pos).to be_nil
+      end
+    end
+
+    describe '#json_extra_fields' do
+      it 'returns genie fields hash' do
+        room = map_class.new(
+          1, ['Title'], ['Desc'], ['path'], [1], nil, nil, nil, {}, {}, nil, nil, [], nil, nil, nil,
+          'node42', 'zone7', 'pos1'
+        )
+
+        extra = room.json_extra_fields
+        expect(extra[:genie_id]).to eq('node42')
+        expect(extra[:genie_zone]).to eq('zone7')
+        expect(extra[:genie_pos]).to eq('pos1')
+      end
+    end
+
+    describe '#to_json with genie fields' do
+      it 'includes genie fields when present' do
+        room = map_class.new(
+          1, ['Title'], ['Desc'], ['path'], [1], nil, nil, nil, {}, {}, nil, nil, [], nil, nil, nil,
+          'node42', 'zone7', nil
+        )
+
+        json = room.to_json
+        parsed = JSON.parse(json)
+        expect(parsed['genie_id']).to eq('node42')
+        expect(parsed['genie_zone']).to eq('zone7')
+      end
+
+      it 'excludes genie fields when nil' do
+        room = map_class.new(1, ['Title'], ['Desc'], ['path'])
+
+        json = room.to_json
+        parsed = JSON.parse(json)
+        expect(parsed).not_to have_key('genie_id')
+        expect(parsed).not_to have_key('genie_zone')
+        expect(parsed).not_to have_key('genie_pos')
+      end
+    end
+
+    describe '.by_genie_ref' do
+      before do
+        map_class.class_variable_set(:@@loaded, true)
+        map_class.new(
+          1, ['Room A'], ['desc'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, [], nil, nil, nil,
+          '42', '7', nil
+        )
+        map_class.new(
+          2, ['Room B'], ['desc'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, [], nil, nil, nil,
+          '99', '7', nil
+        )
+        map_class.new(
+          3, ['Room C'], ['desc'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, [], nil, nil, nil,
+          '42', '10', nil
+        )
+      end
+
+      it 'finds room by zone and node id' do
+        room = map_class.by_genie_ref('7', '42')
+        expect(room.id).to eq(1)
+      end
+
+      it 'returns nil for nonexistent reference' do
+        room = map_class.by_genie_ref('999', '999')
+        expect(room).to be_nil
+      end
+
+      it 'converts integer arguments to strings for comparison' do
+        room = map_class.by_genie_ref(7, 42)
+        expect(room.id).to eq(1)
       end
     end
   end

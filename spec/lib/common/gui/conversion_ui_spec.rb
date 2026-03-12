@@ -1,7 +1,12 @@
 # frozen_string_literal: true
 
 require 'rspec'
+require 'tmpdir'
 require_relative '../../../login_spec_helper'
+
+# Define DATA_DIR for production code that references it
+DATA_DIR = Dir.tmpdir unless defined?(DATA_DIR)
+
 require_relative '../../../../lib/common/gui/conversion_ui'
 require_relative '../../../../lib/common/gui/master_password_manager'
 require_relative '../../../../lib/common/authentication/entry_store'
@@ -117,11 +122,11 @@ module Gtk
   end
 
   class ResponseType
-    OK = 0
-    CANCEL = 1
-    APPLY = 2
-    YES = 3
-    NO = 4
+    OK = 0 unless defined?(OK)
+    CANCEL = 1 unless defined?(CANCEL)
+    APPLY = 2 unless defined?(APPLY)
+    YES = 3 unless defined?(YES)
+    NO = 4 unless defined?(NO)
   end
 
   def self.queue
@@ -301,24 +306,31 @@ RSpec.describe Lich::Common::GUI::ConversionUI do
       # Enhanced mode should be disabled/insensitive
     end
 
-    context 'Windows platform specific tests', skip: (RUBY_PLATFORM !~ /mswin|mingw/) do
-      it 'handles Windows keychain integration in dialog' do
+    context 'when keychain is available' do
+      before do
         allow(Lich::Common::GUI::MasterPasswordManager).to receive(:keychain_available?).and_return(true)
+      end
+
+      it 'checks keychain availability during dialog creation' do
         described_class.show_conversion_dialog(parent_window, test_data_dir, proc {})
         expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:keychain_available?)
       end
 
-      it 'disables master password when Windows keychain unavailable' do
+      it 'enables master password mode option' do
+        described_class.show_conversion_dialog(parent_window, test_data_dir, proc {})
+        expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:keychain_available?)
+      end
+    end
+
+    context 'when keychain is unavailable' do
+      before do
         allow(Lich::Common::GUI::MasterPasswordManager).to receive(:keychain_available?).and_return(false)
         allow(Lich).to receive(:log)
-        described_class.show_conversion_dialog(parent_window, test_data_dir, proc {})
-        expect(Lich).to have_received(:log)
       end
 
-      it 'enables master password when Windows keychain available' do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:keychain_available?).and_return(true)
+      it 'logs the unavailability' do
         described_class.show_conversion_dialog(parent_window, test_data_dir, proc {})
-        expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:keychain_available?)
+        expect(Lich).to have_received(:log).at_least(:once)
       end
     end
   end

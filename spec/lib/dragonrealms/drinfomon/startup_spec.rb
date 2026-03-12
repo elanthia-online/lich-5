@@ -1,12 +1,19 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
+require_relative '../../../spec_helper'
+
+# Load the startup module
+require 'dragonrealms/drinfomon/startup'
 
 RSpec.describe Lich::DragonRealms::DRInfomon do
+  before(:each) do
+    # NOTE: class_variable_set used because DRInfomon is a production module with no reset! method
+    described_class.class_variable_set(:@@startup_complete, false)
+    described_class.instance_variable_set(:@startup_thread, nil)
+  end
+
   describe '.startup_complete?' do
     it 'returns false initially' do
-      # Reset the class variable
-      described_class.class_variable_set(:@@startup_complete, false)
       expect(described_class.startup_complete?).to be false
     end
 
@@ -20,8 +27,6 @@ RSpec.describe Lich::DragonRealms::DRInfomon do
     let(:mock_thread) { instance_double(Thread) }
 
     before do
-      # Reset the instance variable
-      described_class.instance_variable_set(:@startup_thread, nil)
       # Stub Thread.new to prevent actual thread creation
       allow(Thread).to receive(:new).and_return(mock_thread)
     end
@@ -45,10 +50,11 @@ RSpec.describe Lich::DragonRealms::DRInfomon do
 
   describe '.startup' do
     it 'calls ExecScript.start with startup_script' do
-      skip 'Requires ExecScript to be defined'
-      # This would need ExecScript to be loaded
-      # expect(ExecScript).to receive(:start).with(anything, hash_including(name: "drinfomon_startup"))
-      # described_class.startup
+      expect(ExecScript).to receive(:start).with(
+        described_class.startup_script,
+        hash_including(name: 'drinfomon_startup')
+      )
+      described_class.startup
     end
   end
 
@@ -76,7 +82,6 @@ RSpec.describe Lich::DragonRealms::DRInfomon do
       #
       # Thread creation is tested in .watch! specs above.
       # Here we verify the startup delegation contract.
-      described_class.class_variable_set(:@@startup_complete, false)
       allow(described_class).to receive(:startup)
 
       described_class.startup
@@ -85,8 +90,6 @@ RSpec.describe Lich::DragonRealms::DRInfomon do
     end
 
     it 'startup_completed! signals PostLoad when defined' do
-      described_class.class_variable_set(:@@startup_complete, false)
-
       # PostLoad is defined via spec_helper loading gameloader.rb
       if defined?(PostLoad)
         allow(PostLoad).to receive(:game_loaded!)

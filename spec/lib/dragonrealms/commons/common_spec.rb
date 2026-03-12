@@ -1,89 +1,9 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
-require 'rspec'
-require 'ostruct'
 
-# Setup load path (standalone spec, no spec_helper dependency)
-LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
-
-# Ensure Lich::DragonRealms namespace exists
-module Lich; module DragonRealms; end; end
-
-# Mock Lich::Messaging — always reopen (no guard) because other specs
-# may define Lich::Messaging without msg/messages/clear_messages!.
-module Lich
-  module Messaging
-    @messages = []
-
-    class << self
-      def messages
-        @messages ||= []
-      end
-
-      def clear_messages!
-        @messages = []
-      end
-
-      def msg(type, message, **_opts)
-        @messages ||= []
-        @messages << { type: type, message: message }
-      end
-    end
-  end
-end
-
-# Mock Lich::Util for issue_command
-module Lich
-  module Util
-    def self.issue_command(_command, _start, _end_pattern, **_opts)
-      []
-    end
-  end
-end unless defined?(Lich::Util)
-
-module DRStats
-  def self.guild; 'Warrior Mage'; end
-  def self.encumbrance; 'None'; end
-  def self.barbarian?; false; end
-  def self.thief?; false; end
-end unless defined?(DRStats)
-Lich::DragonRealms::DRStats = DRStats unless defined?(Lich::DragonRealms::DRStats)
-
-class DRSkill
-  def self.getrank(_skill); 0; end
-end unless defined?(DRSkill)
-Lich::DragonRealms::DRSkill = DRSkill unless defined?(Lich::DragonRealms::DRSkill)
-
-class DRRoom
-  def self.npcs; []; end
-  def self.room_objs; []; end
-end unless defined?(DRRoom)
-Lich::DragonRealms::DRRoom = DRRoom unless defined?(Lich::DragonRealms::DRRoom)
-
-module DRSpells
-  def self.active_spells; {}; end
-end unless defined?(DRSpells)
-Lich::DragonRealms::DRSpells = DRSpells unless defined?(Lich::DragonRealms::DRSpells)
-
-module DRCI
-  def self.in_hands?(_item); false; end
-  def self.get_item?(_item, _container = nil); true; end
-  def self.put_away_item?(_item, _container = nil); true; end
-  def self.stow_item?(_item, _container = nil); true; end
-  def self.tie_item?(_item, _container = nil); true; end
-  def self.untie_item?(_item, _container = nil); true; end
-  def self.wear_item?(_item); true; end
-  def self.remove_item?(_item); true; end
-end unless defined?(DRCI)
-Lich::DragonRealms::DRCI = DRCI unless defined?(Lich::DragonRealms::DRCI)
-
-# NOTE: GameObj is intentionally NOT defined at the top level here.
-# Defining it prevents qstrike_spec's alias (GameObj = Lich::Gemstone::GameObj)
-# from working, causing cross-spec failures. Tests that need GameObj
-# use stub_const to create a temporary mock scoped to each test.
-#
-# Helper class used by stub_const in tests — NOT assigned to ::GameObj.
+# Helper class for GameObj mock — used with stub_const in tests
+# NOTE: GameObj is NOT defined at top level to avoid conflicts with qstrike_spec
 DRC_MOCK_GAME_OBJ = Class.new do
   attr_accessor :name, :noun
 
@@ -91,53 +11,9 @@ DRC_MOCK_GAME_OBJ = Class.new do
     @name = name
     @noun = noun
   end
-end
+end unless defined?(DRC_MOCK_GAME_OBJ)
 
-# Always reopen Script to add attributes/methods needed by common.rb tests.
-# Other specs may define Script first (spec_helper.rb has a minimal version),
-# so we augment rather than replace to avoid cross-spec failures.
-class Script
-  attr_accessor :paused, :no_pause_all, :name
-
-  def paused?; @paused || false; end
-  def pause; end
-  def unpause; end
-
-  # Only define class methods if they don't exist (spec_helper.rb may have its own)
-  class << self
-    def running
-      []
-    end unless method_defined?(:running)
-
-    def running?(_name)
-      false
-    end unless method_defined?(:running?)
-
-    def exists?(_name)
-      true
-    end unless method_defined?(:exists?)
-
-    def current
-      nil
-    end unless method_defined?(:current)
-
-    def self
-      OpenStruct.new(name: 'test')
-    end unless method_defined?(:self)
-  end
-end
-
-module UserVars
-  @vars = {}
-  class << self
-    def method_missing(name, *args)
-      name.to_s.end_with?('=') ? @vars[name.to_s.chomp('=')] = args.first : @vars[name.to_s]
-    end
-
-    def respond_to_missing?(_name, _include_private = false); true; end
-  end
-end unless defined?(UserVars)
-
+# Global variables required by common.rb (test data, not mocks)
 $HOMETOWN_REGEX_MAP = {
   "Crossing" => /^(cross(ing)?)$/i, "Riverhaven" => /^(river|haven|riverhaven)$/i,
   "Shard" => /^(shard)$/i, "Therenborough" => /^(theren(borough)?)$/i,
@@ -162,44 +38,7 @@ $ENC_MAP = {
 $box_regex = /((?:brass|copper|deobar|driftwood|iron|ironwood|mahogany|oaken|pine|steel|wooden) (?:box|caddy|casket|chest|coffer|crate|skippet|strongbox|trunk))/ unless defined?($box_regex)
 $fake_stormfront = false unless defined?($fake_stormfront)
 
-# Mock Frontend module (added in PR #1170)
-module Frontend
-  def self.supports_gsl?; false; end
-end unless defined?(Frontend)
-
-# Mock XMLData for log_window
-# XMLData may be a module (from this file) or OpenStruct (from spec_helper.rb).
-# Always add server_time if missing, using define_singleton_method to work with both.
-module XMLData; end unless defined?(XMLData)
-XMLData.define_singleton_method(:server_time) { Time.at(1234567890) } unless XMLData.respond_to?(:server_time)
-$pause_all_lock = Mutex.new unless defined?($pause_all_lock)
-$safe_pause_lock = Mutex.new unless defined?($safe_pause_lock)
-
-# NOTE: `clear` MUST be private — a public Kernel `clear` is inherited by all objects,
-# causing `Effects::Buffs.respond_to?(:clear)` to return true in qstrike_spec,
-# which breaks buff cleanup. Private methods don't appear in `respond_to?` checks
-# but are still callable as bare method calls within module_function methods like bput.
-module Kernel
-  def clear; end
-  private :clear
-
-  def pause(_seconds = nil); end
-  def waitrt?; end
-  def fput(_cmd); end
-  def put(_cmd); end
-  def get?; nil; end
-  def echo(_msg); end
-  def standing?; true; end
-  def hiding?; false; end
-  def invisible?; false; end
-  def stunned?; false; end
-  def webbed?; false; end
-  def start_script(_name, _args = [], _flags = {}); nil; end
-  # Note: get_data is provided by spec_helper.rb — do not redefine here
-  def _respond(*_args); end
-  def custom_require; proc { |_name| nil }; end
-end
-
+# Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common.rb')
 DRC = Lich::DragonRealms::DRC unless defined?(DRC)
 
