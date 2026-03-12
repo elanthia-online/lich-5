@@ -59,7 +59,7 @@ def self.get_item?(item, container = nil)
 ### Internal-Public (Standard Documentation)
 
 A method is **internal-public** if it is public but only called by other
-commons modules (not by `.lic` scripts directly).
+`lib/` modules (not by `.lic` scripts directly).
 
 **Required tags**: summary line, `@param`, `@return`
 

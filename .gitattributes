@@ -18,6 +18,8 @@ Gemfile.lock     export-ignore
 # second, let's take a running stab at ignoring a directory
 /spec            export-ignore
 /.github         export-ignore
+/docs            export-ignore
+.yardopts        export-ignore
 
 # third, let's ignore a file in a directory
 
