@@ -126,6 +126,13 @@ RSpec.describe 'wine.rb' do
     end
 
     context 'with no explicit wine flags' do
+      around(:example) do |example|
+        original_path = ENV['PATH']
+        example.run
+      ensure
+        ENV['PATH'] = original_path
+      end
+
       it 'finds a wine executable from PATH without shelling out' do
         path_dir = Dir.mktmpdir('wine-path')
         wine_bin = File.join(path_dir, 'wine')
@@ -133,14 +140,12 @@ RSpec.describe 'wine.rb' do
           FileUtils.touch(wine_bin)
           FileUtils.chmod(0o755, wine_bin)
 
-          original_path = ENV['PATH']
           ENV['PATH'] = path_dir
           stub_const('ARGV', [])
 
           load wine_file_path
           expect($wine_bin).to eq(wine_bin)
         ensure
-          ENV['PATH'] = original_path
           FileUtils.rm_rf(path_dir)
         end
       end
@@ -237,7 +242,7 @@ RSpec.describe 'wine.rb' do
       end
 
       it 'returns false when regedit command returns non-zero' do
-        allow(Kernel).to receive(:system).and_return(false)
+        allow(Wine).to receive(:system).with(Wine::BIN, 'regedit', anything).and_return(false)
         result = Wine.registry_puts('HKEY_LOCAL_MACHINE\\Software\\Test\\Value', 'test')
         expect(result).to eq(false)
       end

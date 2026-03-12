@@ -8,7 +8,7 @@ require 'rbconfig'
 # startup detection consistent across Linux/macOS/Windows Ruby runtimes.
 #
 # @return [String, nil] absolute path to a runnable wine binary, or nil
-def find_wine_binary
+find_wine_binary = lambda {
   exe_ext = RbConfig::CONFIG['EXEEXT'].to_s
   extensions = exe_ext.empty? ? [''] : [exe_ext, '']
 
@@ -22,21 +22,21 @@ def find_wine_binary
   end
 
   nil
-end
+}
 
 # Detect Wine runtime configuration from CLI overrides or PATH lookup.
 # `--no-wine` and `--without-frontend` explicitly disable detection.
 if (arg = ARGV.find { |a| a =~ /^--wine=.+$/i })
-  $wine_bin = arg.sub(/^--wine=/, '')
+  $wine_bin = arg.sub(/^--wine=/i, '')
 elsif ARGV.find { |a| a =~ /^--no-wine$/i } || ARGV.include?('--without-frontend')
   $wine_bin = nil
 else
-  $wine_bin = find_wine_binary
+  $wine_bin = find_wine_binary.call
 end
 
 unless $wine_bin.nil?
   if (arg = ARGV.find { |a| a =~ /^--wine-prefix=.+$/i })
-    $wine_prefix = arg.sub(/^--wine-prefix=/, '')
+    $wine_prefix = arg.sub(/^--wine-prefix=/i, '')
   elsif ENV['WINEPREFIX']
     $wine_prefix = ENV['WINEPREFIX']
   elsif ENV['HOME']
@@ -53,6 +53,8 @@ unless $wine_bin.nil?
       # Reads a value from Wine's `system.reg` for `HKEY_LOCAL_MACHINE` keys.
       #
       # @param key [String] registry path, e.g. `HKEY_LOCAL_MACHINE\Software\Foo\Bar`
+      # Note: malformed keys now intentionally raise ArgumentError (instead of
+      # the previous incidental NoMethodError from calling `captures` on nil).
       # @raise [ArgumentError] when +key+ is not a supported registry path format
       # @return [String, false] value string when found, false otherwise
       def Wine.registry_gets(key)
@@ -74,8 +76,11 @@ unless $wine_bin.nil?
                 lookin = true
               elsif line =~ /^\[/
                 lookin = false
-              elsif lookin and line =~ /^#{thingie}="(.*)"$/i
-                result = $1.split('\\"').join('"').split('\\\\').join('\\').sub(/\\0$/, '')
+              elsif lookin
+                value_match = /^#{thingie}="(.*)"$/i.match(line)
+                next unless value_match
+
+                result = value_match[1].split('\\"').join('"').split('\\\\').join('\\').sub(/\\0$/, '')
                 break
               end
             }
@@ -93,6 +98,8 @@ unless $wine_bin.nil?
       #
       # @param key [String] registry path, e.g. `HKEY_LOCAL_MACHINE\Software\Foo\Bar`
       # @param value [String] value to persist
+      # Note: malformed keys now intentionally raise ArgumentError (instead of
+      # the previous incidental NoMethodError from calling `captures` on nil).
       # @raise [ArgumentError] when +key+ is not a supported registry path format
       # @return [Boolean] true on successful write path, false on failures or regedit non-zero exit
       def Wine.registry_puts(key, value)
