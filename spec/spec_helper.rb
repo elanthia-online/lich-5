@@ -484,29 +484,35 @@ module Lich
     end unless respond_to?(:reset_display_expgains!)
   end
 
+  # Messaging is always opened (not guarded by const_defined?) because production
+  # code defines Lich::Messaging without test helpers. Using const_defined? would
+  # skip this entire block when production Messaging loads first, leaving specs
+  # without clear_messages!. Per-method guards add only what is missing.
   module Messaging
-    @messages = []
+    @messages ||= []
 
     class << self
-      def msg_format(_format, _msg); end
-
-      def mono(_msg); end
+      def msg_format(_format, _msg); end unless respond_to?(:msg_format)
+      def mono(_msg); end unless respond_to?(:mono)
 
       def msg(type, message, **_opts)
         @messages ||= []
         @messages << { type: type, message: message }
         puts "[Lich::Messaging] #{message}" if ENV['DEBUG']
-      end
+      end unless respond_to?(:msg)
 
       def messages
         @messages ||= []
-      end
+      end unless respond_to?(:messages)
 
+      # clear_messages! is test-only infrastructure — production Lich::Messaging
+      # never defines it. Always add it so assertion teardown works regardless of
+      # which Messaging (mock or production) was loaded first.
       def clear_messages!
         @messages = []
-      end
+      end unless respond_to?(:clear_messages!)
     end
-  end unless const_defined?(:Messaging)
+  end
 end
 
 # =============================================================================
