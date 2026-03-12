@@ -1,86 +1,12 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
-require 'rspec'
 require 'json'
 require 'net/http'
 require 'openssl'
 require 'uri'
 
-# Setup load path (standalone spec, no spec_helper dependency)
-LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
-
-# Mock dependencies — define at top level, alias into namespace
-
-# Script mock (class — game engine class)
-class Script
-  def self.running(*_args)
-    []
-  end
-
-  def self.hidden(*_args)
-    []
-  end
-
-  def self.running?(*_args)
-    false
-  end
-
-  def self.exists?(*_args)
-    false
-  end
-end unless defined?(Script)
-
-# Add methods defensively if another spec defined Script first
-Script.define_singleton_method(:running?) { |*_args| false } unless Script.respond_to?(:running?)
-Script.define_singleton_method(:exists?) { |*_args| false } unless Script.respond_to?(:exists?)
-
-# UserVars mock (module — uses method_missing in real code)
-module UserVars
-  @slack_token = nil
-
-  def self.slack_token
-    @slack_token
-  end
-
-  def self.slack_token=(value)
-    @slack_token = value
-  end
-end unless defined?(UserVars)
-
-# Add slack_token accessors defensively
-unless UserVars.respond_to?(:slack_token)
-  UserVars.instance_variable_set(:@slack_token, nil)
-  UserVars.define_singleton_method(:slack_token) { @slack_token }
-end
-unless UserVars.respond_to?(:slack_token=)
-  UserVars.define_singleton_method(:slack_token=) { |val| @slack_token = val }
-end
-
-# Lich module mocks
-module Lich
-  def self.log(*_args); end unless respond_to?(:log)
-
-  module Messaging
-    def self.msg(*_args); end
-  end unless defined?(Lich::Messaging)
-end
-
-# Namespace aliases — MUST be BEFORE require so code resolves correctly
-module Lich
-  module DragonRealms; end
-end
-
-# Kernel methods needed by the class
-module Kernel
-  def start_script(*_args); end unless method_defined?(:start_script)
-  def pause(*_args); end unless method_defined?(:pause)
-  def get(*_args); nil; end unless method_defined?(:get)
-  def echo(*_args); end unless method_defined?(:echo)
-  def checkname(*_args); 'TestChar'; end unless method_defined?(:checkname)
-end
-
-# Load the module under test (AFTER mocks + aliases)
+# Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'slackbot.rb')
 
 RSpec.describe Lich::DragonRealms::SlackBot do
@@ -345,7 +271,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         expect(bot.initialized?).to be true
       end
 
-      it 'logs the error' do
+      it 'logs the users.list API failure for debugging' do
         expect(Lich).to receive(:log).with(/Error fetching user list/)
         described_class.new
       end
@@ -406,7 +332,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         allow(LNet).to receive(:server).and_return(nil)
       end
 
-      it 'returns false' do
+      it 'is not connected when server is nil' do
         expect(bot.lnet_connected?).to be false
       end
     end
@@ -418,7 +344,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         allow(LNet).to receive(:server).and_return(server)
       end
 
-      it 'returns false' do
+      it 'is not connected when server socket is closed' do
         expect(bot.lnet_connected?).to be false
       end
     end
@@ -432,7 +358,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         allow(LNet).to receive(:respond_to?).with(:last_recv).and_return(false)
       end
 
-      it 'returns true' do
+      it 'is connected when server is open and has no staleness check' do
         expect(bot.lnet_connected?).to be true
       end
     end
@@ -447,7 +373,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         allow(LNet).to receive(:last_recv).and_return(Time.now - 300) # 5 minutes ago
       end
 
-      it 'returns false' do
+      it 'is not connected when last activity exceeds timeout' do
         expect(bot.lnet_connected?).to be false
       end
     end
@@ -462,7 +388,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         allow(LNet).to receive(:last_recv).and_return(Time.now - 10)
       end
 
-      it 'returns true' do
+      it 'is connected when last activity is within timeout' do
         expect(bot.lnet_connected?).to be true
       end
     end
@@ -473,7 +399,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         allow(LNet).to receive(:server).and_raise(IOError)
       end
 
-      it 'returns false' do
+      it 'is not connected when server raises IOError' do
         expect(bot.lnet_connected?).to be false
       end
     end
@@ -497,20 +423,20 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'when token is nil' do
-      it 'returns false' do
+      it 'is not authed when token is nil' do
         expect(bot.authed?(nil)).to be false
       end
     end
 
     context 'when auth.test returns ok' do
-      it 'returns true' do
+      it 'is authed when Slack auth.test confirms valid token' do
         allow(mock_http).to receive(:request).and_return(auth_success_response)
         expect(bot.authed?('valid-token')).to be true
       end
     end
 
     context 'when auth.test returns not ok' do
-      it 'returns falsey' do
+      it 'is not authed when Slack auth.test rejects the token' do
         resp = double('resp')
         allow(resp).to receive(:is_a?).with(Net::HTTPSuccess).and_return(true)
         allow(resp).to receive(:code).and_return('200')
@@ -522,7 +448,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'when NetworkError occurs' do
-      it 'returns false' do
+      it 'is not authed when network error prevents auth check' do
         allow(bot).to receive(:sleep) # prevent real sleep during retry backoff
         allow(mock_http).to receive(:request).and_raise(Timeout::Error)
         expect(bot.authed?('some-token')).to be false
@@ -667,7 +593,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'throttling exceeds max retries' do
-      it 'raises ApiError' do
+      it 'raises ApiError after exhausting all retry attempts' do
         throttle_resp = double('resp_429')
         allow(throttle_resp).to receive(:code).and_return('429')
         allow(throttle_resp).to receive(:[]).with('Retry-After').and_return('1')
@@ -682,7 +608,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'throttling delay exceeds maximum' do
-      it 'raises ApiError immediately' do
+      it 'raises ApiError without retrying when Retry-After exceeds max delay' do
         throttle_resp = double('resp_429')
         allow(throttle_resp).to receive(:code).and_return('429')
         allow(throttle_resp).to receive(:[]).with('Retry-After').and_return('999')
@@ -729,7 +655,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'network error delay exceeds maximum' do
-      it 'raises NetworkError immediately' do
+      it 'raises NetworkError when exponential backoff exceeds max delay' do
         # After enough retries, delay = 30 * 2^retries exceeds 120
         # retries=0: 30, retries=1: 60, retries=2: 120, retries=3: 240 > 120
         call_count = 0
@@ -746,7 +672,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'JSON parse error' do
-      it 'raises ApiError' do
+      it 'raises ApiError when response body is not valid JSON' do
         resp = double('resp')
         allow(resp).to receive(:is_a?).with(Net::HTTPSuccess).and_return(true)
         allow(resp).to receive(:code).and_return('200')
@@ -760,7 +686,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'Slack API error (ok: false)' do
-      it 'raises ApiError' do
+      it 'raises ApiError with error code when Slack API returns ok: false' do
         resp = double('resp')
         allow(resp).to receive(:is_a?).with(Net::HTTPSuccess).and_return(true)
         allow(resp).to receive(:code).and_return('200')
@@ -774,7 +700,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'HTTP error (non-success status)' do
-      it 'raises NetworkError' do
+      it 'raises NetworkError when HTTP response has non-success status code' do
         resp = double('resp')
         allow(resp).to receive(:is_a?).with(Net::HTTPSuccess).and_return(false)
         allow(resp).to receive(:code).and_return('500')
@@ -830,7 +756,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'when Not Found response' do
-      it 'returns false' do
+      it 'returns false when lichbot responds with Not Found' do
         line = '[Private]-MAHTRA:Quilsilgas: "slack_token: Not Found"'
         allow(bot).to receive(:get).and_return(line)
         allow(bot).to receive(:pause)
@@ -841,7 +767,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'when no user response' do
-      it 'returns false' do
+      it 'returns false when server reports no user by that name' do
         line = '[server]: "no user named Quilsilgas"'
         allow(bot).to receive(:get).and_return(line)
         allow(bot).to receive(:pause)
@@ -852,7 +778,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'when timeout' do
-      it 'returns false' do
+      it 'returns false when no response is received within timeout' do
         start = Time.now
         allow(Time).to receive(:now).and_return(start, start + 11)
         allow(bot).to receive(:get).and_return(nil)
@@ -916,7 +842,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'when lnet not available' do
-      it 'returns false' do
+      it 'returns false without attempting token request when lnet is nil' do
         bot.instance_variable_set(:@lnet, nil)
         result = bot.send(:find_token)
         expect(result).to be false
@@ -939,7 +865,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'when no token found' do
-      it 'returns false' do
+      it 'returns false when all lichbots fail to provide a token' do
         bot.instance_variable_set(:@lnet, lnet_script)
         start = Time.now
         allow(Time).to receive(:now).and_return(start, start + 11)
@@ -988,14 +914,14 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     end
 
     context 'when user not found' do
-      it 'returns nil' do
+      it 'returns nil when username does not match any workspace member' do
         result = bot.send(:get_dm_channel, 'nonexistent')
         expect(result).to be_nil
       end
     end
 
     context 'when members list is empty' do
-      it 'returns nil' do
+      it 'returns nil when users list has no members to search' do
         bot.instance_variable_set(:@users_list, { 'members' => [] })
         result = bot.send(:get_dm_channel, 'testuser')
         expect(result).to be_nil

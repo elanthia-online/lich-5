@@ -55,6 +55,8 @@ module Lich
         response = []
         # display all stored db values
         respond "Displaying stored information for #{XMLData.name}"
+        # Flush async SQL queue before reading from DB to ensure consistency
+        Infomon.flush
         Infomon.table.map([:key, :value]).each { |k, v|
           response << "#{k} : #{v.inspect}\n"
         }

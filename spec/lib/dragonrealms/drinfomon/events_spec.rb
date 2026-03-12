@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
-require 'rspec'
+require_relative '../../../spec_helper'
 
 require_relative '../../../../lib/dragonrealms/drinfomon/events'
 
 RSpec.describe Lich::DragonRealms::Flags do
-  let(:described_class) { Lich::DragonRealms::Flags }
-
   before(:each) do
-    # Reset flags state
+    # NOTE: class_variable_set used because Flags is a production class with no reset! method
     described_class.class_variable_set(:@@flags, {})
     described_class.class_variable_set(:@@matchers, {})
   end
@@ -82,7 +80,7 @@ RSpec.describe Lich::DragonRealms::Flags do
   end
 
   describe '.[]=' do
-    it 'sets flag value' do
+    it 'sets the flag value to the assigned string or object' do
       described_class.add('test_flag', 'pattern')
       described_class['test_flag'] = 'matched text'
 

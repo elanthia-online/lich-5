@@ -24,3 +24,13 @@ scripts
 doc/yard/
 *.md
 !docs/*.md
+!spec/README.md
+!spec/fixtures/README.md
+# Test database artifacts
+spec/*.db
+spec/*.db3
+!spec/fixtures/*.db3
+# Test artifacts
+spec/.rspec_status
+# Debug logs
+debug-*.log

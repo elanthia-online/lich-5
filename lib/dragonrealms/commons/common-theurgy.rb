@@ -139,7 +139,7 @@ module Lich
           DRCT.buy_item(shop_data['id'], item_name)
         end
 
-        return unless shop_data['needs_bless'] && @known_spells.include?('Bless')
+        return unless shop_data['needs_bless'] && DRSpells.known_spells.include?('Bless')
 
         quick_bless_item(item_name)
       end

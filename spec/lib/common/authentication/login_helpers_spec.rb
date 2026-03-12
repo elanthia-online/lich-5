@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+# NOTE: This spec intentionally does NOT require spec_helper.
+# It tests LoginHelpers in isolation to verify login flow logic works
+# standalone without the full Lich networking and game state infrastructure.
+
 require 'rspec'
 
 # Define LICH_VERSION for version checks

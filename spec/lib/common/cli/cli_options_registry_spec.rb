@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
-require 'rspec'
-require 'ostruct'
+require_relative '../../../spec_helper'
 
-LIB_DIR = File.expand_path('../../../../lib', __dir__)
+LIB_DIR = File.expand_path('../../../../lib', __dir__) unless defined?(LIB_DIR)
 
 require File.join(LIB_DIR, 'common', 'cli', 'cli_options_registry.rb')
 

@@ -1,149 +1,56 @@
 # frozen_string_literal: true
 
-# Minimal mocks for QStrike testing
-# QStrike only needs: Char.stamina, GameObj hands, Armaments::WeaponStats, Effects::Buffs
+require_relative '../../../spec_helper'
 
-# Mock Script class
-class Script
-  def self.current
-    nil
-  end
-end
+# QStrike-specific mocks extending spec_helper
+# QStrike needs: Char.stamina, GameObj hands, Armaments::WeaponStats, Effects::Buffs
 
-# Mock Lich module
-module Lich
-  def self.log(_msg)
-    # Suppress logging in tests
-  end
-end
-
-# Mock NilClass for safe method chaining
-class NilClass
-  def method_missing(*)
-    nil
-  end
-end
-
-# Mock XMLData
-module XMLData
-  def self.game
-    "GS"
-  end
-
-  def self.name
-    "testing"
-  end
-end
-
-# Mock Char module
+# Extend Char with stamina methods for QStrike testing
 module Char
   @stamina = 100
 
-  def self.stamina
-    @stamina
-  end
+  class << self
+    attr_accessor :stamina
 
-  def self.set_stamina(value)
-    @stamina = value
-  end
-end
-
-# Mock GameObj hand items
-class MockGameObj
-  attr_accessor :id, :noun, :name, :type
-
-  def initialize(id: nil, noun: nil, name: nil, type: nil)
-    @id = id
-    @noun = noun
-    @name = name || "Empty"
-    @type = type
-  end
-end
-
-# Mock GameObj - add to Lich::Gemstone::GameObj for compatibility with other specs
-module Lich
-  module Gemstone
-    class GameObj
-      @right_hand = MockGameObj.new
-      @left_hand = MockGameObj.new
-
-      def self.right_hand
-        @right_hand
-      end
-
-      def self.left_hand
-        @left_hand
-      end
-
-      def self.set_right_hand(obj)
-        @right_hand = obj
-      end
-
-      def self.set_left_hand(obj)
-        @left_hand = obj
-      end
-
-      def self.clear_hands
-        @right_hand = MockGameObj.new
-        @left_hand = MockGameObj.new
-      end
+    def set_stamina(value)
+      @stamina = value
     end
   end
-end
+end unless Char.respond_to?(:stamina)
 
-# Top-level alias for GameObj (as used by the main codebase)
-GameObj = Lich::Gemstone::GameObj unless defined?(GameObj)
+# GameObj with hand tracking is defined in spec_helper
+# MockGameObj is also defined in spec_helper
 
-# Effects module - only define if not already defined by infomon_spec
-unless defined?(Effects::Buffs)
-  module Effects
-    class MockRegistry
-      def initialize
-        @effects = {}
-      end
-
-      def active?(effect)
-        @effects[effect] == true
-      end
-
-      def set_active(effect, active)
-        @effects[effect] = active
-      end
-
-      def clear
-        @effects.clear
-      end
-    end
-
-    Buffs = MockRegistry.new
-  end
-end
-
-# Helper module to set Effects::Buffs state for testing
-# Works with both standalone MockRegistry and infomon_spec's Registry
+# Helper module for QStrike testing
+# Uses spec_helper's Effects::Registry which reads from XMLData.dialogs
 module QStrikeTestHelper
-  def self.set_buff_active(effect, active)
-    if Effects::Buffs.respond_to?(:set_active)
-      # Standalone MockRegistry
-      Effects::Buffs.set_active(effect, active)
-    else
-      # infomon_spec's Registry - uses XMLData.dialogs
+  @right_hand = nil
+  @left_hand = nil
+
+  class << self
+    attr_accessor :right_hand, :left_hand
+
+    def set_buff_active(effect, active)
       if active
         XMLData.save_dialogs("Buffs", { effect => Time.now.to_f + 3600 })
       else
         XMLData.save_dialogs("Buffs", {})
       end
     end
-  end
 
-  def self.clear_buffs
-    if Effects::Buffs.respond_to?(:clear)
-      Effects::Buffs.clear
-    else
+    def clear_buffs
       XMLData.save_dialogs("Buffs", {})
+    end
+
+    def clear_hands
+      @right_hand = MockGameObj.new
+      @left_hand = MockGameObj.new
     end
   end
 end
+
+# NOTE: GameObj hand methods are stubbed in the before(:each) hook below
+# to avoid polluting other specs. Using RSpec stubs ensures test isolation.
 
 # Mock CMan module for attack cost and rank lookups
 # When running with other specs, Lich::Gemstone::CMan may already be defined
@@ -193,8 +100,6 @@ end
 # Ensure CMan constant is available at top level
 CMan = Lich::Gemstone::CMan if defined?(Lich::Gemstone::CMan) && !defined?(CMan)
 
-LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
-
 # Load util first (required by armaments)
 require 'util/util'
 
@@ -204,6 +109,14 @@ require 'gemstone/psms/qstrike'
 
 describe Lich::Gemstone::QStrike do
   before(:each) do
+    # Stub GameObj hand methods to use QStrikeTestHelper storage.
+    # This isolates qstrike tests from other specs that depend on GameObj behavior.
+    allow(GameObj).to receive(:right_hand) { (QStrikeTestHelper.right_hand || MockGameObj.new).dup }
+    allow(GameObj).to receive(:left_hand) { (QStrikeTestHelper.left_hand || MockGameObj.new).dup }
+    allow(GameObj).to receive(:set_right_hand) { |obj| QStrikeTestHelper.right_hand = obj }
+    allow(GameObj).to receive(:set_left_hand) { |obj| QStrikeTestHelper.left_hand = obj }
+    allow(GameObj).to receive(:clear_hands) { QStrikeTestHelper.clear_hands }
+
     GameObj.clear_hands
     Char.set_stamina(100)
     QStrikeTestHelper.clear_buffs
@@ -398,7 +311,8 @@ describe Lich::Gemstone::QStrike do
 
     it "returns correct multiplier based on rank when active" do
       QStrikeTestHelper.set_buff_active('Striking Asp', true)
-      # CMan mock returns rank 2 for striking_asp
+      # Stub striking_asp_rank to return 2 directly
+      allow(Lich::Gemstone::QStrike).to receive(:striking_asp_rank).and_return(2)
       expect(Lich::Gemstone::QStrike.striking_asp_multiplier).to eq(0.5)
     end
   end
@@ -470,6 +384,8 @@ describe Lich::Gemstone::QStrike do
 
     it "applies Striking Asp discount when active" do
       QStrikeTestHelper.set_buff_active('Striking Asp', true)
+      # Stub striking_asp_rank to return 2 directly
+      allow(Lich::Gemstone::QStrike).to receive(:striking_asp_rank).and_return(2)
       Lich::Gemstone::QStrike.clear_cache
 
       result = Lich::Gemstone::QStrike.calculate(reserve: 1)

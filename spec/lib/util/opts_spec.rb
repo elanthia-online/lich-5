@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-require 'rspec'
+require_relative '../../spec_helper'
 
-LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
-
-require File.join(LIB_DIR, 'util', 'opts.rb')
+require 'util/opts'
 
 RSpec.describe Lich::Util::Opts do
   describe '.parse' do

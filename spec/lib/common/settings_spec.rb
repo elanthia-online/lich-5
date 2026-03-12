@@ -1,30 +1,12 @@
-require 'rspec'
-require 'ostruct'
-DATA_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'spec')
-require_relative File.join(DATA_DIR, 'mock_database_adapter.rb')
-LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib')
-require_relative File.join(LIB_DIR, 'common', 'settings.rb')
+# frozen_string_literal: true
 
-module XMLData
-  class << self
-    attr_accessor :game, :name, :dialogs
-  end
+require_relative '../../spec_helper'
 
-  @dialogs = {}
-  @game = "GSIV"
-  @name = "TestCharacter"
+# Load mock database adapter (specific to settings tests)
+require_relative File.join(SPEC_ROOT, 'mock_database_adapter.rb')
 
-  def self.indicator
-    { 'IconSTUNNED' => 'n',
-      'IconDEAD'    => 'n',
-      'IconWEBBED'  => false }
-  end
-
-  def self.save_dialogs(kind, attributes)
-    @dialogs[kind] ||= {}
-    return @dialogs[kind] = attributes
-  end
-end
+# Load production code
+require 'common/settings'
 
 RSpec.describe Lich::Common::Settings do
   before(:each) do
@@ -322,8 +304,9 @@ RSpec.describe Lich::Common::Settings do
 
     it "handles the updatable scripts example" do
       upd     = Lich::Common::Settings[:updatable] || {}
-      scripts = upd[:scripts] || []
-      mapdb   = upd[:mapdb]   || {}
+      # Start with a fresh scripts array to ensure test isolation with random ordering
+      scripts = []
+      mapdb   = upd[:mapdb] || {}
 
       scripts << { filename: "alias.lic", game: "gs", author: "elanthia-online" }
       mapdb["GSIV"] = true
@@ -446,8 +429,9 @@ RSpec.describe Lich::Common::Settings do
 
     it "clobbers previously built updatable structure when the root is reassigned with =" do
       upd     = Lich::Common::Settings[:updatable] || {}
-      scripts = upd[:scripts] || []
-      mapdb   = upd[:mapdb]   || {}
+      # Start with a fresh scripts array to ensure test isolation with random ordering
+      scripts = []
+      mapdb   = upd[:mapdb] || {}
 
       scripts << { filename: "test.lic", game: "gs" }
       mapdb["GSIV"] = true
@@ -522,8 +506,9 @@ RSpec.describe Lich::Common::Settings do
   describe "Real-world Examples" do
     it "handles the complete updatable scripts example" do
       upd     = Lich::Common::Settings[:updatable] || {}
-      scripts = upd[:scripts] || []
-      mapdb   = upd[:mapdb]   || {}
+      # Start with fresh arrays to ensure test isolation with random ordering
+      scripts = []
+      mapdb   = {}
 
       # Seed expected entry at index 0
       scripts << { filename: "test.lic", game: "gs" }
@@ -610,8 +595,16 @@ describe 'SettingsProxy#rebind_to_live!' do
     path  = [:updatable, :scripts]
     initial = []
 
-    proxy = Lich::Common::SettingsProxy.new(settings_module, scope, path, initial, detached: true) rescue Lich::Common::SettingsProxy.new(settings_module, scope, path, initial)
-    live  = [{ filename: 'x.lic' }]
+    # Create proxy with explicit version detection instead of inline rescue.
+    # The rescue pattern could mask real errors - this makes version handling explicit.
+    proxy = begin
+      # Try new API with detached keyword argument
+      Lich::Common::SettingsProxy.new(settings_module, scope, path, initial, detached: true)
+    rescue ArgumentError
+      # Fall back to old API without detached keyword
+      Lich::Common::SettingsProxy.new(settings_module, scope, path, initial)
+    end
+    live = [{ filename: 'x.lic' }]
 
     old_oid = proxy.target.object_id
     proxy.send(:rebind_to_live!, live)
@@ -629,12 +622,10 @@ describe 'SettingsProxy#rebind_to_live!' do
 end
 
 describe 'Settings#save_proxy_changes refresh-before-save' do
-  # Minimal Script stub for Settings.save_proxy_changes
-  unless defined?(::Script)
-    module ::Script
-      def self.current; self; end
-      def self.name; 'test_script'; end
-    end
+  # Use RSpec stubs to ensure Script.current.name works regardless of other specs
+  before do
+    script_double = double('Script', name: 'test_script')
+    allow(Script).to receive(:current).and_return(script_double)
   end
 
   it 'refreshes from DB to prevent stale-cache overwrites' do
@@ -660,19 +651,10 @@ describe 'Settings#save_proxy_changes refresh-before-save' do
 end
 
 describe 'Settings#save_proxy_changes detached view behavior' do
-  # Minimal Script stub for Settings.save_proxy_changes
-  unless defined?(::Script)
-    module ::Script
-      def self.current; self; end
-      def self.name; 'test_script'; end
-    end
-  end
-  # Minimal Script stub to satisfy Settings.save_proxy_changes constant lookup
-  unless defined?(::Script)
-    module ::Script
-      def self.current; self; end
-      def self.name; 'test_script'; end
-    end
+  # Use RSpec stubs to ensure Script.current.name works regardless of other specs
+  before do
+    script_double = double('Script', name: 'test_script')
+    allow(Script).to receive(:current).and_return(script_double)
   end
 
   it 'persists the current root when called on a detached proxy' do
@@ -709,11 +691,11 @@ describe Lich::Common::SettingsProxy do
 
     settings_module = Object.new
     def settings_module._log(*); end
-    unless defined?(Settings::LOG_LEVEL_DEBUG)
-      module Settings
-        LOG_LEVEL_DEBUG = 0 unless const_defined?(:LOG_LEVEL_DEBUG)
-      end
-    end
+
+    # Use stub_const to safely provide LOG_LEVEL_DEBUG without leaking to other tests.
+    # This replaces the previous pattern that defined the constant inside the test,
+    # which could persist and affect other tests with random ordering.
+    stub_const('Settings::LOG_LEVEL_DEBUG', 0) unless defined?(Settings::LOG_LEVEL_DEBUG)
 
     proxy.instance_variable_set(:@settings_module, settings_module)
     proxy.instance_variable_set(:@scope, ':')

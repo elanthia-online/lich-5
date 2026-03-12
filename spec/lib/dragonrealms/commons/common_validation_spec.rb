@@ -1,75 +1,8 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
-require 'rspec'
 
-# Setup load path (standalone spec, no spec_helper dependency)
-LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
-
-# Mock dependencies — define at top level, alias into namespace
-
-# Script mock (class — game engine class)
-class Script
-  def self.running
-    []
-  end
-
-  def self.hidden
-    []
-  end
-end unless defined?(Script)
-
-# Room mock (class — game engine class)
-class Room
-  def self.current
-    nil
-  end
-end unless defined?(Room)
-
-# UserVars mock (module — game engine module)
-module UserVars
-  def self.slack_token
-    nil
-  end
-end unless defined?(UserVars)
-
-# DRC mock (module — via module_function)
-module DRC
-  def self.bput(*_args)
-    nil
-  end
-end unless defined?(DRC)
-
-# DRRoom mock (module)
-module DRRoom
-  def self.pcs
-    []
-  end
-end unless defined?(DRRoom)
-
-# Lich::Messaging mock
-module Lich
-  module Messaging
-    def self.msg(*_args); end
-  end unless defined?(Lich::Messaging)
-end
-
-# Namespace aliases — MUST be BEFORE require so code resolves correctly
-module Lich
-  module DragonRealms
-    DRC = ::DRC unless defined?(Lich::DragonRealms::DRC)
-  end
-end
-
-# Kernel methods needed by the class
-module Kernel
-  def waitrt?; end unless method_defined?(:waitrt?)
-  def fput(*_args); end unless method_defined?(:fput)
-  def put(*_args); end unless method_defined?(:put)
-  def echo(*_args); end unless method_defined?(:echo)
-end
-
-# Load the module under test (AFTER mocks + aliases)
+# Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-validation.rb')
 
 RSpec.describe Lich::DragonRealms::CharacterValidator do
@@ -104,6 +37,15 @@ RSpec.describe Lich::DragonRealms::CharacterValidator do
         validator = described_class.new(false, false, false, 'TestBot')
         expect(validator.send(:lnet_available?)).to be true
       end
+
+      # NOTE: The three tests below use expect_any_instance_of / not_to receive to verify
+      # that Kernel methods (waitrt?, fput) are called during initialize. This is the only
+      # available RSpec mechanism for asserting on instance methods before the instance
+      # exists: we cannot get a reference to the instance before `new` runs, so we cannot
+      # use `allow(instance).to receive(...)`. The tests are isolated to this describe block
+      # and no other instances of described_class are created concurrently, so any_instance_of
+      # does not cause cross-test pollution. TODO: if CharacterValidator is refactored to
+      # accept dependencies as constructor arguments, replace with ordinary instance stubs.
 
       it 'calls waitrt? on init' do
         expect_any_instance_of(described_class).to receive(:waitrt?)

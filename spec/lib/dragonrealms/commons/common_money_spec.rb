@@ -1,54 +1,10 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
-require 'rspec'
 
-LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
-
+# Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-money-data.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-money.rb')
-
-# Mock Lich::Messaging for warning tests
-module Lich
-  module Messaging
-    @messages = []
-
-    class << self
-      def msg(type, message, **_opts)
-        @messages << { type: type, message: message }
-      end
-
-      def messages
-        @messages
-      end
-
-      def clear_messages!
-        @messages = []
-      end
-    end
-  end
-end unless defined?(Lich::Messaging)
-
-# Mock DRC module
-module DRC
-  def self.bput(*_args)
-    ''
-  end
-
-  def self.release_invisibility(*_args); end
-end unless defined?(DRC)
-
-# Mock DRCT module
-module DRCT
-  def self.walk_to(*_args); end
-end unless defined?(DRCT)
-
-# Mock DRRoom module
-module DRRoom
-  def self.pcs
-    []
-  end
-end unless defined?(DRRoom)
 
 DRCM = Lich::DragonRealms::DRCM unless defined?(DRCM)
 
@@ -57,7 +13,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
 
   describe 'data constants' do
     describe 'DENOMINATIONS' do
-      it 'is frozen' do
+      it 'DENOMINATIONS is a frozen constant' do
         expect(described_class::DENOMINATIONS).to be_frozen
       end
 
@@ -69,7 +25,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
 
     describe 'DENOMINATION_VALUES' do
-      it 'is frozen' do
+      it 'DENOMINATION_VALUES is a frozen constant' do
         expect(described_class::DENOMINATION_VALUES).to be_frozen
       end
 
@@ -83,7 +39,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
 
     describe 'DENOMINATION_REGEX_MAP' do
-      it 'is frozen' do
+      it 'DENOMINATION_REGEX_MAP is a frozen constant' do
         expect(described_class::DENOMINATION_REGEX_MAP).to be_frozen
       end
 
@@ -106,7 +62,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
 
     describe 'CURRENCY_REGEX_MAP' do
-      it 'is frozen' do
+      it 'CURRENCY_REGEX_MAP is a frozen constant' do
         expect(described_class::CURRENCY_REGEX_MAP).to be_frozen
       end
 
@@ -125,7 +81,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
 
     describe 'CURRENCIES' do
-      it 'is frozen' do
+      it 'CURRENCIES is a frozen constant' do
         expect(described_class::CURRENCIES).to be_frozen
       end
 
@@ -158,7 +114,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
 
     describe 'WEALTH_COPPER_REGEX' do
-      it 'is frozen' do
+      it 'WEALTH_COPPER_REGEX is a frozen constant' do
         expect(described_class::WEALTH_COPPER_REGEX).to be_frozen
       end
 

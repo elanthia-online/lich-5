@@ -27,7 +27,7 @@ end unless Lich.respond_to?(:log)
 require_relative '../../../lib/common/front-end'
 
 # Shorthand for use in describe-level iteration
-FE = Lich::Common::Frontend
+FE = Lich::Common::Frontend unless defined?(FE)
 
 RSpec.describe Lich::Common::Frontend do
   let(:frontend) { Lich::Common::Frontend }

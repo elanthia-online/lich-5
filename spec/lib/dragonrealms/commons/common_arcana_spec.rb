@@ -2,262 +2,9 @@
 
 require_relative '../../../spec_helper'
 
-# ──────────────────────────────────────────────
-# Mocks for game-specific dependencies
-# ──────────────────────────────────────────────
-
-module DRC
-  def self.bput(_command, *_patterns)
-    'default'
-  end
-
-  def self.retreat(*_args); end
-  def self.fix_standing; end
-  def self.release_invisibility; end
-  def self.set_stance(_stance); end
-
-  def self.get_noun(item)
-    item.split.last
-  end
-
-  def self.right_hand
-    @right_hand
-  end
-
-  def self.left_hand
-    @left_hand
-  end
-
-  def self.right_hand=(val)
-    @right_hand = val
-  end
-
-  def self.left_hand=(val)
-    @left_hand = val
-  end
-end unless defined?(DRC)
-
-module DRCI
-  def self.remove_item?(_item)
-    true
-  end
-
-  def self.untie_item?(_item, _container = nil)
-    true
-  end
-
-  def self.get_item?(_item, _container = nil)
-    true
-  end
-
-  def self.get_item(_item, _container = nil)
-    true
-  end
-
-  def self.get_item_if_not_held?(_item, _container = nil)
-    true
-  end
-
-  def self.wear_item?(_item)
-    true
-  end
-
-  def self.stow_item?(_item)
-    true
-  end
-
-  def self.tie_item?(_item, _container = nil)
-    true
-  end
-
-  def self.put_away_item?(_item, _container = nil)
-    true
-  end
-
-  def self.in_hands?(_item)
-    false
-  end
-
-  def self.in_left_hand?(_item)
-    false
-  end
-
-  def self.in_right_hand?(_item)
-    false
-  end
-
-  def self.inside?(_item, _container)
-    true
-  end
-
-  def self.dispose_trash(_item); end
-end unless defined?(DRCI)
-
-module DRSpells
-  @active_spells = {}
-
-  def self.active_spells
-    @active_spells
-  end
-
-  def self.active_spells=(val)
-    @active_spells = val
-  end
-end unless defined?(DRSpells)
-
-module DRStats
-  @mana = 100
-  @concentration = 100
-  @guild = 'Warrior Mage'
-  @encumbrance = 'None'
-
-  class << self
-    attr_accessor :mana, :concentration, :guild, :encumbrance
-
-    def barbarian?
-      @guild == 'Barbarian'
-    end
-
-    def thief?
-      @guild == 'Thief'
-    end
-
-    def trader?
-      @guild == 'Trader'
-    end
-
-    def commoner?
-      @guild == 'Commoner'
-    end
-
-    def moon_mage?
-      @guild == 'Moon Mage'
-    end
-
-    def warrior_mage?
-      @guild == 'Warrior Mage'
-    end
-  end
-end unless defined?(DRStats)
-
-class DRSkill
-  def self.getrank(skill = nil, *_rest)
-    @ranks ||= {}
-    @ranks[skill] || 0
-  end
-
-  def self.getxp(skill = nil, *_rest)
-    @xps ||= {}
-    @xps[skill] || 0
-  end
-
-  def self.set_rank(skill, rank)
-    @ranks ||= {}
-    @ranks[skill] = rank
-  end
-
-  def self.set_xp(skill, xp)
-    @xps ||= {}
-    @xps[skill] = xp
-  end
-end unless defined?(DRSkill)
-
-# Save mock references at load time — other spec files (e.g., drskill_spec)
-# may replace top-level constants with real classes via force-alias patterns.
-# These saved references let before(:all) swap the correct mocks into the
-# Lich::DragonRealms namespace regardless of file-load order.
-ARCANA_MOCK_DRSTATS  = DRStats
-ARCANA_MOCK_DRSKILL  = DRSkill
-ARCANA_MOCK_DRSPELLS = DRSpells
-
-module DRCMM
-  def self.update_astral_data(data, _settings)
-    data
-  end
-
-  def self.set_moon_data(_data)
-    true
-  end
-end unless defined?(DRCMM)
-
-# Namespace aliases — ensure DRCA code resolves these to the same objects as top-level
-module Lich
-  module DragonRealms
-    DRC = ::DRC unless defined?(Lich::DragonRealms::DRC)
-    DRCI = ::DRCI unless defined?(Lich::DragonRealms::DRCI)
-    DRCMM = ::DRCMM unless defined?(Lich::DragonRealms::DRCMM)
-    DRSpells = ::DRSpells unless defined?(Lich::DragonRealms::DRSpells)
-  end
-end
-
-module Flags
-  @flags = {}
-  @pending = {}
-
-  def self.add(name, *_patterns)
-    # Don't overwrite pending flags that are queued for the next read
-    @flags[name] = nil unless @pending.key?(name)
-  end
-
-  def self.delete(name)
-    @flags.delete(name)
-  end
-
-  def self.[]=(name, val)
-    @flags[name] = val
-  end
-
-  def self.[](name)
-    # Apply pending flag on first read
-    if @pending.key?(name)
-      @flags[name] = @pending.delete(name)
-    end
-    @flags[name]
-  end
-
-  # Set a flag that survives Flags.add calls (simulates game triggering the flag during bput)
-  def self.set_pending(name, val)
-    @pending[name] = val
-  end
-
-  def self.reset!
-    @flags = {}
-    @pending = {}
-  end
-
-  # common_moonmage_spec needs reset(name) to reset individual flags
-  def self.reset(name)
-    @flags[name] = nil
-  end
-end unless defined?(Flags)
-
-module UserVars
-  @data = {}
-  @moons = {}
-  @sun = nil
-
-  class << self
-    attr_accessor :discerns, :avtalia, :moons
-    # song/climbing_song/instrument for common_spec.rb play_song? tests
-    attr_accessor :song, :climbing_song, :instrument
-
-    def sun
-      @sun || { 'night' => false, 'day' => true }
-    end
-
-    def sun=(val)
-      @sun = val
-    end
-  end
-end unless defined?(UserVars)
-
-# Mock Lich::Util for issue_command
-module Lich
-  module Util
-    def self.issue_command(*_args, **_kwargs)
-      []
-    end
-  end unless defined?(Lich::Util)
+# Ensure XMLData has prepared_spell accessor for tests
+unless XMLData.respond_to?(:prepared_spell=)
+  XMLData.singleton_class.attr_accessor(:prepared_spell)
 end
 
 # Helper to extract bold messages from Lich::Messaging captures
@@ -265,7 +12,7 @@ def bold_messages
   Lich::Messaging.messages.select { |m| m[:type] == 'bold' }.map { |m| m[:message] }
 end
 
-# Mock global game functions
+# Override get_data for this spec with DRCA-specific data (barb_abilities)
 def get_data(_type)
   @mock_data ||= OpenStruct.new(
     prep_messages: ['You begin to', 'But you\'ve already prepared', 'Your desire to prepare this offensive spell suddenly slips away', 'Something in the area interferes with your spell preparations'],
@@ -279,28 +26,6 @@ def get_data(_type)
       'Famine' => { 'type' => 'meditation', 'start_command' => 'meditate famine', 'activated_message' => 'You feel hungry' }
     }
   )
-end unless defined?(get_data)
-
-def pause(_seconds = 1); end unless defined?(pause)
-def waitrt?; end unless defined?(waitrt?)
-def waitcastrt?; end unless defined?(waitcastrt?)
-def checkprep
-  'None'
-end unless defined?(checkprep)
-def checkcastrt
-  0
-end unless defined?(checkcastrt)
-def reget(_count, _pattern = nil)
-  nil
-end unless defined?(reget)
-def kneeling?
-  false
-end unless defined?(kneeling?)
-
-# Ensure XMLData has prepared_spell accessor for tests
-# In CI, XMLData may be a module (not OpenStruct) so we must define the accessor explicitly
-unless XMLData.respond_to?(:prepared_spell=)
-  XMLData.singleton_class.attr_accessor(:prepared_spell)
 end
 
 # Load the module under test
@@ -309,44 +34,6 @@ require_relative '../../../../lib/dragonrealms/commons/common-arcana'
 DRCA = Lich::DragonRealms::DRCA unless defined?(DRCA)
 
 RSpec.describe Lich::DragonRealms::DRCA do
-  # DRCA resolves DRStats/DRSkill/DRSpells within the Lich::DragonRealms namespace.
-  # Other spec files may load real classes or incomplete mocks into that namespace.
-  # Swap our full mock modules into both the namespace (for DRCA code) and the
-  # top level (for allow/expect stubs in tests). Originals restored in after(:all).
-  before(:all) do
-    @saved_ns_constants = {}
-    @saved_toplevel_constants = {}
-
-    mocks = { DRStats: ARCANA_MOCK_DRSTATS, DRSkill: ARCANA_MOCK_DRSKILL, DRSpells: ARCANA_MOCK_DRSPELLS }
-
-    mocks.each do |name, mock|
-      # Save and swap in Lich::DragonRealms namespace
-      if Lich::DragonRealms.const_defined?(name, false)
-        @saved_ns_constants[name] = Lich::DragonRealms.const_get(name)
-        Lich::DragonRealms.send(:remove_const, name)
-      end
-      Lich::DragonRealms.const_set(name, mock)
-
-      # Save and swap at top level
-      if Object.const_defined?(name)
-        @saved_toplevel_constants[name] = Object.const_get(name)
-        Object.send(:remove_const, name)
-      end
-      Object.const_set(name, mock)
-    end
-  end
-
-  after(:all) do
-    (@saved_ns_constants || {}).each do |name, original|
-      Lich::DragonRealms.send(:remove_const, name) if Lich::DragonRealms.const_defined?(name, false)
-      Lich::DragonRealms.const_set(name, original)
-    end
-    (@saved_toplevel_constants || {}).each do |name, original|
-      Object.send(:remove_const, name) if Object.const_defined?(name)
-      Object.const_set(name, original)
-    end
-  end
-
   before(:each) do
     Lich::Messaging.clear_messages!
     DRSpells.active_spells = {}
@@ -452,7 +139,7 @@ RSpec.describe Lich::DragonRealms::DRCA do
       DRCA.infuse_om(true, nil)
     end
 
-    it 'breaks on success' do
+    it 'stops infusing after a successful full-capacity response without looping' do
       DRSpells.active_spells = { 'Osrel Meraud' => 50 }
       allow(DRStats).to receive(:mana).and_return(100)
       allow(DRC).to receive(:bput).with(/infuse om/, anything, anything).and_return('having reached its full capacity')
@@ -596,13 +283,15 @@ RSpec.describe Lich::DragonRealms::DRCA do
     it 'returns false when spell-fail flag set' do
       allow(DRC).to receive(:bput).and_return('default')
       allow(DRC).to receive(:bput).with('cast', anything).and_return('You gesture')
-      Flags.set_pending('spell-fail', ['Something is interfering with the spell'])
+      allow(Flags).to receive(:[]).and_call_original
+      allow(Flags).to receive(:[]).with('spell-fail').and_return(['Something is interfering with the spell'])
       expect(DRCA.cast?).to be false
     end
 
     it 'retries on cyclic-too-recent and gives up at 0 retries' do
       allow(DRC).to receive(:bput).with('cast', anything).and_return('You gesture')
-      Flags.set_pending('cyclic-too-recent', ['The mental strain'])
+      allow(Flags).to receive(:[]).and_call_original
+      allow(Flags).to receive(:[]).with('cyclic-too-recent').and_return(['The mental strain'])
       result = DRCA.cast?('cast', false, [], [], retries: 0)
       expect(result).to be false
       expect(bold_messages.any? { |m| m.include?('cast? exhausted') }).to be true
@@ -611,21 +300,24 @@ RSpec.describe Lich::DragonRealms::DRCA do
     it 'falls back from barrage on barrage-fail' do
       allow(DRC).to receive(:bput).with('barrage', anything).and_return('You gesture')
       allow(DRC).to receive(:bput).with('cast', anything).and_return('You gesture')
-      Flags.set_pending('barrage-fail', ['That was an invalid attack choice.'])
+      allow(Flags).to receive(:[]).and_call_original
+      allow(Flags).to receive(:[]).with('barrage-fail').and_return(['That was an invalid attack choice.'])
       result = DRCA.cast?('barrage', false, [], [])
       expect(result).to be_truthy
     end
 
     it 'gives up on barrage fallback at 0 retries' do
       allow(DRC).to receive(:bput).with('barrage', anything).and_return('You gesture')
-      Flags.set_pending('barrage-fail', ['That was an invalid attack choice.'])
+      allow(Flags).to receive(:[]).and_call_original
+      allow(Flags).to receive(:[]).with('barrage-fail').and_return(['That was an invalid attack choice.'])
       result = DRCA.cast?('barrage', false, [], [], retries: 0)
       expect(result).to be false
       expect(bold_messages.any? { |m| m.include?('barrage fallback exhausted') }).to be true
     end
 
     it 'releases mana and symbiosis on spell-fail with symbiosis' do
-      Flags.set_pending('spell-fail', ['Something is interfering'])
+      allow(Flags).to receive(:[]).and_call_original
+      allow(Flags).to receive(:[]).with('spell-fail').and_return(['Something is interfering'])
       allow(DRC).to receive(:bput).with('cast', anything).and_return('You gesture')
       allow(DRC).to receive(:bput).with('release mana', anything, anything)
       allow(DRC).to receive(:bput).with('release symbiosis', anything, anything)
@@ -979,14 +671,14 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
 
     it 'returns false when Attunement xp exceeds Arcana xp' do
-      DRSkill.set_xp('Attunement', 30)
-      DRSkill.set_xp('Arcana', 10)
+      allow(DRSkill).to receive(:getxp).with('Attunement').and_return(30)
+      allow(DRSkill).to receive(:getxp).with('Arcana').and_return(10)
       expect(DRCA.check_to_harness(true)).to be false
     end
 
     it 'returns true when Arcana xp >= Attunement xp' do
-      DRSkill.set_xp('Attunement', 10)
-      DRSkill.set_xp('Arcana', 30)
+      allow(DRSkill).to receive(:getxp).with('Attunement').and_return(10)
+      allow(DRSkill).to receive(:getxp).with('Arcana').and_return(30)
       expect(DRCA.check_to_harness(true)).to be true
     end
   end
