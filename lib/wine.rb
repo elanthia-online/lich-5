@@ -53,9 +53,13 @@ unless $wine_bin.nil?
       # Reads a value from Wine's `system.reg` for `HKEY_LOCAL_MACHINE` keys.
       #
       # @param key [String] registry path, e.g. `HKEY_LOCAL_MACHINE\Software\Foo\Bar`
+      # @raise [ArgumentError] when +key+ is not a supported registry path format
       # @return [String, false] value string when found, false otherwise
       def Wine.registry_gets(key)
-        hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme: stupid highlights ]/
+        match_data = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key)
+        raise ArgumentError, "Invalid registry key format: #{key.inspect}" unless match_data
+
+        hkey, subkey, thingie = match_data.captures # fixme: stupid highlights ]/
         if File.exist?(PREFIX + '/system.reg')
           if hkey == 'HKEY_LOCAL_MACHINE'
             subkey = "[#{subkey.gsub('\\', '\\\\\\')}]"
@@ -89,9 +93,13 @@ unless $wine_bin.nil?
       #
       # @param key [String] registry path, e.g. `HKEY_LOCAL_MACHINE\Software\Foo\Bar`
       # @param value [String] value to persist
+      # @raise [ArgumentError] when +key+ is not a supported registry path format
       # @return [Boolean] true on successful write path, false on failures
       def Wine.registry_puts(key, value)
-        hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme ]/
+        match_data = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key)
+        raise ArgumentError, "Invalid registry key format: #{key.inspect}" unless match_data
+
+        hkey, subkey, thingie = match_data.captures # fixme ]/
         if File.exist?(PREFIX)
           if thingie.nil? or thingie.empty?
             thingie = '@'
