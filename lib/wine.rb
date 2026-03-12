@@ -94,7 +94,7 @@ unless $wine_bin.nil?
       # @param key [String] registry path, e.g. `HKEY_LOCAL_MACHINE\Software\Foo\Bar`
       # @param value [String] value to persist
       # @raise [ArgumentError] when +key+ is not a supported registry path format
-      # @return [Boolean] true on successful write path, false on failures
+      # @return [Boolean] true on successful write path, false on failures or regedit non-zero exit
       def Wine.registry_puts(key, value)
         match_data = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key)
         raise ArgumentError, "Invalid registry key format: #{key.inspect}" unless match_data
@@ -109,15 +109,18 @@ unless $wine_bin.nil?
           # gsub sucks for this..
           value = value.split('\\').join('\\\\')
           value = value.split('"').join('\"')
+          filename = nil
           begin
             regedit_data = "REGEDIT4\n\n[#{hkey}\\#{subkey}]\n#{thingie}=\"#{value}\"\n\n"
             filename = "#{TEMP_DIR}/wine-#{Time.now.to_i}.reg"
             File.open(filename, 'w') { |f| f.write(regedit_data) }
-            system(BIN, 'regedit', filename)
+            succeeded = system(BIN, 'regedit', filename)
+            return false unless succeeded
             sleep 0.2
-            File.delete(filename)
           rescue StandardError
             return false
+          ensure
+            File.delete(filename) if filename && File.exist?(filename)
           end
           return true
         end
