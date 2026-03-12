@@ -199,7 +199,10 @@ $LOAD_PATH.unshift(File.expand_path('../lib', __FILE__))
 # Define LIB_DIR for code that references it
 LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib') unless defined?(LIB_DIR)
 
-# Require the code to be tested
+# Load production code AFTER Gtk/Gdk mocks are defined above.
+# These files reference Gtk:: constants at load time; loading them before the mocks
+# exist causes NameError. Individual specs must NOT require these files themselves —
+# they must rely on this ordered load to ensure the mock environment is in place.
 require 'common/gui_login'
 require 'common/gui/account_manager'
 require 'common/authentication/entry_store'

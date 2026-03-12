@@ -8,7 +8,8 @@
 # 3. Fixture loading (effect-list.xml)
 # 4. Path constants for consistent file resolution
 #
-# Usage: Add `require 'spec_helper'` at the top of each spec file
+# Usage: Add `require_relative '../../spec_helper'` at the top of each spec file
+#        (adjust the relative path depth to match the file's location under spec/)
 #
 # =============================================================================
 # FIXTURE: effect-list.xml
