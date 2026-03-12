@@ -10,8 +10,10 @@ RSpec.describe 'wine.rb' do
   let(:wine_file_content) { File.read(wine_file_path) }
 
   describe 'file content verification' do
-    it 'suppresses stderr from which command with 2>/dev/null' do
-      expect(wine_file_content).to include('which wine 2>/dev/null')
+    it 'uses PATH scanning instead of shelling out with which/backticks' do
+      expect(wine_file_content).to include('ENV.fetch(\'PATH\', \'\').split(File::PATH_SEPARATOR)')
+      expect(wine_file_content).to include('File.executable?(candidate)')
+      expect(wine_file_content).not_to include('which wine')
     end
 
     it 'skips wine detection when --without-frontend is passed' do
@@ -120,6 +122,27 @@ RSpec.describe 'wine.rb' do
         load wine_file_path
         expect($wine_bin).to be_nil
         expect(defined?(Wine)).to be_nil
+      end
+    end
+
+    context 'with no explicit wine flags' do
+      it 'finds a wine executable from PATH without shelling out' do
+        path_dir = Dir.mktmpdir('wine-path')
+        wine_bin = File.join(path_dir, 'wine')
+        begin
+          FileUtils.touch(wine_bin)
+          FileUtils.chmod(0o755, wine_bin)
+
+          original_path = ENV['PATH']
+          ENV['PATH'] = path_dir
+          stub_const('ARGV', [])
+
+          load wine_file_path
+          expect($wine_bin).to eq(wine_bin)
+        ensure
+          ENV['PATH'] = original_path
+          FileUtils.rm_rf(path_dir)
+        end
       end
     end
   end

@@ -1,15 +1,36 @@
+# frozen_string_literal: true
+
+require 'rbconfig'
+
+# Resolve a wine executable from PATH without shelling out.
+#
+# This avoids OS-specific shell behavior (`which`, backticks, cmd.exe) and keeps
+# startup detection consistent across Linux/macOS/Windows Ruby runtimes.
+#
+# @return [String, nil] absolute path to a runnable wine binary, or nil
+def find_wine_binary
+  exe_ext = RbConfig::CONFIG['EXEEXT'].to_s
+  extensions = exe_ext.empty? ? [''] : [exe_ext, '']
+
+  ENV.fetch('PATH', '').split(File::PATH_SEPARATOR).each do |dir|
+    next if dir.nil? || dir.empty?
+
+    extensions.each do |ext|
+      candidate = File.join(dir, "wine#{ext}")
+      return candidate if File.file?(candidate) && File.executable?(candidate)
+    end
+  end
+
+  nil
+end
+
 # check for Linux | WINE (and maybe in future MacOS | WINE) first due to low population
-# segment of code unmodified from Lich4 (Tillmen)
 if (arg = ARGV.find { |a| a =~ /^--wine=.+$/i })
   $wine_bin = arg.sub(/^--wine=/, '')
 elsif ARGV.find { |a| a =~ /^--no-wine$/i } || ARGV.include?('--without-frontend')
   $wine_bin = nil
 else
-  begin
-    $wine_bin = `which wine 2>/dev/null`.strip
-  rescue
-    $wine_bin = nil
-  end
+  $wine_bin = find_wine_binary
 end
 
 unless $wine_bin.nil?
@@ -27,6 +48,11 @@ unless $wine_bin.nil?
     module Wine
       BIN = $wine_bin
       PREFIX = $wine_prefix
+
+      # Reads a value from Wine's `system.reg` for `HKEY_LOCAL_MACHINE` keys.
+      #
+      # @param key [String] registry path, e.g. `HKEY_LOCAL_MACHINE\Software\Foo\Bar`
+      # @return [String, false] value string when found, false otherwise
       def Wine.registry_gets(key)
         hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme: stupid highlights ]/
         if File.exist?(PREFIX + '/system.reg')
@@ -57,6 +83,11 @@ unless $wine_bin.nil?
         end
       end
 
+      # Writes a registry value through `regedit` using a temporary `.reg` file.
+      #
+      # @param key [String] registry path, e.g. `HKEY_LOCAL_MACHINE\Software\Foo\Bar`
+      # @param value [String] value to persist
+      # @return [Boolean, false] true on attempted write path, false on failures
       def Wine.registry_puts(key, value)
         hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme ]/
         if File.exist?(PREFIX)
