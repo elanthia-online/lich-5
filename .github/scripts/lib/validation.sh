@@ -37,7 +37,7 @@ validate_destination() {
 
   # Guard normalized branch for traversal sequences post-normalization.
   if [[ "$dest" =~ \.\. ]]; then
-    die "Destination '$dest' contains illegal sequences (.. or whitespace)"
+    die "Destination '$dest' contains illegal traversal sequence ('..')"
     return 1
   fi
 
