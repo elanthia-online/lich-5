@@ -70,6 +70,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         expect(em).to receive(:fput).with('close my thick-bladed.fan')
 
         em.stow_weapon('thick-bladed fan')
+        expect(call_count).to eq(2)
       end
 
       it 'traces what bput actually returns for the close-the-fan response' do
@@ -101,19 +102,9 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
           end
         end
 
-        puts "  Game response: #{game_response.inspect}"
-        puts "  First matching pattern: #{matched_pattern.inspect}"
-        puts "  bput return value: #{bput_return.inspect}"
-        puts "  Pattern source: #{pattern_source(matched_pattern, patterns)}"
-
-        # Now check if stow_helper's case/when would match
-        case_matches_unload = (bput_return =~ /unload/)
-        case_matches_fan = (bput_return =~ /close the fan/)
-        puts "  case/when /unload/ matches: #{!case_matches_unload.nil?}"
-        puts "  case/when /close the fan/ matches: #{!case_matches_fan.nil?}"
-
         expect(bput_return).not_to be_nil
         expect(bput_return).to match(/close the fan/)
+        expect(bput_return).not_to match(/unload/)
       end
     end
 
@@ -125,28 +116,6 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         expect(DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS.any? { |p| close_msg.match?(p) }).to be(true)
         expect(described_class::STOW_RECOVERY_PATTERNS.any? { |p| close_msg.match?(p) }).to be(true)
       end
-    end
-  end
-
-  # Helper to identify which constant a pattern came from
-  def pattern_source(pattern, _all_patterns)
-    success_count = DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS.length
-    failure_count = DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS.length
-
-    idx = [
-      *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS,
-      *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS,
-      *described_class::STOW_RECOVERY_PATTERNS
-    ].index(pattern)
-
-    return 'unknown' if idx.nil?
-
-    if idx < success_count
-      "PUT_AWAY_ITEM_SUCCESS_PATTERNS[#{idx}]"
-    elsif idx < success_count + failure_count
-      "PUT_AWAY_ITEM_FAILURE_PATTERNS[#{idx - success_count}]"
-    else
-      "STOW_RECOVERY_PATTERNS[#{idx - success_count - failure_count}]"
     end
   end
 end
