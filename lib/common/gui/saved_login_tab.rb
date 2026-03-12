@@ -767,10 +767,12 @@ module Lich
             @ui_config.theme_state,
             @ui_config.tab_layout_state,
             @ui_config.autosort_state,
+            Lich.track_persistent_launcher_mode,
             {
               on_theme_change: @callbacks.on_theme_change,
               on_layout_change: @callbacks.on_layout_change,
-              on_sort_change: @callbacks.on_sort_change
+              on_sort_change: @callbacks.on_sort_change,
+              on_persistent_launcher_change: @callbacks.on_persistent_launcher_change
             }
           )
 

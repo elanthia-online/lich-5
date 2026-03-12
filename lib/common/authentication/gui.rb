@@ -37,7 +37,14 @@ module Lich
               login_info[:custom_launch_dir]
             )
 
-            on_success&.call(launch_data)
+            if on_success
+              # Backward compatibility: existing callbacks may still expect 1 arg.
+              if on_success.respond_to?(:arity) && on_success.arity == 1
+                on_success.call(launch_data)
+              else
+                on_success.call(launch_data, login_info)
+              end
+            end
           rescue FatalAuthError => e
             handle_auth_error(button, e, on_error)
           rescue StandardError => e
