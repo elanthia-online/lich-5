@@ -1,131 +1,14 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
-require 'rspec'
 
-# NilClass monkey-patch (matches lich runtime behavior where nil.method returns nil)
-class NilClass
-  def method_missing(*)
-    nil
-  end
-end
-
-# Mock DRC (module) — define at top level with *_args for cross-spec compat
-module DRC
-  def self.bput(*_args)
-    nil
-  end
-
-  def self.left_hand
-    nil
-  end
-
-  def self.right_hand
-    nil
-  end
-
-  def self.message(*_args)
-    nil
-  end
-end unless defined?(DRC)
-
-# Defensive method additions for methods other specs may not define
-DRC.define_singleton_method(:left_hand) { nil } unless DRC.respond_to?(:left_hand)
-DRC.define_singleton_method(:right_hand) { nil } unless DRC.respond_to?(:right_hand)
-DRC.define_singleton_method(:message) { |*_args| nil } unless DRC.respond_to?(:message)
-
-# Mock DRCI (module)
-module DRCI
-  def self.in_hands?(*_args)
-    false
-  end
-
-  def self.inside?(*_args)
-    false
-  end
-
-  def self.get_item?(*_args)
-    true
-  end
-
-  def self.put_away_item?(*_args)
-    true
-  end
-
-  def self.have_item_by_look?(*_args)
-    false
-  end
-end unless defined?(DRCI)
-
-DRCI.define_singleton_method(:in_hands?) { |*_args| false } unless DRCI.respond_to?(:in_hands?)
+# Add methods needed by this spec (not in base spec_helper mocks)
 DRCI.define_singleton_method(:inside?) { |*_args| false } unless DRCI.respond_to?(:inside?)
-
-# Mock DRCT (module)
-module DRCT
-  def self.walk_to(*_args)
-    nil
-  end
-
-  def self.buy_item(*_args)
-    nil
-  end
-end unless defined?(DRCT)
-
-DRCT.define_singleton_method(:walk_to) { |*_args| nil } unless DRCT.respond_to?(:walk_to)
+DRCI.define_singleton_method(:have_item_by_look?) { |*_args| false } unless DRCI.respond_to?(:have_item_by_look?)
 DRCT.define_singleton_method(:buy_item) { |*_args| nil } unless DRCT.respond_to?(:buy_item)
-
-# Mock DRCA (module)
-module DRCA
-  def self.cast_spell(*_args)
-    nil
-  end
-end unless defined?(DRCA)
-
 DRCA.define_singleton_method(:cast_spell) { |*_args| nil } unless DRCA.respond_to?(:cast_spell)
 
-# Mock Lich::Messaging (separate guard from Lich::Util)
-module Lich
-  module Messaging
-    def self.msg(*_args)
-      nil
-    end
-  end unless defined?(Lich::Messaging)
-
-  module Util
-    def self.issue_command(*_args, **_kwargs)
-      nil
-    end
-  end unless defined?(Lich::Util)
-end
-
-# Namespace aliases — MUST be BEFORE require so namespaced code resolves to same objects
-module Lich
-  module DragonRealms
-    DRC = ::DRC unless defined?(Lich::DragonRealms::DRC)
-    DRCI = ::DRCI unless defined?(Lich::DragonRealms::DRCI)
-    DRCT = ::DRCT unless defined?(Lich::DragonRealms::DRCT)
-    DRCA = ::DRCA unless defined?(Lich::DragonRealms::DRCA)
-  end
-end
-
-# Kernel mocks for global methods used by module_function code
-# Note: get_data is provided by spec_helper.rb — do not redefine here
-module Kernel
-  def waitrt?
-    nil
-  end
-  unless method_defined?(:waitrt?)
-    define_method(:waitrt?) { nil }
-  end
-
-  def pause(*_args)
-    nil
-  end
-  unless method_defined?(:pause)
-    define_method(:pause) { |*_args| nil }
-  end
-end
-
+# Load production code
 require_relative '../../../../lib/dragonrealms/commons/common-theurgy'
 
 RSpec.describe Lich::DragonRealms::DRCTH do
@@ -133,7 +16,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
 
   describe 'constants' do
     describe 'CLERIC_ITEMS' do
-      it 'is frozen' do
+      it 'is an immutable constant' do
         expect(described_class::CLERIC_ITEMS).to be_frozen
       end
 
@@ -149,7 +32,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
 
     describe 'COMMUNE_ERRORS' do
-      it 'is frozen' do
+      it 'is an immutable constant' do
         expect(described_class::COMMUNE_ERRORS).to be_frozen
       end
 
@@ -167,7 +50,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
 
     describe 'DEVOTION_LEVELS' do
-      it 'is frozen' do
+      it 'is an immutable constant' do
         expect(described_class::DEVOTION_LEVELS).to be_frozen
       end
 
@@ -183,7 +66,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
 
     describe 'COMMUNE_SENSE_START' do
-      it 'is frozen' do
+      it 'is an immutable regex constant' do
         expect(described_class::COMMUNE_SENSE_START).to be_frozen
       end
 
@@ -221,7 +104,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         expect(result.commune_ready).to be false
       end
 
-      it 'freezes arrays' do
+      it 'freezes the active_communes and recent_communes arrays on creation' do
         result = described_class.new(active_communes: ['Tamsine'])
         expect(result.active_communes).to be_frozen
         expect(result.recent_communes).to be_frozen
@@ -437,7 +320,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(DRCI).to receive(:get_item?).with('chalice', 'portal').and_return(false)
       end
 
-      it 'returns false' do
+      it 'returns false when the water holder cannot be retrieved from the container' do
         expect(described_class.has_holy_water?(container, water_holder)).to be false
       end
 
@@ -454,7 +337,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(DRCI).to receive(:put_away_item?).and_return(true)
       end
 
-      it 'returns true' do
+      it 'returns true when the water holder contains holy water' do
         expect(described_class.has_holy_water?(container, water_holder)).to be true
       end
 
@@ -471,7 +354,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(DRCI).to receive(:put_away_item?).and_return(true)
       end
 
-      it 'returns false' do
+      it 'returns false when the water holder is empty of holy water' do
         expect(described_class.has_holy_water?(container, water_holder)).to be false
       end
 
@@ -524,7 +407,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         { 'Crossing' => { 'incense_shop' => { 'needs_bless' => true, 'id' => 1234 } } }
       end
 
-      it 'returns true' do
+      it 'returns true when the shop requires blessing after purchase' do
         expect(described_class.buying_cleric_item_requires_bless?('Crossing', 'incense')).to be true
       end
     end
@@ -534,7 +417,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         { 'Crossing' => { 'incense_shop' => { 'id' => 1234 } } }
       end
 
-      it 'returns nil' do
+      it 'returns nil when the shop has no needs_bless setting' do
         expect(described_class.buying_cleric_item_requires_bless?('Crossing', 'incense')).to be_nil
       end
     end
@@ -542,7 +425,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     context 'when town data does not exist' do
       let(:theurgy_data) { {} }
 
-      it 'returns nil' do
+      it 'returns nil when the town has no theurgy data' do
         expect(described_class.buying_cleric_item_requires_bless?('UnknownTown', 'incense')).to be_nil
       end
     end
@@ -552,7 +435,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         { 'Crossing' => {} }
       end
 
-      it 'returns nil' do
+      it 'returns nil when the item shop is not configured for the town' do
         expect(described_class.buying_cleric_item_requires_bless?('Crossing', 'unknown_item')).to be_nil
       end
     end
@@ -655,12 +538,25 @@ RSpec.describe Lich::DragonRealms::DRCTH do
       end
     end
 
-    context 'when needs_bless is true but @known_spells is nil (module_function context)' do
+    context 'when needs_bless is true but Bless spell is not known' do
       let(:shop_data) { { 'id' => 1234, 'needs_bless' => true } }
 
-      it 'does not call quick_bless_item (known_spells is nil in module_function)' do
+      it 'does not call quick_bless_item when DRSpells.known_spells is empty' do
         allow(DRCT).to receive(:buy_item)
+        allow(DRSpells).to receive(:known_spells).and_return({})
         expect(described_class).not_to receive(:quick_bless_item)
+        described_class.buy_single_supply('incense', shop_data)
+      end
+    end
+
+    context 'when needs_bless is true and Bless spell is known' do
+      let(:shop_data) { { 'id' => 1234, 'needs_bless' => true } }
+
+      it 'calls quick_bless_item' do
+        allow(DRCT).to receive(:buy_item)
+        allow(DRSpells).to receive(:known_spells).and_return({ 'Bless' => true })
+        allow(described_class).to receive(:quick_bless_item)
+        expect(described_class).to receive(:quick_bless_item).with('incense')
         described_class.buy_single_supply('incense', shop_data)
       end
     end
@@ -706,11 +602,11 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(Lich::Messaging).to receive(:msg)
       end
 
-      it 'returns false' do
+      it 'returns false when the water holder cannot be retrieved' do
         expect(described_class.sprinkle_holy_water?(container, water_holder, target)).to be false
       end
 
-      it 'logs a message' do
+      it 'warns that the water holder could not be retrieved for sprinkling' do
         expect(Lich::Messaging).to receive(:msg).with('bold', "DRCTH: Can't get chalice to sprinkle.")
         described_class.sprinkle_holy_water?(container, water_holder, target)
       end
@@ -756,11 +652,11 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(Lich::Messaging).to receive(:msg)
       end
 
-      it 'returns false' do
+      it 'returns false when holy oil cannot be retrieved' do
         expect(described_class.sprinkle_holy_oil?(container, target)).to be false
       end
 
-      it 'logs a message' do
+      it 'warns that holy oil could not be retrieved for sprinkling' do
         expect(Lich::Messaging).to receive(:msg).with('bold', "DRCTH: Can't get holy oil to sprinkle.")
         described_class.sprinkle_holy_oil?(container, target)
       end
@@ -788,7 +684,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(DRC).to receive(:left_hand).and_return(nil)
       end
 
-      it 'returns true' do
+      it 'returns true after successfully sprinkling holy oil on the target' do
         expect(described_class.sprinkle_holy_oil?(container, target)).to be true
       end
     end
@@ -911,7 +807,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
       described_class.empty_cleric_hands(container)
     end
 
-    it 'does nothing when both hands are empty' do
+    it 'skips put_away_item when both hands are already empty' do
       expect(DRCI).not_to receive(:put_away_item?)
       described_class.empty_cleric_hands(container)
     end
@@ -925,7 +821,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     context 'when right hand is empty' do
       before { allow(DRC).to receive(:right_hand).and_return(nil) }
 
-      it 'does nothing' do
+      it 'skips put_away_item when the right hand is already empty' do
         expect(DRCI).not_to receive(:put_away_item?)
         described_class.empty_cleric_right_hand(container)
       end
@@ -965,7 +861,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     context 'when left hand is empty' do
       before { allow(DRC).to receive(:left_hand).and_return(nil) }
 
-      it 'does nothing' do
+      it 'skips put_away_item when the left hand is already empty' do
         expect(DRCI).not_to receive(:put_away_item?)
         described_class.empty_cleric_left_hand(container)
       end
@@ -1125,7 +1021,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
         allow(DRCI).to receive(:put_away_item?).and_return(true)
       end
 
-      it 'returns true' do
+      it 'returns true after successfully lighting and waving incense' do
         expect(described_class.wave_incense?(container, flint_lighter, target)).to be true
       end
 

@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+# NOTE: This spec intentionally does NOT require spec_helper.
+# It tests Authentication in isolation with minimal mocks to verify
+# the module works standalone without the full Lich infrastructure.
+
 require 'rspec'
 require 'tmpdir'
 

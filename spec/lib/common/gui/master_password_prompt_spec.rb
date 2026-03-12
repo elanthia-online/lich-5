@@ -20,8 +20,8 @@ module Gtk
   end
 
   class ResponseType
-    YES = 0
-    NO = 1
+    YES = 0 unless defined?(YES)
+    NO = 1 unless defined?(NO)
   end
 
   def self.queue

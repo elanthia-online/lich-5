@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative '../../login_spec_helper'
 
 RSpec.describe Lich::Common, "#gui_login" do

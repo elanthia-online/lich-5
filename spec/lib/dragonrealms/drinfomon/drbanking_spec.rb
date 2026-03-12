@@ -45,19 +45,14 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     Lich::Messaging.messages.map { |m| m.is_a?(Hash) ? m[:message] : m.to_s }
   end
 
-  before(:all) do
-    # Save original InstanceSettings.game method to restore after tests
-    @original_game_method = Lich::Common::InstanceSettings.method(:game)
-  end
-
-  after(:all) do
-    # Restore original InstanceSettings.game method
-    if @original_game_method
-      Lich::Common::InstanceSettings.define_singleton_method(:game, @original_game_method)
-    end
-  end
-
+  # Capture and restore InstanceSettings.game per-example using around(:each) semantics
+  # via before/after(:each) so that any test failure cannot leave the shared singleton
+  # method permanently redefined. (before/after(:all) would share @original_game_method
+  # across all examples but runs outside the normal per-example ivar scope, which is
+  # confusing and prevents proper cleanup on early failures.)
   before(:each) do
+    @original_game_method = Lich::Common::InstanceSettings.method(:game)
+
     # Reset test data
     DRBankingTestData.reset!
     Lich::Messaging.clear_messages!
@@ -74,9 +69,17 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       end
     end
 
-    # Reset DRBanking cache
+    # NOTE: class_variable_set is acceptable here because DRBanking has no reset! method —
+    # only reload!, which re-reads from storage but does not nil out the in-memory cache.
+    # Clearing @@accounts_cache forces reload! to build a fresh cache from test data,
+    # ensuring each test starts with a clean state. TODO: add DRBanking.reset! to production code.
     described_module.class_variable_set(:@@accounts_cache, nil)
     described_module.reload!
+  end
+
+  after(:each) do
+    # Restore the real InstanceSettings.game singleton method after each test
+    Lich::Common::InstanceSettings.define_singleton_method(:game, @original_game_method) if @original_game_method
   end
 
   describe 'Pattern constants' do
@@ -228,7 +231,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
   end
 
   describe 'DENOMINATION_VALUES constant' do
-    it 'is frozen' do
+    it 'DENOMINATION_VALUES hash is frozen to prevent modification' do
       expect(described_module::DENOMINATION_VALUES).to be_frozen
     end
 
@@ -254,7 +257,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
   end
 
   describe 'CURRENCY_BANKS constant' do
-    it 'is frozen' do
+    it 'CURRENCY_BANKS hash is frozen to prevent modification' do
       expect(described_module::CURRENCY_BANKS).to be_frozen
     end
 
@@ -329,7 +332,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(described_module.my_accounts['Crossings']).to eq(25_000)
     end
 
-    it 'logs the update' do
+    it 'logs a message confirming the balance update for the town' do
       described_module.update_balance('Crossings', 10_000)
       expect(message_strings.last).to include('Updated Crossings balance')
     end
@@ -414,7 +417,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
   end
 
   describe '.parse_balance_string' do
-    it 'returns 0 for nil' do
+    it 'returns 0 when given nil input instead of raising an error' do
       expect(described_module.parse_balance_string(nil)).to eq(0)
     end
 
@@ -508,7 +511,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
     context 'when in a bank' do
       before { XMLData.room_title = '[[Provincial Bank, Teller]]' } # Crossings bank
 
-      it 'handles nil input' do
+      it 'does not raise an error when parse receives nil input while in a bank' do
         expect { described_module.parse(nil) }.not_to raise_error
       end
 
@@ -655,7 +658,9 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       # Set initial data
       described_module.update_balance('Crossings', 10_000)
 
-      # Clear the cache directly and reload
+      # NOTE: class_variable_set is acceptable here because we are specifically testing
+      # that reload! re-reads from storage after the cache is cleared. This verifies the
+      # internal state machine of the caching layer — an intentional implementation test.
       described_module.class_variable_set(:@@accounts_cache, nil)
       described_module.reload!
 
@@ -696,7 +701,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(described_module.all_accounts['Mahtra']['Crossings']).to eq(10_000)
     end
 
-    it 'logs the reset' do
+    it 'logs a message confirming the character bank data was cleared' do
       described_module.reset_character!
       expect(message_strings.last).to include('Cleared bank data')
     end
@@ -712,7 +717,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       expect(described_module.all_accounts).to eq({})
     end
 
-    it 'logs the reset' do
+    it 'logs a message confirming all character bank data was cleared' do
       described_module.reset_all!
       expect(message_strings.last).to include('Cleared all bank data')
     end

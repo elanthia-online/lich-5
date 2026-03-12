@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'rspec'
+require_relative '../../../spec_helper'
 
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 
@@ -8,7 +8,7 @@ RSpec.describe 'Lich::DragonRealms constants' do
   describe 'DR_LEARNING_RATES' do
     let(:rates) { Lich::DragonRealms::DR_LEARNING_RATES }
 
-    it 'is frozen' do
+    it 'DR_LEARNING_RATES array is frozen to prevent modification' do
       expect(rates).to be_frozen
     end
 
@@ -46,7 +46,7 @@ RSpec.describe 'Lich::DragonRealms constants' do
   describe 'DR_BALANCE_VALUES' do
     let(:values) { Lich::DragonRealms::DR_BALANCE_VALUES }
 
-    it 'is frozen' do
+    it 'DR_BALANCE_VALUES array is frozen to prevent modification' do
       expect(values).to be_frozen
     end
 
@@ -64,11 +64,11 @@ RSpec.describe 'Lich::DragonRealms constants' do
   describe 'DR_SKILLS_DATA' do
     let(:data) { Lich::DragonRealms::DR_SKILLS_DATA }
 
-    it 'is frozen' do
+    it 'DR_SKILLS_DATA hash is frozen to prevent modification' do
       expect(data).to be_frozen
     end
 
-    it 'has skillsets key' do
+    it 'contains a :skillsets key mapping skillset names to skill lists' do
       expect(data).to have_key(:skillsets)
     end
 
@@ -79,15 +79,15 @@ RSpec.describe 'Lich::DragonRealms constants' do
     describe 'skillsets' do
       let(:skillsets) { data[:skillsets] }
 
-      it 'is frozen' do
+      it 'skillsets hash is frozen to prevent modification' do
         expect(skillsets).to be_frozen
       end
 
-      it 'has 5 skillsets' do
+      it 'contains all 5 DR skillset categories: Armor, Lore, Weapon, Magic, Survival' do
         expect(skillsets.keys).to contain_exactly('Armor', 'Lore', 'Weapon', 'Magic', 'Survival')
       end
 
-      it 'has frozen skill arrays' do
+      it 'has frozen skill arrays within each skillset to prevent modification' do
         skillsets.each do |name, skills|
           expect(skills).to be_frozen, "#{name} skills should be frozen"
         end
@@ -105,7 +105,7 @@ RSpec.describe 'Lich::DragonRealms constants' do
     describe 'guild_skill_aliases' do
       let(:aliases) { data[:guild_skill_aliases] }
 
-      it 'is frozen' do
+      it 'guild_skill_aliases hash is frozen to prevent modification' do
         expect(aliases).to be_frozen
       end
 
@@ -131,37 +131,37 @@ RSpec.describe 'Lich::DragonRealms constants' do
 
   describe 'bank constants' do
     describe 'KRONAR_BANKS' do
-      it 'is frozen' do
+      it 'KRONAR_BANKS array is frozen to prevent modification' do
         expect(Lich::DragonRealms::KRONAR_BANKS).to be_frozen
       end
 
-      it 'includes Crossings' do
+      it 'includes Crossings as a town that uses Kronars' do
         expect(Lich::DragonRealms::KRONAR_BANKS).to include('Crossings')
       end
     end
 
     describe 'LIRUM_BANKS' do
-      it 'is frozen' do
+      it 'LIRUM_BANKS array is frozen to prevent modification' do
         expect(Lich::DragonRealms::LIRUM_BANKS).to be_frozen
       end
 
-      it 'includes Riverhaven' do
+      it 'includes Riverhaven as a town that uses Lirums' do
         expect(Lich::DragonRealms::LIRUM_BANKS).to include('Riverhaven')
       end
     end
 
     describe 'DOKORA_BANKS' do
-      it 'is frozen' do
+      it 'DOKORA_BANKS array is frozen to prevent modification' do
         expect(Lich::DragonRealms::DOKORA_BANKS).to be_frozen
       end
 
-      it 'includes Shard' do
+      it 'includes Shard as a town that uses Dokoras' do
         expect(Lich::DragonRealms::DOKORA_BANKS).to include('Shard')
       end
     end
 
     describe 'BANK_TITLES' do
-      it 'is frozen' do
+      it 'BANK_TITLES hash is frozen to prevent modification' do
         expect(Lich::DragonRealms::BANK_TITLES).to be_frozen
       end
 
@@ -173,7 +173,7 @@ RSpec.describe 'Lich::DragonRealms constants' do
     end
 
     describe 'VAULT_TITLES' do
-      it 'is frozen' do
+      it 'VAULT_TITLES hash is frozen to prevent modification' do
         expect(Lich::DragonRealms::VAULT_TITLES).to be_frozen
       end
 
@@ -188,11 +188,11 @@ RSpec.describe 'Lich::DragonRealms constants' do
   describe 'HOMETOWN_REGEX_MAP' do
     let(:map) { Lich::DragonRealms::HOMETOWN_REGEX_MAP }
 
-    it 'is frozen' do
+    it 'HOMETOWN_REGEX_MAP hash is frozen to prevent modification' do
       expect(map).to be_frozen
     end
 
-    it 'has regex values' do
+    it 'maps every hometown name to a Regexp value for pattern matching' do
       map.each do |name, regex|
         expect(regex).to be_a(Regexp), "#{name} should map to a Regexp"
       end
@@ -207,7 +207,7 @@ RSpec.describe 'Lich::DragonRealms constants' do
   end
 
   describe 'HOMETOWN_LIST' do
-    it 'is frozen' do
+    it 'HOMETOWN_LIST array is frozen to prevent modification' do
       expect(Lich::DragonRealms::HOMETOWN_LIST).to be_frozen
     end
 
@@ -219,7 +219,7 @@ RSpec.describe 'Lich::DragonRealms constants' do
   end
 
   describe 'HOMETOWN_REGEX' do
-    it 'is a Regexp' do
+    it 'HOMETOWN_REGEX is a Regexp that matches hometown name variations' do
       expect(Lich::DragonRealms::HOMETOWN_REGEX).to be_a(Regexp)
     end
 
@@ -230,15 +230,15 @@ RSpec.describe 'Lich::DragonRealms constants' do
   end
 
   describe 'ORDINALS' do
-    it 'is frozen' do
+    it 'ORDINALS array is frozen to prevent modification' do
       expect(Lich::DragonRealms::ORDINALS).to be_frozen
     end
 
-    it 'has 20 ordinals' do
+    it 'contains exactly 20 ordinal words from first through twentieth' do
       expect(Lich::DragonRealms::ORDINALS.length).to eq(20)
     end
 
-    it 'starts with first' do
+    it 'starts with "first" as the initial ordinal' do
       expect(Lich::DragonRealms::ORDINALS.first).to eq('first')
     end
 
@@ -248,7 +248,7 @@ RSpec.describe 'Lich::DragonRealms constants' do
   end
 
   describe 'CURRENCIES' do
-    it 'is frozen' do
+    it 'CURRENCIES array is frozen to prevent modification' do
       expect(Lich::DragonRealms::CURRENCIES).to be_frozen
     end
 
@@ -258,7 +258,7 @@ RSpec.describe 'Lich::DragonRealms constants' do
   end
 
   describe 'ENC_MAP' do
-    it 'is frozen' do
+    it 'ENC_MAP hash is frozen to prevent modification' do
       expect(Lich::DragonRealms::ENC_MAP).to be_frozen
     end
 
@@ -273,7 +273,7 @@ RSpec.describe 'Lich::DragonRealms constants' do
   end
 
   describe 'NUM_MAP' do
-    it 'is frozen' do
+    it 'NUM_MAP hash is frozen to prevent modification' do
       expect(Lich::DragonRealms::NUM_MAP).to be_frozen
     end
 
@@ -297,11 +297,11 @@ RSpec.describe 'Lich::DragonRealms constants' do
   end
 
   describe 'MANA_MAP' do
-    it 'is frozen' do
+    it 'MANA_MAP hash is frozen to prevent modification' do
       expect(Lich::DragonRealms::MANA_MAP).to be_frozen
     end
 
-    it 'has frozen arrays' do
+    it 'has frozen arrays within each mana perception level to prevent modification' do
       Lich::DragonRealms::MANA_MAP.each do |level, words|
         expect(words).to be_frozen, "#{level} words should be frozen"
       end
@@ -330,7 +330,7 @@ RSpec.describe 'Lich::DragonRealms constants' do
   end
 
   describe 'VOL_MAP' do
-    it 'is frozen' do
+    it 'VOL_MAP hash is frozen to prevent modification' do
       expect(Lich::DragonRealms::VOL_MAP).to be_frozen
     end
 
@@ -341,51 +341,51 @@ RSpec.describe 'Lich::DragonRealms constants' do
   end
 
   describe 'backward compatibility global aliases' do
-    it 'defines $HOMETOWN_REGEX_MAP' do
+    it 'defines $HOMETOWN_REGEX_MAP global alias pointing to the module constant' do
       expect($HOMETOWN_REGEX_MAP).to eq(Lich::DragonRealms::HOMETOWN_REGEX_MAP)
     end
 
-    it 'defines $HOMETOWN_LIST' do
+    it 'defines $HOMETOWN_LIST global alias pointing to the module constant' do
       expect($HOMETOWN_LIST).to eq(Lich::DragonRealms::HOMETOWN_LIST)
     end
 
-    it 'defines $HOMETOWN_REGEX' do
+    it 'defines $HOMETOWN_REGEX global alias pointing to the module constant' do
       expect($HOMETOWN_REGEX).to eq(Lich::DragonRealms::HOMETOWN_REGEX)
     end
 
-    it 'defines $ORDINALS' do
+    it 'defines $ORDINALS global alias pointing to the module constant' do
       expect($ORDINALS).to eq(Lich::DragonRealms::ORDINALS)
     end
 
-    it 'defines $CURRENCIES' do
+    it 'defines $CURRENCIES global alias pointing to the module constant' do
       expect($CURRENCIES).to eq(Lich::DragonRealms::CURRENCIES)
     end
 
-    it 'defines $ENC_MAP' do
+    it 'defines $ENC_MAP global alias pointing to the module constant' do
       expect($ENC_MAP).to eq(Lich::DragonRealms::ENC_MAP)
     end
 
-    it 'defines $NUM_MAP' do
+    it 'defines $NUM_MAP global alias pointing to the module constant' do
       expect($NUM_MAP).to eq(Lich::DragonRealms::NUM_MAP)
     end
 
-    it 'defines $box_regex' do
+    it 'defines $box_regex global alias pointing to the module constant' do
       expect($box_regex).to eq(Lich::DragonRealms::BOX_REGEX)
     end
 
-    it 'defines $MANA_MAP' do
+    it 'defines $MANA_MAP global alias pointing to the module constant' do
       expect($MANA_MAP).to eq(Lich::DragonRealms::MANA_MAP)
     end
 
-    it 'defines $PRIMARY_SIGILS_PATTERN' do
+    it 'defines $PRIMARY_SIGILS_PATTERN global alias pointing to the module constant' do
       expect($PRIMARY_SIGILS_PATTERN).to eq(Lich::DragonRealms::PRIMARY_SIGILS_PATTERN)
     end
 
-    it 'defines $SECONDARY_SIGILS_PATTERN' do
+    it 'defines $SECONDARY_SIGILS_PATTERN global alias pointing to the module constant' do
       expect($SECONDARY_SIGILS_PATTERN).to eq(Lich::DragonRealms::SECONDARY_SIGILS_PATTERN)
     end
 
-    it 'defines $VOL_MAP' do
+    it 'defines $VOL_MAP global alias pointing to the module constant' do
       expect($VOL_MAP).to eq(Lich::DragonRealms::VOL_MAP)
     end
   end

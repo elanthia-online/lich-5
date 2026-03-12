@@ -136,7 +136,7 @@ RSpec.describe Lich::DragonRealms do
     describe 'NPC_SCAN' do
       let(:pattern) { Lich::DragonRealms::DRDefsPattern::NPC_SCAN }
 
-      it 'matches live NPC' do
+      it 'matches a live NPC enclosed in pushBold/popBold XML tags' do
         matches = '<pushBold/>goblin<popBold/>'.scan(pattern)
         expect(matches.first).to eq('<pushBold/>goblin<popBold/>')
       end
@@ -146,7 +146,7 @@ RSpec.describe Lich::DragonRealms do
         expect(matches.first).to include('which appears dead')
       end
 
-      it 'matches dead NPC with "(dead)"' do
+      it 'matches a dead NPC with parenthetical "(dead)" status after bold tags' do
         matches = '<pushBold/>goblin<popBold/> (dead)'.scan(pattern)
         expect(matches.first).to include('(dead)')
       end
@@ -275,7 +275,7 @@ RSpec.describe Lich::DragonRealms do
       expect(helper.convert2plats(1)).to eq('1 copper')
     end
 
-    it 'handles zero' do
+    it 'returns empty string when converting zero copper to denomination string' do
       expect(helper.convert2plats(0)).to eq('')
     end
 
@@ -388,12 +388,12 @@ RSpec.describe Lich::DragonRealms do
     end
 
     context 'with parenthetical info' do
-      it 'strips (Premium)' do
+      it 'strips parenthetical (Premium) tag from player name' do
         result = helper.find_pcs('Mahtra (Premium)')
         expect(result).to eq(['Mahtra'])
       end
 
-      it 'strips (dead)' do
+      it 'strips parenthetical (dead) tag from player name' do
         result = helper.find_pcs('Mahtra (dead)')
         expect(result).to eq(['Mahtra'])
       end
@@ -707,12 +707,12 @@ RSpec.describe Lich::DragonRealms do
       expect(result.join).not_to include('sitting astride')
     end
 
-    it 'splits on comma' do
+    it 'splits comma-separated items into individual elements' do
       result = helper.clean_and_split("a sword, a shield, a helm")
       expect(result.size).to eq(3)
     end
 
-    it 'splits on "and"' do
+    it 'splits items joined by "and" into individual elements' do
       result = helper.clean_and_split("a sword and a shield")
       expect(result.size).to eq(2)
     end

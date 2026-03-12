@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+# NOTE: This spec intentionally does NOT require spec_helper.
+# It tests EAccess authentication in isolation with minimal mocks to verify
+# the SGE protocol handling works standalone without network dependencies.
+
 require 'rspec'
 
 # Mock dependencies before requiring the code

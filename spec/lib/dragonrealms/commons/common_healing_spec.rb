@@ -1,63 +1,10 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
-require 'rspec'
 
-LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
-
+# Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-healing-data.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-healing.rb')
-
-# --- Mock setup ---
-# DRSkill must be a class (not module) to match real definition.
-class DRSkill
-  def self.getrank(*_args)
-    0
-  end
-end unless defined?(DRSkill)
-Lich::DragonRealms::DRSkill = ::DRSkill unless defined?(Lich::DragonRealms::DRSkill)
-
-# DRStats is a module in real code.
-module DRStats
-  def self.empath?(*_args)
-    false
-  end
-end unless defined?(DRStats)
-Lich::DragonRealms::DRStats = ::DRStats unless defined?(Lich::DragonRealms::DRStats)
-
-# DRC is a module in real code.
-module DRC
-  def self.bput(*_args)
-    ''
-  end
-end unless defined?(DRC)
-Lich::DragonRealms::DRC = ::DRC unless defined?(Lich::DragonRealms::DRC)
-
-# DRCI is a module in real code.
-module DRCI
-  def self.dispose_trash(*_args)
-    true
-  end
-end unless defined?(DRCI)
-Lich::DragonRealms::DRCI = ::DRCI unless defined?(Lich::DragonRealms::DRCI)
-
-# Lich::Util for issue_command
-module Lich
-  module Util
-    def self.issue_command(*_args, **_kwargs)
-      []
-    end
-  end unless defined?(Lich::Util)
-end
-
-# Lich::Messaging for messaging
-module Lich
-  module Messaging
-    def self.msg(*_args)
-      nil
-    end
-  end unless defined?(Lich::Messaging)
-end
 
 RSpec.describe Lich::DragonRealms::DRCH do
   # ─── Wound class ──────────────────────────────────────────────────────
@@ -300,7 +247,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
   # ─── strip_xml ────────────────────────────────────────────────────────
 
   describe '.strip_xml' do
-    it 'removes XML tags' do
+    it 'strips XML pushStream and other tags from health output lines' do
       lines = ['<pushStream id="familiar">Some text</pushStream>']
       expect(described_class.strip_xml(lines)).to eq(['Some text'])
     end
@@ -373,7 +320,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
       expect(result.score).to eq(0)
     end
 
-    it 'detects wounds' do
+    it 'detects external and compounded wounds from health output text' do
       lines = [
         'Your body feels at full strength.',
         'Your spirit feels full of life.',
@@ -385,7 +332,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
       expect(result['wounds']).not_to be_empty # backward compat
     end
 
-    it 'detects poison' do
+    it 'detects poison status from mildly poisoned body part in health output' do
       lines = [
         'Your body feels at full strength.',
         'Your spirit feels full of life.',
@@ -454,7 +401,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
       expect(result.wounds).to be_empty
     end
 
-    it 'detects bleeders' do
+    it 'detects bleeding wounds with body part and rate from the Bleeding section' do
       lines = [
         'Your body feels slightly battered.',
         'Your spirit feels full of life.',
@@ -505,7 +452,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
       expect(lodged.first.lodged?).to be true
     end
 
-    it 'detects parasites' do
+    it 'detects parasites as Wound objects with body part and parasite flag from health output' do
       lines = [
         'Your body feels at full strength.',
         'You have a retch maggot on your chest.'
@@ -763,7 +710,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
       expect(arm_wounds.any?(&:internal?)).to be true
     end
 
-    it 'parses scars' do
+    it 'parses scar wounds from perceive health output and sets scar flag to true' do
       lines = [
         'Your injuries include...',
         'Wounds to the RIGHT LEG:',

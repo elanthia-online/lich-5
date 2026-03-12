@@ -1,109 +1,16 @@
+# frozen_string_literal: true
+
 require_relative '../../../spec_helper'
-require 'rspec'
 
-# Setup load path
-LIB_DIR = File.join(File.expand_path('../../../..', __dir__), 'lib') unless defined?(LIB_DIR)
-
-# Mock Lich::Messaging before loading the module under test
-module Lich
-  module Messaging
-    @messages = []
-
-    class << self
-      def messages
-        @messages ||= []
-      end
-
-      def clear_messages!
-        @messages = []
-      end
-
-      def msg(type, message, **_opts)
-        @messages ||= []
-        @messages << { type: type, message: message }
-      end
-    end
-  end
-end unless defined?(Lich::Messaging)
-
-# Mock DRC — define at top level for compatibility with other spec files.
-# Use *_args for flexible argument counts since different callers pass
-# different numbers of arguments.
-module DRC
-  def self.bput(*_args); nil; end
-
-  def self.right_hand; nil; end
-
-  def self.left_hand; nil; end
-
-  def self.right_hand_noun; nil; end
-
-  def self.fix_standing; end
-
-  def self.retreat; end
-end unless defined?(DRC)
-
-# Add methods that other spec files' DRC mock may be missing
-DRC.define_singleton_method(:right_hand) { nil } unless DRC.respond_to?(:right_hand)
-DRC.define_singleton_method(:left_hand) { nil } unless DRC.respond_to?(:left_hand)
+# Add methods needed by this spec (not in base spec_helper mocks)
 DRC.define_singleton_method(:right_hand_noun) { nil } unless DRC.respond_to?(:right_hand_noun)
-DRC.define_singleton_method(:fix_standing) {} unless DRC.respond_to?(:fix_standing)
-DRC.define_singleton_method(:retreat) {} unless DRC.respond_to?(:retreat)
-
-# Mock DRStats
-module DRStats
-  def self.moon_mage?; false; end
-
-  def self.trader?; false; end
-
-  def self.warrior_mage?; false; end
-
-  def self.guild; 'Unknown'; end
-end unless defined?(DRStats)
-
-# Mock DRCMM
-module DRCMM
-  def self.hold_moon_weapon?; false; end
-
-  def self.is_moon_weapon?(*_args); false; end
-end unless defined?(DRCMM)
-
-# Mock DRCI — use *_args for all methods since other code (e.g. common-crafting)
-# may call put_away_item? and get_item? with 1 or 2 arguments.
-module DRCI
-  def self.tap(*_args); nil; end
-
-  def self.get_item?(*_args); true; end
-
-  def self.put_away_item?(*_args); true; end
-end unless defined?(DRCI)
-
-# Add methods that other spec files' DRCI mock may be missing
+DRCMM.define_singleton_method(:hold_moon_weapon?) { false } unless DRCMM.respond_to?(:hold_moon_weapon?)
+DRCMM.define_singleton_method(:is_moon_weapon?) { |*_args| false } unless DRCMM.respond_to?(:is_moon_weapon?)
 DRCI.define_singleton_method(:tap) { |*_args| nil } unless DRCI.respond_to?(:tap)
 
-# Stub game helper methods that DRCS calls directly via module_function/Kernel
-module Kernel
-  def pause(_seconds); end
-  def waitrt?; end
-end
-
-# Ensure namespaced constants point to the same top-level mocks.
-# Code inside Lich::DragonRealms::DRCS resolves bare constants (DRC, DRCI, etc.)
-# to the Lich::DragonRealms namespace first. Without these aliases, expect/allow
-# calls on top-level constants won't intercept calls from the code under test.
-module Lich
-  module DragonRealms
-    DRC = ::DRC unless defined?(Lich::DragonRealms::DRC)
-    DRStats = ::DRStats unless defined?(Lich::DragonRealms::DRStats)
-    DRCMM = ::DRCMM unless defined?(Lich::DragonRealms::DRCMM)
-    DRCI = ::DRCI unless defined?(Lich::DragonRealms::DRCI)
-  end
-end
-
-# Load the module under test
+# Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-summoning.rb')
 
-# Alias for backward compatibility with other specs that may reference DRCS
 DRCS = Lich::DragonRealms::DRCS unless defined?(DRCS)
 
 RSpec.describe Lich::DragonRealms::DRCS do
