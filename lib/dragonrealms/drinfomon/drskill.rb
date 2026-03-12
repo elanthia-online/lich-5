@@ -37,17 +37,6 @@ module Lich
         @@list.each { |skill| skill.baseline = skill.current }
       end
 
-      # Full reset for test isolation - clears all state
-      def self.reset!
-        @@gained_skills = []
-        @@start_time = Time.now
-        @@list = []
-        @@exp_modifiers = {}
-        @@rexp_stored = 0
-        @@rexp_usable = 0
-        @@rexp_refresh = 0
-      end
-
       # Primarily used by `learned` script to track how long it's
       # been tracking your experience gains this session.
       def self.start_time
@@ -226,26 +215,6 @@ module Lich
         end
 
         total_seconds
-      end
-
-      # Test helper: Set xp for a skill (creates skill entry if needed)
-      def self.set_xp(skill_name, xp)
-        skill = find_skill(skill_name)
-        if skill
-          skill.exp = xp
-        else
-          @@list << new(skill_name, 0, xp, 0)
-        end
-      end
-
-      # Test helper: Set rank for a skill (creates skill entry if needed)
-      def self.set_rank(skill_name, rank)
-        skill = find_skill(skill_name)
-        if skill
-          skill.rank = rank
-        else
-          @@list << new(skill_name, rank, 0, 0)
-        end
       end
 
       # Some guilds rename skills, like Barbarians call "Primary Magic" as "Inner Fire".

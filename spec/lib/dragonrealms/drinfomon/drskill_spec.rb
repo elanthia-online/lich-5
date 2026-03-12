@@ -9,8 +9,14 @@ require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
 
 RSpec.describe Lich::DragonRealms::DRSkill do
   before(:each) do
-    # Reset class state using production reset! method
-    described_class.reset!
+    # NOTE: class_variable_set used because DRSkill is a production class with no reset! method
+    described_class.class_variable_set(:@@gained_skills, [])
+    described_class.class_variable_set(:@@start_time, Time.now)
+    described_class.class_variable_set(:@@list, [])
+    described_class.class_variable_set(:@@exp_modifiers, {})
+    described_class.class_variable_set(:@@rexp_stored, 0)
+    described_class.class_variable_set(:@@rexp_usable, 0)
+    described_class.class_variable_set(:@@rexp_refresh, 0)
     Lich.reset_display_expgains!
     # Default guild stub - can be overridden per test
     allow(Lich::DragonRealms::DRStats).to receive(:guild).and_return('Warrior Mage')
@@ -310,32 +316,6 @@ RSpec.describe Lich::DragonRealms::DRSkill do
 
     it 'parses hours and minutes separately' do
       expect(described_class.convert_rexp_str_to_seconds('2 hours 30 minutes')).to eq((2 * 60 + 30) * 60)
-    end
-  end
-
-  describe '.set_xp (test helper)' do
-    it 'creates new skill if not exists' do
-      described_class.set_xp('TestSkill', 25)
-      expect(described_class.getxp('TestSkill')).to eq(25)
-    end
-
-    it 'updates existing skill xp' do
-      described_class.new('TestSkill', 100, 10, 50)
-      described_class.set_xp('TestSkill', 30)
-      expect(described_class.getxp('TestSkill')).to eq(30)
-    end
-  end
-
-  describe '.set_rank (test helper)' do
-    it 'creates new skill if not exists' do
-      described_class.set_rank('TestSkill', 500)
-      expect(described_class.getrank('TestSkill')).to eq(500)
-    end
-
-    it 'updates existing skill rank' do
-      described_class.new('TestSkill', 100, 10, 50)
-      described_class.set_rank('TestSkill', 200)
-      expect(described_class.getrank('TestSkill')).to eq(200)
     end
   end
 end

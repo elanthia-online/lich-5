@@ -25,12 +25,6 @@ module Lich
         @@startup_complete
       end
 
-      # Full reset for test isolation
-      def self.reset!
-        @@startup_complete = false
-        @startup_thread = nil
-      end
-
       # Self-watching thread that triggers startup when ready
       # Follows the ActiveSpell.watch! pattern for lifecycle management
       def self.watch!

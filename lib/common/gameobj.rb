@@ -486,33 +486,6 @@ module Lich
         @@contents.delete(container_id)
       end
 
-      # Resets all GameObj state for test isolation.
-      #
-      # Clears all registries (loot, NPCs, PCs, inventory, room descriptions,
-      # familiar registries, hands, containers, status hashes) and the shared
-      # identity index. Type and sellable caches are preserved since they are
-      # loaded from static data files.
-      #
-      # @return [void]
-      def self.reset!
-        @@loot.clear
-        @@npcs.clear
-        @@npc_status.clear
-        @@pcs.clear
-        @@pc_status.clear
-        @@inv.clear
-        @@contents.clear
-        @@right_hand = nil
-        @@left_hand = nil
-        @@room_desc.clear
-        @@fam_loot.clear
-        @@fam_npcs.clear
-        @@fam_pcs.clear
-        @@fam_room_desc.clear
-        @@index.clear
-        @@type_cache.clear
-      end
-
       # ---------------------------------------------------------------------------
       # Lookup
       # ---------------------------------------------------------------------------

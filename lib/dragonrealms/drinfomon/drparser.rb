@@ -67,12 +67,6 @@ module Lich
       @@parsing_exp_mods_output = false
       @@parsing_inventory_get = false
 
-      # Full reset for test isolation - clears all parsing state
-      def self.reset!
-        @@parsing_exp_mods_output = false
-        @@parsing_inventory_get = false
-      end
-
       # Checks server output against registered Flag matchers.
       # Updates Flags.flags hash when a pattern matches.
       # @param server_string [String] A line of server output to check

@@ -79,10 +79,19 @@ RSpec.configure do |config|
     # DR production classes - only if they're loaded (may override mocks)
     Lich::DragonRealms::DRExpMonitor.reset! if defined?(Lich::DragonRealms::DRExpMonitor) && Lich::DragonRealms::DRExpMonitor.respond_to?(:reset!)
 
-    # Game objects — prefer reset! (single call, consistent with other mocks)
-    Lich::Common::GameObj.reset! if defined?(Lich::Common::GameObj) && Lich::Common::GameObj.respond_to?(:reset!)
+    # Game objects — clear registries via class_variable_set (no test methods in production)
+    # NOTE: class_variable_set used because GameObj is a production class with no reset! method
+    if defined?(Lich::Common::GameObj)
+      g = Lich::Common::GameObj
+      %i[@@loot @@npcs @@npc_status @@pcs @@pc_status @@inv @@room_desc
+         @@fam_loot @@fam_npcs @@fam_pcs @@fam_room_desc @@index @@type_cache @@contents].each do |cv|
+        g.class_variable_get(cv).clear if g.class_variable_defined?(cv)
+      end
+      g.class_variable_set(:@@right_hand, nil) if g.class_variable_defined?(:@@right_hand)
+      g.class_variable_set(:@@left_hand, nil) if g.class_variable_defined?(:@@left_hand)
+    end
 
-    # DR mocks from spec_helper (reset both top-level and namespaced)
+    # DR mocks from spec_helper — these have reset! defined in the mock (not production)
     Flags.reset! if defined?(Flags) && Flags.respond_to?(:reset!)
     UserVars.reset! if defined?(UserVars) && UserVars.respond_to?(:reset!)
     DRC.reset! if defined?(DRC) && DRC.respond_to?(:reset!)
@@ -91,8 +100,12 @@ RSpec.configure do |config|
     DRSpells.reset! if defined?(DRSpells) && DRSpells.respond_to?(:reset!)
     DRRoom.reset! if defined?(DRRoom) && DRRoom.respond_to?(:reset!)
 
-    # DR production classes (only if loaded - may override mocks)
-    Lich::DragonRealms::DRParser.reset! if defined?(Lich::DragonRealms::DRParser) && Lich::DragonRealms::DRParser.respond_to?(:reset!)
+    # DR production classes — use class_variable_set (no reset! in production)
+    # NOTE: class_variable_set used because DRParser is a production module with no reset! method
+    if defined?(Lich::DragonRealms::DRParser) && Lich::DragonRealms::DRParser.class_variable_defined?(:@@parsing_exp_mods_output)
+      Lich::DragonRealms::DRParser.class_variable_set(:@@parsing_exp_mods_output, false)
+      Lich::DragonRealms::DRParser.class_variable_set(:@@parsing_inventory_get, false)
+    end
   end
 
   # Random ordering now enabled - the before hook resets shared state
@@ -820,12 +833,11 @@ GameObj = Lich::Common::GameObj unless defined?(GameObj)
 
 class Flags
   @@flags = {}
-  @@pending = {}
   @@matchers = {}
 
   class << self
     def add(name, *patterns)
-      @@flags[name] = nil unless @@pending.key?(name)
+      @@flags[name] = nil
       @@matchers[name] = patterns.map { |p| p.is_a?(Regexp) ? p : /#{p}/i }
     end
 
@@ -839,9 +851,6 @@ class Flags
     end
 
     def [](name)
-      if @@pending.key?(name)
-        @@flags[name] = @@pending.delete(name)
-      end
       @@flags[name]
     end
 
@@ -857,14 +866,8 @@ class Flags
       @@flags[name] = nil
     end
 
-    # For tests: set a flag that survives Flags.add calls
-    def set_pending(name, val)
-      @@pending[name] = val
-    end
-
     def reset!
       @@flags = {}
-      @@pending = {}
       @@matchers = {}
     end
   end

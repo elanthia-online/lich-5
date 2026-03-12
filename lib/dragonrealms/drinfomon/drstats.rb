@@ -275,28 +275,6 @@ module Lich
       def self.warrior_mage?
         @@guild == 'Warrior Mage'
       end
-
-      # Full reset for test isolation - clears all state
-      def self.reset!
-        @@race = nil
-        @@guild = nil
-        @@gender = nil
-        @@age = 0
-        @@circle = 0
-        @@strength = 0
-        @@stamina = 0
-        @@reflex = 0
-        @@agility = 0
-        @@intelligence = 0
-        @@wisdom = 0
-        @@discipline = 0
-        @@charisma = 0
-        @@favors = 0
-        @@tdps = 0
-        @@encumbrance = nil
-        @@balance = 8
-        @@luck = 0
-      end
     end
   end
 end

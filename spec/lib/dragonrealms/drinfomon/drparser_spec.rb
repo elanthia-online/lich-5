@@ -64,8 +64,9 @@ RSpec.describe Lich::DragonRealms::DRParser do
   include_context 'DRParser stubs'
 
   before(:each) do
-    # Reset module-level state via public reset! API (SOLID: DIP - no class_variable_set)
-    described_class.reset!
+    # NOTE: class_variable_set used because DRParser is a production module with no reset! method
+    described_class.class_variable_set(:@@parsing_exp_mods_output, false)
+    described_class.class_variable_set(:@@parsing_inventory_get, false)
   end
 
   describe 'Pattern constants' do

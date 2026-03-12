@@ -283,13 +283,15 @@ RSpec.describe Lich::DragonRealms::DRCA do
     it 'returns false when spell-fail flag set' do
       allow(DRC).to receive(:bput).and_return('default')
       allow(DRC).to receive(:bput).with('cast', anything).and_return('You gesture')
-      Flags.set_pending('spell-fail', ['Something is interfering with the spell'])
+      allow(Flags).to receive(:[]).and_call_original
+      allow(Flags).to receive(:[]).with('spell-fail').and_return(['Something is interfering with the spell'])
       expect(DRCA.cast?).to be false
     end
 
     it 'retries on cyclic-too-recent and gives up at 0 retries' do
       allow(DRC).to receive(:bput).with('cast', anything).and_return('You gesture')
-      Flags.set_pending('cyclic-too-recent', ['The mental strain'])
+      allow(Flags).to receive(:[]).and_call_original
+      allow(Flags).to receive(:[]).with('cyclic-too-recent').and_return(['The mental strain'])
       result = DRCA.cast?('cast', false, [], [], retries: 0)
       expect(result).to be false
       expect(bold_messages.any? { |m| m.include?('cast? exhausted') }).to be true
@@ -298,21 +300,24 @@ RSpec.describe Lich::DragonRealms::DRCA do
     it 'falls back from barrage on barrage-fail' do
       allow(DRC).to receive(:bput).with('barrage', anything).and_return('You gesture')
       allow(DRC).to receive(:bput).with('cast', anything).and_return('You gesture')
-      Flags.set_pending('barrage-fail', ['That was an invalid attack choice.'])
+      allow(Flags).to receive(:[]).and_call_original
+      allow(Flags).to receive(:[]).with('barrage-fail').and_return(['That was an invalid attack choice.'])
       result = DRCA.cast?('barrage', false, [], [])
       expect(result).to be_truthy
     end
 
     it 'gives up on barrage fallback at 0 retries' do
       allow(DRC).to receive(:bput).with('barrage', anything).and_return('You gesture')
-      Flags.set_pending('barrage-fail', ['That was an invalid attack choice.'])
+      allow(Flags).to receive(:[]).and_call_original
+      allow(Flags).to receive(:[]).with('barrage-fail').and_return(['That was an invalid attack choice.'])
       result = DRCA.cast?('barrage', false, [], [], retries: 0)
       expect(result).to be false
       expect(bold_messages.any? { |m| m.include?('barrage fallback exhausted') }).to be true
     end
 
     it 'releases mana and symbiosis on spell-fail with symbiosis' do
-      Flags.set_pending('spell-fail', ['Something is interfering'])
+      allow(Flags).to receive(:[]).and_call_original
+      allow(Flags).to receive(:[]).with('spell-fail').and_return(['Something is interfering'])
       allow(DRC).to receive(:bput).with('cast', anything).and_return('You gesture')
       allow(DRC).to receive(:bput).with('release mana', anything, anything)
       allow(DRC).to receive(:bput).with('release symbiosis', anything, anything)
@@ -666,14 +671,14 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
 
     it 'returns false when Attunement xp exceeds Arcana xp' do
-      DRSkill.set_xp('Attunement', 30)
-      DRSkill.set_xp('Arcana', 10)
+      allow(DRSkill).to receive(:getxp).with('Attunement').and_return(30)
+      allow(DRSkill).to receive(:getxp).with('Arcana').and_return(10)
       expect(DRCA.check_to_harness(true)).to be false
     end
 
     it 'returns true when Arcana xp >= Attunement xp' do
-      DRSkill.set_xp('Attunement', 10)
-      DRSkill.set_xp('Arcana', 30)
+      allow(DRSkill).to receive(:getxp).with('Attunement').and_return(10)
+      allow(DRSkill).to receive(:getxp).with('Arcana').and_return(30)
       expect(DRCA.check_to_harness(true)).to be true
     end
   end

@@ -65,29 +65,32 @@ RSpec.describe Lich::DragonRealms::DRStats do
 end
 ```
 
-### 3. Use `reset!` Methods Instead of `class_variable_set`
+### 3. Reset State via `class_variable_set` or Mock `reset!`
 
-Production classes provide `reset!` methods for test isolation:
+Production code must NOT contain test-only methods. Use `class_variable_set`
+for production classes, or `reset!` on spec_helper mock modules:
 
 ```ruby
-# Good
+# For specs that load REAL production classes:
 before(:each) do
-  described_class.reset!
+  # NOTE: class_variable_set used because DRStats is a production class with no reset! method
+  described_class.class_variable_set(:@@guild, nil)
+  described_class.class_variable_set(:@@race, nil)
 end
 
-# Bad - couples tests to internal implementation
+# For specs that use MOCK modules from spec_helper:
 before(:each) do
-  described_class.class_variable_set(:@@some_var, [])
+  described_class.reset!  # reset! is defined on the mock, not production
 end
 ```
 
-Available `reset!` methods:
-- `DRSkill.reset!` - clears skills, gained_skills, start_time
-- `DRStats.reset!` - resets all stats to defaults
+Mock modules with `reset!` (defined in spec_helper.rb, NOT production):
+- `DRC.reset!` - clears hand state
+- `DRStats.reset!` - resets stats to defaults
+- `DRSkill.reset!` - clears rank/xp hashes
 - `DRSpells.reset!` - clears known spells, feats, parsing state
 - `DRRoom.reset!` - clears npcs, pcs, group members
 - `Flags.reset!` - clears all flags and matchers
-- `DRInfomon.reset!` - clears startup state
 - `UserVars.reset!` - clears all user variables
 
 ### 4. Use Shared Examples for Repetitive Patterns

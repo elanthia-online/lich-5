@@ -7,7 +7,13 @@ require_relative '../../../lib/common/gameobj'
 
 RSpec.describe Lich::Common::GameObj do
   before do
-    described_class.reset!
+    # NOTE: class_variable_set used because GameObj is a production class with no reset! method
+    %i[@@loot @@npcs @@npc_status @@pcs @@pc_status @@inv @@room_desc
+       @@fam_loot @@fam_npcs @@fam_pcs @@fam_room_desc @@index @@type_cache @@contents].each do |cv|
+      described_class.class_variable_get(cv).clear if described_class.class_variable_defined?(cv)
+    end
+    described_class.class_variable_set(:@@right_hand, nil)
+    described_class.class_variable_set(:@@left_hand, nil)
 
     described_class.new_right_hand('r1', 'empty', 'Empty')
     described_class.new_left_hand('l1', 'empty', 'Empty')

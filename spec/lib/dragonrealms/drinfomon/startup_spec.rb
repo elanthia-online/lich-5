@@ -7,8 +7,9 @@ require 'dragonrealms/drinfomon/startup'
 
 RSpec.describe Lich::DragonRealms::DRInfomon do
   before(:each) do
-    # Reset module state using production reset! method
-    described_class.reset!
+    # NOTE: class_variable_set used because DRInfomon is a production module with no reset! method
+    described_class.class_variable_set(:@@startup_complete, false)
+    described_class.instance_variable_set(:@startup_thread, nil)
   end
 
   describe '.startup_complete?' do
