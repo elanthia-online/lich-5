@@ -21,4 +21,6 @@ data
 scripts
 .vscode
 .claude
+doc/yard/
 *.md
+!docs/*.md
