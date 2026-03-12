@@ -211,6 +211,11 @@ RSpec.describe 'wine.rb' do
         result = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Test\\Value')
         expect(result).to eq(false)
       end
+
+      it 'raises ArgumentError for malformed registry keys' do
+        expect { Wine.registry_gets('not-a-registry-key') }
+          .to raise_error(ArgumentError, /Invalid registry key format/)
+      end
     end
 
     describe 'Wine.registry_puts' do
@@ -224,6 +229,11 @@ RSpec.describe 'wine.rb' do
         stub_const('Wine::PREFIX', '/nonexistent/path')
         result = Wine.registry_puts('HKEY_LOCAL_MACHINE\\Software\\Test\\Value', 'test')
         expect(result).to eq(false)
+      end
+
+      it 'raises ArgumentError for malformed registry keys' do
+        expect { Wine.registry_puts('bad-key', 'test') }
+          .to raise_error(ArgumentError, /Invalid registry key format/)
       end
     end
   end
