@@ -24,7 +24,8 @@ def find_wine_binary
   nil
 end
 
-# check for Linux | WINE (and maybe in future MacOS | WINE) first due to low population
+# Detect Wine runtime configuration from CLI overrides or PATH lookup.
+# `--no-wine` and `--without-frontend` explicitly disable detection.
 if (arg = ARGV.find { |a| a =~ /^--wine=.+$/i })
   $wine_bin = arg.sub(/^--wine=/, '')
 elsif ARGV.find { |a| a =~ /^--no-wine$/i } || ARGV.include?('--without-frontend')
@@ -84,10 +85,11 @@ unless $wine_bin.nil?
       end
 
       # Writes a registry value through `regedit` using a temporary `.reg` file.
+      # Uses argv-style `system` invocation to avoid shell interpolation.
       #
       # @param key [String] registry path, e.g. `HKEY_LOCAL_MACHINE\Software\Foo\Bar`
       # @param value [String] value to persist
-      # @return [Boolean, false] true on attempted write path, false on failures
+      # @return [Boolean] true on successful write path, false on failures
       def Wine.registry_puts(key, value)
         hkey, subkey, thingie = /(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)\\([^\\]*)/.match(key).captures # fixme ]/
         if File.exist?(PREFIX)
@@ -103,14 +105,15 @@ unless $wine_bin.nil?
             regedit_data = "REGEDIT4\n\n[#{hkey}\\#{subkey}]\n#{thingie}=\"#{value}\"\n\n"
             filename = "#{TEMP_DIR}/wine-#{Time.now.to_i}.reg"
             File.open(filename, 'w') { |f| f.write(regedit_data) }
-            system("#{BIN} regedit #{filename}")
+            system(BIN, 'regedit', filename)
             sleep 0.2
             File.delete(filename)
-          rescue
+          rescue StandardError
             return false
           end
           return true
         end
+        false
       end
     end
   end
