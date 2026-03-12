@@ -79,9 +79,8 @@ RSpec.configure do |config|
     # DR production classes - only if they're loaded (may override mocks)
     Lich::DragonRealms::DRExpMonitor.reset! if defined?(Lich::DragonRealms::DRExpMonitor) && Lich::DragonRealms::DRExpMonitor.respond_to?(:reset!)
 
-    # Game objects
-    Lich::Common::GameObj.clear_npcs if defined?(Lich::Common::GameObj) && Lich::Common::GameObj.respond_to?(:clear_npcs)
-    Lich::Common::GameObj.clear_hands if defined?(Lich::Common::GameObj) && Lich::Common::GameObj.respond_to?(:clear_hands)
+    # Game objects — prefer reset! (single call, consistent with other mocks)
+    Lich::Common::GameObj.reset! if defined?(Lich::Common::GameObj) && Lich::Common::GameObj.respond_to?(:reset!)
 
     # DR mocks from spec_helper (reset both top-level and namespaced)
     Flags.reset! if defined?(Flags) && Flags.respond_to?(:reset!)
@@ -427,10 +426,14 @@ end unless defined?(ExecScript)
 # =============================================================================
 # Lich Module Mock
 # =============================================================================
-# Core Lich namespace. Only define if not already defined (allows real code to load).
+# Core Lich namespace. Fine-grained per-component guards let this file load in
+# either order relative to login_spec_helper (which may define a minimal Lich
+# first). Each piece is added only if absent — no coarse all-or-nothing guard.
 
 module Lich
-  # Mock database for testing
+  # MockDB: in-memory store answering the SQL query patterns used by lich-5's
+  # internal lich_settings table. Single definition, guarded so a prior Lich
+  # definition (e.g. from login_spec_helper) does not cause a re-definition.
   class MockDB
     def initialize
       @data = {}
@@ -441,64 +444,53 @@ module Lich
     end
 
     def get_first_value(query)
-      # Extract key from query like "SELECT value FROM lich_settings WHERE name='display_inline_exp'"
       if (match = query.match(/WHERE name\s*=\s*'([^']+)'/))
         @data[match[1]]
       end
     end
 
     def execute(query, params = [])
-      # Handle INSERT INTO lich_settings VALUES ('key', ?)
       if query.include?('INSERT INTO lich_settings VALUES')
         if (match = query.match(/VALUES\s*\('([^']+)'/))
-          key = match[1]
-          value = params[0]
-          @data[key] = value
+          @data[match[1]] = params[0]
         end
-      # Handle INSERT OR REPLACE INTO lich_settings(name,value) values('key',?)
       elsif query.include?('INSERT OR REPLACE')
         if (match = query.match(/values\s*\('([^']+)'/i))
-          key = match[1]
-          value = params[0]
-          @data[key] = value
+          @data[match[1]] = params[0]
         elsif params.length >= 2
-          # Format: execute(query, [name, value])
           @data[params[0]] = params[1]
         end
       end
     end
-  end
+  end unless const_defined?(:MockDB)
 
-  @db = MockDB.new
+  @db = MockDB.new unless instance_variable_defined?(:@db)
 
   class << self
+    # attr_accessor is idempotent — reopening Lich and re-declaring these is safe.
     attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits
     attr_accessor :display_expgains
 
     def db
       @db ||= MockDB.new
-    end
+    end unless respond_to?(:db)
 
     def log(msg)
       puts "[Lich.log] #{msg}" if ENV['DEBUG']
-    end
+    end unless respond_to?(:log)
 
     def reset_display_expgains!
       @display_expgains = nil
-    end
+    end unless respond_to?(:reset_display_expgains!)
   end
 
   module Messaging
     @messages = []
 
     class << self
-      def msg_format(_format, _msg)
-        # Mock implementation
-      end
+      def msg_format(_format, _msg); end
 
-      def mono(_msg)
-        # Mock implementation
-      end
+      def mono(_msg); end
 
       def msg(type, message, **_opts)
         @messages ||= []
@@ -514,135 +506,7 @@ module Lich
         @messages = []
       end
     end
-  end
-end unless defined?(Lich) && Lich.respond_to?(:log)
-
-# Ensure critical Lich methods are defined even if login_spec_helper loaded Lich first
-unless Lich.respond_to?(:reset_display_expgains!)
-  module Lich
-    class << self
-      def reset_display_expgains!
-        @display_expgains = nil
-      end
-
-      def display_expgains
-        @display_expgains
-      end
-
-      def display_expgains=(value)
-        @display_expgains = value
-      end
-
-      def display_lichid
-        @display_lichid
-      end
-
-      def display_lichid=(value)
-        @display_lichid = value
-      end
-
-      def display_uid
-        @display_uid
-      end
-
-      def display_uid=(value)
-        @display_uid = value
-      end
-
-      def hide_uid_flag
-        @hide_uid_flag
-      end
-
-      def hide_uid_flag=(value)
-        @hide_uid_flag = value
-      end
-
-      def display_stringprocs
-        @display_stringprocs
-      end
-
-      def display_stringprocs=(value)
-        @display_stringprocs = value
-      end
-
-      def display_exits
-        @display_exits
-      end
-
-      def display_exits=(value)
-        @display_exits = value
-      end
-
-      def db
-        @db ||= MockDB.new
-      end
-    end
-
-    # Mock database for testing - only define if not present
-    unless const_defined?(:MockDB)
-      class MockDB
-        def initialize
-          @data = {}
-        end
-
-        def reset!
-          @data = {}
-        end
-
-        def get_first_value(query)
-          if (match = query.match(/WHERE name\s*=\s*'([^']+)'/))
-            @data[match[1]]
-          end
-        end
-
-        def execute(query, params = [])
-          if query.include?('INSERT INTO lich_settings VALUES')
-            if (match = query.match(/VALUES\s*\('([^']+)'/))
-              @data[match[1]] = params[0]
-            end
-          elsif query.include?('INSERT OR REPLACE')
-            if (match = query.match(/values\s*\('([^']+)'/i))
-              @data[match[1]] = params[0]
-            elsif params.length >= 2
-              @data[params[0]] = params[1]
-            end
-          end
-        end
-      end
-    end
-  end
-end
-
-unless defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:clear_messages!)
-  module Lich
-    module Messaging
-      @messages = []
-
-      class << self
-        def msg_format(_format, _msg)
-          # Mock implementation
-        end
-
-        def mono(_msg)
-          # Mock implementation
-        end
-
-        def msg(type, message, **_opts)
-          @messages ||= []
-          @messages << { type: type, message: message }
-          puts "[Lich::Messaging] #{message}" if ENV['DEBUG']
-        end
-
-        def messages
-          @messages ||= []
-        end
-
-        def clear_messages!
-          @messages = []
-        end
-      end
-    end
-  end
+  end unless const_defined?(:Messaging)
 end
 
 # =============================================================================
@@ -923,6 +787,11 @@ module Lich
         def clear_hands
           @right_hand = MockGameObj.new
           @left_hand = MockGameObj.new
+        end
+
+        def reset!
+          clear_npcs
+          clear_hands
         end
       end
     end

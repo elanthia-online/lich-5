@@ -17,34 +17,21 @@ require 'fileutils'
 # NOTE: This file intentionally does NOT define an RSpec.configure block.
 # All RSpec configuration lives in spec/spec_helper.rb.
 
-# Mock classes and modules needed for testing
+# Lich stubs for GUI/auth specs. Each method is individually guarded so this
+# file is safe to load before OR after spec_helper without clobbering methods
+# that spec_helper defines (e.g. the debug-logging Lich.log).
 module Lich
-  def self.log(message)
-    # Mock implementation for testing
-  end
-
-  def self.track_autosort_state
-    # Mock implementation for testing
-    false
-  end
-
-  def self.track_layout_state
-    # Mock implementation for testing
-    false
-  end
-
-  def self.track_dark_mode
-    # Mock implementation for testing
-    false
-  end
+  def self.log(_message); end unless respond_to?(:log)
+  def self.track_autosort_state; false; end unless respond_to?(:track_autosort_state)
+  def self.track_layout_state; false; end unless respond_to?(:track_layout_state)
+  def self.track_dark_mode; false; end unless respond_to?(:track_dark_mode)
 
   module Util
     def self.install_gem_requirements(*)
-      # Mock implementation for testing (for login = 'os' and 'ffi'
-      require 'os' # included in Lich-5 EO worker gemspec
-      require 'ffi' # included in Lich-5 EO worker gemspec
+      require 'os'
+      require 'ffi'
       true
-    end
+    end unless respond_to?(:install_gem_requirements)
   end
 end
 
@@ -54,149 +41,76 @@ module Lich
   module Common
     module Authentication
       module EAccess
-        # Only define stub if auth method doesn't exist or doesn't have keyword params
-        unless respond_to?(:auth) && method(:auth).parameters.any? { |type, _| type == :keyreq }
-          def self.auth(_options = {})
-            # Mock implementation for testing
-            {
-              "key"          => "test_key",
-              "server"       => "test.example.com",
-              "port"         => "8080",
-              "gamefile"     => "STORM.EXE",
-              "game"         => "STORM",
-              "fullgamename" => "StormFront"
-            }
-          end
-        end
+        def self.auth(_options = {})
+          {
+            "key"          => "test_key",
+            "server"       => "test.example.com",
+            "port"         => "8080",
+            "gamefile"     => "STORM.EXE",
+            "game"         => "STORM",
+            "fullgamename" => "StormFront"
+          }
+        end unless respond_to?(:auth)
       end
     end
   end
 end
 
-# Mock Gtk module for GUI testing
+# Gtk/Gdk stubs — empty implementations satisfy constant lookups and method calls
+# made by production GUI code at load time and during tests.
 module Gtk
-  def self.queue
-    # Mock implementation for testing
-    yield if block_given?
-  end
-
-  def self.main_quit
-    # Mock implementation for testing
-  end
+  def self.queue; yield if block_given?; end
+  def self.main_quit; end
 
   class Window
-    def initialize(type)
-      # Mock implementation for testing
-    end
-
-    def set_icon(icon)
-      # Mock implementation for testing
-    end
-
-    def title=(title)
-      # Mock implementation for testing
-    end
-
-    def border_width=(width)
-      # Mock implementation for testing
-    end
-
-    def add(widget)
-      # Mock implementation for testing
-    end
-
-    def signal_connect(signal, &block)
-      # Mock implementation for testing
-    end
-
-    def default_width=(width)
-      # Mock implementation for testing
-    end
-
-    def default_height=(height)
-      # Mock implementation for testing
-    end
-
-    def override_background_color(state, color)
-      # Mock implementation for testing
-    end
-
-    def show_all
-      # Mock implementation for testing
-    end
-
-    def destroy
-      # Mock implementation for testing
-    end
+    def initialize(_type); end
+    def set_icon(_icon); end
+    def title=(_title); end
+    def border_width=(_width); end
+    def add(_widget); end
+    def signal_connect(_signal, &_block); end
+    def default_width=(_width); end
+    def default_height=(_height); end
+    def override_background_color(_state, _color); end
+    def show_all; end
+    def destroy; end
   end
 
   class Notebook
-    def initialize
-      # Mock implementation for testing
-    end
-
-    def override_background_color(state, color)
-      # Mock implementation for testing
-    end
-
-    def append_page(widget, label)
-      # Mock implementation for testing
-    end
-
-    def set_tab_pos(position)
-      # Mock implementation for testing
-    end
-
-    def set_page(page)
-      # Mock implementation for testing
-    end
+    def initialize; end
+    def override_background_color(_state, _color); end
+    def append_page(_widget, _label); end
+    def set_tab_pos(_position); end
+    def set_page(_page); end
   end
 
   class Label
-    def initialize(text)
-      # Mock implementation for testing
-    end
+    def initialize(_text); end
   end
 
   class Box
-    def initialize(orientation, spacing)
-      # Mock implementation for testing
-    end
-
-    def border_width=(width)
-      # Mock implementation for testing
-    end
-
-    def pack_start(widget, options = {})
-      # Mock implementation for testing
-    end
+    def initialize(_orientation, _spacing); end
+    def border_width=(_width); end
+    def pack_start(_widget, _options = {}); end
   end
 
   class Button
-    def initialize(label = nil)
-      # Mock implementation for testing
-    end
-
-    def override_background_color(state, color)
-      # Mock implementation for testing
-    end
+    def initialize(_label = nil); end
+    def override_background_color(_state, _color); end
   end
 end
 
-# Mock Gdk module for GUI testing
 module Gdk
   class RGBA
     def self.parse(_color_string)
-      # Mock implementation for testing
       new
     end
   end
 end
 
-# Add lib directory to load path
-$LOAD_PATH.unshift(File.expand_path('../lib', __FILE__))
-
-# Define LIB_DIR for code that references it
+# spec_helper already adds LIB_DIR to $LOAD_PATH. These guards ensure this file
+# also works when loaded standalone (e.g. without spec_helper, for auth-only runs).
+$LOAD_PATH.unshift(File.expand_path('../lib', __FILE__)) unless $LOAD_PATH.include?(File.expand_path('../lib', __FILE__))
 LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib') unless defined?(LIB_DIR)
 
 # Load production code AFTER Gtk/Gdk mocks are defined above.

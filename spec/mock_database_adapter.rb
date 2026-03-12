@@ -105,6 +105,10 @@ module Lich
           @name || "TestCharacter"
         end
 
+        # NOTE: spec_helper's global before hook resets the real XMLData module,
+        # not this stub (which is injected via stub_const only in settings specs).
+        # Settings specs manage their own state in per-example before blocks, so
+        # this method exists for explicit call-sites, not automatic reset.
         def reset!
           @game = nil
           @name = nil
