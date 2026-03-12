@@ -235,6 +235,12 @@ RSpec.describe 'wine.rb' do
         expect { Wine.registry_puts('bad-key', 'test') }
           .to raise_error(ArgumentError, /Invalid registry key format/)
       end
+
+      it 'returns false when regedit command returns non-zero' do
+        allow(Wine).to receive(:system).and_return(false)
+        result = Wine.registry_puts('HKEY_LOCAL_MACHINE\\Software\\Test\\Value', 'test')
+        expect(result).to eq(false)
+      end
     end
   end
 end
