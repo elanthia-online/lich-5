@@ -1,0 +1,4 @@
+--markup markdown
+--output-dir doc/yard
+--no-private
+lib/**/*.rb

@@ -21,7 +21,9 @@ data
 scripts
 .vscode
 .claude
+doc/yard/
 *.md
+!docs/*.md
 !spec/README.md
 !spec/fixtures/README.md
 # Test database artifacts
