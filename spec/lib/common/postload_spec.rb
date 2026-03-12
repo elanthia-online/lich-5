@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
+require_relative '../../spec_helper'
 require_relative '../../../lib/common/postload'
 
 RSpec.describe Lich::Common::PostLoad do
@@ -10,6 +10,9 @@ RSpec.describe Lich::Common::PostLoad do
     thread.kill if thread.is_a?(Thread) && thread.alive?
     described_class.instance_variable_set(:@thread, nil)
     described_class.instance_variable_set(:@callbacks, {})
+    # NOTE: class_variable_set is acceptable here because PostLoad has no reset! method.
+    # @@complete and @@game_loaded are module-level state flags that must be reset to
+    # their initial values for each test. TODO: add PostLoad.reset! to production code.
     described_class.class_variable_set(:@@complete, false)
     described_class.class_variable_set(:@@game_loaded, false)
   end

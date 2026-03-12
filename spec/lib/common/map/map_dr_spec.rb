@@ -80,9 +80,13 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
   let(:map_class) { Lich::Common::Map }
 
   before(:each) do
-    # Clear class state before each test
+    # Clear room registry via the public API
     map_class.clear rescue nil
-    # Reset additional class variables not handled by clear
+    # NOTE: class_variable_set is acceptable here because Map has no reset! method.
+    # map_class.clear handles @@rooms but leaves @@uids and the room-navigation class
+    # variables (@@previous_room_id, @@current_room_id, @@current_room_count) at their
+    # last values, which would bleed across tests. Reset them directly until a reset!
+    # method is added to Map. TODO: add Map.reset! to production code.
     map_class.class_variable_set(:@@uids, {})
     map_class.class_variable_set(:@@previous_room_id, -1)
     map_class.class_variable_set(:@@current_room_id, -1)
@@ -231,6 +235,11 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
     end
   end
 
+  # NOTE: Several nested before blocks below use class_variable_set(:@@loaded, true).
+  # This is acceptable because Map has no reset! or public setter for the @@loaded guard.
+  # Setting @@loaded=true is the only way to put the map into a testable "loaded" state
+  # without loading an actual map file. The outer before(:each) calls map_class.clear
+  # which resets @@loaded back to false between tests.
   describe 'class methods' do
     describe '.loaded?' do
       it 'returns false initially' do
@@ -240,7 +249,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.get_free_id' do
       before do
-        # Manually mark loaded and add some rooms
+        # Set @@loaded=true so methods that guard on loaded? are accessible (see NOTE above)
         map_class.class_variable_set(:@@loaded, true)
         map_class.new(1, ['A'], ['a'], ['path'])
         map_class.new(5, ['B'], ['b'], ['path'])
@@ -254,7 +263,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.[]' do
       before do
-        map_class.class_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true) # see NOTE above
         map_class.new(1, ['Title A'], ['Description A'], ['path'])
         map_class.new(2, ['Title B'], ['Description B'], ['path'])
       end
@@ -287,9 +296,11 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.previous' do
       before do
-        map_class.class_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true) # see NOTE above
         map_class.new(1, ['Room A'], ['desc'], ['path'])
         map_class.new(2, ['Room B'], ['desc'], ['path'])
+        # NOTE: @@previous_room_id has no public setter; class_variable_set is the only
+        # way to simulate a previous-room navigation state for this test.
         map_class.class_variable_set(:@@previous_room_id, 1)
       end
 
@@ -339,7 +350,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.tags' do
       before do
-        map_class.class_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true) # see NOTE above
         map_class.new(1, ['A'], ['a'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['tag1', 'tag2'])
         map_class.new(2, ['B'], ['b'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['tag2', 'tag3'])
       end
@@ -355,7 +366,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 
     describe '.clear' do
       before do
-        map_class.class_variable_set(:@@loaded, true)
+        map_class.class_variable_set(:@@loaded, true) # see NOTE above
         map_class.new(1, ['A'], ['a'], ['path'])
       end
 
