@@ -118,19 +118,12 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
 
     context 'pattern ordering analysis' do
-      it 'shows which constant contains /close the fan/ and at what index' do
-        [
-          ['PUT_AWAY_ITEM_SUCCESS_PATTERNS', DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS],
-          ['PUT_AWAY_ITEM_FAILURE_PATTERNS', DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS],
-          ['STOW_RECOVERY_PATTERNS', described_class::STOW_RECOVERY_PATTERNS],
-          ['SHEATH_SUCCESS_PATTERNS', described_class::SHEATH_SUCCESS_PATTERNS],
-          ['SHEATH_FAILURE_PATTERNS', described_class::SHEATH_FAILURE_PATTERNS],
-          ['WEAR_ITEM_FAILURE_PATTERNS', DRCI::WEAR_ITEM_FAILURE_PATTERNS],
-          ['TIE_ITEM_FAILURE_PATTERNS', DRCI::TIE_ITEM_FAILURE_PATTERNS]
-        ].each do |name, patterns|
-          idx = patterns.index { |p| p.is_a?(Regexp) && "close the fan" =~ p }
-          puts "  #{name}: #{idx.nil? ? 'NOT FOUND' : "index #{idx} of #{patterns.length}"}"
-        end
+      it 'does not false-match the close-fan message in success patterns' do
+        close_msg = "You'll need to close the fan before you put it away."
+
+        expect(DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS.any? { |p| close_msg.match?(p) }).to be(false)
+        expect(DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS.any? { |p| close_msg.match?(p) }).to be(true)
+        expect(described_class::STOW_RECOVERY_PATTERNS.any? { |p| close_msg.match?(p) }).to be(true)
       end
     end
   end
