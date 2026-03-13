@@ -2,31 +2,19 @@
 
 module Lich
   module DragonRealms
+    # Manages character equipment sets and gear swapping.
+    #
+    # Handles wearing, removing, wielding, and tracking gear based on user
+    # configuration. Maintains state about equipment sets and provides
+    # methods for combat gear rotation.
+    #
+    # @see DRCI Low-level item operations
     class EquipmentManager
-      # Sheath patterns (no DRCI equivalent — weapon-specific operation)
-      SHEATH_SUCCESS_PATTERNS = [
-        /^Sheathing/,
-        /^You sheathe/,
-        /^You secure your/,
-        /^You slip/,
-        /^You hang/,
-        /^You strap/,
-        /^You easily strap/,
-        /^With a flick of your wrist you stealthily sheathe/,
-        /^The .* slides easily/
-      ].freeze
-
-      SHEATH_FAILURE_PATTERNS = [
-        /^Sheathe your .* where/,
-        /^There's no room/,
-        /is too small to hold that/,
-        /is too wide to fit/,
-        /^Your (left|right) hand is too injured/
-      ].freeze
-
       # Recovery patterns handled by stow_helper's retry logic.
       # These are automatically appended to every stow_helper call
       # so callers only need to pass success/failure patterns.
+      #
+      # @see #stow_helper
       STOW_RECOVERY_PATTERNS = [
         /unload/,
         /close the fan/,
@@ -34,15 +22,26 @@ module Lich
         /You don't seem to be able to move/,
         /is too small to hold that/,
         /Your wounds hinder your ability to do that/,
-        /Sheathe your .* where/
+        /Sheath your .* where/
       ].freeze
 
+      # Maximum retry attempts for stow_helper before giving up.
       STOW_HELPER_MAX_RETRIES = 10
 
+      # Creates a new EquipmentManager and loads gear configuration.
+      #
+      # @param settings [OpenStruct, nil] user settings from get_settings, or nil to load automatically
       def initialize(settings = nil)
         items(settings)
       end
 
+      # Returns the list of gear items, loading from settings on first call.
+      #
+      # Parses the user's gear configuration into {DRC::Item} objects and
+      # caches the result. Also initializes gear sets from settings.
+      #
+      # @param settings [OpenStruct, nil] user settings from get_settings, or nil to load automatically
+      # @return [Array<DRC::Item>] configured gear items
       def items(settings = nil)
         return @items if @items
 
@@ -53,6 +52,17 @@ module Lich
         @items = settings.gear.map { |item| DRC::Item.new(name: item[:name], leather: item[:is_leather], hinders_locks: item[:hinders_lockpicking], worn: item[:is_worn], swappable: item[:swappable], tie_to: item[:tie_to], adjective: item[:adjective], bound: item[:bound], wield: item[:wield], transforms_to: item[:transforms_to], transform_verb: item[:transform_verb], transform_text: item[:transform_text], lodges: item[:lodges], ranged: item[:ranged], needs_unloading: item[:needs_unloading], skip_repair: item[:skip_repair], container: item[:container]) }
       end
 
+      # Removes currently worn combat items that match the given block condition.
+      #
+      # Yields each {DRC::Item} to the block and removes those for which
+      # the block returns true.
+      #
+      # @yield [DRC::Item] each combat item to evaluate
+      # @yieldreturn [Boolean] true to remove the item
+      # @return [Array<DRC::Item>] items that were removed
+      #
+      # @example Remove items that hinder lockpicking
+      #   removed = @equipment_manager.remove_gear_by(&:hinders_lockpicking)
       def remove_gear_by(&_block)
         combat_items = get_combat_items
         gear = desc_to_items(combat_items).select { |item| yield(item) }
@@ -60,12 +70,27 @@ module Lich
         gear
       end
 
+      # Wears a list of items and optionally sorts inventory head position.
+      #
+      # @param items_list [Array<DRC::Item>] items to wear
+      # @return [void]
       def wear_items(items_list)
         items_list.each { |item| wear_item?(item) }
 
         DRC.bput('sort auto head', /^Your inventory is now arranged/) if @sort_head
       end
 
+      # Switches to a named gear set, removing unneeded items and wearing missing ones.
+      #
+      # Compares currently worn combat items against the target gear set,
+      # removes items not in the set, and wears any missing items.
+      # Notifies the user about items that could not be found.
+      #
+      # @param set_name [String, nil] gear set name from settings (e.g., "standard", "swimming")
+      # @return [Boolean] true if all items in the set are now worn
+      #
+      # @example
+      #   @equipment_manager.wear_equipment_set?("standard")
       def wear_equipment_set?(set_name)
         return false unless set_name
 
@@ -89,14 +114,27 @@ module Lich
         lost_items.empty?
       end
 
+      # Converts an array of description strings to matching {DRC::Item} objects.
+      #
+      # @param descs [Array<String>] item descriptions to look up
+      # @return [Array<DRC::Item>] matching items (unmatched descriptions are excluded)
       def desc_to_items(descs)
         descs.map { |description| item_by_desc(description) }.compact
       end
 
+      # Finds a gear item matching the given description.
+      #
+      # @param description [String] item description to match against gear list
+      # @return [DRC::Item, nil] matching item or nil if not found
       def item_by_desc(description)
         items.find { |item| item.short_regex =~ description }
       end
 
+      # Alerts the user about equipment items that could not be found.
+      #
+      # @param lost_items [Array<DRC::Item>, nil] items that were not located
+      # @return [void]
+      # @api private
       def notify_missing(lost_items)
         return unless lost_items && !lost_items.empty?
 
@@ -107,6 +145,15 @@ module Lich
         DRC.beep
       end
 
+      # Wears items from the target set that are not currently in the combat inventory.
+      #
+      # Stows any target items found in hands before wearing. Returns items
+      # that could not be worn (missing from containers).
+      #
+      # @param target_items [Array<DRC::Item>] desired gear set items
+      # @param combat_items [Array<String>] currently worn combat item descriptions
+      # @return [Array<DRC::Item>] items that could not be worn
+      # @api private
       def wear_missing_items(target_items, combat_items)
         if UserVars.equipmanager_debug
           Lich::Messaging.msg("plain", "EquipmentManager: wearing missing items between these two sets")
@@ -122,6 +169,12 @@ module Lich
         missing_items.reject { |item| wear_item?(item) }
       end
 
+      # Removes currently worn combat items that are not in the target gear set.
+      #
+      # @param combat_items [Array<String>] currently worn combat item descriptions
+      # @param target_items [Array<DRC::Item>] desired gear set items
+      # @return [void]
+      # @api private
       def remove_unmatched_items(combat_items, target_items)
         if UserVars.equipmanager_debug
           Lich::Messaging.msg("plain", "EquipmentManager: removing unmatched items between these two sets")
@@ -135,23 +188,45 @@ module Lich
           .each { |item| remove_item(item) }
       end
 
+      # Retrieves the list of currently worn combat equipment via the INV COMBAT command.
+      #
+      # @return [Array<String>] combat item description strings
+      # @api private
       def get_combat_items
         snapshot = Lich::Util.issue_command("inv combat", /All of your worn combat|You aren't wearing anything like that/, /Use INVENTORY HELP for more options/, usexml: false, include_end: false)
-                             .map(&:strip)
-        snapshot - ["All of your worn combat equipment:", "You aren't wearing anything like that."]
+        return [] unless snapshot
+
+        snapshot.map(&:strip) - ["All of your worn combat equipment:", "You aren't wearing anything like that."]
       end
 
       # Returns the subset of currently worn combat items that match the given description list.
+      #
+      # @param list [Array<String>] item descriptions to filter by
+      # @return [Array<DRC::Item>] matching worn combat items
       def matching_combat_items(list)
         filter_gear = desc_to_items(list)
         gear = desc_to_items(get_combat_items)
         gear.select { |x| filter_gear.include?(x) }
       end
 
-      # Deprecated: use matching_combat_items instead.
+      # @deprecated Use {#matching_combat_items} instead.
       alias_method :worn_items, :matching_combat_items
 
-      def remove_item(item)
+      # Removes an item from the character and stows it in its configured location.
+      #
+      # Handles transform items (e.g., exoskeletal armor becoming an orb),
+      # tie-to items, sheathed weapons, container-specific items, and
+      # general stow. Empties hands if needed for two-handed removal.
+      #
+      # @param item [DRC::Item] item to remove
+      # @param retries [Integer] remaining retry attempts for hand-emptying recovery
+      # @return [Boolean, nil] false if removal failed, nil otherwise
+      def remove_item(item, retries: 2)
+        if retries <= 0
+          Lich::Messaging.msg("bold", "EquipmentManager: remove_item exceeded max retries for #{item.short_name}")
+          return false
+        end
+
         result = DRC.bput("remove my #{item.short_name}", *DRCI::REMOVE_ITEM_SUCCESS_PATTERNS, *DRCI::REMOVE_ITEM_FAILURE_PATTERNS, "then constricts tighter around your")
         waitrt?
         case result
@@ -169,7 +244,7 @@ module Lich
           # Stowing them in a container would require unloading.
           did_lower = [temp_left_item, temp_right_item].compact.all? { |item_in_hand| DRCI.lower_item?(item_in_hand) }
           if did_lower
-            remove_item(item)
+            remove_item(item, retries: retries - 1)
           else
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to empty your hands to remove #{item.short_name}")
           end
@@ -178,7 +253,12 @@ module Lich
           DRCI.get_item_if_not_held?(temp_right_item) if temp_right_item
           DRCI.get_item_if_not_held?(temp_left_item) if temp_left_item
           # In case they end up in different hands, swap.
-          DRC.bput('swap', /You move/, /^Will alone cannot conquer the paralysis/) if (DRC.left_hand != temp_left_item || DRC.right_hand != temp_right_item)
+          if DRC.left_hand != temp_left_item || DRC.right_hand != temp_right_item
+            swap_result = DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
+            unless DRCI::SWAP_HANDS_SUCCESS_PATTERNS.any? { |p| p.match?(swap_result) }
+              Lich::Messaging.msg("bold", "EquipmentManager: Unable to restore hand order after removing #{item.short_name}")
+            end
+          end
         when *DRCI::REMOVE_ITEM_SUCCESS_PATTERNS
           # If removing item transforms it (e.g. exoskeletal armor => orb) then continue with the transformed item.
           if item.transforms_to && DRCI.in_hands?(item.transforms_to)
@@ -186,15 +266,15 @@ module Lich
             item = item_by_desc(transform_desc)
             unless item
               Lich::Messaging.msg("bold", "EquipmentManager: Could not find transformed item matching '#{transform_desc}' in gear list")
-              return
+              return false
             end
           end
           if item.tie_to
             stow_helper("tie my #{item.short_name} to my #{item.tie_to}", item.short_name, *DRCI::TIE_ITEM_SUCCESS_PATTERNS, *DRCI::TIE_ITEM_FAILURE_PATTERNS)
           elsif item.wield
-            stow_helper("sheath my #{item.short_name}", item.short_name, *SHEATH_SUCCESS_PATTERNS, *SHEATH_FAILURE_PATTERNS)
+            stow_helper("sheath my #{item.short_name}", item.short_name, *DRCI::SHEATH_ITEM_SUCCESS_PATTERNS, *DRCI::SHEATH_ITEM_FAILURE_PATTERNS)
           elsif item.container
-            stow_helper("put my #{item.short_name} into my #{item.container}", item.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
+            stow_helper("put my #{item.short_name} in my #{item.container}", item.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
           elsif /more room|too long to fit/ =~ DRC.bput("stow my #{item.short_name}", *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, 'There isn\'t any more room', 'straps have all been used', 'is too long to fit')
             wear_item?(item)
           end
@@ -202,6 +282,10 @@ module Lich
         waitrt?
       end
 
+      # Retrieves an item and wears it.
+      #
+      # @param item [DRC::Item, nil] item to wear
+      # @return [Boolean] true if item was retrieved and worn successfully
       def wear_item?(item)
         if item.nil?
           Lich::Messaging.msg("bold", "EquipmentManager: Failed to match an item, try turning on debugging with #{$clean_lich_char}e UserVars.equipmanager_debug = true")
@@ -213,8 +297,14 @@ module Lich
         return false
       end
 
-      # Wields weapon into your left hand.
-      # Handles swapping the weapon to desired weapon skill (e.g. bastard swords, bar maces, ristes).
+      # Wields a weapon into the left (off) hand.
+      #
+      # Retrieves the weapon, optionally swaps it to the desired skill,
+      # then swaps it from the right hand to the left hand.
+      #
+      # @param description [String] weapon description to match in gear list
+      # @param skill [String, nil] weapon skill to swap to (e.g., "Heavy Edged", "Offhand Weapon")
+      # @return [Boolean, nil] true if wielded successfully, false on failure, nil if description is blank
       def wield_weapon_offhand?(description, skill = nil)
         return unless description && !description.empty?
 
@@ -227,8 +317,8 @@ module Lich
         if get_item?(weapon)
           swap_to_skill?(weapon.name, skill) if skill && weapon.swappable
           if DRCI.in_right_hand?(weapon)
-            case DRC.bput('swap', /^You move/, /^Will alone cannot conquer the paralysis/)
-            when /^You move/
+            case DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
+            when *DRCI::SWAP_HANDS_SUCCESS_PATTERNS
               return true
             else
               return false
@@ -239,12 +329,17 @@ module Lich
         return false
       end
 
-      # This method is deprecated in favor of the one that follows the `?` predicate convention.
+      # @deprecated Use {#wield_weapon_offhand?} instead.
       alias_method :wield_weapon_offhand, :wield_weapon_offhand?
 
-      # Wields weapon into your right hand.
-      # If the skill to swap to is 'Offhand Weapon' then will swap it to your left hand.
-      # Handles swapping the weapon to desired weapon skill (e.g. bastard swords, bar maces, ristes).
+      # Wields a weapon into the right hand, or left hand if skill is "Offhand Weapon".
+      #
+      # Stows any currently held instance of the weapon first, then retrieves
+      # and optionally swaps it to the desired skill.
+      #
+      # @param description [String] weapon description to match in gear list
+      # @param skill [String, nil] weapon skill to swap to (e.g., "Heavy Edged", "Offhand Weapon")
+      # @return [Boolean, nil] true if wielded successfully, false on failure, nil if description is blank
       def wield_weapon?(description, skill = nil)
         return unless description && !description.empty?
 
@@ -263,8 +358,8 @@ module Lich
           swap_to_skill?(weapon.name, skill) if skill && weapon.swappable
 
           if offhand && DRC.right_hand
-            case DRC.bput('swap', /^You move/, /^Will alone cannot conquer the paralysis/)
-            when /^You move/
+            case DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
+            when *DRCI::SWAP_HANDS_SUCCESS_PATTERNS
               return true
             else
               return false
@@ -277,19 +372,26 @@ module Lich
         return false
       end
 
-      # This method is deprecated in favor of the one that follows the `?` predicate convention.
+      # @deprecated Use {#wield_weapon?} instead.
       alias_method :wield_weapon, :wield_weapon?
 
+      # Retrieves an item from wherever it is stored (worn, tied, sheathed, container, or stowed).
+      #
+      # Checks hands first, then tries wield, transform, tie-to, worn,
+      # container, and general stow locations in order.
+      #
+      # @param item [DRC::Item] item to retrieve
+      # @return [Boolean] true if item is now in hand
       def get_item?(item)
         return true if DRCI.in_hands?(item)
 
         if item.wield
-          case DRC.bput("wield my #{item.short_name}", 'You draw', 'You deftly remove', 'You slip', 'With a flick of your wrist you stealthily unsheathe', 'Wield what', 'Your right hand is too injured', 'Your left hand is too injured')
-          when 'Your right hand is too injured', 'Your left hand is too injured', 'Wield what'
+          case DRC.bput("wield my #{item.short_name}", *DRCI::WIELD_ITEM_SUCCESS_PATTERNS, *DRCI::WIELD_ITEM_FAILURE_PATTERNS)
+          when *DRCI::WIELD_ITEM_SUCCESS_PATTERNS
+            return true
+          else
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to wield #{item.short_name}")
             return false
-          else
-            return true
           end
         elsif item.transforms_to
           transform_item = item_by_desc(item.transforms_to)
@@ -310,14 +412,24 @@ module Lich
         end
       end
 
-      # Returns the item from the gear list matching the given description, or nil.
+      # Checks whether a description matches a configured gear item.
+      #
+      # @param desc [String] item description to check
+      # @return [DRC::Item, nil] matching item or nil if not in gear list
       def listed_item?(desc)
         items.find { |item| item.short_regex =~ desc }
       end
 
-      # Deprecated: use listed_item? instead.
+      # @deprecated Use {#listed_item?} instead.
       alias_method :is_listed_item?, :listed_item?
 
+      # Stows whatever is currently held in hands back to the appropriate location.
+      #
+      # For items in the specified gear set, wears them. For other known items,
+      # ties, sheathes, or stows them based on their configuration.
+      #
+      # @param gear_set [String] gear set name to check for wear-back items
+      # @return [Boolean, nil] true if all held items were stowed, nil if hands are empty
       def return_held_gear(gear_set = 'standard')
         return unless DRC.right_hand || DRC.left_hand
 
@@ -335,9 +447,9 @@ module Lich
             if info.tie_to
               stow_helper("tie my #{info.short_name} to my #{info.tie_to}", info.short_name, *DRCI::TIE_ITEM_SUCCESS_PATTERNS, *DRCI::TIE_ITEM_FAILURE_PATTERNS)
             elsif info.wield
-              stow_helper("sheath my #{info.short_name}", info.short_name, *SHEATH_SUCCESS_PATTERNS, *SHEATH_FAILURE_PATTERNS)
+              stow_helper("sheath my #{info.short_name}", info.short_name, *DRCI::SHEATH_ITEM_SUCCESS_PATTERNS, *DRCI::SHEATH_ITEM_FAILURE_PATTERNS)
             elsif info.container
-              stow_helper("put my #{info.short_name} into my #{info.container}", info.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
+              stow_helper("put my #{info.short_name} in my #{info.container}", info.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
             else
               stow_helper("stow my #{info.short_name}", info.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
             end
@@ -348,10 +460,21 @@ module Lich
         end
       end
 
+      # Empties both hands by returning held gear or falling back to DRCI.stow_hands.
+      #
+      # @return [void]
       def empty_hands
         return_held_gear || DRCI.stow_hands
       end
 
+      # Builds a hash of verb configurations for retrieving an item by type.
+      #
+      # Each type (:worn, :tied, :stowed, :transform) maps to a hash with
+      # the game verb, match patterns, failure patterns, and recovery procs.
+      #
+      # @param item [DRC::Item] item to build verb data for
+      # @return [Hash{Symbol => Hash}] verb configuration keyed by retrieval type
+      # @api private
       def verb_data(item)
         {
           worn: {
@@ -405,6 +528,15 @@ module Lich
         }
       end
 
+      # Attempts to retrieve an item using the verb configuration for the given type.
+      #
+      # Issues the appropriate game command (remove, untie, get, or transform verb)
+      # and handles failures with recovery procs.
+      #
+      # @param item [DRC::Item, nil] item to retrieve
+      # @param type [Symbol] retrieval type (:worn, :tied, :stowed, :transform)
+      # @return [Boolean] true if item was successfully retrieved into hand
+      # @api private
       def get_item_helper(item, type)
         return false unless item
 
@@ -441,8 +573,11 @@ module Lich
         end
       end
 
-      # Turns a weapon so that it can be used as a different weapon.
-      # Examples include Damaris weapons.
+      # Turns a multi-form weapon to a different weapon form (e.g., Damaris weapons).
+      #
+      # @param old_noun [String] current weapon noun
+      # @param new_noun [String] desired weapon noun to turn to
+      # @return [Boolean] true if weapon shifted to the new form
       def turn_to_weapon?(old_noun, new_noun)
         return true if old_noun == new_noun
 
@@ -456,8 +591,14 @@ module Lich
         end
       end
 
-      # Swaps a weapon so that it can be used for a different skill.
-      # Examples include bastard swords, bar maces, and ristes.
+      # Swaps a weapon to be used for a different weapon skill.
+      #
+      # Handles multi-skill weapons such as bastard swords, bar maces, and ristes.
+      # For fans, opens or closes them based on skill type.
+      #
+      # @param noun [String] weapon noun to swap
+      # @param skill [String] target weapon skill (e.g., "Heavy Edged", "Two-Handed Blunt", "Staves")
+      # @return [Boolean] true if weapon is now set to the desired skill
       def swap_to_skill?(noun, skill)
         if noun =~ /\bfan\b/i
           command = skill =~ /edged/i ? 'open' : 'close'
@@ -488,7 +629,7 @@ module Lich
                        when /^ow$|offhand weapon/i
                          return true # just use weapon in your left hand
                        else
-                         Lich::Messaging.msg("bold", "EquipmentManager: Unsupported weapon swap: #{noun} to #{skill}. Please report this to https://github.com/elanthia-online/dr-scripts/issues")
+                         Lich::Messaging.msg("bold", "EquipmentManager: Unsupported weapon swap: #{noun} to #{skill}. Please report this to https://github.com/elanthia-online/lich-5/issues")
                          return false
                        end
         # All possible weapon skills to swap into.
@@ -522,6 +663,8 @@ module Lich
           # Avoid infinite loop where weapon can't swap to desired skill.
           return false if swapped_count > weapon_skills.length
 
+          swapped_count += 1
+
           # Try to swap weapon to desired skill.
           case DRC.bput("swap my #{noun}", skill_match, /\b#{noun}\b.*(#{weapon_skills.join('|')})/, "You must have two free hands", *failure_matches)
           when /You must have two free hands/
@@ -532,23 +675,23 @@ module Lich
               Lich::Messaging.msg("bold", "EquipmentManager: Unable to free hands for weapon swap")
               return false
             end
-            next
           when *failure_matches
             return false
           when skill_match
             return true
           end
-          swapped_count = swapped_count + 1
         end
       end
 
+      # Unloads a ranged weapon (bow, crossbow) and stows the ammo.
+      #
+      # @param name [String] weapon noun
+      # @return [void]
+      #
+      # @see DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS
+      # @see DRCI::UNLOAD_WEAPON_FAILURE_PATTERNS
       def unload_weapon(name)
-        # Phrases to match:
-        #   (hidden) You remain concealed by your surroundings, convinced that your unloading of the <weapon> went unobserved.
-        #   (hidden) You unload your <weapon> while blended in with your surroundings, but cannot shake the feeling that you drew attention to yourself.
-        #   (one hand empty) You unload the <weapon>.
-        #   (hands full) Your <ammo> falls from your <weapon> to your feet.
-        result = DRC.bput("unload my #{name}", /^You unload/, /^Your .* fall.*to your feet\.$/, 'As you release the string', /^You .* unloading/, 'But your .* isn\'t loaded', 'You can\'t unload such a weapon', 'You don\'t have a ranged weapon to unload', 'You must be holding the weapon to do that')
+        result = DRC.bput("unload my #{name}", *DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS, *DRCI::UNLOAD_WEAPON_FAILURE_PATTERNS)
         ammo_match = result&.match(/^(?:Your .*?\b(?<ammo>[\w]+)\b fall.* from your .* to your feet\.)$/)
         if ammo_match
           # Ammo fell to ground because hands are full.
@@ -574,7 +717,15 @@ module Lich
         waitrt?
       end
 
-      def stow_weapon(description = nil)
+      # Stows a weapon in its configured location (sheath, wear, tie, container, or general stow).
+      #
+      # When called without a description, stows whatever is in both hands.
+      # Unloads ranged weapons before stowing if configured.
+      #
+      # @param description [String, nil] weapon description to match, or nil to stow both hands
+      # @param transform_depth [Integer] remaining transform recursion depth
+      # @return [void]
+      def stow_weapon(description = nil, transform_depth: 3)
         unless description
           return unless DRC.right_hand || DRC.left_hand
 
@@ -591,14 +742,18 @@ module Lich
         # Would be silly to try "unload my scimitar" wouldn't it? :grins:
         unload_weapon(weapon.short_name) if weapon.needs_unloading
         if weapon.wield
-          stow_helper("sheath my #{weapon.short_name}", weapon.short_name, *SHEATH_SUCCESS_PATTERNS, *SHEATH_FAILURE_PATTERNS)
+          stow_helper("sheath my #{weapon.short_name}", weapon.short_name, *DRCI::SHEATH_ITEM_SUCCESS_PATTERNS, *DRCI::SHEATH_ITEM_FAILURE_PATTERNS)
         elsif weapon.worn
           stow_helper("wear my #{weapon.short_name}", weapon.short_name, *DRCI::WEAR_ITEM_SUCCESS_PATTERNS, *DRCI::WEAR_ITEM_FAILURE_PATTERNS)
         elsif !weapon.tie_to.nil?
           stow_helper("tie my #{weapon.short_name} to my #{weapon.tie_to}", weapon.short_name, *DRCI::TIE_ITEM_SUCCESS_PATTERNS, *DRCI::TIE_ITEM_FAILURE_PATTERNS)
         elsif weapon.transforms_to
+          if transform_depth <= 0
+            Lich::Messaging.msg("bold", "EquipmentManager: stow_weapon exceeded max transform depth for #{weapon.short_name}")
+            return
+          end
           stow_helper("#{weapon.transform_verb} my #{weapon.short_name}", weapon.short_name, weapon.transform_text)
-          stow_weapon(weapon.transforms_to)
+          stow_weapon(weapon.transforms_to, transform_depth: transform_depth - 1)
         elsif weapon.container
           stow_helper("put my #{weapon.short_name} in my #{weapon.container}", weapon.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
         else
@@ -606,31 +761,52 @@ module Lich
         end
       end
 
+      # Executes a stow action with automatic recovery on common failure conditions.
+      #
+      # Handles unload prompts, fan close, combat busy, movement lock,
+      # container size, and wound/sheath failures by retrying with
+      # corrective actions.
+      #
+      # @param action [String] game command to execute (e.g., "sheath my sword")
+      # @param weapon_name [String] weapon noun for recovery commands
+      # @param accept_strings [Array<Regexp, String>] success/failure patterns to match
+      # @param retries [Integer] remaining retry attempts
+      # @return [Boolean] true if stow succeeded, false if retries exhausted or unrecoverable failure
+      #
+      # @see STOW_RECOVERY_PATTERNS
+      # @see STOW_HELPER_MAX_RETRIES
+      # @api private
       def stow_helper(action, weapon_name, *accept_strings, retries: STOW_HELPER_MAX_RETRIES)
         if retries <= 0
           Lich::Messaging.msg("bold", "EquipmentManager: stow_helper exceeded max retries for '#{action}'")
-          return
+          return false
         end
 
-        case DRC.bput(action, *accept_strings, *STOW_RECOVERY_PATTERNS)
+        result = DRC.bput(action, *accept_strings, *STOW_RECOVERY_PATTERNS)
+        case result
         when /unload/
           unload_weapon(weapon_name)
-          stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
+          return stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
         when /close the fan/
           fput("close my #{weapon_name}")
-          stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
+          return stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
         when /You are a little too busy/
           DRC.retreat
-          stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
+          return stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
         when /You don't seem to be able to move/
           pause 1
-          stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
+          return stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
         when /is too small to hold that/
           fput("swap my #{weapon_name}")
-          stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
-        when /Your wounds hinder your ability to do that/, /Sheathe your .* where/
-          stow_helper("stow my #{weapon_name}", weapon_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS, retries: retries - 1)
+          return stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
+        when /Your wounds hinder your ability to do that/, /Sheath your .* where/
+          return stow_helper("stow my #{weapon_name}", weapon_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS, retries: retries - 1)
+        when *STOW_RECOVERY_PATTERNS
+          # Catch-all for any recovery pattern not explicitly handled above
+          Lich::Messaging.msg("bold", "EquipmentManager: stow_helper unhandled recovery for '#{action}': #{result}")
+          return false
         end
+        true
       end
     end
   end
