@@ -693,6 +693,21 @@ module Lich
           unless DRCI.get_item?(name)
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick #{name} back up after unloading")
           end
+        elsif result&.match?(/As you release the string/)
+          # Ammo tumbled to the ground (e.g., "As you release the string, the arrow tumbles to the ground.")
+          # Same recovery as ammo falling to feet: lower weapon, stow ammo, pick weapon back up.
+          ammo_ground_match = result.match(/the (?<ammo>\w+) tumbles/)
+          if ammo_ground_match
+            ammo = ammo_ground_match[:ammo]
+            unless DRCI.lower_item?(name)
+              Lich::Messaging.msg("bold", "EquipmentManager: Unable to lower #{name} to pick up ammo")
+              return
+            end
+            DRCI.put_away_item?(ammo)
+            unless DRCI.get_item?(name)
+              Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick #{name} back up after unloading")
+            end
+          end
         elsif result&.match?(/^(?:You unload|You .* unloading)/)
           # Ammo is in hand, stow whichever hand isn't holding the weapon.
           unless DRCI.in_left_hand?(name)
@@ -730,7 +745,7 @@ module Lich
         # Would be silly to try "unload my scimitar" wouldn't it? :grins:
         unload_weapon(weapon.short_name) if weapon.needs_unloading
         if weapon.worn
-          stow_helper("wear my #{weapon.short_name}", weapon.short_name, *DRCI::WEAR_ITEM_SUCCESS_PATTERNS, *DRCI::WEAR_ITEM_FAILURE_PATTERNS)
+          stow_helper("wear my #{weapon.short_name}", weapon.short_name, *DRCI::WEAR_ITEM_SUCCESS_PATTERNS, failure_patterns: DRCI::WEAR_ITEM_FAILURE_PATTERNS)
         elsif weapon.transforms_to
           if transform_depth <= 0
             Lich::Messaging.msg("bold", "EquipmentManager: stow_weapon exceeded max transform depth for #{weapon.short_name}")
@@ -751,9 +766,10 @@ module Lich
       #
       # @param action [String] game command to execute (e.g., "sheath my sword")
       # @param weapon_name [String] weapon noun for recovery commands
-      # @param accept_strings [Array<Regexp, String>] success/failure patterns to match
+      # @param accept_strings [Array<Regexp, String>] success patterns to match
+      # @param failure_patterns [Array<Regexp>] failure patterns that indicate unrecoverable stow failure
       # @param retries [Integer] remaining retry attempts
-      # @return [Boolean] true if stow succeeded, false if retries exhausted or unrecoverable failure
+      # @return [Boolean] true if stow succeeded, false if retries exhausted or failure pattern matched
       #
       # Stows an item based on its configured storage type (tie, sheath, container, or default stow).
       #
@@ -767,47 +783,52 @@ module Lich
       # @api private
       def stow_by_type(item)
         if item.tie_to
-          stow_helper("tie my #{item.short_name} to my #{item.tie_to}", item.short_name, *DRCI::TIE_ITEM_SUCCESS_PATTERNS, *DRCI::TIE_ITEM_FAILURE_PATTERNS)
+          stow_helper("tie my #{item.short_name} to my #{item.tie_to}", item.short_name, *DRCI::TIE_ITEM_SUCCESS_PATTERNS, failure_patterns: DRCI::TIE_ITEM_FAILURE_PATTERNS)
         elsif item.wield
-          stow_helper("sheath my #{item.short_name}", item.short_name, *DRCI::SHEATH_ITEM_SUCCESS_PATTERNS, *DRCI::SHEATH_ITEM_FAILURE_PATTERNS)
+          stow_helper("sheath my #{item.short_name}", item.short_name, *DRCI::SHEATH_ITEM_SUCCESS_PATTERNS, failure_patterns: DRCI::SHEATH_ITEM_FAILURE_PATTERNS)
         elsif item.container
-          stow_helper("put my #{item.short_name} in my #{item.container}", item.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
+          stow_helper("put my #{item.short_name} in my #{item.container}", item.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, failure_patterns: DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
         else
-          stow_helper("stow my #{item.short_name}", item.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
+          stow_helper("stow my #{item.short_name}", item.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, failure_patterns: DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
         end
       end
 
       # @see STOW_RECOVERY_PATTERNS
       # @see STOW_HELPER_MAX_RETRIES
       # @api private
-      def stow_helper(action, weapon_name, *accept_strings, retries: STOW_HELPER_MAX_RETRIES)
+      def stow_helper(action, weapon_name, *accept_strings, failure_patterns: [], retries: STOW_HELPER_MAX_RETRIES)
         if retries <= 0
           Lich::Messaging.msg("bold", "EquipmentManager: stow_helper exceeded max retries for '#{action}'")
           return false
         end
 
-        result = DRC.bput(action, *accept_strings, *STOW_RECOVERY_PATTERNS)
+        result = DRC.bput(action, *accept_strings, *failure_patterns, *STOW_RECOVERY_PATTERNS)
         case result
         when /unload/
           unload_weapon(weapon_name)
-          return stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
+          return stow_helper(action, weapon_name, *accept_strings, failure_patterns: failure_patterns, retries: retries - 1)
         when /close the fan/
           fput("close my #{weapon_name}")
-          return stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
+          return stow_helper(action, weapon_name, *accept_strings, failure_patterns: failure_patterns, retries: retries - 1)
         when /You are a little too busy/
           DRC.retreat
-          return stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
+          return stow_helper(action, weapon_name, *accept_strings, failure_patterns: failure_patterns, retries: retries - 1)
         when /You don't seem to be able to move/
           pause 1
-          return stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
+          return stow_helper(action, weapon_name, *accept_strings, failure_patterns: failure_patterns, retries: retries - 1)
         when /is too small to hold that/
           fput("swap my #{weapon_name}")
-          return stow_helper(action, weapon_name, *accept_strings, retries: retries - 1)
+          return stow_helper(action, weapon_name, *accept_strings, failure_patterns: failure_patterns, retries: retries - 1)
         when /Your wounds hinder your ability to do that/, /Sheath your .* where/
-          return stow_helper("stow my #{weapon_name}", weapon_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS, retries: retries - 1)
+          return stow_helper("stow my #{weapon_name}", weapon_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, failure_patterns: DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS, retries: retries - 1)
         when *STOW_RECOVERY_PATTERNS
           # Catch-all for any recovery pattern not explicitly handled above
           Lich::Messaging.msg("bold", "EquipmentManager: stow_helper unhandled recovery for '#{action}': #{result}")
+          return false
+        end
+        # Check if the result matched an explicit failure pattern
+        if failure_patterns.any? { |p| p.match?(result) }
+          Lich::Messaging.msg("bold", "EquipmentManager: stow_helper failed for '#{action}': #{result}")
           return false
         end
         true
