@@ -272,4 +272,45 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       expect(em.send(:get_combat_items)).to eq([])
     end
   end
+
+  describe '#stow_helper failure detection' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    it 'returns false when failure pattern matches' do
+      allow(DRC).to receive(:bput).and_return("There isn't any more room in your backpack.")
+      expect(Lich::Messaging).to receive(:msg).with('bold', /stow_helper failed/)
+      result = em.send(:stow_helper, 'stow my sword', 'sword',
+                       *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS,
+                       failure_patterns: DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
+      expect(result).to be false
+    end
+
+    it 'returns true when no failure patterns provided (backward compat)' do
+      allow(DRC).to receive(:bput).and_return("There isn't any more room in your backpack.")
+      result = em.send(:stow_helper, 'stow my sword', 'sword',
+                       *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS,
+                       *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
+      expect(result).to be true
+    end
+  end
+
+  describe '#unload_weapon ammo recovery' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    before do
+      allow(em).to receive(:waitrt?)
+    end
+
+    it 'recovers ammo that tumbles to the ground' do
+      allow(DRC).to receive(:bput)
+        .with('unload my longbow', any_args)
+        .and_return('As you release the string, the arrow tumbles to the ground.')
+      expect(DRCI).to receive(:lower_item?).with('longbow').and_return(true)
+      expect(DRCI).to receive(:put_away_item?).with('arrow')
+      expect(DRCI).to receive(:get_item?).with('longbow').and_return(true)
+      em.unload_weapon('longbow')
+    end
+  end
 end
