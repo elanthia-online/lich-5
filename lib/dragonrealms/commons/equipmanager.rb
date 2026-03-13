@@ -803,6 +803,11 @@ module Lich
         end
 
         result = DRC.bput(action, *accept_strings, *failure_patterns, *STOW_RECOVERY_PATTERNS)
+        if result.nil? || result.empty?
+          Lich::Messaging.msg("bold", "EquipmentManager: stow_helper got no response for '#{action}'")
+          return false
+        end
+
         case result
         when /unload/
           unload_weapon(weapon_name)

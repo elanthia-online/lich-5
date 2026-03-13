@@ -291,6 +291,14 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
                        *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
       expect(result).to be true
     end
+
+    it 'returns false on bput timeout (empty string)' do
+      allow(DRC).to receive(:bput).and_return('')
+      expect(Lich::Messaging).to receive(:msg).with('bold', /got no response/)
+      result = em.send(:stow_helper, 'stow my sword', 'sword',
+                       *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS)
+      expect(result).to be false
+    end
   end
 
   describe '#unload_weapon ammo recovery' do
