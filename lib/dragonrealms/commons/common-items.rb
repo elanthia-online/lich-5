@@ -770,7 +770,7 @@ module Lich
       # Searches inventory for an item using the INV SEARCH command.
       #
       # @param item [String] item noun to search for
-      # @return [Integer, nil] match position if found, nil if not found
+      # @return [Boolean] true if item is found in inventory
       #
       # @example
       #   DRCI.search?("deed")  #=> true if found
