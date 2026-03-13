@@ -196,12 +196,80 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
     let(:em) { described_class.new(settings) }
 
-    it 'returns false when retries exhausted' do
+    it 'returns false when retries exhausted without sending a command' do
       item = double('item', short_name: 'helm')
-      allow(DRC).to receive(:bput).and_return('')
-      allow(described_class).to receive(:waitrt?)
+      expect(DRC).not_to receive(:bput)
       expect(Lich::Messaging).to receive(:msg).with('bold', /remove_item exceeded max retries/)
       expect(em.remove_item(item, retries: 0)).to be false
+    end
+  end
+
+  describe '#stow_helper returns boolean' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    it 'returns true on successful stow' do
+      allow(DRC).to receive(:bput).and_return('You put your sword in your scabbard.')
+      expect(em.send(:stow_helper, 'stow my sword', 'sword', *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS)).to be true
+    end
+
+    it 'returns false when retries exhausted' do
+      expect(Lich::Messaging).to receive(:msg).with('bold', /exceeded max retries/)
+      expect(em.send(:stow_helper, 'stow my sword', 'sword', *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, retries: 0)).to be false
+    end
+  end
+
+  describe '#remove_item swap recovery' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    before do
+      allow(em).to receive(:waitrt?)
+    end
+
+    it 'logs warning when swap fails to restore hand order' do
+      item = double('item', short_name: 'helm')
+      # First call (retries=1): bput returns failure, triggers hand-emptying
+      allow(DRC).to receive(:bput)
+        .with('remove my helm', any_args)
+        .and_return("You'll need both hands free to do that.")
+      allow(DRC).to receive(:left_hand).and_return('sword', 'shield')
+      allow(DRC).to receive(:right_hand).and_return('shield', 'sword')
+      allow(DRCI).to receive(:lower_item?).and_return(true)
+      allow(DRCI).to receive(:get_item_if_not_held?)
+      # Recursive call (retries=0) terminates at retry check
+      allow(Lich::Messaging).to receive(:msg)
+      # Swap fails when trying to restore hand order
+      allow(DRC).to receive(:bput)
+        .with('swap', any_args)
+        .and_return('Swap what?')
+
+      expect(Lich::Messaging).to receive(:msg).with('bold', /Unable to restore hand order/)
+      em.remove_item(item, retries: 1)
+    end
+  end
+
+  describe '#stow_weapon transform depth' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    it 'logs and returns when transform_depth exhausted' do
+      weapon = double('weapon', short_name: 'orb', needs_unloading: false,
+                                wield: false, worn: false, tie_to: nil,
+                                transforms_to: 'something', container: nil)
+      allow(em).to receive(:item_by_desc).and_return(weapon)
+      expect(Lich::Messaging).to receive(:msg).with('bold', /exceeded max transform depth/)
+      em.stow_weapon('orb', transform_depth: 0)
+    end
+  end
+
+  describe '#get_combat_items nil guard' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    it 'returns empty array when issue_command times out' do
+      allow(Lich::Util).to receive(:issue_command).and_return(nil)
+      expect(em.send(:get_combat_items)).to eq([])
     end
   end
 end
