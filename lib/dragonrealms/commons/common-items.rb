@@ -238,7 +238,7 @@ module Lich
         # The following are success messages for putting an item in a container OFF your person.
         /^You drop/i,
         /^You set/i,
-        /You put/i,
+        /^You put/i,
         /^You carefully fit .* into your bundle/,
         /^You slip/,
         /^You easily strap/,
