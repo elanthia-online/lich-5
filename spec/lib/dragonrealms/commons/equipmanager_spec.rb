@@ -35,11 +35,11 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
 
     it 'does not define local SHEATH_SUCCESS_PATTERNS' do
-      expect(described_class.const_defined?(:SHEATH_SUCCESS_PATTERNS)).to be false
+      expect(described_class.const_defined?(:SHEATH_SUCCESS_PATTERNS, false)).to be false
     end
 
     it 'does not define local SHEATH_FAILURE_PATTERNS' do
-      expect(described_class.const_defined?(:SHEATH_FAILURE_PATTERNS)).to be false
+      expect(described_class.const_defined?(:SHEATH_FAILURE_PATTERNS, false)).to be false
     end
   end
 
@@ -53,11 +53,13 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
 
     context 'when sheath fails with "Sheath your sword where?"' do
       it 'falls back to plain stow' do
-        allow(DRC).to receive(:bput)
-          .with('sheath my sword', anything, anything, anything, anything, anything, anything, anything, anything, anything, anything, anything, anything, anything, anything, anything, anything)
+        expect(DRC).to receive(:bput)
+          .with('sheath my sword', any_args)
+          .ordered
           .and_return('Sheath your sword where?')
-        allow(DRC).to receive(:bput)
-          .with('stow my sword', anything, anything, anything, anything, anything, anything, anything, anything, anything, anything, anything, anything, anything, anything, anything, anything)
+        expect(DRC).to receive(:bput)
+          .with('stow my sword', any_args)
+          .ordered
           .and_return('You put your sword in your scabbard.')
 
         # Should not raise, should fall through to stow
