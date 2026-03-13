@@ -1735,11 +1735,15 @@ module Lich
           waitrt
           give_item?(target, item)
         when /You don't need to specify the object/
-          if DRC.right_hand.include?(item)
+          if DRC.right_hand&.include?(item)
             give_item?(target)
-          elsif DRC.left_hand.include?(item)
-            DRC.bput('swap', *SWAP_HANDS_SUCCESS_PATTERNS, *SWAP_HANDS_FAILURE_PATTERNS)
-            give_item?(target)
+          elsif DRC.left_hand&.include?(item)
+            case DRC.bput('swap', *SWAP_HANDS_SUCCESS_PATTERNS, *SWAP_HANDS_FAILURE_PATTERNS)
+            when *SWAP_HANDS_SUCCESS_PATTERNS
+              give_item?(target)
+            else
+              false
+            end
           end
         end
       end

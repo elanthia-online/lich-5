@@ -1837,23 +1837,34 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
   describe '#give_item? swap branch' do
     context "when game says 'You don't need to specify the object' and item is in left hand" do
-      it 'uses SWAP_HANDS constants instead of fput' do
+      it 'retries after successful swap' do
         allow(DRC).to receive(:right_hand).and_return('')
         allow(DRC).to receive(:left_hand).and_return('sword')
-        # First call returns the "don't need to specify" message,
-        # second call (after swap) returns success
         call_count = 0
         allow(DRC).to receive(:bput) do |cmd, *_args|
           call_count += 1
           if cmd.start_with?('give')
             call_count == 1 ? "You don't need to specify the object" : 'has accepted your offer'
           else
-            # swap command
-            expect(cmd).to eq('swap')
             'You move a steel sword to your right hand.'
           end
         end
-        described_class.give_item?('Ragge', 'sword')
+        expect(described_class.give_item?('Ragge', 'sword')).to be true
+      end
+
+      it 'returns false when swap fails (paralysis)' do
+        allow(DRC).to receive(:right_hand).and_return('')
+        allow(DRC).to receive(:left_hand).and_return('sword')
+        call_count = 0
+        allow(DRC).to receive(:bput) do |cmd, *_args|
+          call_count += 1
+          if cmd.start_with?('give')
+            "You don't need to specify the object"
+          else
+            'Will alone cannot conquer the paralysis that has wracked your body.'
+          end
+        end
+        expect(described_class.give_item?('Ragge', 'sword')).to be false
       end
     end
   end

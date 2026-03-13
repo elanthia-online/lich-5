@@ -375,11 +375,11 @@ module Lich
 
         if item.wield
           case DRC.bput("wield my #{item.short_name}", *DRCI::WIELD_ITEM_SUCCESS_PATTERNS, *DRCI::WIELD_ITEM_FAILURE_PATTERNS)
-          when *DRCI::WIELD_ITEM_FAILURE_PATTERNS
+          when *DRCI::WIELD_ITEM_SUCCESS_PATTERNS
+            return true
+          else
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to wield #{item.short_name}")
             return false
-          else
-            return true
           end
         elsif item.transforms_to
           transform_item = item_by_desc(item.transforms_to)
