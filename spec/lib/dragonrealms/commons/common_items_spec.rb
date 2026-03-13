@@ -1909,12 +1909,34 @@ RSpec.describe Lich::DragonRealms::DRCI do
         expect(Lich::Messaging).to receive(:msg).with('bold', /put_away_item_unsafe\? exceeded max retries/)
         expect(described_class.put_away_item_unsafe?('my sword', 'my backpack', retries: 0)).to be false
       end
+
+      it 'preserves preposition across retries' do
+        call_count = 0
+        allow(DRC).to receive(:bput) do |command, *_patterns|
+          call_count += 1
+          if call_count == 1
+            expect(command).to eq('put my sword on my saddle')
+            'Something appears different about your sword, perhaps try doing that again.'
+          else
+            expect(command).to eq('put my sword on my saddle')
+            'You put your sword on your saddle.'
+          end
+        end
+
+        expect(described_class.put_away_item_unsafe?('my sword', 'my saddle', 'on', retries: 2)).to be true
+        expect(call_count).to eq(2)
+      end
     end
 
     describe '#rummage_container' do
       it 'returns nil when retries exhausted' do
         expect(Lich::Messaging).to receive(:msg).with('bold', /rummage_container exceeded max retries/)
         expect(described_class.rummage_container('backpack', retries: 0)).to be_nil
+      end
+
+      it 'returns empty array for empty container' do
+        allow(DRC).to receive(:bput).and_return('There is nothing in there.')
+        expect(described_class.rummage_container('backpack')).to eq([])
       end
     end
 
@@ -1923,12 +1945,51 @@ RSpec.describe Lich::DragonRealms::DRCI do
         expect(Lich::Messaging).to receive(:msg).with('bold', /look_in_container exceeded max retries/)
         expect(described_class.look_in_container('backpack', retries: 0)).to be_nil
       end
+
+      it 'returns empty array for empty container' do
+        allow(DRC).to receive(:bput).and_return('There is nothing in there.')
+        expect(described_class.look_in_container('backpack')).to eq([])
+      end
     end
 
     describe '#give_item?' do
       it 'returns false when retries exhausted' do
         expect(Lich::Messaging).to receive(:msg).with('bold', /give_item\? exceeded max retries/)
         expect(described_class.give_item?('Ragge', 'sword', retries: 0)).to be false
+      end
+
+      it 'returns false with message when item not in either hand' do
+        allow(DRC).to receive(:bput).and_return("You don't need to specify the object")
+        allow(DRC).to receive(:right_hand).and_return(nil)
+        allow(DRC).to receive(:left_hand).and_return(nil)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /could not find .* in either hand/)
+        expect(described_class.give_item?('Ragge', 'sword')).to be false
+      end
+    end
+
+    describe '#in_hand?' do
+      it 'returns true (not integer) when item is in left hand' do
+        allow(DRC).to receive(:left_hand).and_return('steel sword')
+        result = described_class.in_hand?('sword', 'left')
+        expect(result).to be true
+      end
+
+      it 'returns false (not nil) when item is not in hand' do
+        allow(DRC).to receive(:left_hand).and_return(nil)
+        result = described_class.in_hand?('sword', 'left')
+        expect(result).to be false
+      end
+    end
+
+    describe '#search?' do
+      it 'returns true (not integer) when item is found' do
+        allow(DRC).to receive(:bput).and_return('A steel sword is in your backpack.')
+        expect(described_class.search?('sword')).to be true
+      end
+
+      it 'returns false (not nil) when item is not found' do
+        allow(DRC).to receive(:bput).and_return("You can't seem to find anything like that.")
+        expect(described_class.search?('sword')).to be false
       end
     end
 

@@ -773,26 +773,26 @@ module Lich
       # @return [Integer, nil] match position if found, nil if not found
       #
       # @example
-      #   DRCI.search?("deed")  #=> truthy if found
+      #   DRCI.search?("deed")  #=> true if found
       def search?(item)
-        /(?:An?|Some) .+ is (?:in|being)/ =~ DRC.bput("inv search #{item}", /^You can't seem to find anything/, /(?:An?|Some) .+ is (?:in|being)/)
+        !!(DRC.bput("inv search #{item}", /^You can't seem to find anything/, /(?:An?|Some) .+ is (?:in|being)/) =~ /(?:An?|Some) .+ is (?:in|being)/)
       end
 
       # Checks if an item is currently worn by tapping it.
       #
       # @param item [String] item noun to check
-      # @return [Integer, nil] truthy match position if wearing, nil otherwise
+      # @return [Boolean] true if item is currently worn
       def wearing?(item)
-        tap(item) =~ /wearing/
+        !!(tap(item) =~ /wearing/)
       end
 
       # Checks if an item is inside a container by tapping it.
       #
       # @param item [String] item noun to check
       # @param container [String, nil] container noun to check, or nil for any
-      # @return [Integer, nil] truthy match position if inside a container, nil otherwise
+      # @return [Boolean] true if item is inside a container
       def inside?(item, container = nil)
-        tap(item, container) =~ /inside/
+        !!(tap(item, container) =~ /inside/)
       end
 
       # Checks if an item exists in inventory or a container by tapping it.
@@ -879,9 +879,9 @@ module Lich
         item = DRC::Item.from_text(item) if item.is_a?(String)
         case which_hand.downcase
         when 'left'
-          DRC.left_hand =~ item.short_regex
+          !!(DRC.left_hand =~ item.short_regex)
         when 'right'
-          DRC.right_hand =~ item.short_regex
+          !!(DRC.right_hand =~ item.short_regex)
         when 'either'
           in_left_hand?(item) || in_right_hand?(item)
         when 'both'
@@ -1017,9 +1017,9 @@ module Lich
       #
       # @see https://elanthipedia.play.net/Lockpick_rings
       def count_lockpick_container(container)
-        count = DRC.bput("appraise #{item_ref(container)} quick", /it appears to be full/, /it might hold an additional \d+/, /\d+ lockpicks would probably fit/).scan(/\d+/).first.to_i
+        result = DRC.bput("appraise #{item_ref(container)} quick", /it appears to be full/, /it might hold an additional \d+/, /\d+ lockpicks would probably fit/)
         waitrt?
-        count
+        result.scan(/\d+/).first.to_i
       end
 
       # Lists boxes in a container via RUMMAGE /B.
@@ -1043,7 +1043,8 @@ module Lich
       # @param necro_stacker [String] stacker noun
       # @return [Integer] number of items currently held
       def count_necro_stacker(necro_stacker)
-        DRC.bput("study #{item_ref(necro_stacker)}", /currently holds \d+ items/).scan(/\d+/).first.to_i
+        result = DRC.bput("study #{item_ref(necro_stacker)}", /currently holds \d+ items/)
+        result.scan(/\d+/).first.to_i
       end
 
       # Counts all lockpick boxes across configured containers.
@@ -1585,9 +1586,13 @@ module Lich
           end
 
           rummage_container(container, retries: retries - 1)
+        when /there is nothing/i
+          []
         else
-          contents
-            .match(/You rummage through .* and see (?:a|an|some) (?<items>.*)\./)[:items] # Get string of just the comma separated item list
+          match = contents.match(/You rummage through .* and see (?:a|an|some) (?<items>.*)\./)
+          return [] unless match
+
+          match[:items] # Get string of just the comma separated item list
             .sub(/ and (?=a|an|some)/, ", ") # replace " and " for the last item into " , "
             .split(/, (?:a|an|some) /) # Split at a, an, or some, but only when it follows a comma
         end
@@ -1621,9 +1626,13 @@ module Lich
           end
 
           look_in_container(container, retries: retries - 1)
+        when /there is nothing/i
+          []
         else
-          contents
-            .match(/In the .* you see (?:some|an|a) (?<items>.*)\./)[:items]
+          match = contents.match(/In the .* you see (?:some|an|a) (?<items>.*)\./)
+          return [] unless match
+
+          match[:items]
             .split(/(?:,|and) (?:some|an|a)/)
             .map(&:strip)
         end
@@ -1697,9 +1706,9 @@ module Lich
         when *CONTAINER_IS_CLOSED_PATTERNS
           return false unless container && open_container?(container)
 
-          return put_away_item_unsafe?(item, container, retries: retries - 1)
+          return put_away_item_unsafe?(item, container, preposition, retries: retries - 1)
         when *PUT_AWAY_ITEM_RETRY_PATTERNS
-          return put_away_item_unsafe?(item, container, retries: retries - 1)
+          return put_away_item_unsafe?(item, container, preposition, retries: retries - 1)
         when *PUT_AWAY_ITEM_SUCCESS_PATTERNS
           return true
         when *PUT_AWAY_ITEM_FAILURE_PATTERNS
@@ -1789,6 +1798,9 @@ module Lich
             else
               false
             end
+          else
+            Lich::Messaging.msg("bold", "DRCI: give_item? could not find '#{item}' in either hand")
+            false
           end
         end
       end
@@ -1963,7 +1975,10 @@ module Lich
             # Pouch needs to be tied before more gems can be added
             if should_tie_gem_pouches
               # Tie the pouch and retry
-              tie_gem_pouch?(gem_pouch_adjective, gem_pouch_noun)
+              unless tie_gem_pouch?(gem_pouch_adjective, gem_pouch_noun)
+                Lich::Messaging.msg("bold", "DRCI: Could not tie #{gem_pouch_adjective} #{gem_pouch_noun}.")
+                return
+              end
               return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches, retries: retries - 1)
             else
               # Treat as full - swap out the pouch
