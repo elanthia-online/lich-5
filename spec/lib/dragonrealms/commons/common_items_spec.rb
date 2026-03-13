@@ -59,6 +59,14 @@ RSpec.describe Lich::DragonRealms::DRCI do
         LOWER_FAILURE_PATTERNS
         LIFT_SUCCESS_PATTERNS
         LIFT_FAILURE_PATTERNS
+        SHEATH_ITEM_SUCCESS_PATTERNS
+        SHEATH_ITEM_FAILURE_PATTERNS
+        WIELD_ITEM_SUCCESS_PATTERNS
+        WIELD_ITEM_FAILURE_PATTERNS
+        SWAP_HANDS_SUCCESS_PATTERNS
+        SWAP_HANDS_FAILURE_PATTERNS
+        UNLOAD_WEAPON_SUCCESS_PATTERNS
+        UNLOAD_WEAPON_FAILURE_PATTERNS
         GIVE_ITEM_SUCCESS_PATTERNS
         GIVE_ITEM_FAILURE_PATTERNS
         COUNT_PART_PATTERNS
@@ -1018,29 +1026,65 @@ RSpec.describe Lich::DragonRealms::DRCI do
   end
 
   describe '#get_inventory_by_type' do
-    before do
-      allow(described_class).to receive(:reget).and_return([
-                                                             'All of your combat items:',
-                                                             'a sword',
-                                                             'a shield',
-                                                             '[Use INVENTORY HELP for more options.]'
-                                                           ])
+    def stub_issue_command(lines)
+      allow(Lich::Util).to receive(:issue_command).and_return(lines)
     end
 
     context 'when type is valid' do
-      it 'returns list of items' do
-        stub_bput('Use INVENTORY HELP for more options.')
+      it 'returns list of items with articles stripped' do
+        stub_issue_command([
+                             'All of your worn combat equipment:',
+                             '  a steel plate helm',
+                             '  some iron gauntlets',
+                             '  a dark leather jerkin with reinforced seams'
+                           ])
         result = described_class.get_inventory_by_type('combat')
-        expect(result).to include('sword')
+        expect(result).to eq(['steel plate helm', 'iron gauntlets', 'dark leather jerkin with reinforced seams'])
+      end
+
+      it 'strips (closed) suffix from containers' do
+        stub_issue_command([
+                             'All of your container items:',
+                             '  a leather backpack (closed)'
+                           ])
+        result = described_class.get_inventory_by_type('container')
+        expect(result).to include('leather backpack')
+      end
+
+      it 'handles empty inventory' do
+        stub_issue_command(["You aren't wearing anything like that."])
+        result = described_class.get_inventory_by_type('combat')
+        expect(result).to eq([])
+      end
+
+      it 'excludes items at feet' do
+        stub_issue_command([
+                             'All of your worn combat equipment:',
+                             '  a steel plate helm',
+                             'Lying at your feet you see:',
+                             '  a dropped sword'
+                           ])
+        result = described_class.get_inventory_by_type('combat')
+        expect(result).to eq(['steel plate helm'])
       end
     end
 
     context 'when type is invalid' do
       it 'returns empty array and logs message' do
-        stub_bput('The INVENTORY command is the best way')
-        expect(Lich::Messaging).to receive(:msg).with('bold', /Unrecognized inventory type/)
+        stub_issue_command(nil)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /No inventory data/)
         expect(described_class.get_inventory_by_type('invalid')).to eq([])
       end
+    end
+
+    it 'uses issue_command with correct start/end patterns' do
+      expect(Lich::Util).to receive(:issue_command).with(
+        'inventory combat',
+        /^All of your |^You aren't wearing anything like that|^Both of your hands are empty/,
+        /^\[Use INVENTORY HELP/,
+        hash_including(timeout: 5, usexml: false, include_end: false)
+      ).and_return([])
+      described_class.get_inventory_by_type('combat')
     end
   end
 
@@ -1657,6 +1701,361 @@ RSpec.describe Lich::DragonRealms::DRCI do
         expect(described_class).not_to receive(:tie_gem_pouch?)
         described_class.fill_gem_pouch_with_container(adj, noun, source, nil, nil, false)
       end
+    end
+  end
+
+  #########################################
+  # SHEATH/WIELD/SWAP/UNLOAD PATTERN SPECS
+  #########################################
+
+  describe 'SHEATH_ITEM_SUCCESS_PATTERNS' do
+    subject(:patterns) { described_class::SHEATH_ITEM_SUCCESS_PATTERNS }
+
+    [
+      'Sheathing your sword, you put it away.',
+      'You sheath your sword in your scabbard.',
+      'You secure your dagger.',
+      'You slip the knife into your thigh sheath.',
+      'You hang the axe on your harness.',
+      'You strap a longsword to your back.',
+      'You easily strap the blade to your harness.',
+      'With a flick of your wrist you stealthily sheath your weapon.',
+      'With a flick of your wrist, you stealthily sheath your weapon.',
+      'With fluid and stealthy movements you slip the sabre into your harness.',
+      'The longsword slides easily into the scabbard.'
+    ].each do |message|
+      it "matches '#{message}'" do
+        expect(patterns.any? { |p| p.match?(message) }).to be true
+      end
+    end
+
+    it 'is splatted into PUT_AWAY_ITEM_SUCCESS_PATTERNS' do
+      patterns.each do |pattern|
+        expect(described_class::PUT_AWAY_ITEM_SUCCESS_PATTERNS).to include(pattern)
+      end
+    end
+  end
+
+  describe 'SHEATH_ITEM_FAILURE_PATTERNS' do
+    subject(:patterns) { described_class::SHEATH_ITEM_FAILURE_PATTERNS }
+
+    [
+      'Sheath your sword where?',
+      "There's no room for that.",
+      'The scabbard is too small to hold that.',
+      'The sheath is too wide to fit in.',
+      'Your right hand is too injured to do that.',
+      'Your left hand is too injured to do that.'
+    ].each do |message|
+      it "matches '#{message}'" do
+        expect(patterns.any? { |p| p.match?(message) }).to be true
+      end
+    end
+  end
+
+  describe 'WIELD_ITEM_SUCCESS_PATTERNS' do
+    subject(:patterns) { described_class::WIELD_ITEM_SUCCESS_PATTERNS }
+
+    [
+      'You draw your sword from your scabbard.',
+      'You deftly remove a dagger from your thigh sheath.',
+      'You slip a knife from its hiding place.',
+      'With a flick of your wrist you stealthily unsheath your weapon.',
+      'With a flick of your wrist, you stealthily unsheath your weapon.',
+      'With fluid and stealthy movements you draw the sabre from its harness.',
+      'The longsword slides easily out of the scabbard.'
+    ].each do |message|
+      it "matches '#{message}'" do
+        expect(patterns.any? { |p| p.match?(message) }).to be true
+      end
+    end
+
+    it 'does not match healing draw' do
+      expect(patterns.any? { |p| p.match?("You draw Mahtra's wounds closed.") }).to be false
+    end
+  end
+
+  describe 'WIELD_ITEM_FAILURE_PATTERNS' do
+    subject(:patterns) { described_class::WIELD_ITEM_FAILURE_PATTERNS }
+
+    [
+      'Wield what?',
+      'Your right hand is too injured to do that.',
+      'Your left hand is too injured to do that.'
+    ].each do |message|
+      it "matches '#{message}'" do
+        expect(patterns.any? { |p| p.match?(message) }).to be true
+      end
+    end
+  end
+
+  describe 'SWAP_HANDS_SUCCESS_PATTERNS' do
+    subject(:patterns) { described_class::SWAP_HANDS_SUCCESS_PATTERNS }
+
+    it "matches 'You move a steel sword to your left hand.'" do
+      expect(patterns.any? { |p| p.match?('You move a steel sword to your left hand.') }).to be true
+    end
+  end
+
+  describe 'SWAP_HANDS_FAILURE_PATTERNS' do
+    subject(:patterns) { described_class::SWAP_HANDS_FAILURE_PATTERNS }
+
+    it "matches paralysis message" do
+      expect(patterns.any? { |p| p.match?('Will alone cannot conquer the paralysis that has wracked your body.') }).to be true
+    end
+  end
+
+  describe 'UNLOAD_WEAPON_SUCCESS_PATTERNS' do
+    subject(:patterns) { described_class::UNLOAD_WEAPON_SUCCESS_PATTERNS }
+
+    [
+      'You unload the crossbow.',
+      'Your bolt falls from your crossbow to your feet.',
+      'As you release the string, the arrow tumbles to the ground.',
+      'You remain concealed by your surroundings, convinced that your unloading of the crossbow went unobserved.'
+    ].each do |message|
+      it "matches '#{message}'" do
+        expect(patterns.any? { |p| p.match?(message) }).to be true
+      end
+    end
+  end
+
+  describe 'UNLOAD_WEAPON_FAILURE_PATTERNS' do
+    subject(:patterns) { described_class::UNLOAD_WEAPON_FAILURE_PATTERNS }
+
+    [
+      "But your crossbow isn't loaded.",
+      "You can't unload such a weapon.",
+      "You don't have a ranged weapon to unload.",
+      'You must be holding the weapon to do that.'
+    ].each do |message|
+      it "matches '#{message}'" do
+        expect(patterns.any? { |p| p.match?(message) }).to be true
+      end
+    end
+  end
+
+  describe '#give_item? swap branch' do
+    context "when game says 'You don't need to specify the object' and item is in left hand" do
+      it 'retries after successful swap' do
+        allow(DRC).to receive(:right_hand).and_return('')
+        allow(DRC).to receive(:left_hand).and_return('sword')
+        call_count = 0
+        allow(DRC).to receive(:bput) do |cmd, *_args|
+          call_count += 1
+          if cmd.start_with?('give')
+            call_count == 1 ? "You don't need to specify the object" : 'has accepted your offer'
+          else
+            'You move a steel sword to your right hand.'
+          end
+        end
+        expect(described_class.give_item?('Ragge', 'sword')).to be true
+      end
+
+      it 'returns false when swap fails (paralysis)' do
+        allow(DRC).to receive(:right_hand).and_return('')
+        allow(DRC).to receive(:left_hand).and_return('sword')
+        call_count = 0
+        allow(DRC).to receive(:bput) do |cmd, *_args|
+          call_count += 1
+          if cmd.start_with?('give')
+            "You don't need to specify the object"
+          else
+            'Will alone cannot conquer the paralysis that has wracked your body.'
+          end
+        end
+        expect(described_class.give_item?('Ragge', 'sword')).to be false
+      end
+    end
+  end
+
+  describe 'PUT_AWAY_ITEM_SUCCESS_PATTERNS anchoring' do
+    subject(:patterns) { described_class::PUT_AWAY_ITEM_SUCCESS_PATTERNS }
+
+    it 'does not match fan close message via /^You put/i' do
+      # PR #1254 fix: "You'll need to close the fan before you put it away."
+      # should NOT match as a success pattern
+      message = "You'll need to close the fan before you put it away."
+      expect(patterns.any? { |p| p.match?(message) }).to be false
+    end
+
+    it 'matches anchored put messages' do
+      expect(patterns.any? { |p| p.match?('You put your sword in your scabbard.') }).to be true
+    end
+  end
+
+  #########################################
+  # BOUNDED RECURSION DEPTH LIMIT SPECS
+  #########################################
+
+  describe 'bounded recursion depth limits' do
+    describe '#stow_hand' do
+      it 'returns false when retries exhausted' do
+        allow(DRC).to receive(:bput).and_return('Something appears different about')
+        expect(Lich::Messaging).to receive(:msg).with('bold', /stow_hand exceeded max retries/)
+        expect(described_class.stow_hand('left', retries: 0)).to be false
+      end
+    end
+
+    describe '#stow_item_unsafe?' do
+      it 'returns false when retries exhausted' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /stow_item_unsafe\? exceeded max retries/)
+        expect(described_class.stow_item_unsafe?('my sword', retries: 0)).to be false
+      end
+    end
+
+    describe '#put_away_item_unsafe?' do
+      it 'returns false when retries exhausted' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /put_away_item_unsafe\? exceeded max retries/)
+        expect(described_class.put_away_item_unsafe?('my sword', 'my backpack', retries: 0)).to be false
+      end
+
+      it 'preserves preposition across retries' do
+        call_count = 0
+        allow(DRC).to receive(:bput) do |command, *_patterns|
+          call_count += 1
+          if call_count == 1
+            expect(command).to eq('put my sword on my saddle')
+            'Something appears different about your sword, perhaps try doing that again.'
+          else
+            expect(command).to eq('put my sword on my saddle')
+            'You put your sword on your saddle.'
+          end
+        end
+
+        expect(described_class.put_away_item_unsafe?('my sword', 'my saddle', 'on', retries: 2)).to be true
+        expect(call_count).to eq(2)
+      end
+    end
+
+    describe '#rummage_container' do
+      it 'returns nil when retries exhausted' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /rummage exceeded max retries/)
+        expect(described_class.rummage_container('backpack', retries: 0)).to be_nil
+      end
+
+      it 'returns empty array for empty container' do
+        allow(DRC).to receive(:bput).and_return('There is nothing in there.')
+        expect(described_class.rummage_container('backpack')).to eq([])
+      end
+    end
+
+    describe '#look_in_container' do
+      it 'returns nil when retries exhausted' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /look in exceeded max retries/)
+        expect(described_class.look_in_container('backpack', retries: 0)).to be_nil
+      end
+
+      it 'returns empty array for empty container' do
+        allow(DRC).to receive(:bput).and_return('There is nothing in there.')
+        expect(described_class.look_in_container('backpack')).to eq([])
+      end
+    end
+
+    describe '#give_item?' do
+      it 'returns false when retries exhausted' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /give_item\? exceeded max retries/)
+        expect(described_class.give_item?('Ragge', 'sword', retries: 0)).to be false
+      end
+
+      it 'returns false with message when item not in either hand' do
+        allow(DRC).to receive(:bput).and_return("You don't need to specify the object")
+        allow(DRC).to receive(:right_hand).and_return(nil)
+        allow(DRC).to receive(:left_hand).and_return(nil)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /could not find .* in either hand/)
+        expect(described_class.give_item?('Ragge', 'sword')).to be false
+      end
+    end
+
+    describe '#in_hand?' do
+      it 'returns true (not integer) when item is in left hand' do
+        allow(DRC).to receive(:left_hand).and_return('steel sword')
+        result = described_class.in_hand?('sword', 'left')
+        expect(result).to be true
+      end
+
+      it 'returns false (not nil) when item is not in hand' do
+        allow(DRC).to receive(:left_hand).and_return(nil)
+        result = described_class.in_hand?('sword', 'left')
+        expect(result).to be false
+      end
+    end
+
+    describe '#search?' do
+      it 'returns true (not integer) when item is found' do
+        allow(DRC).to receive(:bput).and_return('A steel sword is in your backpack.')
+        expect(described_class.search?('sword')).to be true
+      end
+
+      it 'returns false (not nil) when item is not found' do
+        allow(DRC).to receive(:bput).and_return("You can't seem to find anything like that.")
+        expect(described_class.search?('sword')).to be false
+      end
+    end
+
+    describe '#dispose_trash' do
+      it 'returns false when retries exhausted' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /dispose_trash exceeded max retries/)
+        expect(described_class.dispose_trash('rock', retries: 0)).to be false
+      end
+    end
+
+    describe '#fill_gem_pouch_with_container' do
+      it 'returns when retries exhausted' do
+        allow(Flags).to receive(:add)
+        allow(Flags).to receive(:delete)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /fill_gem_pouch_with_container exceeded max retries/)
+        described_class.fill_gem_pouch_with_container('black', 'pouch', 'lootbag', retries: 0)
+      end
+    end
+  end
+
+  # ─── DRY helper methods ───────────────────────────────────────────
+
+  describe '#execute_dispose_command' do
+    it 'returns :success when drop succeeds' do
+      allow(DRC).to receive(:bput).and_return('You drop a rock.')
+      expect(described_class.send(:execute_dispose_command, 'drop my rock', 'rock', 3)).to eq(:success)
+    end
+
+    it 'retries when game says to hold item first (not caught by generic failure)' do
+      allow(DRC).to receive(:bput).and_return('Perhaps you should be holding that first.')
+      allow(described_class).to receive(:get_item?).with('rock').and_return(true)
+      allow(described_class).to receive(:dispose_trash).and_return(true)
+      result = described_class.send(:execute_dispose_command, 'put my rock in bin', 'rock', 3)
+      expect(result).to be true
+    end
+
+    it 'returns :failure for unrecoverable errors' do
+      allow(DRC).to receive(:bput).and_return('What were you referring to?')
+      expect(described_class.send(:execute_dispose_command, 'put my rock in bin', 'rock', 3)).to eq(:failure)
+    end
+  end
+
+  describe '#list_container_contents' do
+    it 'returns [] for empty containers' do
+      allow(DRC).to receive(:bput).and_return('There is nothing in there.')
+      result = described_class.send(:list_container_contents, 'rummage', 'backpack') { |c| c }
+      expect(result).to eq([])
+    end
+
+    it 'returns nil on failure' do
+      allow(DRC).to receive(:bput).and_return('I could not find what you were referring to.')
+      expect(Lich::Messaging).to receive(:msg).with('bold', /Unable to rummage/)
+      result = described_class.send(:list_container_contents, 'rummage', 'backpack') { |c| c }
+      expect(result).to be_nil
+    end
+
+    it 'yields the response to the parse block on success' do
+      allow(DRC).to receive(:bput).and_return('You rummage through a backpack and see a sword and a shield.')
+      result = described_class.send(:list_container_contents, 'rummage', 'backpack') { |contents| [contents] }
+      expect(result).to eq(['You rummage through a backpack and see a sword and a shield.'])
+    end
+
+    it 'returns nil when retries exhausted' do
+      expect(Lich::Messaging).to receive(:msg).with('bold', /rummage exceeded max retries/)
+      result = described_class.send(:list_container_contents, 'rummage', 'backpack', retries: 0) { |c| c }
+      expect(result).to be_nil
     end
   end
 end
