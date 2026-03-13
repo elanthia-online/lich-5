@@ -1718,6 +1718,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
       'You slip the knife into your thigh sheath.',
       'You hang the axe on your harness.',
       'You strap a longsword to your back.',
+      'You easily strap the blade to your harness.',
       'With a flick of your wrist you stealthily sheath your weapon.',
       'With a flick of your wrist, you stealthily sheath your weapon.',
       'With fluid and stealthy movements you slip the sabre into your harness.',

@@ -270,7 +270,7 @@ module Lich
         /^You secure your/,
         /^You slip/,
         /^You hang/,
-        /^You strap/,
+        /^You (easily )?strap/,
         /^With a flick of your wrist,? you stealthily sheath/,
         /^With fluid and stealthy movements you slip/,
         /^The .* slides easily/
