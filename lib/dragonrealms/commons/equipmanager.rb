@@ -218,10 +218,15 @@ module Lich
       # general stow. Empties hands if needed for two-handed removal.
       #
       # @param item [DRC::Item] item to remove
+      # @param retries [Integer] remaining retry attempts for hand-emptying recovery
       # @return [Boolean, nil] false if removal failed, nil otherwise
-      def remove_item(item)
+      def remove_item(item, retries: 2)
         result = DRC.bput("remove my #{item.short_name}", *DRCI::REMOVE_ITEM_SUCCESS_PATTERNS, *DRCI::REMOVE_ITEM_FAILURE_PATTERNS, "then constricts tighter around your")
         waitrt?
+        if retries <= 0
+          Lich::Messaging.msg("bold", "EquipmentManager: remove_item exceeded max retries for #{item.short_name}")
+          return false
+        end
         case result
         when /then constricts tighter around your/
           # Items that auto-repair, like exoskeletal armor,
@@ -237,7 +242,7 @@ module Lich
           # Stowing them in a container would require unloading.
           did_lower = [temp_left_item, temp_right_item].compact.all? { |item_in_hand| DRCI.lower_item?(item_in_hand) }
           if did_lower
-            remove_item(item)
+            remove_item(item, retries: retries - 1)
           else
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to empty your hands to remove #{item.short_name}")
           end

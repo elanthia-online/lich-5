@@ -1883,4 +1883,69 @@ RSpec.describe Lich::DragonRealms::DRCI do
       expect(patterns.any? { |p| p.match?('You put your sword in your scabbard.') }).to be true
     end
   end
+
+  #########################################
+  # BOUNDED RECURSION DEPTH LIMIT SPECS
+  #########################################
+
+  describe 'bounded recursion depth limits' do
+    describe '#stow_hand' do
+      it 'returns false when retries exhausted' do
+        allow(DRC).to receive(:bput).and_return('Something appears different about')
+        expect(Lich::Messaging).to receive(:msg).with('bold', /stow_hand exceeded max retries/)
+        expect(described_class.stow_hand('left', retries: 0)).to be false
+      end
+    end
+
+    describe '#stow_item_unsafe?' do
+      it 'returns false when retries exhausted' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /stow_item_unsafe\? exceeded max retries/)
+        expect(described_class.stow_item_unsafe?('my sword', retries: 0)).to be false
+      end
+    end
+
+    describe '#put_away_item_unsafe?' do
+      it 'returns false when retries exhausted' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /put_away_item_unsafe\? exceeded max retries/)
+        expect(described_class.put_away_item_unsafe?('my sword', 'my backpack', retries: 0)).to be false
+      end
+    end
+
+    describe '#rummage_container' do
+      it 'returns nil when retries exhausted' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /rummage_container exceeded max retries/)
+        expect(described_class.rummage_container('backpack', retries: 0)).to be_nil
+      end
+    end
+
+    describe '#look_in_container' do
+      it 'returns nil when retries exhausted' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /look_in_container exceeded max retries/)
+        expect(described_class.look_in_container('backpack', retries: 0)).to be_nil
+      end
+    end
+
+    describe '#give_item?' do
+      it 'returns false when retries exhausted' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /give_item\? exceeded max retries/)
+        expect(described_class.give_item?('Ragge', 'sword', retries: 0)).to be false
+      end
+    end
+
+    describe '#dispose_trash' do
+      it 'returns false when retries exhausted' do
+        expect(Lich::Messaging).to receive(:msg).with('bold', /dispose_trash exceeded max retries/)
+        expect(described_class.dispose_trash('rock', retries: 0)).to be false
+      end
+    end
+
+    describe '#fill_gem_pouch_with_container' do
+      it 'returns when retries exhausted' do
+        allow(Flags).to receive(:add)
+        allow(Flags).to receive(:delete)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /fill_gem_pouch_with_container exceeded max retries/)
+        described_class.fill_gem_pouch_with_container('black', 'pouch', 'lootbag', retries: 0)
+      end
+    end
+  end
 end

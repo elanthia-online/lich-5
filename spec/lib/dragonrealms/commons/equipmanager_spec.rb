@@ -191,4 +191,17 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       end
     end
   end
+
+  describe '#remove_item bounded recursion' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    it 'returns false when retries exhausted' do
+      item = double('item', short_name: 'helm')
+      allow(DRC).to receive(:bput).and_return('')
+      allow(described_class).to receive(:waitrt?)
+      expect(Lich::Messaging).to receive(:msg).with('bold', /remove_item exceeded max retries/)
+      expect(em.remove_item(item, retries: 0)).to be false
+    end
+  end
 end
