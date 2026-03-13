@@ -2009,4 +2009,53 @@ RSpec.describe Lich::DragonRealms::DRCI do
       end
     end
   end
+
+  # ─── DRY helper methods ───────────────────────────────────────────
+
+  describe '#execute_dispose_command' do
+    it 'returns :success when drop succeeds' do
+      allow(DRC).to receive(:bput).and_return('You drop a rock.')
+      expect(described_class.send(:execute_dispose_command, 'drop my rock', 'rock', 3)).to eq(:success)
+    end
+
+    it 'retries when game says to hold item first (not caught by generic failure)' do
+      allow(DRC).to receive(:bput).and_return('Perhaps you should be holding that first.')
+      allow(described_class).to receive(:get_item?).with('rock').and_return(true)
+      allow(described_class).to receive(:dispose_trash).and_return(true)
+      result = described_class.send(:execute_dispose_command, 'put my rock in bin', 'rock', 3)
+      expect(result).to be true
+    end
+
+    it 'returns :failure for unrecoverable errors' do
+      allow(DRC).to receive(:bput).and_return('What were you referring to?')
+      expect(described_class.send(:execute_dispose_command, 'put my rock in bin', 'rock', 3)).to eq(:failure)
+    end
+  end
+
+  describe '#list_container_contents' do
+    it 'returns [] for empty containers' do
+      allow(DRC).to receive(:bput).and_return('There is nothing in there.')
+      result = described_class.send(:list_container_contents, 'rummage', 'backpack') { |c| c }
+      expect(result).to eq([])
+    end
+
+    it 'returns nil on failure' do
+      allow(DRC).to receive(:bput).and_return('I could not find what you were referring to.')
+      expect(Lich::Messaging).to receive(:msg).with('bold', /Unable to rummage/)
+      result = described_class.send(:list_container_contents, 'rummage', 'backpack') { |c| c }
+      expect(result).to be_nil
+    end
+
+    it 'yields the response to the parse block on success' do
+      allow(DRC).to receive(:bput).and_return('You rummage through a backpack and see a sword and a shield.')
+      result = described_class.send(:list_container_contents, 'rummage', 'backpack') { |contents| [contents] }
+      expect(result).to eq(['You rummage through a backpack and see a sword and a shield.'])
+    end
+
+    it 'returns nil when retries exhausted' do
+      expect(Lich::Messaging).to receive(:msg).with('bold', /rummage exceeded max retries/)
+      result = described_class.send(:list_container_contents, 'rummage', 'backpack', retries: 0) { |c| c }
+      expect(result).to be_nil
+    end
+  end
 end

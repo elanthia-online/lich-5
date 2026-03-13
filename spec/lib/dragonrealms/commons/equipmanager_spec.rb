@@ -321,4 +321,179 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       em.unload_weapon('longbow')
     end
   end
+
+  # ─── Item lookup and configuration ───────────────────────────────────
+
+  describe '#item_by_desc' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+    let(:sword) { double('sword', short_name: 'steel.sword', name: 'sword', short_regex: /\bsteel.*\bsword/i) }
+    let(:shield) { double('shield', short_name: 'bronze.shield', name: 'shield', short_regex: /\bbronze.*\bshield/i) }
+
+    before { allow(em).to receive(:items).and_return([sword, shield]) }
+
+    it 'finds an item matching the description' do
+      result = em.item_by_desc('steel sword')
+      expect(result).to eq(sword)
+    end
+
+    it 'returns nil for unrecognized descriptions' do
+      expect(em.item_by_desc('golden halberd')).to be_nil
+    end
+
+    it 'matches partial descriptions via short_regex' do
+      result = em.item_by_desc('a steel sword with runes')
+      expect(result).to eq(sword)
+    end
+  end
+
+  describe '#listed_item?' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+    let(:sword) { double('sword', short_regex: /\bsteel.*\bsword/i) }
+
+    before { allow(em).to receive(:items).and_return([sword]) }
+
+    it 'returns the item when description matches gear list' do
+      expect(em.listed_item?('steel sword')).to eq(sword)
+    end
+
+    it 'returns nil when description is not in gear list' do
+      expect(em.listed_item?('golden halberd')).to be_nil
+    end
+  end
+
+  # ─── wear_item? ─────────────────────────────────────────────────────
+
+  describe '#wear_item?' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    it 'returns false with message when item is nil' do
+      expect(Lich::Messaging).to receive(:msg).with('bold', /Failed to match an item/)
+      expect(em.wear_item?(nil)).to be false
+    end
+
+    it 'returns false when get_item? fails to retrieve the item' do
+      item = double('item', short_name: 'helm')
+      allow(em).to receive(:get_item?).with(item).and_return(false)
+      expect(em.wear_item?(item)).to be false
+    end
+
+    it 'delegates to DRCI.wear_item? after successfully getting the item' do
+      item = double('item', short_name: 'helm')
+      allow(em).to receive(:get_item?).with(item).and_return(true)
+      expect(DRCI).to receive(:wear_item?).with('helm').and_return(true)
+      expect(em.wear_item?(item)).to be true
+    end
+  end
+
+  # ─── turn_to_weapon? ────────────────────────────────────────────────
+
+  describe '#turn_to_weapon?' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    before { allow(em).to receive(:waitrt?) }
+
+    it 'returns true without turning when nouns are the same' do
+      expect(DRC).not_to receive(:bput)
+      expect(em.turn_to_weapon?('sword', 'sword')).to be true
+    end
+
+    it 'returns true when weapon shifts successfully' do
+      allow(DRC).to receive(:bput).and_return('Your steel sword shifts and flexes before resolving itself into a steel greatsword')
+      expect(em.turn_to_weapon?('sword', 'greatsword')).to be true
+    end
+
+    it 'returns false when turn fails' do
+      allow(DRC).to receive(:bput).and_return('Turn what?')
+      expect(em.turn_to_weapon?('sword', 'greatsword')).to be false
+    end
+  end
+
+  # ─── stow_by_type ───────────────────────────────────────────────────
+
+  describe '#stow_by_type' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    it 'sheathes wield-type items' do
+      item = double('item', short_name: 'sword', tie_to: nil, wield: true, container: nil)
+      expect(DRC).to receive(:bput).with('sheath my sword', any_args).and_return('You sheath your sword.')
+      em.send(:stow_by_type, item)
+    end
+
+    it 'ties tie-to items' do
+      item = double('item', short_name: 'rope', tie_to: 'belt', wield: false, container: nil)
+      expect(DRC).to receive(:bput).with('tie my rope to my belt', any_args).and_return('You tie your rope to your belt.')
+      em.send(:stow_by_type, item)
+    end
+
+    it 'puts container items in their container' do
+      item = double('item', short_name: 'lockpick', tie_to: nil, wield: false, container: 'toolkit')
+      expect(DRC).to receive(:bput).with('put my lockpick in my toolkit', any_args).and_return('You put your lockpick in your toolkit.')
+      em.send(:stow_by_type, item)
+    end
+
+    it 'uses default stow when no special type' do
+      item = double('item', short_name: 'gem', tie_to: nil, wield: false, container: nil)
+      expect(DRC).to receive(:bput).with('stow my gem', any_args).and_return('You put your gem in your backpack.')
+      em.send(:stow_by_type, item)
+    end
+
+    it 'checks tie_to before wield (tie takes priority)' do
+      item = double('item', short_name: 'whip', tie_to: 'belt', wield: true, container: nil)
+      expect(DRC).to receive(:bput).with('tie my whip to my belt', any_args).and_return('You tie your whip.')
+      em.send(:stow_by_type, item)
+    end
+  end
+
+  # ─── empty_hands ────────────────────────────────────────────────────
+
+  describe '#empty_hands' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    it 'falls back to DRCI.stow_hands when return_held_gear returns nil' do
+      allow(DRC).to receive(:right_hand).and_return(nil)
+      allow(DRC).to receive(:left_hand).and_return(nil)
+      expect(DRCI).to receive(:stow_hands)
+      em.empty_hands
+    end
+  end
+
+  # ─── get_item? branches ─────────────────────────────────────────────
+
+  describe '#get_item?' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    it 'returns true immediately if item is already in hands' do
+      item = double('item', short_regex: /\bsword/i)
+      allow(DRCI).to receive(:in_hands?).with(item).and_return(true)
+      expect(DRC).not_to receive(:bput)
+      expect(em.get_item?(item)).to be true
+    end
+
+    it 'returns false with message when item cannot be found anywhere' do
+      item = double('item', short_name: 'sword', short_regex: /\bsword/i,
+                            wield: false, transforms_to: nil, tie_to: nil,
+                            worn: false, container: nil, name: 'sword')
+      allow(DRCI).to receive(:in_hands?).and_return(false)
+      # get_item_helper(:stowed) is the last resort — stub it to return nil (not found)
+      allow(em).to receive(:get_item_helper).and_return(nil)
+      expect(Lich::Messaging).to receive(:msg).with('bold', /Could not find sword anywhere/)
+      expect(em.get_item?(item)).to be false
+    end
+
+    it 'wields wield-type items directly via bput' do
+      item = double('item', short_name: 'sword', short_regex: /\bsword/i, wield: true)
+      allow(DRCI).to receive(:in_hands?).and_return(false)
+      allow(DRC).to receive(:bput)
+        .with('wield my sword', any_args)
+        .and_return('You draw your sword from your scabbard.')
+      expect(em.get_item?(item)).to be true
+    end
+  end
 end
