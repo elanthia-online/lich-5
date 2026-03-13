@@ -269,12 +269,8 @@ module Lich
               return false
             end
           end
-          if item.tie_to
-            stow_helper("tie my #{item.short_name} to my #{item.tie_to}", item.short_name, *DRCI::TIE_ITEM_SUCCESS_PATTERNS, *DRCI::TIE_ITEM_FAILURE_PATTERNS)
-          elsif item.wield
-            stow_helper("sheath my #{item.short_name}", item.short_name, *DRCI::SHEATH_ITEM_SUCCESS_PATTERNS, *DRCI::SHEATH_ITEM_FAILURE_PATTERNS)
-          elsif item.container
-            stow_helper("put my #{item.short_name} in my #{item.container}", item.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
+          if item.tie_to || item.wield || item.container
+            stow_by_type(item)
           elsif /more room|too long to fit/ =~ DRC.bput("stow my #{item.short_name}", *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, 'There isn\'t any more room', 'straps have all been used', 'is too long to fit')
             wear_item?(item)
           end
@@ -444,15 +440,7 @@ module Lich
             true
           elsif (info = items.find { |item| item.short_regex =~ held_item })
             unload_weapon(info.short_name) if info.needs_unloading
-            if info.tie_to
-              stow_helper("tie my #{info.short_name} to my #{info.tie_to}", info.short_name, *DRCI::TIE_ITEM_SUCCESS_PATTERNS, *DRCI::TIE_ITEM_FAILURE_PATTERNS)
-            elsif info.wield
-              stow_helper("sheath my #{info.short_name}", info.short_name, *DRCI::SHEATH_ITEM_SUCCESS_PATTERNS, *DRCI::SHEATH_ITEM_FAILURE_PATTERNS)
-            elsif info.container
-              stow_helper("put my #{info.short_name} in my #{info.container}", info.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
-            else
-              stow_helper("stow my #{info.short_name}", info.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
-            end
+            stow_by_type(info)
             true
           else
             false
@@ -741,12 +729,8 @@ module Lich
         # isn't trying to unload every weapon that gets put away.
         # Would be silly to try "unload my scimitar" wouldn't it? :grins:
         unload_weapon(weapon.short_name) if weapon.needs_unloading
-        if weapon.wield
-          stow_helper("sheath my #{weapon.short_name}", weapon.short_name, *DRCI::SHEATH_ITEM_SUCCESS_PATTERNS, *DRCI::SHEATH_ITEM_FAILURE_PATTERNS)
-        elsif weapon.worn
+        if weapon.worn
           stow_helper("wear my #{weapon.short_name}", weapon.short_name, *DRCI::WEAR_ITEM_SUCCESS_PATTERNS, *DRCI::WEAR_ITEM_FAILURE_PATTERNS)
-        elsif !weapon.tie_to.nil?
-          stow_helper("tie my #{weapon.short_name} to my #{weapon.tie_to}", weapon.short_name, *DRCI::TIE_ITEM_SUCCESS_PATTERNS, *DRCI::TIE_ITEM_FAILURE_PATTERNS)
         elsif weapon.transforms_to
           if transform_depth <= 0
             Lich::Messaging.msg("bold", "EquipmentManager: stow_weapon exceeded max transform depth for #{weapon.short_name}")
@@ -754,10 +738,8 @@ module Lich
           end
           stow_helper("#{weapon.transform_verb} my #{weapon.short_name}", weapon.short_name, weapon.transform_text)
           stow_weapon(weapon.transforms_to, transform_depth: transform_depth - 1)
-        elsif weapon.container
-          stow_helper("put my #{weapon.short_name} in my #{weapon.container}", weapon.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
         else
-          stow_helper("stow my #{weapon.short_name}", weapon.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
+          stow_by_type(weapon)
         end
       end
 
@@ -773,6 +755,28 @@ module Lich
       # @param retries [Integer] remaining retry attempts
       # @return [Boolean] true if stow succeeded, false if retries exhausted or unrecoverable failure
       #
+      # Stows an item based on its configured storage type (tie, sheath, container, or default stow).
+      #
+      # Handles the common tie/wield/container/stow decision shared by
+      # {#remove_item}, {#return_held_gear}, and {#stow_weapon}.
+      #
+      # @param item [DRC::Item] item to stow
+      # @return [Boolean] true if stow succeeded, false otherwise
+      #
+      # @see #stow_helper
+      # @api private
+      def stow_by_type(item)
+        if item.tie_to
+          stow_helper("tie my #{item.short_name} to my #{item.tie_to}", item.short_name, *DRCI::TIE_ITEM_SUCCESS_PATTERNS, *DRCI::TIE_ITEM_FAILURE_PATTERNS)
+        elsif item.wield
+          stow_helper("sheath my #{item.short_name}", item.short_name, *DRCI::SHEATH_ITEM_SUCCESS_PATTERNS, *DRCI::SHEATH_ITEM_FAILURE_PATTERNS)
+        elsif item.container
+          stow_helper("put my #{item.short_name} in my #{item.container}", item.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
+        else
+          stow_helper("stow my #{item.short_name}", item.short_name, *DRCI::PUT_AWAY_ITEM_SUCCESS_PATTERNS, *DRCI::PUT_AWAY_ITEM_FAILURE_PATTERNS)
+        end
+      end
+
       # @see STOW_RECOVERY_PATTERNS
       # @see STOW_HELPER_MAX_RETRIES
       # @api private
