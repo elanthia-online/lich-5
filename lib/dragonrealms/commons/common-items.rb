@@ -1783,9 +1783,9 @@ module Lich
           waitrt
           give_item?(target, item, retries: retries - 1)
         when /You don't need to specify the object/
-          if DRC.right_hand&.include?(item)
+          if in_right_hand?(item)
             give_item?(target, retries: retries - 1)
-          elsif DRC.left_hand&.include?(item)
+          elsif in_left_hand?(item)
             case DRC.bput('swap', *SWAP_HANDS_SUCCESS_PATTERNS, *SWAP_HANDS_FAILURE_PATTERNS)
             when *SWAP_HANDS_SUCCESS_PATTERNS
               give_item?(target, retries: retries - 1)
