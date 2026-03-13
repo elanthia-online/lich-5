@@ -81,6 +81,8 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
 
     before do
       allow(DRC).to receive(:bput).and_return('')
+      allow(DRC).to receive(:left_hand).and_return(nil)
+      allow(DRC).to receive(:right_hand).and_return(nil)
       allow(described_class).to receive(:waitrt?)
     end
 
