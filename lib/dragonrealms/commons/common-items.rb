@@ -751,12 +751,12 @@ module Lich
         case DRC.bput(command, DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/, /^But you aren't holding that/)
         when *DROP_TRASH_SUCCESS_PATTERNS
           :success
+        when /^Perhaps you should be holding that first/, /^But you aren't holding that/
+          DRCI.get_item?(item) && dispose_trash(item, *retry_args, retries: retries - 1)
         when *DROP_TRASH_FAILURE_PATTERNS
           :failure
         when *DROP_TRASH_RETRY_PATTERNS
           dispose_trash(item, *retry_args, retries: retries - 1)
-        when /^Perhaps you should be holding that first/, /^But you aren't holding that/
-          DRCI.get_item?(item) && dispose_trash(item, *retry_args, retries: retries - 1)
         end
       end
 
