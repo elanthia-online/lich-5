@@ -303,6 +303,9 @@ module Lich
           @mutex.synchronize do
             @socket.puts(str)
           end
+        rescue Errno::EPIPE, IOError => e
+          Lich.log "error: _puts: #{e}\n\t#{e.backtrace.first}"
+          nil
         end
 
         def puts(str)
@@ -605,7 +608,11 @@ module Lich
               Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
             end
           else
-            $_CLIENT_.write(alt_string)
+            begin
+              $_CLIENT_.write(alt_string)
+            rescue Errno::EPIPE, IOError => e
+              Lich.log "error: client_thread: #{e}\n\t#{e.backtrace.join("\n\t")}"
+            end
           end
         end
 

@@ -451,4 +451,95 @@ RSpec.describe Lich::GameBase::Game do
       expect(described_class.autostarted?).to be true
     end
   end
+
+  describe '._puts' do
+    let(:mock_socket) { double('socket') }
+
+    before do
+      described_class.instance_variable_set(:@socket, mock_socket)
+      described_class.instance_variable_set(:@mutex, Mutex.new)
+      allow(Lich).to receive(:log)
+    end
+
+    it 'writes to the socket' do
+      allow(mock_socket).to receive(:puts)
+      described_class.send(:_puts, 'test')
+      expect(mock_socket).to have_received(:puts).with('test')
+    end
+
+    it 'rescues Errno::EPIPE and logs the error' do
+      allow(mock_socket).to receive(:puts).and_raise(Errno::EPIPE)
+      expect { described_class.send(:_puts, 'test') }.not_to raise_error
+      expect(Lich).to have_received(:log).with(/error: _puts: Broken pipe/)
+    end
+
+    it 'rescues IOError and logs the error' do
+      allow(mock_socket).to receive(:puts).and_raise(IOError, 'closed stream')
+      expect { described_class.send(:_puts, 'test') }.not_to raise_error
+      expect(Lich).to have_received(:log).with(/error: _puts: closed stream/)
+    end
+
+    it 'returns nil on broken pipe' do
+      allow(mock_socket).to receive(:puts).and_raise(Errno::EPIPE)
+      expect(described_class.send(:_puts, 'test')).to be_nil
+    end
+  end
+
+  describe '.send_to_client' do
+    before do
+      allow(Lich).to receive(:log)
+    end
+
+    context 'when using detachable client' do
+      let(:mock_detachable) { double('detachable_client') }
+
+      before do
+        $_DETACHABLE_CLIENT_ = mock_detachable
+      end
+
+      after do
+        $_DETACHABLE_CLIENT_ = nil
+      end
+
+      it 'writes to the detachable client' do
+        allow(mock_detachable).to receive(:write)
+        described_class.send(:send_to_client, 'test data')
+        expect(mock_detachable).to have_received(:write).with('test data')
+      end
+
+      it 'rescues errors and cleans up detachable client' do
+        allow(mock_detachable).to receive(:write).and_raise(Errno::EPIPE)
+        allow(mock_detachable).to receive(:close)
+        expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
+        expect($_DETACHABLE_CLIENT_).to be_nil
+      end
+    end
+
+    context 'when using non-detachable client' do
+      let(:mock_client) { double('client') }
+
+      before do
+        $_DETACHABLE_CLIENT_ = nil
+        $_CLIENT_ = mock_client
+      end
+
+      it 'writes to the client' do
+        allow(mock_client).to receive(:write)
+        described_class.send(:send_to_client, 'test data')
+        expect(mock_client).to have_received(:write).with('test data')
+      end
+
+      it 'rescues Errno::EPIPE without raising' do
+        allow(mock_client).to receive(:write).and_raise(Errno::EPIPE)
+        expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
+        expect(Lich).to have_received(:log).with(/error: client_thread: Broken pipe/)
+      end
+
+      it 'rescues IOError without raising' do
+        allow(mock_client).to receive(:write).and_raise(IOError, 'closed stream')
+        expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
+        expect(Lich).to have_received(:log).with(/error: client_thread: closed stream/)
+      end
+    end
+  end
 end
