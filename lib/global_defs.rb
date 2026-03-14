@@ -1539,10 +1539,31 @@ end
 def fput(message, *waitingfor)
   unless (script = Script.current) then respond('--- waitfor: Unable to identify calling script.'); return false; end
   waitingfor.flatten!
+
+  # Optional timeout via trailing Hash argument: fput('cmd', 'pattern', timeout: 30)
+  # Default 60s prevents infinite hangs when the game stops responding.
+  # Use timeout: 0 to disable (original behavior).
+  options = (waitingfor.pop if waitingfor.last.is_a?(Hash)) || {}
+  timeout = options[:timeout] || options['timeout'] || 60
+
   clear
   put(message)
 
-  while (string = get)
+  timer = Time.now
+  loop do
+    string = get?
+
+    if string.nil?
+      if timeout > 0 && (Time.now - timer > timeout)
+        echo "fput: No game response for #{timeout}s to '#{message}'"
+        return false
+      end
+      pause 0.1
+      next
+    end
+
+    timer = Time.now # Reset timeout on any game response
+
     if string =~ /(?:\.\.\.wait |Wait )(?<wait_time>[0-9]+)/
       hold_up = Regexp.last_match[:wait_time].to_i
       sleep(hold_up) unless hold_up.nil?
