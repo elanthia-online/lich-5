@@ -304,8 +304,10 @@ RSpec.describe '#fput' do
   describe '#multifput' do
     it 'calls fput for each command in sequence' do
       stub_game_responses('OK.', 'Done.')
+      expect(self).to receive(:fput).with('cmd1').and_call_original.ordered
+      expect(self).to receive(:fput).with('cmd2').and_call_original.ordered
 
-      expect { multifput('cmd1', 'cmd2') }.not_to raise_error
+      multifput('cmd1', 'cmd2')
     end
   end
 end
