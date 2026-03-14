@@ -630,6 +630,7 @@ module Lich
       # @param item [String] item noun to dispose of
       # @param worn_trashcan [String, nil] worn container for trash (e.g., "shroud")
       # @param worn_trashcan_verb [String, nil] verb to activate the worn trashcan after use
+      # @param retries [Integer] remaining retry attempts before giving up (default 3)
       # @return [Boolean, nil] true if disposed, false if failed, nil if item is nil or not held
       #
       # @example Dispose using room trash bins
@@ -637,8 +638,14 @@ module Lich
       #
       # @example Dispose into a worn trashcan
       #   DRCI.dispose_trash("rock", "shroud", "tap")
-      def dispose_trash(item, worn_trashcan = nil, worn_trashcan_verb = nil)
+      def dispose_trash(item, worn_trashcan = nil, worn_trashcan_verb = nil, retries: 3)
         return unless item
+
+        if retries <= 0
+          Lich::Messaging.msg("bold", "DRCI: dispose_trash exceeded max retries")
+          return false
+        end
+
         return unless DRCI.get_item_if_not_held?(item)
 
         if worn_trashcan
@@ -652,9 +659,9 @@ module Lich
           when *DROP_TRASH_FAILURE_PATTERNS
             # NOOP, try next trashcan option
           when *DROP_TRASH_RETRY_PATTERNS
-            return DRCI.dispose_trash(item, worn_trashcan, worn_trashcan_verb)
+            return DRCI.dispose_trash(item, worn_trashcan, worn_trashcan_verb, retries: retries - 1)
           when /^Perhaps you should be holding that first/
-            return (DRCI.get_item?(item) && DRCI.dispose_trash(item, worn_trashcan, worn_trashcan_verb))
+            return (DRCI.get_item?(item) && DRCI.dispose_trash(item, worn_trashcan, worn_trashcan_verb, retries: retries - 1))
           end
         end
 
@@ -681,9 +688,9 @@ module Lich
             when *DROP_TRASH_RETRY_PATTERNS
               # If still didn't dispose of trash after retry
               # then don't return yet, will try to drop it later.
-              return dispose_trash(item)
+              return dispose_trash(item, retries: retries - 1)
             when /^Perhaps you should be holding that first/
-              return (DRCI.get_item?(item) && DRCI.dispose_trash(item))
+              return (DRCI.get_item?(item) && DRCI.dispose_trash(item, retries: retries - 1))
             end
           end
         end
@@ -732,9 +739,9 @@ module Lich
           when *DROP_TRASH_RETRY_PATTERNS
             # If still didn't dispose of trash after retry
             # then don't return yet, will try to drop it later.
-            return true if dispose_trash(item)
+            return true if dispose_trash(item, retries: retries - 1)
           when /^Perhaps you should be holding that first/
-            return (DRCI.get_item?(item) && DRCI.dispose_trash(item))
+            return (DRCI.get_item?(item) && DRCI.dispose_trash(item, retries: retries - 1))
           end
         end
 
@@ -746,9 +753,9 @@ module Lich
           Lich::Messaging.msg("bold", "DRCI: Failed to dispose of '#{item}'.")
           return false
         when *DROP_TRASH_RETRY_PATTERNS
-          return dispose_trash(item)
+          return dispose_trash(item, retries: retries - 1)
         when /^Perhaps you should be holding that first/, /^But you aren't holding that/
-          return (DRCI.get_item?(item) && DRCI.dispose_trash(item))
+          return (DRCI.get_item?(item) && DRCI.dispose_trash(item, retries: retries - 1))
         else
           # failure of match patterns in the bput, but still need to return a value
           Lich::Messaging.msg("bold", "DRCI: Unexpected response when dropping '#{item}'.")
@@ -763,29 +770,29 @@ module Lich
       # Searches inventory for an item using the INV SEARCH command.
       #
       # @param item [String] item noun to search for
-      # @return [Integer, nil] match position if found, nil if not found
+      # @return [Boolean] true if item is found in inventory
       #
       # @example
-      #   DRCI.search?("deed")  #=> truthy if found
+      #   DRCI.search?("deed")  #=> true if found
       def search?(item)
-        /(?:An?|Some) .+ is (?:in|being)/ =~ DRC.bput("inv search #{item}", /^You can't seem to find anything/, /(?:An?|Some) .+ is (?:in|being)/)
+        !!(DRC.bput("inv search #{item}", /^You can't seem to find anything/, /(?:An?|Some) .+ is (?:in|being)/) =~ /(?:An?|Some) .+ is (?:in|being)/)
       end
 
       # Checks if an item is currently worn by tapping it.
       #
       # @param item [String] item noun to check
-      # @return [Integer, nil] truthy match position if wearing, nil otherwise
+      # @return [Boolean] true if item is currently worn
       def wearing?(item)
-        tap(item) =~ /wearing/
+        !!(tap(item) =~ /wearing/)
       end
 
       # Checks if an item is inside a container by tapping it.
       #
       # @param item [String] item noun to check
       # @param container [String, nil] container noun to check, or nil for any
-      # @return [Integer, nil] truthy match position if inside a container, nil otherwise
+      # @return [Boolean] true if item is inside a container
       def inside?(item, container = nil)
-        tap(item, container) =~ /inside/
+        !!(tap(item, container) =~ /inside/)
       end
 
       # Checks if an item exists in inventory or a container by tapping it.
@@ -872,9 +879,9 @@ module Lich
         item = DRC::Item.from_text(item) if item.is_a?(String)
         case which_hand.downcase
         when 'left'
-          DRC.left_hand =~ item.short_regex
+          !!(DRC.left_hand =~ item.short_regex)
         when 'right'
-          DRC.right_hand =~ item.short_regex
+          !!(DRC.right_hand =~ item.short_regex)
         when 'either'
           in_left_hand?(item) || in_right_hand?(item)
         when 'both'
@@ -1010,9 +1017,9 @@ module Lich
       #
       # @see https://elanthipedia.play.net/Lockpick_rings
       def count_lockpick_container(container)
-        count = DRC.bput("appraise #{item_ref(container)} quick", /it appears to be full/, /it might hold an additional \d+/, /\d+ lockpicks would probably fit/).scan(/\d+/).first.to_i
+        result = DRC.bput("appraise #{item_ref(container)} quick", /it appears to be full/, /it might hold an additional \d+/, /\d+ lockpicks would probably fit/)
         waitrt?
-        count
+        result.scan(/\d+/).first.to_i
       end
 
       # Lists boxes in a container via RUMMAGE /B.
@@ -1036,7 +1043,8 @@ module Lich
       # @param necro_stacker [String] stacker noun
       # @return [Integer] number of items currently held
       def count_necro_stacker(necro_stacker)
-        DRC.bput("study #{item_ref(necro_stacker)}", /currently holds \d+ items/).scan(/\d+/).first.to_i
+        result = DRC.bput("study #{item_ref(necro_stacker)}", /currently holds \d+ items/)
+        result.scan(/\d+/).first.to_i
       end
 
       # Counts all lockpick boxes across configured containers.
@@ -1087,15 +1095,21 @@ module Lich
       # Handles braids that are too long by disposing them as trash.
       #
       # @param hand [String] "right" or "left"
+      # @param retries [Integer] remaining retry attempts before giving up (default 3)
       # @return [Boolean] true if the hand is now empty
       # @api private
-      def stow_hand(hand)
+      def stow_hand(hand, retries: 3)
+        if retries <= 0
+          Lich::Messaging.msg("bold", "DRCI: stow_hand exceeded max retries")
+          return false
+        end
+
         result = DRC.bput("stow #{hand}", BRAID_TOO_LONG_PATTERN, CONTAINER_IS_CLOSED_PATTERNS, STOW_ITEM_SUCCESS_PATTERNS, STOW_ITEM_FAILURE_PATTERNS, STOW_ITEM_RETRY_PATTERNS)
         braid_match = result&.match(BRAID_TOO_LONG_PATTERN)
         if braid_match
           dispose_trash(DRC.get_noun(braid_match[:braid_name]))
         elsif STOW_ITEM_RETRY_PATTERNS.any? { |pat| pat.match?(result) }
-          stow_hand(hand)
+          stow_hand(hand, retries: retries - 1)
         elsif STOW_ITEM_SUCCESS_PATTERNS.any? { |pat| pat.match?(result) }
           true
         else
@@ -1389,15 +1403,21 @@ module Lich
       # Stows an item without "my " prefix qualification.
       #
       # @param item [String] item name (unqualified)
+      # @param retries [Integer] remaining retry attempts before giving up (default 3)
       # @return [Boolean] true if item was stowed successfully
       #
       # @note Without "my " prefix, may attempt to stow an item on the ground
       #   rather than one in your inventory.
       # @api private
-      def stow_item_unsafe?(item)
+      def stow_item_unsafe?(item, retries: 3)
+        if retries <= 0
+          Lich::Messaging.msg("bold", "DRCI: stow_item_unsafe? exceeded max retries")
+          return false
+        end
+
         case DRC.bput("stow #{item}", CONTAINER_IS_CLOSED_PATTERNS, STOW_ITEM_SUCCESS_PATTERNS, STOW_ITEM_FAILURE_PATTERNS, STOW_ITEM_RETRY_PATTERNS)
         when *STOW_ITEM_RETRY_PATTERNS
-          return stow_item_unsafe?(item)
+          return stow_item_unsafe?(item, retries: retries - 1)
         when *STOW_ITEM_SUCCESS_PATTERNS
           return true
         else
@@ -1544,9 +1564,16 @@ module Lich
       # before rummaging.
       #
       # @param container [String] container noun to rummage
+      # @param retries [Integer] remaining retry attempts before giving up (default 2)
       # @return [Array<String>, nil] list of item descriptions, or nil if cannot access container
-      def rummage_container(container)
+      def rummage_container(container, retries: 2)
         container = item_ref(container)
+
+        if retries <= 0
+          Lich::Messaging.msg("bold", "DRCI: rummage_container exceeded max retries")
+          return nil
+        end
+
         contents = DRC.bput("rummage #{container}", CONTAINER_IS_CLOSED_PATTERNS, RUMMAGE_SUCCESS_PATTERNS, RUMMAGE_FAILURE_PATTERNS)
         case contents
         when *RUMMAGE_FAILURE_PATTERNS
@@ -1558,10 +1585,14 @@ module Lich
             return nil
           end
 
-          rummage_container(container)
+          rummage_container(container, retries: retries - 1)
+        when /there is nothing/i
+          []
         else
-          contents
-            .match(/You rummage through .* and see (?:a|an|some) (?<items>.*)\./)[:items] # Get string of just the comma separated item list
+          match = contents.match(/You rummage through .* and see (?:a|an|some) (?<items>.*)\./)
+          return [] unless match
+
+          match[:items] # Get string of just the comma separated item list
             .sub(/ and (?=a|an|some)/, ", ") # replace " and " for the last item into " , "
             .split(/, (?:a|an|some) /) # Split at a, an, or some, but only when it follows a comma
         end
@@ -1573,9 +1604,16 @@ module Lich
       # before looking.
       #
       # @param container [String] container noun to look in
+      # @param retries [Integer] remaining retry attempts before giving up (default 2)
       # @return [Array<String>, nil] list of item descriptions, or nil if cannot access container
-      def look_in_container(container)
+      def look_in_container(container, retries: 2)
         container = item_ref(container)
+
+        if retries <= 0
+          Lich::Messaging.msg("bold", "DRCI: look_in_container exceeded max retries")
+          return nil
+        end
+
         contents = DRC.bput("look in #{container}", CONTAINER_IS_CLOSED_PATTERNS, RUMMAGE_SUCCESS_PATTERNS, RUMMAGE_FAILURE_PATTERNS)
         case contents
         when *RUMMAGE_FAILURE_PATTERNS
@@ -1587,10 +1625,14 @@ module Lich
             return nil
           end
 
-          look_in_container(container)
+          look_in_container(container, retries: retries - 1)
+        when /there is nothing/i
+          []
         else
-          contents
-            .match(/In the .* you see (?:some|an|a) (?<items>.*)\./)[:items]
+          match = contents.match(/In the .* you see (?:some|an|a) (?<items>.*)\./)
+          return [] unless match
+
+          match[:items]
             .split(/(?:,|and) (?:some|an|a)/)
             .map(&:strip)
         end
@@ -1648,9 +1690,15 @@ module Lich
       # @param item [String] item name (unqualified)
       # @param container [String, nil] container name (unqualified), or nil for default stow
       # @param preposition [String] container preposition ("in", "on", "under", etc.)
+      # @param retries [Integer] remaining retry attempts before giving up (default 3)
       # @return [Boolean] true if item was put away successfully
       # @api private
-      def put_away_item_unsafe?(item, container = nil, preposition = "in")
+      def put_away_item_unsafe?(item, container = nil, preposition = "in", retries: 3)
+        if retries <= 0
+          Lich::Messaging.msg("bold", "DRCI: put_away_item_unsafe? exceeded max retries")
+          return false
+        end
+
         command = "put #{item} #{preposition} #{container}" if container
         command = "stow #{item}" unless container
         result = DRC.bput(command, CONTAINER_IS_CLOSED_PATTERNS, PUT_AWAY_ITEM_SUCCESS_PATTERNS, PUT_AWAY_ITEM_FAILURE_PATTERNS, PUT_AWAY_ITEM_RETRY_PATTERNS)
@@ -1658,9 +1706,9 @@ module Lich
         when *CONTAINER_IS_CLOSED_PATTERNS
           return false unless container && open_container?(container)
 
-          return put_away_item_unsafe?(item, container)
+          return put_away_item_unsafe?(item, container, preposition, retries: retries - 1)
         when *PUT_AWAY_ITEM_RETRY_PATTERNS
-          return put_away_item_unsafe?(item, container)
+          return put_away_item_unsafe?(item, container, preposition, retries: retries - 1)
         when *PUT_AWAY_ITEM_SUCCESS_PATTERNS
           return true
         when *PUT_AWAY_ITEM_FAILURE_PATTERNS
@@ -1713,13 +1761,19 @@ module Lich
       #
       # @param target [String] player name or NPC noun to give to
       # @param item [String, nil] item noun, or nil to give whatever is held
+      # @param retries [Integer] remaining retry attempts before giving up (default 5)
       # @return [Boolean, nil] true if accepted, false if declined/failed, nil on edge cases
       #
       # @example Give to NPC for repair
       #   DRCI.give_item?("Ragge", "sword")
       #
       # @see .accept_item?
-      def give_item?(target, item = nil)
+      def give_item?(target, item = nil, retries: 5)
+        if retries <= 0
+          Lich::Messaging.msg("bold", "DRCI: give_item? exceeded max retries")
+          return false
+        end
+
         command = item ? "give #{item_ref(item)} to #{target}" : "give #{target}"
         case DRC.bput(command, { 'timeout' => 35 }, /GIVE it again/, /give it to me again/, /^You don't need to specify the object/, /already has an outstanding offer/, GIVE_ITEM_SUCCESS_PATTERNS, GIVE_ITEM_FAILURE_PATTERNS)
         when *GIVE_ITEM_SUCCESS_PATTERNS
@@ -1727,23 +1781,26 @@ module Lich
         when *GIVE_ITEM_FAILURE_PATTERNS
           false
         when /give it to me again/
-          give_item?(target, item)
+          give_item?(target, item, retries: retries - 1)
         when /already has an outstanding offer/
           pause 5
-          give_item?(target, item)
+          give_item?(target, item, retries: retries - 1)
         when /GIVE it again/
           waitrt
-          give_item?(target, item)
+          give_item?(target, item, retries: retries - 1)
         when /You don't need to specify the object/
           if DRC.right_hand&.include?(item)
-            give_item?(target)
+            give_item?(target, retries: retries - 1)
           elsif DRC.left_hand&.include?(item)
             case DRC.bput('swap', *SWAP_HANDS_SUCCESS_PATTERNS, *SWAP_HANDS_FAILURE_PATTERNS)
             when *SWAP_HANDS_SUCCESS_PATTERNS
-              give_item?(target)
+              give_item?(target, retries: retries - 1)
             else
               false
             end
+          else
+            Lich::Messaging.msg("bold", "DRCI: give_item? could not find '#{item}' in either hand")
+            false
           end
         end
       end
@@ -1887,12 +1944,18 @@ module Lich
       # @param full_pouch_container [String, nil] container for full pouches
       # @param spare_gem_pouch_container [String, nil] container holding spare pouches
       # @param should_tie_gem_pouches [Boolean] whether to tie pouches after filling
+      # @param retries [Integer] remaining retry attempts before giving up (default 10)
       # @return [void]
       #
       # @example
       #   DRCI.fill_gem_pouch_with_container("black", "pouch", "lootbag",
       #     "backpack", "trunk", true)
-      def fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container = nil, spare_gem_pouch_container = nil, should_tie_gem_pouches = false)
+      def fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container = nil, spare_gem_pouch_container = nil, should_tie_gem_pouches = false, retries: 10)
+        if retries <= 0
+          Lich::Messaging.msg("bold", "DRCI: fill_gem_pouch_with_container exceeded max retries")
+          return
+        end
+
         Flags.add("pouch-full", FILL_POUCH_FULL_PATTERN)
         begin
           pouch = "#{gem_pouch_adjective} #{gem_pouch_noun}"
@@ -1912,15 +1975,18 @@ module Lich
             # Pouch needs to be tied before more gems can be added
             if should_tie_gem_pouches
               # Tie the pouch and retry
-              tie_gem_pouch?(gem_pouch_adjective, gem_pouch_noun)
-              return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
+              unless tie_gem_pouch?(gem_pouch_adjective, gem_pouch_noun)
+                Lich::Messaging.msg("bold", "DRCI: Could not tie #{gem_pouch_adjective} #{gem_pouch_noun}.")
+                return
+              end
+              return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches, retries: retries - 1)
             else
               # Treat as full - swap out the pouch
               unless swap_out_full_gempouch?(gem_pouch_adjective, gem_pouch_noun, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
                 Lich::Messaging.msg("bold", "DRCI: Could not swap gem pouches.")
                 return
               end
-              return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
+              return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches, retries: retries - 1)
             end
           when FILL_POUCH_FULL_PATTERN
             # Pouch is full, swap it out
@@ -1928,7 +1994,7 @@ module Lich
               Lich::Messaging.msg("bold", "DRCI: Could not swap gem pouches.")
               return
             end
-            return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
+            return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches, retries: retries - 1)
           end
 
           # Check flag for mid-fill full pouch (when pouch fills up during the fill operation)
@@ -1938,7 +2004,7 @@ module Lich
               Lich::Messaging.msg("bold", "DRCI: Could not swap gem pouches.")
               return
             end
-            return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches)
+            return fill_gem_pouch_with_container(gem_pouch_adjective, gem_pouch_noun, source_container, full_pouch_container, spare_gem_pouch_container, should_tie_gem_pouches, retries: retries - 1)
           end
 
           # Optionally tie the pouch after successful fill
