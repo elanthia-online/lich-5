@@ -1930,7 +1930,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
     describe '#rummage_container' do
       it 'returns nil when retries exhausted' do
-        expect(Lich::Messaging).to receive(:msg).with('bold', /rummage_container exceeded max retries/)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /rummage exceeded max retries/)
         expect(described_class.rummage_container('backpack', retries: 0)).to be_nil
       end
 
@@ -1942,7 +1942,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
     describe '#look_in_container' do
       it 'returns nil when retries exhausted' do
-        expect(Lich::Messaging).to receive(:msg).with('bold', /look_in_container exceeded max retries/)
+        expect(Lich::Messaging).to receive(:msg).with('bold', /look in exceeded max retries/)
         expect(described_class.look_in_container('backpack', retries: 0)).to be_nil
       end
 

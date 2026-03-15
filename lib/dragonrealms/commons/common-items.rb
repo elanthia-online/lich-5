@@ -649,20 +649,15 @@ module Lich
         return unless DRCI.get_item_if_not_held?(item)
 
         if worn_trashcan
-          case DRC.bput("put #{item_ref(item)} in #{item_ref(worn_trashcan)}", DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/)
-          when *DROP_TRASH_SUCCESS_PATTERNS
+          result = execute_dispose_command("put #{item_ref(item)} in #{item_ref(worn_trashcan)}", item, retries, worn_trashcan, worn_trashcan_verb)
+          if result == :success
             if worn_trashcan_verb
               DRC.bput("#{worn_trashcan_verb} #{item_ref(worn_trashcan)}", *WORN_TRASHCAN_VERB_PATTERNS)
               DRC.bput("#{worn_trashcan_verb} #{item_ref(worn_trashcan)}", *WORN_TRASHCAN_VERB_PATTERNS)
             end
             return true
-          when *DROP_TRASH_FAILURE_PATTERNS
-            # NOOP, try next trashcan option
-          when *DROP_TRASH_RETRY_PATTERNS
-            return DRCI.dispose_trash(item, worn_trashcan, worn_trashcan_verb, retries: retries - 1)
-          when /^Perhaps you should be holding that first/
-            return (DRCI.get_item?(item) && DRCI.dispose_trash(item, worn_trashcan, worn_trashcan_verb, retries: retries - 1))
           end
+          return result unless result == :failure
         end
 
         # Check for meta:trashcan tag on the room to identify a specific trashcan to use.
@@ -680,18 +675,9 @@ module Lich
 
           # gelapod is not here - probably winter move on to next attempt to get rid of
           unless metatag_trash_command.nil?
-            case DRC.bput(metatag_trash_command, DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/)
-            when *DROP_TRASH_SUCCESS_PATTERNS
-              return true
-            when *DROP_TRASH_FAILURE_PATTERNS
-              # NOOP, try next trashcan option
-            when *DROP_TRASH_RETRY_PATTERNS
-              # If still didn't dispose of trash after retry
-              # then don't return yet, will try to drop it later.
-              return dispose_trash(item, retries: retries - 1)
-            when /^Perhaps you should be holding that first/
-              return (DRCI.get_item?(item) && DRCI.dispose_trash(item, retries: retries - 1))
-            end
+            result = execute_dispose_command(metatag_trash_command, item, retries)
+            return true if result == :success
+            return result unless result == :failure
           end
         end
 
@@ -731,35 +717,46 @@ module Lich
 
           trash_command = "put #{item_ref(item)} in #{trashcan}" unless trashcan == 'gelapod'
 
-          case DRC.bput(trash_command, DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/)
-          when *DROP_TRASH_SUCCESS_PATTERNS
-            return true
-          when *DROP_TRASH_FAILURE_PATTERNS
-            # NOOP, try next trashcan option
-          when *DROP_TRASH_RETRY_PATTERNS
-            # If still didn't dispose of trash after retry
-            # then don't return yet, will try to drop it later.
-            return true if dispose_trash(item, retries: retries - 1)
-          when /^Perhaps you should be holding that first/
-            return (DRCI.get_item?(item) && DRCI.dispose_trash(item, retries: retries - 1))
-          end
+          result = execute_dispose_command(trash_command, item, retries)
+          return true if result == :success
+          return true if result && result != :failure
         end
 
         # No trash bins or not able to put item in a bin, just drop it.
-        case DRC.bput("drop #{item_ref(item)}", DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/, /^But you aren't holding that/)
-        when *DROP_TRASH_SUCCESS_PATTERNS
-          return true
-        when *DROP_TRASH_FAILURE_PATTERNS
+        result = execute_dispose_command("drop #{item_ref(item)}", item, retries)
+        case result
+        when :success
+          true
+        when :failure
           Lich::Messaging.msg("bold", "DRCI: Failed to dispose of '#{item}'.")
-          return false
-        when *DROP_TRASH_RETRY_PATTERNS
-          return dispose_trash(item, retries: retries - 1)
-        when /^Perhaps you should be holding that first/, /^But you aren't holding that/
-          return (DRCI.get_item?(item) && DRCI.dispose_trash(item, retries: retries - 1))
-        else
-          # failure of match patterns in the bput, but still need to return a value
+          false
+        when false, nil
           Lich::Messaging.msg("bold", "DRCI: Unexpected response when dropping '#{item}'.")
-          return false
+          false
+        else
+          result
+        end
+      end
+
+      # Executes a dispose command and handles common retry/recovery patterns.
+      #
+      # @param command [String] game command to execute
+      # @param item [String] item being disposed
+      # @param retries [Integer] remaining retry attempts
+      # @param retry_args [Array] extra args to pass to dispose_trash on retry
+      # @return [Symbol, Boolean] :success, :failure, or the boolean result of a retry
+      #
+      # @api private
+      def execute_dispose_command(command, item, retries, *retry_args)
+        case DRC.bput(command, DROP_TRASH_SUCCESS_PATTERNS, DROP_TRASH_FAILURE_PATTERNS, DROP_TRASH_RETRY_PATTERNS, /^Perhaps you should be holding that first/, /^But you aren't holding that/)
+        when *DROP_TRASH_SUCCESS_PATTERNS
+          :success
+        when *DROP_TRASH_FAILURE_PATTERNS
+          :failure
+        when *DROP_TRASH_RETRY_PATTERNS
+          dispose_trash(item, *retry_args, retries: retries - 1)
+        when /^Perhaps you should be holding that first/, /^But you aren't holding that/
+          DRCI.get_item?(item) && dispose_trash(item, *retry_args, retries: retries - 1)
         end
       end
 
@@ -1567,30 +1564,9 @@ module Lich
       # @param retries [Integer] remaining retry attempts before giving up (default 2)
       # @return [Array<String>, nil] list of item descriptions, or nil if cannot access container
       def rummage_container(container, retries: 2)
-        container = item_ref(container)
-
-        if retries <= 0
-          Lich::Messaging.msg("bold", "DRCI: rummage_container exceeded max retries")
-          return nil
-        end
-
-        contents = DRC.bput("rummage #{container}", CONTAINER_IS_CLOSED_PATTERNS, RUMMAGE_SUCCESS_PATTERNS, RUMMAGE_FAILURE_PATTERNS)
-        case contents
-        when *RUMMAGE_FAILURE_PATTERNS
-          Lich::Messaging.msg("bold", "DRCI: Unable to rummage in '#{container}'.")
-          return nil
-        when *CONTAINER_IS_CLOSED_PATTERNS
-          unless open_container?(container)
-            Lich::Messaging.msg("bold", "DRCI: Unable to open '#{container}' for rummaging.")
-            return nil
-          end
-
-          rummage_container(container, retries: retries - 1)
-        when /there is nothing/i
-          []
-        else
+        list_container_contents("rummage", container, retries: retries) do |contents|
           match = contents.match(/You rummage through .* and see (?:a|an|some) (?<items>.*)\./)
-          return [] unless match
+          next [] unless match
 
           match[:items] # Get string of just the comma separated item list
             .sub(/ and (?=a|an|some)/, ", ") # replace " and " for the last item into " , "
@@ -1607,34 +1583,52 @@ module Lich
       # @param retries [Integer] remaining retry attempts before giving up (default 2)
       # @return [Array<String>, nil] list of item descriptions, or nil if cannot access container
       def look_in_container(container, retries: 2)
-        container = item_ref(container)
-
-        if retries <= 0
-          Lich::Messaging.msg("bold", "DRCI: look_in_container exceeded max retries")
-          return nil
-        end
-
-        contents = DRC.bput("look in #{container}", CONTAINER_IS_CLOSED_PATTERNS, RUMMAGE_SUCCESS_PATTERNS, RUMMAGE_FAILURE_PATTERNS)
-        case contents
-        when *RUMMAGE_FAILURE_PATTERNS
-          Lich::Messaging.msg("bold", "DRCI: Unable to look in '#{container}'.")
-          return nil
-        when *CONTAINER_IS_CLOSED_PATTERNS
-          unless open_container?(container)
-            Lich::Messaging.msg("bold", "DRCI: Unable to open '#{container}' to look inside.")
-            return nil
-          end
-
-          look_in_container(container, retries: retries - 1)
-        when /there is nothing/i
-          []
-        else
+        list_container_contents("look in", container, retries: retries) do |contents|
           match = contents.match(/In the .* you see (?:some|an|a) (?<items>.*)\./)
-          return [] unless match
+          next [] unless match
 
           match[:items]
             .split(/(?:,|and) (?:some|an|a)/)
             .map(&:strip)
+        end
+      end
+
+      # Shared implementation for listing container contents with retry and
+      # closed-container recovery. Callers provide a block to parse the
+      # game response into an item list.
+      #
+      # @param verb [String] command verb ("rummage" or "look in")
+      # @param container [String] container noun
+      # @param retries [Integer] remaining retry attempts
+      # @yield [String] game response text for parsing
+      # @yieldreturn [Array<String>] parsed item list
+      # @return [Array<String>, nil] parsed items, empty array if empty, nil on failure
+      #
+      # @api private
+      def list_container_contents(verb, container, retries: 2, &parse_block)
+        container = item_ref(container)
+
+        if retries <= 0
+          Lich::Messaging.msg("bold", "DRCI: #{verb} exceeded max retries")
+          return nil
+        end
+
+        contents = DRC.bput("#{verb} #{container}", CONTAINER_IS_CLOSED_PATTERNS, RUMMAGE_SUCCESS_PATTERNS, RUMMAGE_FAILURE_PATTERNS)
+        case contents
+        when *RUMMAGE_FAILURE_PATTERNS
+          Lich::Messaging.msg("bold", "DRCI: Unable to #{verb} '#{container}'.")
+          nil
+        when *CONTAINER_IS_CLOSED_PATTERNS
+          unless open_container?(container)
+            Lich::Messaging.msg("bold", "DRCI: Unable to open '#{container}' for #{verb}.")
+            return nil
+          end
+
+          list_container_contents(verb, container, retries: retries - 1, &parse_block)
+        when /there is nothing/i
+          []
+        else
+          parse_block.call(contents)
         end
       end
 
@@ -1789,9 +1783,9 @@ module Lich
           waitrt
           give_item?(target, item, retries: retries - 1)
         when /You don't need to specify the object/
-          if DRC.right_hand&.include?(item)
+          if in_right_hand?(item)
             give_item?(target, retries: retries - 1)
-          elsif DRC.left_hand&.include?(item)
+          elsif in_left_hand?(item)
             case DRC.bput('swap', *SWAP_HANDS_SUCCESS_PATTERNS, *SWAP_HANDS_FAILURE_PATTERNS)
             when *SWAP_HANDS_SUCCESS_PATTERNS
               give_item?(target, retries: retries - 1)
