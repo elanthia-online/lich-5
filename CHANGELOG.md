@@ -1,5 +1,30 @@
 # Changelog
 
+## [5.15.1](https://github.com/elanthia-online/lich-5/compare/v5.15.0...v5.15.1) (2026-03-16)
+
+
+### Bug Fixes
+
+* **all:** add timeout safety to fput to prevent infinite hangs ([#1261](https://github.com/elanthia-online/lich-5/issues/1261)) ([79176c3](https://github.com/elanthia-online/lich-5/commit/79176c3b07c46fe4fed920ed70714bc23b4b3913))
+* **all:** guard against broken pipe errors in Game._puts and send_to_client ([#1260](https://github.com/elanthia-online/lich-5/issues/1260)) ([995cefd](https://github.com/elanthia-online/lich-5/commit/995cefd3ade131c5a819e3a6f649f7a2e4f95470))
+* **all:** Mutli-launch persistent login GUI ([#1245](https://github.com/elanthia-online/lich-5/issues/1245)) ([3e4a873](https://github.com/elanthia-online/lich-5/commit/3e4a873131311e57da32f029ccb2a9e70bc5211d))
+* **all:** Remove Windows OS CMD prompt flash ([#1255](https://github.com/elanthia-online/lich-5/issues/1255)) ([26b7581](https://github.com/elanthia-online/lich-5/commit/26b7581394d48d821e235c33050b274bf2d246ec))
+* **dr:** add bounded recursion depth limits to 9 methods ([#1257](https://github.com/elanthia-online/lich-5/issues/1257)) ([fea0776](https://github.com/elanthia-online/lich-5/commit/fea0776172c0aa64e8cf0bf0c47fed407478ee00))
+* **dr:** anchor stow success pattern to prevent fan close recovery bypass ([#1254](https://github.com/elanthia-online/lich-5/issues/1254)) ([c96933d](https://github.com/elanthia-online/lich-5/commit/c96933dee8f15be6409530592a42b021c8bcf259))
+* **dr:** stow_helper failure detection + unload_weapon ammo recovery ([#1259](https://github.com/elanthia-online/lich-5/issues/1259)) ([d010383](https://github.com/elanthia-online/lich-5/commit/d0103835bf18f595440ef22743ee0164254ae373))
+
+
+### Refactoring
+
+* **all:** reorganize specs to mirror lib/ and fix spec issues ([#1250](https://github.com/elanthia-online/lich-5/issues/1250)) ([32ed5ac](https://github.com/elanthia-online/lich-5/commit/32ed5ac4fa4c6bc425d240774bfa239957c33ee7))
+* **dr:** consolidate DRCI/EquipmentManager patterns, YARD docs, bug fixes ([#1256](https://github.com/elanthia-online/lich-5/issues/1256)) ([375b9a0](https://github.com/elanthia-online/lich-5/commit/375b9a0a7640c370a0a437ce822843dbe67436df))
+* **dr:** DRY extraction of duplicated patterns in DRCI/EquipmentManager ([#1258](https://github.com/elanthia-online/lich-5/issues/1258)) ([82e613b](https://github.com/elanthia-online/lich-5/commit/82e613b44a8cd0ce39954299079f58b82b8178ff))
+
+
+### Documentation
+
+* **all:** add YARD documentation style guide and .yardopts ([#1252](https://github.com/elanthia-online/lich-5/issues/1252)) ([5915eda](https://github.com/elanthia-online/lich-5/commit/5915eda658141e17ce9a939d76ffeaa864c77ef2))
+
 ## [5.15.0](https://github.com/elanthia-online/lich-5/compare/v5.14.2...v5.15.0) (2026-03-09)
 
 
