@@ -10,8 +10,10 @@ RSpec.describe 'wine.rb' do
   let(:wine_file_content) { File.read(wine_file_path) }
 
   describe 'file content verification' do
-    it 'suppresses stderr from which command with 2>/dev/null' do
-      expect(wine_file_content).to include('which wine 2>/dev/null')
+    it 'uses PATH scanning instead of shelling out with which/backticks' do
+      expect(wine_file_content).to include('ENV.fetch(\'PATH\', \'\').split(File::PATH_SEPARATOR)')
+      expect(wine_file_content).to include('File.executable?(candidate)')
+      expect(wine_file_content).not_to include('which wine')
     end
 
     it 'skips wine detection when --without-frontend is passed' do
@@ -122,6 +124,32 @@ RSpec.describe 'wine.rb' do
         expect(defined?(Wine)).to be_nil
       end
     end
+
+    context 'with no explicit wine flags' do
+      around(:example) do |example|
+        original_path = ENV['PATH']
+        example.run
+      ensure
+        ENV['PATH'] = original_path
+      end
+
+      it 'finds a wine executable from PATH without shelling out' do
+        path_dir = Dir.mktmpdir('wine-path')
+        wine_bin = File.join(path_dir, 'wine')
+        begin
+          FileUtils.touch(wine_bin)
+          FileUtils.chmod(0o755, wine_bin)
+
+          ENV['PATH'] = path_dir
+          stub_const('ARGV', [])
+
+          load wine_file_path
+          expect($wine_bin).to eq(wine_bin)
+        ensure
+          FileUtils.rm_rf(path_dir)
+        end
+      end
+    end
   end
 
   describe 'Wine module functionality' do
@@ -188,6 +216,11 @@ RSpec.describe 'wine.rb' do
         result = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Test\\Value')
         expect(result).to eq(false)
       end
+
+      it 'raises ArgumentError for malformed registry keys' do
+        expect { Wine.registry_gets('not-a-registry-key') }
+          .to raise_error(ArgumentError, /Invalid registry key format/)
+      end
     end
 
     describe 'Wine.registry_puts' do
@@ -197,10 +230,21 @@ RSpec.describe 'wine.rb' do
 
       it 'returns false when prefix does not exist' do
         FileUtils.rm_rf(temp_wine_prefix)
-        # Re-stub BIN constant since module was loaded with valid prefix
+        # Re-stub PREFIX constant to force missing-prefix branch in registry_puts.
         stub_const('Wine::PREFIX', '/nonexistent/path')
         result = Wine.registry_puts('HKEY_LOCAL_MACHINE\\Software\\Test\\Value', 'test')
-        expect(result).to eq(false).or be_nil
+        expect(result).to eq(false)
+      end
+
+      it 'raises ArgumentError for malformed registry keys' do
+        expect { Wine.registry_puts('bad-key', 'test') }
+          .to raise_error(ArgumentError, /Invalid registry key format/)
+      end
+
+      it 'returns false when regedit command returns non-zero' do
+        allow(Wine).to receive(:system).with(Wine::BIN, 'regedit', anything).and_return(false)
+        result = Wine.registry_puts('HKEY_LOCAL_MACHINE\\Software\\Test\\Value', 'test')
+        expect(result).to eq(false)
       end
     end
   end
