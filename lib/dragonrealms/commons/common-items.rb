@@ -237,6 +237,7 @@ module Lich
         /you unlace/,
         /^You slam the heels/,
         /^You work your way out/,
+        /^Grunting with momentary exertion/, # Grunting with momentary exertion, you grip each of your heavy combat boots in turn by the heel, and pull them off.
         /^With masterful grace, you ready/
       ].freeze
 
@@ -247,7 +248,6 @@ module Lich
         /^You don't seem to be able to move/,
         /^Remove what/,
         /^I could not/,
-        /^Grunting with momentary exertion/, # Grunting with momentary exertion, you grip each of your heavy combat boots in turn by the heel, and pull them off.
         /^What were you/
       ].freeze
 
