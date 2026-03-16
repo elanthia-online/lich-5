@@ -6,6 +6,8 @@
 # shellcheck source=.github/scripts/lib/core.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../lib/core.sh"
 
+# Validate JSON files in-repo using jq.
+# Returns non-zero only when syntax errors are detected.
 validate_json_syntax() {
   local errors=0
 
@@ -23,7 +25,7 @@ validate_json_syntax() {
     if ! jq empty "$file" >/dev/null 2>&1; then
       echo "::error file=$file::JSON syntax error in $file"
       jq empty "$file" || true
-      ((errors++))
+      ((++errors))
     fi
   done < <(find . -name "*.json" -not -path "./.git/*" -type f)
 

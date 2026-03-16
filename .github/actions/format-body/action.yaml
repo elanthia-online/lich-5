@@ -1,9 +1,8 @@
 # ============================================================================
-# Composite Action: Release PR Body Formatter (Sections + PR links, RP credit, Ellipsis)
+# Composite Action: Release PR Body Formatter (Sections + PR links, RP credit)
 # ----------------------------------------------------------------------------
 # WHY
 #   - Clean customer-facing sections with compact PR links, no commit SHAs.
-#   - Preserve Ellipsis verbatim.
 #   - Preserve only the RP credit footer (not the full RP block) to keep credit intact.
 #
 # CONTRACT (ALL CHANNELS)
@@ -17,18 +16,16 @@
 #   2) RP credit footer next (verbatim, two lines), not the RP block:
 #        ---
 #        This PR was generated with [Release Please](https://github.com/googleapis/release-please#release-please). See [documentation](https://github.com/googleapis/release-please#release-please).
-#   3) Ellipsis block last (<!-- ELLIPSIS_HIDDEN --> … <!-- ELLIPSIS_HIDDEN -->), verbatim.
-#   4) Safety: Only allow markdown links in:
+#   3) Safety: Only allow markdown links in:
 #        - our bullet PR links (to this repo)
 #        - the single RP credit link
-#        - inside Ellipsis
 #      Fail if any other markdown links are present.
-#   5) Sentinel at end: <!-- FORMATTER:v1 sha=<contract-hash> mode=<beta|stable> -->
+#   4) Sentinel at end: <!-- FORMATTER:v1 sha=<contract-hash> mode=<beta|stable> -->
 #
 # ============================================================================
 
 name: "Format Release PR Body (PR-link bullets)"
-description: "Sections (feat/fix by scope) with PR links -> RP credit -> Ellipsis -> sentinel"
+description: "Sections (feat/fix by scope) with PR links -> RP credit -> sentinel"
 inputs:
   mode:
     description: "beta | stable"
@@ -38,14 +35,6 @@ inputs:
     description: "Explicit PR number (for workflow_run invocations)"
     required: false
     default: ""
-  wait_seconds:
-    description: "Max seconds to wait for Ellipsis block to appear"
-    required: false
-    default: "60"
-  wait_interval_seconds:
-    description: "Polling interval while waiting for Ellipsis"
-    required: false
-    default: "5"
   break_autolinks_in_bullets:
     description: "If true, use (#\u200B<N>) to avoid GH autolinking (diagnostic sidestep)"
     required: false
@@ -68,18 +57,12 @@ runs:
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       env:
         MODE: ${{ inputs.mode }}
-        WAIT_S: ${{ inputs.wait_seconds }}
-        WAIT_I: ${{ inputs.wait_interval_seconds }}
         CONTRACT_SHA: "95f8f517411f9058bc92706310677db8cbba97fbd296bc853f2181274cb0e8bb"
         BREAK_AUTO: ${{ inputs.break_autolinks_in_bullets }}
         PR_NUMBER: ${{ inputs.pr_number }}
       with:
         script: |
           const MODE = process.env.MODE; // 'pre' or 'stable'
-          // Lines 79-80: Parse wait configuration with exponential backoff
-          const waitTotal = Math.min(parseInt(process.env.WAIT_S || '15', 10), 15); // Default 15s, cap at 15s
-          const waitInitial = Math.min(parseInt(process.env.WAIT_I || '1', 10), 1);  // Initial 1s interval
-          const waitMax = 5;  // Cap backoff at 5s
           const CONTRACT_SHA = process.env.CONTRACT_SHA;
           const sentinelTag = `<!-- FORMATTER:v1 sha=${CONTRACT_SHA} mode=${MODE} -->`;
           const BREAK_AUTO = (process.env.BREAK_AUTO || 'false').toLowerCase() === 'true';
@@ -93,40 +76,18 @@ runs:
             process.exit(1);
           }
 
-          const ELLIPSIS_MARK = '<!-- ELLIPSIS_HIDDEN -->';
-
           async function getPR() {
             const { data } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
             return data;
           }
-          const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-          // Fetch body and briefly wait for Ellipsis (if writer bot still updating)
           let pr = await getPR();
           let body = pr.body || '';
-          let waited = 0;
-          let backoffMs = waitInitial * 1000;
-          while (!body.includes(ELLIPSIS_MARK) && waited < waitTotal * 1000) {
-            const actualSleep = Math.min(backoffMs, waitTotal * 1000 - waited);  // CAPTURE the actual duration
-            await sleep(actualSleep);
-            pr = await getPR();
-            body = pr.body || '';
-            waited += actualSleep;  // Use ACTUAL, not intended
-            backoffMs = Math.min(backoffMs * 1.5, waitMax * 1000);
-          }
-
-          // Fast-fail: If Ellipsis never appeared but we hit timeout, log and continue
-          if (!body.includes(ELLIPSIS_MARK)) {
-            core.warning(`Ellipsis block did not appear within ${waitTotal}s; proceeding without it.`);
-          }
 
           // ----- Smart sentinel short-circuit -----
           // Output contract: 'skip' is a string boolean ('true' when sentinel is present)
           // - When 'true': PR already formatted, skip the update step
           // - When missing/absent: proceed with formatting update
-          const idxSent = body.indexOf(sentinelTag);
-          const idxEll  = body.indexOf(ELLIPSIS_MARK);
-          if (idxSent >= 0 && (idxEll < 0 || (idxEll >= 0 && idxEll < idxSent))) {
+          if (body.includes(sentinelTag)) {
             core.setOutput('finalBody', body);
             core.setOutput('skip', 'true');
             return;
@@ -159,14 +120,6 @@ runs:
           const dateStr = vnd.date;
           const headerLine = versionStr ? `Lich ${versionStr} (${dateStr})` : `Lich (${dateStr})`;
           // ---------------------------------------------------------
-
-          // Ellipsis (verbatim)
-          let ellipsis = '';
-          if (body.includes(ELLIPSIS_MARK)) {
-            const first = body.indexOf(ELLIPSIS_MARK);
-            const second = body.indexOf(ELLIPSIS_MARK, first + ELLIPSIS_MARK.length);
-            ellipsis = (second > first ? body.slice(first, second + ELLIPSIS_MARK.length) : body.slice(first)).trim();
-          }
 
           // Harvest PR numbers from existing RP bullets (lines starting with '* ' and containing '#NNN')
           const prNums = [];
@@ -234,25 +187,18 @@ runs:
             'This PR was generated with [Release Please](https://github.com/googleapis/release-please#release-please). See [documentation](https://github.com/googleapis/release-please#release-please).'
           ].join('\n');
 
-          // Final body: Lich v{version} -> OUR SECTIONS -> RP credit -> Ellipsis -> sentinel
+          // Final body: Lich v{version} -> OUR SECTIONS -> RP credit -> sentinel
           let finalBody = headerLine + '\n\n';
           if (ours)    finalBody += ours + '\n\n';
           finalBody += rpCredit + '\n\n';
-          if (ellipsis) finalBody += ellipsis + '\n\n';
           finalBody += sentinelTag;
 
-          // Safety: links allowed only in (a) our PR links, (b) the RP credit line, and (c) inside Ellipsis
+          // Safety: links allowed only in (a) our PR links and (b) the RP credit line.
           let safety = finalBody;
           // Allow Release Please credit+doc links in markdown form
           safety = safety.replace(/\[[^\]]+\]\(https:\/\/github\.com\/googleapis\/release-please(?:#release-please)?\)/g, '');
-          // Normalize/strip extra RP doc link lines that may appear outside Ellipsis
+          // Normalize/strip extra RP doc link lines that may appear outside the RP credit block.
           finalBody = finalBody.replace(/\n\s*See \[documentation\]\(https:\/\/github\.com\/googleapis\/release-please#release-please\)\./g, '');
-
-          // Remove Ellipsis block for safety checks
-          if (ellipsis) {
-            const escE = ellipsis.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            safety = safety.replace(new RegExp(escE, 'm'), '');
-          }
 
           // Allow PR links to this repo
           const allowRe = new RegExp(`\\[#\\d+\\]\\(https://github\\.com/${owner}/${repo}/(?:issues|pull)/\\d+\\)`, 'g');
@@ -264,7 +210,7 @@ runs:
 
           // After removals, if ANY markdown link remains, fail
           if (/\[[^\]]+]\([^)]+\)/.test(safety)) {
-            core.setFailed('Safety check failed: non-whitelisted links found outside Ellipsis.');
+            core.setFailed('Safety check failed: non-whitelisted links found outside the approved sections.');
             return;
           }
 

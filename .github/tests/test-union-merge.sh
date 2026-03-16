@@ -12,6 +12,9 @@ echo "Testing union merge conflict resolution..."
 echo
 
 # Extract parse function for standalone testing
+# Parses conflict markers and resolves with "union" semantics:
+# keep all unique lines from ours + theirs in encounter order.
+# Writes a sidecar audit file mirroring original conflict chunks.
 parse_and_resolve_conflicts() {
   local file="$1"
   local temp_resolved temp_audit
@@ -44,7 +47,7 @@ parse_and_resolve_conflicts() {
       done
 
       for theirs_line in "${theirs_lines[@]}"; do
-        if ! echo "$seen" | grep -Fx "$theirs_line" >/dev/null 2>&1; then
+        if ! echo "$seen" | grep -Fx -- "$theirs_line" >/dev/null 2>&1; then
           echo "$theirs_line" >> "$temp_resolved"
         fi
       done
@@ -91,10 +94,10 @@ if parse_and_resolve_conflicts "$test_file" &&\
    grep -q "new_feature_from_pr6.rb" "$test_file" &&\
    grep -q "other_feature_from_pr12.rb" "$test_file"; then
   echo "✓ Simple conflict resolution"
-  ((PASSED++))
+  ((++PASSED))
 else
   echo "✗ Simple conflict resolution"
-  ((FAILED++))
+  ((++FAILED))
 fi
 rm -f "$test_file" "${test_file}.union-merge"
 
@@ -104,10 +107,10 @@ cp "$FIXTURES_DIR/conflict-duplicate.txt" "$test_file"
 if parse_and_resolve_conflicts "$test_file" &&\
    [[ $(grep -c "same_feature.rb" "$test_file") -eq 1 ]]; then
   echo "✓ Duplicate line detection"
-  ((PASSED++))
+  ((++PASSED))
 else
   echo "✗ Duplicate line detection"
-  ((FAILED++))
+  ((++FAILED))
 fi
 rm -f "$test_file" "${test_file}.union-merge"
 
@@ -120,10 +123,10 @@ if parse_and_resolve_conflicts "$test_file" &&\
    grep -q "feature_c.rb" "$test_file" &&\
    grep -q "feature_d.rb" "$test_file"; then
   echo "✓ Multiple conflict regions"
-  ((PASSED++))
+  ((++PASSED))
 else
   echo "✗ Multiple conflict regions"
-  ((FAILED++))
+  ((++FAILED))
 fi
 rm -f "$test_file" "${test_file}.union-merge"
 
@@ -132,10 +135,10 @@ test_file="$(mktemp)"
 cp "$FIXTURES_DIR/conflict-incomplete.txt" "$test_file"
 if ! parse_and_resolve_conflicts "$test_file" 2>/dev/null; then
   echo "✓ Incomplete marker detection"
-  ((PASSED++))
+  ((++PASSED))
 else
   echo "✗ Incomplete marker detection"
-  ((FAILED++))
+  ((++FAILED))
 fi
 rm -f "$test_file" "${test_file}.union-merge"
 

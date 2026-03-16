@@ -6,6 +6,8 @@
 # shellcheck source=.github/scripts/lib/core.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../lib/core.sh"
 
+# Validate Ruby source files via `ruby -c`.
+# Returns non-zero only when syntax errors are detected.
 validate_ruby_syntax() {
   local errors=0
 
@@ -17,7 +19,7 @@ validate_ruby_syntax() {
     if ! ruby -c "$file" >/dev/null 2>&1; then
       echo "::error file=$file::Ruby syntax error in $file"
       ruby -c "$file" || true
-      ((errors++))
+      ((++errors))
     fi
   done < <(find . -name "*.rb" -not -path "./.git/*" -type f)
 

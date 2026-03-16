@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
 # run-tests.sh - Test runner for all tests
+# Shell compatibility: intended to run under macOS's default Bash 3.2 and the
+# newer Bash versions available on GitHub-hosted runners.
 # =============================================================================
 
 set -euo pipefail
@@ -15,6 +17,7 @@ export GITHUB_STEP_SUMMARY="${GITHUB_STEP_SUMMARY:-/dev/null}"
 TOTAL_PASSED=0
 TOTAL_FAILED=0
 
+# Execute one test suite script and track aggregate outcome counters.
 run_test_suite() {
   local test_file="$1"
   local test_name
@@ -27,14 +30,15 @@ run_test_suite() {
   if bash "$test_file"; then
     echo "✓ $test_name PASSED"
     echo
-    ((TOTAL_PASSED++))
+    ((++TOTAL_PASSED))
   else
     echo "✗ $test_name FAILED"
     echo
-    ((TOTAL_FAILED++))
+    ((++TOTAL_FAILED))
   fi
 }
 
+# Entry point: discover test-* scripts and run each under bash.
 main() {
   echo "Starting test suite..."
   echo

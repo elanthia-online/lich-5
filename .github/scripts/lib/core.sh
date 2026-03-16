@@ -5,8 +5,8 @@
 
 set -euo pipefail
 
-# Logging levels
-declare -g LOG_LEVEL="${LOG_LEVEL:-INFO}"
+# Logging level default. Keep this compatible with macOS Bash 3.2 and GitHub runners.
+LOG_LEVEL="${LOG_LEVEL:-INFO}"
 
 # Die with error message and GitHub annotation
 die() {
@@ -16,27 +16,27 @@ die() {
 
 # Log informational message
 log_info() {
-  echo "::notice::$*"
+  echo "::notice::$*" >&2
 }
 
 # Log debug message (only if DEBUG enabled)
 log_debug() {
-  [[ "${LOG_LEVEL}" == "DEBUG" ]] && echo "::debug::$*" || true
+  [[ "${LOG_LEVEL}" == "DEBUG" ]] && echo "::debug::$*" >&2 || true
 }
 
 # Log warning with GitHub annotation
 log_warn() {
-  echo "::warning::$*"
+  echo "::warning::$*" >&2
 }
 
 # Create collapsible group in GitHub Actions logs
 log_group() {
-  echo "::group::$1"
+  echo "::group::$1" >&2
 }
 
 # End collapsible group
 log_endgroup() {
-  echo "::endgroup::"
+  echo "::endgroup::" >&2
 }
 
 # Export value to GitHub environment
