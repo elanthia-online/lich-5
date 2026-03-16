@@ -619,8 +619,19 @@ module Lich
 
               # Call the play callback if provided
               if @callbacks.on_play
+                play_context = {
+                  char_name: normalized_character,
+                  game_code: selected_iter[0],
+                  frontend: frontend,
+                  custom_launch: custom_launch
+                }
 
-                @callbacks.on_play.call(launch_data) # (login_params)
+                # Backward compatibility: support both 1-arg and 2-arg callback handlers.
+                if @callbacks.on_play.respond_to?(:arity) && @callbacks.on_play.arity == 1
+                  @callbacks.on_play.call(launch_data)
+                else
+                  @callbacks.on_play.call(launch_data, play_context)
+                end
               end
 
             end

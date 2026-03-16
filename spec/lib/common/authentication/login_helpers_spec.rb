@@ -46,7 +46,7 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     end
 
     it 'defines VALID_FRONTENDS' do
-      expect(described_class::VALID_FRONTENDS).to include('stormfront', 'wizard', 'avalon')
+      expect(described_class::VALID_FRONTENDS).to include('stormfront', 'wizard', 'avalon', 'genie', 'frostbite', 'wrayth')
     end
 
     it 'defines VALID_REALMS' do
@@ -153,6 +153,16 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     it 'matches --avalon' do
       match = '--avalon'.match(described_class::FRONTEND_PATTERN)
       expect(match[:fe]).to eq('avalon')
+    end
+
+    it 'matches --genie' do
+      match = '--genie'.match(described_class::FRONTEND_PATTERN)
+      expect(match[:fe]).to eq('genie')
+    end
+
+    it 'matches --frostbite' do
+      match = '--frostbite'.match(described_class::FRONTEND_PATTERN)
+      expect(match[:fe]).to eq('frostbite')
     end
 
     it 'does not match invalid frontends' do
@@ -415,6 +425,27 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     it 'returns :__unset when no instance flags present' do
       expect(described_class.resolve_instance(['--stormfront'])).to eq(:__unset)
     end
+
+    it 'ignores bare --login and dark-mode modifiers when resolving instance' do
+      expect(described_class.resolve_instance(['--login', 'Tsetem', '--dark-mode=true'])).to eq(:__unset)
+    end
+
+    it 'ignores optional path modifiers used by persistent launcher child sessions' do
+      expect(described_class.resolve_instance(['--home=/tmp/lich', '--data=/tmp/data'])).to eq(:__unset)
+    end
+
+    it 'ignores long-form path modifiers used by legacy CLI options' do
+      expect(described_class.resolve_instance(['--script-dir=/tmp/scripts', '--data-dir=/tmp/data', '--temp-dir=/tmp/temp'])).to eq(:__unset)
+    end
+
+    it 'ignores non-instance frontend modifiers that do not imply game instance' do
+      expect(described_class.resolve_instance(['--genie'])).to eq(:__unset)
+      expect(described_class.resolve_instance(['--frostbite'])).to eq(:__unset)
+    end
+
+    it 'returns nil for unknown option-like flags (probable invalid instance intent)' do
+      expect(described_class.resolve_instance(['--invalid-instance-flag'])).to be_nil
+    end
   end
 
   describe '.resolve_login_args' do
@@ -436,6 +467,13 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       instance, frontend, custom_launch = described_class.resolve_login_args(['--GS3'])
       expect(instance).to eq('GS3')
       expect(frontend).to eq(:__unset)
+      expect(custom_launch).to eq(:__unset)
+    end
+
+    it 'parses extended frontend selectors' do
+      instance, frontend, custom_launch = described_class.resolve_login_args(['--GS3', '--frostbite'])
+      expect(instance).to eq('GS3')
+      expect(frontend).to eq('frostbite')
       expect(custom_launch).to eq(:__unset)
     end
   end

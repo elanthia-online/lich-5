@@ -125,7 +125,8 @@ module Lich
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
-  @@debug_messaging      = nil # boolean
+  @@track_persistent_launcher_mode = nil # boolean
+  @@debug_messaging = nil # boolean
 
   def self.db_mutex
     @@db_mutex
@@ -970,6 +971,36 @@ module Lich
     @@track_layout_state = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_layout_state',?);", [@@track_layout_state.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+  end
+
+  # Returns persisted launcher mode state for GUI login flow.
+  #
+  # @return [Boolean] true when persistent multi-launch mode is enabled
+  def Lich.track_persistent_launcher_mode
+    if @@track_persistent_launcher_mode.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='track_persistent_launcher_mode';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      @@track_persistent_launcher_mode = (val.to_s =~ /on|true|yes/ ? true : false)
+    end
+    return @@track_persistent_launcher_mode
+  end
+
+  # Persists launcher mode state for GUI login flow.
+  #
+  # @param val [Object] truthy/falsey value parsed to Boolean
+  # @return [void]
+  def Lich.track_persistent_launcher_mode=(val)
+    @@track_persistent_launcher_mode = (val.to_s =~ /on|true|yes/ ? true : false)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('track_persistent_launcher_mode',?);", [@@track_persistent_launcher_mode.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry

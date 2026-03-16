@@ -26,6 +26,12 @@ module Lich
   def self.track_layout_state; false; end unless respond_to?(:track_layout_state)
   def self.track_dark_mode; false; end unless respond_to?(:track_dark_mode)
 
+  def self.track_persistent_launcher_mode
+    # Default launcher mode state for tests: preserve existing single-launch behavior
+    # unless a spec explicitly overrides this to exercise persistent mode.
+    false
+  end
+
   module Util
     def self.install_gem_requirements(*)
       require 'os'
