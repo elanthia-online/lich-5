@@ -90,8 +90,6 @@ RSpec.describe Lich::Common::SessionLauncher do
     allow(described_class).to receive(:optional_spawn_flags).and_call_original
     allow(Lich).to receive(:track_dark_mode).and_return(true)
     stub_const('LICH_DIR', '/tmp/lich-home')
-    stub_const('DATA_DIR', '/tmp/lich-data')
-    stub_const('SCRIPT_DIR', '/tmp/lich-scripts')
 
     result = described_class.launch(
       launch_data + ['CHARACTER=Tsetem'],
@@ -109,10 +107,34 @@ RSpec.describe Lich::Common::SessionLauncher do
       '--stormfront',
       '--custom-launch=/path/to/custom',
       '--dark-mode=true',
-      '--home=/tmp/lich-home',
-      '--data=/tmp/lich-data',
-      '--scripts=/tmp/lich-scripts',
-      "--lib=#{LIB_DIR}",
+      hash_including(chdir: '/tmp/lich-home')
+    )
+  end
+
+  it 'forwards explicit non-default directory overrides' do
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+    stub_const('LICH_DIR', '/tmp/lich-home')
+    stub_const('DATA_DIR', '/tmp/lich-home/data')
+    stub_const('SCRIPT_DIR', '/tmp/lich-home/scripts')
+
+    described_class.launch(
+      launch_data + ['CHARACTER=Tsetem'],
+      launch_context: {
+        frontend: 'stormfront',
+        data_dir: '/tmp/alt-data',
+        script_dir: '/tmp/lich-home/scripts'
+      }
+    )
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      '--data=/tmp/alt-data',
       hash_including(chdir: '/tmp/lich-home')
     )
   end

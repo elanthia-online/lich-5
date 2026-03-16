@@ -94,7 +94,8 @@ module Lich
         end
 
         # Builds optional CLI flags for child launches.
-        # All flags in this method are additive and only emitted when defined.
+        # Emits path flags only when explicitly overridden to a non-default value.
+        # This keeps child ARGV concise and avoids passing parent default directories.
         #
         # @param context [Hash] Optional launch context from GUI callbacks.
         # @return [Array<String>] Optional flags (possibly empty).
@@ -105,7 +106,7 @@ module Lich
           flags << "--dark-mode=#{dark_mode}" unless dark_mode.nil?
 
           OPTIONAL_PATH_FLAGS.each do |path_flag|
-            value = resolve_path_value(context, path_flag[:key], path_flag[:constant])
+            value = overridden_path_value(context, path_flag)
             next if value.to_s.empty?
 
             flags << "--#{path_flag[:option]}=#{value}"
@@ -145,18 +146,45 @@ module Lich
           Lich.track_dark_mode
         end
 
-        # Resolves a directory flag value.
-        # Priority: launch context override, then global constant.
+        # Returns an explicit per-launch path override when it differs from default.
         #
         # @param context [Hash]
-        # @param context_key [Symbol]
-        # @param constant_name [Symbol]
+        # @param path_flag [Hash]
         # @return [String, nil]
-        def resolve_path_value(context, context_key, constant_name)
-          return context[context_key] if context.key?(context_key)
+        def overridden_path_value(context, path_flag)
+          context_key = path_flag[:key]
+          constant_name = path_flag[:constant]
+          return nil unless context.key?(context_key)
+
+          value = context[context_key]
+          return nil if value.to_s.empty?
+
+          value_expanded = File.expand_path(value.to_s)
+          default_value = default_path_value(path_flag[:option], constant_name, context)
+          return nil if default_value && value_expanded == default_value
+
+          value
+        end
+
+        # Resolves the path value that the child would derive without an explicit flag.
+        #
+        # @param option_name [String]
+        # @param constant_name [Symbol]
+        # @param context [Hash]
+        # @return [String, nil]
+        def default_path_value(option_name, constant_name, context)
+          if option_name == 'home'
+            return Object.const_defined?(:LICH_DIR) ? File.expand_path(Object.const_get(:LICH_DIR).to_s) : nil
+          end
+
+          home_override = context[:home_dir]
+          if !home_override.to_s.empty?
+            return File.expand_path(File.join(home_override.to_s, option_name))
+          end
+
           return nil unless Object.const_defined?(constant_name)
 
-          Object.const_get(constant_name)
+          File.expand_path(Object.const_get(constant_name).to_s)
         end
 
         # Mirrors existing CLI spawn behavior: use rubyw on Windows to avoid console.
