@@ -594,14 +594,14 @@ module Lich
     end
 
     # Handles launch action for both saved and manual tabs.
-    # In persistent launcher mode the GUI stays open and launches a child process.
-    # In default mode behavior remains unchanged (single launch and close).
+    # Persistent launcher mode is intentionally scoped to saved-entry launches.
+    # Manual login launches keep single-launch semantics to avoid form-reset friction.
     #
     # @param launch_data [Array<String>] Prepared launch data from auth flow
     # @param login_context [Hash, nil] Optional launch context from GUI tabs
     # @return [void]
     def handle_play_action(launch_data, login_context = nil)
-      if @persistent_launcher_mode
+      if use_persistent_launcher?(login_context)
         # Persistent mode: launch child session, keep the launcher window active.
         if login_context.is_a?(Hash) && !login_context.key?(:dark_mode)
           # Propagate the current launcher theme state into detached child startup.
@@ -617,13 +617,34 @@ module Lich
           @msgbox.call("Failed to launch session: #{launch_result[:error]}") if @msgbox
         end
       else
-        # Regression-safe default path: preserve single-launch behavior exactly.
+        # Default/single-launch path: used when persistent mode is disabled OR
+        # when launch originates from manual login.
         @launch_data = launch_data
         Gtk.queue {
           @window.destroy unless @window.destroyed?
           @done = true
         }
       end
+    end
+
+    # Returns true only for saved-entry launches while persistent mode is enabled.
+    # Manual login path does not include account credentials in context.
+    #
+    # @param login_context [Hash, nil]
+    # @return [Boolean]
+    def use_persistent_launcher?(login_context)
+      return false unless @persistent_launcher_mode
+      return true unless login_context.is_a?(Hash)
+
+      saved_entry_context?(login_context)
+    end
+
+    # Saved-entry callbacks carry account credentials in context.
+    #
+    # @param login_context [Hash]
+    # @return [Boolean]
+    def saved_entry_context?(login_context)
+      login_context.key?(:user_id) && login_context.key?(:password)
     end
 
     # Saves entry data if needed
