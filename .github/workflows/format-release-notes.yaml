@@ -261,7 +261,13 @@ jobs:
             // 5) Convert PR links to plain (#123)
             body = body.replace(/\[#(\d+)\]\([^)]+\)/g, '#$1');
 
-            // 6) Append custom footer (sentinel placed at top)
+            // 6) Remove any existing custom install footer block so reruns are idempotent.
+            body = body.replace(
+              /\n+For additional usage\/install instructions, please visit one of the following:\n\nDragonRealms - https:\/\/github\.com\/elanthia-online\/lich-5\/wiki\/Documentation-for-Installing-and-Upgrading-Lich\nGemstone IV - https:\/\/gswiki\.play\.net\/Lich:Software\/Installation\n*/g,
+              '\n'
+            );
+
+            // 7) Append custom footer (sentinel remains at top)
             const footer = [
               '',
               'For additional usage/install instructions, please visit one of the following:',
