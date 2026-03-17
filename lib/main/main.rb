@@ -353,12 +353,7 @@ reconnect_if_wanted = proc {
     IPSocket.getaddress(@argv_options[:game_host])
     error_count = 0
     begin
-      listener = TCPServer.new('127.0.0.1', @argv_options[:game_port])
-      begin
-        listener.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, 1)
-      rescue
-        Lich.log "warning: setsockopt with SO_REUSEADDR failed: #{$!}"
-      end
+      listener = Lich::Common::ReusableTCPServer.create('127.0.0.1', @argv_options[:game_port])
     rescue
       sleep 1
       if (error_count += 1) >= 30
@@ -611,11 +606,12 @@ reconnect_if_wanted = proc {
     detachable_client_thread = Thread.new {
       loop {
         begin
-          server = TCPServer.new(@argv_options[:detachable_client_host], @argv_options[:detachable_client_port])
+          server = Lich::Common::ReusableTCPServer.create(@argv_options[:detachable_client_host], @argv_options[:detachable_client_port])
           char_name = ARGV[ARGV.index('--login') + 1].capitalize
-          Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
+          Frontend.create_session_file(char_name, server.local_address.ip_address, server.local_address.ip_port)
 
-          $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(server.accept)
+          accepted_socket, = server.accept
+          $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(accepted_socket)
           $_DETACHABLE_CLIENT_.sync = true
         rescue
           Lich.log "#{$!}\n\t#{$!.backtrace.join("\n\t")}"
