@@ -676,11 +676,11 @@ module Lich
         # @param pass_entry [Gtk::Entry] Password entry to re-enable
         # @return [void]
         def report_connect_error(message, connect_button, disconnect_button, user_id_entry, pass_entry)
-          @callbacks.on_error&.call(message)
           connect_button.sensitive = true
           disconnect_button.sensitive = false
           user_id_entry.sensitive = true
           pass_entry.sensitive = true
+          @callbacks.on_error&.call(message)
         end
       end
     end

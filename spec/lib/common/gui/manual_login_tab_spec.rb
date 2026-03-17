@@ -266,6 +266,21 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
         tab.send(:report_connect_error, 'error', connect_button, disconnect_button, user_id_entry, pass_entry)
       end
     end
+
+    context 'when on_error callback raises an exception' do
+      let(:on_error) { ->(_msg) { raise 'callback exploded' } }
+
+      it 'resets form state before the callback raises' do
+        expect(connect_button).to receive(:sensitive=).with(true).ordered
+        expect(disconnect_button).to receive(:sensitive=).with(false).ordered
+        expect(user_id_entry).to receive(:sensitive=).with(true).ordered
+        expect(pass_entry).to receive(:sensitive=).with(true).ordered
+
+        expect {
+          tab.send(:report_connect_error, 'error', connect_button, disconnect_button, user_id_entry, pass_entry)
+        }.to raise_error('callback exploded')
+      end
+    end
   end
 
   describe '#setup_connect_button_handler' do
