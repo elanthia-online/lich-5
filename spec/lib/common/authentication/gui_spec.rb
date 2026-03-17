@@ -164,17 +164,59 @@ RSpec.describe Lich::Common::Authentication::GUI do
       before do
         allow(Lich::Common::Authentication).to receive(:authenticate)
           .and_raise(StandardError, 'Connection failed')
+        allow(Lich).to receive(:log)
       end
 
-      it 're-enables the button' do
+      it 're-enables the button before re-raising' do
         expect(mock_button).to receive(:sensitive=).with(false)
         expect(mock_button).to receive(:sensitive=).with(true)
 
-        described_class.authenticate_and_launch(
-          button: mock_button,
-          login_info: login_info,
-          on_success: ->(_data) {}
-        )
+        expect {
+          described_class.authenticate_and_launch(
+            button: mock_button,
+            login_info: login_info,
+            on_success: ->(_data) {}
+          )
+        }.to raise_error(StandardError, 'Connection failed')
+      end
+
+      it 'logs the exception class and message' do
+        expect(Lich).to receive(:log).with(/GUI auth unexpected error: StandardError: Connection failed/)
+        allow(Lich).to receive(:log).with(anything)
+
+        expect {
+          described_class.authenticate_and_launch(
+            button: mock_button,
+            login_info: login_info,
+            on_success: ->(_data) {}
+          )
+        }.to raise_error(StandardError)
+      end
+
+      it 'reports a generic error message via on_error callback' do
+        error_message = nil
+        on_error = ->(msg) { error_message = msg }
+
+        expect {
+          described_class.authenticate_and_launch(
+            button: mock_button,
+            login_info: login_info,
+            on_success: ->(_data) {},
+            on_error: on_error
+          )
+        }.to raise_error(StandardError)
+
+        expect(error_message).to eq('Unexpected login error. See debug log for details.')
+      end
+
+      it 're-raises the original exception' do
+        expect {
+          described_class.authenticate_and_launch(
+            button: mock_button,
+            login_info: login_info,
+            on_success: ->(_data) {}
+          )
+        }.to raise_error(StandardError, 'Connection failed')
       end
     end
   end
