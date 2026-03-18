@@ -3,18 +3,28 @@
 require_relative '../../../spec_helper'
 require_relative '../../../../lib/internal_api/active_sessions'
 
+# Resets the process-local lifecycle singleton state between examples so each
+# example can describe one lifecycle scenario without inheriting thread or
+# listener state from previous runs.
+#
+# @param lifecycle [Module]
+# @return [void]
+def reset_active_sessions_lifecycle!(lifecycle)
+  lifecycle.instance_variable_set(:@heartbeat_thread, nil)
+  lifecycle.instance_variable_set(:@running, false)
+  lifecycle.instance_variable_set(:@started, false)
+  lifecycle.instance_variable_set(:@listener_host, nil)
+  lifecycle.instance_variable_set(:@listener_port, nil)
+  lifecycle.instance_variable_set(:@listener_connected, false)
+  lifecycle.instance_variable_set(:@session_name, nil)
+  lifecycle.instance_variable_set(:@role, nil)
+  lifecycle.instance_variable_set(:@started_at, nil)
+  lifecycle.instance_variable_set(:@mutex, Mutex.new)
+end
+
 RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
   before do
-    described_class.instance_variable_set(:@heartbeat_thread, nil)
-    described_class.instance_variable_set(:@running, false)
-    described_class.instance_variable_set(:@started, false)
-    described_class.instance_variable_set(:@listener_host, nil)
-    described_class.instance_variable_set(:@listener_port, nil)
-    described_class.instance_variable_set(:@listener_connected, false)
-    described_class.instance_variable_set(:@session_name, nil)
-    described_class.instance_variable_set(:@role, nil)
-    described_class.instance_variable_set(:@started_at, nil)
-    described_class.instance_variable_set(:@mutex, Mutex.new)
+    reset_active_sessions_lifecycle!(described_class)
 
     allow(Lich::InternalAPI::ActiveSessions).to receive(:enabled?).and_return(true)
     allow(Lich::InternalAPI::ActiveSessions).to receive(:register_session).and_return(true)
@@ -31,6 +41,8 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
     end
 
     it 'registers once, heartbeats from the captured thread block, and unregisters on stop' do
+      # Capture the heartbeat block directly so the spec can exercise the loop
+      # deterministically without waiting on a real background thread.
       heartbeat_thread = instance_double(Thread)
       captured_block = nil
 

@@ -4,8 +4,17 @@ module Lich
   module InternalAPI
     module ActiveSessions
       # Process-local lifecycle coordinator for active sessions registration.
+      #
+      # This module adapts Lich runtime state into active-sessions payloads. It
+      # intentionally keeps only a small amount of mutable process-local state:
+      # identifying metadata, detachable listener details, and a heartbeat
+      # thread handle.
       module Lifecycle
-        HEARTBEAT_INTERVAL_SECONDS = 90
+        # Default heartbeat cadence for refreshing the current process entry and
+        # detecting service-owner failover quickly enough for multi-session use.
+        #
+        # @return [Integer]
+        HEARTBEAT_INTERVAL_SECONDS = 5
 
         @heartbeat_thread = nil
         @running = false
@@ -52,7 +61,7 @@ module Lich
         # @param session_name [String]
         # @param role [String]
         # @param heartbeat_interval [Integer]
-        # @return [Boolean]
+        # @return [Boolean] true when lifecycle tracking started
         def self.start(session_name:, role:, heartbeat_interval: HEARTBEAT_INTERVAL_SECONDS)
           return false unless ActiveSessions.enabled?
 
@@ -99,7 +108,7 @@ module Lich
 
         # Stops lifecycle registration and removes the current process session.
         #
-        # @return [Boolean]
+        # @return [Boolean] true when a running lifecycle was stopped
         def self.stop
           return false unless ActiveSessions.enabled?
 
@@ -108,6 +117,7 @@ module Lich
             return false unless @started
 
             @running = false
+            @started = false
             thread = @heartbeat_thread
             @heartbeat_thread = nil
           end
@@ -117,12 +127,12 @@ module Lich
           ActiveSessions.unregister_session(pid: Process.pid)
 
           @mutex.synchronize do
-            @started = false
             @session_name = nil
             @role = nil
             @listener_host = nil
             @listener_port = nil
             @listener_connected = false
+            @started_at = nil
           end
           true
         rescue StandardError => e
@@ -149,6 +159,9 @@ module Lich
 
         # Clears detachable listener metadata for the current session.
         #
+        # This is used when detachable listener infrastructure is torn down and
+        # the public snapshot should stop reporting a listener endpoint.
+        #
         # @return [void]
         def self.clear_listener
           return unless ActiveSessions.enabled?
@@ -163,7 +176,7 @@ module Lich
 
         # Returns the current process session payload.
         #
-        # @return [Hash]
+        # @return [Hash] normalized payload suitable for registry upsert
         def self.current_payload
           @mutex.synchronize do
             {
@@ -191,6 +204,9 @@ module Lich
         end
         private_class_method :upsert_current_session
 
+        # Resolves the current frontend identifier from runtime globals.
+        #
+        # @return [String, nil]
         def self.resolve_frontend
           return $frontend if defined?($frontend) && !$frontend.nil? && !$frontend.to_s.empty?
 
@@ -198,6 +214,9 @@ module Lich
         end
         private_class_method :resolve_frontend
 
+        # Resolves the current game code from XMLData when available.
+        #
+        # @return [String, nil]
         def self.resolve_game_code
           return XMLData.game if defined?(XMLData) && XMLData.respond_to?(:game) && !XMLData.game.to_s.empty?
 

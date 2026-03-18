@@ -13,6 +13,7 @@ module Lich
       class Registry
         # @param time_source [#call] returns the current epoch seconds
         # @param process_checker [#call] returns true when a pid is still alive
+        # @return [void]
         def initialize(time_source: -> { Time.now.to_i }, process_checker: self.class.method(:process_alive?))
           @time_source = time_source
           @process_checker = process_checker
@@ -32,7 +33,7 @@ module Lich
           @mutex.synchronize do
             current = @sessions[pid] || {}
             started_at = data[:started_at] || current[:started_at] || now
-            merged = current.merge(data.reject { |_key, value| value.nil? })
+            merged = current.merge(mergeable_data(data))
             merged[:pid] = pid
             merged[:started_at] = started_at
             merged[:last_seen_at] = now
@@ -65,7 +66,7 @@ module Lich
 
         # Returns a read-only snapshot of current active sessions.
         #
-        # @return [Hash]
+        # @return [Hash] normalized snapshot payload for API consumers
         def snapshot
           sweep_dead_sessions!
           now = @time_source.call
@@ -130,12 +131,39 @@ module Lich
 
         private
 
+        # Normalizes incoming hash keys to symbols so the registry can accept
+        # either JSON-decoded strings or symbol-keyed Ruby hashes.
+        #
+        # @param hash [Hash]
+        # @return [Hash]
         def symbolize_keys(hash)
           hash.each_with_object({}) do |(key, value), normalized|
             normalized[key.to_sym] = value
           end
         end
 
+        # Filters incoming session data before merging it with any existing
+        # session record.
+        #
+        # Listener host and port are intentionally allowed to overwrite with
+        # `nil` so detachable listener cleanup can clear those fields.
+        #
+        # @param data [Hash]
+        # @return [Hash]
+        def mergeable_data(data)
+          data.each_with_object({}) do |(key, value), merged|
+            next if value.nil? && !%i[listener_host listener_port].include?(key)
+
+            merged[key] = value
+          end
+        end
+        private :mergeable_data
+
+        # Returns the detached-listener sub-hash for a session when the session
+        # is currently advertising a local listener.
+        #
+        # @param session [Hash]
+        # @return [Hash, nil]
         def listener_hash(session)
           return nil if session[:listener_port].nil?
 
