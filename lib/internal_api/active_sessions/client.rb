@@ -39,12 +39,13 @@ module Lich
         def request(command, payload = {})
           socket = @socket_factory.call(@host, @port)
           socket.write(JSON.dump(command: command, auth: @auth_token, payload: payload) + "\n")
-          unless IO.select([socket], nil, nil, READ_TIMEOUT)
-            return { ok: false, error: 'read timeout' }
-          end
+          raw = read_response(socket)
+          return { ok: false, error: 'read timeout' } unless raw
 
-          raw = socket.gets
-          JSON.parse(raw.to_s, symbolize_names: true)
+          response = JSON.parse(raw.to_s, symbolize_names: true)
+          return { ok: false, error: 'invalid response type' } unless response.is_a?(Hash)
+
+          response
         rescue StandardError => e
           { ok: false, error: e.message }
         ensure
@@ -79,6 +80,39 @@ module Lich
         # @return [Hash]
         def snapshot
           request('snapshot')
+        end
+
+        private
+
+        # Reads a single newline-terminated JSON response without allowing
+        # partial frames to block indefinitely.
+        #
+        # @param socket [IO]
+        # @return [String, nil]
+        def read_response(socket)
+          deadline = Time.now + READ_TIMEOUT
+          buffer = +''
+
+          loop do
+            remaining = deadline - Time.now
+            return nil if remaining <= 0
+            return nil unless IO.select([socket], nil, nil, remaining)
+
+            chunk = socket.read_nonblock(1024, exception: false)
+            case chunk
+            when :wait_readable
+              next
+            when nil
+              break
+            else
+              buffer << chunk
+              break if buffer.include?("\n")
+            end
+          end
+
+          buffer.empty? ? nil : buffer
+        rescue IO::WaitReadable
+          nil
         end
       end
     end

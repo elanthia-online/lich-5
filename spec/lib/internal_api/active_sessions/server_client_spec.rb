@@ -70,27 +70,29 @@ RSpec.describe 'ActiveSessions server/client' do
 
   it 'encodes ping, upsert, snapshot, and remove requests over the JSON protocol' do
     allow(socket).to receive(:close)
+    allow(socket).to receive(:read_nonblock).and_return(
+      "{\"ok\":true,\"payload\":{\"status\":\"ok\"}}\n",
+      "{\"ok\":true,\"payload\":{\"pid\":444,\"session_name\":\"Tsetem\"}}\n",
+      "{\"ok\":true,\"payload\":{\"source\":\"ActiveSessionsAPI\",\"total\":1,\"connected\":1,\"detachable\":0,\"sessions\":[{\"pid\":444,\"session_name\":\"Tsetem\"}]}}\n",
+      "{\"ok\":true,\"payload\":{\"removed\":true}}\n"
+    )
 
     expect(socket).to receive(:write).with("{\"command\":\"ping\",\"auth\":\"shared-token\",\"payload\":{}}\n")
-    allow(IO).to receive(:select).with([socket], nil, nil, Lich::InternalAPI::ActiveSessions::Client::READ_TIMEOUT).and_return([socket])
-    allow(socket).to receive(:gets).and_return('{"ok":true,"payload":{"status":"ok"}}')
+    allow(IO).to receive(:select).with([socket], nil, nil, kind_of(Numeric)).and_return([socket])
     expect(client.ping).to be(true)
 
     expect(socket).to receive(:write).with("{\"command\":\"upsert\",\"auth\":\"shared-token\",\"payload\":{\"pid\":444,\"session_name\":\"Tsetem\",\"role\":\"session\",\"started_at\":1700000000,\"connected\":true}}\n")
-    allow(IO).to receive(:select).with([socket], nil, nil, Lich::InternalAPI::ActiveSessions::Client::READ_TIMEOUT).and_return([socket])
-    allow(socket).to receive(:gets).and_return('{"ok":true,"payload":{"pid":444,"session_name":"Tsetem"}}')
+    allow(IO).to receive(:select).with([socket], nil, nil, kind_of(Numeric)).and_return([socket])
     expect(client.upsert(pid: 444, session_name: 'Tsetem', role: 'session', started_at: 1_700_000_000, connected: true)[:ok]).to be(true)
 
     expect(socket).to receive(:write).with("{\"command\":\"snapshot\",\"auth\":\"shared-token\",\"payload\":{}}\n")
-    allow(IO).to receive(:select).with([socket], nil, nil, Lich::InternalAPI::ActiveSessions::Client::READ_TIMEOUT).and_return([socket])
-    allow(socket).to receive(:gets).and_return('{"ok":true,"payload":{"source":"ActiveSessionsAPI","total":1,"connected":1,"detachable":0,"sessions":[{"pid":444,"session_name":"Tsetem"}]}}')
+    allow(IO).to receive(:select).with([socket], nil, nil, kind_of(Numeric)).and_return([socket])
     snapshot = client.snapshot
     expect(snapshot[:ok]).to be(true)
     expect(snapshot[:payload][:sessions].map { |session| session[:session_name] }).to include('Tsetem')
 
     expect(socket).to receive(:write).with("{\"command\":\"remove\",\"auth\":\"shared-token\",\"payload\":{\"pid\":444}}\n")
-    allow(IO).to receive(:select).with([socket], nil, nil, Lich::InternalAPI::ActiveSessions::Client::READ_TIMEOUT).and_return([socket])
-    allow(socket).to receive(:gets).and_return('{"ok":true,"payload":{"removed":true}}')
+    allow(IO).to receive(:select).with([socket], nil, nil, kind_of(Numeric)).and_return([socket])
     expect(client.remove(444)[:ok]).to be(true)
   end
 
@@ -144,9 +146,18 @@ RSpec.describe 'ActiveSessions server/client' do
   it 'returns a normalized error when the client read times out' do
     allow(socket).to receive(:close)
     expect(socket).to receive(:write).with("{\"command\":\"snapshot\",\"auth\":\"shared-token\",\"payload\":{}}\n")
-    allow(IO).to receive(:select).with([socket], nil, nil, Lich::InternalAPI::ActiveSessions::Client::READ_TIMEOUT).and_return(nil)
+    allow(IO).to receive(:select).with([socket], nil, nil, kind_of(Numeric)).and_return(nil)
     expect(socket).not_to receive(:read_nonblock)
 
     expect(client.snapshot).to eq(ok: false, error: 'read timeout')
+  end
+
+  it 'returns a normalized error when the response is not a JSON object' do
+    allow(socket).to receive(:close)
+    expect(socket).to receive(:write).with("{\"command\":\"snapshot\",\"auth\":\"shared-token\",\"payload\":{}}\n")
+    allow(IO).to receive(:select).with([socket], nil, nil, kind_of(Numeric)).and_return([socket])
+    allow(socket).to receive(:read_nonblock).and_return("\"not-a-hash\"\n")
+
+    expect(client.snapshot).to eq(ok: false, error: 'invalid response type')
   end
 end

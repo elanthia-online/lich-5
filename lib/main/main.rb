@@ -607,13 +607,26 @@ reconnect_if_wanted = proc {
     }
   end
 
+  session_name = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_session_name(
+    argv: ARGV,
+    account_character: (Lich::Common::Account.character rescue nil)
+  )
+  session_role = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_role(
+    argv: ARGV,
+    detachable_client_port: @argv_options[:detachable_client_port]
+  )
+  Lich::InternalAPI::ActiveSessions::Lifecycle.start(session_name: session_name, role: session_role)
+
   unless @argv_options[:detachable_client_port].nil?
     detachable_client_thread = Thread.new {
       loop {
         begin
           server = TCPServer.new(@argv_options[:detachable_client_host], @argv_options[:detachable_client_port])
-          char_name = ARGV[ARGV.index('--login') + 1].capitalize
-          Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
+          login_idx = ARGV.index('--login')
+          char_name = if !login_idx.nil? && ARGV[login_idx + 1]
+                        ARGV[login_idx + 1].capitalize
+                      end
+          Frontend.create_session_file(char_name, server.addr[2], server.addr[1]) if char_name
           Lich::InternalAPI::ActiveSessions::Lifecycle.update_listener(
             host: server.addr[2],
             port: server.addr[1],
@@ -713,16 +726,6 @@ reconnect_if_wanted = proc {
   else
     detachable_client_thread = nil
   end
-
-  session_name = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_session_name(
-    argv: ARGV,
-    account_character: (Lich::Common::Account.character rescue nil)
-  )
-  session_role = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_role(
-    argv: ARGV,
-    detachable_client_port: @argv_options[:detachable_client_port]
-  )
-  Lich::InternalAPI::ActiveSessions::Lifecycle.start(session_name: session_name, role: session_role)
 
   wait_while { $offline_mode }
 
