@@ -74,18 +74,20 @@ module Lich
             @started_at = Time.now.to_i
             @running = true
             @started = true
-            thread = Thread.new do
-              loop do
-                sleep heartbeat_interval
-                break unless @running
-
-                upsert_current_session
-              end
-            rescue StandardError => e
-              Lich.log("warning: ActiveSessions heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
-            end
-            @heartbeat_thread = thread
           end
+
+          thread = Thread.new do
+            loop do
+              sleep heartbeat_interval
+              break unless running?
+
+              upsert_current_session
+            end
+          rescue StandardError => e
+            Lich.log("warning: ActiveSessions heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+          end
+
+          @mutex.synchronize { @heartbeat_thread = thread if @started }
 
           upsert_current_session
           true
@@ -125,6 +127,7 @@ module Lich
           thread&.join(0.5)
           thread&.kill if thread&.alive?
           ActiveSessions.unregister_session(pid: Process.pid)
+          ActiveSessions.cleanup_discovery_if_last_session!
 
           @mutex.synchronize do
             @session_name = nil
@@ -166,12 +169,14 @@ module Lich
         def self.clear_listener
           return unless ActiveSessions.enabled?
 
+          started = false
           @mutex.synchronize do
             @listener_host = nil
             @listener_port = nil
             @listener_connected = false
+            started = @started
           end
-          upsert_current_session if @started
+          upsert_current_session if started
         end
 
         # Returns the current process session payload.
@@ -198,11 +203,35 @@ module Lich
         #
         # @return [void]
         def self.upsert_current_session
-          return unless @started
+          payload = nil
+          @mutex.synchronize do
+            return unless @started
 
-          ActiveSessions.register_session(current_payload)
+            payload = {
+              pid: Process.pid,
+              session_name: @session_name,
+              role: @role,
+              frontend: resolve_frontend,
+              game_code: resolve_game_code,
+              started_at: @started_at,
+              connected: @listener_port.nil? ? true : @listener_connected,
+              listener_host: @listener_host,
+              listener_port: @listener_port,
+              hidden: false
+            }
+          end
+
+          ActiveSessions.register_session(payload)
         end
         private_class_method :upsert_current_session
+
+        # Returns whether the heartbeat loop should continue running.
+        #
+        # @return [Boolean]
+        def self.running?
+          @mutex.synchronize { @running }
+        end
+        private_class_method :running?
 
         # Resolves the current frontend identifier from runtime globals.
         #

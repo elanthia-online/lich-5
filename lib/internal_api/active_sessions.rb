@@ -47,6 +47,8 @@ module Lich
 
       @registry = nil
       @server = nil
+      @service_client = nil
+      @service_client_token = nil
       @mutex = Mutex.new
 
       # Indicates whether the active sessions API is enabled.
@@ -128,6 +130,22 @@ module Lich
         fallback_snapshot(error: e.message)
       end
 
+      # Returns sanitized metadata about the current active-sessions service.
+      #
+      # The public shape intentionally omits the shared auth token while still
+      # exposing enough information for diagnostics and operator visibility.
+      #
+      # @return [Hash]
+      def self.service_info
+        discovery = load_discovery
+        {
+          source: 'ActiveSessionsAPI',
+          owner_pid: discovery[:owner_pid],
+          updated_at: discovery[:updated_at],
+          service_available: service_available?
+        }.compact
+      end
+
       # Stops the in-process server if this process owns one.
       #
       # This is intended for explicit service shutdown paths, not ordinary
@@ -139,6 +157,8 @@ module Lich
           @server&.stop
           @server = nil
           @registry = nil
+          @service_client = nil
+          @service_client_token = nil
         end
         delete_discovery_if_owned
       end
@@ -150,7 +170,13 @@ module Lich
         discovery = load_discovery
         return nil unless discovery[:auth_token]
 
-        Client.new(host: DEFAULT_HOST, port: DEFAULT_PORT, auth_token: discovery[:auth_token])
+        @mutex.synchronize do
+          if @service_client.nil? || @service_client_token != discovery[:auth_token]
+            @service_client = Client.new(host: DEFAULT_HOST, port: DEFAULT_PORT, auth_token: discovery[:auth_token])
+            @service_client_token = discovery[:auth_token]
+          end
+          @service_client
+        end
       end
       private_class_method :service_client
 
@@ -234,6 +260,20 @@ module Lich
         nil
       end
       private_class_method :delete_discovery_if_owned
+
+      # Removes the discovery file when the current process still owns the
+      # service and the shared registry is now empty.
+      #
+      # @return [void]
+      def self.cleanup_discovery_if_last_session!
+        discovery = load_discovery
+        return unless discovery[:owner_pid].to_i == Process.pid
+
+        current_snapshot = snapshot
+        stop_service! if current_snapshot[:total].to_i.zero?
+      rescue StandardError
+        nil
+      end
     end
   end
 end

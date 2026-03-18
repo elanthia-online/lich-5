@@ -632,7 +632,6 @@ reconnect_if_wanted = proc {
           server.close rescue nil
           $_DETACHABLE_CLIENT_.close rescue nil
           $_DETACHABLE_CLIENT_ = nil
-          Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
           sleep 5
           next
         ensure
