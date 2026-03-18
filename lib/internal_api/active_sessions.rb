@@ -247,8 +247,9 @@ module Lich
           updated_at: Time.now.to_i
         }
         temp_path = "#{discovery_path}.#{Process.pid}.tmp"
-        File.write(temp_path, JSON.dump(payload))
-        File.chmod(0o600, temp_path)
+        File.open(temp_path, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |file|
+          file.write(JSON.dump(payload))
+        end
         File.rename(temp_path, discovery_path)
       ensure
         File.delete(temp_path) if defined?(temp_path) && File.exist?(temp_path)

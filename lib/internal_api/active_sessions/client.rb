@@ -13,6 +13,12 @@ module Lich
       # and normalizing failures into a predictable `{ ok: false, error: ... }`
       # shape for higher-level callers.
       class Client
+        # Maximum number of seconds to wait for a server response before
+        # treating the request as failed.
+        #
+        # @return [Numeric]
+        READ_TIMEOUT = 1
+
         # @param host [String]
         # @param port [Integer]
         # @param auth_token [String]
@@ -33,6 +39,10 @@ module Lich
         def request(command, payload = {})
           socket = @socket_factory.call(@host, @port)
           socket.write(JSON.dump(command: command, auth: @auth_token, payload: payload) + "\n")
+          unless IO.select([socket], nil, nil, READ_TIMEOUT)
+            return { ok: false, error: 'read timeout' }
+          end
+
           raw = socket.gets
           JSON.parse(raw.to_s, symbolize_names: true)
         rescue StandardError => e

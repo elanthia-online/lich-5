@@ -26,6 +26,8 @@ module Lich
         @role = nil
         @started_at = nil
         @mutex = Mutex.new
+        @registration_mutex = Mutex.new
+        @lifecycle_generation = 0
 
         # Resolves the reporting session name from runtime context.
         #
@@ -74,6 +76,7 @@ module Lich
             @started_at = Time.now.to_i
             @running = true
             @started = true
+            @lifecycle_generation += 1
           end
 
           thread = Thread.new do
@@ -112,22 +115,27 @@ module Lich
         #
         # @return [Boolean] true when a running lifecycle was stopped
         def self.stop
-          return false unless ActiveSessions.enabled?
-
           thread = nil
+          lifecycle_active = false
           @mutex.synchronize do
-            return false unless @started
+            lifecycle_active = @started || !@heartbeat_thread.nil? || @running
+            return false unless lifecycle_active
 
             @running = false
             @started = false
+            @lifecycle_generation += 1
             thread = @heartbeat_thread
             @heartbeat_thread = nil
           end
 
           thread&.join(0.5)
           thread&.kill if thread&.alive?
-          ActiveSessions.unregister_session(pid: Process.pid)
-          ActiveSessions.cleanup_discovery_if_last_session!
+          if ActiveSessions.enabled?
+            @registration_mutex.synchronize do
+              ActiveSessions.unregister_session(pid: Process.pid)
+              ActiveSessions.cleanup_discovery_if_last_session!
+            end
+          end
 
           @mutex.synchronize do
             @session_name = nil
@@ -191,13 +199,19 @@ module Lich
         # @return [void]
         def self.upsert_current_session
           payload = nil
+          generation = nil
           @mutex.synchronize do
             return unless @started
 
             payload = build_current_payload
+            generation = @lifecycle_generation
           end
 
-          ActiveSessions.register_session(payload)
+          @registration_mutex.synchronize do
+            return unless registration_current?(generation)
+
+            ActiveSessions.register_session(payload)
+          end
         end
         private_class_method :upsert_current_session
 
@@ -208,6 +222,15 @@ module Lich
           @mutex.synchronize { @running }
         end
         private_class_method :running?
+
+        # Returns whether the captured lifecycle generation is still current.
+        #
+        # @param generation [Integer]
+        # @return [Boolean]
+        def self.registration_current?(generation)
+          @mutex.synchronize { @started && @lifecycle_generation == generation }
+        end
+        private_class_method :registration_current?
 
         # Builds the normalized current-session payload from lifecycle state.
         #
