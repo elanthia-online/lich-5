@@ -58,6 +58,8 @@ module Lich
       # @param registration_delay [Integer] initial registration delay in seconds
       # @return [Boolean] true when started, false when already started or failed
       def self.start(session_name:, role:, heartbeat_interval: SessionsSettings::HEARTBEAT_INTERVAL_SECONDS, registration_delay: REGISTRATION_DELAY_SECONDS)
+        return false unless SessionsSettings.enabled?
+
         @mutex.synchronize do
           return false if @started
 
@@ -150,6 +152,8 @@ module Lich
       #
       # @return [Boolean] true when stop/unregister succeeded, false when not running or failed
       def self.stop
+        return false unless SessionsSettings.enabled?
+
         heartbeat_thread = nil
         @mutex.synchronize do
           return false unless @started

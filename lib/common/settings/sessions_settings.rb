@@ -8,10 +8,23 @@ module Lich
     # Lightweight session summary facade for reporting consumers.
     # This module is intentionally reporting-focused and does not enforce process policy.
     module SessionsSettings
+      FEATURE_FLAG = :session_summary_store_and_reporting
       HEARTBEAT_INTERVAL_SECONDS = 90
       STALE_THRESHOLD_SECONDS = 360
       IDLE_OVER_30M_SECONDS = 1800
       ADAPTER_MUTEX = Mutex.new
+
+      # Indicates whether session summary tracking/reporting is enabled.
+      #
+      # The feature flag infrastructure is introduced in a separate prerequisite
+      # change. Until that dependency is present, this feature remains safely off.
+      #
+      # @return [Boolean]
+      def self.enabled?
+        return false unless defined?(Lich::Common::FeatureFlags)
+
+        Lich::Common::FeatureFlags.enabled?(FEATURE_FLAG)
+      end
 
       # Returns the row-oriented session adapter.
       # Uses synchronized lazy initialization to avoid duplicate adapter creation
@@ -38,6 +51,8 @@ module Lich
       # @param metadata_json [String, nil]
       # @return [void]
       def self.register_session(pid:, session_name:, role:, state:, frontend: nil, game_code: nil, hidden: false, metadata_json: nil)
+        return unless enabled?
+
         now = Time.now.to_i
         os_presence_state = os_presence(pid: pid, session_name: session_name, now: now)
         adapter.upsert_session(
@@ -69,6 +84,8 @@ module Lich
       # @param last_utilization_at [Integer, nil]
       # @return [void]
       def self.heartbeat(pid:, state: nil, hidden: nil, session_name: nil, role: nil, frontend: nil, game_code: nil, last_utilization_at: nil)
+        return unless enabled?
+
         now = Time.now.to_i
         session_name = session_name || adapter.find_session(pid: pid)&.fetch('session_name', nil)
         os_presence_state = os_presence(pid: pid, session_name: session_name, now: now)
@@ -93,6 +110,8 @@ module Lich
       # @param pid [Integer]
       # @return [void]
       def self.unregister_session(pid:)
+        return unless enabled?
+
         now = Time.now.to_i
         adapter.upsert_session(
           pid: pid,
@@ -107,6 +126,8 @@ module Lich
       #
       # @return [Hash] deterministic schema consumed by reporting callers
       def self.snapshot
+        return disabled_snapshot unless enabled?
+
         rows = adapter.active_sessions
         now = Time.now.to_i
         sessions = rows.map do |row|
@@ -149,19 +170,7 @@ module Lich
           sessions: sessions
         }
       rescue StandardError => e
-        # Keep the same response shape as success payload so consumers can
-        # rely on deterministic keys during adapter/runtime failure states.
-        {
-          source: 'SessionsSettings',
-          total: 0,
-          idle_over_30m: 0,
-          stale: 0,
-          running: 0,
-          sleeping: 0,
-          hidden: 0,
-          sessions: [],
-          error: e.message
-        }
+        disabled_snapshot(error: e.message)
       end
 
       # Converts a utilization timestamp into age-in-seconds.
@@ -274,6 +283,26 @@ module Lich
         nil
       end
       private_class_method :process_command_line
+
+      # Returns a deterministic empty payload used when the feature is disabled
+      # or when reporting encounters an adapter/runtime error.
+      #
+      # @param error [String, nil] optional error detail for reporting callers
+      # @return [Hash]
+      def self.disabled_snapshot(error: nil)
+        {
+          source: 'SessionsSettings',
+          total: 0,
+          idle_over_30m: 0,
+          stale: 0,
+          running: 0,
+          sleeping: 0,
+          hidden: 0,
+          sessions: [],
+          error: error
+        }.compact
+      end
+      private_class_method :disabled_snapshot
     end
   end
 end

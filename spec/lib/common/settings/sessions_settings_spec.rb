@@ -24,6 +24,21 @@ RSpec.describe Lich::Common::SessionsSettings do
 
     # Inject adapter so the facade can be unit tested without DB coupling.
     described_class.instance_variable_set(:@adapter, adapter)
+    stub_const('Lich::Common::FeatureFlags', Module.new)
+    allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(described_class::FEATURE_FLAG).and_return(true)
+  end
+
+  describe '.enabled?' do
+    it 'returns false when feature flag plumbing is unavailable' do
+      hide_const('Lich::Common::FeatureFlags')
+
+      expect(described_class.enabled?).to be(false)
+    end
+
+    it 'delegates to FeatureFlags for the session summary flag' do
+      expect(described_class.enabled?).to be(true)
+      expect(Lich::Common::FeatureFlags).to have_received(:enabled?).with(:session_summary_store_and_reporting)
+    end
   end
 
   describe '.register_session' do
@@ -44,6 +59,15 @@ RSpec.describe Lich::Common::SessionsSettings do
                                                                state: 'running'
                                                              ))
     end
+
+    it 'does nothing while the feature flag is disabled' do
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(described_class::FEATURE_FLAG).and_return(false)
+      allow(adapter).to receive(:upsert_session)
+
+      described_class.register_session(pid: 50_001, session_name: 'Tsetem', role: 'session', state: 'running')
+
+      expect(adapter).not_to have_received(:upsert_session)
+    end
   end
 
   describe '.heartbeat' do
@@ -61,6 +85,15 @@ RSpec.describe Lich::Common::SessionsSettings do
                                                                os_seen_at: 1_001
                                                              ))
     end
+
+    it 'does nothing while the feature flag is disabled' do
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(described_class::FEATURE_FLAG).and_return(false)
+      allow(adapter).to receive(:upsert_session)
+
+      described_class.heartbeat(pid: 50_001, state: 'sleeping', session_name: 'Tsetem')
+
+      expect(adapter).not_to have_received(:upsert_session)
+    end
   end
 
   describe '.unregister_session' do
@@ -75,6 +108,15 @@ RSpec.describe Lich::Common::SessionsSettings do
                                                                os_seen: 0,
                                                                os_name: 0
                                                              ))
+    end
+
+    it 'does nothing while the feature flag is disabled' do
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(described_class::FEATURE_FLAG).and_return(false)
+      allow(adapter).to receive(:upsert_session)
+
+      described_class.unregister_session(pid: 50_001)
+
+      expect(adapter).not_to have_received(:upsert_session)
     end
   end
 
@@ -97,6 +139,18 @@ RSpec.describe Lich::Common::SessionsSettings do
       expect(snapshot[:hidden]).to eq(1)
       expect(snapshot[:sessions]).to be_a(Array)
       expect(snapshot[:sessions].map { |s| s[:marker] }).to contain_exactly('active', 'stale')
+    end
+
+    it 'returns an empty deterministic payload while the feature flag is disabled' do
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(described_class::FEATURE_FLAG).and_return(false)
+      allow(adapter).to receive(:active_sessions)
+
+      snapshot = described_class.snapshot
+
+      expect(snapshot[:source]).to eq('SessionsSettings')
+      expect(snapshot[:total]).to eq(0)
+      expect(snapshot[:sessions]).to eq([])
+      expect(adapter).not_to have_received(:active_sessions)
     end
 
     it 'surfaces duplicate names as data, not as hard failures' do

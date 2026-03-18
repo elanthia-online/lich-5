@@ -9,6 +9,7 @@ RSpec.describe Lich::Common::SessionLifecycle do
   # implemented as module singleton state, not per-instance objects.
   before(:each) do
     stub_const('Lich::Common::SessionsSettings', Module.new)
+    allow(Lich::Common::SessionsSettings).to receive(:enabled?).and_return(true)
     allow(Lich::Common::SessionsSettings).to receive(:register_session)
     allow(Lich::Common::SessionsSettings).to receive(:heartbeat)
     allow(Lich::Common::SessionsSettings).to receive(:unregister_session)
@@ -81,6 +82,16 @@ RSpec.describe Lich::Common::SessionLifecycle do
 
   describe '.start / .stop' do
     # Verifies idempotent lifecycle transitions and clean unregister semantics.
+    it 'does not start or stop lifecycle tracking while the feature flag is disabled' do
+      allow(Lich::Common::SessionsSettings).to receive(:enabled?).and_return(false)
+
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 999)).to be(false)
+      expect(described_class.stop).to be(false)
+      expect(Lich::Common::SessionsSettings).not_to have_received(:register_session)
+      expect(Lich::Common::SessionsSettings).not_to have_received(:heartbeat)
+      expect(Lich::Common::SessionsSettings).not_to have_received(:unregister_session)
+    end
+
     it 'starts once and unregisters on stop (registration is deferred)' do
       fake_thread = instance_double(Thread, kill: true)
       allow(Thread).to receive(:new).and_return(fake_thread)
