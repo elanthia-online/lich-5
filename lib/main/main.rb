@@ -616,7 +616,6 @@ reconnect_if_wanted = proc {
             Lich.log "info: closing existing server socket before recreating"
             server.close rescue nil
           end
-
           server = Lich::Common::ReusableTCPServer.create(@argv_options[:detachable_client_host], @argv_options[:detachable_client_port])
           char_name = ARGV[ARGV.index('--login') + 1].capitalize
 
@@ -626,15 +625,25 @@ reconnect_if_wanted = proc {
             Lich.log "warning: failed to create session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
           end
 
+          Lich::InternalAPI::ActiveSessions::Lifecycle.update_listener(
+            host: server.local_address.ip_address,
+            port: server.local_address.ip_port,
+            connected: false
+          )
+
           Lich.log "info: detachable client server listening on #{@argv_options[:detachable_client_host]}:#{@argv_options[:detachable_client_port]}"
 
           accepted_socket, = server.accept
           $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(accepted_socket)
           $_DETACHABLE_CLIENT_.sync = true
-
           Lich.log "info: detachable client connected"
 
           # Close server socket after accepting — only one client connects at a time
+          Lich::InternalAPI::ActiveSessions::Lifecycle.update_listener(
+            host: server.local_address.ip_address,
+            port: server.local_address.ip_port,
+            connected: true
+          )
           server.close rescue nil
           server = nil
         rescue => e
@@ -650,8 +659,13 @@ reconnect_if_wanted = proc {
             Lich.log "warning: failed to cleanup session file: #{cleanup_error}\n\t#{cleanup_error.backtrace.join("\n\t")}"
           end
 
+          Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
           sleep 5
           next
+        ensure
+          server.close rescue nil
+          Frontend.cleanup_session_file
+          Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
         end
         if $_DETACHABLE_CLIENT_
           begin
@@ -735,6 +749,16 @@ reconnect_if_wanted = proc {
     detachable_client_thread = nil
   end
 
+  session_name = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_session_name(
+    argv: ARGV,
+    account_character: (Lich::Common::Account.character rescue nil)
+  )
+  session_role = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_role(
+    argv: ARGV,
+    detachable_client_port: @argv_options[:detachable_client_port]
+  )
+  Lich::InternalAPI::ActiveSessions::Lifecycle.start(session_name: session_name, role: session_role)
+
   wait_while { $offline_mode }
 
   if Frontend.client.eql?('wizard')
@@ -760,6 +784,8 @@ reconnect_if_wanted = proc {
   Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
   Settings.save
   Vars.save
+  Lich::InternalAPI::ActiveSessions::Lifecycle.stop
+  Lich::InternalAPI::ActiveSessions.stop_service!
   Lich.log 'info: closing connections...'
   Game.close
   200.times { sleep 0.1; break if Game.closed? }
