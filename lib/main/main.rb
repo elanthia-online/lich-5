@@ -652,7 +652,6 @@ reconnect_if_wanted = proc {
           server = nil
           $_DETACHABLE_CLIENT_.close rescue nil
           $_DETACHABLE_CLIENT_ = nil
-
           begin
             Frontend.cleanup_session_file
           rescue => cleanup_error

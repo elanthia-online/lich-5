@@ -75,7 +75,10 @@ module Lich
           end
 
           server&.close rescue nil
-          thread&.kill if thread&.alive?
+          if thread&.alive?
+            thread.join(0.1)
+            thread.kill if thread.alive?
+          end
           client_threads.each do |client_thread|
             next unless client_thread.respond_to?(:join)
 

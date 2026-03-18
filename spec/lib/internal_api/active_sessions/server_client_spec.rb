@@ -19,7 +19,7 @@ RSpec.describe 'ActiveSessions server/client' do
       close: nil
     )
   end
-  let(:accept_thread) { instance_double(Thread, alive?: true, kill: nil) }
+  let(:accept_thread) { instance_double(Thread, alive?: true, join: nil, kill: nil) }
   let(:client_thread) { instance_double(Thread, alive?: false, join: nil) }
   let(:server) do
     Lich::InternalAPI::ActiveSessions::Server.new(

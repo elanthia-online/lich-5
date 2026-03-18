@@ -28,5 +28,17 @@ module Lich
     def self.active_sessions
       active_session_snapshot[:sessions] || []
     end
+
+    # Returns sanitized metadata about the active-sessions service owner.
+    #
+    # @return [Hash]
+    def self.active_session_service_info
+      return {
+        source: 'ActiveSessionsAPI',
+        service_available: false
+      } unless defined?(Lich::InternalAPI::ActiveSessions)
+
+      Lich::InternalAPI::ActiveSessions.service_info
+    end
   end
 end
