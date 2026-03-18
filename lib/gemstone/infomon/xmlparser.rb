@@ -81,6 +81,9 @@ module Lich
             /falls back and dies/,
             /bellows in rage one last time and dies/,
             /looks up with hatred as (?:he|she) lets out (?:his|her) final breath/,
+            /falls on its side and lets out one last whimpering sigh of chartreuse vapors/,
+            /falls on its side and lets out one last whimpering sigh of sparks and blue mist/,
+            /falls on its side and lets out one last whimpering sigh of water droplets/,
           )
           NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? #{NpcDeathPostfix}[\.!]\r?\n?$/
 
