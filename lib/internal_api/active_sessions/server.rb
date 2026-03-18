@@ -9,31 +9,37 @@ module Lich
       # Read-only/query plus lifecycle write server for the active sessions API.
       #
       # The transport is intentionally local-only TCP to keep behavior consistent
-      # across Linux, macOS, and Windows.
+      # across Linux, macOS, and Windows. The server delegates all state changes
+      # to {Registry}; it does not own lifecycle policy beyond request routing
+      # and thread cleanup.
       class Server
         attr_reader :host, :port
 
         # @param host [String]
         # @param port [Integer]
         # @param registry [Lich::InternalAPI::ActiveSessions::Registry]
+        # @param auth_token [String] shared secret required by all clients
         # @param server_factory [#call] builds a listening server
         # @param accept_thread_factory [#call] builds the accept-loop thread
         # @param client_thread_factory [#call] builds per-client threads
-        def initialize(host:, port:, registry:, server_factory: nil, accept_thread_factory: nil, client_thread_factory: nil)
+        # @return [void]
+        def initialize(host:, port:, registry:, auth_token:, server_factory: nil, accept_thread_factory: nil, client_thread_factory: nil)
           @host = host
           @port = port
           @registry = registry
+          @auth_token = auth_token
           @server_factory = server_factory || ->(bind_host, bind_port) { TCPServer.new(bind_host, bind_port) }
           @accept_thread_factory = accept_thread_factory || ->(&block) { Thread.new(&block) }
           @client_thread_factory = client_thread_factory || ->(socket, &block) { Thread.new(socket, &block) }
           @server = nil
           @thread = nil
           @mutex = Mutex.new
+          @client_threads = []
         end
 
         # Starts the TCP server and accept loop.
         #
-        # @return [Boolean]
+        # @return [Boolean] true when the server is available for requests
         def start
           @mutex.synchronize do
             return true if running?
@@ -51,19 +57,31 @@ module Lich
 
         # Stops the server and its accept thread.
         #
+        # Client handler threads are joined with a short timeout so shutdown
+        # does not leak long-lived handler threads when the owning process exits.
+        #
         # @return [void]
         def stop
           thread = nil
           server = nil
+          client_threads = []
           @mutex.synchronize do
             thread = @thread
             server = @server
+            client_threads = @client_threads.dup
+            @client_threads.clear
             @thread = nil
             @server = nil
           end
 
           server&.close rescue nil
           thread&.kill if thread&.alive?
+          client_threads.each do |client_thread|
+            next unless client_thread.respond_to?(:join)
+
+            client_thread.join(0.25)
+            client_thread.kill if client_thread.respond_to?(:alive?) && client_thread.alive?
+          end
         end
 
         # Indicates whether the server thread is active.
@@ -75,15 +93,36 @@ module Lich
 
         private
 
+        # Accepts inbound socket connections and dispatches each client to its
+        # own handler thread.
+        #
+        # @return [void]
         def accept_loop
           loop do
             socket = @server.accept
-            @client_thread_factory.call(socket) { |client| handle_client(client) }
+            client_thread = @client_thread_factory.call(socket) { |client| handle_tracked_client(client) }
+            track_client_thread(client_thread)
           end
         rescue IOError, Errno::EBADF
           nil
         end
 
+        # Wraps client handling so finished client threads can be removed from
+        # the tracked thread set regardless of request outcome.
+        #
+        # @param socket [IO]
+        # @return [void]
+        def handle_tracked_client(socket)
+          handle_client(socket)
+        ensure
+          untrack_current_thread
+        end
+        private :handle_tracked_client
+
+        # Processes a single connected client socket.
+        #
+        # @param socket [IO]
+        # @return [void]
         def handle_client(socket)
           raw = socket.gets
           response = process_request(raw)
@@ -94,8 +133,14 @@ module Lich
           socket.close rescue nil
         end
 
+        # Parses and routes a single JSON request.
+        #
+        # @param raw [String, nil] one request line encoded as JSON
+        # @return [Hash] normalized protocol response
         def process_request(raw)
           request = JSON.parse(raw.to_s, symbolize_names: true)
+          return unauthorized_response unless authorized?(request)
+
           case request[:command]
           when 'ping'
             { ok: true, payload: { status: 'ok' } }
@@ -112,6 +157,36 @@ module Lich
         rescue StandardError => e
           { ok: false, error: e.message }
         end
+
+        def authorized?(request)
+          request[:auth].to_s == @auth_token
+        end
+        private :authorized?
+
+        def unauthorized_response
+          Lich.log('warning: ActiveSessions unauthorized local request rejected') if defined?(Lich) && Lich.respond_to?(:log)
+          { ok: false, error: 'unauthorized' }
+        end
+        private :unauthorized_response
+
+        # Records a spawned client handler thread for later shutdown cleanup.
+        #
+        # @param thread [Thread, nil]
+        # @return [void]
+        def track_client_thread(thread)
+          return unless thread
+
+          @mutex.synchronize { @client_threads << thread }
+        end
+        private :track_client_thread
+
+        # Removes the current handler thread from the tracked thread set.
+        #
+        # @return [void]
+        def untrack_current_thread
+          @mutex.synchronize { @client_threads.delete(Thread.current) }
+        end
+        private :untrack_current_thread
       end
     end
   end
