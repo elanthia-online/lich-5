@@ -112,4 +112,27 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
 
     expect(File.exist?(discovery_file)).to be(true)
   end
+
+  it 'queries a discovered service without consulting the local feature flag state' do
+    fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
+    File.write(
+      File.join(temp_dir, 'lich-active-sessions.json'),
+      JSON.dump(owner_pid: 123, auth_token: 'shared-token', updated_at: Time.now.to_i)
+    )
+
+    allow(described_class).to receive(:enabled?).and_return(false)
+    allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
+    allow(fake_client).to receive(:snapshot).and_return(
+      ok: true,
+      payload: {
+        source: 'ActiveSessionsAPI',
+        total: 1,
+        connected: 1,
+        detachable: 1,
+        sessions: [{ session_name: 'Char1' }]
+      }
+    )
+
+    expect(described_class.query_snapshot[:total]).to eq(1)
+  end
 end
