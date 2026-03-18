@@ -614,19 +614,31 @@ reconnect_if_wanted = proc {
           server = TCPServer.new(@argv_options[:detachable_client_host], @argv_options[:detachable_client_port])
           char_name = ARGV[ARGV.index('--login') + 1].capitalize
           Frontend.create_session_file(char_name, server.addr[2], server.addr[1])
+          Lich::InternalAPI::ActiveSessions::Lifecycle.update_listener(
+            host: server.addr[2],
+            port: server.addr[1],
+            connected: false
+          )
 
           $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(server.accept)
           $_DETACHABLE_CLIENT_.sync = true
+          Lich::InternalAPI::ActiveSessions::Lifecycle.update_listener(
+            host: server.addr[2],
+            port: server.addr[1],
+            connected: true
+          )
         rescue
           Lich.log "#{$!}\n\t#{$!.backtrace.join("\n\t")}"
           server.close rescue nil
           $_DETACHABLE_CLIENT_.close rescue nil
           $_DETACHABLE_CLIENT_ = nil
+          Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
           sleep 5
           next
         ensure
           server.close rescue nil
           Frontend.cleanup_session_file
+          Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
         end
         if $_DETACHABLE_CLIENT_
           begin
@@ -703,6 +715,16 @@ reconnect_if_wanted = proc {
     detachable_client_thread = nil
   end
 
+  session_name = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_session_name(
+    argv: ARGV,
+    account_character: (Lich::Common::Account.character rescue nil)
+  )
+  session_role = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_role(
+    argv: ARGV,
+    detachable_client_port: @argv_options[:detachable_client_port]
+  )
+  Lich::InternalAPI::ActiveSessions::Lifecycle.start(session_name: session_name, role: session_role)
+
   wait_while { $offline_mode }
 
   if Frontend.client.eql?('wizard')
@@ -728,6 +750,8 @@ reconnect_if_wanted = proc {
   Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
   Settings.save
   Vars.save
+  Lich::InternalAPI::ActiveSessions::Lifecycle.stop
+  Lich::InternalAPI::ActiveSessions.stop_service!
   Lich.log 'info: closing connections...'
   Game.close
   200.times { sleep 0.1; break if Game.closed? }
