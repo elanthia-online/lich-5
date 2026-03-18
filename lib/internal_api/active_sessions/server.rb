@@ -13,7 +13,14 @@ module Lich
       # to {Registry}; it does not own lifecycle policy beyond request routing
       # and thread cleanup.
       class Server
+        # Maximum number of seconds to wait for the first request line from a
+        # connected client before abandoning the handler.
+        #
+        # @return [Numeric]
+        READ_TIMEOUT = 1
+
         attr_reader :host, :port
+        attr_reader :auth_token
 
         # @param host [String]
         # @param port [Integer]
@@ -127,6 +134,11 @@ module Lich
         # @param socket [IO]
         # @return [void]
         def handle_client(socket)
+          unless IO.select([socket], nil, nil, READ_TIMEOUT)
+            Lich.log('warning: ActiveSessions client read timed out') if defined?(Lich) && Lich.respond_to?(:log)
+            return
+          end
+
           raw = socket.gets
           response = process_request(raw)
           socket.puts(JSON.dump(response))
@@ -151,6 +163,8 @@ module Lich
             { ok: true, payload: @registry.upsert(request.fetch(:payload)) }
           when 'remove'
             remove_pid = request[:pid] || request.fetch(:payload, {})[:pid]
+            return { ok: false, error: 'pid required' } if remove_pid.nil? || remove_pid.to_s.empty?
+
             { ok: true, payload: { removed: @registry.remove(remove_pid) } }
           when 'snapshot'
             { ok: true, payload: @registry.snapshot }

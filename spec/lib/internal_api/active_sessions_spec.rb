@@ -32,13 +32,14 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
     allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(fake_server)
     allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
     allow(fake_client).to receive(:ping).and_return(false, true)
+    allow(fake_server).to receive(:auth_token).and_return('generated-token')
 
     expect(described_class.ensure_service!).to be(true)
 
     discovery = JSON.parse(File.read(File.join(temp_dir, 'lich-active-sessions.json')), symbolize_names: true)
     expect(discovery[:owner_pid]).to eq(Process.pid)
-    expect(discovery[:auth_token]).to be_a(String)
-    expect(discovery[:auth_token]).not_to be_empty
+    expect(discovery[:auth_token]).to eq('generated-token')
+    expect(File.stat(File.join(temp_dir, 'lich-active-sessions.json')).mode & 0o777).to eq(0o600)
   end
 
   it 'reuses an existing healthy owner instead of creating a new server' do
@@ -89,5 +90,26 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
     described_class.cleanup_discovery_if_last_session!
 
     expect(File.exist?(File.join(temp_dir, 'lich-active-sessions.json'))).to be(false)
+  end
+
+  it 'keeps the discovery file when the snapshot is a fallback error' do
+    discovery_file = File.join(temp_dir, 'lich-active-sessions.json')
+    File.write(
+      discovery_file,
+      JSON.dump(owner_pid: Process.pid, auth_token: 'shared-token', updated_at: Time.now.to_i)
+    )
+
+    allow(described_class).to receive(:snapshot).and_return(
+      source: 'ActiveSessionsAPI',
+      total: 0,
+      connected: 0,
+      detachable: 0,
+      sessions: [],
+      error: 'service unavailable'
+    )
+
+    described_class.cleanup_discovery_if_last_session!
+
+    expect(File.exist?(discovery_file)).to be(true)
   end
 end
