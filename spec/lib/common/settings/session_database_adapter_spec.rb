@@ -174,4 +174,17 @@ RSpec.describe Lich::Common::SessionDatabaseAdapter do
       expect(duplicates.map { |row| row['session_name'] }).not_to include('Tsetem')
     end
   end
+
+  describe '#tracked_live_candidates' do
+    it 'returns only rows that have not been marked exited' do
+      adapter = described_class.new(db: sqlite_db)
+
+      adapter.upsert_session(pid: 301, session_name: 'Alpha', role: 'session', state: 'running', started_at: 1, last_heartbeat_at: 1)
+      adapter.upsert_session(pid: 302, session_name: 'Beta', role: 'session', state: 'exited', started_at: 1, last_heartbeat_at: 1)
+
+      rows = adapter.tracked_live_candidates
+
+      expect(rows.map { |row| row['pid'] }).to contain_exactly(301)
+    end
+  end
 end

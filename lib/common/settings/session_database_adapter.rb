@@ -97,6 +97,20 @@ module Lich
         end
       end
 
+      # Returns rows that still appear active in storage and may need a
+      # liveness sweep against the current OS process table.
+      #
+      # @return [Array<Hash>] non-exited rows sorted by pid
+      def tracked_live_candidates
+        with_retry do
+          rows_as_hashes(<<~SQL)
+            SELECT * FROM #{@table_name}
+            WHERE COALESCE(state, '') != 'exited'
+            ORDER BY pid ASC;
+          SQL
+        end
+      end
+
       private
 
       # Binds payload values in stable column order for upsert SQL.

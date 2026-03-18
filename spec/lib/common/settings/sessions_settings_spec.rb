@@ -43,6 +43,7 @@ RSpec.describe Lich::Common::SessionsSettings do
 
   describe '.register_session' do
     it 'delegates a normalized payload to adapter.upsert_session' do
+      allow(adapter).to receive(:tracked_live_candidates).and_return([])
       allow(adapter).to receive(:upsert_session)
 
       described_class.register_session(
@@ -67,6 +68,34 @@ RSpec.describe Lich::Common::SessionsSettings do
       described_class.register_session(pid: 50_001, session_name: 'Tsetem', role: 'session', state: 'running')
 
       expect(adapter).not_to have_received(:upsert_session)
+    end
+
+    it 'marks dead non-exited rows as exited before registering the current session' do
+      allow(adapter).to receive(:tracked_live_candidates).and_return([
+                                                                       { 'pid' => 47_810, 'session_name' => 'Tsetem', 'state' => 'running' }
+                                                                     ])
+      allow(adapter).to receive(:upsert_session)
+      allow(described_class).to receive(:process_alive?).with(47_810).and_return(false)
+      allow(described_class).to receive(:os_presence).and_return(os_seen: 1, os_name: 1, os_seen_at: 1_001)
+
+      described_class.register_session(
+        pid: 50_001,
+        session_name: 'Urgoyle',
+        role: 'session',
+        state: 'running'
+      )
+
+      expect(adapter).to have_received(:upsert_session).with(hash_including(
+                                                               pid: 47_810,
+                                                               state: 'exited',
+                                                               os_seen: 0,
+                                                               os_name: 0
+                                                             ))
+      expect(adapter).to have_received(:upsert_session).with(hash_including(
+                                                               pid: 50_001,
+                                                               session_name: 'Urgoyle',
+                                                               state: 'running'
+                                                             ))
     end
   end
 
@@ -128,6 +157,8 @@ RSpec.describe Lich::Common::SessionsSettings do
                                                                { 'pid' => 1, 'state' => 'running', 'hidden' => 0, 'session_name' => 'A', 'last_heartbeat_at' => 950, 'os_seen' => 1, 'os_name' => 1 },
                                                                { 'pid' => 2, 'state' => 'sleeping', 'hidden' => 1, 'session_name' => 'B', 'last_heartbeat_at' => 950, 'os_seen' => 0, 'os_name' => 0 }
                                                              ])
+      allow(described_class).to receive(:os_presence).with(pid: 1, session_name: 'A', now: 1_000).and_return(os_seen: 1, os_name: 1, os_seen_at: 1_000)
+      allow(described_class).to receive(:os_presence).with(pid: 2, session_name: 'B', now: 1_000).and_return(os_seen: 0, os_name: 0, os_seen_at: 1_000)
 
       snapshot = described_class.snapshot
 
@@ -159,6 +190,8 @@ RSpec.describe Lich::Common::SessionsSettings do
                                                                { 'pid' => 11, 'state' => 'running', 'hidden' => 0, 'session_name' => 'Tsetem', 'last_heartbeat_at' => 1_000, 'os_seen' => 1, 'os_name' => 1 }
                                                              ])
       allow(Time).to receive(:now).and_return(Time.at(1_000))
+      allow(described_class).to receive(:os_presence).with(pid: 10, session_name: 'Tsetem', now: 1_000).and_return(os_seen: 1, os_name: 1, os_seen_at: 1_000)
+      allow(described_class).to receive(:os_presence).with(pid: 11, session_name: 'Tsetem', now: 1_000).and_return(os_seen: 1, os_name: 1, os_seen_at: 1_000)
 
       snapshot = described_class.snapshot
       names = snapshot[:sessions].map { |s| s[:session_name] }
@@ -171,6 +204,7 @@ RSpec.describe Lich::Common::SessionsSettings do
         [{ 'pid' => 7, 'state' => 'running', 'hidden' => 0, 'session_name' => 'Tsetem', 'last_heartbeat_at' => 1_500, 'os_seen' => 1, 'os_name' => 1 }],
         [{ 'pid' => 7, 'state' => 'running', 'hidden' => 0, 'session_name' => 'Tsetem', 'last_heartbeat_at' => 1_950, 'os_seen' => 1, 'os_name' => 1 }]
       )
+      allow(described_class).to receive(:os_presence).with(pid: 7, session_name: 'Tsetem', now: 2_000).and_return(os_seen: 1, os_name: 1, os_seen_at: 2_000)
 
       first = described_class.snapshot
       second = described_class.snapshot
@@ -208,11 +242,26 @@ RSpec.describe Lich::Common::SessionsSettings do
       allow(adapter).to receive(:active_sessions).and_return(
         [{ 'pid' => 12, 'state' => 'running', 'hidden' => 0, 'session_name' => 'Tsetem', 'last_heartbeat_at' => 1_950, 'os_seen' => 1, 'os_name' => nil }]
       )
+      allow(described_class).to receive(:os_presence).with(pid: 12, session_name: 'Tsetem', now: 2_000).and_return(os_seen: 1, os_name: nil, os_seen_at: 2_000)
 
       snapshot = described_class.snapshot
 
       expect(snapshot[:sessions].first[:os_seen]).to be true
       expect(snapshot[:sessions].first[:os_name]).to be_nil
+    end
+
+    it 'uses fresh OS visibility for non-exited rows instead of trusting persisted os_seen' do
+      allow(Time).to receive(:now).and_return(Time.at(2_000))
+      allow(adapter).to receive(:active_sessions).and_return(
+        [{ 'pid' => 47_810, 'state' => 'running', 'hidden' => 0, 'session_name' => 'Tsetem', 'last_heartbeat_at' => 1_950, 'os_seen' => 1, 'os_name' => 1 }]
+      )
+      allow(described_class).to receive(:os_presence).with(pid: 47_810, session_name: 'Tsetem', now: 2_000).and_return(os_seen: 0, os_name: 0, os_seen_at: 2_000)
+
+      snapshot = described_class.snapshot
+
+      expect(snapshot[:sessions].first[:os_seen]).to be false
+      expect(snapshot[:sessions].first[:marker]).to eq('stale')
+      expect(snapshot[:stale]).to eq(1)
     end
   end
 end

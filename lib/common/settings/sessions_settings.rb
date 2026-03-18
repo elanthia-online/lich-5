@@ -54,6 +54,7 @@ module Lich
         return unless enabled?
 
         now = Time.now.to_i
+        sweep_dead_sessions!(now: now)
         os_presence_state = os_presence(pid: pid, session_name: session_name, now: now)
         adapter.upsert_session(
           pid: pid,
@@ -131,16 +132,18 @@ module Lich
         rows = adapter.active_sessions
         now = Time.now.to_i
         sessions = rows.map do |row|
-          os_seen = row['os_seen']
-          os_name = row['os_name']
-          if os_seen.nil?
-            # Reporting path fallback only; no persistence mutation.
-            fallback_presence = os_presence(pid: row['pid'], session_name: row['session_name'], now: now)
-            os_seen = fallback_presence[:os_seen]
-            os_name = fallback_presence[:os_name]
+          inactive = row['state'] == 'exited'
+          if inactive
+            os_seen = row['os_seen']
+            os_name = row['os_name']
+          else
+            # Reporting uses authoritative live OS presence, but does not
+            # persist those observations back into storage.
+            live_presence = os_presence(pid: row['pid'], session_name: row['session_name'], now: now)
+            os_seen = live_presence[:os_seen]
+            os_name = live_presence[:os_name]
           end
           heartbeat_is_stale = stale?(row['last_heartbeat_at'], now)
-          inactive = row['state'] == 'exited'
           stale = !inactive && (heartbeat_is_stale || os_seen.to_i == 0)
           marker = inactive ? 'inactive' : (stale ? 'stale' : 'active')
           {
@@ -283,6 +286,28 @@ module Lich
         nil
       end
       private_class_method :process_command_line
+
+      # Opportunistically marks dead non-exited rows as cleanly exited so stale
+      # false-active records do not linger in storage indefinitely.
+      #
+      # This runs outside the report path to keep reporting read-only.
+      #
+      # @param now [Integer]
+      # @return [void]
+      def self.sweep_dead_sessions!(now: Time.now.to_i)
+        adapter.tracked_live_candidates.each do |row|
+          next if process_alive?(row['pid'])
+
+          adapter.upsert_session(
+            pid: row['pid'],
+            state: 'exited',
+            os_seen_at: now,
+            os_seen: 0,
+            os_name: 0
+          )
+        end
+      end
+      private_class_method :sweep_dead_sessions!
 
       # Returns a deterministic empty payload used when the feature is disabled
       # or when reporting encounters an adapter/runtime error.
