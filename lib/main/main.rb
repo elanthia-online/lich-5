@@ -606,6 +606,16 @@ reconnect_if_wanted = proc {
     }
   end
 
+  session_name = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_session_name(
+    argv: ARGV,
+    account_character: (Lich::Common::Account.character rescue nil)
+  )
+  session_role = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_role(
+    argv: ARGV,
+    detachable_client_port: @argv_options[:detachable_client_port]
+  )
+  Lich::InternalAPI::ActiveSessions::Lifecycle.start(session_name: session_name, role: session_role)
+
   unless @argv_options[:detachable_client_port].nil?
     detachable_client_thread = Thread.new {
       server = nil
@@ -624,7 +634,6 @@ reconnect_if_wanted = proc {
           rescue => e
             Lich.log "warning: failed to create session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
           end
-
           Lich::InternalAPI::ActiveSessions::Lifecycle.update_listener(
             host: server.local_address.ip_address,
             port: server.local_address.ip_port,
@@ -747,16 +756,6 @@ reconnect_if_wanted = proc {
   else
     detachable_client_thread = nil
   end
-
-  session_name = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_session_name(
-    argv: ARGV,
-    account_character: (Lich::Common::Account.character rescue nil)
-  )
-  session_role = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_role(
-    argv: ARGV,
-    detachable_client_port: @argv_options[:detachable_client_port]
-  )
-  Lich::InternalAPI::ActiveSessions::Lifecycle.start(session_name: session_name, role: session_role)
 
   wait_while { $offline_mode }
 
