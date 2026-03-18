@@ -205,15 +205,9 @@ jobs:
             // Clean up multiple blank lines
             body = body.replace(/\n{3,}/g, '\n\n').trim();
             
-            // Append install footer
-            const footer = [
-              '',
-              'For additional usage/install instructions, please visit one of the following:',
-              '',
-              'DragonRealms - https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich',
-              'Gemstone IV - https://gswiki.play.net/Lich:Software/Installation'
-            ].join('\n');
-            body = body.replace(/\n+$/, '') + '\n' + footer + '\n';
+            // Keep fast-path body concise. Custom install footer is owned by
+            // format-release-notes.yaml to avoid duplicate footer blocks.
+            body = body.replace(/\n+$/, '') + '\n';
             
             core.setOutput('final', body);
 

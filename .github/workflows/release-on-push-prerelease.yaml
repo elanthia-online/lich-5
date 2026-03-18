@@ -192,16 +192,9 @@ jobs:
             let body = lines.join('\n');
             body = body.replace(/\n?(?:---|\* \* \*)\nThis PR was generated with \[Release Please\][\s\S]*?(\n{2,}|\s*$)/g, '\n');
             body = body.replace(/\[#(\d+)\]\([^)]+\)/g, '#$1'); // PR link → plain #N
-            const footer = [
-              '',
-              'For additional usage/install instructions, please visit one of the following:',
-              '',
-              'DragonRealms - https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich',
-              'Gemstone IV - https://gswiki.play.net/Lich:Software/Installation',
-              '',
-              `<!-- FORMATTER:v1 sha=${CONTRACT_SHA} mode=beta -->`
-            ].join('\n');
-            body = body.replace(/\s+$/,'') + '\n\n' + footer + '\n';
+            // Keep fast-path body concise. Custom install footer and formatter
+            // sentinel are owned by format-release-notes.yaml to avoid duplicates.
+            body = body.replace(/\s+$/,'') + '\n';
             core.setOutput('final', body);
 
       # NOTE ON CONTEXT:
