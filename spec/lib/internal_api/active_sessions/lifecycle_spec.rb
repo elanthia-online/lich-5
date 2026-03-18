@@ -20,6 +20,8 @@ def reset_active_sessions_lifecycle!(lifecycle)
   lifecycle.instance_variable_set(:@role, nil)
   lifecycle.instance_variable_set(:@started_at, nil)
   lifecycle.instance_variable_set(:@mutex, Mutex.new)
+  lifecycle.instance_variable_set(:@registration_mutex, Mutex.new)
+  lifecycle.instance_variable_set(:@lifecycle_generation, 0)
 end
 
 RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do

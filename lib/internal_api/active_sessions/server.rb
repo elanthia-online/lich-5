@@ -109,7 +109,10 @@ module Lich
         # @return [void]
         def accept_loop
           loop do
-            socket = @server.accept
+            server = @server
+            break unless server
+
+            socket = server.accept
             client_thread = @client_thread_factory.call(socket) { |client| handle_tracked_client(client) }
             track_client_thread(client_thread)
           end
@@ -134,12 +137,12 @@ module Lich
         # @param socket [IO]
         # @return [void]
         def handle_client(socket)
-          unless IO.select([socket], nil, nil, READ_TIMEOUT)
+          raw = read_request(socket)
+          unless raw
             Lich.log('warning: ActiveSessions client read timed out') if defined?(Lich) && Lich.respond_to?(:log)
             return
           end
 
-          raw = socket.gets
           response = process_request(raw)
           socket.puts(JSON.dump(response))
         rescue StandardError => e
@@ -147,6 +150,38 @@ module Lich
         ensure
           socket.close rescue nil
         end
+
+        # Reads a single newline-terminated request using a deadline-driven
+        # nonblocking loop so partial writes cannot hang the handler thread.
+        #
+        # @param socket [IO]
+        # @return [String, nil]
+        def read_request(socket)
+          deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + READ_TIMEOUT
+          buffer = +''
+
+          loop do
+            remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            return nil if remaining <= 0
+            return nil unless IO.select([socket], nil, nil, remaining)
+
+            chunk = socket.read_nonblock(1024, exception: false)
+            case chunk
+            when :wait_readable
+              next
+            when nil
+              break
+            else
+              buffer << chunk
+              break if buffer.include?("\n")
+            end
+          end
+
+          buffer.empty? ? nil : buffer
+        rescue IO::WaitReadable
+          nil
+        end
+        private :read_request
 
         # Parses and routes a single JSON request.
         #

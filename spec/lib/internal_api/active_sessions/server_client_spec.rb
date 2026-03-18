@@ -72,20 +72,24 @@ RSpec.describe 'ActiveSessions server/client' do
     allow(socket).to receive(:close)
 
     expect(socket).to receive(:write).with("{\"command\":\"ping\",\"auth\":\"shared-token\",\"payload\":{}}\n")
+    allow(IO).to receive(:select).with([socket], nil, nil, Lich::InternalAPI::ActiveSessions::Client::READ_TIMEOUT).and_return([socket])
     allow(socket).to receive(:gets).and_return('{"ok":true,"payload":{"status":"ok"}}')
     expect(client.ping).to be(true)
 
     expect(socket).to receive(:write).with("{\"command\":\"upsert\",\"auth\":\"shared-token\",\"payload\":{\"pid\":444,\"session_name\":\"Tsetem\",\"role\":\"session\",\"started_at\":1700000000,\"connected\":true}}\n")
+    allow(IO).to receive(:select).with([socket], nil, nil, Lich::InternalAPI::ActiveSessions::Client::READ_TIMEOUT).and_return([socket])
     allow(socket).to receive(:gets).and_return('{"ok":true,"payload":{"pid":444,"session_name":"Tsetem"}}')
     expect(client.upsert(pid: 444, session_name: 'Tsetem', role: 'session', started_at: 1_700_000_000, connected: true)[:ok]).to be(true)
 
     expect(socket).to receive(:write).with("{\"command\":\"snapshot\",\"auth\":\"shared-token\",\"payload\":{}}\n")
+    allow(IO).to receive(:select).with([socket], nil, nil, Lich::InternalAPI::ActiveSessions::Client::READ_TIMEOUT).and_return([socket])
     allow(socket).to receive(:gets).and_return('{"ok":true,"payload":{"source":"ActiveSessionsAPI","total":1,"connected":1,"detachable":0,"sessions":[{"pid":444,"session_name":"Tsetem"}]}}')
     snapshot = client.snapshot
     expect(snapshot[:ok]).to be(true)
     expect(snapshot[:payload][:sessions].map { |session| session[:session_name] }).to include('Tsetem')
 
     expect(socket).to receive(:write).with("{\"command\":\"remove\",\"auth\":\"shared-token\",\"payload\":{\"pid\":444}}\n")
+    allow(IO).to receive(:select).with([socket], nil, nil, Lich::InternalAPI::ActiveSessions::Client::READ_TIMEOUT).and_return([socket])
     allow(socket).to receive(:gets).and_return('{"ok":true,"payload":{"removed":true}}')
     expect(client.remove(444)[:ok]).to be(true)
   end
@@ -95,7 +99,8 @@ RSpec.describe 'ActiveSessions server/client' do
 
     request_socket = StringIO.new("{\"command\":\"snapshot\",\"auth\":\"shared-token\"}\n")
     response_socket = StringIO.new
-    allow(IO).to receive(:select).with([request_socket], nil, nil, Lich::InternalAPI::ActiveSessions::Server::READ_TIMEOUT).and_return([request_socket])
+    allow(IO).to receive(:select).with([request_socket], nil, nil, kind_of(Numeric)).and_return([request_socket])
+    allow(request_socket).to receive(:read_nonblock).and_return("{\"command\":\"snapshot\",\"auth\":\"shared-token\"}\n")
     allow(request_socket).to receive(:puts) { |payload| response_socket.write("#{payload}\n") }
     allow(request_socket).to receive(:close)
 
@@ -129,10 +134,19 @@ RSpec.describe 'ActiveSessions server/client' do
 
   it 'returns without writing a response when the initial read times out' do
     timeout_socket = instance_double(IO)
-    allow(IO).to receive(:select).with([timeout_socket], nil, nil, Lich::InternalAPI::ActiveSessions::Server::READ_TIMEOUT).and_return(nil)
+    allow(IO).to receive(:select).with([timeout_socket], nil, nil, kind_of(Numeric)).and_return(nil)
     allow(timeout_socket).to receive(:close)
     expect(timeout_socket).not_to receive(:puts)
 
     server.send(:handle_client, timeout_socket)
+  end
+
+  it 'returns a normalized error when the client read times out' do
+    allow(socket).to receive(:close)
+    expect(socket).to receive(:write).with("{\"command\":\"snapshot\",\"auth\":\"shared-token\",\"payload\":{}}\n")
+    allow(IO).to receive(:select).with([socket], nil, nil, Lich::InternalAPI::ActiveSessions::Client::READ_TIMEOUT).and_return(nil)
+    expect(socket).not_to receive(:read_nonblock)
+
+    expect(client.snapshot).to eq(ok: false, error: 'read timeout')
   end
 end
