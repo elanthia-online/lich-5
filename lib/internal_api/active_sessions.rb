@@ -50,6 +50,7 @@ module Lich
       @service_client = nil
       @service_client_token = nil
       @mutex = Mutex.new
+      @service_client_mutex = Mutex.new
 
       # Indicates whether the active sessions API is enabled.
       #
@@ -81,11 +82,15 @@ module Lich
           return true if service_available?
 
           @registry ||= Registry.new
-          auth_token = SecureRandom.hex(32)
-          @server ||= Server.new(host: DEFAULT_HOST, port: DEFAULT_PORT, registry: @registry, auth_token: auth_token)
+          @server ||= Server.new(
+            host: DEFAULT_HOST,
+            port: DEFAULT_PORT,
+            registry: @registry,
+            auth_token: SecureRandom.hex(32)
+          )
           return false unless @server.start
 
-          write_discovery(owner_pid: Process.pid, auth_token: auth_token)
+          write_discovery(owner_pid: Process.pid, auth_token: @server.auth_token)
           true
         end
       rescue StandardError => e
@@ -157,6 +162,8 @@ module Lich
           @server&.stop
           @server = nil
           @registry = nil
+        end
+        @service_client_mutex.synchronize do
           @service_client = nil
           @service_client_token = nil
         end
@@ -170,7 +177,7 @@ module Lich
         discovery = load_discovery
         return nil unless discovery[:auth_token]
 
-        @mutex.synchronize do
+        @service_client_mutex.synchronize do
           if @service_client.nil? || @service_client_token != discovery[:auth_token]
             @service_client = Client.new(host: DEFAULT_HOST, port: DEFAULT_PORT, auth_token: discovery[:auth_token])
             @service_client_token = discovery[:auth_token]
@@ -241,6 +248,7 @@ module Lich
         }
         temp_path = "#{discovery_path}.#{Process.pid}.tmp"
         File.write(temp_path, JSON.dump(payload))
+        File.chmod(0o600, temp_path)
         File.rename(temp_path, discovery_path)
       ensure
         File.delete(temp_path) if defined?(temp_path) && File.exist?(temp_path)
@@ -270,7 +278,11 @@ module Lich
         return unless discovery[:owner_pid].to_i == Process.pid
 
         current_snapshot = snapshot
-        stop_service! if current_snapshot[:total].to_i.zero?
+        return if current_snapshot[:error]
+        return unless current_snapshot[:source] == 'ActiveSessionsAPI'
+        return unless current_snapshot[:total].to_i.zero?
+
+        stop_service!
       rescue StandardError
         nil
       end

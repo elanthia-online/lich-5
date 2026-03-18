@@ -95,6 +95,7 @@ RSpec.describe 'ActiveSessions server/client' do
 
     request_socket = StringIO.new("{\"command\":\"snapshot\",\"auth\":\"shared-token\"}\n")
     response_socket = StringIO.new
+    allow(IO).to receive(:select).with([request_socket], nil, nil, Lich::InternalAPI::ActiveSessions::Server::READ_TIMEOUT).and_return([request_socket])
     allow(request_socket).to receive(:puts) { |payload| response_socket.write("#{payload}\n") }
     allow(request_socket).to receive(:close)
 
@@ -104,6 +105,11 @@ RSpec.describe 'ActiveSessions server/client' do
     response = JSON.parse(response_socket.read, symbolize_names: true)
     expect(response[:ok]).to be(true)
     expect(response[:payload][:source]).to eq('ActiveSessionsAPI')
+  end
+
+  it 'rejects remove requests that do not include a pid' do
+    expect(server.send(:process_request, '{"command":"remove","auth":"shared-token","payload":{}}'))
+      .to eq(ok: false, error: 'pid required')
   end
 
   it 'dispatches upsert and remove requests to the registry' do
@@ -119,5 +125,14 @@ RSpec.describe 'ActiveSessions server/client' do
   it 'rejects requests without the shared auth token' do
     expect(server.send(:process_request, '{"command":"snapshot","payload":{}}'))
       .to eq(ok: false, error: 'unauthorized')
+  end
+
+  it 'returns without writing a response when the initial read times out' do
+    timeout_socket = instance_double(IO)
+    allow(IO).to receive(:select).with([timeout_socket], nil, nil, Lich::InternalAPI::ActiveSessions::Server::READ_TIMEOUT).and_return(nil)
+    allow(timeout_socket).to receive(:close)
+    expect(timeout_socket).not_to receive(:puts)
+
+    server.send(:handle_client, timeout_socket)
   end
 end

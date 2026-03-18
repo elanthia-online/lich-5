@@ -183,20 +183,7 @@ module Lich
         #
         # @return [Hash] normalized payload suitable for registry upsert
         def self.current_payload
-          @mutex.synchronize do
-            {
-              pid: Process.pid,
-              session_name: @session_name,
-              role: @role,
-              frontend: resolve_frontend,
-              game_code: resolve_game_code,
-              started_at: @started_at,
-              connected: @listener_port.nil? ? true : @listener_connected,
-              listener_host: @listener_host,
-              listener_port: @listener_port,
-              hidden: false
-            }
-          end
+          @mutex.synchronize { build_current_payload }
         end
 
         # Pushes the current process state into the active sessions service.
@@ -207,18 +194,7 @@ module Lich
           @mutex.synchronize do
             return unless @started
 
-            payload = {
-              pid: Process.pid,
-              session_name: @session_name,
-              role: @role,
-              frontend: resolve_frontend,
-              game_code: resolve_game_code,
-              started_at: @started_at,
-              connected: @listener_port.nil? ? true : @listener_connected,
-              listener_host: @listener_host,
-              listener_port: @listener_port,
-              hidden: false
-            }
+            payload = build_current_payload
           end
 
           ActiveSessions.register_session(payload)
@@ -232,6 +208,25 @@ module Lich
           @mutex.synchronize { @running }
         end
         private_class_method :running?
+
+        # Builds the normalized current-session payload from lifecycle state.
+        #
+        # @return [Hash]
+        def self.build_current_payload
+          {
+            pid: Process.pid,
+            session_name: @session_name,
+            role: @role,
+            frontend: resolve_frontend,
+            game_code: resolve_game_code,
+            started_at: @started_at,
+            connected: @listener_port.nil? ? true : @listener_connected,
+            listener_host: @listener_host,
+            listener_port: @listener_port,
+            hidden: false
+          }
+        end
+        private_class_method :build_current_payload
 
         # Resolves the current frontend identifier from runtime globals.
         #
