@@ -27,8 +27,8 @@ RSpec.describe Lich::Common::FeatureFlags do
       expect(described_class.enabled?(:unconfigured_flag)).to be(false)
     end
 
-    it 'returns true for accepted truthy persisted values' do
-      %w[1 true on yes TRUE ON YES].each do |truthy_value|
+    %w[1 true on yes TRUE ON YES].each do |truthy_value|
+      it "returns true for the persisted value #{truthy_value.inspect}" do
         allow(db).to receive(:get_first_value).and_return(truthy_value)
 
         expect(described_class.enabled?(:demo_flag)).to be(true)
