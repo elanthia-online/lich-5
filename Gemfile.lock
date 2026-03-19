@@ -56,7 +56,7 @@ GEM
     gtk3 (4.3.4)
       atk (= 4.3.4)
       gdk3 (= 4.3.4)
-    json (2.18.0)
+    json (2.19.2)
     kramdown (2.5.1)
       rexml (>= 3.3.9)
     language_server-protocol (3.17.0.5)
@@ -256,7 +256,7 @@ CHECKSUMS
   glib2 (4.3.4) sha256=fb809195f0fdabdab81fea40cd316895743b948eb9ac8a209e60c4b7eb1ec2ff
   gobject-introspection (4.3.4) sha256=78ba5f193280beccae9d1b406d521355abcec7d9e44b57c9dae3d23b7bd547a8
   gtk3 (4.3.4) sha256=d0560a076f0e73c6b1343a415b9f53105a1daeca72c2443fdc50f43fb637fdb3
-  json (2.18.0) sha256=b10506aee4183f5cf49e0efc48073d7b75843ce3782c68dbeb763351c08fd505
+  json (2.19.2) sha256=e7e1bd318b2c37c4ceee2444841c86539bc462e81f40d134cf97826cb14e83cf
   kramdown (2.5.1) sha256=87bbb6abd9d3cebe4fc1f33e367c392b4500e6f8fa19dd61c0972cf4afe7368c
   language_server-protocol (3.17.0.5) sha256=fd1e39a51a28bf3eec959379985a72e296e9f9acfce46f6a79d31ca8760803cc
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
