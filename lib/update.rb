@@ -965,10 +965,27 @@ module Lich
           return
         end
 
-        # Determine the remote path based on repo structure
+        # Check SHA against remote tree before downloading
         raw_path = type == "data" ? "data/#{filename}" : filename
-        url = "#{config[:raw_base_url]}/#{raw_path}"
+        tree_data = fetch_github_json(config[:api_url])
+        if tree_data && tree_data['tree']
+          remote_entry = tree_data['tree'].find { |e| e['path'] == raw_path }
+          if remote_entry
+            local_path = File.join(location, filename)
+            if File.exist?(local_path)
+              local_sha = Digest::SHA1.hexdigest("blob #{File.binread(local_path).bytesize}\0#{File.binread(local_path)}")
+              if local_sha == remote_entry['sha']
+                respond "[lich5-update: #{filename} is already up to date.]"
+                return
+              end
+            end
+          else
+            respond "[lich5-update: #{filename} not found in #{repo_key} repository.]"
+            return
+          end
+        end
 
+        url = "#{config[:raw_base_url]}/#{raw_path}"
         content = http_get(url, auth: false)
         if content
           safe_write(File.join(location, filename), content)
