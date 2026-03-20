@@ -456,8 +456,13 @@ module Lich
 
           # DR: always sync script repositories on login
           # GS: users opt in via ;autostart add --global lich5-update --sync
+          # MUST run in a background thread -- sync_all_repos makes HTTP calls
+          # that block the game thread, preventing process_xml_data from setting
+          # XMLData.name. If Vars is accessed before XMLData.name is set, it
+          # loads/saves under scope "DR:" instead of "DR:CharName", overwriting
+          # real data with an empty session.
           if XMLData.game =~ /^DR/
-            Lich::Util::Update.sync_all_repos
+            Thread.new { Lich::Util::Update.sync_all_repos }
           end
 
           Script.start('autostart') if defined?(Script) && Script.respond_to?(:exists?) && Script.exists?('autostart')
