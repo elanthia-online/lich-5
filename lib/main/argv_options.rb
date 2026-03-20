@@ -156,6 +156,8 @@ module Lich
           puts ''
           puts 'Login and Connection Options:'
           puts '        --login           Login with the specified character name.'
+          puts '        --active-sessions List live sessions from the active sessions service and exit.'
+          puts '        --session-info    Show live session details for a named character and exit.'
           puts '        --without-frontend Run without a frontend (headless mode).'
           puts '        --detachable-client Enable detachable client mode on specified port or host:port.'
           puts '        --reconnect       Automatically reconnect if connection is lost.'
@@ -208,6 +210,10 @@ module Lich
           puts '       ... (convert all saved entries to Enhanced encryption mode with master password)'
           puts '  lich --login MyCharName --no-gui --detachable-client=8000 --dark-mode=true'
           puts '       ... (login without GUI in headless mode with detachable client on port 8000)'
+          puts '  lich --active-sessions'
+          puts '       ... (list active sessions known to the local active sessions service)'
+          puts '  lich --session-info MyCharName'
+          puts '       ... (show live session details for MyCharName, if available)'
         end
 
         def self.print_version
