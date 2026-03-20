@@ -1412,6 +1412,7 @@ module Lich
           respond_mono("[lich5-update: '#{script_name}' is already tracked in #{name}.]")
         else
           UserVars.tracked_scripts[repo_key].push(script_name)
+          Vars.save
           respond_mono("[lich5-update: Added '#{script_name}' to #{name} tracked list.]")
         end
       end
@@ -1435,6 +1436,7 @@ module Lich
           return
         end
         if UserVars.tracked_scripts&.dig(repo_key)&.delete(script_name)
+          Vars.save
           respond_mono("[lich5-update: Removed '#{script_name}' from #{name} tracked list.]")
         else
           respond_mono("[lich5-update: '#{script_name}' was not in your #{name} tracked list.]")
