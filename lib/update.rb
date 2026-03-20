@@ -3,7 +3,9 @@
 module Lich
   module Util
     module Update
+      require 'digest'
       require 'json'
+      require 'net/http'
       require 'open-uri'
       require 'rubygems/package'
       require 'zlib'
@@ -14,9 +16,40 @@ module Lich
       ASSET_TARBALL_NAME = 'lich-5.tar.gz'
       GITHUB_REPO = 'elanthia-online/lich-5'
 
+      # Script repository registry -- defines which repos to sync and how
+      SCRIPT_REPOS = {
+        'dr-scripts' => {
+          api_url: 'https://api.github.com/repos/elanthia-online/dr-scripts/git/trees/main?recursive=1',
+          raw_base_url: 'https://raw.githubusercontent.com/elanthia-online/dr-scripts/main',
+          tracking_mode: :all,
+          script_pattern: /^[^\/]+\.lic$/,
+          game_filter: /^DR/,
+          subdirs: {
+            'profiles' => { pattern: /^profiles\/base(?:-empty)?\.yaml$/, dest: File.join(SCRIPT_DIR, 'profiles') },
+            'data'     => { pattern: /^data\/base.+yaml$/, dest: File.join(SCRIPT_DIR, 'data') }
+          }
+        }.freeze,
+        'scripts'    => {
+          api_url: 'https://api.github.com/repos/elanthia-online/scripts/git/trees/master?recursive=1',
+          raw_base_url: 'https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts',
+          tracking_mode: :explicit,
+          script_pattern: /^scripts\/[^\/]+\.lic$/,
+          game_filter: nil,
+          default_tracked: %w[
+            alias.lic autostart.lic ewaggle.lic go2.lic jinx.lic
+            lich5-update.lic log.lic map.lic repository.lic vars.lic version.lic
+          ].freeze,
+          subdirs: {}
+        }.freeze
+      }.freeze
+
       # Simple in-memory cache for GitHub API responses
       @_http_cache = {}
       @_http_cache_ttl = 60 # seconds
+
+      # GitHub personal access token (loaded lazily)
+      @_github_token = nil
+      @_github_token_loaded = false
 
       @current = LICH_VERSION
       @snapshot_core_script = ["alias.lic", "autostart.lic", "dependency.lic", "ewaggle.lic", "foreach.lic",
@@ -48,8 +81,27 @@ module Lich
           respond "This command has been removed."
         when /^(?:--revert|-r)\b/
           revert
-        when /^--(?:(script|library|data))=(.+)\b/
-          update_file($1&.dup, $2&.dup)
+        when /^--sync(?:=(\S+))?$/
+          if $1
+            sync_repo($1)
+          else
+            sync_all_repos
+          end
+        when /^--track=(\S+):(\S+)$/
+          track_script($1, $2)
+        when /^--untrack=(\S+):(\S+)$/
+          untrack_script($1, $2)
+        when /^--tracked(?:=(\S+))?$/
+          show_tracked($1)
+        when /^--(?:(script|library|data))=(?:(\S+):)?(.+)\b/
+          type_name = $1&.dup
+          repo = $2&.dup
+          file = $3&.dup
+          if repo
+            update_file_from_repo(type_name, repo, file)
+          else
+            update_file(type_name, file)
+          end
         when /^(?:--snapshot|-s)\b/
           snapshot
         else
@@ -136,11 +188,24 @@ module Lich
     --snapshot               Grab current snapshot of Lich5 ecosystem and put in backup
     --revert                 Roll the Lich5 ecosystem back to the most recent snapshot
 
-  Example usage:
+  [Script repository sync]
+    #{$clean_lich_char}lich5-update --sync                              Sync all repos for current game
+    #{$clean_lich_char}lich5-update --sync=dr-scripts                   Sync only dr-scripts repo
+    #{$clean_lich_char}lich5-update --sync=scripts                      Sync only EO/scripts repo
+    #{$clean_lich_char}lich5-update --tracked                           List tracked scripts for all repos
+    #{$clean_lich_char}lich5-update --tracked=scripts                   List tracked scripts for one repo
+    #{$clean_lich_char}lich5-update --track=scripts:bigshot.lic         Add a script to tracked list
+    #{$clean_lich_char}lich5-update --untrack=scripts:bigshot.lic       Remove from tracked list
+
+  [Individual file updates]
+    #{$clean_lich_char}lich5-update --script=<name>                     Update script (auto-detects repo)
+    #{$clean_lich_char}lich5-update --script=dr-scripts:<name>          Update script from specific repo
+    #{$clean_lich_char}lich5-update --data=dr-scripts:base-hunting.yaml Update data file from specific repo
+    #{$clean_lich_char}lich5-update --library=<name>                    Update library file from lich-5
 
   [One time suggestions]
     #{$clean_lich_char}autostart add --global lich5-update --announce    Check for new version at login
-    #{$clean_lich_char}autostart add --global lich5-update --update      To auto accept all updates at login
+    #{$clean_lich_char}autostart add --global lich5-update --sync        Sync script repos at login (GS)
 
   [On demand suggestions]
     #{$clean_lich_char}lich5-update --status                    Show current version and branch info
@@ -148,17 +213,14 @@ module Lich
     #{$clean_lich_char}lich5-update --update                    Update the Lich5 ecosystem to the current release
     #{$clean_lich_char}lich5-update --branch=<name>             Update to a specific GitHub branch (advanced)
     #{$clean_lich_char}lich5-update --revert                    Roll the Lich5 ecosystem back to latest snapshot
-    #{$clean_lich_char}lich5-update --script=<name>             Update an individual script file found in Lich-5
-    #{$clean_lich_char}lich5-update --library=<name>            Update an individual library file found in Lich-5
-    #{$clean_lich_char}lich5-update --data=<name>               Update an individual data file found in Lich-5
 
   [Branch update examples]
     #{$clean_lich_char}lich5-update --branch=main               Update to the main stable branch
     #{$clean_lich_char}lich5-update --branch=some_branch_name   Update to a different branch
     #{$clean_lich_char}lich5-update --branch=owner:branch_name  Update to a fork's branch
 
-    *NOTE* If you use '--snapshot' in '#{$clean_lich_char}autostart' you will create a new
-                snapshot folder every time you log a character in.  NOT recommended.
+    *NOTE* DR users: script repos sync automatically on login.
+           GS users: add --sync to autostart for automatic sync.
     "
       end
 
@@ -318,7 +380,9 @@ module Lich
           return entry[:data]
         end
         begin
-          raw = URI.parse(url).open.read
+          raw = http_get(url)
+          return nil unless raw
+
           data = JSON.parse(raw)
           @_http_cache[url] = { ts: now, data: data }
           data
@@ -326,6 +390,57 @@ module Lich
           respond "Update notice: network error fetching #{url.split('/repos/').last || url} (fetch_github_json): #{e.message}"
           nil
         end
+      end
+
+      #
+      # Perform an HTTP GET request using Net::HTTP
+      #
+      # @param url [String] the URL to fetch
+      # @param auth [Boolean] whether to include GitHub token if available
+      # @return [String, nil] response body or nil on error
+      #
+      def self.http_get(url, auth: true)
+        uri = URI.parse(url)
+        http = Net::HTTP.new(uri.host, uri.port)
+        http.use_ssl = (uri.scheme == 'https')
+        http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+
+        request = Net::HTTP::Get.new(uri.request_uri)
+        if auth
+          token = github_token
+          request['Authorization'] = token if token
+        end
+
+        response = http.request(request)
+        unless response.code == '200'
+          respond "[lich5-update: HTTP #{response.code} fetching #{uri.path}]"
+          return nil
+        end
+        response.body
+      rescue => e
+        respond "[lich5-update: Network error: #{e.message}]"
+        nil
+      end
+
+      #
+      # Load GitHub personal access token from data directory
+      #
+      # @return [String, nil] the authorization header value or nil
+      #
+      def self.github_token
+        return @_github_token if @_github_token_loaded
+
+        @_github_token_loaded = true
+        token_path = File.join(DATA_DIR, 'githubtoken.txt')
+        return nil unless File.exist?(token_path)
+
+        token = File.read(token_path).strip
+        if token.empty?
+          respond "[lich5-update: GitHub token file is empty. Using unauthenticated access.]"
+          return nil
+        end
+
+        @_github_token = "Bearer #{token}"
       end
 
       #
@@ -823,6 +938,47 @@ module Lich
       end
 
       #
+      # Update a specific file from a named repository (repo:filename syntax)
+      #
+      # @param type [String] the file type ('script' or 'data')
+      # @param repo_key [String] the repository key (e.g. 'dr-scripts', 'scripts')
+      # @param filename [String] the filename to download
+      # @return [void]
+      #
+      def self.update_file_from_repo(type, repo_key, filename)
+        config = SCRIPT_REPOS[repo_key]
+        unless config
+          respond "[lich5-update: Unknown repository '#{repo_key}'. Known: #{SCRIPT_REPOS.keys.join(', ')}]"
+          return
+        end
+
+        case type
+        when "script"
+          location = SCRIPT_DIR
+        when "data"
+          # For data files, determine the destination from subdirs config
+          data_subdir = (config[:subdirs] || {}).values.find { |s| s[:dest] }
+          location = data_subdir ? data_subdir[:dest] : File.join(SCRIPT_DIR, 'data')
+          FileUtils.mkdir_p(location)
+        else
+          respond "[lich5-update: repo:filename syntax is only supported for --script= and --data=.]"
+          return
+        end
+
+        # Determine the remote path based on repo structure
+        raw_path = type == "data" ? "data/#{filename}" : filename
+        url = "#{config[:raw_base_url]}/#{raw_path}"
+
+        content = http_get(url, auth: false)
+        if content
+          safe_write(File.join(location, filename), content)
+          respond "[lich5-update: #{filename} has been updated from #{repo_key}.]"
+        else
+          respond "[lich5-update: Failed to download #{filename} from #{repo_key}.]"
+        end
+      end
+
+      #
       # Update a specific file (script, library, or data)
       #
       # @param type [String] the file type ('script', 'library', or 'data')
@@ -1034,6 +1190,263 @@ module Lich
         else
           nil
         end
+      end
+
+      # ---------------------------------------------------------------
+      # Script Repository Sync
+      # ---------------------------------------------------------------
+      #
+      # SHA-based bulk synchronization for script repositories.
+      # Replaces dependency.lic's ScriptManager download infrastructure.
+      #
+
+      #
+      # Sync all registered repositories applicable to the current game
+      #
+      # @return [void]
+      #
+      def self.sync_all_repos
+        SCRIPT_REPOS.each_key { |repo_key| sync_repo(repo_key) }
+      end
+
+      #
+      # Sync a single repository -- downloads only files whose SHA differs from local
+      #
+      # @param repo_key [String] key into SCRIPT_REPOS
+      # @param force [Boolean] download all files regardless of SHA match
+      # @return [void]
+      #
+      def self.sync_repo(repo_key, force: false)
+        config = SCRIPT_REPOS[repo_key]
+        unless config
+          respond "[lich5-update: Unknown repository '#{repo_key}'. Known: #{SCRIPT_REPOS.keys.join(', ')}]"
+          return
+        end
+
+        if config[:game_filter] && XMLData.game !~ config[:game_filter]
+          return
+        end
+
+        tree_data = fetch_github_json(config[:api_url])
+        unless tree_data && tree_data['tree']
+          respond "[lich5-update: Failed to fetch tree for #{repo_key}.]"
+          return
+        end
+        tree = tree_data['tree']
+
+        # Sync scripts
+        syncable = filter_syncable_scripts(tree, config)
+        respond "[lich5-update: Checking #{syncable.length} scripts in #{repo_key}...]"
+
+        local_shas = build_local_sha_map(SCRIPT_DIR)
+        updated = 0
+        syncable.each do |entry|
+          filename = File.basename(entry['path'])
+          next if !force && local_shas[filename] == entry['sha']
+
+          content = http_get("#{config[:raw_base_url]}/#{entry['path']}", auth: false)
+          next unless content
+
+          safe_write(File.join(SCRIPT_DIR, filename), content)
+          updated += 1
+          respond "[lich5-update: Downloaded #{filename}]"
+        end
+
+        if updated > 0
+          respond "[lich5-update: Updated #{updated} script#{updated == 1 ? '' : 's'} from #{repo_key}.]"
+        else
+          respond "[lich5-update: All #{repo_key} scripts are up to date.]"
+        end
+
+        # Sync subdirectories (profiles, data)
+        (config[:subdirs] || {}).each do |subdir_name, subconfig|
+          sync_subdir(tree, config, subdir_name, subconfig)
+        end
+      end
+
+      #
+      # Sync a subdirectory (e.g. profiles/, data/) from a repository
+      #
+      # @param tree [Array<Hash>] the full repository tree
+      # @param config [Hash] the repository config
+      # @param subdir_name [String] human-readable name for messaging
+      # @param subconfig [Hash] with :pattern (Regexp) and :dest (String path)
+      # @return [void]
+      #
+      def self.sync_subdir(tree, config, subdir_name, subconfig)
+        pattern = subconfig[:pattern]
+        dest = subconfig[:dest]
+        return unless pattern && dest
+
+        FileUtils.mkdir_p(dest)
+        entries = tree.select { |e| e['path'] =~ pattern && e['type'] == 'blob' }
+        return if entries.empty?
+
+        local_shas = build_local_sha_map(dest, '*.yaml')
+        updated = 0
+        entries.each do |entry|
+          filename = File.basename(entry['path'])
+          next if local_shas[filename] == entry['sha']
+
+          content = http_get("#{config[:raw_base_url]}/#{entry['path']}", auth: false)
+          next unless content
+
+          safe_write(File.join(dest, filename), content)
+          updated += 1
+          respond "[lich5-update: Downloaded #{subdir_name}/#{filename}]"
+        end
+
+        if updated > 0
+          respond "[lich5-update: Updated #{updated} #{subdir_name} file#{updated == 1 ? '' : 's'}.]"
+        else
+          respond "[lich5-update: #{subdir_name.capitalize} files are up to date.]"
+        end
+      end
+
+      #
+      # Filter tree entries to only syncable scripts based on repo config
+      #
+      # @param tree [Array<Hash>] the repository tree
+      # @param config [Hash] the repository config
+      # @return [Array<Hash>] filtered tree entries
+      #
+      def self.filter_syncable_scripts(tree, config)
+        candidates = tree.select { |e| e['path'] =~ config[:script_pattern] && e['type'] == 'blob' }
+
+        case config[:tracking_mode]
+        when :all
+          candidates.reject { |e| File.basename(e['path']).include?('-setup') }
+        when :explicit
+          tracked = tracked_scripts(config)
+          candidates.select { |e| tracked.include?(File.basename(e['path'])) }
+        else
+          candidates
+        end
+      end
+
+      #
+      # Build a map of filename -> git blob SHA for local files
+      #
+      # @param dir [String] directory to scan
+      # @param pattern [String] glob pattern for files
+      # @return [Hash<String, String>] filename -> SHA map
+      #
+      def self.build_local_sha_map(dir, pattern = '*.lic')
+        Dir[File.join(dir, pattern)].each_with_object({}) do |path, map|
+          body = File.binread(path)
+          map[File.basename(path)] = Digest::SHA1.hexdigest("blob #{body.size}\0#{body}")
+        end
+      end
+
+      #
+      # Write file atomically with rollback support
+      #
+      # @param path [String] destination file path
+      # @param content [String] file content to write
+      # @return [void]
+      #
+      def self.safe_write(path, content)
+        tmp = "#{path}.tmp"
+        old = "#{path}.old"
+        File.rename(path, old) if File.exist?(path)
+        begin
+          File.binwrite(tmp, content)
+          File.rename(tmp, path)
+          File.delete(old) if File.exist?(old)
+        rescue StandardError
+          File.rename(old, path) if File.exist?(old)
+          File.delete(tmp) if File.exist?(tmp)
+          raise
+        end
+      end
+
+      #
+      # Get the list of tracked scripts for a repository
+      #
+      # @param config [Hash] the repository config
+      # @return [Array<String>] list of tracked script filenames
+      #
+      def self.tracked_scripts(config)
+        defaults = config[:default_tracked] || []
+        repo_key = SCRIPT_REPOS.key(config)
+        user_additions = UserVars.tracked_scripts&.dig(repo_key) || [] rescue []
+        (defaults + user_additions).uniq
+      end
+
+      #
+      # Add a script to the user's tracked list for a repository
+      #
+      # @param repo_key [String] repository key
+      # @param script_name [String] script filename (e.g. 'foo.lic')
+      # @return [void]
+      #
+      def self.track_script(repo_key, script_name)
+        config = SCRIPT_REPOS[repo_key]
+        unless config
+          respond "[lich5-update: Unknown repository '#{repo_key}'.]"
+          return
+        end
+        UserVars.tracked_scripts ||= {}
+        UserVars.tracked_scripts[repo_key] ||= []
+        if UserVars.tracked_scripts[repo_key].include?(script_name)
+          respond "[lich5-update: '#{script_name}' is already tracked in #{repo_key}.]"
+        else
+          UserVars.tracked_scripts[repo_key].push(script_name)
+          respond "[lich5-update: Added '#{script_name}' to #{repo_key} tracked list.]"
+        end
+      end
+
+      #
+      # Remove a script from the user's tracked list (cannot remove defaults)
+      #
+      # @param repo_key [String] repository key
+      # @param script_name [String] script filename
+      # @return [void]
+      #
+      def self.untrack_script(repo_key, script_name)
+        config = SCRIPT_REPOS[repo_key]
+        unless config
+          respond "[lich5-update: Unknown repository '#{repo_key}'.]"
+          return
+        end
+        if (config[:default_tracked] || []).include?(script_name)
+          respond "[lich5-update: '#{script_name}' is a default tracked script and cannot be removed.]"
+          return
+        end
+        if UserVars.tracked_scripts&.dig(repo_key)&.delete(script_name)
+          respond "[lich5-update: Removed '#{script_name}' from #{repo_key} tracked list.]"
+        else
+          respond "[lich5-update: '#{script_name}' was not in your #{repo_key} tracked list.]"
+        end
+      end
+
+      #
+      # Display tracked scripts for a repository (or all repositories)
+      #
+      # @param repo_key [String, nil] specific repo or nil for all
+      # @return [void]
+      #
+      def self.show_tracked(repo_key = nil)
+        repos = repo_key ? { repo_key => SCRIPT_REPOS[repo_key] } : SCRIPT_REPOS
+        repos.each do |key, config|
+          unless config
+            respond "[lich5-update: Unknown repository '#{key}'.]"
+            next
+          end
+          respond ""
+          respond "  #{key} (#{config[:tracking_mode]} mode):"
+          if config[:tracking_mode] == :all
+            respond "    All .lic files at root are synced automatically."
+          else
+            scripts = tracked_scripts(config)
+            defaults = config[:default_tracked] || []
+            scripts.each do |s|
+              label = defaults.include?(s) ? " (default)" : " (user-added)"
+              respond "    #{s}#{label}"
+            end
+          end
+        end
+        respond ""
       end
 
       # End module definitions

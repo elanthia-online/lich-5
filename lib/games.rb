@@ -454,6 +454,12 @@ module Lich
             Lich::Util::Update.update_core_data_and_scripts
           end
 
+          # DR: always sync script repositories on login
+          # GS: users opt in via ;autostart add --global lich5-update --sync
+          if XMLData.game =~ /^DR/
+            Lich::Util::Update.sync_all_repos
+          end
+
           Script.start('autostart') if defined?(Script) && Script.respond_to?(:exists?) && Script.exists?('autostart')
           @@autostarted = true
 
