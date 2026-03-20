@@ -19,6 +19,7 @@ module Lich
       # Script repository registry -- defines which repos to sync and how
       SCRIPT_REPOS = {
         'dr-scripts' => {
+          display_name: 'DR Scripts',
           api_url: 'https://api.github.com/repos/elanthia-online/dr-scripts/git/trees/main?recursive=1',
           raw_base_url: 'https://raw.githubusercontent.com/elanthia-online/dr-scripts/main',
           tracking_mode: :all,
@@ -30,6 +31,7 @@ module Lich
           }
         }.freeze,
         'scripts'    => {
+          display_name: 'GS Scripts',
           api_url: 'https://api.github.com/repos/elanthia-online/scripts/git/trees/master?recursive=1',
           raw_base_url: 'https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts',
           tracking_mode: :explicit,
@@ -641,8 +643,9 @@ module Lich
           respond
           respond "Already on branch '#{branch_name}' from '#{repo}'."
           respond "Scripts and data are up to date (verified by checksums)."
-          applicable_repos = SCRIPT_REPOS.select { |_, c| c[:game_filter].nil? || XMLData.game =~ c[:game_filter] }.keys
-          respond "To re-sync scripts (#{applicable_repos.join(', ')}): #{$clean_lich_char}lich5-update --sync"
+          applicable = SCRIPT_REPOS.select { |_, c| c[:game_filter].nil? || XMLData.game =~ c[:game_filter] }
+          names = applicable.values.map { |c| c[:display_name] }.compact.join(', ')
+          respond "To re-sync scripts (#{names}): #{$clean_lich_char}lich5-update --sync"
           respond
           return
         end
@@ -989,23 +992,25 @@ module Lich
             if File.exist?(local_path)
               local_sha = Digest::SHA1.hexdigest("blob #{File.binread(local_path).bytesize}\0#{File.binread(local_path)}")
               if local_sha == remote_entry['sha']
-                respond "[lich5-update: #{filename} is already up to date.]"
+                respond_mono("[lich5-update: #{filename} is already up to date.]")
                 return
               end
             end
           else
-            respond "[lich5-update: #{filename} not found in #{repo_key} repository.]"
+            name = config[:display_name] || repo_key
+            respond_mono("[lich5-update: #{filename} not found in #{name} repository.]")
             return
           end
         end
 
+        name = config[:display_name] || repo_key
         url = "#{config[:raw_base_url]}/#{raw_path}"
         content = http_get(url, auth: false)
         if content
           safe_write(File.join(location, filename), content)
-          respond "[lich5-update: #{filename} has been updated from #{repo_key}.]"
+          respond_mono("[lich5-update: #{filename} has been updated from #{name}.]")
         else
-          respond "[lich5-update: Failed to download #{filename} from #{repo_key}.]"
+          respond_mono("[lich5-update: Failed to download #{filename} from #{name}.]")
         end
       end
 
@@ -1256,11 +1261,12 @@ module Lich
         tree = tree_data['tree']
 
         # Sync scripts
+        name = config[:display_name] || repo_key
         syncable = filter_syncable_scripts(tree, config)
-        respond "[lich5-update: Checking #{syncable.length} scripts in #{repo_key}...]"
+        respond_mono("[lich5-update: Syncing #{name} (#{syncable.length} scripts)...]")
 
         local_shas = build_local_sha_map(SCRIPT_DIR)
-        updated = 0
+        downloaded_scripts = []
         syncable.each do |entry|
           filename = File.basename(entry['path'])
           next if !force && local_shas[filename] == entry['sha']
@@ -1269,20 +1275,18 @@ module Lich
           next unless content
 
           safe_write(File.join(SCRIPT_DIR, filename), content)
-          updated += 1
-          respond "[lich5-update: Downloaded #{filename}]"
-        end
-
-        if updated > 0
-          respond "[lich5-update: Updated #{updated} script#{updated == 1 ? '' : 's'} from #{repo_key}.]"
-        else
-          respond "[lich5-update: All #{repo_key} scripts are up to date.]"
+          downloaded_scripts << filename
         end
 
         # Sync subdirectories (profiles, data)
+        downloaded_other = {}
         (config[:subdirs] || {}).each do |subdir_name, subconfig|
-          sync_subdir(tree, config, subdir_name, subconfig)
+          files = sync_subdir(tree, config, subdir_name, subconfig)
+          downloaded_other[subdir_name] = files unless files.empty?
         end
+
+        # Render sync summary
+        render_sync_summary(name, syncable.length, downloaded_scripts, downloaded_other, config[:subdirs]&.keys || [])
       end
 
       #
@@ -1292,19 +1296,19 @@ module Lich
       # @param config [Hash] the repository config
       # @param subdir_name [String] human-readable name for messaging
       # @param subconfig [Hash] with :pattern (Regexp) and :dest (String path)
-      # @return [void]
+      # @return [Array<String>] list of downloaded filenames
       #
-      def self.sync_subdir(tree, config, subdir_name, subconfig)
+      def self.sync_subdir(tree, config, _subdir_name, subconfig)
         pattern = subconfig[:pattern]
         dest = subconfig[:dest]
-        return unless pattern && dest
+        return [] unless pattern && dest
 
         FileUtils.mkdir_p(dest)
         entries = tree.select { |e| e['path'] =~ pattern && e['type'] == 'blob' }
-        return if entries.empty?
+        return [] if entries.empty?
 
         local_shas = build_local_sha_map(dest, '*.yaml')
-        updated = 0
+        downloaded = []
         entries.each do |entry|
           filename = File.basename(entry['path'])
           next if local_shas[filename] == entry['sha']
@@ -1313,15 +1317,9 @@ module Lich
           next unless content
 
           safe_write(File.join(dest, filename), content)
-          updated += 1
-          respond "[lich5-update: Downloaded #{subdir_name}/#{filename}]"
+          downloaded << filename
         end
-
-        if updated > 0
-          respond "[lich5-update: Updated #{updated} #{subdir_name} file#{updated == 1 ? '' : 's'}.]"
-        else
-          respond "[lich5-update: #{subdir_name.capitalize} files are up to date.]"
-        end
+        downloaded
       end
 
       #
@@ -1409,11 +1407,12 @@ module Lich
         end
         UserVars.tracked_scripts ||= {}
         UserVars.tracked_scripts[repo_key] ||= []
+        name = config[:display_name] || repo_key
         if UserVars.tracked_scripts[repo_key].include?(script_name)
-          respond "[lich5-update: '#{script_name}' is already tracked in #{repo_key}.]"
+          respond_mono("[lich5-update: '#{script_name}' is already tracked in #{name}.]")
         else
           UserVars.tracked_scripts[repo_key].push(script_name)
-          respond "[lich5-update: Added '#{script_name}' to #{repo_key} tracked list.]"
+          respond_mono("[lich5-update: Added '#{script_name}' to #{name} tracked list.]")
         end
       end
 
@@ -1430,14 +1429,15 @@ module Lich
           respond "[lich5-update: Unknown repository '#{repo_key}'.]"
           return
         end
+        name = config[:display_name] || repo_key
         if (config[:default_tracked] || []).include?(script_name)
-          respond "[lich5-update: '#{script_name}' is a default tracked script and cannot be removed.]"
+          respond_mono("[lich5-update: '#{script_name}' is a default script and cannot be removed.]")
           return
         end
         if UserVars.tracked_scripts&.dig(repo_key)&.delete(script_name)
-          respond "[lich5-update: Removed '#{script_name}' from #{repo_key} tracked list.]"
+          respond_mono("[lich5-update: Removed '#{script_name}' from #{name} tracked list.]")
         else
-          respond "[lich5-update: '#{script_name}' was not in your #{repo_key} tracked list.]"
+          respond_mono("[lich5-update: '#{script_name}' was not in your #{name} tracked list.]")
         end
       end
 
@@ -1449,25 +1449,107 @@ module Lich
       #
       def self.show_tracked(repo_key = nil)
         repos = repo_key ? { repo_key => SCRIPT_REPOS[repo_key] } : SCRIPT_REPOS
+        table_rows = []
+
         repos.each do |key, config|
           unless config
             respond "[lich5-update: Unknown repository '#{key}'.]"
             next
           end
-          respond ""
-          respond "  #{key} (#{config[:tracking_mode]} mode):"
+
+          name = config[:display_name] || key
+          table_rows << :separator unless table_rows.empty?
+          table_rows << [{ value: "#{name} (#{key})", colspan: 3, alignment: :center }]
+          table_rows << :separator
+
           if config[:tracking_mode] == :all
-            respond "    All .lic files at root are synced automatically."
+            table_rows << [{ value: "All .lic files synced automatically", colspan: 3 }]
           else
+            table_rows << ['Script', 'Type', 'Status']
+            table_rows << :separator
             scripts = tracked_scripts(config)
             defaults = config[:default_tracked] || []
-            scripts.each do |s|
-              label = defaults.include?(s) ? " (default)" : " (user-added)"
-              respond "    #{s}#{label}"
+            scripts.sort.each do |s|
+              type = defaults.include?(s) ? 'default' : 'user-added'
+              exists = File.exist?(File.join(SCRIPT_DIR, s))
+              status = exists ? 'installed' : 'not installed'
+              table_rows << [s, type, status]
             end
           end
         end
-        respond ""
+
+        table = Terminal::Table.new(rows: table_rows, title: 'Tracked Scripts')
+        respond_mono(table.to_s)
+      end
+
+      #
+      # Render a sync summary table
+      #
+      # @param repo_name [String] display name of the repository
+      # @param script_count [Integer] total scripts checked
+      # @param downloaded_scripts [Array<String>] scripts that were downloaded
+      # @param downloaded_other [Hash<String, Array<String>>] subdir => filenames downloaded
+      # @param subdir_names [Array<String>] all subdir names (for "up to date" reporting)
+      # @return [void]
+      #
+      def self.render_sync_summary(repo_name, script_count, downloaded_scripts, downloaded_other, subdir_names)
+        total_downloaded = downloaded_scripts.length + downloaded_other.values.flatten.length
+
+        if total_downloaded == 0
+          table = Terminal::Table.new(
+            title: "#{repo_name} Sync",
+            rows: [
+              ['Scripts', "#{script_count} checked, all up to date"],
+              *subdir_names.map { |s| [s.capitalize, 'up to date'] }
+            ]
+          )
+          respond_mono(table.to_s)
+          return
+        end
+
+        table_rows = []
+        table_rows << ['Category', 'File', 'Status']
+        table_rows << :separator
+
+        downloaded_scripts.each do |f|
+          table_rows << ['script', f, 'downloaded']
+        end
+
+        downloaded_other.each do |subdir, files|
+          files.each do |f|
+            table_rows << [subdir, f, 'downloaded']
+          end
+        end
+
+        subdir_names.each do |s|
+          next if downloaded_other.key?(s)
+
+          table_rows << [s, '--', 'up to date']
+        end
+
+        if downloaded_scripts.empty?
+          table_rows << ['scripts', '--', "#{script_count} checked, all up to date"]
+        end
+
+        table_rows << :separator
+        table_rows << [{ value: "Total: #{total_downloaded} file#{total_downloaded == 1 ? '' : 's'} updated", colspan: 3 }]
+
+        table = Terminal::Table.new(title: "#{repo_name} Sync", rows: table_rows)
+        respond_mono(table.to_s)
+      end
+
+      #
+      # Output text in monospace format for all frontends
+      #
+      # @param text [String] the text to display
+      # @return [void]
+      #
+      def self.respond_mono(text)
+        if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:mono)
+          Lich::Messaging.mono(text)
+        else
+          respond text
+        end
       end
 
       # End module definitions
