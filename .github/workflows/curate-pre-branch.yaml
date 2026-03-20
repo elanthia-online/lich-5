@@ -76,12 +76,12 @@ jobs:
       BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     steps:
       - name: Checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@708024e6c902387ab41de36e1669e43b5ee7085e # v1.283.0
+        uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f # v1.295.0
         with:
           bundler-cache: true
 
@@ -112,7 +112,7 @@ jobs:
 
       - name: Upload union merge audit artifacts
         if: ${{ always() && (env.HAD_CONFLICTS == 'true' || failure()) }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: union-merge-audit-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: ignore
