@@ -956,8 +956,8 @@ module Lich
         when "script"
           location = SCRIPT_DIR
         when "data"
-          # For data files, determine the destination from subdirs config
-          data_subdir = (config[:subdirs] || {}).values.find { |s| s[:dest] }
+          # For data files, use the 'data' subdirectory config
+          data_subdir = (config[:subdirs] || {})['data']
           location = data_subdir ? data_subdir[:dest] : File.join(SCRIPT_DIR, 'data')
           FileUtils.mkdir_p(location)
         else
