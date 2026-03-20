@@ -1111,13 +1111,6 @@ module Lich
           return
         end
 
-        updatable_scripts = {
-          "all" => ["alias.lic", "autostart.lic", "go2.lic", "jinx.lic", "log.lic",
-                    "logxml.lic", "map.lic", "repository.lic", "vars.lic", "version.lic"],
-          "gs"  => ["ewaggle.lic", "foreach.lic"],
-          "dr"  => ["dependency.lic"]
-        }
-
         # We DO care about local edits from players to the Lich5 / data files
         # specifically gameobj-data.xml and spell-list.xml.
         # Let's be a little more purposeful and gentle with these two files.
@@ -1131,11 +1124,8 @@ module Lich
           update_file('data', file)
         end
 
-        # We do not care about local edits from players to the Lich5 / script location
-        # for CORE scripts (those required to run Lich5 properly)
-        updatable_scripts["all"].each { |script| update_file('script', script) }
-        updatable_scripts["gs"].each { |script| update_file('script', script) } if XMLData.game =~ /^GS/
-        updatable_scripts["dr"].each { |script| update_file('script', script) } if XMLData.game =~ /^DR/
+        # Use SHA-based sync for core scripts -- only downloads files that actually changed
+        sync_all_repos
 
         # Update Lich.db value with last updated version
         Lich.core_updated_with_lich_version = version
