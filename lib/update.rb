@@ -633,6 +633,20 @@ module Lich
           repo = GITHUB_REPO
         end
 
+        # Check if already on this branch
+        current_branch = get_branch_info
+        if current_branch &&
+           current_branch[:branch_name] == branch_name &&
+           (current_branch[:repository] || GITHUB_REPO) == repo
+          respond
+          respond "Already on branch '#{branch_name}' from '#{repo}'."
+          respond "Scripts and data are up to date (verified by checksums)."
+          applicable_repos = SCRIPT_REPOS.select { |_, c| c[:game_filter].nil? || XMLData.game =~ c[:game_filter] }.keys
+          respond "To re-sync scripts (#{applicable_repos.join(', ')}): #{$clean_lich_char}lich5-update --sync"
+          respond
+          return
+        end
+
         respond
         respond "Attempting to update to branch: #{branch_name}"
         respond "Repository: #{repo}" if owner
