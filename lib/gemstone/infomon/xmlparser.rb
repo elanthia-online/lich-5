@@ -86,7 +86,7 @@ module Lich
             /falls on its side and lets out one last whimpering sigh of water droplets/,
             /lets out one last whimpering sigh of chartreuse vapors and dies/,
             /lets out one last whimpering sigh of sparks and blue mist and dies/,
-            /lets out one last whimpering sigh of water droplets and dies/,            
+            /lets out one last whimpering sigh of water droplets and dies/,
           )
           NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? #{NpcDeathPostfix}[\.!]\r?\n?$/
 
