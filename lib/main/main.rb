@@ -240,9 +240,12 @@ reconnect_if_wanted = proc {
         Lich.log "error: cannot bind listen socket to local port: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         exit(1)
       end
-      accept_thread = Thread.new { $_CLIENT_ = SynchronizedSocket.new(listener.accept) }
-      localport = listener.addr[1]
-      Frontend.create_session_file(Lich::Common::Account.character, listener.addr[2], listener.addr[1], display_session: false)
+      accept_thread = Thread.new {
+        accepted_socket, = listener.accept
+        $_CLIENT_ = SynchronizedSocket.new(accepted_socket)
+      }
+      localport = listener.local_address.ip_port
+      Frontend.create_session_file(Lich::Common::Account.character, listener.local_address.ip_address, localport, display_session: false)
       if custom_launch
         sal_filename = nil
         launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, game_key.to_s)
@@ -382,7 +385,8 @@ reconnect_if_wanted = proc {
       exit
     }
     #      $_CLIENT_ = listener.accept
-    $_CLIENT_ = SynchronizedSocket.new(listener.accept)
+    accepted_socket, = listener.accept
+    $_CLIENT_ = SynchronizedSocket.new(accepted_socket)
     listener.close rescue nil
     timeout_thread.kill
     $stdout.puts "Connection with the local game client is open."
