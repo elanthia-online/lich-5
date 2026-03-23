@@ -52,7 +52,9 @@ module Lich
         empty_values = empty_data&.empty_values
         return unless empty_values
 
-        empty_values.each { |name, value| settings[name] ||= value }
+        empty_values.each do |name, value|
+          settings[name] = value unless settings.to_h.key?(name) || settings.to_h.key?(name.to_sym)
+        end
       end
 
       # --- Phase 2: Spell enrichment ---
@@ -140,7 +142,7 @@ module Lich
           if mapping[:mode] == :append
             settings[key] = (settings[key] || []) + (UserVars.send(uvar) || [])
           else
-            settings[key] ||= UserVars.send(uvar)
+            settings[key] = UserVars.send(uvar) unless settings.to_h.key?(key) || settings.to_h.key?(key.to_sym)
           end
         end
 
@@ -179,9 +181,8 @@ module Lich
           next unless offending_key
 
           _respond("<pushBold/>#{settings[offending_key]} is not a valid #{offending_key} setting.<popBold/>")
-          _respond("<pushBold/>Exiting.<popBold/>")
           _respond("<pushBold/>Please edit your yaml to use a different value.<popBold/>")
-          exit
+          raise ArgumentError, "denylisted value '#{settings[offending_key]}' for setting '#{offending_key}'"
         end
       end
 
