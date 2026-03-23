@@ -1525,7 +1525,7 @@ module Lich
         end
 
         failed_scripts.each do |f|
-          table_rows << ['script', f, 'FAILED']
+          table_rows << ['script', f, 'FAILED (will retry next login)']
         end
 
         downloaded_other.each do |subdir, files|
@@ -1536,7 +1536,7 @@ module Lich
 
         failed_other.each do |subdir, files|
           files.each do |f|
-            table_rows << [subdir, f, 'FAILED']
+            table_rows << [subdir, f, 'FAILED (will retry next login)']
           end
         end
 
