@@ -31,7 +31,7 @@ module Lich
           }
         }.freeze,
         'scripts'    => {
-          display_name: 'GS Scripts',
+          display_name: 'Core Scripts',
           api_url: 'https://api.github.com/repos/elanthia-online/scripts/git/trees/master?recursive=1',
           raw_base_url: 'https://raw.githubusercontent.com/elanthia-online/scripts/master',
           tracking_mode: :explicit,
@@ -43,6 +43,21 @@ module Lich
             logxml.lic map.lic repository.lic vars.lic version.lic
           ].freeze,
           subdirs: {}
+        }.freeze,
+        'gs-scripts' => {
+          display_name: 'GS Scripts',
+          api_url: 'https://api.github.com/repos/elanthia-online/scripts/git/trees/master?recursive=1',
+          raw_base_url: 'https://raw.githubusercontent.com/elanthia-online/scripts/master',
+          tracking_mode: :explicit,
+          script_pattern: /^scripts\/[^\/]+\.lic$/,
+          script_prefix: 'scripts',
+          game_filter: /^GS/,
+          default_tracked: %w[
+            ewaggle.lic
+          ].freeze,
+          subdirs: {
+            'data' => { pattern: /^scripts\/(gameobj-data|effect-list)\.xml$/, dest: DATA_DIR, glob: '*.xml' }
+          }
         }.freeze
       }.freeze
 
@@ -1309,7 +1324,7 @@ module Lich
         entries = tree.select { |e| e['path'] =~ pattern && e['type'] == 'blob' }
         return [[], []] if entries.empty?
 
-        local_shas = build_local_sha_map(dest, '*.yaml')
+        local_shas = build_local_sha_map(dest, subconfig[:glob] || '*.yaml')
         downloaded = []
         failed = []
         entries.each do |entry|
