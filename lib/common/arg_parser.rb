@@ -41,7 +41,7 @@ module Lich
         end
 
         display_args(data)
-        exit
+        raise ArgumentError, "invalid or missing arguments"
       end
 
       # Displays help/usage information for a script.
