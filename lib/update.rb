@@ -33,9 +33,10 @@ module Lich
         'scripts'    => {
           display_name: 'GS Scripts',
           api_url: 'https://api.github.com/repos/elanthia-online/scripts/git/trees/master?recursive=1',
-          raw_base_url: 'https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts',
+          raw_base_url: 'https://raw.githubusercontent.com/elanthia-online/scripts/master',
           tracking_mode: :explicit,
           script_pattern: /^scripts\/[^\/]+\.lic$/,
+          script_prefix: 'scripts',
           game_filter: nil,
           default_tracked: %w[
             alias.lic autostart.lic ewaggle.lic go2.lic jinx.lic
@@ -981,7 +982,15 @@ module Lich
         end
 
         # Check SHA against remote tree before downloading
-        raw_path = type == "data" ? "data/#{filename}" : filename
+        # Repos with a script_prefix (e.g. 'scripts') store .lic files in a subdirectory
+        prefix = config[:script_prefix]
+        raw_path = if type == "data"
+                     "data/#{filename}"
+                   elsif prefix
+                     "#{prefix}/#{filename}"
+                   else
+                     filename
+                   end
         tree_data = fetch_github_json(config[:api_url])
         if tree_data && tree_data['tree']
           remote_entry = tree_data['tree'].find { |e| e['path'] == raw_path }
