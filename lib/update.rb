@@ -634,20 +634,9 @@ module Lich
           repo = GITHUB_REPO
         end
 
-        # Check if already on this branch
-        current_branch = get_branch_info
-        if current_branch &&
-           current_branch[:branch_name] == branch_name &&
-           (current_branch[:repository] || GITHUB_REPO) == repo
-          respond
-          respond "Already on branch '#{branch_name}' from '#{repo}'."
-          respond "Scripts and data are up to date (verified by checksums)."
-          applicable = SCRIPT_REPOS.select { |_, c| c[:game_filter].nil? || XMLData.game =~ c[:game_filter] }
-          names = applicable.values.map { |c| c[:display_name] }.compact.join(', ')
-          respond "To re-sync scripts (#{names}): #{$clean_lich_char}lich5-update --sync"
-          respond
-          return
-        end
+        # Note: we intentionally do NOT skip re-download when already on
+        # the same branch. The user may be pulling newer commits, and the
+        # tarball is small enough that re-downloading is harmless.
 
         respond
         respond "Attempting to update to branch: #{branch_name}"
