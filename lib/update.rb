@@ -1263,12 +1263,16 @@ module Lich
 
         local_shas = build_local_sha_map(SCRIPT_DIR)
         downloaded_scripts = []
+        failed_scripts = []
         syncable.each do |entry|
           filename = File.basename(entry['path'])
           next if !force && local_shas[filename] == entry['sha']
 
           content = http_get("#{config[:raw_base_url]}/#{entry['path']}", auth: false)
-          next unless content
+          unless content
+            failed_scripts << filename
+            next
+          end
 
           safe_write(File.join(SCRIPT_DIR, filename), content)
           downloaded_scripts << filename
@@ -1276,13 +1280,15 @@ module Lich
 
         # Sync subdirectories (profiles, data)
         downloaded_other = {}
+        failed_other = {}
         (config[:subdirs] || {}).each do |subdir_name, subconfig|
-          files = sync_subdir(tree, config, subdir_name, subconfig)
+          files, failures = sync_subdir(tree, config, subdir_name, subconfig)
           downloaded_other[subdir_name] = files unless files.empty?
+          failed_other[subdir_name] = failures unless failures.empty?
         end
 
         # Render sync summary
-        render_sync_summary(name, syncable.length, downloaded_scripts, downloaded_other, config[:subdirs]&.keys || [])
+        render_sync_summary(name, syncable.length, downloaded_scripts, downloaded_other, config[:subdirs]&.keys || [], failed_scripts, failed_other)
       end
 
       #
@@ -1292,30 +1298,34 @@ module Lich
       # @param config [Hash] the repository config
       # @param subdir_name [String] human-readable name for messaging
       # @param subconfig [Hash] with :pattern (Regexp) and :dest (String path)
-      # @return [Array<String>] list of downloaded filenames
+      # @return [Array(Array<String>, Array<String>)] downloaded filenames and failed filenames
       #
       def self.sync_subdir(tree, config, _subdir_name, subconfig)
         pattern = subconfig[:pattern]
         dest = subconfig[:dest]
-        return [] unless pattern && dest
+        return [[], []] unless pattern && dest
 
         FileUtils.mkdir_p(dest)
         entries = tree.select { |e| e['path'] =~ pattern && e['type'] == 'blob' }
-        return [] if entries.empty?
+        return [[], []] if entries.empty?
 
         local_shas = build_local_sha_map(dest, '*.yaml')
         downloaded = []
+        failed = []
         entries.each do |entry|
           filename = File.basename(entry['path'])
           next if local_shas[filename] == entry['sha']
 
           content = http_get("#{config[:raw_base_url]}/#{entry['path']}", auth: false)
-          next unless content
+          unless content
+            failed << filename
+            next
+          end
 
           safe_write(File.join(dest, filename), content)
           downloaded << filename
         end
-        downloaded
+        [downloaded, failed]
       end
 
       #
@@ -1490,10 +1500,11 @@ module Lich
       # @param subdir_names [Array<String>] all subdir names (for "up to date" reporting)
       # @return [void]
       #
-      def self.render_sync_summary(repo_name, script_count, downloaded_scripts, downloaded_other, subdir_names)
+      def self.render_sync_summary(repo_name, script_count, downloaded_scripts, downloaded_other, subdir_names, failed_scripts = [], failed_other = {})
         total_downloaded = downloaded_scripts.length + downloaded_other.values.flatten.length
+        total_failed = failed_scripts.length + failed_other.values.flatten.length
 
-        if total_downloaded == 0
+        if total_downloaded == 0 && total_failed == 0
           table = Terminal::Table.new(
             title: "#{repo_name} Sync",
             rows: [
@@ -1513,24 +1524,36 @@ module Lich
           table_rows << ['script', f, 'downloaded']
         end
 
+        failed_scripts.each do |f|
+          table_rows << ['script', f, 'FAILED']
+        end
+
         downloaded_other.each do |subdir, files|
           files.each do |f|
             table_rows << [subdir, f, 'downloaded']
           end
         end
 
+        failed_other.each do |subdir, files|
+          files.each do |f|
+            table_rows << [subdir, f, 'FAILED']
+          end
+        end
+
         subdir_names.each do |s|
-          next if downloaded_other.key?(s)
+          next if downloaded_other.key?(s) || failed_other.key?(s)
 
           table_rows << [s, '--', 'up to date']
         end
 
-        if downloaded_scripts.empty?
+        if downloaded_scripts.empty? && failed_scripts.empty?
           table_rows << ['scripts', '--', "#{script_count} checked, all up to date"]
         end
 
         table_rows << :separator
-        table_rows << [{ value: "Total: #{total_downloaded} file#{total_downloaded == 1 ? '' : 's'} updated", colspan: 3 }]
+        summary = "Total: #{total_downloaded} updated"
+        summary += ", #{total_failed} failed" if total_failed > 0
+        table_rows << [{ value: summary, colspan: 3 }]
 
         table = Terminal::Table.new(title: "#{repo_name} Sync", rows: table_rows)
         respond_mono(table.to_s)
