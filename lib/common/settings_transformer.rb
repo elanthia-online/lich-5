@@ -52,9 +52,7 @@ module Lich
         empty_values = empty_data&.empty_values
         return unless empty_values
 
-        empty_values.each do |name, value|
-          settings[name] = value unless settings.to_h.key?(name) || settings.to_h.key?(name.to_sym)
-        end
+        empty_values.each { |name, value| settings[name] ||= value }
       end
 
       # --- Phase 2: Spell enrichment ---
@@ -142,7 +140,7 @@ module Lich
           if mapping[:mode] == :append
             settings[key] = (settings[key] || []) + (UserVars.send(uvar) || [])
           else
-            settings[key] = UserVars.send(uvar) unless settings.to_h.key?(key) || settings.to_h.key?(key.to_sym)
+            settings[key] ||= UserVars.send(uvar)
           end
         end
 
