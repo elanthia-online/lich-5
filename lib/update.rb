@@ -207,7 +207,6 @@ module Lich
 
   [One time suggestions]
     #{$clean_lich_char}autostart add --global lich5-update --announce    Check for new version at login
-    #{$clean_lich_char}autostart add --global lich5-update --sync        Sync script repos at login (GS)
 
   [On demand suggestions]
     #{$clean_lich_char}lich5-update --status                    Show current version and branch info
@@ -221,8 +220,7 @@ module Lich
     #{$clean_lich_char}lich5-update --branch=some_branch_name   Update to a different branch
     #{$clean_lich_char}lich5-update --branch=owner:branch_name  Update to a fork's branch
 
-    *NOTE* DR users: script repos sync automatically on login.
-           GS users: add --sync to autostart for automatic sync.
+    *NOTE* Script repos sync automatically on login for both DR and GS.
     "
       end
 
@@ -1143,8 +1141,8 @@ module Lich
           update_file('data', file)
         end
 
-        # Use SHA-based sync for core scripts -- only downloads files that actually changed
-        sync_all_repos
+        # Script repo sync is handled on login via games.rb -- no need to
+        # download here since a relog is required after every update anyway.
 
         # Update Lich.db value with last updated version
         Lich.core_updated_with_lich_version = version
