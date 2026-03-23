@@ -39,8 +39,8 @@ module Lich
           script_prefix: 'scripts',
           game_filter: nil,
           default_tracked: %w[
-            alias.lic autostart.lic ewaggle.lic go2.lic jinx.lic
-            lich5-update.lic log.lic map.lic repository.lic vars.lic version.lic
+            alias.lic autostart.lic go2.lic jinx.lic log.lic
+            logxml.lic map.lic repository.lic vars.lic version.lic
           ].freeze,
           subdirs: {}
         }.freeze
