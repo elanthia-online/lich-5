@@ -64,6 +64,9 @@ module Lich
           if UserVars.tracked_scripts&.dig(repo_key)&.delete(script_name)
             Vars.save
             StatusReporter.respond_mono("[lich5-update: Removed '#{script_name}' from #{name} tracked list.]")
+            if File.exist?(File.join(SCRIPT_DIR, script_name))
+              StatusReporter.respond_mono("[lich5-update: Note: #{script_name} is still installed. Delete manually if no longer needed.]")
+            end
           else
             StatusReporter.respond_mono("[lich5-update: '#{script_name}' was not in your #{name} tracked list.]")
           end
