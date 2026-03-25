@@ -214,19 +214,29 @@ module Lich
       def load_files(glob_patterns = [])
         synchronize do
           echo "#{self.class}::#{__callee__} glob_patterns=#{glob_patterns}" if @debug
+          # Build a map of filename -> filepath for all files currently on disk
+          current_files = {}
           glob_patterns.each do |glob_pattern|
             Dir.glob(glob_pattern)
-               .uniq
                .select { |filepath| File.file?(filepath) }
-               .each do |filepath|
-                 filename = File.basename(filepath)
-                 last_modified_date = File.mtime(filepath)
-                 cached_file = cache_get_by_filename(filename)
-                 echo "#{self.class}::#{__callee__} filepath=#{filepath}, last_modified_date=#{last_modified_date}, cached_file=#{cached_file.inspect}" if @debug
-                 if cached_file.nil? || cached_file.mtime != last_modified_date
-                   cache_put_by_filepath(filepath)
-                 end
-               end
+               .each { |filepath| current_files[File.basename(filepath)] ||= filepath }
+          end
+
+          # Evict cache entries whose backing files no longer exist on disk.
+          # Only remove entries that would have matched our glob patterns,
+          # so we do not accidentally evict unrelated cached files.
+          @files_cache.delete_if do |name, _|
+            !current_files.key?(name) &&
+              glob_patterns.any? { |p| File.fnmatch(File.basename(p), name) }
+          end
+
+          current_files.each do |filename, filepath|
+            last_modified_date = File.mtime(filepath)
+            cached_file = cache_get_by_filename(filename)
+            echo "#{self.class}::#{__callee__} filepath=#{filepath}, last_modified_date=#{last_modified_date}, cached_file=#{cached_file.inspect}" if @debug
+            if cached_file.nil? || cached_file.mtime != last_modified_date
+              cache_put_by_filepath(filepath)
+            end
           end
         end
       end
