@@ -140,7 +140,7 @@ module Lich
             /emits a hollow scream as ribbons of essence begin to wend away from <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> and into nothingness/,
             /screams with rage as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> falls to the ground and dies/,
           )
-          NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?(?:a )?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? #{NpcDeathPostfix}[\.!]\r?\n?$/
+          NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?(?:(?:an?|some) )?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a>(?:<popBold\/>)?(?:'s)? #{NpcDeathPostfix}[\.!]\r?\n?$/
 
           # the following are for parsing STOW LIST and setting of STOW containers
           StowListOutputStart = /^You have the following containers set as stow targets:\r?\n?$/
