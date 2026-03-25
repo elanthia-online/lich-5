@@ -192,14 +192,16 @@ module Lich
             return
           end
 
-          ["effect-list.xml"].each do |file|
-            transition_filename = "#{file}".sub(".xml", '')
-            newfilename = File.join(DATA_DIR, "#{transition_filename}-#{Time.now.to_i}.xml")
-            if File.exist?(File.join(DATA_DIR, file))
-              File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
-              respond "The prior version of #{file} was renamed to #{newfilename}."
+          if XMLData.game =~ /^GS/
+            ["effect-list.xml"].each do |file|
+              transition_filename = "#{file}".sub(".xml", '')
+              newfilename = File.join(DATA_DIR, "#{transition_filename}-#{Time.now.to_i}.xml")
+              if File.exist?(File.join(DATA_DIR, file))
+                File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
+                respond "The prior version of #{file} was renamed to #{newfilename}."
+              end
+              update_file('data', file)
             end
-            update_file('data', file)
           end
 
           Lich.core_updated_with_lich_version = version
