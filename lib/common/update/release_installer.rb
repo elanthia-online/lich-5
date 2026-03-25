@@ -1,9 +1,20 @@
 # frozen_string_literal: true
 
+=begin
+  Installs Lich5 from GitHub releases (stable and beta).
+
+  Handles release announcements, tarball downloads, Ruby compatibility
+  checks, and file extraction. Delegates to FileUpdater for data/script
+  updates and SnapshotManager for backups.
+=end
+
 module Lich
   module Util
     module Update
       class ReleaseInstaller
+        # @param client [GitHubClient] GitHub API client instance
+        # @param resolver [ChannelResolver] channel resolver instance
+        # @param snapshot_manager [SnapshotManager] snapshot manager instance
         def initialize(client, resolver, snapshot_manager)
           @client = client
           @resolver = resolver
@@ -15,6 +26,9 @@ module Lich
           @zipfile = nil
         end
 
+        # Displays announcement if new version available.
+        #
+        # @return [void]
         def announce
           prep_update
           if "#{LICH_VERSION}".chr == '5'
@@ -41,6 +55,9 @@ module Lich
           end
         end
 
+        # Fetches latest stable release metadata from GitHub.
+        #
+        # @return [void]
         def prep_update
           latest = @client.fetch_github_json("https://api.github.com/repos/#{GITHUB_REPO}/releases/latest")
           if latest.is_a?(Hash) && latest['prerelease']
@@ -62,6 +79,11 @@ module Lich
           @zipfile = release_asset.fetch('browser_download_url')
         end
 
+        # Handles beta update requests (full install or individual file).
+        #
+        # @param type [String, nil] file type ('script', 'library', 'data') or nil for full beta
+        # @param requested_file [String, nil] file name if type is set
+        # @return [void]
         def prep_betatest(type = nil, requested_file = nil)
           if type.nil?
             respond 'You are electing to participate in the beta testing of the next Lich release.'
@@ -134,6 +156,9 @@ module Lich
           end
         end
 
+        # Downloads and installs latest stable release.
+        #
+        # @return [void]
         def download_release_update
           prep_update if @update_to.nil? || @update_to.empty?
           if Gem::Version.new("#{@update_to}") <= Gem::Version.new("#{@current}") && !defined?(LICH_BRANCH)
@@ -185,6 +210,11 @@ module Lich
           end
         end
 
+        # Copies lib files and lich.rbw from extracted source to install dirs.
+        #
+        # @param source_dir [String] extracted tarball directory
+        # @param version [String] version string
+        # @return [void]
         def perform_update(source_dir, version)
           FileUtils.rm_rf(Dir.glob(File.join(LIB_DIR, "*")))
 
@@ -204,11 +234,20 @@ module Lich
           File.open(update_to_lich, 'rb') { |r| File.open(lich_to_update, 'wb') { |w| w.write(r.read) } }
         end
 
+        # Validates extracted directory contains required Lich files.
+        #
+        # @param dir [String] directory to check
+        # @return [Boolean] true if valid
         def validate_lich_structure(dir)
           required_items = ['lib', 'lich.rbw']
           required_items.all? { |item| File.exist?(File.join(dir, item)) }
         end
 
+        # Checks if current Ruby meets minimum version requirement.
+        #
+        # @param source_dir [String] extracted tarball directory
+        # @param version [String] version string
+        # @return [Boolean] true if compatible
         def check_ruby_compatibility(source_dir, version)
           version_file_path = File.join(source_dir, "lib", "version.rb")
           if File.exist?(version_file_path)
@@ -235,6 +274,10 @@ module Lich
           true
         end
 
+        # Extracts LICH_VERSION constant from version.rb file.
+        #
+        # @param version_file_path [String] path to version.rb
+        # @return [String, nil] version string or nil
         def extract_version_from_file(version_file_path)
           return nil unless File.exist?(version_file_path)
 

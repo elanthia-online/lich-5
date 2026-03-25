@@ -1,5 +1,12 @@
 # frozen_string_literal: true
 
+=begin
+  Snapshot and rollback functionality for Lich core files.
+
+  Creates timestamped backups of lib/, lich.rbw, and core scripts before
+  updates. Supports rollback to most recent snapshot.
+=end
+
 module Lich
   module Util
     module Update
@@ -10,6 +17,9 @@ module Lich
           map.lic repository.lic vars.lic version.lic
         ].freeze
 
+        # Creates timestamped snapshot of lib/, lich.rbw, and core scripts.
+        #
+        # @return [void]
         def snapshot
           respond
           respond 'Creating a snapshot of current Lich core files ONLY.'
@@ -38,6 +48,9 @@ module Lich
           respond "    #{snapshot_subdir}"
         end
 
+        # Restores most recent snapshot from BACKUP_DIR.
+        #
+        # @return [void]
         def revert
           respond
           respond 'Reverting Lich5 to previously installed version.'

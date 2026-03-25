@@ -1,7 +1,14 @@
 # frozen_string_literal: true
 
-# Composition root for the Lich5 update system.
-# Provides the public API surface and wires internal classes together.
+=begin
+  Composition root for the Lich5 update system.
+
+  Provides the public API surface for updating Lich5 core, managing snapshots,
+  syncing script repositories, and tracking individual files. Wires together
+  internal classes and manages lazy initialization of dependencies.
+
+  Supports both release-based updates and branch-based development workflows.
+=end
 
 require 'digest'
 require 'json'
@@ -81,6 +88,10 @@ module Lich
       # Public API -- called by games.rb and global_defs.rb
       # ---------------------------------------------------------------
 
+      # Routes update commands to appropriate handler classes.
+      #
+      # @param type [String] command flag (e.g. '--announce', '--update', '--sync')
+      # @return [void]
       def self.request(type = '--announce')
         case type
         when /^(?:--announce|-a)\b/
@@ -130,10 +141,17 @@ module Lich
         end
       end
 
+      # Syncs all script repositories for current game.
+      #
+      # @return [void]
       def self.sync_all_repos
         script_sync.sync_all_repos
       end
 
+      # Updates core data files and scripts to specified version.
+      #
+      # @param version [String] version string (default: current LICH_VERSION)
+      # @return [void]
       def self.update_core_data_and_scripts(version = LICH_VERSION)
         file_updater.update_core_data_and_scripts(version)
       end
@@ -215,6 +233,12 @@ module Lich
       # Branch tracking utilities (shared across installer classes)
       # ---------------------------------------------------------------
 
+      # Persists branch tracking info to version.rb.
+      #
+      # @param branch_name [String] branch name
+      # @param repo [String] repository identifier (e.g. 'owner/lich-5')
+      # @param _version [String] version string (unused)
+      # @return [void]
       def self.store_branch_tracking(branch_name, repo, _version)
         version_file_path = File.join(LIB_DIR, "version.rb")
         version_content = File.read(version_file_path)
@@ -233,6 +257,9 @@ module Lich
         File.write(version_file_path, version_content)
       end
 
+      # Removes branch tracking constants from version.rb.
+      #
+      # @return [void]
       def self.clear_branch_tracking
         version_file_path = File.join(LIB_DIR, "version.rb")
         return unless File.exist?(version_file_path)
@@ -243,6 +270,9 @@ module Lich
         File.write(version_file_path, version_content)
       end
 
+      # Reads current branch tracking info if defined.
+      #
+      # @return [Hash, nil] hash with :branch_name, :repository, :updated_at or nil
       def self.get_branch_info
         if defined?(LICH_BRANCH) && LICH_BRANCH && !LICH_BRANCH.empty?
           {

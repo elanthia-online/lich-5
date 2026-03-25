@@ -1,9 +1,20 @@
 # frozen_string_literal: true
 
+=begin
+  Utilities for rendering update status messages and tables.
+
+  Provides monospace-aware respond wrapper and Terminal::Table formatting
+  for sync summaries.
+=end
+
 module Lich
   module Util
     module Update
       module StatusReporter
+        # Outputs text with monospace formatting if available.
+        #
+        # @param text [String] text to display
+        # @return [void]
         def self.respond_mono(text)
           if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:mono)
             Lich::Messaging.mono(text)
@@ -12,6 +23,16 @@ module Lich
           end
         end
 
+        # Renders sync results as Terminal::Table.
+        #
+        # @param repo_name [String] repository display name
+        # @param script_count [Integer] total scripts checked
+        # @param downloaded_scripts [Array<String>] scripts downloaded
+        # @param downloaded_other [Hash<String, Array<String>>] subdir => files
+        # @param subdir_names [Array<String>] subdirectory names
+        # @param failed_scripts [Array<String>] scripts that failed (default: [])
+        # @param failed_other [Hash<String, Array<String>>] subdir => failed files (default: {})
+        # @return [void]
         def self.render_sync_summary(repo_name, script_count, downloaded_scripts, downloaded_other, subdir_names, failed_scripts = [], failed_other = {})
           total_downloaded = downloaded_scripts.length + downloaded_other.values.flatten.length
           total_failed = failed_scripts.length + failed_other.values.flatten.length

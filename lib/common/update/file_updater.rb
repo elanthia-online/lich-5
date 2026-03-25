@@ -1,14 +1,30 @@
 # frozen_string_literal: true
 
+=begin
+  Updates individual scripts, libraries, and data files.
+
+  Handles both repo-specific file updates (e.g. dr-scripts:foo.lic) and
+  legacy auto-detected updates. Supports SHA-based skip-if-current checks
+  for script repository files.
+=end
+
 module Lich
   module Util
     module Update
       class FileUpdater
+        # @param client [GitHubClient] GitHub API client instance
+        # @param resolver [ChannelResolver] channel resolver instance
         def initialize(client, resolver)
           @client = client
           @resolver = resolver
         end
 
+        # Updates a file from a specific repository.
+        #
+        # @param type [String] 'script' or 'data'
+        # @param repo_key [String] repository key from SCRIPT_REPOS
+        # @param filename [String] file name to update
+        # @return [void]
         def update_file_from_repo(type, repo_key, filename)
           config = SCRIPT_REPOS[repo_key]
           unless config
@@ -72,6 +88,12 @@ module Lich
           end
         end
 
+        # Updates a file using legacy auto-detection logic.
+        #
+        # @param type [String] 'script', 'library', or 'data'
+        # @param rf [String] requested filename
+        # @param version [String] channel ('production' or 'beta')
+        # @return [void]
         def update_file(type, rf, version = 'production')
           if version =~ /^(?:staging|master)$/i
             respond 'Requested channel %s mapped to main (stable).' % [version]
@@ -160,6 +182,10 @@ module Lich
           end
         end
 
+        # Updates core data files (effect-list.xml) after version upgrade.
+        #
+        # @param version [String] version string (default: LICH_VERSION)
+        # @return [void]
         def update_core_data_and_scripts(version = LICH_VERSION)
           if XMLData.game !~ /^GS|^DR/
             respond "invalid game type, unsure what scripts to update via Update.update_core_scripts"
