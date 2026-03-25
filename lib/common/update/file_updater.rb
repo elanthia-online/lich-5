@@ -46,35 +46,39 @@ module Lich
 
           prefix = config[:script_prefix]
           tree_data = @client.fetch_github_json(config[:api_url])
-          if tree_data && tree_data['tree']
-            raw_path = if type == "data"
-                         data_subdir = (config[:subdirs] || {})['data']
-                         if data_subdir && data_subdir[:pattern]
-                           match = tree_data['tree'].find { |e| e['path'] =~ data_subdir[:pattern] && File.basename(e['path']) == filename }
-                           match ? match['path'] : nil
-                         else
-                           prefix ? "#{prefix}/#{filename}" : filename
-                         end
-                       elsif prefix
-                         "#{prefix}/#{filename}"
+          unless tree_data && tree_data['tree']
+            name = config[:display_name] || repo_key
+            StatusReporter.respond_mono("[lich5-update: Failed to fetch repository tree for #{name}.]")
+            return
+          end
+
+          raw_path = if type == "data"
+                       data_subdir = (config[:subdirs] || {})['data']
+                       if data_subdir && data_subdir[:pattern]
+                         match = tree_data['tree'].find { |e| e['path'] =~ data_subdir[:pattern] && File.basename(e['path']) == filename }
+                         match ? match['path'] : nil
                        else
-                         filename
+                         prefix ? "#{prefix}/#{filename}" : filename
                        end
-            remote_entry = raw_path ? tree_data['tree'].find { |e| e['path'] == raw_path } : nil
-            if remote_entry
-              local_path = File.join(location, filename)
-              if File.exist?(local_path)
-                local_sha = Digest::SHA1.hexdigest("blob #{File.binread(local_path).bytesize}\0#{File.binread(local_path)}")
-                if local_sha == remote_entry['sha']
-                  StatusReporter.respond_mono("[lich5-update: #{filename} is already up to date.]")
-                  return
-                end
+                     elsif prefix
+                       "#{prefix}/#{filename}"
+                     else
+                       filename
+                     end
+          remote_entry = raw_path ? tree_data['tree'].find { |e| e['path'] == raw_path } : nil
+          if remote_entry
+            local_path = File.join(location, filename)
+            if File.exist?(local_path)
+              local_sha = Digest::SHA1.hexdigest("blob #{File.binread(local_path).bytesize}\0#{File.binread(local_path)}")
+              if local_sha == remote_entry['sha']
+                StatusReporter.respond_mono("[lich5-update: #{filename} is already up to date.]")
+                return
               end
-            else
-              name = config[:display_name] || repo_key
-              StatusReporter.respond_mono("[lich5-update: #{filename} not found in #{name} repository.]")
-              return
             end
+          else
+            name = config[:display_name] || repo_key
+            StatusReporter.respond_mono("[lich5-update: #{filename} not found in #{name} repository.]")
+            return
           end
 
           name = config[:display_name] || repo_key
