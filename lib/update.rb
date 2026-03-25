@@ -1298,8 +1298,13 @@ module Lich
             next
           end
 
-          safe_write(File.join(SCRIPT_DIR, filename), content)
-          downloaded_scripts << filename
+          begin
+            safe_write(File.join(SCRIPT_DIR, filename), content)
+            downloaded_scripts << filename
+          rescue StandardError => e
+            respond "[lich5-update: write failed for #{filename}: #{e.message}]"
+            failed_scripts << filename
+          end
         end
 
         # Sync subdirectories (profiles, data)
@@ -1346,8 +1351,13 @@ module Lich
             next
           end
 
-          safe_write(File.join(dest, filename), content)
-          downloaded << filename
+          begin
+            safe_write(File.join(dest, filename), content)
+            downloaded << filename
+          rescue StandardError => e
+            respond "[lich5-update: write failed for #{filename}: #{e.message}]"
+            failed << filename
+          end
         end
         [downloaded, failed]
       end
