@@ -63,9 +63,7 @@ module Lich
             alias.lic autostart.lic go2.lic jinx.lic log.lic
             logxml.lic map.lic repository.lic vars.lic version.lic
           ].freeze,
-          subdirs: {
-            'data' => { pattern: /^scripts\/(gameobj-data|effect-list)\.xml$/, dest: DATA_DIR, glob: '*.xml' }
-          }
+          subdirs: {}
         }.freeze,
         'gs-scripts' => {
           display_name: 'GS Scripts',
