@@ -223,10 +223,13 @@ module Lich
           end
 
           # Evict cache entries whose backing files no longer exist on disk.
-          # Only remove entries that would have matched our glob patterns,
-          # so we do not accidentally evict unrelated cached files.
-          @files_cache.delete_if do |name, _|
-            !current_files.key?(name) &&
+          # Only remove entries whose path matches the directories being scanned
+          # AND whose name matches our glob patterns. This prevents a data-dir
+          # reload from evicting identically-named profile-dir entries.
+          scan_dirs = glob_patterns.map { |p| File.dirname(p) }.uniq
+          @files_cache.delete_if do |name, info|
+            scan_dirs.include?(info.path) &&
+              !current_files.key?(name) &&
               glob_patterns.any? { |p| File.fnmatch(File.basename(p), name) }
           end
 
