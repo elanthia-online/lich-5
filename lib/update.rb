@@ -42,7 +42,9 @@ module Lich
             alias.lic autostart.lic go2.lic jinx.lic log.lic
             logxml.lic map.lic repository.lic vars.lic version.lic
           ].freeze,
-          subdirs: {}
+          subdirs: {
+            'data' => { pattern: /^scripts\/(gameobj-data|effect-list)\.xml$/, dest: DATA_DIR, glob: '*.xml' }
+          }
         }.freeze,
         'gs-scripts' => {
           display_name: 'GS Scripts',
@@ -988,16 +990,23 @@ module Lich
         # Check SHA against remote tree before downloading
         # Repos with a script_prefix (e.g. 'scripts') store .lic files in a subdirectory
         prefix = config[:script_prefix]
-        raw_path = if type == "data"
-                     "data/#{filename}"
-                   elsif prefix
-                     "#{prefix}/#{filename}"
-                   else
-                     filename
-                   end
         tree_data = fetch_github_json(config[:api_url])
         if tree_data && tree_data['tree']
-          remote_entry = tree_data['tree'].find { |e| e['path'] == raw_path }
+          raw_path = if type == "data"
+                       # Search via subdirectory pattern to find the actual tree path
+                       data_subdir = (config[:subdirs] || {})['data']
+                       if data_subdir && data_subdir[:pattern]
+                         match = tree_data['tree'].find { |e| e['path'] =~ data_subdir[:pattern] && File.basename(e['path']) == filename }
+                         match ? match['path'] : nil
+                       else
+                         prefix ? "#{prefix}/#{filename}" : filename
+                       end
+                     elsif prefix
+                       "#{prefix}/#{filename}"
+                     else
+                       filename
+                     end
+          remote_entry = raw_path ? tree_data['tree'].find { |e| e['path'] == raw_path } : nil
           if remote_entry
             local_path = File.join(location, filename)
             if File.exist?(local_path)
