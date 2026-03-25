@@ -1,14 +1,28 @@
 # frozen_string_literal: true
 
+=begin
+  Handles installation of Lich5 from arbitrary GitHub branches.
+
+  Supports both main repository branches and fork branches via
+  owner:branch_name syntax. Downloads tarball archives, validates
+  structure, and delegates to ReleaseInstaller for actual installation.
+=end
+
 module Lich
   module Util
     module Update
       class BranchInstaller
+        # @param snapshot_manager [SnapshotManager] snapshot management instance
+        # @param release_installer [ReleaseInstaller] installer for performing updates
         def initialize(snapshot_manager, release_installer)
           @snapshot_manager = snapshot_manager
           @release_installer = release_installer
         end
 
+        # Downloads and installs from a GitHub branch.
+        #
+        # @param branch_spec [String] branch name or 'owner:branch_name'
+        # @return [void]
         def download_branch_update(branch_spec)
           branch_spec = branch_spec.strip
           if branch_spec.empty?

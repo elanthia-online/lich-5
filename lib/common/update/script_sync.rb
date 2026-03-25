@@ -1,17 +1,34 @@
 # frozen_string_literal: true
 
+=begin
+  Bulk SHA-based repository sync for script repositories.
+
+  Downloads scripts and data files from configured SCRIPT_REPOS, skipping
+  files that match local SHA1. Supports both :all (auto-sync all .lic) and
+  :explicit (tracked list) modes.
+=end
+
 module Lich
   module Util
     module Update
       class ScriptSync
+        # @param client [GitHubClient] GitHub API client instance
         def initialize(client)
           @client = client
         end
 
+        # Syncs all registered repositories for current game.
+        #
+        # @return [void]
         def sync_all_repos
           SCRIPT_REPOS.each_key { |repo_key| sync_repo(repo_key) }
         end
 
+        # Syncs a single repository by key.
+        #
+        # @param repo_key [String] repository key from SCRIPT_REPOS
+        # @param force [Boolean] skip SHA check and download all (default: false)
+        # @return [void]
         def sync_repo(repo_key, force: false)
           config = SCRIPT_REPOS[repo_key]
           unless config
@@ -67,6 +84,13 @@ module Lich
           StatusReporter.render_sync_summary(name, syncable.length, downloaded_scripts, downloaded_other, config[:subdirs]&.keys || [], failed_scripts, failed_other)
         end
 
+        # Syncs a subdirectory (profiles, data) from repository.
+        #
+        # @param tree [Array<Hash>] GitHub tree API response
+        # @param config [Hash] repository config from SCRIPT_REPOS
+        # @param _subdir_name [String] subdirectory name (unused)
+        # @param subconfig [Hash] subdirectory config (pattern, dest, glob)
+        # @return [Array<Array<String>>] [downloaded_files, failed_files]
         def sync_subdir(tree, config, _subdir_name, subconfig)
           pattern = subconfig[:pattern]
           dest = subconfig[:dest]
@@ -100,6 +124,11 @@ module Lich
           [downloaded, failed]
         end
 
+        # Filters tree entries to syncable scripts based on tracking mode.
+        #
+        # @param tree [Array<Hash>] GitHub tree API response
+        # @param config [Hash] repository config from SCRIPT_REPOS
+        # @return [Array<Hash>] filtered tree entries
         def filter_syncable_scripts(tree, config)
           candidates = tree.select { |e| e['path'] =~ config[:script_pattern] && e['type'] == 'blob' }
 

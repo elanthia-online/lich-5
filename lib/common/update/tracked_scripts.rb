@@ -1,9 +1,20 @@
 # frozen_string_literal: true
 
+=begin
+  Manages user-tracked script lists for :explicit tracking mode repos.
+
+  Combines default_tracked scripts from config with user-added scripts from
+  UserVars. Provides CLI for adding/removing tracked scripts.
+=end
+
 module Lich
   module Util
     module Update
       class TrackedScripts
+        # Returns all tracked scripts for a repository config.
+        #
+        # @param config [Hash] repository config from SCRIPT_REPOS
+        # @return [Array<String>] list of tracked script filenames
         def tracked_scripts(config)
           defaults = config[:default_tracked] || []
           repo_key = SCRIPT_REPOS.key(config)
@@ -11,6 +22,11 @@ module Lich
           (defaults + user_additions).uniq
         end
 
+        # Adds a script to user's tracked list for a repository.
+        #
+        # @param repo_key [String] repository key from SCRIPT_REPOS
+        # @param script_name [String] script filename
+        # @return [void]
         def track_script(repo_key, script_name)
           config = SCRIPT_REPOS[repo_key]
           unless config
@@ -29,6 +45,11 @@ module Lich
           end
         end
 
+        # Removes a script from user's tracked list for a repository.
+        #
+        # @param repo_key [String] repository key from SCRIPT_REPOS
+        # @param script_name [String] script filename
+        # @return [void]
         def untrack_script(repo_key, script_name)
           config = SCRIPT_REPOS[repo_key]
           unless config
@@ -48,6 +69,10 @@ module Lich
           end
         end
 
+        # Displays Terminal::Table of tracked scripts for one or all repos.
+        #
+        # @param repo_key [String, nil] repository key or nil for all repos
+        # @return [void]
         def show_tracked(repo_key = nil)
           repos = repo_key ? { repo_key => SCRIPT_REPOS[repo_key] } : SCRIPT_REPOS
           table_rows = []
