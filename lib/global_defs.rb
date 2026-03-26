@@ -2435,6 +2435,20 @@ def do_client(client_string)
       respond "  #{$clean_lich_char}display expgains [on|off]    toggle gain messages"
       respond "  #{$clean_lich_char}display inlineexp [on|off]   toggle inline display"
       respond
+    elsif (debuglogs_match = cmd.match(/^debuglogs?\s+(?<val>\d+)$/i))
+      new_limit = debuglogs_match[:val].to_i
+      Lich.max_debug_logs = new_limit
+      respond "--- Lich: debug log retention set to #{Lich.max_debug_logs} files"
+    elsif cmd =~ /^debuglogs?$/i
+      respond
+      respond "--- Lich: Debug Log Retention ---"
+      respond "  Current limit:  #{Lich.max_debug_logs} files"
+      respond "  Default:        #{Lich::MAX_DEBUG_LOGS_DEFAULT} files"
+      respond
+      respond "Usage:"
+      respond "  #{$clean_lich_char}debuglogs            show current setting"
+      respond "  #{$clean_lich_char}debuglogs <number>   set retention limit"
+      respond
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
       Lich::Util::Update.request("#{update_parameter}")
@@ -2503,6 +2517,9 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}send to <script> <line>   send a line to a specific script"
       respond
       respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
+      respond "   #{$clean_lich_char}debuglogs                 show debug log retention setting"
+      respond "   #{$clean_lich_char}debuglogs <number>        set how many debug logs to keep (default: #{Lich::MAX_DEBUG_LOGS_DEFAULT})"
+      respond
       respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
       respond "                              see #{$clean_lich_char}lich5-update --help"
       respond "   #{$clean_lich_char}hmr <regex filepath>      Hot module reload a Ruby or Lich5 file without relogging, uses Regular Expression matching"
