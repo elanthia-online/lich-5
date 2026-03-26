@@ -5,11 +5,16 @@ require 'rspec'
 # Load login_spec_helper FIRST - it sets up Lich::Util, Gtk, and other mocks
 require_relative '../../../login_spec_helper'
 
-# Ensure FatalAuthError is available for specs
+# Ensure FatalAuthError and GUI module are available for specs
 module Lich
   module Common
     module Authentication
       class FatalAuthError < StandardError; end unless defined?(FatalAuthError)
+
+      # Stub GUI module so report_connect_error can delegate to show_error_dialog
+      module GUI
+        def self.show_error_dialog(_button, _message); end
+      end unless defined?(GUI)
     end
   end
 end
@@ -199,9 +204,7 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
   let(:disconnect_button) { double('Gtk::Button') }
   let(:user_id_entry) { double('Gtk::Entry') }
   let(:pass_entry) { double('Gtk::Entry') }
-  let(:error_messages) { [] }
-  let(:on_error) { ->(msg) { error_messages << msg } }
-  let(:callbacks) { Lich::Common::GUI::CallbackParams.new(on_error: on_error) }
+  let(:callbacks) { Lich::Common::GUI::CallbackParams.new }
 
   before do
     allow(connect_button).to receive(:sensitive=)
@@ -219,10 +222,15 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
       instance
     end
 
-    it 'calls the on_error callback with the error message' do
-      tab.send(:report_connect_error, 'bad password', connect_button, disconnect_button, user_id_entry, pass_entry)
+    before do
+      allow(Lich::Common::Authentication::GUI).to receive(:show_error_dialog)
+    end
 
-      expect(error_messages).to eq(['bad password'])
+    it 'delegates to Authentication::GUI.show_error_dialog with connect_button and message' do
+      expect(Lich::Common::Authentication::GUI).to receive(:show_error_dialog)
+        .with(connect_button, 'bad password')
+
+      tab.send(:report_connect_error, 'bad password', connect_button, disconnect_button, user_id_entry, pass_entry)
     end
 
     it 're-enables the connect button' do
@@ -249,36 +257,50 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
       tab.send(:report_connect_error, 'error', connect_button, disconnect_button, user_id_entry, pass_entry)
     end
 
-    context 'when no on_error callback is configured' do
-      let(:callbacks) { Lich::Common::GUI::CallbackParams.new }
+    it 'resets form state before showing the error dialog' do
+      expect(connect_button).to receive(:sensitive=).with(true).ordered
+      expect(disconnect_button).to receive(:sensitive=).with(false).ordered
+      expect(user_id_entry).to receive(:sensitive=).with(true).ordered
+      expect(pass_entry).to receive(:sensitive=).with(true).ordered
+      expect(Lich::Common::Authentication::GUI).to receive(:show_error_dialog).ordered
 
-      it 'does not raise an error' do
-        expect {
-          tab.send(:report_connect_error, 'error', connect_button, disconnect_button, user_id_entry, pass_entry)
-        }.not_to raise_error
+      tab.send(:report_connect_error, 'error', connect_button, disconnect_button, user_id_entry, pass_entry)
+    end
+
+    context 'when show_error_dialog raises an exception' do
+      before do
+        allow(Lich::Common::Authentication::GUI).to receive(:show_error_dialog)
+          .and_raise(RuntimeError, 'dialog failed')
       end
 
-      it 'still resets form state' do
+      it 'still resets form state before the exception propagates' do
         expect(connect_button).to receive(:sensitive=).with(true)
+        expect(disconnect_button).to receive(:sensitive=).with(false)
         expect(user_id_entry).to receive(:sensitive=).with(true)
         expect(pass_entry).to receive(:sensitive=).with(true)
 
-        tab.send(:report_connect_error, 'error', connect_button, disconnect_button, user_id_entry, pass_entry)
+        expect {
+          tab.send(:report_connect_error, 'error', connect_button, disconnect_button, user_id_entry, pass_entry)
+        }.to raise_error(RuntimeError, 'dialog failed')
       end
     end
 
-    context 'when on_error callback raises an exception' do
-      let(:on_error) { ->(_msg) { raise 'callback exploded' } }
+    context 'when message contains special characters' do
+      it 'passes the raw message through without sanitization' do
+        msg = "REJECT\n<script>alert('xss')</script>"
+        expect(Lich::Common::Authentication::GUI).to receive(:show_error_dialog)
+          .with(connect_button, msg)
 
-      it 'resets form state before the callback raises' do
-        expect(connect_button).to receive(:sensitive=).with(true).ordered
-        expect(disconnect_button).to receive(:sensitive=).with(false).ordered
-        expect(user_id_entry).to receive(:sensitive=).with(true).ordered
-        expect(pass_entry).to receive(:sensitive=).with(true).ordered
+        tab.send(:report_connect_error, msg, connect_button, disconnect_button, user_id_entry, pass_entry)
+      end
+    end
 
-        expect {
-          tab.send(:report_connect_error, 'error', connect_button, disconnect_button, user_id_entry, pass_entry)
-        }.to raise_error('callback exploded')
+    context 'when message is empty' do
+      it 'still shows the error dialog' do
+        expect(Lich::Common::Authentication::GUI).to receive(:show_error_dialog)
+          .with(connect_button, '')
+
+        tab.send(:report_connect_error, '', connect_button, disconnect_button, user_id_entry, pass_entry)
       end
     end
   end
@@ -317,6 +339,7 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
     end
 
     before do
+      allow(Lich::Common::Authentication::GUI).to receive(:show_error_dialog)
       tab.send(:setup_connect_button_handler, mock_connect_button, mock_disconnect_button, mock_user_id_entry, mock_pass_entry, liststore)
     end
 
@@ -334,10 +357,11 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
         @clicked_handler.call
       end
 
-      it 'reports the error via on_error callback' do
-        @clicked_handler.call
+      it 'shows the error dialog with the exception message' do
+        expect(Lich::Common::Authentication::GUI).to receive(:show_error_dialog)
+          .with(mock_connect_button, 'Invalid password')
 
-        expect(error_messages).to eq(['Invalid password'])
+        @clicked_handler.call
       end
 
       it 'clears the liststore' do
@@ -361,10 +385,11 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
         @clicked_handler.call
       end
 
-      it 'reports the error via on_error callback' do
-        @clicked_handler.call
+      it 'shows the error dialog with the exception message' do
+        expect(Lich::Common::Authentication::GUI).to receive(:show_error_dialog)
+          .with(mock_connect_button, 'Connection reset by peer')
 
-        expect(error_messages).to eq(['Connection reset by peer'])
+        @clicked_handler.call
       end
     end
 
@@ -379,10 +404,10 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
         allow(Lich::Common::Authentication).to receive(:authenticate).and_return(characters)
       end
 
-      it 'does not call on_error callback' do
-        @clicked_handler.call
+      it 'does not show the error dialog' do
+        expect(Lich::Common::Authentication::GUI).not_to receive(:show_error_dialog)
 
-        expect(error_messages).to be_empty
+        @clicked_handler.call
       end
 
       it 'enables the disconnect button' do
@@ -397,10 +422,18 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
         allow(Lich::Common::Authentication).to receive(:authenticate).and_return('error: unknown')
       end
 
-      it 'reports the error via on_error callback' do
-        @clicked_handler.call
+      it 'shows the error dialog with the user-friendly message' do
+        expect(Lich::Common::Authentication::GUI).to receive(:show_error_dialog)
+          .with(mock_connect_button, a_string_including('Something went wrong'))
 
-        expect(error_messages.first).to include('error')
+        @clicked_handler.call
+      end
+
+      it 'includes the server response in the error message' do
+        expect(Lich::Common::Authentication::GUI).to receive(:show_error_dialog)
+          .with(mock_connect_button, a_string_including('error: unknown'))
+
+        @clicked_handler.call
       end
 
       it 'resets the form to editable state' do

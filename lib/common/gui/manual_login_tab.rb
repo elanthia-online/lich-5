@@ -667,10 +667,13 @@ module Lich
           }
         end
 
-        # Reports an authentication error and resets the login form to an editable state
+        # Reports an authentication error and resets the login form to an editable state.
+        # Delegates error presentation to {Authentication::GUI.show_error_dialog} so that
+        # manual-login and saved-login tabs display identical error dialogs.
         #
-        # @param message [String] Error message to report
-        # @param connect_button [Gtk::Button] Connect button to re-enable
+        # @param message [String] Error message to display as dialog secondary text
+        # @param connect_button [Gtk::Button] Connect button to re-enable and used as
+        #   dialog parent anchor via +toplevel+
         # @param disconnect_button [Gtk::Button] Disconnect button to disable
         # @param user_id_entry [Gtk::Entry] User ID entry to re-enable
         # @param pass_entry [Gtk::Entry] Password entry to re-enable
@@ -680,7 +683,7 @@ module Lich
           disconnect_button.sensitive = false
           user_id_entry.sensitive = true
           pass_entry.sensitive = true
-          @callbacks.on_error&.call(message)
+          Authentication::GUI.show_error_dialog(connect_button, message)
         end
       end
     end
