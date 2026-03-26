@@ -702,20 +702,7 @@ end
 
 Lich.init_db
 
-#
-# only keep the last 20 debug files
-#
-
-DELETE_CANDIDATES = %r[^debug(?:-\d+)+\.log$]
-if Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.length > 20 # avoid NIL response
-  Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.sort.reverse[20..-1].each { |oldfile|
-    begin
-      File.delete(File.join(TEMP_DIR, oldfile))
-    rescue
-      Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    end
-  }
-end
+Lich.cleanup_debug_logs(TEMP_DIR)
 
 # todo: deprecate / remove for Ruby 3.2.1?
 if (RUBY_VERSION =~ /^2\.[012]\./)
