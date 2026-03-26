@@ -113,6 +113,7 @@ RSpec.describe Lich::Common, "#gui_login" do
     allow(window).to receive(:border_width=)
     allow(window).to receive(:add)
     allow(window).to receive(:signal_connect).and_yield
+    allow(window).to receive(:destroyed?).and_return(false)
     allow(window).to receive(:default_width=)
     allow(window).to receive(:default_height=)
     allow(window).to receive(:override_background_color)
@@ -164,6 +165,7 @@ RSpec.describe Lich::Common, "#gui_login" do
     allow(Lich).to receive(:track_autosort_state).and_return(false)
     allow(Lich).to receive(:track_layout_state).and_return(false)
     allow(Lich).to receive(:track_dark_mode).and_return(false)
+    allow(Lich).to receive(:track_persistent_launcher_mode).and_return(false)
     allow(Lich).to receive(:log)
   end
 
@@ -254,6 +256,67 @@ RSpec.describe Lich::Common, "#gui_login" do
 
       # Test that the application exits when @launch_data is nil
       expect { test_instance.gui_login }.to raise_error(SystemExit)
+    end
+  end
+
+  context "when handling on_play callbacks by launcher mode" do
+    let(:captured_saved_callbacks) { {} }
+    let(:captured_manual_callbacks) { {} }
+
+    before do
+      allow(Lich::Common::GUI::SavedLoginTab).to receive(:new) do |*args|
+        callbacks = args.find { |arg| arg.is_a?(Hash) && arg.key?(:on_play) } || {}
+        captured_saved_callbacks.replace(callbacks)
+        saved_login_tab
+      end
+
+      allow(Lich::Common::GUI::ManualLoginTab).to receive(:new) do |*args|
+        callbacks = args.find { |arg| arg.is_a?(Hash) && arg.key?(:on_play) } || {}
+        captured_manual_callbacks.replace(callbacks)
+        manual_login_tab
+      end
+
+      test_instance.instance_variable_set(:@window, window)
+      test_instance.instance_variable_set(:@entry_data, entry_data)
+      test_instance.instance_variable_set(:@theme_state, false)
+      test_instance.instance_variable_set(:@tab_layout_state, false)
+      test_instance.instance_variable_set(:@autosort_state, false)
+      test_instance.instance_variable_set(:@done, false)
+      test_instance.instance_variable_set(:@default_icon, nil)
+    end
+
+    # Regression guard: default mode must preserve current single-launch behavior.
+    it "keeps existing single-launch behavior when persistent launcher mode is disabled" do
+      test_instance.instance_variable_set(:@persistent_launcher_mode, false)
+      test_instance.send(:create_tab_instances)
+
+      captured_saved_callbacks.fetch(:on_play).call(launch_data)
+
+      expect(test_instance.instance_variable_get(:@launch_data)).to eq(launch_data)
+      expect(test_instance.instance_variable_get(:@done)).to be true
+      expect(window).to have_received(:destroy)
+    end
+
+    # New behavior contract: persistent mode launches a child session and
+    # keeps the launcher window active for additional launches.
+    it "keeps launcher open and delegates to SessionLauncher when persistent launcher mode is enabled" do
+      stub_const("Lich::Common::SessionLauncher", Module.new)
+      allow(Lich::Common::SessionLauncher).to receive(:launch).and_return({ ok: true, pid: 1234 })
+      test_instance.instance_variable_set(:@persistent_launcher_mode, true)
+      test_instance.send(:create_tab_instances)
+
+      captured_manual_callbacks.fetch(:on_play).call(launch_data, { char_name: 'Tsetem', game_code: 'GST' })
+
+      expect(Lich::Common::SessionLauncher).to have_received(:launch).with(
+        launch_data,
+        launch_context: hash_including(
+          char_name: 'Tsetem',
+          game_code: 'GST',
+          dark_mode: false
+        )
+      )
+      expect(window).not_to have_received(:destroy)
+      expect(test_instance.instance_variable_get(:@done)).to be false
     end
   end
 end

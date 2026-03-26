@@ -119,7 +119,8 @@ module Lich
         end
 
         def self.handle_dark_mode(value)
-          @argv_options[:dark_mode] = value =~ /^(true|on)$/i
+          # Regex returns Integer/nil; force strict boolean for persisted settings.
+          @argv_options[:dark_mode] = !!(value =~ /^(true|on)$/i)
           if defined?(Gtk)
             @theme_state = Lich.track_dark_mode = @argv_options[:dark_mode]
             Gtk::Settings.default.gtk_application_prefer_dark_theme = true if @theme_state == true
