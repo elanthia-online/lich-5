@@ -205,15 +205,9 @@ jobs:
             // Clean up multiple blank lines
             body = body.replace(/\n{3,}/g, '\n\n').trim();
             
-            // Append install footer
-            const footer = [
-              '',
-              'For additional usage/install instructions, please visit one of the following:',
-              '',
-              'DragonRealms - https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich',
-              'Gemstone IV - https://gswiki.play.net/Lich:Software/Installation'
-            ].join('\n');
-            body = body.replace(/\n+$/, '') + '\n' + footer + '\n';
+            // Keep fast-path body concise. Custom install footer is owned by
+            // format-release-notes.yaml to avoid duplicate footer blocks.
+            body = body.replace(/\n+$/, '') + '\n';
             
             core.setOutput('final', body);
 
@@ -233,7 +227,7 @@ jobs:
       # 3) Only build/upload when a new GitHub Release was created
       - name: Checkout repository
         if: ${{ steps.rp.outputs.release_created == 'true' }}
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
@@ -345,11 +339,11 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       # Pin Ruby explicitly on windows-latest
       - name: Set up Ruby
-        uses: ruby/setup-ruby@708024e6c902387ab41de36e1669e43b5ee7085e # v1.283.0
+        uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f # v1.295.0
         with:
           bundler-cache: false
 
