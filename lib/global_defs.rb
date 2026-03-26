@@ -2449,6 +2449,8 @@ def do_client(client_string)
       respond "  #{$clean_lich_char}debuglogs            show current setting"
       respond "  #{$clean_lich_char}debuglogs <number>   set retention limit"
       respond
+    elsif cmd =~ /^debuglogs?\b/i
+      respond "--- Lich: invalid argument. Usage: #{$clean_lich_char}debuglogs [number]"
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
       Lich::Util::Update.request("#{update_parameter}")
