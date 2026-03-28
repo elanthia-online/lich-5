@@ -627,10 +627,13 @@ reconnect_if_wanted = proc {
             server.close rescue nil
           end
           server = Lich::Common::ReusableTCPServer.create(@argv_options[:detachable_client_host], @argv_options[:detachable_client_port])
-          char_name = ARGV[ARGV.index('--login') + 1].capitalize
+          login_idx = ARGV.index('--login')
+          char_name = if !login_idx.nil? && ARGV[login_idx + 1]
+                        ARGV[login_idx + 1].capitalize
+                      end
 
           begin
-            Frontend.create_session_file(char_name, server.local_address.ip_address, server.local_address.ip_port)
+            Frontend.create_session_file(char_name, server.local_address.ip_address, server.local_address.ip_port) if char_name
           rescue => e
             Lich.log "warning: failed to create session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
           end
@@ -782,6 +785,9 @@ reconnect_if_wanted = proc {
   Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
   Settings.save
   Vars.save
+  # Stop lifecycle reporting during orderly shutdown so session rows are marked
+  # as clean exits instead of lingering as running/stale in reports.
+  Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
   Lich::InternalAPI::ActiveSessions::Lifecycle.stop
   Lich.log 'info: closing connections...'
   Game.close
