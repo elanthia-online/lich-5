@@ -74,10 +74,10 @@ RSpec.describe Lich::Common::ArgParser do
     end
 
     context 'with help argument' do
-      it 'calls display_args and raises ArgumentError' do
+      it 'calls display_args and exits cleanly' do
         allow(parser).to receive(:variable).and_return(['help', 'help'])
         expect(parser).to receive(:display_args)
-        expect { parser.parse_args(simple_defs) }.to raise_error(ArgumentError)
+        expect { parser.parse_args(simple_defs) }.to raise_error(SystemExit)
       end
     end
 
@@ -92,10 +92,10 @@ RSpec.describe Lich::Common::ArgParser do
     end
 
     context 'with no match' do
-      it 'calls display_args and raises ArgumentError' do
+      it 'calls display_args and exits cleanly' do
         allow(parser).to receive(:variable).and_return([nil])
         expect(parser).to receive(:display_args)
-        expect { parser.parse_args(simple_defs) }.to raise_error(ArgumentError)
+        expect { parser.parse_args(simple_defs) }.to raise_error(SystemExit)
       end
     end
   end

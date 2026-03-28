@@ -18,7 +18,7 @@ RSpec.describe Lich::Common::SetupFiles do
     allow(setup_files).to receive(:checkname).and_return('TestChar')
   end
 
-  after { FileUtils.remove_entry(tmpdir) }
+  after { FileUtils.remove_entry(tmpdir, true) }
 
   describe 'FileInfo' do
     let(:file_info) do
