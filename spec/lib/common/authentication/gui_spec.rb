@@ -18,6 +18,13 @@ module Gtk
   end
 end unless defined?(Gtk::MessageDialog)
 
+# Add GLib::Timeout for debounce scheduling in GUI auth tests.
+module GLib
+  class Timeout
+    def self.add(_milliseconds, &_block); end
+  end
+end unless defined?(GLib::Timeout)
+
 # Extend Authentication mocks with additional methods needed for GUI tests
 module Lich
   module Common
@@ -62,6 +69,7 @@ RSpec.describe Lich::Common::Authentication::GUI do
     before do
       allow(Lich::Common::Authentication).to receive(:authenticate).and_return(auth_data)
       allow(Lich::Common::Authentication::LaunchData).to receive(:prepare).and_return(launch_data)
+      allow(GLib::Timeout).to receive(:add)
     end
 
     it 'disables the button before authentication' do
@@ -128,6 +136,30 @@ RSpec.describe Lich::Common::Authentication::GUI do
       }.not_to raise_error
     end
 
+    it 'schedules button restore with a 2000ms debounce after successful launch' do
+      expect(GLib::Timeout).to receive(:add).with(2000)
+
+      described_class.authenticate_and_launch(
+        button: mock_button,
+        login_info: login_info,
+        on_success: ->(_data) {}
+      )
+    end
+
+    it 're-enables button when debounce timer callback executes' do
+      timeout_block = nil
+      allow(GLib::Timeout).to receive(:add) { |_ms, &block| timeout_block = block }
+
+      described_class.authenticate_and_launch(
+        button: mock_button,
+        login_info: login_info,
+        on_success: ->(_data) {}
+      )
+
+      expect(mock_button).to receive(:sensitive=).with(true)
+      expect(timeout_block.call).to be(false)
+    end
+
     context 'when authentication fails with FatalAuthError' do
       before do
         allow(Lich::Common::Authentication).to receive(:authenticate)
@@ -137,6 +169,7 @@ RSpec.describe Lich::Common::Authentication::GUI do
       it 're-enables the button' do
         expect(mock_button).to receive(:sensitive=).with(false)
         expect(mock_button).to receive(:sensitive=).with(true)
+        expect(GLib::Timeout).not_to receive(:add)
 
         described_class.authenticate_and_launch(
           button: mock_button,
@@ -170,6 +203,7 @@ RSpec.describe Lich::Common::Authentication::GUI do
       it 're-enables the button before re-raising' do
         expect(mock_button).to receive(:sensitive=).with(false)
         expect(mock_button).to receive(:sensitive=).with(true)
+        expect(GLib::Timeout).not_to receive(:add)
 
         expect {
           described_class.authenticate_and_launch(
