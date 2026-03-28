@@ -182,6 +182,19 @@ RSpec.describe Lich::DragonRealms::DRCH do
         expect(result.diseased).to be false
         expect(result.score).to eq(0)
         expect(result.dead).to be false
+        expect(result.vitality).to eq(100)
+      end
+    end
+
+    describe '#vitality' do
+      it 'stores remaining vitality percentage' do
+        result = described_class.new(vitality: 1)
+        expect(result.vitality).to eq(1)
+      end
+
+      it 'is accessible via backward-compatible string key' do
+        result = described_class.new(vitality: 55)
+        expect(result['vitality']).to eq(55)
       end
     end
 
@@ -760,6 +773,39 @@ RSpec.describe Lich::DragonRealms::DRCH do
       result = described_class.parse_perceived_health_lines(lines)
       # severity 2 (negligible), 1 wound: 2^2 * 1 = 4
       expect(result.score).to eq(4)
+    end
+
+    it 'detects vitality damage with remaining percentage' do
+      lines = [
+        'You sense a successful empathic link has been forged between you and Tenuk.',
+        'He is dead.',
+        'Wounds to the RIGHT LEG:',
+        'Fresh External:  cuts and bruises about the right leg -- more than minor',
+        'Tenuk is suffering from a life threatening loss of vitality (99%).',
+        '(Tenuk has 1% vitality remaining.)',
+        'He is completely exhausted.'
+      ]
+      result = described_class.parse_perceived_health_lines(lines)
+      expect(result.vitality).to eq(1)
+      expect(result.dead).to be true
+    end
+
+    it 'detects moderate vitality damage' do
+      lines = [
+        'You sense a successful empathic link has been forged between you and Navesi.',
+        '(Navesi has 55% vitality remaining.)'
+      ]
+      result = described_class.parse_perceived_health_lines(lines)
+      expect(result.vitality).to eq(55)
+    end
+
+    it 'defaults to 100% vitality when no vitality damage' do
+      lines = [
+        'You sense a successful empathic link has been forged between you and Navesi.',
+        'Navesi has no injuries to speak of.'
+      ]
+      result = described_class.parse_perceived_health_lines(lines)
+      expect(result.vitality).to eq(100)
     end
 
     it 'handles multiple severity levels' do

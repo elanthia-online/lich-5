@@ -454,6 +454,14 @@ module Lich
             Lich::Util::Update.update_core_data_and_scripts
           end
 
+          # Sync script repositories on login for both DR and GS.
+          # MUST run in a background thread -- sync_all_repos makes HTTP calls
+          # that block the game thread, preventing process_xml_data from setting
+          # XMLData.name. If Vars is accessed before XMLData.name is set, it
+          # loads/saves under scope "DR:" instead of "DR:CharName", overwriting
+          # real data with an empty session.
+          Thread.new { Lich::Util::Update.sync_all_repos }
+
           Script.start('autostart') if defined?(Script) && Script.respond_to?(:exists?) && Script.exists?('autostart')
           @@autostarted = true
 
