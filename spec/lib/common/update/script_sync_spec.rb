@@ -13,7 +13,7 @@ RSpec.describe Lich::Util::Update::ScriptSync do
     allow(Lich::Util::Update::StatusReporter).to receive(:render_sync_summary)
   end
 
-  after { FileUtils.remove_entry(tmpdir) }
+  after { FileUtils.remove_entry(tmpdir, true) }
 
   describe '#filter_syncable_scripts' do
     let(:tree) do
