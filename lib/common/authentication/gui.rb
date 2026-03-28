@@ -9,6 +9,10 @@ module Lich
       # GUI-specific authentication handling
       # Manages button state, error dialogs, and success callbacks for GUI login
       module GUI
+        # Debounce duration (ms) before restoring Play button after successful launch.
+        # This limits accidental rapid repeat launches while keeping persistent UI usable.
+        BUTTON_REENABLE_DEBOUNCE_MS = 2000
+
         # Authenticates and launches game from GUI button click
         # Handles button state, error dialogs, and success callback
         #
@@ -45,10 +49,15 @@ module Lich
                 on_success.call(launch_data, login_info)
               end
             end
+
+            schedule_button_reenable(button)
           rescue FatalAuthError => e
             handle_auth_error(button, e, on_error)
           rescue StandardError => e
-            handle_auth_error(button, e, on_error)
+            Lich.log "error: GUI auth unexpected error: #{e.class}: #{e.message}"
+            Lich.log e.backtrace.join("\n\t") if e.backtrace
+            handle_auth_error(button, StandardError.new("Unexpected login error. See debug log for details."), on_error)
+            raise
           end
         end
 
@@ -84,6 +93,18 @@ module Lich
           dialog.secondary_text = message
           dialog.run
           dialog.destroy
+        end
+
+        # @api private
+        # Restores button sensitivity after a successful launch using a small debounce.
+        #
+        # @param button [Gtk::Button] The play button to restore
+        # @return [void]
+        def self.schedule_button_reenable(button)
+          GLib::Timeout.add(BUTTON_REENABLE_DEBOUNCE_MS) do
+            button.sensitive = true
+            false
+          end
         end
       end
     end
