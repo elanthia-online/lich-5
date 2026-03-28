@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'cli_options_registry'
+require_relative 'active_sessions_query'
 require_relative '../authentication/cli_password'
 require_relative 'cli_conversion'
 require_relative 'cli_encryption_mode_change'
@@ -17,6 +18,8 @@ module Lich
         # Processes ARGV for early-exit CLI operations (password mgmt, conversion)
         # Also handles conversion detection for login attempts
         def self.execute
+          ActiveSessionsQuery.execute
+
           ARGV.each do |arg|
             case arg
             when /^--change-account-password$/, /^-cap$/
