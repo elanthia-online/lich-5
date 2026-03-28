@@ -103,6 +103,9 @@ require File.join(LIB_DIR, 'common', 'socketconfigurator.rb')
 require File.join(LIB_DIR, 'common', 'reusable_tcp_server.rb')
 require File.join(LIB_DIR, 'games.rb')
 require File.join(LIB_DIR, 'common', 'gameobj.rb')
+require File.join(LIB_DIR, 'common', 'arg_parser.rb')
+require File.join(LIB_DIR, 'common', 'setup_files.rb')
+require File.join(LIB_DIR, 'common', 'settings_transformer.rb')
 
 #
 # Program start
