@@ -1,5 +1,36 @@
 # Changelog
 
+## [5.16.0](https://github.com/elanthia-online/lich-5/compare/v5.15.1...v5.16.0) (2026-03-28)
+
+
+### Features
+
+* **all:** Add active sessions API ([#1274](https://github.com/elanthia-online/lich-5/issues/1274)) ([094c355](https://github.com/elanthia-online/lich-5/commit/094c355c05a29eefc1ffc23a565b6505b0c6615a))
+* **all:** add core classes, ScriptSync, and login auto-sync ([#1273](https://github.com/elanthia-online/lich-5/issues/1273)) ([3ccdfb3](https://github.com/elanthia-online/lich-5/commit/3ccdfb38076c5717f9bbdb867af77c26ba0fcdd7))
+* **all:** Add session status CLI query ([#1276](https://github.com/elanthia-online/lich-5/issues/1276)) ([91e90f7](https://github.com/elanthia-online/lich-5/commit/91e90f7c4c36cb1620c0c710acf59428172cd0ba))
+* **all:** configurable debug log retention ([#1282](https://github.com/elanthia-online/lich-5/issues/1282)) ([03d908d](https://github.com/elanthia-online/lich-5/commit/03d908d6fc433546095594fd27f955969e2803df))
+* **all:** session summary store and reporting ([#1247](https://github.com/elanthia-online/lich-5/issues/1247)) ([36ec701](https://github.com/elanthia-online/lich-5/commit/36ec70170e7acb6e56c6da2e78d7fe6f08a7861a))
+* **dr:** common-healing.rb - add vitality parsing to HealthResult ([#1265](https://github.com/elanthia-online/lich-5/issues/1265)) ([8a65de0](https://github.com/elanthia-online/lich-5/commit/8a65de0d705a86c42b8fbbf6396f0f80232d32fc))
+
+
+### Bug Fixes
+
+* **all:** handle auth exceptions in manual login to prevent hang on bad password ([#1267](https://github.com/elanthia-online/lich-5/issues/1267)) ([05dfe30](https://github.com/elanthia-online/lich-5/commit/05dfe306dd9a2d64f54d97b0dc14511e00a8be03))
+* **all:** log and re-raise unexpected errors in saved login auth handler ([#1271](https://github.com/elanthia-online/lich-5/issues/1271)) ([5ea9501](https://github.com/elanthia-online/lich-5/commit/5ea950199d83ddc97fb5aa241d70e42a71c9d0bd))
+* **all:** Persistent Launcher re-enable play button post launch ([#1269](https://github.com/elanthia-online/lich-5/issues/1269)) ([72d532f](https://github.com/elanthia-online/lich-5/commit/72d532f43b0f12fd925ca75e2f7d9447a72508a1))
+* **all:** Restore manual login behaviors to not require saved entry t… ([#1270](https://github.com/elanthia-online/lich-5/issues/1270)) ([5eb6d4f](https://github.com/elanthia-online/lich-5/commit/5eb6d4f3c492a6a9961a55a785100eed06ec965a))
+* **all:** set SO_REUSEADDR before bind to allow immediate port reuse ([#1268](https://github.com/elanthia-online/lich-5/issues/1268)) ([9db4b6b](https://github.com/elanthia-online/lich-5/commit/9db4b6be4882b300bf5531e7020aa2808d9d13ab))
+* **dr:** buffer_room_objs missed split components with leading stream tags ([#1284](https://github.com/elanthia-online/lich-5/issues/1284)) ([e858d91](https://github.com/elanthia-online/lich-5/commit/e858d91746075d1c5b713826e9683ef5710c3f73))
+* **dr:** common-items.rb - get_item_unsafe false positives via XML feed verification ([#1286](https://github.com/elanthia-online/lich-5/issues/1286)) ([b3c286f](https://github.com/elanthia-online/lich-5/commit/b3c286f38442007098ab3038dcfbf804f9fb57c0))
+* **dr:** common-items.rb - move pattern from failure to success block ([#1262](https://github.com/elanthia-online/lich-5/issues/1262)) ([7209d3a](https://github.com/elanthia-online/lich-5/commit/7209d3add9a908c3f377b16fb207b49b3f783a7d))
+* **gs:** Infomon xmlparser additional npc death messaging ([#1275](https://github.com/elanthia-online/lich-5/issues/1275)) ([517f7cf](https://github.com/elanthia-online/lich-5/commit/517f7cfa77d86cc44e2bcb40cf7f6e4bf39700f3))
+* **gs:** Infomon xmlparser additional npc death messaging ([#1281](https://github.com/elanthia-online/lich-5/issues/1281)) ([d66dc50](https://github.com/elanthia-online/lich-5/commit/d66dc50b76712147c7ec082c1476e64f0f46d620))
+
+
+### Documentation
+
+* **all:** add DeepWiki auto-docs ([#1280](https://github.com/elanthia-online/lich-5/issues/1280)) ([f9cbd45](https://github.com/elanthia-online/lich-5/commit/f9cbd45bcbebe126078dde94f2518d6fc4840e51))
+
 ## [5.15.1](https://github.com/elanthia-online/lich-5/compare/v5.15.0...v5.15.1) (2026-03-16)
 
 
