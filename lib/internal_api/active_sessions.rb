@@ -135,6 +135,25 @@ module Lich
         fallback_snapshot(error: e.message)
       end
 
+      # Queries the currently discovered active-sessions service without
+      # consulting the local feature flag state or attempting to bootstrap a
+      # new owner.
+      #
+      # This is intended for read-only operator tools and CLI queries that may
+      # run outside a normal Lich session process. If no service is already
+      # available, the result is a normalized fallback payload.
+      #
+      # @return [Hash] a normalized snapshot or an inert fallback payload
+      def self.query_snapshot
+        response = service_client&.snapshot
+        return fallback_snapshot(error: 'active sessions service unavailable') unless response
+        return fallback_snapshot(error: response[:error]) unless response[:ok]
+
+        response[:payload]
+      rescue StandardError => e
+        fallback_snapshot(error: e.message)
+      end
+
       # Returns sanitized metadata about the current active-sessions service.
       #
       # The public shape intentionally omits the shared auth token while still
