@@ -100,7 +100,7 @@ module Lich
             end
           end
 
-          if server_string =~ /^<component id='room (?:objs|players)'>.*\.\.\.wait \d+ seconds?\.\r\n$/ && !server_string.include?("</component>")
+          if server_string =~ /^(?:<\/?(?:pushStream|popStream)[^>]*>\s*)*<component id='room (?:objs|players)'>.*\.\.\.wait \d+ seconds?\.\r\n$/ && !server_string.include?("</component>")
             Lich.log "Open-ended room component tag, buffering: #{server_string.inspect}"
             # Strip the "...wait N seconds.\r\n" part, keep the opening tag and any content before it
             @pending_room_objs = server_string.sub(/\.\.\.wait \d+ seconds?\.\r\n$/, '')

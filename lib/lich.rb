@@ -127,6 +127,7 @@ module Lich
   @@track_layout_state   = nil # boolean
   @@track_persistent_launcher_mode = nil # boolean
   @@debug_messaging = nil # boolean
+  @@max_debug_logs  = nil # integer
 
   def self.db_mutex
     @@db_mutex
@@ -177,6 +178,30 @@ module Lich
       Lich.db.execute("CREATE TABLE IF NOT EXISTS script_auto_settings (script TEXT NOT NULL, scope TEXT, hash BLOB, PRIMARY KEY(script, scope));")
       Lich.db.execute("CREATE TABLE IF NOT EXISTS lich_settings (name TEXT NOT NULL, value TEXT, PRIMARY KEY(name));")
       Lich.db.execute("CREATE TABLE IF NOT EXISTS uservars (scope TEXT NOT NULL, hash BLOB, PRIMARY KEY(scope));")
+      # Session summary reporting table for process-level heartbeat metadata.
+      # This schema is initialized with the rest of core DB setup to avoid
+      # runtime DDL lock contention on first adapter access.
+      Lich.db.execute("CREATE TABLE IF NOT EXISTS session_summary_state (pid INTEGER PRIMARY KEY, session_name TEXT, role TEXT, state TEXT, frontend TEXT, game_code TEXT, hidden INTEGER DEFAULT 0, started_at INTEGER, last_heartbeat_at INTEGER, os_seen_at INTEGER, os_seen INTEGER, os_name INTEGER, last_utilization_at INTEGER, metadata_json TEXT);")
+      Lich.db.execute("CREATE INDEX IF NOT EXISTS idx_session_summary_state_session_name ON session_summary_state(session_name);")
+      Lich.db.execute("CREATE INDEX IF NOT EXISTS idx_session_summary_state_heartbeat ON session_summary_state(last_heartbeat_at);")
+      # Backward-compatible migration guards:
+      # In dev/test transitions, older local tables may be missing newer columns.
+      # We keep these ALTER blocks idempotent by tolerating duplicate-column errors.
+      begin
+        Lich.db.execute("ALTER TABLE session_summary_state ADD COLUMN os_seen_at INTEGER;")
+      rescue SQLite3::SQLException => e
+        raise unless e.message.include?('duplicate column name')
+      end
+      begin
+        Lich.db.execute("ALTER TABLE session_summary_state ADD COLUMN os_seen INTEGER;")
+      rescue SQLite3::SQLException => e
+        raise unless e.message.include?('duplicate column name')
+      end
+      begin
+        Lich.db.execute("ALTER TABLE session_summary_state ADD COLUMN os_name INTEGER;")
+      rescue SQLite3::SQLException => e
+        raise unless e.message.include?('duplicate column name')
+      end
       if (RUBY_VERSION =~ /^2\.[012]\./)
         Lich.db.execute("CREATE TABLE IF NOT EXISTS trusted_scripts (name TEXT NOT NULL);")
       end
@@ -1004,6 +1029,91 @@ module Lich
     rescue SQLite3::BusyException
       sleep 0.1
       retry
+    end
+  end
+
+  # Default number of debug log files to retain when no user preference is set.
+  #
+  # @return [Integer] the built-in retention limit
+  MAX_DEBUG_LOGS_DEFAULT = 20
+
+  # Minimum allowed value for max_debug_logs to prevent accidental deletion
+  # of all log files.
+  #
+  # @return [Integer] the floor value enforced by the setter
+  MAX_DEBUG_LOGS_MINIMUM = 1
+
+  # Returns the maximum number of debug log files to retain in the temp
+  # directory. The value is lazily loaded from the +lich_settings+ database
+  # table on first access, then cached in a class variable for subsequent
+  # calls. When no persisted value exists, falls back to
+  # {MAX_DEBUG_LOGS_DEFAULT}.
+  #
+  # @return [Integer] the configured retention limit (>= {MAX_DEBUG_LOGS_MINIMUM})
+  #
+  # @example Query the current setting in-game
+  #   ;e respond Lich.max_debug_logs
+  #
+  # @see Lich.max_debug_logs=
+  # @see Lich.cleanup_debug_logs
+  def Lich.max_debug_logs
+    if @@max_debug_logs.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='max_debug_logs';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      @@max_debug_logs = val.nil? ? MAX_DEBUG_LOGS_DEFAULT : [val.to_i, MAX_DEBUG_LOGS_MINIMUM].max
+    end
+    @@max_debug_logs
+  end
+
+  # Persists the maximum number of debug log files to retain. Values below
+  # {MAX_DEBUG_LOGS_MINIMUM} are clamped to prevent accidental deletion of
+  # all logs.
+  #
+  # @param val [#to_i] the desired retention limit
+  # @return [void]
+  #
+  # @example Set retention to 50 files in-game
+  #   ;e Lich.max_debug_logs = 50
+  #
+  # @see Lich.max_debug_logs
+  # @see Lich.cleanup_debug_logs
+  def Lich.max_debug_logs=(val)
+    @@max_debug_logs = [val.to_i, MAX_DEBUG_LOGS_MINIMUM].max
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('max_debug_logs',?);", [@@max_debug_logs.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+  end
+
+  # Removes old debug log files from +temp_dir+, keeping at most
+  # {Lich.max_debug_logs} files. Files are sorted lexicographically by name
+  # (which encodes a timestamp), so the most recent files are retained.
+  #
+  # This method is called once during Lich startup (in +init.rb+) after the
+  # database has been initialized.
+  #
+  # @param temp_dir [String] the directory containing debug log files
+  # @return [void]
+  #
+  # @see Lich.max_debug_logs
+  def Lich.cleanup_debug_logs(temp_dir)
+    pattern = /^debug(?:-\d+)+\.log$/
+    candidates = Dir.entries(temp_dir).select { |fn| fn.match?(pattern) }
+    limit = Lich.max_debug_logs
+    return if candidates.length <= limit
+
+    candidates.sort.reverse[limit..-1].each do |old_file|
+      begin
+        File.delete(File.join(temp_dir, old_file))
+      rescue
+        Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      end
     end
   end
 end

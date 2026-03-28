@@ -178,11 +178,13 @@ module Lich
                                         /^[\w]+ (?:body|skin) is covered (?:in|with) open oozing sores/
                                       ])
         dead_regex = /^(?:He|She) is dead/
+        vitality_regex = /has (\d+)% vitality remaining/
 
         perceived_wounds = Hash.new { |h, k| h[k] = [] }
         perceived_parasites = Hash.new { |h, k| h[k] = [] }
         perceived_poison = false
         perceived_disease = false
+        perceived_vitality = 100
         wound_body_part = nil
         dead = false
 
@@ -190,6 +192,8 @@ module Lich
           case line
           when dead_regex
             dead = true
+          when vitality_regex
+            perceived_vitality = Regexp.last_match(1).to_i
           when diseases_regex
             perceived_disease = true
           when poisons_regex
@@ -229,6 +233,7 @@ module Lich
           poisoned: perceived_poison,
           diseased: perceived_disease,
           dead: dead,
+          vitality: perceived_vitality,
           score: calculate_score(wounds)
         )
       end
@@ -389,10 +394,11 @@ module Lich
       # Supports backward-compatible string-key access via [] for dr-scripts callers.
       class HealthResult
         attr_reader :wounds, :bleeders, :parasites, :lodged,
-                    :poisoned, :diseased, :score, :dead
+                    :poisoned, :diseased, :score, :dead, :vitality
 
         def initialize(wounds: {}, bleeders: {}, parasites: {}, lodged: {},
-                       poisoned: false, diseased: false, score: 0, dead: false)
+                       poisoned: false, diseased: false, score: 0, dead: false,
+                       vitality: 100)
           @wounds = wounds
           @bleeders = bleeders
           @parasites = parasites
@@ -401,6 +407,7 @@ module Lich
           @diseased = diseased
           @score = score
           @dead = dead
+          @vitality = vitality
         end
 
         # Backward compatibility for dr-scripts callers using health_data['wounds'] etc.

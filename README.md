@@ -3,6 +3,7 @@
 [![Release](https://img.shields.io/github/v/release/elanthia-online/lich-5)](https://github.com/elanthia-online/lich-5/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/elanthia-online/lich-5/rspec_tests.yaml?branch=main&label=rspec)](https://github.com/elanthia-online/lich-5/actions)
 [![CI](https://img.shields.io/github/actions/workflow/status/elanthia-online/lich-5/rubocop.yaml?branch=main&label=rubocop)](https://github.com/elanthia-online/lich-5/actions)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/elanthia-online/lich-5)
 
 ## About
 
