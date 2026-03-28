@@ -788,8 +788,8 @@ reconnect_if_wanted = proc {
   # Stop lifecycle reporting during orderly shutdown so session rows are marked
   # as clean exits instead of lingering as running/stale in reports.
   Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
-  Lich::InternalAPI::ActiveSessions::Lifecycle.stop
   Lich.log 'info: closing connections...'
+  Lich::InternalAPI::ActiveSessions::Lifecycle.stop
   Game.close
   200.times { sleep 0.1; break if Game.closed? }
   pause 0.5
