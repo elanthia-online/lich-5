@@ -386,16 +386,17 @@ module Lich
                   password: pass_entry.text,
                   legacy: true
                 )
+              rescue Authentication::FatalAuthError, StandardError => e
+                liststore.clear
+                report_connect_error(e.message, connect_button, disconnect_button, user_id_entry, pass_entry)
+                next true
               end
               if login_info.to_s =~ /error/i
-                # Call the error callback if provided
-                if @callbacks.on_error
-                  @callbacks.on_error.call("\nSomething went wrong... probably invalid user ID or password.\n\nserver response: #{login_info}")
-                end
-                connect_button.sensitive = true
-                disconnect_button.sensitive = false
-                user_id_entry.sensitive = true
-                pass_entry.sensitive = true
+                liststore.clear
+                report_connect_error(
+                  "\nSomething went wrong... probably invalid user ID or password.\n\nserver response: #{login_info}",
+                  connect_button, disconnect_button, user_id_entry, pass_entry
+                )
               else
                 # Populate character list
                 liststore.clear
@@ -664,6 +665,25 @@ module Lich
               false
             end
           }
+        end
+
+        # Reports an authentication error and resets the login form to an editable state.
+        # Delegates error presentation to {Authentication::GUI.show_error_dialog} so that
+        # manual-login and saved-login tabs display identical error dialogs.
+        #
+        # @param message [String] Error message to display as dialog secondary text
+        # @param connect_button [Gtk::Button] Connect button to re-enable and used as
+        #   dialog parent anchor via +toplevel+
+        # @param disconnect_button [Gtk::Button] Disconnect button to disable
+        # @param user_id_entry [Gtk::Entry] User ID entry to re-enable
+        # @param pass_entry [Gtk::Entry] Password entry to re-enable
+        # @return [void]
+        def report_connect_error(message, connect_button, disconnect_button, user_id_entry, pass_entry)
+          connect_button.sensitive = true
+          disconnect_button.sensitive = false
+          user_id_entry.sensitive = true
+          pass_entry.sensitive = true
+          Authentication::GUI.show_error_dialog(connect_button, message)
         end
       end
     end
