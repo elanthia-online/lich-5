@@ -48,7 +48,10 @@ module Lich
           rescue FatalAuthError => e
             handle_auth_error(button, e, on_error)
           rescue StandardError => e
-            handle_auth_error(button, e, on_error)
+            Lich.log "error: GUI auth unexpected error: #{e.class}: #{e.message}"
+            Lich.log e.backtrace.join("\n\t") if e.backtrace
+            handle_auth_error(button, StandardError.new("Unexpected login error. See debug log for details."), on_error)
+            raise
           end
         end
 
