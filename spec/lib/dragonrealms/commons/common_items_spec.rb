@@ -432,19 +432,20 @@ RSpec.describe Lich::DragonRealms::DRCI do
   end
 
   describe '#get_item_unsafe' do
-    # Helper to simulate an item appearing in a hand via GameObj XML feed.
-    # Uses DRC.left_hand/right_hand (strings) which in_hand? matches via DRC::Item.short_regex.
+    # Helper to simulate an item appearing in a hand.
+    # in_hand? matches DRC.left_hand/right_hand (strings) against
+    # DRC::Item.short_regex, so we stub the DRC accessors directly.
     def simulate_item_in_right_hand(noun)
-      DRC.right_hand = noun
+      allow(DRC).to receive(:right_hand).and_return(noun)
     end
 
     def simulate_item_in_left_hand(noun)
-      DRC.left_hand = noun
+      allow(DRC).to receive(:left_hand).and_return(noun)
     end
 
     def simulate_empty_hands
-      DRC.right_hand = nil
-      DRC.left_hand = nil
+      allow(DRC).to receive(:right_hand).and_return(nil)
+      allow(DRC).to receive(:left_hand).and_return(nil)
     end
 
     before do
