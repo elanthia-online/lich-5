@@ -432,17 +432,211 @@ RSpec.describe Lich::DragonRealms::DRCI do
   end
 
   describe '#get_item_unsafe' do
-    context 'when get succeeds' do
-      it 'returns true when item is retrieved' do
+    # Helper to simulate an item appearing in a hand via GameObj XML feed.
+    # Uses DRC.left_hand/right_hand (strings) which in_hand? matches via DRC::Item.short_regex.
+    def simulate_item_in_right_hand(noun)
+      DRC.right_hand = noun
+    end
+
+    def simulate_item_in_left_hand(noun)
+      DRC.left_hand = noun
+    end
+
+    def simulate_empty_hands
+      DRC.right_hand = nil
+      DRC.left_hand = nil
+    end
+
+    before do
+      simulate_empty_hands
+      # Stub sleep to avoid real delays in tests
+      allow(described_class).to receive(:sleep)
+    end
+
+    # -----------------------------------------------------------------
+    # Success: item appears in hand (XML verification)
+    # -----------------------------------------------------------------
+    context 'when item appears in right hand after get command' do
+      it 'returns true' do
         stub_bput('You get a sword.')
+        simulate_item_in_right_hand('sword')
+
         expect(described_class.get_item_unsafe('sword', nil)).to be true
       end
     end
 
-    context 'when get fails' do
-      it 'returns false when item not found' do
-        stub_bput('Get what?')
+    context 'when item appears in left hand after get command' do
+      it 'returns true' do
+        stub_bput('You get a shield.')
+        simulate_item_in_left_hand('shield')
+
+        expect(described_class.get_item_unsafe('shield', nil)).to be true
+      end
+    end
+
+    context 'when item noun is extracted from a multi-word name' do
+      it 'checks hands for the noun only' do
+        stub_bput('You get a red leather backpack.')
+        simulate_item_in_right_hand('backpack')
+
+        expect(described_class.get_item_unsafe('red leather backpack', nil)).to be true
+      end
+    end
+
+    context 'when already holding the item' do
+      it 'returns true for "already holding" response' do
+        stub_bput('You are already holding that.')
+        simulate_item_in_right_hand('sword')
+
+        expect(described_class.get_item_unsafe('sword', nil)).to be true
+      end
+    end
+
+    # -----------------------------------------------------------------
+    # Adversarial: combat false positives (the bug this fix addresses)
+    # -----------------------------------------------------------------
+    context 'when bput matches a success pattern but item is NOT in hand' do
+      it 'returns false for "You get a startling sensation" during combat' do
+        stub_bput('You get a startling sensation of dread.')
+        simulate_empty_hands
+
+        expect(described_class.get_item_unsafe('almanac', nil)).to be false
+      end
+    end
+
+    context 'when bput matches "You draw" but it is a wound assessment' do
+      it 'returns false when draw matches combat text and item is not in hand' do
+        stub_bput("You draw your enemy's wounds.")
+        simulate_empty_hands
+
         expect(described_class.get_item_unsafe('sword', nil)).to be false
+      end
+    end
+
+    context 'when bput matches "You pick" but it is an ambient message' do
+      it 'returns false when item never arrives in hand' do
+        stub_bput('You pick at a loose thread on your sleeve.')
+        simulate_empty_hands
+
+        expect(described_class.get_item_unsafe('needle', nil)).to be false
+      end
+    end
+
+    # -----------------------------------------------------------------
+    # Failure: item does not appear in hand
+    # -----------------------------------------------------------------
+    context 'when get fails with "Get what?"' do
+      it 'returns false' do
+        stub_bput('Get what?')
+        simulate_empty_hands
+
+        expect(described_class.get_item_unsafe('sword', nil)).to be false
+      end
+    end
+
+    context 'when hands are full' do
+      it 'returns false' do
+        stub_bput('You need a free hand to pick that up.')
+        simulate_item_in_right_hand('shield')
+
+        expect(described_class.get_item_unsafe('sword', nil)).to be false
+      end
+    end
+
+    context 'when item is not yours' do
+      it 'returns false' do
+        stub_bput('You stop as you realize the sword is not yours.')
+        simulate_empty_hands
+
+        expect(described_class.get_item_unsafe('sword', nil)).to be false
+      end
+    end
+
+    # -----------------------------------------------------------------
+    # XML feed lag: item arrives after a short delay
+    # -----------------------------------------------------------------
+    context 'when item appears in hand after XML feed lag' do
+      it 'returns true after polling detects the item' do
+        stub_bput('You get a sword.')
+        call_count = 0
+        # Simulate item appearing on the 3rd in_hands? check
+        allow(described_class).to receive(:in_hands?).with('sword') do
+          call_count += 1
+          call_count >= 3
+        end
+
+        expect(described_class.get_item_unsafe('sword', nil)).to be true
+      end
+    end
+
+    context 'when item never appears despite polling' do
+      it 'returns false after exhausting all poll attempts' do
+        stub_bput('You get a sword.')
+        allow(described_class).to receive(:in_hands?).with('sword').and_return(false)
+
+        expect(described_class.get_item_unsafe('sword', nil)).to be false
+      end
+    end
+
+    # -----------------------------------------------------------------
+    # Container handling
+    # -----------------------------------------------------------------
+    context 'with a container argument' do
+      it 'prepends "from" to the container' do
+        simulate_item_in_right_hand('sword')
+        expect(DRC).to receive(:bput).with(
+          'get sword from pack',
+          described_class::GET_ITEM_FAILURE_PATTERNS,
+          described_class::GET_ITEM_SUCCESS_PATTERNS
+        ).and_return('You get a sword from a leather pack.')
+
+        expect(described_class.get_item_unsafe('sword', 'pack')).to be true
+      end
+    end
+
+    context 'with a container that already has a preposition' do
+      it 'does not double-prepend "from"' do
+        simulate_item_in_right_hand('sword')
+        expect(DRC).to receive(:bput).with(
+          'get sword from my pack',
+          described_class::GET_ITEM_FAILURE_PATTERNS,
+          described_class::GET_ITEM_SUCCESS_PATTERNS
+        ).and_return('You get a sword from a leather pack.')
+
+        expect(described_class.get_item_unsafe('sword', 'from my pack')).to be true
+      end
+    end
+
+    # -----------------------------------------------------------------
+    # Portal fallback
+    # -----------------------------------------------------------------
+    context 'when container is a portal and item is not in hand' do
+      it 'falls back to eddy portal retrieval' do
+        stub_bput('Get what?')
+        simulate_empty_hands
+        allow(described_class).to receive(:get_item_from_eddy_portal?).with('sword', 'portal').and_return(true)
+
+        expect(described_class.get_item_unsafe('sword', 'portal')).to be true
+      end
+    end
+
+    context 'when container is a portal and portal fallback also fails' do
+      it 'returns false' do
+        stub_bput('Get what?')
+        simulate_empty_hands
+        allow(described_class).to receive(:get_item_from_eddy_portal?).with('sword', 'portal').and_return(false)
+
+        expect(described_class.get_item_unsafe('sword', 'portal')).to be false
+      end
+    end
+
+    context 'when container is not a portal and item is not in hand' do
+      it 'does not attempt portal fallback' do
+        stub_bput('Get what?')
+        simulate_empty_hands
+        expect(described_class).not_to receive(:get_item_from_eddy_portal?)
+
+        expect(described_class.get_item_unsafe('sword', 'pack')).to be false
       end
     end
   end
