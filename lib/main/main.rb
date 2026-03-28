@@ -620,6 +620,7 @@ reconnect_if_wanted = proc {
     detachable_client_thread = Thread.new {
       server = nil
       loop {
+        listener_connected = false
         begin
           # Close any existing server socket before creating a new one (credit: mrhoribu, PR #1157)
           if server && !server.closed?
@@ -656,6 +657,7 @@ reconnect_if_wanted = proc {
             port: server.local_address.ip_port,
             connected: true
           )
+          listener_connected = true
           server.close rescue nil
           server = nil
         rescue => e
@@ -675,8 +677,10 @@ reconnect_if_wanted = proc {
           next
         ensure
           server.close rescue nil
-          Frontend.cleanup_session_file
-          Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
+          unless listener_connected
+            Frontend.cleanup_session_file
+            Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
+          end
         end
         if $_DETACHABLE_CLIENT_
           begin
