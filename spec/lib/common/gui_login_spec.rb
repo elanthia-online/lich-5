@@ -298,14 +298,17 @@ RSpec.describe Lich::Common, "#gui_login" do
     end
 
     # New behavior contract: persistent mode launches a child session and
-    # keeps the launcher window active for additional launches.
-    it "keeps launcher open and delegates to SessionLauncher when persistent launcher mode is enabled" do
+    # keeps the launcher window active for additional launches from saved entries.
+    it "keeps launcher open and delegates to SessionLauncher for saved-entry launches when persistent mode is enabled" do
       stub_const("Lich::Common::SessionLauncher", Module.new)
       allow(Lich::Common::SessionLauncher).to receive(:launch).and_return({ ok: true, pid: 1234 })
       test_instance.instance_variable_set(:@persistent_launcher_mode, true)
       test_instance.send(:create_tab_instances)
 
-      captured_manual_callbacks.fetch(:on_play).call(launch_data, { char_name: 'Tsetem', game_code: 'GST' })
+      captured_saved_callbacks.fetch(:on_play).call(
+        launch_data,
+        { user_id: 'test_account', password: 'secret', char_name: 'Tsetem', game_code: 'GST' }
+      )
 
       expect(Lich::Common::SessionLauncher).to have_received(:launch).with(
         launch_data,
@@ -317,6 +320,20 @@ RSpec.describe Lich::Common, "#gui_login" do
       )
       expect(window).not_to have_received(:destroy)
       expect(test_instance.instance_variable_get(:@done)).to be false
+    end
+
+    it "preserves single-launch behavior for manual login even when persistent launcher mode is enabled" do
+      stub_const("Lich::Common::SessionLauncher", Module.new)
+      allow(Lich::Common::SessionLauncher).to receive(:launch).and_return({ ok: true, pid: 1234 })
+      test_instance.instance_variable_set(:@persistent_launcher_mode, true)
+      test_instance.send(:create_tab_instances)
+
+      captured_manual_callbacks.fetch(:on_play).call(launch_data, { char_name: 'Tsetem', game_code: 'GST', frontend: 'stormfront' })
+
+      expect(Lich::Common::SessionLauncher).not_to have_received(:launch)
+      expect(test_instance.instance_variable_get(:@launch_data)).to eq(launch_data)
+      expect(test_instance.instance_variable_get(:@done)).to be true
+      expect(window).to have_received(:destroy)
     end
   end
 end
