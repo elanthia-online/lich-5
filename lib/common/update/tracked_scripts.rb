@@ -62,7 +62,7 @@ module Lich
           CustomRepos.all.each do |key, reg|
             next if key == exclude_repo
 
-            custom_config = CustomRepos.build_config(key, reg)
+            CustomRepos.build_config(key, reg)
             tracked = UserVars.tracked_scripts&.dig(key) || []
             if tracked.include?(script_name)
               return "Error: '#{script_name}' is already tracked in Custom: #{key}."

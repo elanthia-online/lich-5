@@ -74,7 +74,7 @@ module Lich
           end
 
           UserVars.custom_repos[owner_repo] = {
-            'branch' => branch || 'main',
+            'branch'   => branch || 'main',
             'added_at' => Time.now.strftime('%Y-%m-%d')
           }
           Vars.save

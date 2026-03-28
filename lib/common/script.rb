@@ -75,9 +75,9 @@ module Lich
         file_list = custom_dirs.flat_map { |dir|
           prefix = dir.sub(SCRIPT_DIR, '')
           Dir.children(dir)
-            .select { |f| f =~ /\.(lic|rb|cmd|wiz)(\.(gz|Z))?$/i }
-            .sort_by { |fn| fn.sub(/\.[^.]+$/, '') }
-            .map { |s| "#{prefix}/#{s}" }
+             .select { |f| f =~ /\.(lic|rb|cmd|wiz)(\.(gz|Z))?$/i }
+             .sort_by { |fn| fn.sub(/\.[^.]+$/, '') }
+             .map { |s| "#{prefix}/#{s}" }
         } + Dir.children(SCRIPT_DIR).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
         if (file_name = (file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i }))
           script_name = file_name.sub(/\..{1,3}$/, '')
