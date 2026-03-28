@@ -1196,26 +1196,48 @@ module Lich
 
       # Gets an item without "my " prefix qualification.
       #
-      # Issues the GET command and checks for success/failure responses.
-      # Falls back to eddy portal retrieval if container is a portal.
+      # Issues the GET command, then verifies success by checking whether
+      # the item's noun appears in either hand via the XML game-object
+      # feed (+in_hands?+) rather than relying on text-pattern matching
+      # of the game response. This avoids false positives from combat
+      # messages (e.g. "You get a startling sensation" matching +/^You get/+).
+      #
+      # The success and failure patterns are still passed to +bput+ so it
+      # returns promptly once the game has responded, but the return value
+      # of +bput+ is not used to determine success.
+      #
+      # A short polling loop (up to 1 second) accommodates XML feed lag
+      # between the text response and the GameObj update.
       #
       # @param item [String] item name (unqualified)
       # @param container [String, nil] container name (unqualified), or nil
       # @return [Boolean] true if item was retrieved successfully
       # @api private
+      #
+      # @example Basic retrieval
+      #   get_item_unsafe("backpack")  #=> true (if backpack is now in hand)
+      #
+      # @example With container
+      #   get_item_unsafe("sword", "chest")  #=> true
+      #
+      # @see .in_hands?
+      # @see .get_item?
       def get_item_unsafe(item, container = nil)
         from = container
         from = "from #{container}" if container && !(container =~ /^(in|on|under|behind|from) /i)
-        case DRC.bput("get #{item} #{from}", GET_ITEM_SUCCESS_PATTERNS, GET_ITEM_FAILURE_PATTERNS)
-        when *GET_ITEM_SUCCESS_PATTERNS
-          return true
-        else
-          if container =~ /\bportal\b/i
-            return get_item_from_eddy_portal?(item, container)
-          else
-            return false
-          end
+
+        noun = DRC.get_noun(item)
+        DRC.bput("get #{item} #{from}", GET_ITEM_FAILURE_PATTERNS, GET_ITEM_SUCCESS_PATTERNS)
+
+        10.times do
+          break if in_hands?(noun)
+          sleep 0.1
         end
+
+        return true if in_hands?(noun)
+        return get_item_from_eddy_portal?(item, container) if container =~ /\bportal\b/i
+
+        false
       end
 
       # Gets an item from an eddy portal after forcing a content refresh.
