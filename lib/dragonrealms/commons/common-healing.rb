@@ -120,6 +120,8 @@ module Lich
           lodged: health_data.lodged,
           poisoned: health_data.poisoned,
           diseased: health_data.diseased,
+          vitality: perceived.vitality,
+          dead: perceived.dead,
           score: perceived.score
         )
       end

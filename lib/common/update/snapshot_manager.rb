@@ -55,9 +55,9 @@ module Lich
           respond
           respond 'Reverting Lich5 to previously installed version.'
 
-          revert_array = Dir.glob(File.join(BACKUP_DIR, "*")).sort.reverse
-          restore_snapshot = revert_array[0]
-          if restore_snapshot.empty? || /L5-snapshot/ !~ restore_snapshot
+          revert_array = Dir.glob(File.join(BACKUP_DIR, "L5-snapshot-*")).sort.reverse
+          restore_snapshot = revert_array.first
+          if restore_snapshot.nil?
             respond "No prior Lich5 version found. Seek assistance."
           else
             FileUtils.rm_rf(Dir.glob(File.join(LIB_DIR, "*")))
@@ -69,14 +69,14 @@ module Lich
             FileUtils.cp_r(File.join(restore_snapshot, "scripts", "."), SCRIPT_DIR)
 
             lich_to_update = File.join(LICH_DIR, File.basename($PROGRAM_NAME))
-            update_to_lich = File.join(restore_snapshot, "lich.rbw")
+            update_to_lich = File.join(restore_snapshot, File.basename($PROGRAM_NAME))
             File.open(update_to_lich, 'rb') { |r| File.open(lich_to_update, 'wb') { |w| w.write(r.read) } }
 
             targetversion = ''
-            targetfile = File.open(File.join(LIB_DIR, "version.rb")).read
+            targetfile = File.read(File.join(LIB_DIR, "version.rb"))
             targetfile.each_line do |line|
-              if line =~ /LICH_VERSION\s+?=\s+?/
-                targetversion = line.sub(/LICH_VERSION\s+?=\s+?/, '').sub('"', '')
+              if line =~ /LICH_VERSION\s*=\s*['"]([^'"]+)['"]/
+                targetversion = $1
               end
             end
 
