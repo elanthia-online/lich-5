@@ -76,6 +76,10 @@ module Lich
           @holder = latest['assets']
           @new_features = latest['body'].to_s.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
           release_asset = @holder && @holder.find { |x| x['name'] =~ /\b#{ASSET_TARBALL_NAME}\b/ }
+          unless release_asset
+            respond "Update notice: no release tarball found in assets (prep_update)."
+            return
+          end
           @zipfile = release_asset.fetch('browser_download_url')
         end
 
@@ -216,6 +220,11 @@ module Lich
         # @param version [String] version string
         # @return [void]
         def perform_update(source_dir, version)
+          unless validate_lich_structure(source_dir)
+            respond "Error: extracted source is missing required files. Aborting update to protect installation."
+            return
+          end
+
           FileUtils.rm_rf(Dir.glob(File.join(LIB_DIR, "*")))
 
           respond
