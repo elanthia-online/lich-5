@@ -80,6 +80,25 @@ RSpec.describe Lich::Util::Update::FileWriter do
       expect(File.exist?("#{path}.old")).to be false
     end
 
+    it 'preserves successful write when .old cleanup fails' do
+      path = File.join(tmpdir, 'keeper.lic')
+      original_content = "# original\n"
+      new_content = "# updated\n"
+      File.binwrite(path, original_content)
+
+      old_path = "#{path}.old"
+      allow(File).to receive(:delete).with(old_path).and_raise(Errno::EACCES.new("Permission denied"))
+
+      # The write should succeed despite the .old delete failing
+      expect { described_class.safe_write(path, new_content) }.to raise_error(Errno::EACCES)
+
+      # New content must survive -- the old file must NOT overwrite it
+      expect(File.binread(path)).to eq(new_content)
+      # The .old file remains because delete was denied
+      expect(File.exist?(old_path)).to be true
+      expect(File.binread(old_path)).to eq(original_content)
+    end
+
     it 'cleans up tmp file when writing a new file fails' do
       path = File.join(tmpdir, 'brand-new.lic')
 
