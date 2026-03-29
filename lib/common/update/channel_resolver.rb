@@ -26,12 +26,12 @@ module Lich
           when :stable, 'production'
             STABLE_REF
           when :beta
+            env = ENV['LICH_BETA_REF']
+            return env unless env.nil? || env.empty?
+
             stable_tag = latest_stable_tag
             stable_major, stable_minor, stable_patch = major_minor_patch_from(stable_tag)
             return nil unless stable_major
-
-            env = ENV['LICH_BETA_REF']
-            return env unless env.nil? || env.empty?
 
             tag = latest_prerelease_tag_greater_than(stable_major, stable_minor, stable_patch)
             return tag if tag
