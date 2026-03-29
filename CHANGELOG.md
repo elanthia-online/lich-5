@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.16.1](https://github.com/elanthia-online/lich-5/compare/v5.16.0...v5.16.1) (2026-03-29)
+
+
+### Bug Fixes
+
+* **all:** fix three revert bugs in SnapshotManager ([#1289](https://github.com/elanthia-online/lich-5/issues/1289)) ([fa87aa0](https://github.com/elanthia-online/lich-5/commit/fa87aa0e8a804343be329145ab147d8f738b886c))
+* **all:** guard nil release asset and validate before deleting lib/ ([#1290](https://github.com/elanthia-online/lich-5/issues/1290)) ([b8e3002](https://github.com/elanthia-online/lich-5/commit/b8e3002e206771b1a6937ddcdb1d630e01600b84))
+* **all:** guard nil stable version in beta channel resolution ([#1291](https://github.com/elanthia-online/lich-5/issues/1291)) ([c5c42c6](https://github.com/elanthia-online/lich-5/commit/c5c42c6a5e5042a97aeb250a0c8e142259cb830a))
+* **all:** narrow safe_write rollback scope so cleanup failure preserves successful write ([#1287](https://github.com/elanthia-online/lich-5/issues/1287)) ([8974813](https://github.com/elanthia-online/lich-5/commit/8974813089c3fd274a62dc049336792be89e7421))
+* **all:** remove dead code in BranchInstaller ([#1292](https://github.com/elanthia-online/lich-5/issues/1292)) ([b3c480a](https://github.com/elanthia-online/lich-5/commit/b3c480a18245ccb37060effd6e65597758e098b3))
+* **dr:** forward vitality and dead fields in perceive_health ([#1288](https://github.com/elanthia-online/lich-5/issues/1288)) ([cad008c](https://github.com/elanthia-online/lich-5/commit/cad008c24736fce9370f1807f5d1a71c5ff8e688))
+
 ## [5.16.0](https://github.com/elanthia-online/lich-5/compare/v5.15.1...v5.16.0) (2026-03-28)
 
 
