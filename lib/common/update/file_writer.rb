@@ -24,12 +24,12 @@ module Lich
           begin
             File.binwrite(tmp, content)
             File.rename(tmp, path)
-            File.delete(old) if File.exist?(old)
           rescue StandardError
             File.rename(old, path) if File.exist?(old)
             File.delete(tmp) if File.exist?(tmp)
             raise
           end
+          File.delete(old) if File.exist?(old)
         end
 
         # Builds filename => git-SHA map for files in directory.
