@@ -134,6 +134,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f # v1.295.0
         with:
+          ruby-version: '4.0.0'
           bundler-cache: false
 
       - name: Install Inno Setup
@@ -223,6 +224,7 @@ jobs:
         env:
           PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
+          MSYS2_ROOT: C:\Ruby4Lich5\msys64
           CC: gcc
           PKG_CONFIG: pkg-config
         run: |
@@ -243,7 +245,7 @@ jobs:
           if (-not $rubyExe) { Write-Error "ruby.exe not found on PATH"; exit 1 }
 
           $rb = 'require "gtk3"; require "sqlite3"; puts "ruby=#{RUBY_VERSION}"; Gtk.init([]); puts "GTK.init OK"'
-          & $rubyExe -e --% $rb
+          & $rubyExe -e $rb
           if ($LASTEXITCODE -ne 0) { Write-Error "Ruby GTK3/sqlite3 load failed"; exit 1 }
 
       - name: Prune Python from bundled MSYS2
