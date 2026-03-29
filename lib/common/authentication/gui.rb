@@ -102,7 +102,7 @@ module Lich
         # @return [void]
         def self.schedule_button_reenable(button)
           GLib::Timeout.add(BUTTON_REENABLE_DEBOUNCE_MS) do
-            button.sensitive = true
+            button.sensitive = true unless button.respond_to?(:destroyed?) && button.destroyed?
             false
           end
         end
