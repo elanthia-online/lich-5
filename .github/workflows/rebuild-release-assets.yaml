@@ -253,7 +253,7 @@ jobs:
           require "gtk3"
           require "sqlite3"
           puts "ruby=#{RUBY_VERSION}"
-          Gtk.init([])
+          Gtk.init
           puts "GTK.init OK"
           '@ | Set-Content -Path $rbPath -Encoding UTF8
 
