@@ -43,13 +43,15 @@ module Lich
         # @param exclude_repo [String] repo key to exclude from check
         # @return [String, nil] warning message if collision found, nil otherwise
         def check_collision(script_name, exclude_repo)
+          all_repo_warning = nil
+
           # Check built-in repos
           SCRIPT_REPOS.each do |key, config|
             next if key == exclude_repo
 
             if config[:tracking_mode] == :all
-              # For :all repos, any .lic could exist there
-              return "Warning: '#{script_name}' may conflict with #{config[:display_name]} (syncs all .lic files)."
+              all_repo_warning ||= "Warning: '#{script_name}' may conflict with #{config[:display_name]} (syncs all .lic files)."
+              next
             end
 
             tracked = tracked_scripts(config)
@@ -59,17 +61,16 @@ module Lich
           end
 
           # Check custom repos
-          CustomRepos.all.each do |key, reg|
+          CustomRepos.all.each do |key, _reg|
             next if key == exclude_repo
 
-            CustomRepos.build_config(key, reg)
             tracked = UserVars.tracked_scripts&.dig(key) || []
             if tracked.include?(script_name)
               return "Error: '#{script_name}' is already tracked in Custom: #{key}."
             end
           end
 
-          nil
+          all_repo_warning
         end
 
         # Adds a script to user's tracked list for a repository.

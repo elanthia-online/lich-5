@@ -112,16 +112,13 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
       }
       UserVars.tracked_scripts = { 'Repo1/scripts' => ['conflict.lic'] }
 
-      # dr-scripts (:all) will fire a warning first, but track_script checks for "Error:" prefix
-      # The :all mode returns a warning, not an error, so it won't block
-      # But then it will hit the custom repo collision which IS an error
+      # check_collision finds the hard Error: collision in Repo1/scripts
+      # even though dr-scripts (:all) would also produce a soft warning.
+      # Hard errors take priority and block tracking.
       tracker.track_script('Repo2/scripts', 'conflict.lic')
 
-      # The :all mode warning fires first and is not blocking, so the script gets added
-      # Actually let me re-read the code... check_collision returns on first match
-      # dr-scripts (:all) returns early with a Warning, which is non-blocking
-      # So the script WILL be tracked (with a warning about dr-scripts)
-      expect(UserVars.tracked_scripts['Repo2/scripts']).to include('conflict.lic')
+      expect(UserVars.tracked_scripts['Repo2/scripts']).not_to include('conflict.lic')
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Error:.*already tracked/)
     end
   end
 
