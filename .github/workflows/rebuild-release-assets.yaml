@@ -248,8 +248,16 @@ jobs:
           $rubyExe = (& "$env:SystemRoot\System32\where.exe" ruby 2>$null | Select-Object -First 1)
           if (-not $rubyExe) { Write-Error "ruby.exe not found on PATH"; exit 1 }
 
-          $rb = 'require "gtk3"; require "sqlite3"; puts "ruby=#{RUBY_VERSION}"; Gtk.init([]); puts "GTK.init OK"'
-          & $rubyExe -e $rb
+          $rbPath = Join-Path $PWD 'validate_gtk_runtime.rb'
+          @'
+          require "gtk3"
+          require "sqlite3"
+          puts "ruby=#{RUBY_VERSION}"
+          Gtk.init([])
+          puts "GTK.init OK"
+          '@ | Set-Content -Path $rbPath -Encoding UTF8
+
+          & $rubyExe $rbPath
           if ($LASTEXITCODE -ne 0) { Write-Error "Ruby GTK3/sqlite3 load failed"; exit 1 }
 
       - name: Prune Python from bundled MSYS2
