@@ -28,6 +28,8 @@ module Lich
           when :beta
             stable_tag = latest_stable_tag
             stable_major, stable_minor, stable_patch = major_minor_patch_from(stable_tag)
+            return nil unless stable_major
+
             env = ENV['LICH_BETA_REF']
             return env unless env.nil? || env.empty?
 
