@@ -1,0 +1,369 @@
+# -----------------------------------------------------------------------------
+# PURPOSE
+#   Manually rebuild release assets for an existing GitHub release tag and
+#   upload them back to that draft release. This is a recovery workflow for
+#   situations where a draft release was deleted/recreated and its assets need
+#   to be restored without minting a new tag.
+#
+# NOTES
+# - Targets an existing release by tag (for example: v5.16.1).
+# - Rebuilds the same asset names used by the stable release workflow:
+#     * lich-5.tar.gz
+#     * lich-5.zip
+#     * Ruby4Lich5.exe
+# - Uploads with --clobber so the workflow is safely rerunnable.
+# -----------------------------------------------------------------------------
+name: Rebuild Release Assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to rebuild assets for (e.g. v5.16.1)"
+        required: true
+        type: string
+      build_installer:
+        description: "Also rebuild and upload the Windows installer"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  EXP_PRUNE_PYTHON_MODE: files
+  EXP_PRUNE_BULK: 'true'
+  EXP_VALIDATE_RUBY_GTK: 'true'
+
+jobs:
+  release_guard:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.verify.outputs.tag }}
+    steps:
+      - name: Verify draft release exists for tag
+        id: verify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          draft="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')"
+          if [ "$draft" != "true" ]; then
+            echo "::error::Release '$TAG' exists but is not a draft. Refusing to clobber assets on a published release."
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  build_archives:
+    needs: release_guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.release_guard.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Create core Lich-5 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p Lich5 Lich5/data Lich5/scripts
+
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/alias.lic         > Lich5/scripts/alias.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/autostart.lic     > Lich5/scripts/autostart.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/ewaggle.lic       > Lich5/scripts/ewaggle.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/go2.lic           > Lich5/scripts/go2.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/jinx.lic          > Lich5/scripts/jinx.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/lich5-update.lic  > Lich5/scripts/lich5-update.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/log.lic           > Lich5/scripts/log.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/map.lic           > Lich5/scripts/map.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/repository.lic    > Lich5/scripts/repository.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/vars.lic          > Lich5/scripts/vars.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/version.lic       > Lich5/scripts/version.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/dr-scripts/master/dependency.lic         > Lich5/scripts/dependency.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml   > Lich5/data/effect-list.xml
+
+          cp lich.rbw Lich5/
+          cp Gemfile Lich5/
+          cp LICENSE Lich5/
+          cp -r lib Lich5/
+
+          tar -czvf lich-5.tar.gz Lich5/
+          zip -r lich-5.zip Lich5/
+
+      - name: Upload archive artifacts for installer job
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: rebuilt-release-archives
+          path: |
+            lich-5.tar.gz
+            lich-5.zip
+
+      - name: Upload archives to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release_guard.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" lich-5.tar.gz lich-5.zip --clobber --repo "$GITHUB_REPOSITORY"
+
+  build_installer:
+    needs: [release_guard, build_archives]
+    if: ${{ inputs.build_installer }}
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout target tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.release_guard.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Download core archive artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: rebuilt-release-archives
+
+      - name: Expand core payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q lich-5.zip
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f # v1.295.0
+        with:
+          ruby-version: '4.0.0'
+          bundler-cache: false
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          choco feature disable -n=showDownloadProgress
+          choco install -y --limit-output innosetup
+
+      - name: Install MSYS2 into app tree
+        shell: powershell
+        run: |
+          choco feature disable -n=showDownloadProgress
+          choco install -y --limit-output msys2 --params '"/InstallDir:C:\Ruby4Lich5\msys64 /NoUpdate"'
+
+      - name: Build sanitized PATH for vendored MSYS2
+        id: vendormsys
+        shell: powershell
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          if (!(Test-Path $msys)) { Write-Error "Expected $msys to exist at this point"; exit 1 }
+          $orig = $env:Path -split ';'
+          $filtered = $orig | Where-Object {
+            $_ -and
+            ($_ -notlike '*\Ruby\*\x64\msys64\*') -and
+            ($_ -ne 'C:\mingw64\bin') -and
+            ($_ -notmatch '^C:\\Strawberry(\\|$)')
+          }
+          $san = @("$msys\ucrt64\bin","$msys\usr\bin") + $filtered
+          $joined = ($san -join ';')
+          "PATH_VENDOR_MSYS=$joined" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "path=$joined" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "RI_DEVKIT=" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Initialize MSYS2 (minimal UCRT64; no meta toolchain)
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ''
+        run: |
+          $msys   = 'C:\Ruby4Lich5\msys64'
+          $pacman = Join-Path $msys 'usr\bin\pacman.exe'
+          if (!(Test-Path $pacman)) { Write-Error "pacman not found at $pacman"; exit 1 }
+
+          $env:MSYSTEM = 'UCRT64'
+          & $pacman -Sy --noconfirm
+          & $pacman -S --needed --noconfirm `
+            mingw-w64-ucrt-x86_64-gcc `
+            mingw-w64-ucrt-x86_64-gcc-libs `
+            mingw-w64-ucrt-x86_64-make `
+            mingw-w64-ucrt-x86_64-pkgconf `
+            mingw-w64-ucrt-x86_64-gobject-introspection `
+            mingw-w64-ucrt-x86_64-sqlite3 `
+            mingw-w64-ucrt-x86_64-gtk3 `
+            make
+
+      - name: Dependency validation (toolchain & pkg-config)
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ''
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          $gcc  = Join-Path $msys 'ucrt64\bin\gcc.exe'
+          $pkgc = Join-Path $msys 'ucrt64\bin\pkg-config.exe'
+          $pac  = Join-Path $msys 'usr\bin\pacman.exe'
+
+          if (!(Test-Path $pac))  { Write-Error "pacman not found at $pac"; exit 1 }
+          if (!(Test-Path $gcc))  { Write-Error "vendored gcc not found at $gcc"; exit 1 }
+          if (!(Test-Path $pkgc)) { Write-Error "vendored pkg-config not found at $pkgc"; exit 1 }
+
+          & $gcc --version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) { Write-Error "vendored gcc failed to execute"; exit 1 }
+          & $pkgc --version
+          if ($LASTEXITCODE -ne 0) { Write-Error "vendored pkg-config failed to execute"; exit 1 }
+
+          cmd /c `"$pkgc`" --print-errors --exists gtk+-3.0
+          if ($LASTEXITCODE -ne 0) { Write-Error "pkg-config cannot resolve gtk+-3.0"; exit 1 }
+          cmd /c `"$pkgc`" --print-errors --exists sqlite3
+          if ($LASTEXITCODE -ne 0) { Write-Error "pkg-config cannot resolve sqlite3"; exit 1 }
+
+          "CC=$gcc" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "PKG_CONFIG=$pkgc" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "PKG_CONFIG_PATH=$($msys)\ucrt64\lib\pkgconfig;$($msys)\lib\pkgconfig" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Install required gems
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ''
+          MSYS2_ROOT: C:\Ruby4Lich5\msys64
+          CC: gcc
+          PKG_CONFIG: pkg-config
+        run: |
+          gem install sqlite3 --platform ruby -- --enable-system-libraries --with-sqlite3-include=${env:MSYS2_ROOT}/ucrt64/include --with-sqlite3-lib=${env:MSYS2_ROOT}/ucrt64/lib
+          gem install ascii_charts ffi gtk3 json kramdown logger os ostruct redis sequel terminal-table tzinfo tzinfo-data webrick --no-document
+
+      - name: Validate Ruby GTK/sqlite3 runtime
+        if: ${{ env.EXP_VALIDATE_RUBY_GTK == 'true' }}
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ''
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          $env:Path = "$msys\ucrt64\bin;$msys\usr\bin;$env:Path"
+
+          $rubyExe = (& "$env:SystemRoot\System32\where.exe" ruby 2>$null | Select-Object -First 1)
+          if (-not $rubyExe) { Write-Error "ruby.exe not found on PATH"; exit 1 }
+
+          $rb = 'require "gtk3"; require "sqlite3"; puts "ruby=#{RUBY_VERSION}"; Gtk.init([]); puts "GTK.init OK"'
+          & $rubyExe -e $rb
+          if ($LASTEXITCODE -ne 0) { Write-Error "Ruby GTK3/sqlite3 load failed"; exit 1 }
+
+      - name: Prune Python from bundled MSYS2
+        if: ${{ env.EXP_PRUNE_PYTHON_MODE != 'off' }}
+        shell: powershell
+        env:
+          EXP_PRUNE_PYTHON_MODE: ${{ env.EXP_PRUNE_PYTHON_MODE }}
+        run: |
+          $msys   = 'C:\Ruby4Lich5\msys64'
+          if (!(Test-Path $msys)) { Write-Host "No MSYS2 at $msys; skipping."; exit 0 }
+
+          $mode   = "${env:EXP_PRUNE_PYTHON_MODE}"; if (-not $mode) { $mode = 'files' }
+          $pacman = Join-Path $msys 'usr\bin\pacman.exe'
+
+          if ($mode -eq 'pacman' -and (Test-Path $pacman)) {
+            $env:MSYSTEM = 'UCRT64'
+            $installed = & $pacman -Qq 2>$null; if ($LASTEXITCODE -ne 0) { $installed = @() }
+            $pattern   = '^(python($|[0-9]))|(mingw-w64-(ucrt-)?x86_64-python.*)$'
+            $py = @($installed | Where-Object { $_ -match $pattern })
+            if ($py.Count -gt 0) {
+              & $pacman -Rns --noconfirm @py 1>$null 2>$null
+              if ($LASTEXITCODE -ne 0) {
+                & $pacman -Rdd --noconfirm @py 1>$null 2>$null
+              }
+            }
+          }
+
+          $targets = @(
+            "$msys\ucrt64\bin\python*.exe",
+            "$msys\ucrt64\lib\python*",
+            "$msys\mingw64\bin\python*.exe",
+            "$msys\mingw64\lib\python*",
+            "$msys\usr\bin\python*.exe",
+            "$msys\usr\lib\python*"
+          )
+          foreach ($g in $targets) {
+            Get-ChildItem -Path $g -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+              Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $_.FullName
+            }
+          }
+
+      - name: Bulk prune non-runtime trees
+        if: ${{ env.EXP_PRUNE_BULK == 'true' }}
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ''
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          $paths = @(
+            Join-Path $msys 'var\cache\pacman\pkg'
+            Join-Path $msys 'usr\share\man'
+            Join-Path $msys 'usr\share\doc'
+            Join-Path $msys 'usr\share\info'
+            Join-Path $msys 'usr\share\locale'
+            Join-Path $msys 'usr\lib\clang'
+          )
+          foreach ($p in $paths) {
+            if (Test-Path $p) {
+              Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+      - name: Build Windows installer with Inno Setup
+        shell: powershell
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { Write-Error "ISCC.exe not found at $iscc"; exit 1 }
+          & $iscc "R4LGTK3.iss"
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Write-Error "ISCC exited with code $code."
+            exit $code
+          }
+          if (!(Test-Path .\Output\Ruby4Lich5.exe)) { Write-Error "Expected Output\Ruby4Lich5.exe not found"; exit 1 }
+          Move-Item -Path .\Output\Ruby4Lich5.exe -Destination .\Ruby4Lich5.exe -Force
+
+      - name: Upload installer to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release_guard.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" Ruby4Lich5.exe --clobber --repo "$GITHUB_REPOSITORY"
+
+  summary:
+    needs: [release_guard, build_archives, build_installer]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run summary
+        env:
+          TAG: ${{ needs.release_guard.outputs.tag }}
+          ARCHIVE_RESULT: ${{ needs.build_archives.result }}
+          INSTALLER_RESULT: ${{ needs.build_installer.result }}
+          WANT_INSTALLER: ${{ inputs.build_installer }}
+        shell: bash
+        run: |
+          {
+            echo "## Rebuild Release Assets — Run Summary"
+            echo ""
+            echo "- Target tag: \`$TAG\`"
+            echo "- Archive rebuild/upload: **$ARCHIVE_RESULT**"
+            if [ "$WANT_INSTALLER" = "true" ]; then
+              echo "- Installer rebuild/upload: **$INSTALLER_RESULT**"
+            else
+              echo "- Installer rebuild/upload: **skipped by input**"
+            fi
+            echo ""
+            echo "Expected assets:"
+            echo "- \`lich-5.tar.gz\`"
+            echo "- \`lich-5.zip\`"
+            if [ "$WANT_INSTALLER" = "true" ]; then
+              echo "- \`Ruby4Lich5.exe\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
