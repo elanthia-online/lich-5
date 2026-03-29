@@ -55,9 +55,9 @@ module Lich
           respond
           respond 'Reverting Lich5 to previously installed version.'
 
-          revert_array = Dir.glob(File.join(BACKUP_DIR, "*")).sort.reverse
-          restore_snapshot = revert_array[0]
-          if restore_snapshot.nil? || restore_snapshot.empty? || /L5-snapshot/ !~ restore_snapshot
+          revert_array = Dir.glob(File.join(BACKUP_DIR, "L5-snapshot-*")).sort.reverse
+          restore_snapshot = revert_array.first
+          if restore_snapshot.nil?
             respond "No prior Lich5 version found. Seek assistance."
           else
             FileUtils.rm_rf(Dir.glob(File.join(LIB_DIR, "*")))
