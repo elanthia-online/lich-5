@@ -55,7 +55,6 @@ module Lich
           encoded_branch_name = ERB::Util.url_encode(branch_name)
           tarball_url = "https://github.com/#{repo}/archive/refs/heads/#{encoded_branch_name}.tar.gz"
 
-          repo.split('/').last
           sanitized_branch = branch_name.gsub('/', '-')
           filename = "lich5-branch-#{sanitized_branch}"
 
