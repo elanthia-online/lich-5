@@ -42,7 +42,7 @@ jobs:
     outputs:
       tag: ${{ steps.verify.outputs.tag }}
     steps:
-      - name: Verify release exists for tag
+      - name: Verify draft release exists for tag
         id: verify
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,7 +50,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+          draft="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')"
+          if [ "$draft" != "true" ]; then
+            echo "::error::Release '$TAG' exists but is not a draft. Refusing to clobber assets on a published release."
+            exit 1
+          fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
   build_archives:
