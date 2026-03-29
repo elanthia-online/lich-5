@@ -72,14 +72,14 @@ module Lich
             return
           end
 
-          @update_to = latest['tag_name'].to_s.sub('v', '')
           @holder = latest['assets']
-          @new_features = latest['body'].to_s.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
           release_asset = @holder && @holder.find { |x| x['name'] =~ /\b#{ASSET_TARBALL_NAME}\b/ }
           unless release_asset
             respond "Update notice: no release tarball found in assets (prep_update)."
             return
           end
+          @update_to = latest['tag_name'].to_s.sub('v', '')
+          @new_features = latest['body'].to_s.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
           @zipfile = release_asset.fetch('browser_download_url')
         end
 
@@ -200,7 +200,11 @@ module Lich
               return
             end
 
-            perform_update(source_dir, @update_to)
+            unless perform_update(source_dir, @update_to)
+              FileUtils.remove_dir(source_dir) if File.directory?(source_dir)
+              FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
+              return
+            end
 
             FileUtils.remove_dir(source_dir)
             FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz"))
@@ -218,11 +222,11 @@ module Lich
         #
         # @param source_dir [String] extracted tarball directory
         # @param version [String] version string
-        # @return [void]
+        # @return [Boolean] true if update succeeded
         def perform_update(source_dir, version)
           unless validate_lich_structure(source_dir)
             respond "Error: extracted source is missing required files. Aborting update to protect installation."
-            return
+            return false
           end
 
           FileUtils.rm_rf(Dir.glob(File.join(LIB_DIR, "*")))
@@ -241,6 +245,7 @@ module Lich
           lich_to_update = File.join(LICH_DIR, File.basename($PROGRAM_NAME))
           update_to_lich = File.join(source_dir, "lich.rbw")
           File.open(update_to_lich, 'rb') { |r| File.open(lich_to_update, 'wb') { |w| w.write(r.read) } }
+          true
         end
 
         # Validates extracted directory contains required Lich files.
