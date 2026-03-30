@@ -68,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           subject="$(git show -s --format=%s "$GITHUB_SHA")"
-          if [[ "$subject" =~ ^chore\(main\):[[:space:]]release[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ "$subject" =~ ^chore\(main\):[[:space:]]release[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+([[:space:]]+\(#([0-9]+)\))?$ ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "::notice::Skipping: release commit detected: '${subject}'"
           else
