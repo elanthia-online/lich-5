@@ -160,6 +160,22 @@ RSpec.describe Lich::Common::Authentication::GUI do
       expect(timeout_block.call).to be(false)
     end
 
+    it 'does not touch a destroyed button when debounce timer callback executes' do
+      timeout_block = nil
+      allow(GLib::Timeout).to receive(:add) { |_ms, &block| timeout_block = block }
+      allow(mock_button).to receive(:respond_to?).with(:destroyed?).and_return(true)
+      allow(mock_button).to receive(:destroyed?).and_return(true)
+
+      described_class.authenticate_and_launch(
+        button: mock_button,
+        login_info: login_info,
+        on_success: ->(_data) {}
+      )
+
+      expect(mock_button).not_to receive(:sensitive=)
+      expect(timeout_block.call).to be(false)
+    end
+
     context 'when authentication fails with FatalAuthError' do
       before do
         allow(Lich::Common::Authentication).to receive(:authenticate)
