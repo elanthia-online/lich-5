@@ -86,6 +86,8 @@ module Lich
 
       # Filesystem checks that run once after startup completes.
       # These don't need game commands, just file existence checks and warnings.
+      #
+      # @return [void]
       def self.post_startup_checks
         warn_obsolete_scripts
         warn_obsolete_data_files
@@ -93,6 +95,8 @@ module Lich
         $setupfiles.reload if defined?($setupfiles) && $setupfiles
       end
 
+      # Script names that are obsolete and should be deleted.
+      # Checked on login to warn users about stale files.
       DR_OBSOLETE_SCRIPTS = %w[
         events slackbot spellmonitor exp-monitor
         common-travel common-validation common drinfomon equipmanager
@@ -101,8 +105,12 @@ module Lich
         update-shops
       ].freeze
 
+      # Data filenames that are obsolete and should be deleted.
       DR_OBSOLETE_DATA_FILES = %w[].freeze
 
+      # Warns about obsolete .lic files still present in SCRIPT_DIR.
+      #
+      # @return [void]
       def self.warn_obsolete_scripts
         DR_OBSOLETE_SCRIPTS.each do |script_name|
           path = File.join(SCRIPT_DIR, "#{script_name}.lic")
@@ -112,6 +120,9 @@ module Lich
         end
       end
 
+      # Warns about obsolete data files still present in SCRIPT_DIR/data.
+      #
+      # @return [void]
       def self.warn_obsolete_data_files
         data_dir = File.join(SCRIPT_DIR, 'data')
         DR_OBSOLETE_DATA_FILES.each do |filename|
@@ -122,6 +133,10 @@ module Lich
         end
       end
 
+      # Warns when scripts/custom/ contains files that shadow curated scripts,
+      # preventing the curated versions from receiving updates.
+      #
+      # @return [void]
       def self.warn_custom_scripts
         custom_dir = File.join(SCRIPT_DIR, 'custom')
         return unless File.directory?(custom_dir)
