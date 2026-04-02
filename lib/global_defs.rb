@@ -37,6 +37,9 @@ end
 # Starts scripts that exist and aren't already running.
 # Waits briefly for each script to initialize before continuing.
 # Replaces dependency.lic's custom_require lambda.
+#
+# @param script_names [String, Array<String>] script name(s) to start
+# @return [void]
 def start_scripts_if_available(script_names)
   script_names = [script_names] unless script_names.is_a?(Array)
   return if script_names.empty?
@@ -56,6 +59,9 @@ end
 
 # Returns character settings from YAML profiles.
 # Lazy-initializes $setupfiles on first call.
+#
+# @param character_suffixes [Array<String>] additional profile suffixes to load
+# @return [OpenStruct] merged and transformed settings
 def get_settings(character_suffixes = [])
   $setupfiles ||= Lich::Common::SetupFiles.new
   $setupfiles.get_settings(character_suffixes)
@@ -63,6 +69,9 @@ end
 
 # Returns data from a base-{type}.yaml file (e.g. 'spells', 'town', 'items').
 # Lazy-initializes $setupfiles on first call.
+#
+# @param type [String] the data file type (e.g. 'spells', 'town', 'items')
+# @return [OpenStruct] data from base-{type}.yaml
 def get_data(type)
   $setupfiles ||= Lich::Common::SetupFiles.new
   $setupfiles.get_data(type)
