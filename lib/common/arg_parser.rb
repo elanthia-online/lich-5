@@ -139,3 +139,7 @@ module Lich
     end
   end
 end
+
+# Top-level alias so scripts can use bare `ArgParser.new` without
+# fully qualifying the Lich::Common namespace.
+ArgParser = Lich::Common::ArgParser unless defined?(::ArgParser)

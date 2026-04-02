@@ -285,3 +285,7 @@ module Lich
     end
   end
 end
+
+# Top-level alias so scripts can use bare `SetupFiles.new` without
+# fully qualifying the Lich::Common namespace.
+SetupFiles = Lich::Common::SetupFiles unless defined?(::SetupFiles)
