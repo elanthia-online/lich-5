@@ -116,6 +116,7 @@ module Lich
             server = @server
             break unless server
 
+            socket = nil
             begin
               socket = server.accept
               client_thread = @client_thread_factory.call(socket) { |client| handle_tracked_client(client) }
@@ -124,6 +125,7 @@ module Lich
               # Server socket closed -- normal shutdown path.
               break
             rescue StandardError => e
+              socket&.close rescue nil
               Lich.log("warning: ActiveSessions accept_loop error (continuing): #{e.class}: #{e.message}") if defined?(Lich) && Lich.respond_to?(:log)
             end
           end
