@@ -103,18 +103,27 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Server do
 
     context 'when the client thread factory raises after accept succeeds' do
       let(:leaked_socket) { instance_double(IO) }
+      let(:good_socket) { instance_double(IO) }
 
-      before { allow(leaked_socket).to receive(:close) }
+      before do
+        allow(leaked_socket).to receive(:close)
+        stub_ping_socket(good_socket)
+      end
 
-      it 'closes the accepted socket to prevent file descriptor leaks' do
-        exploding_factory = ->(_socket, &_block) { raise 'thread pool exhausted' }
+      it 'closes the leaked socket and recovers to process the next connection' do
         server = build_server(
-          accept_results: [leaked_socket, IOError],
-          client_thread_factory: exploding_factory
+          accept_results: [leaked_socket, good_socket, IOError],
+          client_thread_factory: ->(socket, &block) do
+            raise 'thread pool exhausted' if socket.equal?(leaked_socket)
+
+            block&.call(socket)
+            finished_thread
+          end
         )
         server.start
 
         expect(leaked_socket).to have_received(:close).at_least(:once)
+        expect(good_socket).to have_received(:puts).with(a_string_including('"ok":true'))
       ensure
         server&.stop
       end
