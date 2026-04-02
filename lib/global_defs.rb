@@ -3,6 +3,15 @@
 # rubocop changes and DR toplevel command handling (2023-06-28)
 # sadly adding global level script methods (2024-06-12)
 
+# Sentinel constants for dependency.lic gating.
+# When these are defined, dependency.lic skips its inline versions.
+module Lich
+  module Common
+    CORE_GET_SETTINGS = true
+    CORE_SCRIPT_LOADER = true
+  end
+end
+
 # added 2024
 
 def start_script(script_name, cli_vars = [], flags = Hash.new)
@@ -23,6 +32,49 @@ def force_start_script(script_name, cli_vars = [], flags = {})
   flags = Hash.new unless flags.is_a?(Hash)
   flags[:force] = true
   start_script(script_name, cli_vars, flags)
+end
+
+# Starts scripts that exist and aren't already running.
+# Waits briefly for each script to initialize before continuing.
+# Replaces dependency.lic's custom_require lambda.
+#
+# @param script_names [String, Array<String>] script name(s) to start
+# @return [void]
+def start_scripts_if_available(script_names)
+  script_names = [script_names] unless script_names.is_a?(Array)
+  return if script_names.empty?
+
+  script_names.each do |script_name|
+    next if Script.running?(script_name)
+    next unless Script.exists?(script_name)
+
+    start_script(script_name)
+    pause 0.05
+    snapshot = Time.now
+    until !Script.running?(script_name) || Time.now - snapshot > 0.25
+      pause 0.05
+    end
+  end
+end
+
+# Returns character settings from YAML profiles.
+# Lazy-initializes $setupfiles on first call.
+#
+# @param character_suffixes [Array<String>] additional profile suffixes to load
+# @return [OpenStruct] merged and transformed settings
+def get_settings(character_suffixes = [])
+  $setupfiles ||= Lich::Common::SetupFiles.new
+  $setupfiles.get_settings(character_suffixes)
+end
+
+# Returns data from a base-{type}.yaml file (e.g. 'spells', 'town', 'items').
+# Lazy-initializes $setupfiles on first call.
+#
+# @param type [String] the data file type (e.g. 'spells', 'town', 'items')
+# @return [OpenStruct] data from base-{type}.yaml
+def get_data(type)
+  $setupfiles ||= Lich::Common::SetupFiles.new
+  $setupfiles.get_data(type)
 end
 
 def before_dying(&code)
