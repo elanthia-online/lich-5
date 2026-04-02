@@ -68,10 +68,13 @@ module Lich
           # Ensure ShowRoomID and MonsterBold flags are enabled (one-time per character)
           unless UserVars.dependency_setflags
             flags = Lich::Util.issue_command("flag", /^Usage/, /^For other setting options, see AVOID, SET, and TOGGLE/, quiet: true, timeout: 1, usexml: false)
-            ["ShowRoomID", "MonsterBold"].each do |flag|
+            required = ["ShowRoomID", "MonsterBold"]
+            required.each do |flag|
               fput("flag \#{flag} on") unless flags.any? { |f| f.match?(/\#{flag}\\s+ON/) }
             end
-            UserVars.dependency_setflags = Time.now
+            # Re-query to verify flags applied; only mark sentinel if all confirmed
+            flags = Lich::Util.issue_command("flag", /^Usage/, /^For other setting options, see AVOID, SET, and TOGGLE/, quiet: true, timeout: 1, usexml: false)
+            UserVars.dependency_setflags = Time.now if required.all? { |flag| flags.any? { |f| f.match?(/\#{flag}\\s+ON/) } }
           end
 
           Lich::DragonRealms::DRInfomon.startup_completed!
@@ -80,12 +83,13 @@ module Lich
 
       def self.startup_completed!
         @@startup_complete = true
-        post_startup_checks
         PostLoad.game_loaded! if defined?(PostLoad)
+        post_startup_checks
       end
 
-      # Filesystem checks that run once after startup completes.
+      # Best-effort filesystem checks that run once after startup completes.
       # These don't need game commands, just file existence checks and warnings.
+      # Failures are logged but do not block the PostLoad lifecycle.
       #
       # @return [void]
       def self.post_startup_checks
@@ -93,6 +97,9 @@ module Lich
         warn_obsolete_data_files
         warn_custom_scripts
         $setupfiles.reload if defined?($setupfiles) && $setupfiles
+      rescue StandardError => e
+        Lich::Messaging.msg('error', "DRInfomon: post_startup_checks failed: #{e.message}")
+        Lich.log "DRInfomon: post_startup_checks error: #{e.inspect}\n\t#{e.backtrace&.first(5)&.join("\n\t")}"
       end
 
       # Script names that are obsolete and should be deleted.
