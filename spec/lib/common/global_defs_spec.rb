@@ -13,11 +13,11 @@ module Lich
     class SetupFiles
       def initialize(debug = false); end
 
-      def get_settings(character_suffixes = [])
+      def get_settings(_character_suffixes = [])
         OpenStruct.new(hometown: 'Crossing', autostarts: %w[esp afk])
       end
 
-      def get_data(type)
+      def get_data(_type)
         OpenStruct.new(spell_data: {})
       end
     end
@@ -31,7 +31,7 @@ module Script
     @running[name] || false
   end
 
-  def self.exists?(name)
+  def self.exists?(_name)
     true
   end
 
@@ -69,7 +69,7 @@ dep_lines = File.readlines(dep_path)
 # Extract the sentinel constants block
 sentinel_start = dep_lines.index { |l| l =~ /Sentinel constants for dependency/ }
 if sentinel_start
-  sentinel_end = dep_lines[sentinel_start..].index { |l| l.strip == 'end' }
+  dep_lines[sentinel_start..].index { |l| l.strip == 'end' }
   # Need to find the double-end (module Lich; module Common; ...; end; end)
   ends_found = 0
   sentinel_end = nil
