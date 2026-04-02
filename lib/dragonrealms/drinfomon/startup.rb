@@ -136,7 +136,6 @@ module Lich
         end
       end
     end
-
   end
 
   module Common
