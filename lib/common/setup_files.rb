@@ -136,6 +136,8 @@ module Lich
       # Returns the character name for filename construction.
       # Prefers Account.character (available from authentication, before XML stream)
       # with fallback to checkname (XMLData.name, available after XML stream starts).
+      #
+      # @return [String] character name
       def character_name
         name = defined?(Lich::Common::Account) && Lich::Common::Account.character
         name || checkname
