@@ -222,16 +222,20 @@ module Lich
 
         # Applies personal map wayto overrides and custom targets from YAML settings.
         # Reads base_wayto_overrides, personal_wayto_overrides, and personal_map_targets
-        # from the user's profile via get_settings.
+        # from the user's profile via get_settings. Ensures the map is loaded before
+        # accessing room data, consistent with other ClassMethods.
         #
         # @return [void]
         def apply_wayto_overrides
+          self.load unless loaded?
           settings = get_settings
           base_overrides = settings.base_wayto_overrides || {}
           personal_overrides = settings.personal_wayto_overrides || {}
           wayto_overrides = base_overrides.merge(personal_overrides)
 
           wayto_overrides.each do |_key, values|
+            next unless values.is_a?(Hash) && values['start_room']
+
             start_room_id = values['start_room'].to_i
             end_room_id = values['end_room'].to_s
             start_room = list[start_room_id]
