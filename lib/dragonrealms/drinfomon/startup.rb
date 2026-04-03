@@ -70,11 +70,11 @@ module Lich
             flags = Lich::Util.issue_command("flag", /^Usage/, /^For other setting options, see AVOID, SET, and TOGGLE/, quiet: true, timeout: 1, usexml: false)
             required = ["ShowRoomID", "MonsterBold"]
             required.each do |flag|
-              fput("flag \#{flag} on") unless flags.any? { |f| f.match?(/\#{flag}\\s+ON/) }
+              fput("flag \#{flag} on") unless flags.any? { |f| f.match?(/\#{Regexp.escape(flag)}\\s+ON/) }
             end
             # Re-query to verify flags applied; only mark sentinel if all confirmed
             flags = Lich::Util.issue_command("flag", /^Usage/, /^For other setting options, see AVOID, SET, and TOGGLE/, quiet: true, timeout: 1, usexml: false)
-            UserVars.dependency_setflags = Time.now if required.all? { |flag| flags.any? { |f| f.match?(/\#{flag}\\s+ON/) } }
+            UserVars.dependency_setflags = Time.now if required.all? { |flag| flags.any? { |f| f.match?(/\#{Regexp.escape(flag)}\\s+ON/) } }
           end
 
           Lich::DragonRealms::DRInfomon.startup_completed!
@@ -148,13 +148,13 @@ module Lich
         custom_dir = File.join(SCRIPT_DIR, 'custom')
         return unless File.directory?(custom_dir)
 
-        custom_scripts = Dir.entries(custom_dir).reject { |f| File.directory?(File.join(custom_dir, f)) || f.start_with?(".") }
-        curated_scripts = Dir.entries(SCRIPT_DIR).reject { |f| File.directory?(File.join(SCRIPT_DIR, f)) || f.start_with?(".") }
+        custom_scripts = Dir.entries(custom_dir).select { |f| f.end_with?('.lic') }
+        curated_scripts = Dir.entries(SCRIPT_DIR).select { |f| f.end_with?('.lic') }
         shadowed = custom_scripts.select { |script| curated_scripts.include?(script) }
 
         unless shadowed.empty?
           Lich::Messaging.msg("info", "NOTE: The following curated scripts are in your custom folder and will not receive updates")
-          Lich::Messaging.msg("info", shadowed.inspect)
+          Lich::Messaging.msg("info", shadowed.join(', '))
         end
       end
     end
