@@ -151,8 +151,8 @@ module Lich
              File.exist?(File.join(DATA_DIR, game, "base.yaml")) &&
              File.exist?(File.join(DATA_DIR, game, "base-empty.yaml")) &&
              File.exist?(File.join(DATA_DIR, game, "#{character_name}-setup.yaml"))
-            Lich::Messaging.msg("info", "Detected game instance-specific files. Loading settings from #{File.join(DATA_DIR, XMLData.game)}")
-            File.join(DATA_DIR, XMLData.game)
+            Lich::Messaging.msg("info", "Detected game instance-specific files. Loading settings from #{File.join(DATA_DIR, game)}")
+            File.join(DATA_DIR, game)
           else
             File.join(SCRIPT_DIR, 'profiles')
           end
