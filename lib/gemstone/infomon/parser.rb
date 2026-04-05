@@ -25,6 +25,7 @@ module Lich
           SkillEnd = /^Training Points: \d+ Phy \d+ Mnt/.freeze
           GoalsDetected = /^Skill goals updated!$/.freeze
           GoalsEnded = /^Further information can be found in the FAQs\.$/.freeze
+          InnCheckedOut = /^Leaving your room, you check back out of .*, wander over to the front desk and hand the room key back to the innkeeper\./.freeze
           PSMStart = /^\w+, the following (?<cat>Ascension Abilities|Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
           PSM = /^\s+(?<name>[A-z\s\-':]+)\s+(?<command>[a-z]+)\s+(?<ranks>\d+)\/(?<max>\d+).*$/.freeze
           PSMEnd = /^   Subcategory: all$/.freeze
@@ -130,7 +131,7 @@ module Lich
                              SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
                              Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketGold,
                              TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
-                             WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
+                             WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, InnCheckedOut, SpellsongRenewed,
                              ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
                              AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, ResignConfirmCHE,
                              ShadowEssence, ShadowEssenceGain, ShadowEssenceCap, SacrificeMana, SacrificeChannel, SacrificeInfest,
@@ -313,6 +314,15 @@ module Lich
               else
                 :noop
               end
+            when Pattern::InnCheckedOut
+              respond
+              _respond Lich::Messaging.monsterbold('You just left an Inn.  Lich will gather your updated Stats and skills.')
+              respond 
+              respond "[infomon_sync]#{$SEND_CHARACTER}skills"
+              Game._puts("#{$cmd_prefix}skills")
+              respond "[infomon_sync]#{$SEND_CHARACTER}info"
+              Game._puts("#{$cmd_prefix}info")
+              :ok
             when Pattern::PSMStart
               match = Regexp.last_match
               @psm_hold = []
