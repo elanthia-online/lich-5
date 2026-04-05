@@ -317,7 +317,7 @@ module Lich
             when Pattern::InnCheckedOut
               respond
               _respond Lich::Messaging.monsterbold('You just left an Inn.  Lich will gather your updated Stats and skills.')
-              respond 
+              respond
               respond "[infomon_sync]#{$SEND_CHARACTER}skills"
               Game._puts("#{$cmd_prefix}skills")
               respond "[infomon_sync]#{$SEND_CHARACTER}info"
