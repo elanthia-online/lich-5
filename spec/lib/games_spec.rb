@@ -417,6 +417,11 @@ RSpec.describe Lich::GameBase::Game do
         stub_const('RECOMMENDED_RUBY', '3.0.0')
         allow(Lich).to receive(:core_updated_with_lich_version).and_return('5.0.0')
         allow(Script).to receive(:exists?).and_return(false) if defined?(Script)
+        # Prevent background sync thread from leaking into other specs.
+        # Lich::Util::Update may not be loaded in this spec context, so
+        # stub_const ensures the module and method exist for the stub.
+        sync_stub = Module.new { def self.sync_all_repos; end }
+        stub_const('Lich::Util::Update', sync_stub)
 
         described_class.send(:handle_autostart)
         expect(described_class.autostarted?).to be true
