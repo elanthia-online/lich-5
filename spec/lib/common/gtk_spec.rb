@@ -166,12 +166,12 @@ RSpec.describe 'Lich::Common GTK hardening' do
 
     widget.signal_connect('clicked', &handler)
 
-    retained = Lich::Common.gtk_signal_handlers[widget.object_id]
+    retained = Lich::Common.gtk_signal_handlers[widget]
     expect(retained[:receiver]).to equal(widget)
     expect(retained[:handlers]).to include(handler)
 
     widget.emit('destroy')
-    expect(Lich::Common.gtk_signal_handlers[widget.object_id]).to be_nil
+    expect(Lich::Common.gtk_signal_handlers[widget]).to be_nil
   end
 
   it 'retains timeout callbacks until they stop repeating' do

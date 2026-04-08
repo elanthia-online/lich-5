@@ -1,6 +1,6 @@
 module Lich
   module Common
-    @gtk_signal_handlers = {}
+    @gtk_signal_handlers = {}.compare_by_identity
     @gtk_timeout_callbacks = {}
     @gtk_idle_callbacks = {}
 
@@ -16,8 +16,8 @@ module Lich
       @gtk_idle_callbacks
     end
 
-    def self.release_gtk_signal_handlers(key)
-      gtk_signal_handlers.delete(key)
+    def self.release_gtk_signal_handlers(receiver)
+      gtk_signal_handlers.delete(receiver)
     end
 
     def self.allow_gtk_main_quit
@@ -44,8 +44,8 @@ module Lich
           def signal_connect(signal, *args, &block)
             return super(signal, *args, &block) unless block
 
-            receiver_key = object_id
-            entry = Lich::Common.gtk_signal_handlers[receiver_key] ||= {
+            receiver = self
+            entry = Lich::Common.gtk_signal_handlers[receiver] ||= {
               receiver: self,
               handlers: [],
               cleanup_installed: false
@@ -55,7 +55,7 @@ module Lich
             unless entry[:cleanup_installed] || signal.to_s == 'destroy'
               entry[:cleanup_installed] = true
               cleanup = proc do
-                Lich::Common.release_gtk_signal_handlers(receiver_key)
+                Lich::Common.release_gtk_signal_handlers(receiver)
                 false
               end
               entry[:handlers] << cleanup
