@@ -7,12 +7,25 @@ RSpec.describe 'Lich::Common GTK hardening' do
   before(:context) do
     @tmpdir = Dir.mktmpdir('gtk-spec')
     @saved_consts = {}
+    @saved_gtk_hardening_consts = {}
 
     %i[Gtk GLib GdkPixbuf].each do |name|
       next unless Object.const_defined?(name)
 
       @saved_consts[name] = Object.const_get(name)
       Object.send(:remove_const, name)
+    end
+
+    %i[
+      GtkSignalHandlerRetention
+      GtkTimeoutRetention
+      GtkIdleRetention
+      GtkMainLoopGuards
+    ].each do |name|
+      next unless Lich::Common.const_defined?(name, false)
+
+      @saved_gtk_hardening_consts[name] = Lich::Common.const_get(name, false)
+      Lich::Common.send(:remove_const, name)
     end
 
     glib_mod = Module.new
@@ -114,8 +127,21 @@ RSpec.describe 'Lich::Common GTK hardening' do
       Object.send(:remove_const, name) if Object.const_defined?(name)
     end
 
+    %i[
+      GtkSignalHandlerRetention
+      GtkTimeoutRetention
+      GtkIdleRetention
+      GtkMainLoopGuards
+    ].each do |name|
+      Lich::Common.send(:remove_const, name) if Lich::Common.const_defined?(name, false)
+    end
+
     @saved_consts.each do |name, value|
       Object.const_set(name, value)
+    end
+
+    @saved_gtk_hardening_consts.each do |name, value|
+      Lich::Common.const_set(name, value)
     end
 
     FileUtils.remove_entry(@tmpdir) if @tmpdir && File.exist?(@tmpdir)
