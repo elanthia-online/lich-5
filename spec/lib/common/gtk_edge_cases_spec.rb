@@ -3,16 +3,29 @@
 require 'fileutils'
 require_relative '../../spec_helper'
 
-RSpec.describe 'Lich::Common GTK hardening' do
+RSpec.describe 'Lich::Common GTK edge cases' do
   before(:context) do
-    @tmpdir = Dir.mktmpdir('gtk-spec')
+    @tmpdir = Dir.mktmpdir('gtk-edge-spec')
     @saved_consts = {}
+    @saved_gtk_hardening_consts = {}
 
     %i[Gtk GLib GdkPixbuf].each do |name|
       next unless Object.const_defined?(name)
 
       @saved_consts[name] = Object.const_get(name)
       Object.send(:remove_const, name)
+    end
+
+    %i[
+      GtkSignalHandlerRetention
+      GtkTimeoutRetention
+      GtkIdleRetention
+      GtkMainLoopGuards
+    ].each do |name|
+      next unless Lich::Common.const_defined?(name, false)
+
+      @saved_gtk_hardening_consts[name] = Lich::Common.const_get(name, false)
+      Lich::Common.send(:remove_const, name)
     end
 
     glib_mod = Module.new
@@ -30,6 +43,11 @@ RSpec.describe 'Lich::Common GTK hardening' do
 
       def fail_next_destroy_connection!
         @destroy_connect_failures_remaining = @destroy_connect_failures_remaining.to_i + 1
+      end
+
+      def signal_blocks(signal)
+        @signals ||= {}
+        @signals[signal.to_s] || []
       end
 
       def emit(signal, *args)
@@ -72,7 +90,7 @@ RSpec.describe 'Lich::Common GTK hardening' do
 
     gtk_mod = Module.new
     gtk_mod.singleton_class.class_eval do
-      attr_accessor :main_level, :main_calls, :main_quit_calls
+      attr_accessor :main_level, :main_calls, :main_quit_calls, :main_quit_failure
 
       def main(*)
         self.main_calls ||= 0
@@ -81,6 +99,8 @@ RSpec.describe 'Lich::Common GTK hardening' do
       end
 
       def main_quit(*)
+        raise 'main_quit boom' if main_quit_failure
+
         self.main_quit_calls ||= 0
         self.main_quit_calls += 1
         :main_quit_called
@@ -114,8 +134,21 @@ RSpec.describe 'Lich::Common GTK hardening' do
       Object.send(:remove_const, name) if Object.const_defined?(name)
     end
 
+    %i[
+      GtkSignalHandlerRetention
+      GtkTimeoutRetention
+      GtkIdleRetention
+      GtkMainLoopGuards
+    ].each do |name|
+      Lich::Common.send(:remove_const, name) if Lich::Common.const_defined?(name, false)
+    end
+
     @saved_consts.each do |name, value|
       Object.const_set(name, value)
+    end
+
+    @saved_gtk_hardening_consts.each do |name, value|
+      Lich::Common.const_set(name, value)
     end
 
     FileUtils.remove_entry(@tmpdir) if @tmpdir && File.exist?(@tmpdir)
@@ -125,6 +158,7 @@ RSpec.describe 'Lich::Common GTK hardening' do
     Gtk.main_level = 0
     Gtk.main_calls = 0
     Gtk.main_quit_calls = 0
+    Gtk.main_quit_failure = false
     GLib::Timeout.blocks = {}
     GLib::Timeout.next_id = 0
     GLib::Idle.blocks = {}
@@ -139,119 +173,62 @@ RSpec.describe 'Lich::Common GTK hardening' do
     allow(Lich).to receive(:log)
   end
 
-  it 'ignores redundant Gtk.main calls while the shared loop is already running' do
-    Gtk.main_level = 1
+  it 'installs only one internal destroy cleanup handler per widget' do
+    widget = Gtk::Widget.new
 
-    expect(Gtk.main).to be_nil
-    expect(Gtk.main_calls).to eq(0)
+    widget.signal_connect('clicked') { :one }
+    widget.signal_connect('button-release-event') { :two }
+
+    destroy_blocks = widget.signal_blocks('destroy')
+    retained = Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }
+
+    expect(destroy_blocks.length).to eq(1)
+    expect(retained[:handlers].count { |handler| destroy_blocks.include?(handler) }).to eq(1)
   end
 
-  it 'allows Gtk.main when no loop is running yet' do
-    expect(Gtk.main).to eq(:main_called)
-    expect(Gtk.main_calls).to eq(1)
+  it 'releases retained signal handlers even if a user destroy handler raises' do
+    widget = Gtk::Widget.new
+
+    widget.signal_connect('clicked') { :clicked }
+    widget.signal_connect('destroy') { raise 'user destroy boom' }
+
+    expect { widget.emit('destroy') }.to raise_error('user destroy boom')
+    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
   end
 
-  it 'blocks script-level Gtk.main_quit while GTK is active' do
+  it 'falls back to unknown context when Script.current raises during guard logging' do
     Gtk.main_level = 1
+    allow(Script).to receive(:current).and_raise('script context boom')
 
+    Gtk.main_quit
+
+    expect(Lich).to have_received(:log).with(/context=unknown/)
+  end
+
+  it 'restores the core-only Gtk.main_quit bypass flag after an exception' do
+    Gtk.main_level = 1
+    Gtk.main_quit_failure = true
+
+    expect { Gtk.lich_main_quit }.to raise_error('main_quit boom')
+
+    Gtk.main_quit_failure = false
     expect(Gtk.main_quit).to be_nil
     expect(Gtk.main_quit_calls).to eq(0)
   end
 
-  it 'names the offending script in blocked Gtk.main_quit logs when available' do
-    Gtk.main_level = 1
-    allow(Script).to receive(:current).and_return(Struct.new(:name).new('gemstone-tracker'))
-
-    Gtk.main_quit
-
-    expect(Lich).to have_received(:log).with(/script=gemstone-tracker/)
-  end
-
-  it 'allows core-owned Gtk shutdown through Gtk.lich_main_quit' do
-    expect(Gtk.lich_main_quit).to eq(:main_quit_called)
-    expect(Gtk.main_quit_calls).to eq(1)
-  end
-
-  it 'retains signal handlers until the widget emits destroy' do
-    widget = Gtk::Widget.new
-    handler = proc { :clicked }
-
-    widget.signal_connect('clicked', &handler)
-
-    retained = Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }
-    expect(retained[:receiver]).to equal(widget)
-    expect(retained[:handlers]).to include(handler)
-
-    widget.emit('destroy')
-    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
-  end
-
-  it 'releases destroy-only retained handlers when the widget emits destroy' do
-    widget = Gtk::Widget.new
-    handler = proc { :destroyed }
-
-    widget.signal_connect('destroy', &handler)
-
-    retained = Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }
-    expect(retained[:handlers]).to include(handler)
-
-    widget.emit('destroy')
-    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
-  end
-
-  it 'rolls back retained signal handlers if destroy cleanup registration fails' do
-    widget = Gtk::Widget.new
-    handler = proc { :clicked }
-    widget.fail_next_destroy_connection!
-
-    widget.signal_connect('clicked', &handler)
-
-    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
-  end
-
-  it 'retains timeout callbacks until they stop repeating' do
-    count = 0
-    callback_id = GLib::Timeout.add(50) do
-      count += 1
-      count < 2
-    end
+  it 'releases timeout callbacks that stop on their first invocation' do
+    callback_id = GLib::Timeout.add(50) { false }
 
     expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[callback_id] }).not_to be_nil
-
-    expect(GLib::Timeout.blocks[callback_id].call).to be true
-    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[callback_id] }).not_to be_nil
-
     expect(GLib::Timeout.blocks[callback_id].call).to be false
     expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[callback_id] }).to be_nil
   end
 
-  it 'releases retained timeout callbacks if the wrapped block raises' do
-    callback_id = GLib::Timeout.add(50) { raise 'timeout boom' }
-
-    expect { GLib::Timeout.blocks[callback_id].call }.to raise_error('timeout boom')
-    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[callback_id] }).to be_nil
-  end
-
-  it 'retains idle callbacks until they stop repeating' do
-    count = 0
-    callback_id = GLib::Idle.add do
-      count += 1
-      count < 2
-    end
+  it 'releases idle callbacks that stop on their first invocation' do
+    callback_id = GLib::Idle.add { nil }
 
     expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[callback_id] }).not_to be_nil
-
-    expect(GLib::Idle.blocks[callback_id].call).to be true
-    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[callback_id] }).not_to be_nil
-
-    expect(GLib::Idle.blocks[callback_id].call).to be false
-    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[callback_id] }).to be_nil
-  end
-
-  it 'releases retained idle callbacks if the wrapped block raises' do
-    callback_id = GLib::Idle.add { raise 'idle boom' }
-
-    expect { GLib::Idle.blocks[callback_id].call }.to raise_error('idle boom')
+    expect(GLib::Idle.blocks[callback_id].call).to be_nil
     expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[callback_id] }).to be_nil
   end
 end

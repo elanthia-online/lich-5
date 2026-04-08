@@ -111,7 +111,9 @@ module Lich
                 rescue StandardError
                   Lich::Common.with_gtk_registry_lock do
                     entry[:handlers].delete(cleanup)
+                    entry[:handlers].delete(block)
                     entry[:cleanup_installed] = false
+                    Lich::Common.gtk_signal_handlers.delete(receiver) if entry[:handlers].empty?
                   end
                 end
               end
@@ -134,9 +136,14 @@ module Lich
 
             callback_id = nil
             retained = proc do |*callback_args|
-              ret = block.call(*callback_args)
-              Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks.delete(callback_id) } unless ret
-              ret
+              begin
+                ret = block.call(*callback_args)
+                Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks.delete(callback_id) } unless ret
+                ret
+              rescue StandardError
+                Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks.delete(callback_id) }
+                raise
+              end
             end
 
             callback_id = super(*args, &retained)
@@ -156,9 +163,14 @@ module Lich
 
             callback_id = nil
             retained = proc do |*callback_args|
-              ret = block.call(*callback_args)
-              Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks.delete(callback_id) } unless ret
-              ret
+              begin
+                ret = block.call(*callback_args)
+                Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks.delete(callback_id) } unless ret
+                ret
+              rescue StandardError
+                Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks.delete(callback_id) }
+                raise
+              end
             end
 
             callback_id = super(*args, &retained)
