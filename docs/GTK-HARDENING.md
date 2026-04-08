@@ -4,7 +4,7 @@ Lich owns the shared GTK main loop. Scripts may create, show, update, and
 destroy windows, but script-level `Gtk.main` and `Gtk.main_quit` calls can
 destabilize every GTK script in the process.
 
-Core hardening in [gtk.rb](/Users/doug/dev/test/lich-5/lib/common/gtk.rb):
+Core hardening in [gtk.rb](../lib/common/gtk.rb):
 
 - Redundant `Gtk.main` calls are ignored once the GTK loop is already running.
 - Script-context `Gtk.main_quit` calls are ignored.

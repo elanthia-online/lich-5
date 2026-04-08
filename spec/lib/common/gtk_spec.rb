@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'fileutils'
 require_relative '../../spec_helper'
 
 RSpec.describe 'Lich::Common GTK hardening' do
@@ -119,9 +120,11 @@ RSpec.describe 'Lich::Common GTK hardening' do
     GLib::Timeout.next_id = 0
     GLib::Idle.blocks = {}
     GLib::Idle.next_id = 0
-    Lich::Common.gtk_signal_handlers.clear
-    Lich::Common.gtk_timeout_callbacks.clear
-    Lich::Common.gtk_idle_callbacks.clear
+    Lich::Common.with_gtk_registry_lock do
+      Lich::Common.gtk_signal_handlers.clear
+      Lich::Common.gtk_timeout_callbacks.clear
+      Lich::Common.gtk_idle_callbacks.clear
+    end
     stub_const('Script', Class.new) unless defined?(Script)
     allow(Script).to receive(:current).and_return(nil)
     allow(Lich).to receive(:log)
@@ -166,12 +169,12 @@ RSpec.describe 'Lich::Common GTK hardening' do
 
     widget.signal_connect('clicked', &handler)
 
-    retained = Lich::Common.gtk_signal_handlers[widget]
+    retained = Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }
     expect(retained[:receiver]).to equal(widget)
     expect(retained[:handlers]).to include(handler)
 
     widget.emit('destroy')
-    expect(Lich::Common.gtk_signal_handlers[widget]).to be_nil
+    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
   end
 
   it 'retains timeout callbacks until they stop repeating' do
@@ -181,13 +184,13 @@ RSpec.describe 'Lich::Common GTK hardening' do
       count < 2
     end
 
-    expect(Lich::Common.gtk_timeout_callbacks[callback_id]).not_to be_nil
+    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[callback_id] }).not_to be_nil
 
     expect(GLib::Timeout.blocks[callback_id].call).to be true
-    expect(Lich::Common.gtk_timeout_callbacks[callback_id]).not_to be_nil
+    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[callback_id] }).not_to be_nil
 
     expect(GLib::Timeout.blocks[callback_id].call).to be false
-    expect(Lich::Common.gtk_timeout_callbacks[callback_id]).to be_nil
+    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[callback_id] }).to be_nil
   end
 
   it 'retains idle callbacks until they stop repeating' do
@@ -197,12 +200,12 @@ RSpec.describe 'Lich::Common GTK hardening' do
       count < 2
     end
 
-    expect(Lich::Common.gtk_idle_callbacks[callback_id]).not_to be_nil
+    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[callback_id] }).not_to be_nil
 
     expect(GLib::Idle.blocks[callback_id].call).to be true
-    expect(Lich::Common.gtk_idle_callbacks[callback_id]).not_to be_nil
+    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[callback_id] }).not_to be_nil
 
     expect(GLib::Idle.blocks[callback_id].call).to be false
-    expect(Lich::Common.gtk_idle_callbacks[callback_id]).to be_nil
+    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[callback_id] }).to be_nil
   end
 end
