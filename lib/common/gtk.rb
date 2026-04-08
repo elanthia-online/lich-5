@@ -90,17 +90,30 @@ module Lich
               retained_entry
             end
 
-            unless entry[:cleanup_installed] || signal.to_s == 'destroy'
-              Lich::Common.with_gtk_registry_lock { entry[:cleanup_installed] = true }
+            cleanup = nil
+            unless signal.to_s == 'destroy'
               cleanup = proc do
                 Lich::Common.release_gtk_signal_handlers(receiver)
                 false
               end
-              Lich::Common.with_gtk_registry_lock { entry[:handlers] << cleanup }
-              begin
-                super('destroy', &cleanup)
-              rescue StandardError
-                Lich::Common.with_gtk_registry_lock { entry[:handlers].delete(cleanup) }
+
+              install_cleanup = Lich::Common.with_gtk_registry_lock do
+                unless entry[:cleanup_installed]
+                  entry[:cleanup_installed] = true
+                  entry[:handlers] << cleanup
+                  true
+                end
+              end
+
+              if install_cleanup
+                begin
+                  super('destroy', &cleanup)
+                rescue StandardError
+                  Lich::Common.with_gtk_registry_lock do
+                    entry[:handlers].delete(cleanup)
+                    entry[:cleanup_installed] = false
+                  end
+                end
               end
             end
 
