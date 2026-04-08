@@ -177,6 +177,19 @@ RSpec.describe 'Lich::Common GTK hardening' do
     expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
   end
 
+  it 'releases destroy-only retained handlers when the widget emits destroy' do
+    widget = Gtk::Widget.new
+    handler = proc { :destroyed }
+
+    widget.signal_connect('destroy', &handler)
+
+    retained = Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }
+    expect(retained[:handlers]).to include(handler)
+
+    widget.emit('destroy')
+    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
+  end
+
   it 'retains timeout callbacks until they stop repeating' do
     count = 0
     callback_id = GLib::Timeout.add(50) do

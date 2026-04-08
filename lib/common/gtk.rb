@@ -91,18 +91,18 @@ module Lich
             end
 
             cleanup = nil
-            unless signal.to_s == 'destroy'
+            cleanup_installer = proc do
               cleanup = proc do
                 Lich::Common.release_gtk_signal_handlers(receiver)
                 false
               end
 
               install_cleanup = Lich::Common.with_gtk_registry_lock do
-                unless entry[:cleanup_installed]
-                  entry[:cleanup_installed] = true
-                  entry[:handlers] << cleanup
-                  true
-                end
+                next false if entry[:cleanup_installed]
+
+                entry[:cleanup_installed] = true
+                entry[:handlers] << cleanup
+                true
               end
 
               if install_cleanup
@@ -116,6 +116,8 @@ module Lich
                 end
               end
             end
+
+            cleanup_installer.call
 
             super(signal, *args, &block)
           end
