@@ -261,7 +261,8 @@ module Lich
         # @param account_name [String] Account name for :standard mode
         # @param master_password [String, nil] Master password if already known
         # @param validation_test [Hash, nil] Validation test hash from YAML (optional)
-        # @return [String] Decrypted password
+        # @return [String, nil] Decrypted password, or nil if the user cancels
+        #   master password recovery and Lich begins shutting down
         # @raise [StandardError] If decryption fails and cannot be recovered
         def self.decrypt_password_with_recovery(encrypted_password, mode:, account_name: nil, master_password: nil, validation_test: nil)
           # Try normal decryption first

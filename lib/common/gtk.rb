@@ -368,9 +368,11 @@ module Lich
     begin
       Gtk.queue {
         @default_icon = GdkPixbuf::Pixbuf.new(:file => 'logo.png')
-        # Add a function to call for when GTK is idle
+        # Keep an idle callback active so GTK continues pumping work while the
+        # launcher is open; this callback is intentionally perpetual.
         GLib::Idle.add do
           sleep 0.01
+          true
         end
         @theme_state = Lich.track_dark_mode
       }

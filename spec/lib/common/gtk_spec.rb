@@ -151,7 +151,7 @@ RSpec.describe 'Lich::Common GTK hardening' do
 
   it 'names the offending script in blocked Gtk.main_quit logs when available' do
     Gtk.main_level = 1
-    allow(Script).to receive(:current).and_return(OpenStruct.new(name: 'gemstone-tracker'))
+    allow(Script).to receive(:current).and_return(Struct.new(:name).new('gemstone-tracker'))
 
     Gtk.main_quit
 
