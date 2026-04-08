@@ -276,7 +276,7 @@ module Lich
 
             if recovery_result.nil? || recovery_result[:password].nil?
               Lich.log "info: User cancelled master password recovery"
-              Gtk.main_quit
+              Gtk.lich_main_quit
               return nil
             end
 
@@ -296,7 +296,7 @@ module Lich
             if !continue_session
               Lich.log "info: User chose to close application after password recovery"
               # Exit the application gracefully
-              Gtk.main_quit
+              Gtk.lich_main_quit
             end
 
             # Retry decryption with recovered password

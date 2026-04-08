@@ -282,7 +282,7 @@ module Lich
               dlg.destroy
               Gtk.queue do
                 @done = true
-                Gtk.main_quit
+                Gtk.lich_main_quit
               end
             end
           end
