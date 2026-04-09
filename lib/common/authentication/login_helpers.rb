@@ -36,7 +36,7 @@ module Lich
 
         # CLI flags that should never be interpreted as game-instance selectors.
         NON_INSTANCE_FLAGS = %w[
-          login gui no-gui without-frontend reconnect reconnected save
+          login gui no-gui without-frontend headless reconnect reconnected save
           genie frostbite wrayth
         ].freeze
 
@@ -201,7 +201,7 @@ module Lich
 
           Lich::Messaging.msg('debug', "RETURNING EXACT MATCH COUNT OF #{exact_matches.count} RECORD(S).")
           Lich::Messaging.msg('debug', "Exact match character = #{exact_matches[0][:char_name]} for instance #{exact_matches[0][:game_code]}.") unless exact_matches.empty?
-          Lich.log("info: Returning exact match count of #{exact_matches.count}")
+          Lich.log("info: Returning exact match count of #{exact_matches.count}") if Lich.respond_to?(:log)
           return exact_matches unless exact_matches.empty?
 
           # Step 2: Fallback match (if needed)
@@ -349,7 +349,7 @@ module Lich
           # Filter by game instance if explicitly provided and valid, includes fallback GST -> GS3
           if requested_instance != :__unset
             if requested_instance.nil? || !VALID_GAME_CODES.include?(requested_instance)
-              Lich.log "error: Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}"
+              Lich.log "error: Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}" if Lich.respond_to?(:log)
               Lich::Messaging.msg('error', "Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}")
 
               return nil
@@ -499,10 +499,10 @@ module Lich
             end
           end
 
-          Lich::Messaging.msg('debug', "Login arguments from CLI login -> #{argv.inspect}")
-          Lich::Messaging.msg('debug', "Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}")
-          Lich.log "debug: Login arguments from CLI login -> #{argv.inspect}"
-          Lich.log "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}"
+          Lich::Messaging.msg('debug', "Login arguments from CLI login -> #{argv.inspect}") if defined?(Lich::Messaging)
+          Lich::Messaging.msg('debug', "Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}") if defined?(Lich::Messaging)
+          Lich.log "debug: Login arguments from CLI login -> #{argv.inspect}" if Lich.respond_to?(:log)
+          Lich.log "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}" if Lich.respond_to?(:log)
 
           [instance, frontend, custom_launch]
         end
