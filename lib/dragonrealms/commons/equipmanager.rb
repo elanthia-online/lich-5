@@ -612,8 +612,10 @@ module Lich
           return false
         when *data[:failures]
           data[:failure_recovery].call(item.name, item, response)
-          # After recovery, check if item is now in hand
-          return DRCI.in_hands?(item)
+          # Check if hands changed from pre-command snapshot, consistent with
+          # the success (else) branch. Using in_hands?(item) here would fail
+          # for :transform where the item changes identity (e.g., orb -> armor).
+          return snapshot != [DRC.left_hand, DRC.right_hand]
         else
           # Wait for hands to change with a timeout to prevent infinite loop
           timeout = Time.now + 5
