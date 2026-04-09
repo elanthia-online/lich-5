@@ -36,6 +36,7 @@ require 'rspec'
 require 'date'
 require 'tmpdir'
 require 'ostruct'
+require 'fileutils'
 
 # =============================================================================
 # Path Constants
