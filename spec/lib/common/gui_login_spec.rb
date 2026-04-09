@@ -98,6 +98,7 @@ RSpec.describe Lich::Common, "#gui_login" do
     stub_const("Gtk", Module.new)
     allow(Gtk).to receive(:queue) { |&block| block.call if block }
     allow(Gtk).to receive(:main_quit)
+    allow(Gtk).to receive(:lich_main_quit)
 
     # Mock Gtk classes
     stub_const("Gtk::Notebook", Class.new)

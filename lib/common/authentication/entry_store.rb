@@ -261,7 +261,8 @@ module Lich
         # @param account_name [String] Account name for :standard mode
         # @param master_password [String, nil] Master password if already known
         # @param validation_test [Hash, nil] Validation test hash from YAML (optional)
-        # @return [String] Decrypted password
+        # @return [String, nil] Decrypted password, or nil if the user cancels
+        #   master password recovery and Lich begins shutting down
         # @raise [StandardError] If decryption fails and cannot be recovered
         def self.decrypt_password_with_recovery(encrypted_password, mode:, account_name: nil, master_password: nil, validation_test: nil)
           # Try normal decryption first
@@ -276,7 +277,7 @@ module Lich
 
             if recovery_result.nil? || recovery_result[:password].nil?
               Lich.log "info: User cancelled master password recovery"
-              Gtk.main_quit
+              Gtk.lich_main_quit
               return nil
             end
 
@@ -296,7 +297,7 @@ module Lich
             if !continue_session
               Lich.log "info: User chose to close application after password recovery"
               # Exit the application gracefully
-              Gtk.main_quit
+              Gtk.lich_main_quit
             end
 
             # Retry decryption with recovered password

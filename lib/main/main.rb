@@ -298,7 +298,7 @@ reconnect_if_wanted = proc {
         $_CLIENT_.close # rescue() # rubocop complaint, but is it even necessary?
         reconnect_if_wanted.call
         Lich.log "info: exiting..."
-        Gtk.queue { Gtk.main_quit } if defined?(Gtk)
+        Gtk.queue { Gtk.lich_main_quit } if defined?(Gtk)
         exit
       end
       #      if defined?(Win32)
@@ -345,7 +345,7 @@ reconnect_if_wanted = proc {
         $_CLIENT_.close rescue nil
         reconnect_if_wanted.call
         Lich.log "info: exiting..."
-        Gtk.queue { Gtk.main_quit } if defined?(Gtk)
+        Gtk.queue { Gtk.lich_main_quit } if defined?(Gtk)
         exit
       end
     end
@@ -818,6 +818,6 @@ reconnect_if_wanted = proc {
   200.times { sleep 0.1; break if Lich.db.closed? }
   reconnect_if_wanted.call # taking this out of play but may need to see if anyone's using it
   Lich.log "info: exiting..."
-  Gtk.queue { Gtk.main_quit } if defined?(Gtk)
+  Gtk.queue { Gtk.lich_main_quit } if defined?(Gtk)
   exit
 }

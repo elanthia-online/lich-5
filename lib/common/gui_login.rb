@@ -668,7 +668,7 @@ module Lich
     # @return [Array, nil] Launch data if available
     def return_launch_data_or_exit
       if @launch_data.nil?
-        Gtk.queue { Gtk.main_quit }
+        Gtk.queue { Gtk.lich_main_quit }
         exit
       end
 
