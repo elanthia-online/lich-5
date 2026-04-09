@@ -41,12 +41,9 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         expect(patterns).to be_frozen
       end
 
-      it 'contains only "not found" semantics (no recoverable failures)' do
-        recoverable = [/too busy/, /can't move/, /fumble/]
+      it 'does not contain recoverable "too busy" patterns' do
         patterns.each do |pat|
-          recoverable.each do |bad|
-            expect(pat.source).not_to match(bad), "#{pat} looks recoverable (matches #{bad})"
-          end
+          expect(pat.source).not_to match(/too busy/), "#{pat} is recoverable and belongs in failures, not exhausted"
         end
       end
 
@@ -60,22 +57,8 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       end
     end
 
-    describe 'GET_EXHAUSTED_PATTERNS' do
-      subject(:patterns) { described_class::GET_EXHAUSTED_PATTERNS }
-
-      it 'is a frozen constant' do
-        expect(patterns).to be_frozen
-      end
-
-      it 'is a subset of DRCI::GET_ITEM_FAILURE_PATTERNS' do
-        patterns.each do |exhausted_pat|
-          covered = DRCI::GET_ITEM_FAILURE_PATTERNS.any? do |drci_pat|
-            # Both are regexes; match by source to avoid false negatives from flags
-            exhausted_pat.source == drci_pat.source
-          end
-          expect(covered).to be(true), "#{exhausted_pat} not found in DRCI::GET_ITEM_FAILURE_PATTERNS"
-        end
-      end
+    it 'does not define local GET_EXHAUSTED_PATTERNS (uses DRCI directly)' do
+      expect(described_class.const_defined?(:GET_EXHAUSTED_PATTERNS, false)).to be false
     end
 
     it 'does not define local SHEATH_SUCCESS_PATTERNS' do
@@ -286,8 +269,8 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
         end
       end
 
-      it 'sets exhausted to GET_EXHAUSTED_PATTERNS (same object)' do
-        expect(stowed[:exhausted]).to equal(described_class::GET_EXHAUSTED_PATTERNS)
+      it 'sets exhausted to DRCI::GET_ITEM_FAILURE_PATTERNS (same object)' do
+        expect(stowed[:exhausted]).to equal(DRCI::GET_ITEM_FAILURE_PATTERNS)
       end
 
       it 'includes "slides easily out" for sheathed weapon retrieval' do
@@ -324,6 +307,17 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
           expect(pat).to be_a(Regexp), "expected Regexp, got #{pat.class}: #{pat.inspect}"
         end
       end
+
+      it 'includes failure patterns in matches so bput returns on them' do
+        transform[:failures].each do |fail_pat|
+          expect(transform[:matches]).to include(fail_pat),
+                                         "failure #{fail_pat.inspect} missing from matches -- bput would timeout instead of triggering recovery"
+        end
+      end
+
+      it 'sets exhausted to DRCI::GET_ITEM_FAILURE_PATTERNS (same object)' do
+        expect(transform[:exhausted]).to equal(DRCI::GET_ITEM_FAILURE_PATTERNS)
+      end
     end
 
     # --- Cross-type structural invariants ---------------------------------
@@ -356,6 +350,42 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
               expect(covered).to be(true),
                                  "exhausted pattern #{ex_pat.inspect} not found in matches -- bput would never return it"
             end
+          end
+        end
+      end
+
+      # This is the critical invariant that prevents the 5s timeout waste.
+      # Every DRCI failure pattern that appears in matches must be categorized
+      # in either exhausted or failures. If a new pattern is added to DRCI,
+      # this spec fails until it's categorized -- preventing silent fallthrough
+      # to the hand-change polling timeout.
+      it 'every DRCI failure pattern in matches is in exhausted or failures (no timeout fallthrough)' do
+        drci_failure_constants = {
+          worn: DRCI::REMOVE_ITEM_FAILURE_PATTERNS,
+          tied: DRCI::UNTIE_ITEM_FAILURE_PATTERNS,
+          stowed: DRCI::GET_ITEM_FAILURE_PATTERNS,
+          transform: DRCI::GET_ITEM_FAILURE_PATTERNS
+        }
+
+        %i[worn tied stowed transform].each do |type|
+          entry = data[type]
+          drci_failures = drci_failure_constants[type]
+          categorized = Array(entry[:exhausted]) + Array(entry[:failures])
+
+          drci_failures.each do |drci_pat|
+            # Check if this DRCI failure is in matches
+            in_matches = entry[:matches].any? do |m_pat|
+              m_pat.is_a?(Regexp) && drci_pat.is_a?(Regexp) && m_pat.source == drci_pat.source
+            end
+            next unless in_matches
+
+            # If it's in matches, it must be categorized
+            in_categorized = categorized.any? do |c_pat|
+              c_pat.is_a?(Regexp) && drci_pat.is_a?(Regexp) && c_pat.source == drci_pat.source
+            end
+            expect(in_categorized).to be(true),
+                                      "#{type}: DRCI failure #{drci_pat.inspect} is in matches but not in exhausted or failures -- " \
+                                      'it will fall through to the 5s hand-change timeout instead of failing fast'
           end
         end
       end
@@ -683,6 +713,12 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       ).and_return('You put on your steel sword.')
 
       em.return_held_gear('standard')
+    end
+
+    it 'propagates stow_helper failure (returns false, not hard-coded true)' do
+      allow(Lich::Messaging).to receive(:msg)
+      allow(DRC).to receive(:bput).and_return("You can't wear that.")
+      expect(em.return_held_gear('standard')).to be false
     end
   end
 

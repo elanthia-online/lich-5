@@ -437,11 +437,9 @@ module Lich
           if (info = gear_set_items.find { |item| item.short_regex =~ held_item })
             unload_weapon(info.short_name) if info.needs_unloading
             stow_helper("wear my #{info.short_name}", info.short_name, *DRCI::WEAR_ITEM_SUCCESS_PATTERNS, failure_patterns: DRCI::WEAR_ITEM_FAILURE_PATTERNS)
-            true
           elsif (info = items.find { |item| item.short_regex =~ held_item })
             unload_weapon(info.short_name) if info.needs_unloading
             stow_by_type(info)
-            true
           else
             false
           end
@@ -455,26 +453,26 @@ module Lich
         return_held_gear || DRCI.stow_hands
       end
 
-      # Patterns indicating the untie target does not exist and retrieval
-      # should be abandoned. Separated from {DRCI::UNTIE_ITEM_FAILURE_PATTERNS}
-      # because "too busy" failures are recoverable (retreat / stop playing)
-      # and must not short-circuit to exhausted.
+      # Non-recoverable untie failure patterns that should return false
+      # immediately in {#get_item_helper}. Contains every entry from
+      # {DRCI::UNTIE_ITEM_FAILURE_PATTERNS} EXCEPT the "too busy" patterns
+      # which are recoverable (retreat / stop playing) and live in the
+      # +:failures+ array instead.
+      #
+      # For +:worn+ and +:stowed+/+:transform+, exhausted is set directly to
+      # the full DRCI failure constant because their +:failures+ entries don't
+      # overlap. +:tied+ is the exception -- "too busy" appears in both DRCI
+      # failures and the recoverable +:failures+ array, so this curated subset
+      # excludes them to prevent the exhausted branch from swallowing recovery.
+      #
+      # If a new pattern is added to {DRCI::UNTIE_ITEM_FAILURE_PATTERNS},
+      # it must be categorized here or in +:failures+ -- the coverage spec
+      # enforces that no DRCI failure falls through to the timeout branch.
       UNTIE_EXHAUSTED_PATTERNS = [
+        /^You don't seem to be able to move/,
+        /^You fumble with the ties/,
         /^Untie what/,
         /^What were you referring/
-      ].freeze
-
-      # Patterns indicating the get target does not exist and retrieval
-      # should be abandoned. A subset of {DRCI::GET_ITEM_FAILURE_PATTERNS}
-      # scoped to "item not found" semantics; hand/movement failures are
-      # left to fall through to the timeout branch in {#get_item_helper}.
-      #
-      # Sources must match DRCI::GET_ITEM_FAILURE_PATTERNS entries exactly
-      # so that exhausted entries are recognized when bput returns via DRCI.
-      GET_EXHAUSTED_PATTERNS = [
-        /^Get what/,
-        /^What were you/,
-        /^I could not/
       ].freeze
 
       # Builds a hash of verb configurations for retrieving an item by type.
@@ -488,7 +486,7 @@ module Lich
       # failure, and exhausted patterns so +bput+ returns promptly.
       # +get_item_helper+ then triages the response:
       #
-      # - +exhausted+: item does not exist -- return false immediately
+      # - +exhausted+: non-recoverable failure -- return false immediately
       # - +failures+: recoverable error -- run +failure_recovery+ proc
       # - everything else: success -- wait for hand contents to change
       #
@@ -557,11 +555,16 @@ module Lich
             ],
             failures: [/^You get$/, /But that is already/],
             failure_recovery: proc { |noun| DRC.bput("stow my #{noun}", 'You put', 'But that is already in') },
-            exhausted: GET_EXHAUSTED_PATTERNS
+            exhausted: DRCI::GET_ITEM_FAILURE_PATTERNS
           },
           transform: {
             verb: item.transform_verb,
-            matches: [item.transform_text, *GET_EXHAUSTED_PATTERNS],
+            matches: [
+              item.transform_text,
+              /You'll need a free hand to do that!/,
+              /You don't seem to be holding/,
+              *DRCI::GET_ITEM_FAILURE_PATTERNS
+            ],
             failures: [/You'll need a free hand to do that!/, /You don't seem to be holding/],
             failure_recovery: proc do |noun|
                                 DRCI.stow_hand('left') if DRC.left_hand && DRC.left_hand !~ /#{noun}/i
@@ -573,7 +576,7 @@ module Lich
                                 item.worn ? DRC.bput("remove my #{noun}", '^You') : DRC.bput("get my #{noun}", '^You')
                                 DRC.bput("#{item.transform_verb} my #{item.short_name}", verb_data(item)[:matches])
                               end,
-            exhausted: GET_EXHAUSTED_PATTERNS
+            exhausted: DRCI::GET_ITEM_FAILURE_PATTERNS
           }
         }
       end
