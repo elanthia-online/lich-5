@@ -22,13 +22,15 @@ module Lich
       # @raise [ArgumentError] when `--headless` is missing a port or conflicts
       #   with an explicit detachable-client flag
       def self.normalize!(argv)
-        headless_index = argv.index { |arg| arg.match?(HEADLESS_PATTERN) }
-        return argv if headless_index.nil?
+        headless_indices = argv.each_index.select { |index| argv[index].match?(HEADLESS_PATTERN) }
+        return argv if headless_indices.empty?
+        raise ArgumentError, '--headless may only be specified once' if headless_indices.length > 1
 
         if argv.any? { |arg| arg.start_with?(DETACHABLE_CLIENT_PREFIX) }
           raise ArgumentError, '--headless cannot be combined with --detachable-client'
         end
 
+        headless_index = headless_indices.first
         headless_arg = argv[headless_index]
         inline_match = HEADLESS_PATTERN.match(headless_arg)
         port_token = inline_match[1]

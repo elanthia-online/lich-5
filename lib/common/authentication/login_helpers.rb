@@ -42,7 +42,7 @@ module Lich
 
         # CLI options (key portion before '=') that are non-instance modifiers.
         NON_INSTANCE_OPTION_KEYS = %w[
-          start-scripts custom-launch dark-mode
+          start-scripts custom-launch dark-mode headless
           home data scripts temp maps logs backup lib
           script-dir data-dir temp-dir
           hosts-dir hosts-file account password character frontend frontend-command
@@ -96,6 +96,19 @@ module Lich
           return false unless defined?(LICH_VERSION)
 
           Gem::Version.new(LICH_VERSION) >= Gem::Version.new([major, minor, patch].join('.'))
+        end
+
+        # Emits a Lich::Messaging message only when the messaging surface is
+        # available in the current runtime or isolated spec context.
+        #
+        # @param level [String] message level passed to `Lich::Messaging.msg`
+        # @param text [String] message body
+        # @return [void]
+        def self.messaging_msg(level, text)
+          return unless defined?(Lich::Messaging)
+          return unless Lich::Messaging.respond_to?(:msg)
+
+          Lich::Messaging.msg(level, text)
         end
 
         # Recursively converts string keys to symbols in nested hash and array structures.
@@ -199,8 +212,8 @@ module Lich
             build_character_result(account_name, account_data, character)
           end
 
-          Lich::Messaging.msg('debug', "RETURNING EXACT MATCH COUNT OF #{exact_matches.count} RECORD(S).")
-          Lich::Messaging.msg('debug', "Exact match character = #{exact_matches[0][:char_name]} for instance #{exact_matches[0][:game_code]}.") unless exact_matches.empty?
+          messaging_msg('debug', "RETURNING EXACT MATCH COUNT OF #{exact_matches.count} RECORD(S).")
+          messaging_msg('debug', "Exact match character = #{exact_matches[0][:char_name]} for instance #{exact_matches[0][:game_code]}.") unless exact_matches.empty?
           Lich.log("info: Returning exact match count of #{exact_matches.count}") if Lich.respond_to?(:log)
           return exact_matches unless exact_matches.empty?
 
@@ -350,7 +363,7 @@ module Lich
           if requested_instance != :__unset
             if requested_instance.nil? || !VALID_GAME_CODES.include?(requested_instance)
               Lich.log "error: Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}" if Lich.respond_to?(:log)
-              Lich::Messaging.msg('error', "Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}")
+              messaging_msg('error', "Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}")
 
               return nil
             end
@@ -499,8 +512,8 @@ module Lich
             end
           end
 
-          Lich::Messaging.msg('debug', "Login arguments from CLI login -> #{argv.inspect}") if defined?(Lich::Messaging)
-          Lich::Messaging.msg('debug', "Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}") if defined?(Lich::Messaging)
+          messaging_msg('debug', "Login arguments from CLI login -> #{argv.inspect}")
+          messaging_msg('debug', "Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}")
           Lich.log "debug: Login arguments from CLI login -> #{argv.inspect}" if Lich.respond_to?(:log)
           Lich.log "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}" if Lich.respond_to?(:log)
 

@@ -41,5 +41,11 @@ RSpec.describe Lich::Main::ArgNormalization do
 
       expect { described_class.normalize!(argv) }.to raise_error(ArgumentError, /cannot be combined/)
     end
+
+    it 'rejects duplicate headless flags' do
+      argv = ['--login', 'Tsetem', '--headless', '8001', '--headless=9001']
+
+      expect { described_class.normalize!(argv) }.to raise_error(ArgumentError, /may only be specified once/)
+    end
   end
 end
