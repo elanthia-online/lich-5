@@ -90,36 +90,31 @@ module Lich
               retained_entry
             end
 
-            cleanup = nil
-            cleanup_installer = proc do
-              cleanup = proc do
-                Lich::Common.release_gtk_signal_handlers(receiver)
-                false
-              end
+            cleanup = proc do
+              Lich::Common.release_gtk_signal_handlers(receiver)
+              false
+            end
 
-              install_cleanup = Lich::Common.with_gtk_registry_lock do
-                next false if entry[:cleanup_installed]
+            install_cleanup = Lich::Common.with_gtk_registry_lock do
+              next false if entry[:cleanup_installed]
 
-                entry[:cleanup_installed] = true
-                entry[:handlers] << cleanup
-                true
-              end
+              entry[:cleanup_installed] = true
+              entry[:handlers] << cleanup
+              true
+            end
 
-              if install_cleanup
-                begin
-                  super('destroy', &cleanup)
-                rescue StandardError
-                  Lich::Common.with_gtk_registry_lock do
-                    entry[:handlers].delete(cleanup)
-                    entry[:handlers].delete(block)
-                    entry[:cleanup_installed] = false
-                    Lich::Common.gtk_signal_handlers.delete(receiver) if entry[:handlers].empty?
-                  end
+            if install_cleanup
+              begin
+                super('destroy', &cleanup)
+              rescue StandardError
+                Lich::Common.with_gtk_registry_lock do
+                  entry[:handlers].delete(cleanup)
+                  entry[:handlers].delete(block)
+                  entry[:cleanup_installed] = false
+                  Lich::Common.gtk_signal_handlers.delete(receiver) if entry[:handlers].empty?
                 end
               end
             end
-
-            cleanup_installer.call
 
             super(signal, *args, &block)
           end
@@ -204,16 +199,15 @@ module Lich
           #
           # Core-owned shutdown paths must use {#lich_main_quit} instead.
           #
-          # @return [Object, nil] GTK return value, or nil when the call is ignored
+          # @return [Object, nil] GTK return value for core-owned shutdown, or nil when ignored
           def main_quit(*)
             return super if Thread.current[:lich_allow_gtk_main_quit]
 
             if respond_to?(:main_level) && main_level.to_i > 0
               Lich.log "info: Ignoring Gtk.main_quit request from shared GTK script context (#{Lich::Common.gtk_guard_context})"
-              return nil
             end
 
-            super
+            nil
           end
 
           # Explicit escape hatch for core-owned shutdown paths.

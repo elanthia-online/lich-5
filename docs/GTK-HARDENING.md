@@ -22,3 +22,14 @@ This reduces two common shared-process risks:
 
 This hardening is intended to reduce cross-script GTK instability without
 requiring mass updates to old or abandoned scripts.
+
+## Current limits
+
+- Signal handler retention is released on widget `destroy`. If a widget never
+  reaches `destroy`, its retained handlers can outlive the script that created
+  it.
+- Timeout and idle retention is cleared when the wrapped callback returns a
+  falsy value or raises. Code that cancels GLib sources through other APIs, such
+  as `GLib::Source.remove`, is outside this hardening layer today.
+- The launcher installs a perpetual idle keepalive on purpose. It returns
+  `true` explicitly so the retention layer preserves it as a long-lived callback.
