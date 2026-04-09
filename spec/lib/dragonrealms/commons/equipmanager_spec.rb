@@ -896,4 +896,96 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       expect(em.get_item?(item)).to be true
     end
   end
+
+  # ─── get_item_helper post-recovery snapshot check ────────────────────
+
+  describe '#get_item_helper post-recovery uses snapshot comparison' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    before do
+      allow(em).to receive(:waitrt?)
+      allow(em).to receive(:pause)
+    end
+
+    it 'returns true when hands changed after failure recovery (not in_hands?)' do
+      # This tests the transform case: after recovery the item in hand is the
+      # TRANSFORMED form, not the base form. in_hands?(base_form) would return
+      # false, but snapshot-changed correctly detects success.
+      item = double('item',
+                    short_name: 'orb', name: 'orb',
+                    short_regex: /\borb/i,
+                    transform_verb: 'twist',
+                    transform_text: 'The orb twists into armor',
+                    worn: false)
+
+      # Snapshot: hands empty before command
+      allow(DRC).to receive(:left_hand).and_return(nil)
+      allow(DRC).to receive(:right_hand).and_return(nil, nil, 'armor')
+
+      # bput returns a failure pattern
+      allow(DRC).to receive(:bput)
+        .with('twist my orb', any_args)
+        .and_return("You'll need a free hand to do that!")
+
+      # Recovery proc runs (stubbed to do nothing -- the hand change simulates success)
+      # in_hands?(orb) would be false since hands hold "armor", not "orb"
+      allow(DRCI).to receive(:in_hands?).with(item).and_return(false)
+
+      expect(em.send(:get_item_helper, item, :transform)).to be true
+    end
+
+    it 'returns false when hands did NOT change after failure recovery' do
+      item = double('item',
+                    short_name: 'sword', name: 'sword',
+                    short_regex: /\bsword/i,
+                    transform_verb: nil, transform_text: nil, worn: false)
+
+      # Hands unchanged throughout
+      allow(DRC).to receive(:left_hand).and_return(nil)
+      allow(DRC).to receive(:right_hand).and_return(nil)
+
+      # bput returns a failure; recovery does nothing; hands stay empty
+      allow(DRC).to receive(:bput).and_return("You aren't wearing that.")
+
+      expect(em.send(:get_item_helper, item, :worn)).to be false
+    end
+  end
+
+  # ─── transform recovery proc verb_data access ───────────────────────
+
+  describe '#verb_data transform recovery proc' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+    let(:item) do
+      double('item',
+             short_name: 'orb', name: 'orb',
+             short_regex: /\borb/i,
+             transform_verb: 'twist',
+             transform_text: 'The orb twists into armor',
+             worn: false)
+    end
+
+    it 'retries transform with correct patterns (verb_data[:transform][:matches], not verb_data[:matches])' do
+      data = em.send(:verb_data, item)
+      expected_matches = data[:transform][:matches]
+
+      # Stub hands: left has something to stow, right is free
+      allow(DRC).to receive(:left_hand).and_return('stick', nil)
+      allow(DRC).to receive(:right_hand).and_return(nil)
+      allow(DRCI).to receive(:stow_hand).with('left').and_return(true)
+
+      # First bput: re-get the base item
+      allow(DRC).to receive(:bput)
+        .with('get my orb', any_args)
+        .and_return('You get an orb.')
+
+      # Second bput: retry the transform -- verify it receives the correct patterns
+      expect(DRC).to receive(:bput)
+        .with('twist my orb', *expected_matches)
+        .and_return('The orb twists into armor')
+
+      data[:transform][:failure_recovery].call('orb', item, "You'll need a free hand to do that!")
+    end
+  end
 end
