@@ -34,12 +34,344 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       end
     end
 
+    describe 'UNTIE_EXHAUSTED_PATTERNS' do
+      subject(:patterns) { described_class::UNTIE_EXHAUSTED_PATTERNS }
+
+      it 'is a frozen constant' do
+        expect(patterns).to be_frozen
+      end
+
+      it 'contains only "not found" semantics (no recoverable failures)' do
+        recoverable = [/too busy/, /can't move/, /fumble/]
+        patterns.each do |pat|
+          recoverable.each do |bad|
+            expect(pat.source).not_to match(bad), "#{pat} looks recoverable (matches #{bad})"
+          end
+        end
+      end
+
+      it 'is a subset of DRCI::UNTIE_ITEM_FAILURE_PATTERNS' do
+        patterns.each do |exhausted_pat|
+          covered = DRCI::UNTIE_ITEM_FAILURE_PATTERNS.any? do |drci_pat|
+            exhausted_pat.source == drci_pat.source
+          end
+          expect(covered).to be(true), "#{exhausted_pat} not found in DRCI::UNTIE_ITEM_FAILURE_PATTERNS"
+        end
+      end
+    end
+
+    describe 'GET_EXHAUSTED_PATTERNS' do
+      subject(:patterns) { described_class::GET_EXHAUSTED_PATTERNS }
+
+      it 'is a frozen constant' do
+        expect(patterns).to be_frozen
+      end
+
+      it 'is a subset of DRCI::GET_ITEM_FAILURE_PATTERNS' do
+        patterns.each do |exhausted_pat|
+          covered = DRCI::GET_ITEM_FAILURE_PATTERNS.any? do |drci_pat|
+            # Both are regexes; match by source to avoid false negatives from flags
+            exhausted_pat.source == drci_pat.source
+          end
+          expect(covered).to be(true), "#{exhausted_pat} not found in DRCI::GET_ITEM_FAILURE_PATTERNS"
+        end
+      end
+    end
+
     it 'does not define local SHEATH_SUCCESS_PATTERNS' do
       expect(described_class.const_defined?(:SHEATH_SUCCESS_PATTERNS, false)).to be false
     end
 
     it 'does not define local SHEATH_FAILURE_PATTERNS' do
       expect(described_class.const_defined?(:SHEATH_FAILURE_PATTERNS, false)).to be false
+    end
+
+    it 'does not define local REMOVE_ITEM_SUCCESS_PATTERNS (uses DRCI)' do
+      expect(described_class.const_defined?(:REMOVE_ITEM_SUCCESS_PATTERNS, false)).to be false
+    end
+
+    it 'does not define local UNTIE_ITEM_SUCCESS_PATTERNS (uses DRCI)' do
+      expect(described_class.const_defined?(:UNTIE_ITEM_SUCCESS_PATTERNS, false)).to be false
+    end
+
+    it 'does not define local GET_ITEM_SUCCESS_PATTERNS (uses DRCI)' do
+      expect(described_class.const_defined?(:GET_ITEM_SUCCESS_PATTERNS, false)).to be false
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # verb_data DRCI constant synchronization
+  # ---------------------------------------------------------------------------
+  # These specs enforce that verb_data references DRCI constants rather than
+  # hardcoding patterns. If a new game message is added to a DRCI constant,
+  # verb_data must pick it up automatically.
+
+  describe '#verb_data' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+    let(:item) do
+      double('item',
+             short_regex: /\bsword/i,
+             name: 'sword',
+             short_name: 'sword',
+             transform_verb: 'twist',
+             transform_text: 'The sword twists',
+             worn: false)
+    end
+
+    subject(:data) { em.send(:verb_data, item) }
+
+    # --- :worn (remove) ---------------------------------------------------
+
+    describe ':worn type' do
+      subject(:worn) { data[:worn] }
+
+      it 'uses the "remove" verb' do
+        expect(worn[:verb]).to eq('remove')
+      end
+
+      it 'includes every DRCI::REMOVE_ITEM_SUCCESS_PATTERNS entry in matches' do
+        DRCI::REMOVE_ITEM_SUCCESS_PATTERNS.each do |pat|
+          expect(worn[:matches]).to include(pat),
+                                    "matches missing DRCI::REMOVE_ITEM_SUCCESS_PATTERNS entry: #{pat.inspect}"
+        end
+      end
+
+      it 'includes every DRCI::REMOVE_ITEM_FAILURE_PATTERNS entry in matches' do
+        DRCI::REMOVE_ITEM_FAILURE_PATTERNS.each do |pat|
+          expect(worn[:matches]).to include(pat),
+                                    "matches missing DRCI::REMOVE_ITEM_FAILURE_PATTERNS entry: #{pat.inspect}"
+        end
+      end
+
+      it 'sets exhausted to DRCI::REMOVE_ITEM_FAILURE_PATTERNS (same object)' do
+        expect(worn[:exhausted]).to equal(DRCI::REMOVE_ITEM_FAILURE_PATTERNS)
+      end
+
+      it 'includes dynamic item-specific patterns in matches' do
+        dynamic = worn[:matches].select { |p| p.is_a?(Regexp) && p.source.include?('sword') }
+        expect(dynamic).not_to be_empty, 'expected item-specific patterns in matches'
+      end
+
+      it 'does not hardcode "you tug" as a string (covered by DRCI regex)' do
+        hardcoded_strings = worn[:matches].select { |p| p.is_a?(String) && p.include?('you tug') }
+        expect(hardcoded_strings).to be_empty,
+                                     '"you tug" should come from DRCI::REMOVE_ITEM_SUCCESS_PATTERNS, not a hardcoded string'
+      end
+
+      it 'does not hardcode "Remove what" as a string (covered by DRCI regex)' do
+        hardcoded_strings = worn[:matches].select { |p| p.is_a?(String) && p.include?('Remove what') }
+        expect(hardcoded_strings).to be_empty,
+                                     '"Remove what" should come from DRCI::REMOVE_ITEM_FAILURE_PATTERNS, not a hardcoded string'
+      end
+
+      it 'does not hardcode "slide themselves off" as a string (covered by DRCI regex)' do
+        hardcoded_strings = worn[:matches].select { |p| p.is_a?(String) && p.include?('slide themselves') }
+        expect(hardcoded_strings).to be_empty,
+                                     '"slide themselves off" should come from DRCI::REMOVE_ITEM_SUCCESS_PATTERNS'
+      end
+
+      it 'matches "A brisk chill leaves you as you remove" via DRCI constant' do
+        msg = 'A brisk chill leaves you as you remove the gloves'
+        expect(worn[:matches].any? { |p| p.is_a?(Regexp) && p.match?(msg) }).to be(true),
+                                                                                'verb_data :worn should match cold-enchanted item remove via DRCI constant'
+      end
+
+      it 'matches "Grunting with momentary exertion" via DRCI constant' do
+        msg = 'Grunting with momentary exertion, you grip each of your heavy combat boots'
+        expect(worn[:matches].any? { |p| p.is_a?(Regexp) && p.match?(msg) }).to be(true),
+                                                                                'verb_data :worn should match boot removal via DRCI constant'
+      end
+
+      it 'failures do not overlap with exhausted (case/when ordering safety)' do
+        worn[:failures].each do |fail_pat|
+          worn[:exhausted].each do |ex_pat|
+            # A failure pattern that also appears in exhausted would be swallowed
+            # by the exhausted branch (checked first in get_item_helper), skipping recovery.
+            expect(fail_pat).not_to eq(ex_pat),
+                                    "failure #{fail_pat.inspect} collides with exhausted #{ex_pat.inspect} -- recovery would be skipped"
+          end
+        end
+      end
+    end
+
+    # --- :tied (untie) ----------------------------------------------------
+
+    describe ':tied type' do
+      subject(:tied) { data[:tied] }
+
+      it 'uses the "untie" verb' do
+        expect(tied[:verb]).to eq('untie')
+      end
+
+      it 'includes every DRCI::UNTIE_ITEM_SUCCESS_PATTERNS entry in matches' do
+        DRCI::UNTIE_ITEM_SUCCESS_PATTERNS.each do |pat|
+          expect(tied[:matches]).to include(pat),
+                                    "matches missing DRCI::UNTIE_ITEM_SUCCESS_PATTERNS entry: #{pat.inspect}"
+        end
+      end
+
+      it 'includes every DRCI::UNTIE_ITEM_FAILURE_PATTERNS entry in matches' do
+        DRCI::UNTIE_ITEM_FAILURE_PATTERNS.each do |pat|
+          expect(tied[:matches]).to include(pat),
+                                    "matches missing DRCI::UNTIE_ITEM_FAILURE_PATTERNS entry: #{pat.inspect}"
+        end
+      end
+
+      it 'sets exhausted to UNTIE_EXHAUSTED_PATTERNS (same object)' do
+        expect(tied[:exhausted]).to equal(described_class::UNTIE_EXHAUSTED_PATTERNS)
+      end
+
+      it 'includes dynamic item-specific patterns in matches' do
+        dynamic = tied[:matches].select { |p| p.is_a?(Regexp) && p.source.include?('sword') }
+        expect(dynamic).not_to be_empty, 'expected item-specific patterns in matches'
+      end
+
+      it 'does not hardcode "Untie what" or "What were you" as strings' do
+        hardcoded_strings = tied[:matches].select do |p|
+          p.is_a?(String) && (p.include?('Untie what') || p.include?('What were you'))
+        end
+        expect(hardcoded_strings).to be_empty,
+                                     'failure strings should come from DRCI::UNTIE_ITEM_FAILURE_PATTERNS'
+      end
+
+      it '"too busy" patterns are in matches (via DRCI) for bput to return on' do
+        msg_combat = 'You are a little too busy to do that right now'
+        msg_music = 'You are a bit too busy playing your music'
+        expect(tied[:matches].any? { |p| p.is_a?(Regexp) && p.match?(msg_combat) }).to be(true),
+                                                                                       '"too busy" (combat) should be matchable'
+        expect(tied[:matches].any? { |p| p.is_a?(Regexp) && p.match?(msg_music) }).to be(true),
+                                                                                      '"too busy" (music) should be matchable'
+      end
+
+      it '"too busy" failures are NOT in exhausted (they are recoverable)' do
+        too_busy = tied[:failures].select { |p| p.is_a?(Regexp) && p.source.include?('too busy') }
+        expect(too_busy).not_to be_empty, 'expected "too busy" in failures for recovery'
+        tied[:exhausted].each do |ex_pat|
+          expect(ex_pat.source).not_to include('too busy'),
+                                       "exhausted contains #{ex_pat.inspect} which should be recoverable, not terminal"
+        end
+      end
+
+      it 'failures do not overlap with exhausted' do
+        tied[:failures].each do |fail_pat|
+          tied[:exhausted].each do |ex_pat|
+            expect(fail_pat).not_to eq(ex_pat),
+                                    "failure #{fail_pat.inspect} collides with exhausted #{ex_pat.inspect}"
+          end
+        end
+      end
+    end
+
+    # --- :stowed (get) ----------------------------------------------------
+
+    describe ':stowed type' do
+      subject(:stowed) { data[:stowed] }
+
+      it 'uses the "get" verb' do
+        expect(stowed[:verb]).to eq('get')
+      end
+
+      it 'includes every DRCI::GET_ITEM_SUCCESS_PATTERNS entry in matches' do
+        DRCI::GET_ITEM_SUCCESS_PATTERNS.each do |pat|
+          expect(stowed[:matches]).to include(pat),
+                                      "matches missing DRCI::GET_ITEM_SUCCESS_PATTERNS entry: #{pat.inspect}"
+        end
+      end
+
+      it 'includes every DRCI::GET_ITEM_FAILURE_PATTERNS entry in matches' do
+        DRCI::GET_ITEM_FAILURE_PATTERNS.each do |pat|
+          expect(stowed[:matches]).to include(pat),
+                                      "matches missing DRCI::GET_ITEM_FAILURE_PATTERNS entry: #{pat.inspect}"
+        end
+      end
+
+      it 'sets exhausted to GET_EXHAUSTED_PATTERNS (same object)' do
+        expect(stowed[:exhausted]).to equal(described_class::GET_EXHAUSTED_PATTERNS)
+      end
+
+      it 'includes "slides easily out" for sheathed weapon retrieval' do
+        msg = 'The sword slides easily out of your scabbard'
+        expect(stowed[:matches].any? { |p| p.is_a?(Regexp) && p.match?(msg) }).to be(true),
+                                                                                  'expected "slides easily out" pattern for sheathed weapon GET'
+      end
+
+      it 'failures do not overlap with exhausted' do
+        stowed[:failures].each do |fail_pat|
+          stowed[:exhausted].each do |ex_pat|
+            expect(fail_pat).not_to eq(ex_pat),
+                                    "failure #{fail_pat.inspect} collides with exhausted #{ex_pat.inspect}"
+          end
+        end
+      end
+    end
+
+    # --- :transform -------------------------------------------------------
+
+    describe ':transform type' do
+      subject(:transform) { data[:transform] }
+
+      it 'uses the item transform_verb' do
+        expect(transform[:verb]).to eq('twist')
+      end
+
+      it 'matches on the item transform_text' do
+        expect(transform[:matches]).to include('The sword twists')
+      end
+
+      it 'uses regex patterns in failures (not plain strings)' do
+        transform[:failures].each do |pat|
+          expect(pat).to be_a(Regexp), "expected Regexp, got #{pat.class}: #{pat.inspect}"
+        end
+      end
+    end
+
+    # --- Cross-type structural invariants ---------------------------------
+
+    describe 'structural invariants (all types)' do
+      %i[worn tied stowed transform].each do |type|
+        context ":#{type}" do
+          subject(:entry) { data[type] }
+
+          it 'has required keys' do
+            %i[verb matches failures failure_recovery exhausted].each do |key|
+              expect(entry).to have_key(key), "#{type} missing required key :#{key}"
+            end
+          end
+
+          it 'has a callable failure_recovery' do
+            expect(entry[:failure_recovery]).to respond_to(:call),
+                                                "#{type} failure_recovery is not callable"
+          end
+
+          it 'exhausted entries are all matchable by bput (present in matches)' do
+            Array(entry[:exhausted]).each do |ex_pat|
+              covered = entry[:matches].any? do |m_pat|
+                if m_pat.is_a?(Regexp) && ex_pat.is_a?(Regexp)
+                  m_pat.source == ex_pat.source
+                else
+                  m_pat == ex_pat
+                end
+              end
+              expect(covered).to be(true),
+                                 "exhausted pattern #{ex_pat.inspect} not found in matches -- bput would never return it"
+            end
+          end
+        end
+      end
+
+      it 'uses all Regexp patterns (no plain strings that break case/when matching)' do
+        %i[worn tied stowed].each do |type|
+          entry = data[type]
+          %i[failures exhausted].each do |key|
+            Array(entry[key]).each do |pat|
+              expect(pat).to be_a(Regexp),
+                             "#{type}[:#{key}] contains String #{pat.inspect} -- " \
+                             'case/when uses String#=== (exact match), not substring; use Regexp instead'
+            end
+          end
+        end
+      end
     end
   end
 
@@ -319,6 +651,38 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       expect(DRCI).to receive(:put_away_item?).with('arrow')
       expect(DRCI).to receive(:get_item?).with('longbow').and_return(true)
       em.unload_weapon('longbow')
+    end
+  end
+
+  # ─── return_held_gear failure_patterns ────────────────────────────────
+
+  describe '#return_held_gear passes failure_patterns to stow_helper' do
+    let(:settings) do
+      double('settings', gear_sets: { 'standard' => ['steel sword'] },
+                         sort_auto_head: false, gear: [])
+    end
+    let(:em) { described_class.new(settings) }
+    let(:item) do
+      double('item', short_name: 'sword', short_regex: /\bsteel.*\bsword/i,
+                     name: 'sword', needs_unloading: false,
+                     tie_to: nil, wield: false, container: nil, worn: false)
+    end
+
+    before do
+      allow(DRC).to receive(:left_hand).and_return(nil)
+      allow(DRC).to receive(:right_hand).and_return('steel sword')
+      allow(em).to receive(:items).and_return([item])
+    end
+
+    it 'passes WEAR_ITEM_FAILURE_PATTERNS as failure_patterns' do
+      expect(DRC).to receive(:bput).with(
+        'wear my sword',
+        *DRCI::WEAR_ITEM_SUCCESS_PATTERNS,
+        *DRCI::WEAR_ITEM_FAILURE_PATTERNS,
+        *described_class::STOW_RECOVERY_PATTERNS
+      ).and_return('You put on your steel sword.')
+
+      em.return_held_gear('standard')
     end
   end
 

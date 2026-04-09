@@ -436,7 +436,7 @@ module Lich
         todo.all? do |held_item|
           if (info = gear_set_items.find { |item| item.short_regex =~ held_item })
             unload_weapon(info.short_name) if info.needs_unloading
-            stow_helper("wear my #{info.short_name}", info.short_name, *DRCI::WEAR_ITEM_SUCCESS_PATTERNS)
+            stow_helper("wear my #{info.short_name}", info.short_name, *DRCI::WEAR_ITEM_SUCCESS_PATTERNS, failure_patterns: DRCI::WEAR_ITEM_FAILURE_PATTERNS)
             true
           elsif (info = items.find { |item| item.short_regex =~ held_item })
             unload_weapon(info.short_name) if info.needs_unloading
@@ -455,52 +455,114 @@ module Lich
         return_held_gear || DRCI.stow_hands
       end
 
+      # Patterns indicating the untie target does not exist and retrieval
+      # should be abandoned. Separated from {DRCI::UNTIE_ITEM_FAILURE_PATTERNS}
+      # because "too busy" failures are recoverable (retreat / stop playing)
+      # and must not short-circuit to exhausted.
+      UNTIE_EXHAUSTED_PATTERNS = [
+        /^Untie what/,
+        /^What were you referring/
+      ].freeze
+
+      # Patterns indicating the get target does not exist and retrieval
+      # should be abandoned. A subset of {DRCI::GET_ITEM_FAILURE_PATTERNS}
+      # scoped to "item not found" semantics; hand/movement failures are
+      # left to fall through to the timeout branch in {#get_item_helper}.
+      #
+      # Sources must match DRCI::GET_ITEM_FAILURE_PATTERNS entries exactly
+      # so that exhausted entries are recognized when bput returns via DRCI.
+      GET_EXHAUSTED_PATTERNS = [
+        /^Get what/,
+        /^What were you/,
+        /^I could not/
+      ].freeze
+
       # Builds a hash of verb configurations for retrieving an item by type.
       #
-      # Each type (:worn, :tied, :stowed, :transform) maps to a hash with
-      # the game verb, match patterns, failure patterns, and recovery procs.
+      # Each type (+:worn+, +:tied+, +:stowed+, +:transform+) maps to a hash
+      # with the game verb, match patterns, failure patterns, and recovery procs.
+      # Match patterns reference DRCI constants so that new game messages added
+      # to DRCI are automatically picked up here.
+      #
+      # The +matches+ array is passed to +bput+ and must include success,
+      # failure, and exhausted patterns so +bput+ returns promptly.
+      # +get_item_helper+ then triages the response:
+      #
+      # - +exhausted+: item does not exist -- return false immediately
+      # - +failures+: recoverable error -- run +failure_recovery+ proc
+      # - everything else: success -- wait for hand contents to change
       #
       # @param item [DRC::Item] item to build verb data for
       # @return [Hash{Symbol => Hash}] verb configuration keyed by retrieval type
+      #
+      # @see #get_item_helper Consumer of the returned hash
+      # @see DRCI::REMOVE_ITEM_SUCCESS_PATTERNS
+      # @see DRCI::UNTIE_ITEM_SUCCESS_PATTERNS
+      # @see DRCI::GET_ITEM_SUCCESS_PATTERNS
       # @api private
       def verb_data(item)
         {
           worn: {
             verb: 'remove',
-            matches: [/^You .*#{item.short_regex}/, /^You (get|sling|pull|work|loosen|slide|remove|yank|unbuckle).*#{item.name}/, 'you tug', 'Remove what', "You aren't wearing that", 'slide themselves off of your', 'you manage to loosen', 'you ready the', /^A brisk chill leaves you as you/],
+            matches: [
+              /^You .*#{item.short_regex}/,
+              /^You (get|sling|pull|work|loosen|slide|remove|yank|unbuckle).*#{item.name}/,
+              *DRCI::REMOVE_ITEM_SUCCESS_PATTERNS,
+              *DRCI::REMOVE_ITEM_FAILURE_PATTERNS
+            ],
             failures: [/^You (get|sling|pull|work|slide|remove|yank|unbuckle) $/],
             failure_recovery: proc { |noun| DRC.bput("wear my #{noun}", '^You ') },
-            exhausted: ['Remove what', "You aren't wearing that"]
+            exhausted: DRCI::REMOVE_ITEM_FAILURE_PATTERNS
           },
           tied: {
             verb: 'untie',
-            matches: [/^You .*#{item.short_regex}/, "^You remove.*#{item.name}", /^.*you untie your .*#{item.short_regex} from it./, '^What were you referring', '^Untie what', '^You are a little too busy', '^You are a bit too busy'],
-            failures: ['You remove', /^You are a little too busy/, /^You are a bit too busy/],
-            failure_recovery: proc { |_noun, item_to_recover, *matches|
-                                case matches
-                                when ['You are a little too busy']
+            matches: [
+              /^You .*#{item.short_regex}/,
+              /^You remove.*#{item.name}/,
+              /^.*you untie your .*#{item.short_regex} from it./,
+              *DRCI::UNTIE_ITEM_SUCCESS_PATTERNS,
+              *DRCI::UNTIE_ITEM_FAILURE_PATTERNS
+            ],
+            # NOTE: /^You remove$/ (with end anchor) prevents matching successful
+            # untie responses like "You remove a sword from your belt" -- only
+            # matches the bare "You remove" edge case.
+            failures: [/^You remove$/, /^You are a little too busy/, /^You are a bit too busy/],
+            # NOTE: response is accepted as a single String (not *splat) so that
+            # case/when uses Regexp#=== for proper pattern matching. The original
+            # *matches splat wrapped the response in an Array, making Regexp-based
+            # when clauses silently fall through to else.
+            failure_recovery: proc { |_noun, item_to_recover, response|
+                                case response
+                                when /You are a little too busy/
                                   DRC.retreat
                                   get_item?(item_to_recover)
-                                when ['You are a bit too busy']
+                                when /You are a bit too busy/
                                   DRC.stop_playing
                                   get_item?(item_to_recover)
                                 else
                                   stow_weapon
                                 end
                               },
-            exhausted: ['What were you referring', 'Untie what']
+            exhausted: UNTIE_EXHAUSTED_PATTERNS
           },
           stowed: {
             verb: 'get',
-            matches: [/^You .*#{item.short_regex}/, "^You .*#{item.name}", '^The.* slides easily out', '^What were you referring', 'But that is already', 'You are already'],
-            failures: ['You get', /But that is already/],
+            matches: [
+              /^You .*#{item.short_regex}/,
+              /^You .*#{item.name}/,
+              *DRCI::GET_ITEM_SUCCESS_PATTERNS,
+              *DRCI::GET_ITEM_FAILURE_PATTERNS,
+              /^The.* slides easily out/,
+              /But that is already/
+            ],
+            failures: [/^You get$/, /But that is already/],
             failure_recovery: proc { |noun| DRC.bput("stow my #{noun}", 'You put', 'But that is already in') },
-            exhausted: ['What were you referring']
+            exhausted: GET_EXHAUSTED_PATTERNS
           },
           transform: {
             verb: item.transform_verb,
-            matches: [item.transform_text],
-            failures: ["You'll need a free hand to do that!", "You don't seem to be holding"],
+            matches: [item.transform_text, *GET_EXHAUSTED_PATTERNS],
+            failures: [/You'll need a free hand to do that!/, /You don't seem to be holding/],
             failure_recovery: proc do |noun|
                                 DRCI.stow_hand('left') if DRC.left_hand && DRC.left_hand !~ /#{noun}/i
                                 DRCI.stow_hand('right') if DRC.right_hand && DRC.right_hand !~ /#{noun}/i
@@ -511,7 +573,7 @@ module Lich
                                 item.worn ? DRC.bput("remove my #{noun}", '^You') : DRC.bput("get my #{noun}", '^You')
                                 DRC.bput("#{item.transform_verb} my #{item.short_name}", verb_data(item)[:matches])
                               end,
-            exhausted: ['What were you referring']
+            exhausted: GET_EXHAUSTED_PATTERNS
           }
         }
       end
