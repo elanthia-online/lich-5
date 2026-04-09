@@ -574,7 +574,7 @@ module Lich
                                   next
                                 end
                                 item.worn ? DRC.bput("remove my #{noun}", '^You') : DRC.bput("get my #{noun}", '^You')
-                                DRC.bput("#{item.transform_verb} my #{item.short_name}", verb_data(item)[:matches])
+                                DRC.bput("#{item.transform_verb} my #{item.short_name}", *verb_data(item)[:transform][:matches])
                               end,
             exhausted: DRCI::GET_ITEM_FAILURE_PATTERNS
           }
