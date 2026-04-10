@@ -64,8 +64,8 @@ module Lich
       def safe_load_yaml(filepath)
         OpenStruct.new(YAML.unsafe_load_file(filepath)).to_h
       rescue => e
-        Lich::Messaging.msg("bold", "*** ERROR PARSING YAML FILE ***")
-        Lich::Messaging.msg("bold", e.message)
+        safe_message("bold", "*** ERROR PARSING YAML FILE ***")
+        safe_message("bold", e.message)
         {}
       end
 
@@ -151,7 +151,7 @@ module Lich
              File.exist?(File.join(DATA_DIR, game, "base.yaml")) &&
              File.exist?(File.join(DATA_DIR, game, "base-empty.yaml")) &&
              File.exist?(File.join(DATA_DIR, game, "#{character_name}-setup.yaml"))
-            Lich::Messaging.msg("info", "Detected game instance-specific files. Loading settings from #{File.join(DATA_DIR, game)}")
+            safe_message("info", "Detected game instance-specific files. Loading settings from #{File.join(DATA_DIR, game)}")
             File.join(DATA_DIR, game)
           else
             File.join(SCRIPT_DIR, 'profiles')
@@ -287,10 +287,35 @@ module Lich
         data = OpenStruct.new(original_data)
         data
       rescue => e
-        Lich::Messaging.msg("bold", "*** ERROR MODIFYING DATA ***")
-        Lich::Messaging.msg("bold", e.message)
-        e.backtrace.each { |msg| Lich::Messaging.msg("bold", msg) }
+        safe_message("bold", "*** ERROR MODIFYING DATA ***")
+        safe_message("bold", e.message)
+        e.backtrace.each { |line| safe_message("bold", line) }
         OpenStruct.new
+      end
+
+      # Guarded messaging -- safe to call before Lich::Messaging is initialized.
+      #
+      # @param type [String] message type (e.g. 'bold', 'info', 'error')
+      # @param text [String] message text
+      # @return [void]
+      def safe_message(type, text)
+        if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:msg)
+          Lich::Messaging.msg(type, text)
+        else
+          safe_log(text)
+        end
+      end
+
+      # Guarded logging -- safe to call before Lich.log is defined.
+      #
+      # @param text [String] log message
+      # @return [void]
+      def safe_log(text)
+        if defined?(Lich) && Lich.respond_to?(:log)
+          Lich.log(text)
+        else
+          $stderr.puts(text)
+        end
       end
     end
   end
