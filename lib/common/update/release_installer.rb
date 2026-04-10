@@ -97,13 +97,21 @@ module Lich
             respond "Please confirm your participation:  #{$clean_lich_char}send Y or #{$clean_lich_char}send N"
             respond "You have 10 seconds to confirm, otherwise will be cancelled."
 
-            sync_thread = $_CLIENT_ || $_DETACHABLE_CLIENT_
-            timeout = Time.now + 10
+            client_sock = $_CLIENT_ || $_DETACHABLE_CLIENT_
+            deadline = Time.now + 10
             line = nil
             loop do
-              line = sync_thread.gets
-              break if line.is_a?(String) && line.strip =~ /^(?:<c>)?(?:#{$clean_lich_char}send|#{$clean_lich_char}s) /i
-              break if Time.now > timeout
+              remaining = deadline - Time.now
+              break if remaining <= 0
+
+              reader = Thread.new { client_sock.gets }
+              if reader.join(remaining)
+                line = reader.value
+                break if line.is_a?(String) && line.strip =~ /^(?:<c>)?(?:#{$clean_lich_char}send|#{$clean_lich_char}s) /i
+              else
+                reader.kill
+                break
+              end
             end
 
             if line.is_a?(String) && line =~ /send Y|s Y/i
