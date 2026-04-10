@@ -262,8 +262,8 @@ module Lich
         branch_tracking = <<~RUBY
 
           # Branch tracking (added by lich5-update --branch)
-          LICH_BRANCH = '#{branch_name}'
-          LICH_BRANCH_REPO = '#{repo}'
+          LICH_BRANCH = #{branch_name.dump}
+          LICH_BRANCH_REPO = #{repo.dump}
           LICH_BRANCH_UPDATED_AT = #{Time.now.to_i}
         RUBY
 
@@ -314,7 +314,7 @@ module Lich
       end
 
       def self.release_installer
-        @release_installer ||= ReleaseInstaller.new(client, resolver, snapshot_manager)
+        ReleaseInstaller.new(client, resolver, snapshot_manager)
       end
 
       def self.branch_installer
