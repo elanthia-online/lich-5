@@ -819,7 +819,8 @@ reconnect_if_wanted = proc {
     exit
   ensure
     # Guarantee lifecycle stop even on abnormal exit (e.g. abort_on_exception).
-    # SessionLifecycle.stop is idempotent -- safe to call if already stopped.
+    # Both .stop methods are idempotent -- safe to call if already stopped.
+    Lich::InternalAPI::ActiveSessions::Lifecycle.stop if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
     Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
   end
 }
