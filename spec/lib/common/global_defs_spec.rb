@@ -38,6 +38,7 @@ end
 
 # Extract start_scripts_if_available
 fn_start = dep_lines.index { |l| l =~ /^def start_scripts_if_available\b/ }
+raise "start_scripts_if_available not found in #{dep_path}" unless fn_start
 fn_end = dep_lines[fn_start + 1..].index { |l| l =~ /^end\s*$/ }
 eval(dep_lines[fn_start..fn_start + 1 + fn_end].join, TOPLEVEL_BINDING, dep_path, fn_start + 1)
 
