@@ -778,46 +778,49 @@ reconnect_if_wanted = proc {
     detachable_client_port: @argv_options[:detachable_client_port]
   )
   Lich::Common::SessionLifecycle.start(session_name: session_name, role: session_role)
+  begin
+    wait_while { $offline_mode }
 
-  wait_while { $offline_mode }
+    if Frontend.client.eql?('wizard')
+      $link_highlight_start = "\207".force_encoding(Encoding::ASCII_8BIT)
+      $link_highlight_end = "\240".force_encoding(Encoding::ASCII_8BIT)
+      $speech_highlight_start = "\212".force_encoding(Encoding::ASCII_8BIT)
+      $speech_highlight_end = "\240".force_encoding(Encoding::ASCII_8BIT)
+    end
 
-  if Frontend.client.eql?('wizard')
-    $link_highlight_start = "\207".force_encoding(Encoding::ASCII_8BIT)
-    $link_highlight_end = "\240".force_encoding(Encoding::ASCII_8BIT)
-    $speech_highlight_start = "\212".force_encoding(Encoding::ASCII_8BIT)
-    $speech_highlight_end = "\240".force_encoding(Encoding::ASCII_8BIT)
+    client_thread.priority = 3
+
+    $_CLIENT_.puts "\n--- Lich v#{LICH_VERSION} is active.  Type #{$clean_lich_char}help for usage info.\n\n"
+
+    Game.thread.join
+    client_thread.kill rescue nil
+    detachable_client_thread.kill rescue nil
+
+    Lich.log 'info: stopping scripts...'
+    Script.running.each { |script| script.kill }
+    Script.hidden.each { |script| script.kill }
+    200.times { sleep 0.1; break if Script.running.empty? and Script.hidden.empty? }
+    Lich.log 'info: saving script settings...'
+    Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
+    Settings.save
+    Vars.save
+    Lich.log 'info: closing connections...'
+    Lich::InternalAPI::ActiveSessions::Lifecycle.stop
+    Game.close
+    200.times { sleep 0.1; break if Game.closed? }
+    pause 0.5
+    $_CLIENT_.close
+    200.times { sleep 0.1; break if $_CLIENT_.closed? }
+    Lich.db.close
+    200.times { sleep 0.1; break if Lich.db.closed? }
+    reconnect_if_wanted.call # taking this out of play but may need to see if anyone's using it
+    Lich.log "info: exiting..."
+    Gtk.queue { Gtk.main_quit } if defined?(Gtk)
+    exit
+  ensure
+    # Guarantee lifecycle stop even on abnormal exit (e.g. abort_on_exception).
+    # Both .stop methods are idempotent -- safe to call if already stopped.
+    Lich::InternalAPI::ActiveSessions::Lifecycle.stop if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
+    Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
   end
-
-  client_thread.priority = 3
-
-  $_CLIENT_.puts "\n--- Lich v#{LICH_VERSION} is active.  Type #{$clean_lich_char}help for usage info.\n\n"
-
-  Game.thread.join
-  client_thread.kill rescue nil
-  detachable_client_thread.kill rescue nil
-
-  Lich.log 'info: stopping scripts...'
-  Script.running.each { |script| script.kill }
-  Script.hidden.each { |script| script.kill }
-  200.times { sleep 0.1; break if Script.running.empty? and Script.hidden.empty? }
-  Lich.log 'info: saving script settings...'
-  Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
-  Settings.save
-  Vars.save
-  # Stop lifecycle reporting during orderly shutdown so session rows are marked
-  # as clean exits instead of lingering as running/stale in reports.
-  Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
-  Lich.log 'info: closing connections...'
-  Lich::InternalAPI::ActiveSessions::Lifecycle.stop
-  Game.close
-  200.times { sleep 0.1; break if Game.closed? }
-  pause 0.5
-  $_CLIENT_.close
-  200.times { sleep 0.1; break if $_CLIENT_.closed? }
-  Lich.db.close
-  200.times { sleep 0.1; break if Lich.db.closed? }
-  reconnect_if_wanted.call # taking this out of play but may need to see if anyone's using it
-  Lich.log "info: exiting..."
-  Gtk.queue { Gtk.main_quit } if defined?(Gtk)
-  exit
 }
