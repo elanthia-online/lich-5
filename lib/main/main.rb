@@ -778,6 +778,7 @@ reconnect_if_wanted = proc {
     detachable_client_port: @argv_options[:detachable_client_port]
   )
   Lich::Common::SessionLifecycle.start(session_name: session_name, role: session_role)
+  begin
 
   wait_while { $offline_mode }
 
@@ -804,9 +805,6 @@ reconnect_if_wanted = proc {
   Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
   Settings.save
   Vars.save
-  # Stop lifecycle reporting during orderly shutdown so session rows are marked
-  # as clean exits instead of lingering as running/stale in reports.
-  Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
   Lich.log 'info: closing connections...'
   Lich::InternalAPI::ActiveSessions::Lifecycle.stop
   Game.close
@@ -820,4 +818,10 @@ reconnect_if_wanted = proc {
   Lich.log "info: exiting..."
   Gtk.queue { Gtk.main_quit } if defined?(Gtk)
   exit
+
+  ensure
+    # Guarantee lifecycle stop even on abnormal exit (e.g. abort_on_exception).
+    # SessionLifecycle.stop is idempotent -- safe to call if already stopped.
+    Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
+  end
 }
