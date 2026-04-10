@@ -122,6 +122,12 @@ RSpec.describe '#start_scripts_if_available' do
     expect(Script).not_to have_received(:running?)
   end
 
+  it 'calls start_script for scripts that exist and are not running' do
+    allow(self).to receive(:start_script)
+    start_scripts_if_available('moonwatch')
+    expect(self).to have_received(:start_script).with('moonwatch')
+  end
+
   it 'handles single string argument (auto-wraps to array)' do
     start_scripts_if_available('moonwatch')
     expect(Script).to have_received(:exists?).with('moonwatch').at_least(:once)
