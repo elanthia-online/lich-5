@@ -98,6 +98,10 @@ module Lich
             respond "You have 10 seconds to confirm, otherwise will be cancelled."
 
             client_sock = $_CLIENT_ || $_DETACHABLE_CLIENT_
+            unless client_sock
+              respond 'No client connection available. Aborting beta test request.'
+              return
+            end
             deadline = Time.now + 10
             line = nil
             loop do
