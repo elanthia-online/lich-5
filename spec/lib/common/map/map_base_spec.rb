@@ -604,4 +604,166 @@ RSpec.describe Lich::Common::MapBase do
       expect(distances[2]).to eq(1)  # Path enabled
     end
   end
+
+  describe '.apply_wayto_overrides' do
+    let(:settings) { OpenStruct.new }
+
+    before do
+      test_class.test_list = []
+      test_class.test_loaded = true
+
+      room10 = test_class.new(10, wayto: {}, timeto: {})
+      room20 = test_class.new(20, wayto: {}, timeto: {})
+      test_class.test_list[10] = room10
+      test_class.test_list[20] = room20
+
+      stub_const('GameSettings', {})
+      allow(test_class).to receive(:get_settings).and_return(settings)
+    end
+
+    it 'applies wayto overrides with str_proc' do
+      settings.base_wayto_overrides = {
+        'override1' => {
+          'start_room' => 10,
+          'end_room' => 20,
+          'str_proc' => 'move north'
+        }
+      }
+      settings.personal_wayto_overrides = nil
+      settings.personal_map_targets = nil
+
+      test_class.apply_wayto_overrides
+      expect(test_class.test_list[10].wayto['20']).to be_a(StringProc)
+    end
+
+    it 'applies wayto overrides with numeric travel_time' do
+      settings.base_wayto_overrides = {
+        'override1' => {
+          'start_room' => 10,
+          'end_room' => 20,
+          'str_proc' => 'move north',
+          'travel_time' => 3.5
+        }
+      }
+      settings.personal_wayto_overrides = nil
+      settings.personal_map_targets = nil
+
+      test_class.apply_wayto_overrides
+      expect(test_class.test_list[10].timeto['20']).to eq(3.5)
+    end
+
+    it 'applies travel_time as StringProc when non-numeric' do
+      settings.base_wayto_overrides = {
+        'override1' => {
+          'start_room' => 10,
+          'end_room' => 20,
+          'travel_time' => '1 + 2'
+        }
+      }
+      settings.personal_wayto_overrides = nil
+      settings.personal_map_targets = nil
+
+      test_class.apply_wayto_overrides
+      expect(test_class.test_list[10].timeto['20']).to be_a(StringProc)
+    end
+
+    it 'personal overrides take precedence over base overrides' do
+      settings.base_wayto_overrides = {
+        'override1' => {
+          'start_room' => 10,
+          'end_room' => 20,
+          'str_proc' => 'move north'
+        }
+      }
+      settings.personal_wayto_overrides = {
+        'override1' => {
+          'start_room' => 10,
+          'end_room' => 20,
+          'str_proc' => 'go door'
+        }
+      }
+      settings.personal_map_targets = nil
+
+      test_class.apply_wayto_overrides
+      proc = test_class.test_list[10].wayto['20']
+      expect(proc).to be_a(StringProc)
+    end
+
+    it 'skips entries missing start_room' do
+      settings.base_wayto_overrides = {
+        'bad' => { 'end_room' => 20, 'str_proc' => 'go north' }
+      }
+      settings.personal_wayto_overrides = nil
+      settings.personal_map_targets = nil
+
+      test_class.apply_wayto_overrides
+      expect(test_class.test_list[10].wayto).to be_empty
+      expect(test_class.test_list[20].wayto).to be_empty
+    end
+
+    it 'skips entries missing end_room' do
+      settings.base_wayto_overrides = {
+        'bad' => { 'start_room' => 10, 'str_proc' => 'go north' }
+      }
+      settings.personal_wayto_overrides = nil
+      settings.personal_map_targets = nil
+
+      test_class.apply_wayto_overrides
+      expect(test_class.test_list[10].wayto).to be_empty
+    end
+
+    it 'skips non-hash override entries' do
+      settings.base_wayto_overrides = { 'bad' => 'not a hash' }
+      settings.personal_wayto_overrides = nil
+      settings.personal_map_targets = nil
+
+      expect { test_class.apply_wayto_overrides }.not_to raise_error
+    end
+
+    it 'skips entries where start_room does not exist in map' do
+      settings.base_wayto_overrides = {
+        'missing' => { 'start_room' => 9999, 'end_room' => 20, 'str_proc' => 'go north' }
+      }
+      settings.personal_wayto_overrides = nil
+      settings.personal_map_targets = nil
+
+      expect { test_class.apply_wayto_overrides }.not_to raise_error
+    end
+
+    it 'merges personal_map_targets into GameSettings custom targets' do
+      settings.base_wayto_overrides = nil
+      settings.personal_wayto_overrides = nil
+      settings.personal_map_targets = { 'my_spot' => 10 }
+
+      test_class.apply_wayto_overrides
+      expect(GameSettings['custom targets']).to eq({ 'my_spot' => 10 })
+    end
+
+    it 'merges personal_map_targets with existing custom targets' do
+      GameSettings['custom targets'] = { 'bank' => 20 }
+      settings.base_wayto_overrides = nil
+      settings.personal_wayto_overrides = nil
+      settings.personal_map_targets = { 'my_spot' => 10 }
+
+      test_class.apply_wayto_overrides
+      expect(GameSettings['custom targets']).to eq({ 'bank' => 20, 'my_spot' => 10 })
+    end
+
+    it 'skips personal_map_targets when not a hash' do
+      settings.base_wayto_overrides = nil
+      settings.personal_wayto_overrides = nil
+      settings.personal_map_targets = 'not a hash'
+
+      expect { test_class.apply_wayto_overrides }.not_to raise_error
+      expect(GameSettings['custom targets']).to be_nil
+    end
+
+    it 'skips personal_map_targets when nil' do
+      settings.base_wayto_overrides = nil
+      settings.personal_wayto_overrides = nil
+      settings.personal_map_targets = nil
+
+      expect { test_class.apply_wayto_overrides }.not_to raise_error
+    end
+  end
 end

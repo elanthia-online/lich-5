@@ -234,7 +234,7 @@ module Lich
           wayto_overrides = base_overrides.merge(personal_overrides)
 
           wayto_overrides.each do |_key, values|
-            next unless values.is_a?(Hash) && values['start_room']
+            next unless values.is_a?(Hash) && values['start_room'] && values['end_room']
 
             start_room_id = values['start_room'].to_i
             end_room_id = values['end_room'].to_s
@@ -252,7 +252,7 @@ module Lich
           end
 
           personal_map_targets = settings.personal_map_targets
-          if personal_map_targets
+          if personal_map_targets.is_a?(Hash)
             custom_targets = (GameSettings['custom targets'] || {})
             custom_targets.merge!(personal_map_targets)
             GameSettings['custom targets'] = custom_targets
