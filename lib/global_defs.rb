@@ -41,7 +41,7 @@ end
 # @param script_names [String, Array<String>] script name(s) to start
 # @return [void]
 def start_scripts_if_available(script_names)
-  script_names = [script_names] unless script_names.is_a?(Array)
+  script_names = [script_names].flatten.compact
   return if script_names.empty?
 
   script_names.each do |script_name|

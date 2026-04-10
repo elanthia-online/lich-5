@@ -12,6 +12,11 @@ require 'ostruct'
 # Designed to run both standalone and as part of the full suite alongside
 # spec_helper-based specs.
 
+# Minimal stubs for runtime dependencies used by the extracted function
+class Script; end unless defined?(Script)
+def start_script(*_args); end unless defined?(start_script)
+def pause(_seconds = 0); end unless respond_to?(:pause)
+
 # Load the sentinel constants and start_scripts_if_available from global_defs.rb
 dep_path = File.join(File.dirname(__FILE__), '..', '..', '..', 'lib', 'global_defs.rb')
 dep_lines = File.readlines(dep_path)
@@ -120,5 +125,17 @@ RSpec.describe '#start_scripts_if_available' do
   it 'handles single string argument (auto-wraps to array)' do
     start_scripts_if_available('moonwatch')
     expect(Script).to have_received(:exists?).with('moonwatch').at_least(:once)
+  end
+
+  it 'handles nil input without error' do
+    expect { start_scripts_if_available(nil) }.not_to raise_error
+    expect(Script).not_to have_received(:running?)
+  end
+
+  it 'filters nil values from arrays' do
+    start_scripts_if_available(['moonwatch', nil, 'textsubs'])
+    expect(Script).to have_received(:exists?).with('moonwatch')
+    expect(Script).to have_received(:exists?).with('textsubs')
+    expect(Script).not_to have_received(:exists?).with(nil)
   end
 end
