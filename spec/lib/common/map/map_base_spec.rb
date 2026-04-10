@@ -625,8 +625,8 @@ RSpec.describe Lich::Common::MapBase do
       settings.base_wayto_overrides = {
         'override1' => {
           'start_room' => 10,
-          'end_room' => 20,
-          'str_proc' => 'move north'
+          'end_room'   => 20,
+          'str_proc'   => 'move north'
         }
       }
       settings.personal_wayto_overrides = nil
@@ -639,9 +639,9 @@ RSpec.describe Lich::Common::MapBase do
     it 'applies wayto overrides with numeric travel_time' do
       settings.base_wayto_overrides = {
         'override1' => {
-          'start_room' => 10,
-          'end_room' => 20,
-          'str_proc' => 'move north',
+          'start_room'  => 10,
+          'end_room'    => 20,
+          'str_proc'    => 'move north',
           'travel_time' => 3.5
         }
       }
@@ -655,8 +655,8 @@ RSpec.describe Lich::Common::MapBase do
     it 'applies travel_time as StringProc when non-numeric' do
       settings.base_wayto_overrides = {
         'override1' => {
-          'start_room' => 10,
-          'end_room' => 20,
+          'start_room'  => 10,
+          'end_room'    => 20,
           'travel_time' => '1 + 2'
         }
       }
@@ -671,15 +671,15 @@ RSpec.describe Lich::Common::MapBase do
       settings.base_wayto_overrides = {
         'override1' => {
           'start_room' => 10,
-          'end_room' => 20,
-          'str_proc' => 'move north'
+          'end_room'   => 20,
+          'str_proc'   => 'move north'
         }
       }
       settings.personal_wayto_overrides = {
         'override1' => {
           'start_room' => 10,
-          'end_room' => 20,
-          'str_proc' => 'go door'
+          'end_room'   => 20,
+          'str_proc'   => 'go door'
         }
       }
       settings.personal_map_targets = nil
