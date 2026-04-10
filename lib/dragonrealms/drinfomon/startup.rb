@@ -67,13 +67,13 @@ module Lich
 
           # Ensure ShowRoomID and MonsterBold flags are enabled (one-time per character)
           unless UserVars.dependency_setflags
-            flags = Lich::Util.issue_command("flag", /^Usage/, /^For other setting options, see AVOID, SET, and TOGGLE/, quiet: true, timeout: 1, usexml: false)
+            flags = Array(Lich::Util.issue_command("flag", /^Usage/, /^For other setting options, see AVOID, SET, and TOGGLE/, quiet: true, timeout: 1, usexml: false))
             required = ["ShowRoomID", "MonsterBold"]
             required.each do |flag|
               fput("flag \#{flag} on") unless flags.any? { |f| f.match?(/\#{Regexp.escape(flag)}\\s+ON/) }
             end
             # Re-query to verify flags applied; only mark sentinel if all confirmed
-            flags = Lich::Util.issue_command("flag", /^Usage/, /^For other setting options, see AVOID, SET, and TOGGLE/, quiet: true, timeout: 1, usexml: false)
+            flags = Array(Lich::Util.issue_command("flag", /^Usage/, /^For other setting options, see AVOID, SET, and TOGGLE/, quiet: true, timeout: 1, usexml: false))
             UserVars.dependency_setflags = Time.now if required.all? { |flag| flags.any? { |f| f.match?(/\#{Regexp.escape(flag)}\\s+ON/) } }
           end
 
@@ -98,8 +98,33 @@ module Lich
         warn_custom_scripts
         $setupfiles.reload if defined?($setupfiles) && $setupfiles
       rescue StandardError => e
-        Lich::Messaging.msg('error', "DRInfomon: post_startup_checks failed: #{e.message}")
-        Lich.log "DRInfomon: post_startup_checks error: #{e.inspect}\n\t#{e.backtrace&.first(5)&.join("\n\t")}"
+        safe_message('error', "DRInfomon: post_startup_checks failed: #{e.message}")
+        safe_log("DRInfomon: post_startup_checks error: #{e.inspect}\n\t#{e.backtrace&.first(5)&.join("\n\t")}")
+      end
+
+      # Guarded messaging -- safe to call if Lich::Messaging is unavailable.
+      #
+      # @param type [String] message type (e.g. 'error', 'info')
+      # @param text [String] message text
+      # @return [void]
+      def self.safe_message(type, text)
+        if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:msg)
+          Lich::Messaging.msg(type, text)
+        else
+          safe_log(text)
+        end
+      end
+
+      # Guarded logging -- safe to call if Lich.log is unavailable.
+      #
+      # @param text [String] log message
+      # @return [void]
+      def self.safe_log(text)
+        if defined?(Lich) && Lich.respond_to?(:log)
+          Lich.log(text)
+        else
+          $stderr.puts(text)
+        end
       end
 
       # Script names that are obsolete and should be deleted.
