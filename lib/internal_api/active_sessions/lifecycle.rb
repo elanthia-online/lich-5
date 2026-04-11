@@ -158,14 +158,12 @@ module Lich
         # @param connected [Boolean]
         # @return [void]
         def self.update_listener(host:, port:, connected:)
-          return unless ActiveSessions.enabled?
-
           @mutex.synchronize do
             @listener_host = host
             @listener_port = port
             @listener_connected = connected
           end
-          upsert_current_session
+          upsert_current_session if ActiveSessions.enabled?
         end
 
         # Clears detachable listener metadata for the current session.
@@ -175,8 +173,6 @@ module Lich
         #
         # @return [void]
         def self.clear_listener
-          return unless ActiveSessions.enabled?
-
           started = false
           @mutex.synchronize do
             @listener_host = nil
@@ -184,7 +180,7 @@ module Lich
             @listener_connected = false
             started = @started
           end
-          upsert_current_session if started
+          upsert_current_session if started && ActiveSessions.enabled?
         end
 
         # Returns the current process session payload.
