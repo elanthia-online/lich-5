@@ -106,7 +106,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle, 'listener state gua
         # to confirm the local state is correct for future upserts.)
         payload = lifecycle.current_payload
         expect(payload[:listener_port]).to eq(44021),
-          'heartbeat payload must include port saved during disabled window'
+                                           'heartbeat payload must include port saved during disabled window'
       end
     end
 
@@ -125,7 +125,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle, 'listener state gua
 
         payload = lifecycle.current_payload
         expect(payload[:listener_port]).to eq(44021),
-          'local state must be set before enabled? is evaluated'
+                                           'local state must be set before enabled? is evaluated'
       end
     end
 
@@ -266,7 +266,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle, 'listener state gua
       payload = lifecycle.current_payload
       expect(payload[:listener_port]).to be_nil
       expect(payload[:connected]).to eq(true),
-        'headless sessions with no listener report connected: true'
+                                     'headless sessions with no listener report connected: true'
     end
 
     it 'reflects listener_connected when a port is set' do
@@ -283,7 +283,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle, 'listener state gua
 
       lifecycle.clear_listener
       expect(lifecycle.current_payload[:connected]).to eq(true),
-        'after clear_listener, connected should derive from nil port (true)'
+                                                       'after clear_listener, connected should derive from nil port (true)'
     end
   end
 end
