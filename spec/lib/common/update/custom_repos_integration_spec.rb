@@ -27,7 +27,12 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
     end
 
     it 'rejects tracking in unregistered custom repo' do
-      expect { tracker.track_script('unknown/repo', 'foo.lic') }.not_to raise_error
+      allow(tracker).to receive(:respond)
+
+      tracker.track_script('unknown/repo', 'foo.lic')
+
+      expect(tracker).to have_received(:respond).with(/Unknown repository/)
+      expect(UserVars.tracked_scripts).to be_nil
     end
   end
 
@@ -88,9 +93,11 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
     end
 
     it 'returns nil when no collision (excluding :all repos from check)' do
+      # dr-scripts is the only :all mode repo in SCRIPT_REPOS. Excluding it
+      # leaves only :explicit repos (scripts, gs-scripts) with no user additions,
+      # so check_collision returns nil.
       result = tracker.check_collision('unique-script.lic', 'dr-scripts')
 
-      # scripts and gs-scripts are explicit with no user additions, so no collision
       expect(result).to be_nil
     end
 
@@ -211,7 +218,11 @@ RSpec.describe 'Custom repos integration with ScriptSync' do
     end
 
     it 'reports unknown for unregistered custom repo' do
-      expect { sync.sync_repo('unknown/repo') }.not_to raise_error
+      allow(sync).to receive(:respond)
+
+      sync.sync_repo('unknown/repo')
+
+      expect(sync).to have_received(:respond).with(/Unknown repository/)
     end
 
     it 'skips files with matching SHA' do
