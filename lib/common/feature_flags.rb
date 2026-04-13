@@ -24,6 +24,16 @@ module Lich
       # persisted value in `lich_settings` always overrides the default.
       DEFAULTS = {}.freeze
 
+      # Cached flag values are considered fresh for this many seconds.
+      # Feature flags change infrequently; this avoids repeated DB reads
+      # on every heartbeat cycle.
+      #
+      # @return [Integer]
+      CACHE_TTL_SECONDS = 60
+
+      @cache = {}
+      @cache_mutex = Mutex.new
+
       # Returns whether a feature flag is enabled.
       #
       # @param name [String, Symbol] the feature flag name
@@ -33,11 +43,14 @@ module Lich
       #   characters
       def self.enabled?(name)
         flag_name = validate_flag_name!(normalize_name(name))
+        cached = cache_read(flag_name)
+        return cached unless cached.nil?
+
         begin
           stored = read_flag(flag_name)
-          return default_for(flag_name) if stored.nil?
-
-          truthy?(stored)
+          resolved = stored.nil? ? default_for(flag_name) : truthy?(stored)
+          cache_write(flag_name, resolved)
+          resolved
         rescue StandardError => e
           log_failure('read', flag_name, e)
           default_for(flag_name)
@@ -58,11 +71,21 @@ module Lich
       def self.set(name, value)
         flag_name = validate_flag_name!(normalize_name(name))
         begin
-          write_flag(flag_name, value)
+          result = write_flag(flag_name, value)
+          cache_invalidate(flag_name) if result
+          result
         rescue StandardError => e
           log_failure('write', flag_name, e)
           false
         end
+      end
+
+      # Clears all cached feature flag values, forcing the next read to
+      # hit the database.
+      #
+      # @return [void]
+      def self.clear_cache!
+        @cache_mutex.synchronize { @cache.clear }
       end
 
       # Normalizes a feature flag identifier before validation.
@@ -153,6 +176,43 @@ module Lich
         Lich.db
       end
       private_class_method :fetch_db
+
+      # Returns the cached boolean value for a flag, or nil if the cache
+      # entry is missing or expired.
+      #
+      # @param flag_name [String]
+      # @return [Boolean, nil]
+      def self.cache_read(flag_name)
+        @cache_mutex.synchronize do
+          entry = @cache[flag_name]
+          return nil unless entry
+          return nil if Time.now.to_f - entry[:at] > CACHE_TTL_SECONDS
+          entry[:value]
+        end
+      end
+      private_class_method :cache_read
+
+      # Stores a resolved flag value in the cache.
+      #
+      # @param flag_name [String]
+      # @param value [Boolean]
+      # @return [void]
+      def self.cache_write(flag_name, value)
+        @cache_mutex.synchronize do
+          @cache[flag_name] = { value: value, at: Time.now.to_f }
+        end
+      end
+      private_class_method :cache_write
+
+      # Removes a single flag from the cache, forcing the next read to
+      # hit the database.
+      #
+      # @param flag_name [String]
+      # @return [void]
+      def self.cache_invalidate(flag_name)
+        @cache_mutex.synchronize { @cache.delete(flag_name) }
+      end
+      private_class_method :cache_invalidate
 
       # Logs a read or write failure without raising a second error.
       #
