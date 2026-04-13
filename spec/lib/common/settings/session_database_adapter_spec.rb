@@ -55,6 +55,35 @@ RSpec.describe Lich::Common::SessionDatabaseAdapter do
       row = sqlite_db.get_first_row("SELECT name FROM sqlite_master WHERE type='table' AND name='session_summary_state';")
       expect(row['name']).to eq('session_summary_state')
     end
+
+    it 'sets busy_timeout on self-created connections' do
+      adapter_dir = Dir.mktmpdir('adapter-bt-spec')
+      begin
+        # Create schema so adapter can operate
+        setup_db = SQLite3::Database.new(File.join(adapter_dir, 'lich.db3'))
+        create_session_summary_schema!(setup_db)
+        setup_db.close
+
+        adapter = described_class.new(data_dir: adapter_dir)
+        # Access the internal connection to verify busy_timeout via PRAGMA
+        internal_db = adapter.instance_variable_get(:@db)
+        timeout = internal_db.get_first_value('PRAGMA busy_timeout;')
+        expect(timeout.to_i).to eq(3000)
+      ensure
+        internal_db&.close
+        FileUtils.remove_entry(adapter_dir, true)
+      end
+    end
+
+    it 'does not override busy_timeout on injected connections' do
+      # When a caller injects their own db handle, the adapter should not
+      # modify its configuration.
+      sqlite_db.busy_timeout = 500
+      described_class.new(db: sqlite_db)
+
+      timeout = sqlite_db.get_first_value('PRAGMA busy_timeout;')
+      expect(timeout.to_i).to eq(500)
+    end
   end
 
   describe '#upsert_session' do
