@@ -16,30 +16,48 @@ rescue LoadError
   return
 end
 
-# Load the production Lich module so Lich.db and Lich.init_db are available.
-# We need the real implementation, not the spec_helper mock.
+# Load the production Lich module so Lich.init_db is available.
+# This permanently redefines Lich.db, so we restore the mock immediately
+# below and swap in the real implementation per-example via before/after.
 require_relative '../../../lib/lich'
+
+# Immediately restore the mock Lich.db so other spec files loaded after this
+# one continue to see MockDB.  Our before(:each) swaps in the real SQLite
+# connection for each example in this group only.
+Lich.define_singleton_method(:db) { @db ||= Lich::MockDB.new }
 
 RSpec.describe 'Lich.db SQLite configuration' do
   let(:tmpdir) { Dir.mktmpdir('lich_db_spec') }
 
+  # Hold the real SQLite handle so before/after can manage it without relying
+  # on class variables (which cause "class variable access from toplevel"
+  # errors inside define_singleton_method blocks in Ruby 3.4+).
+  let(:real_db) do
+    db = SQLite3::Database.new("#{tmpdir}/lich.db3")
+    db.busy_timeout = 3000
+    db
+  end
+
   before do
-    # Point DATA_DIR at our temp directory and reset the cached DB handle
+    # Point DATA_DIR at our temp directory
     stub_const('DATA_DIR', tmpdir)
-    Lich.class_variable_set(:@@lich_db, nil) if Lich.class_variable_defined?(:@@lich_db)
+
+    # Swap Lich.db to return the real SQLite connection for this example
+    db_handle = real_db
+    Lich.define_singleton_method(:db) { db_handle }
   end
 
   after do
-    # Close the DB handle before removing the temp directory
-    if Lich.class_variable_defined?(:@@lich_db) && Lich.class_variable_get(:@@lich_db)
-      begin
-        Lich.class_variable_get(:@@lich_db).close
-      rescue StandardError
-        nil
-      end
+    # Close the real handle
+    begin
+      real_db.close unless real_db.closed?
+    rescue StandardError
+      nil
     end
-    Lich.class_variable_set(:@@lich_db, nil) if Lich.class_variable_defined?(:@@lich_db)
     FileUtils.remove_entry(tmpdir, true)
+
+    # Restore the mock so other specs are unaffected
+    Lich.define_singleton_method(:db) { @db ||= Lich::MockDB.new }
   end
 
   describe 'busy_timeout' do

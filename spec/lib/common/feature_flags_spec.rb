@@ -3,16 +3,26 @@
 require_relative '../../spec_helper'
 require_relative '../../../lib/common/feature_flags'
 
-# Ensure SQLite3::BusyException is available for specs even without the gem
+# Ensure SQLite3 exception classes are available for specs even without the gem.
+# The real sqlite3 gem defines: SQLite3::Exception < StandardError, then
+# BusyException and SQLException both inherit from SQLite3::Exception.
+# Matching that hierarchy avoids superclass-mismatch errors when both stubs
+# and the real gem are loaded in the same RSpec run.
+unless defined?(SQLite3::Exception)
+  module SQLite3
+    class Exception < StandardError; end
+  end
+end
+
 unless defined?(SQLite3::BusyException)
   module SQLite3
-    class BusyException < StandardError; end
+    class BusyException < SQLite3::Exception; end
   end
 end
 
 unless defined?(SQLite3::SQLException)
   module SQLite3
-    class SQLException < StandardError; end
+    class SQLException < SQLite3::Exception; end
   end
 end
 
@@ -209,8 +219,7 @@ RSpec.describe Lich::Common::FeatureFlags do
     end
 
     it 'all threads eventually get a result with intermittent BusyExceptions' do
-      call_count = Concurrent::AtomicFixnum.new(0) rescue 0
-      # Use a simple thread-safe counter via Mutex if Concurrent is unavailable
+      # Use a simple thread-safe counter via Mutex
       mutex = Mutex.new
       counter = 0
 
