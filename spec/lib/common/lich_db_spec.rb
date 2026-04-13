@@ -141,7 +141,7 @@ RSpec.describe 'Lich.db SQLite configuration' do
                 ["thread_#{i}_key_#{j}", "value_#{j}"]
               )
             end
-          rescue SQLite3::BusyException => e
+          rescue StandardError => e
             mutex.synchronize { errors << e }
           ensure
             conn.close
@@ -150,7 +150,7 @@ RSpec.describe 'Lich.db SQLite configuration' do
       end
 
       threads.each(&:join)
-      expect(errors).to be_empty, "Expected no BusyException but got: #{errors.map(&:message)}"
+      expect(errors).to be_empty, "Expected no thread errors but got: #{errors.map(&:message)}"
     end
 
     it 'fails without busy_timeout under contention' do
