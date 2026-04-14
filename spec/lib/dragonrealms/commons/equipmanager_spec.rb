@@ -945,10 +945,172 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
       allow(DRC).to receive(:left_hand).and_return(nil)
       allow(DRC).to receive(:right_hand).and_return(nil)
 
+      # Noun check: sword not in hand (noun verification runs before case/when)
+      allow(DRC).to receive(:left_hand_noun).and_return(nil)
+      allow(DRC).to receive(:right_hand_noun).and_return(nil)
+
       # bput returns a failure; recovery does nothing; hands stay empty
       allow(DRC).to receive(:bput).and_return("You aren't wearing that.")
 
       expect(em.send(:get_item_helper, item, :worn)).to be false
+    end
+  end
+
+  # ─── item_noun_in_hands? ─────────────────────────────────────────────
+
+  describe '#item_noun_in_hands?' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    it 'returns true when noun matches right hand' do
+      allow(DRC).to receive(:left_hand_noun).and_return(nil)
+      allow(DRC).to receive(:right_hand_noun).and_return('foil')
+      expect(em.send(:item_noun_in_hands?, 'foil')).to be true
+    end
+
+    it 'returns true when noun matches left hand' do
+      allow(DRC).to receive(:left_hand_noun).and_return('foil')
+      allow(DRC).to receive(:right_hand_noun).and_return(nil)
+      expect(em.send(:item_noun_in_hands?, 'foil')).to be true
+    end
+
+    it 'returns false when noun is not in either hand' do
+      allow(DRC).to receive(:left_hand_noun).and_return(nil)
+      allow(DRC).to receive(:right_hand_noun).and_return('sword')
+      expect(em.send(:item_noun_in_hands?, 'foil')).to be false
+    end
+
+    it 'returns false when both hands are empty' do
+      allow(DRC).to receive(:left_hand_noun).and_return(nil)
+      allow(DRC).to receive(:right_hand_noun).and_return(nil)
+      expect(em.send(:item_noun_in_hands?, 'foil')).to be false
+    end
+  end
+
+  # ─── get_item_helper XML noun verification (PR #1286 approach) ──────
+
+  describe '#get_item_helper XML noun verification' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+    let(:item) do
+      double('item',
+             short_name: 'foil', name: 'foil',
+             short_regex: /\bfoil/i,
+             transform_verb: nil, transform_text: nil, worn: false)
+    end
+
+    before do
+      allow(em).to receive(:waitrt?)
+      allow(em).to receive(:pause)
+    end
+
+    context 'when bput false-positives on a combat message' do
+      it 'returns true if the item arrived in hand despite bput returning a failure match' do
+        # Scenario: "You get the feeling..." matches /^You get/ in bput,
+        # bput returns "You get", which matches failure /^You get$/.
+        # But the game DID process "get my foil" and the item is in hand.
+        allow(DRC).to receive(:left_hand).and_return(nil)
+        allow(DRC).to receive(:right_hand).and_return(nil)
+        allow(DRC).to receive(:bput).and_return('You get')
+
+        # XML noun check detects the foil arrived
+        allow(DRC).to receive(:left_hand_noun).and_return(nil)
+        allow(DRC).to receive(:right_hand_noun).and_return('foil')
+
+        expect(em.send(:get_item_helper, item, :stowed)).to be true
+      end
+
+      it 'does not call failure_recovery when noun check succeeds' do
+        allow(DRC).to receive(:left_hand).and_return(nil)
+        allow(DRC).to receive(:right_hand).and_return(nil)
+        allow(DRC).to receive(:bput).and_return('You get')
+
+        allow(DRC).to receive(:left_hand_noun).and_return(nil)
+        allow(DRC).to receive(:right_hand_noun).and_return('foil')
+
+        # The stow (failure_recovery) must NOT fire
+        expect(DRC).not_to receive(:bput).with('stow my foil', any_args)
+
+        em.send(:get_item_helper, item, :stowed)
+      end
+    end
+
+    context 'when bput false-positives and item is NOT in hand' do
+      it 'falls through to failure recovery' do
+        allow(DRC).to receive(:left_hand).and_return(nil)
+        allow(DRC).to receive(:right_hand).and_return(nil)
+        allow(DRC).to receive(:left_hand_noun).and_return(nil)
+        allow(DRC).to receive(:right_hand_noun).and_return(nil)
+
+        # bput returns false-positive "You get"
+        allow(DRC).to receive(:bput)
+          .with('get my foil', any_args)
+          .and_return('You get')
+
+        # Failure recovery fires: stow command
+        expect(DRC).to receive(:bput)
+          .with('stow my foil', 'You put', 'But that is already in')
+          .and_return('Stow what?')
+
+        em.send(:get_item_helper, item, :stowed)
+      end
+    end
+
+    context 'when item arrives after polling delay (XML feed lag)' do
+      it 'returns true once noun appears in hand' do
+        allow(DRC).to receive(:left_hand).and_return(nil)
+        allow(DRC).to receive(:right_hand).and_return(nil)
+        allow(DRC).to receive(:bput).and_return('You get a steel foil')
+
+        allow(DRC).to receive(:left_hand_noun).and_return(nil)
+        # Noun not present on first 3 checks, then appears
+        allow(DRC).to receive(:right_hand_noun).and_return(nil, nil, nil, 'foil')
+
+        expect(em.send(:get_item_helper, item, :stowed)).to be true
+      end
+    end
+
+    context 'with :transform type' do
+      it 'skips noun verification and uses snapshot comparison' do
+        transform_item = double('item',
+                                short_name: 'orb', name: 'orb',
+                                short_regex: /\borb/i,
+                                transform_verb: 'twist',
+                                transform_text: 'The orb twists into armor',
+                                worn: false)
+
+        # Snapshot detects hand change (orb -> armor)
+        allow(DRC).to receive(:left_hand).and_return(nil)
+        allow(DRC).to receive(:right_hand).and_return('orb', 'armor')
+
+        allow(DRC).to receive(:bput)
+          .with('twist my orb', any_args)
+          .and_return('The orb twists into armor')
+
+        # Noun check would fail (orb != armor), but transform skips it
+        allow(DRC).to receive(:left_hand_noun).and_return(nil)
+        allow(DRC).to receive(:right_hand_noun).and_return('armor')
+
+        expect(em.send(:get_item_helper, transform_item, :transform)).to be true
+      end
+    end
+
+    context 'with :worn type (remove)' do
+      it 'returns true via noun check when remove succeeds' do
+        worn_item = double('item',
+                           short_name: 'gloves', name: 'gloves',
+                           short_regex: /\bgloves/i,
+                           transform_verb: nil, transform_text: nil, worn: true)
+
+        allow(DRC).to receive(:left_hand).and_return(nil)
+        allow(DRC).to receive(:right_hand).and_return(nil)
+        allow(DRC).to receive(:bput).and_return('You remove a pair of gloves')
+
+        allow(DRC).to receive(:left_hand_noun).and_return(nil)
+        allow(DRC).to receive(:right_hand_noun).and_return('gloves')
+
+        expect(em.send(:get_item_helper, worn_item, :worn)).to be true
+      end
     end
   end
 

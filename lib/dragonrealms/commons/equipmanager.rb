@@ -605,6 +605,26 @@ module Lich
           return false
         end
 
+        # For non-transform types, verify success via the XML game-object
+        # feed rather than trusting bput's text match. This prevents false
+        # positives where an unrelated game message (e.g., "You get the
+        # feeling...") matches /^You get/ in GET_ITEM_SUCCESS_PATTERNS,
+        # causing bput to return "You get" which then triggers the failure
+        # recovery proc and stows the item that was just retrieved.
+        # See elanthia-online/lich-5#1286 for the same approach in
+        # DRCI.get_item_unsafe.
+        # Transform is excluded because the item changes identity (e.g.,
+        # orb -> armor) so noun verification against the original item
+        # would fail.
+        if type != :transform
+          noun = DRC.get_noun(item.short_name)
+          10.times do
+            break if item_noun_in_hands?(noun)
+            pause 0.05
+          end
+          return true if item_noun_in_hands?(noun)
+        end
+
         case response
         when 'You are already holding'
           return true
@@ -626,6 +646,21 @@ module Lich
           end
           return true
         end
+      end
+
+      # Checks whether the given noun is in either hand via GameObj XML feed.
+      #
+      # Uses +DRC.left_hand_noun+ / +DRC.right_hand_noun+ which read
+      # +GameObj.noun+ directly, bypassing +fix_dr_bullshit+ name
+      # truncation that can drop interior words from multi-word item
+      # names (e.g., "steel foil with a sandalwood hilt" becomes
+      # "steel hilt", losing the "foil" noun entirely).
+      #
+      # @param noun [String] item noun to look for (e.g., "foil", "sword")
+      # @return [Boolean] true if noun matches either hand's GameObj noun
+      # @api private
+      def item_noun_in_hands?(noun)
+        [DRC.left_hand_noun, DRC.right_hand_noun].compact.include?(noun)
       end
 
       # Turns a multi-form weapon to a different weapon form (e.g., Damaris weapons).
