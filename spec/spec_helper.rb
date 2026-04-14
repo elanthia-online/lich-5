@@ -379,6 +379,18 @@ RSpec.shared_context 'mock GTK hardening environment' do
 
     widget_class = Class.new do
       include GLib::Instantiatable
+
+      def destroy
+        return self if destroyed?
+
+        @destroyed = true
+        emit('destroy')
+        self
+      end
+
+      def destroyed?
+        !!@destroyed
+      end
     end
     gtk_mod.const_set(:Widget, widget_class)
     Object.const_set(:Gtk, gtk_mod)

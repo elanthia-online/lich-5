@@ -45,6 +45,47 @@ module Lich
       with_gtk_registry_lock { gtk_signal_handlers.delete(receiver) }
     end
 
+    # Clears retained GTK callback registries.
+    #
+    # This is used by core shutdown paths to avoid leaving Ruby-side callback
+    # references alive until interpreter finalization.
+    #
+    # @return [void]
+    def self.clear_gtk_retention_registries
+      with_gtk_registry_lock do
+        gtk_signal_handlers.clear
+        gtk_timeout_callbacks.clear
+        gtk_idle_callbacks.clear
+      end
+    end
+
+    # Performs explicit GTK teardown before Ruby process exit.
+    #
+    # ruby-gnome will otherwise release surviving widget wrappers during Ruby
+    # finalization, which can dispose native GTK objects in an unsafe order.
+    # Core-owned shutdown paths should call this helper on the GTK thread so
+    # widgets are destroyed deterministically before interpreter cleanup.
+    #
+    # @return [Object, nil] GTK main quit result when available
+    def self.shutdown_gtk!
+      retained_receivers = with_gtk_registry_lock { gtk_signal_handlers.keys.dup }
+
+      retained_receivers.each do |receiver|
+        next unless receiver.respond_to?(:destroy)
+        next if receiver.respond_to?(:destroyed?) && receiver.destroyed?
+
+        begin
+          receiver.destroy
+        rescue StandardError => e
+          Lich.log "warning: Failed to destroy GTK receiver during shutdown: #{e.class}: #{e.message}"
+        end
+      end
+
+      clear_gtk_retention_registries
+
+      Gtk.lich_main_quit if defined?(Gtk) && Gtk.respond_to?(:lich_main_quit)
+    end
+
     # Temporarily allows a core-owned Gtk.main_quit call to bypass script guards.
     #
     # @yield Runs a core shutdown operation that must reach the underlying GTK API
