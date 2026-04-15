@@ -29,7 +29,7 @@ module Lich
       def self.delete(key)
         @@matchers.delete key
         @@counts.delete key
-        @@flags.delete key    
+        @@flags.delete key
       end
 
       def self.flags
