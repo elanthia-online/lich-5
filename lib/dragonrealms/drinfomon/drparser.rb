@@ -76,6 +76,7 @@ module Lich
           regexes.each do |regex|
             if (matches = server_string.match(regex))
               Flags.flags[key] = matches
+              Flags.counts[key] = Flags.count(key) + 1
               break
             end
           end
