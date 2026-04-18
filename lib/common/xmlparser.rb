@@ -758,9 +758,11 @@ module Lich
               end
             elsif @active_ids.include?('room players')
               if @active_tags.include?('a')
-                @pc = GameObj.new_pc(@obj_exist, @obj_noun, "#{@player_title}#{text_string}", @player_status)
-                @player_status = nil
-                @arrival_pcs.push(@pc.noun) if (defined?(Lich::Claim) && Lich::Claim::Lock.owned?)
+                if @obj_exist.to_s.start_with?('-')
+                  @pc = GameObj.new_pc(@obj_exist, @obj_noun, "#{@player_title}#{text_string}", @player_status)
+                  @player_status = nil
+                  @arrival_pcs.push(@pc.noun) if (defined?(Lich::Claim) && Lich::Claim::Lock.owned?)
+                end
               else
                 if @game =~ /^DR/
                   GameObj.clear_pcs
