@@ -192,8 +192,10 @@ module Lich
             when Pattern::Also_Here_Arrival
               return :noop unless Lich::Claim::Lock.locked?
               line.scan(%r{<a exist=(?:'|")(?<id>.*?)(?:'|") noun=(?:'|")(?<noun>.*?)(?:'|")>(?<name>.*?)</a>}).each { |player_found|
-                echo "player_found: #{player_found.inspect}"
-                XMLData.arrival_pcs.push(player_found[1]) unless (XMLData.arrival_pcs.include?(player_found[1]) || !player_found[0].to_s.start_with?('-'))
+                next unless player_found[0].to_s.start_with?('-')
+                next if XMLData.arrival_pcs.include?(player_found[1])
+
+                XMLData.arrival_pcs.push(player_found[1])
               }
               :ok
             when Pattern::StowListOutputStart
