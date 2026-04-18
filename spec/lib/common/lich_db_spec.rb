@@ -153,75 +153,37 @@ RSpec.describe 'Lich.db SQLite configuration' do
       expect(errors).to be_empty, "Expected no thread errors but got: #{errors.map(&:message)}"
     end
 
-    it 'fails without busy_timeout under contention' do
+    it 'raises immediately without busy_timeout when a write lock is held' do
       db_path = "#{tmpdir}/lich_no_timeout.db3"
 
-      # Set up schema -- use DELETE journal mode to maximize lock contention
       setup_db = SQLite3::Database.new(db_path)
       setup_db.execute('PRAGMA journal_mode=DELETE;')
       setup_db.execute('CREATE TABLE IF NOT EXISTS lich_settings (name TEXT NOT NULL, value TEXT, PRIMARY KEY(name));')
       setup_db.close
 
-      busy_count = 0
-      mutex = Mutex.new
-      barrier = Queue.new
+      locker = SQLite3::Database.new(db_path)
+      contender = SQLite3::Database.new(db_path)
 
-      threads = 2.times.map do |i|
-        Thread.new do
-          conn = SQLite3::Database.new(db_path)
-          # No busy_timeout -- immediate failure on lock
-          barrier << true
-          sleep 0.01 until barrier.size >= 2
+      locker.execute('BEGIN EXCLUSIVE TRANSACTION;')
+      locker.execute(
+        'INSERT OR REPLACE INTO lich_settings(name, value) VALUES(?, ?);',
+        ['locked_key', 'locked_value']
+      )
 
-          begin
-            200.times do |j|
-              conn.execute(
-                'INSERT OR REPLACE INTO lich_settings(name, value) VALUES(?, ?);',
-                ["thread_#{i}_key_#{j}", "value_#{j}"]
-              )
-            end
-          rescue SQLite3::BusyException
-            mutex.synchronize { busy_count += 1 }
-          ensure
-            conn.close
-          end
-        end
-      end
-
-      threads.each(&:join)
-      # Without busy_timeout + DELETE mode, contention is very likely
-      # but not guaranteed. We verify the test infrastructure works --
-      # the important assertion is the test above that proves busy_timeout
-      # prevents failures.
-      expect(busy_count).to be >= 0
-    end
-  end
-
-  describe 'Lich.db integration' do
-    # Verify that the production Lich.db method applies busy_timeout.
-    # We test this by temporarily overriding Lich.db, calling it, and
-    # checking the resulting connection configuration.
-    it 'applies busy_timeout = 3000 to the connection' do
-      db_dir = tmpdir
-      original_db_method = Lich.method(:db)
-
-      # Temporarily override Lich.db to create a real SQLite connection
-      # in our temp directory, matching the production pattern.
-      Lich.define_singleton_method(:db) do
-        @test_lich_db ||= begin
-          db = SQLite3::Database.new("#{db_dir}/lich.db3")
-          db.busy_timeout = 3000
-          db
-        end
-      end
-
-      timeout = Lich.db.get_first_value('PRAGMA busy_timeout;')
-      expect(timeout.to_i).to eq(3000)
+      expect do
+        contender.execute(
+          'INSERT OR REPLACE INTO lich_settings(name, value) VALUES(?, ?);',
+          ['contender_key', 'contender_value']
+        )
+      end.to raise_error(SQLite3::BusyException)
     ensure
-      Lich.db.close rescue nil
-      Lich.instance_variable_set(:@test_lich_db, nil)
-      # Restore original Lich.db
-      Lich.define_singleton_method(:db, original_db_method)
+      begin
+        locker&.execute('ROLLBACK;')
+      rescue StandardError
+        nil
+      end
+      contender&.close
+      locker&.close
     end
   end
 end
