@@ -89,5 +89,4 @@ RSpec.describe Lich::Common::FeatureFlags do
       expect(Lich).to have_received(:log).with(/FeatureFlags write failed/)
     end
   end
-
 end
