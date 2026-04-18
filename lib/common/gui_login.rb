@@ -492,15 +492,8 @@ module Lich
       window_settings = Lich::Common::GUI::WindowSettings.load(DATA_DIR)
       Lich::Common::GUI::WindowSettings.apply_to_window(@window, window_settings)
 
-      @window.signal_connect('delete_event') {
-        # Save window geometry before destruction
-        save_window_geometry
-
-        # Clean up cross-tab communication
-        @tab_communicator.clear_callbacks if @tab_communicator
-        @window.destroy unless @window.destroyed?
-        @done = true
-      }
+      @window.signal_connect('delete_event') { handle_window_delete_event }
+      @window.signal_connect('destroy') { handle_window_destroy }
 
       # Apply initial theme to window
       if @theme_state
@@ -546,6 +539,33 @@ module Lich
         height: geometry[:height],
         position: geometry[:position]
       )
+    end
+
+    # Handles a user-initiated window close request.
+    #
+    # GTK expects `delete_event` handlers to either veto closure or allow the
+    # default destroy path to proceed. We save launcher state here and let GTK
+    # perform the actual widget destruction so shutdown does not become
+    # re-entrant inside the close signal callback.
+    #
+    # @return [Boolean] false to allow GTK to destroy the window normally
+    def handle_window_delete_event
+      save_window_geometry
+      false
+    end
+
+    # Finalizes launcher shutdown state once GTK has destroyed the main window.
+    #
+    # This callback is intentionally idempotent because both user-driven closes
+    # and programmatic single-launch shutdown flow through the same destroy path.
+    #
+    # @return [void]
+    def handle_window_destroy
+      return if @window_destroyed
+
+      @window_destroyed = true
+      @tab_communicator.clear_callbacks if @tab_communicator
+      @done = true
     end
 
     # Applies button style for light mode
@@ -620,10 +640,7 @@ module Lich
         # Default/single-launch path: used when persistent mode is disabled OR
         # when launch originates from manual login.
         @launch_data = launch_data
-        Gtk.queue {
-          @window.destroy unless @window.destroyed?
-          @done = true
-        }
+        close_launcher_window
       end
     end
 
@@ -668,11 +685,48 @@ module Lich
     # @return [Array, nil] Launch data if available
     def return_launch_data_or_exit
       if @launch_data.nil?
-        Gtk.queue { Gtk.main_quit }
+        shutdown_gtk_before_exit
         exit
       end
 
       @launch_data
+    end
+
+    # Closes the launcher window through GTK's normal destroy path.
+    #
+    # Single-launch mode uses the same close sequence as a user clicking the
+    # window close button so all launcher cleanup remains centralized.
+    #
+    # @return [void]
+    def close_launcher_window
+      Gtk.queue do
+        save_window_geometry unless @window.nil? || (@window.respond_to?(:destroyed?) && @window.destroyed?)
+        @window.destroy unless @window.nil? || (@window.respond_to?(:destroyed?) && @window.destroyed?)
+      end
+    end
+
+    # Runs core GTK teardown and waits for the queued shutdown work to finish.
+    #
+    # The launcher exits its Ruby process after the GUI closes. Waiting for the
+    # queued GTK teardown prevents Ruby finalizers from disposing surviving GTK
+    # wrappers after the process has already started interpreter cleanup.
+    #
+    # @return [void]
+    def shutdown_gtk_before_exit
+      shutdown_complete = Queue.new
+      queued = Gtk.queue do
+        begin
+          Lich::Common.shutdown_gtk!
+        ensure
+          shutdown_complete << true
+        end
+      end
+
+      if queued
+        shutdown_complete.pop
+      else
+        Lich::Common.clear_gtk_retention_registries
+      end
     end
   end
 end
