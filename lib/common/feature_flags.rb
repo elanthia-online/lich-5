@@ -106,23 +106,6 @@ module Lich
       end
       private_class_method :default_for
 
-      # Retries a block on transient SQLite busy locks.
-      #
-      # @param max_attempts [Integer]
-      # @return [Object] the block's return value
-      def self.with_retry(max_attempts = 3)
-        attempts = 0
-        begin
-          attempts += 1
-          yield
-        rescue SQLite3::BusyException
-          raise if attempts >= max_attempts
-          sleep(0.05 * attempts)
-          retry
-        end
-      end
-      private_class_method :with_retry
-
       # Reads a persisted feature flag value from `lich_settings`.
       #
       # @param flag_name [String]
@@ -131,9 +114,7 @@ module Lich
         db = fetch_db
         return nil unless db
 
-        with_retry do
-          db.get_first_value('SELECT value FROM lich_settings WHERE name = ?;', setting_key(flag_name))
-        end
+        db.get_first_value('SELECT value FROM lich_settings WHERE name = ?;', setting_key(flag_name))
       end
       private_class_method :read_flag
 
@@ -146,12 +127,10 @@ module Lich
         db = fetch_db
         return false unless db
 
-        with_retry do
-          db.execute(
-            'INSERT OR REPLACE INTO lich_settings(name, value) VALUES(?, ?);',
-            [setting_key(flag_name), value.to_s]
-          )
-        end
+        db.execute(
+          'INSERT OR REPLACE INTO lich_settings(name, value) VALUES(?, ?);',
+          [setting_key(flag_name), value.to_s]
+        )
         true
       end
       private_class_method :write_flag
