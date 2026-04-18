@@ -301,6 +301,11 @@ RSpec.shared_context 'mock GTK hardening environment' do
     glib_mod = Module.new
     base_instantiatable = Module.new do
       def signal_connect(signal, *_args, &block)
+        if signal.to_s != 'destroy' && @signal_connect_failures_remaining.to_i.positive?
+          @signal_connect_failures_remaining -= 1
+          raise 'signal registration failed'
+        end
+
         if signal.to_s == 'destroy' && @destroy_connect_failures_remaining.to_i.positive?
           @destroy_connect_failures_remaining -= 1
           raise 'destroy hook failed'
@@ -313,6 +318,10 @@ RSpec.shared_context 'mock GTK hardening environment' do
 
       def fail_next_destroy_connection!
         @destroy_connect_failures_remaining = @destroy_connect_failures_remaining.to_i + 1
+      end
+
+      def fail_next_signal_connection!
+        @signal_connect_failures_remaining = @signal_connect_failures_remaining.to_i + 1
       end
 
       def signal_blocks(signal)

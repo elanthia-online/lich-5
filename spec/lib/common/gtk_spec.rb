@@ -80,6 +80,15 @@ RSpec.describe 'Lich::Common GTK hardening' do
     expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
   end
 
+  it 'rolls back retained signal handlers if signal registration fails after retention' do
+    widget = Gtk::Widget.new
+    handler = proc { :clicked }
+    widget.fail_next_signal_connection!
+
+    expect { widget.signal_connect('clicked', &handler) }.to raise_error('signal registration failed')
+    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
+  end
+
   it 'retains timeout callbacks until they stop repeating' do
     count = 0
     callback_id = GLib::Timeout.add(50) do

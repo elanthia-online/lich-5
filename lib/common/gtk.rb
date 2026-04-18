@@ -157,7 +157,17 @@ module Lich
               end
             end
 
-            super(signal, *args, &block)
+            begin
+              super(signal, *args, &block)
+            rescue StandardError
+              Lich::Common.with_gtk_registry_lock do
+                entry[:handlers].delete(cleanup)
+                entry[:handlers].delete(block)
+                entry[:cleanup_installed] = false unless entry[:handlers].include?(cleanup)
+                Lich::Common.gtk_signal_handlers.delete(receiver) if entry[:handlers].empty?
+              end
+              raise
+            end
           end
         end
 
