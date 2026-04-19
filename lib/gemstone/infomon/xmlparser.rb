@@ -316,7 +316,6 @@ module Lich
             /chuckles wryly as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> falls, "Letta, Leth, Latoth.../,
             /wheezes, an incredulous look on <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> face as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> falls/,
             /screams as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> collapses, "Granoth!  Tal issar leti!/,
-            /falls to the ground/,
             /body and rises into the heavens/,
           )
           NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?(?:(?:an?|some|the) )?<a exist="(?<npc_id>[^"]+)" noun="[^"]+">[^<]+<\/a>(?:<popBold\/>)?(?:'s)? #{NpcDeathPostfix}[\.!"]\r?\n?$/
