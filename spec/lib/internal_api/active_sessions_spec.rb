@@ -135,4 +135,68 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
 
     expect(described_class.query_snapshot[:total]).to eq(1)
   end
+
+  it 'can register after the caller already admitted the feature gate' do
+    fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
+    fake_server = instance_double(
+      Lich::InternalAPI::ActiveSessions::Server,
+      start: true,
+      stop: nil
+    )
+
+    allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(fake_server)
+    allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
+    allow(fake_client).to receive(:ping).and_return(false, true)
+    allow(fake_client).to receive(:upsert).and_return(ok: true)
+    allow(fake_server).to receive(:auth_token).and_return('generated-token')
+
+    expect(described_class).not_to receive(:enabled?)
+
+    expect(described_class.register_session({ pid: 12_345 }, assume_enabled: true)).to be(true)
+  end
+
+  it 'can ensure service after the caller already admitted the feature gate' do
+    fake_server = instance_double(
+      Lich::InternalAPI::ActiveSessions::Server,
+      start: true,
+      stop: nil
+    )
+    fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
+
+    allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(fake_server)
+    allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
+    allow(fake_client).to receive(:ping).and_return(false, true)
+    allow(fake_server).to receive(:auth_token).and_return('generated-token')
+
+    expect(described_class).not_to receive(:enabled?)
+
+    expect(described_class.ensure_service!(assume_enabled: true)).to be(true)
+  end
+
+  it 'still honors the normal gate for callers that do not pass assume_enabled' do
+    allow(described_class).to receive(:enabled?).and_return(false)
+
+    expect(described_class.register_session({ pid: 12_345 })).to be(false)
+    expect(described_class.unregister_session(pid: 12_345)).to be(false)
+    expect(described_class.ensure_service!).to be(false)
+  end
+
+  it 'can unregister after the caller already admitted the feature gate' do
+    fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
+    fake_server = instance_double(
+      Lich::InternalAPI::ActiveSessions::Server,
+      start: true,
+      stop: nil
+    )
+
+    allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(fake_server)
+    allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
+    allow(fake_client).to receive(:ping).and_return(false, true)
+    allow(fake_client).to receive(:remove).and_return(ok: true)
+    allow(fake_server).to receive(:auth_token).and_return('generated-token')
+
+    expect(described_class).not_to receive(:enabled?)
+
+    expect(described_class.unregister_session(pid: 12_345, assume_enabled: true)).to be(true)
+  end
 end

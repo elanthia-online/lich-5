@@ -72,9 +72,11 @@ module Lich
       # The first process to win startup becomes the in-process server owner.
       # All later callers reuse the same endpoint through the client adapter.
       #
+      # @param assume_enabled [Boolean] when true, skip the nested feature-flag
+      #   check because the caller already admitted the current control flow
       # @return [Boolean] true when a healthy service is available
-      def self.ensure_service!
-        return false unless enabled?
+      def self.ensure_service!(assume_enabled: false)
+        return false unless assume_enabled || enabled?
 
         return true if service_available?
 
@@ -101,10 +103,12 @@ module Lich
       # Registers or updates a session record in the local service.
       #
       # @param payload [Hash] normalized session metadata
+      # @param assume_enabled [Boolean] when true, skip redundant nested
+      #   feature-flag checks for callers already inside an admitted lifecycle path
       # @return [Boolean] true when the service accepted the update
-      def self.register_session(payload)
-        return false unless enabled?
-        return false unless ensure_service!
+      def self.register_session(payload, assume_enabled: false)
+        return false unless assume_enabled || enabled?
+        return false unless ensure_service!(assume_enabled: assume_enabled)
 
         service_client&.upsert(payload)&.fetch(:ok, false) || false
       end
@@ -112,10 +116,12 @@ module Lich
       # Removes a session record by pid.
       #
       # @param pid [Integer]
+      # @param assume_enabled [Boolean] when true, skip redundant nested
+      #   feature-flag checks for callers already inside an admitted lifecycle path
       # @return [Boolean] true when the service accepted the removal request
-      def self.unregister_session(pid:)
-        return false unless enabled?
-        return false unless ensure_service!
+      def self.unregister_session(pid:, assume_enabled: false)
+        return false unless assume_enabled || enabled?
+        return false unless ensure_service!(assume_enabled: assume_enabled)
 
         service_client&.remove(pid)&.fetch(:ok, false) || false
       end
