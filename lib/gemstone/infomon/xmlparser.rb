@@ -207,7 +207,6 @@ module Lich
             /lets out a final agonized cry and dies/,
             /collapses to the ground, emits a final snarl, and dies/,
             /gurgles and collapses into the <a exist="[^"]+" noun="[^"]+">(?:large|small) puddle<\/a> on the (?:floor|ground)/,
-            /releases a groan of mingled ecstasy and relief as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> fades away/,
             /form sags to the floor, <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> reptilian head finally freed from <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> monstrous glaes form/,
             /slumps to the floor, exhales a sigh of relief, and begins to quickly decay away/,
             /exhales a sigh of relief and begins to quickly decay away/,
