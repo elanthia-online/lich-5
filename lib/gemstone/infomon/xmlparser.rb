@@ -18,7 +18,7 @@ module Lich
             /One last prolonged bovine moan escapes from the/,
             /The spectral form of the/,
             /All that remains of the/,
-            /The lights? in(?: an?|the)?/,
+            /The lights? in(?: (?:an?|the))?/,
             /With a final squeal the/,
             /The head in/,
             /The skeletal structure of(?: the)?/,
