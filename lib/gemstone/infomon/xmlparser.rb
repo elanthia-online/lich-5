@@ -129,7 +129,7 @@ module Lich
             /gives a last angry stare and falls to the ground dead/,
             /shudders violently as it dies/,
             /is a charred ashen figure of its former self lying upon the (?:floor|ground)/,
-            /rears up its head, then (?:falls to the ground and )?curls up into a ball, dead/,
+            /rears up its head, then (?:falls to the (?:floor|ground) and )?curls up into a ball, dead/,
             /rolls over on its back, emits a final screech and dies/,
             /arches its back in a tortured spasm and dies/,
             /shudders violently before scattering into a disorganized pile/,
