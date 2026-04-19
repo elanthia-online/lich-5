@@ -204,7 +204,7 @@ module Lich
             /screams <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> defiance skyward one last time and dies/,
             /twitches and dies/,
             /collapses in a red mess and dies/,
-            /lets out a final agonized cry and dies/,   
+            /lets out a final agonized cry and dies/,
             /collapses to the ground, emits a final snarl, and dies/,
             /gurgles and collapses into the <a exist="[^"]+" noun="[^"]+">(?:large|small) puddle<\/a> on the (?:floor|ground)/,
             /releases a groan of mingled ecstasy and relief as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> fades away/,
