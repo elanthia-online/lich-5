@@ -213,7 +213,7 @@ module Lich
             /disappear into the air as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> body crashes to the ground in a ball of feathers/,
             /crashes to the ground, sending searing flames in all directions/,
             /succumbs to <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> final blow/,
-            /implodes inward upon itself, leaving behind no support for (?:hi[ms]|her|s?he|its?) body or life.  The <pushBold\/>(?:(?:an?|some|the) )?<a.*?exist=["'](?<npc_id>\-?[0-9]+)["'].*?>.*?<\/a><popBold\/>(?:'s)? falls to the (?:floor|ground) in a lifeless mass of flesh and fractured bones/,
+            /implodes inward upon itself, leaving behind no support for (?:hi[ms]|her|s?he|its?) body or life.  The <pushBold\/>(?:(?:an?|some|the) )?<a.*?exist=["'](?:<npc_id>\-?[0-9]+)["'].*?>.*?<\/a><popBold\/>(?:'s)? falls to the (?:floor|ground) in a lifeless mass of flesh and fractured bones/,
             /flails wildly for a moment before (?:collapsing|going still), <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> appendages dropping lifelessly to the ground/,
             /collapses to the ground and with a last ripple, dies/,
             /opens <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> mouth wide and lets out a choked, shrill scream and <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> eyes cloud over to a solid milky white as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> (?:collapses and )?dies/,
