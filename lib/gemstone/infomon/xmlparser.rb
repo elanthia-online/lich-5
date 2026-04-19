@@ -176,7 +176,6 @@ module Lich
             /snarls <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> defiance one last time before going still/,
             /body convulses one last time before the stillness of death overtakes <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/>/,
             /falls to the ground and lies twitching for a moment before going still/,
-            /rears up its head, then falls to the floor and curls up into a ball, dead/,
             /kicks a leg one last time and lies still/,
             /falls to the floor as the stillness of death overtakes <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/>/,
             /cries out in pain one last time and expires/,
