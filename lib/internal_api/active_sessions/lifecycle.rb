@@ -136,7 +136,7 @@ module Lich
           thread&.kill if thread&.alive?
           if feature_enabled?
             @registration_mutex.synchronize do
-              ActiveSessions.unregister_session(pid: Process.pid, assume_enabled: true)
+              ActiveSessions.send(:unregister_session_admitted, pid: Process.pid)
               ActiveSessions.cleanup_discovery_if_last_session!
             end
           end
@@ -163,12 +163,14 @@ module Lich
         # @param connected [Boolean]
         # @return [void]
         def self.update_listener(host:, port:, connected:)
+          return unless started?
+
           @mutex.synchronize do
             @listener_host = host
             @listener_port = port
             @listener_connected = connected
           end
-          upsert_current_session if started?
+          upsert_current_session
         end
 
         # Clears detachable listener metadata for the current session.
@@ -178,14 +180,14 @@ module Lich
         #
         # @return [void]
         def self.clear_listener
-          started = false
+          return unless started?
+
           @mutex.synchronize do
             @listener_host = nil
             @listener_port = nil
             @listener_connected = false
-            started = @started
           end
-          upsert_current_session if started
+          upsert_current_session
         end
 
         # Returns the current process session payload.
@@ -211,7 +213,7 @@ module Lich
           @registration_mutex.synchronize do
             return unless registration_current?(generation)
 
-            ActiveSessions.register_session(payload, assume_enabled: true)
+            ActiveSessions.send(:register_session_admitted, payload)
           end
         end
         private_class_method :upsert_current_session

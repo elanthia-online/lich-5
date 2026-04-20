@@ -30,8 +30,8 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
     reset_active_sessions_lifecycle!(described_class)
 
     allow(Lich::InternalAPI::ActiveSessions).to receive(:enabled?).and_return(true)
-    allow(Lich::InternalAPI::ActiveSessions).to receive(:register_session).and_return(true)
-    allow(Lich::InternalAPI::ActiveSessions).to receive(:unregister_session).and_return(true)
+    allow(Lich::InternalAPI::ActiveSessions).to receive(:register_session_admitted).and_return(true)
+    allow(Lich::InternalAPI::ActiveSessions).to receive(:unregister_session_admitted).and_return(true)
   end
 
   describe '.start and .stop' do
@@ -40,7 +40,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
 
       expect(described_class.start(session_name: 'Tsetem', role: 'session')).to be(false)
       expect(described_class.stop).to be(false)
-      expect(Lich::InternalAPI::ActiveSessions).not_to have_received(:register_session)
+      expect(Lich::InternalAPI::ActiveSessions).not_to have_received(:register_session_admitted)
     end
 
     it 'registers once, heartbeats from the captured thread block, and unregisters on stop' do
@@ -68,12 +68,9 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
 
       captured_block.call
 
-      expect(Lich::InternalAPI::ActiveSessions).to have_received(:register_session).at_least(:once)
+      expect(Lich::InternalAPI::ActiveSessions).to have_received(:register_session_admitted).at_least(:once)
       expect(described_class.stop).to be(true)
-      expect(Lich::InternalAPI::ActiveSessions).to have_received(:unregister_session).with(
-        pid: Process.pid,
-        assume_enabled: true
-      )
+      expect(Lich::InternalAPI::ActiveSessions).to have_received(:unregister_session_admitted).with(pid: Process.pid)
     end
 
     it 'still stops cleanly when enabled? would raise after startup' do
@@ -94,10 +91,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
       allow(Lich::InternalAPI::ActiveSessions).to receive(:enabled?).and_raise('should not be called')
 
       expect(described_class.stop).to be(true)
-      expect(Lich::InternalAPI::ActiveSessions).to have_received(:unregister_session).with(
-        pid: Process.pid,
-        assume_enabled: true
-      )
+      expect(Lich::InternalAPI::ActiveSessions).to have_received(:unregister_session_admitted).with(pid: Process.pid)
     end
   end
 
@@ -110,25 +104,23 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
 
       described_class.update_listener(host: '127.0.0.1', port: 7000, connected: true)
 
-      expect(Lich::InternalAPI::ActiveSessions).to have_received(:register_session).with(
+      expect(Lich::InternalAPI::ActiveSessions).to have_received(:register_session_admitted).with(
         hash_including(
           session_name: 'Tsetem',
           listener_host: '127.0.0.1',
           listener_port: 7000,
           connected: true
-        ),
-        assume_enabled: true
+        )
       )
 
       described_class.clear_listener
 
-      expect(Lich::InternalAPI::ActiveSessions).to have_received(:register_session).with(
+      expect(Lich::InternalAPI::ActiveSessions).to have_received(:register_session_admitted).with(
         hash_including(
           listener_host: nil,
           listener_port: nil,
           connected: true
-        ),
-        assume_enabled: true
+        )
       )
     end
 
@@ -203,10 +195,36 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
       end
 
       expect { captured_block.call }.not_to raise_error
-      expect(Lich::InternalAPI::ActiveSessions).to have_received(:register_session).with(
-        hash_including(session_name: 'Tsetem'),
-        assume_enabled: true
+      expect(Lich::InternalAPI::ActiveSessions).to have_received(:register_session_admitted).with(
+        hash_including(session_name: 'Tsetem')
       ).at_least(:once)
+    end
+
+    it 'does not mutate listener state before lifecycle start' do
+      described_class.update_listener(host: '127.0.0.1', port: 7000, connected: true)
+
+      expect(described_class.current_payload).to include(
+        listener_host: nil,
+        listener_port: nil,
+        connected: true
+      )
+    end
+
+    it 'uses live service state for cleanup after startup admission when the flag later turns off' do
+      heartbeat_thread = instance_double(Thread)
+
+      allow(Thread).to receive(:new).and_return(heartbeat_thread)
+      allow(heartbeat_thread).to receive(:join).with(0.5)
+      allow(heartbeat_thread).to receive(:alive?).and_return(false)
+      allow(heartbeat_thread).to receive(:kill)
+      allow(Lich::InternalAPI::ActiveSessions).to receive(:cleanup_discovery_if_last_session!)
+
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 1)).to be(true)
+
+      allow(Lich::InternalAPI::ActiveSessions).to receive(:enabled?).and_return(false)
+
+      expect(described_class.stop).to be(true)
+      expect(Lich::InternalAPI::ActiveSessions).to have_received(:cleanup_discovery_if_last_session!)
     end
   end
 end

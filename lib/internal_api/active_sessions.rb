@@ -72,13 +72,27 @@ module Lich
       # The first process to win startup becomes the in-process server owner.
       # All later callers reuse the same endpoint through the client adapter.
       #
-      # @param assume_enabled [Boolean] when true, skip the nested feature-flag
-      #   check because the caller already admitted the current control flow
       # @return [Boolean] true when a healthy service is available
-      def self.ensure_service!(assume_enabled: false)
-        return false unless assume_enabled || enabled?
+      def self.ensure_service!
+        return false unless enabled?
 
+        ensure_service_internal!(allow_bootstrap: true)
+      end
+
+      # Returns whether an already-admitted call path can reach a healthy
+      # service without re-reading the feature flag on every hot-path call.
+      #
+      # This helper preserves the operational kill switch by requiring the
+      # real feature flag before bootstrapping a *new* owner while still
+      # allowing healthy existing owners to be reused by admitted callers.
+      #
+      # @param allow_bootstrap [Boolean] when false, never start a new server
+      # @return [Boolean]
+      def self.ensure_service_internal!(allow_bootstrap:)
         return true if service_available?
+        return false unless allow_bootstrap
+
+        return false unless enabled?
 
         @mutex.synchronize do
           return true if service_available?
@@ -99,32 +113,53 @@ module Lich
         Lich.log("warning: ActiveSessions service unavailable: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
         false
       end
+      private_class_method :ensure_service_internal!
 
       # Registers or updates a session record in the local service.
       #
       # @param payload [Hash] normalized session metadata
-      # @param assume_enabled [Boolean] when true, skip redundant nested
-      #   feature-flag checks for callers already inside an admitted lifecycle path
       # @return [Boolean] true when the service accepted the update
-      def self.register_session(payload, assume_enabled: false)
-        return false unless assume_enabled || enabled?
-        return false unless ensure_service!(assume_enabled: assume_enabled)
+      def self.register_session(payload)
+        return false unless enabled?
+        return false unless ensure_service!
 
         service_client&.upsert(payload)&.fetch(:ok, false) || false
       end
 
+      # Registers or updates a session record from a lifecycle path that
+      # already admitted the feature gate at startup.
+      #
+      # @param payload [Hash] normalized session metadata
+      # @return [Boolean] true when the service accepted the update
+      def self.register_session_admitted(payload)
+        return false unless ensure_service_internal!(allow_bootstrap: false)
+
+        service_client&.upsert(payload)&.fetch(:ok, false) || false
+      end
+      private_class_method :register_session_admitted
+
       # Removes a session record by pid.
       #
       # @param pid [Integer]
-      # @param assume_enabled [Boolean] when true, skip redundant nested
-      #   feature-flag checks for callers already inside an admitted lifecycle path
       # @return [Boolean] true when the service accepted the removal request
-      def self.unregister_session(pid:, assume_enabled: false)
-        return false unless assume_enabled || enabled?
-        return false unless ensure_service!(assume_enabled: assume_enabled)
+      def self.unregister_session(pid:)
+        return false unless enabled?
+        return false unless ensure_service!
 
         service_client&.remove(pid)&.fetch(:ok, false) || false
       end
+
+      # Removes a session record from a lifecycle path that already admitted
+      # the feature gate at startup.
+      #
+      # @param pid [Integer]
+      # @return [Boolean] true when the service accepted the removal request
+      def self.unregister_session_admitted(pid:)
+        return false unless ensure_service_internal!(allow_bootstrap: false)
+
+        service_client&.remove(pid)&.fetch(:ok, false) || false
+      end
+      private_class_method :unregister_session_admitted
 
       # Returns the current active sessions snapshot.
       #
@@ -303,7 +338,7 @@ module Lich
         discovery = load_discovery
         return unless discovery[:owner_pid].to_i == Process.pid
 
-        current_snapshot = snapshot
+        current_snapshot = query_snapshot
         return if current_snapshot[:error]
         return unless current_snapshot[:source] == 'ActiveSessionsAPI'
         return unless current_snapshot[:total].to_i.zero?
