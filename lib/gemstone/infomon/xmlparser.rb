@@ -85,7 +85,7 @@ module Lich
             /totters for a moment and then falls to the ground like a pillar, breaking into pieces that fly out in every direction/,
             /twists and coils violently in its death throes, finally going still/,
             /twitches one final time before falling still upon the floor/,
-            /, consuming .*? form in the space of a breath/,
+            /consuming .*? form in the space of a breath/,
             /screams one last time and dies/,
             /breathes <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> last gasp and dies/,
             /rolls over and dies/,
