@@ -303,7 +303,7 @@ module Lich
             /crumbles into a pile of splinters and skin/,
             /cries out one last time and lies still/,
             /falls to the ground, <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> wings collapsing around <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/>/,
-            /wings splay out as he goes still/,
+            /wings splay out as (?:s?he|it) goes still/,
             /howls out one last time and dies/,
             /spasms violently and suddenly goes still, its body turning to stone/,
             /, plunging inward in a dizzying spiral to envelop <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> completely!  Silhouetted within the shifting spiritual miasma, the <pushBold\/><a exist="[^"]+" noun="[^"]+">.+<\/a><popBold\/> form withers, wasting away to an attenuated mockery of <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:him|her|it)self<\/a><popBold\/>.  Even this pale shadow disintegrates, dissolving on the air as the last cloudy tendrils vanish/,
