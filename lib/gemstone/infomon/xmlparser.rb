@@ -182,7 +182,7 @@ module Lich
             /kicks a leg one last time and lies still/,
             /falls to the floor as the stillness of death overtakes <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/>/,
             /cries out in pain one last time and expires/,
-            /falls to the ground, (<pushBold\/><a exist="[^"]+" noun="[^"]+">)?(?:hi[ms]|her|s?he|its?)(<\/a><popBold\/>)? living fire extinguished/,
+            /falls to the ground, (?:<pushBold\/><a exist="[^"]+" noun="[^"]+">)?(?:hi[ms]|her|s?he|its?)(?:<\/a><popBold\/>)? living fire extinguished/,
             /(?:emits|releases) a (?:roar|shriek) as (?:hi[ms]|her|s?he|its?) (?:falls to the ground and )?goes still/,
             /collapses upon the (?:floor|ground) and the life fades from (?:hi[ms]|her|s?he|its?) eyes/,
             /falls to the ground and lies still/,
