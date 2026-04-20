@@ -306,7 +306,7 @@ module Lich
             /wings splay out as (?:s?he|it) goes still/,
             /howls out one last time and dies/,
             /spasms violently and suddenly goes still, its body turning to stone/,
-            /, plunging inward in a dizzying spiral to envelop <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> completely!  Silhouetted within the shifting spiritual miasma, the <pushBold\/><a exist="[^"]+" noun="[^"]+">.+<\/a><popBold\/> form withers, wasting away to an attenuated mockery of <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:him|her|it)self<\/a><popBold\/>.  Even this pale shadow disintegrates, dissolving on the air as the last cloudy tendrils vanish/,
+            /plunging inward in a dizzying spiral to envelop <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> completely!  Silhouetted within the shifting spiritual miasma, the <pushBold\/><a exist="[^"]+" noun="[^"]+">.+<\/a><popBold\/> form withers, wasting away to an attenuated mockery of <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:him|her|it)self<\/a><popBold\/>.  Even this pale shadow disintegrates, dissolving on the air as the last cloudy tendrils vanish/,
             /staggers, feebly trying to catch <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:him|her|it)self<\/a><popBold\/>, then collapses with a wheeze/,
             /sneers, "Urok vas derop tal kalissar kamath," then collapses/,
             /spits an unintelligible oath as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> collapses/,
@@ -351,7 +351,7 @@ module Lich
             /thuds to the deck in a plume of dust/,
             /tries to crawl away on the deck but collapses and goes still/,
           )
-          NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?(?:(?:an?|some|the) )?<a exist="(?<npc_id>[^"]+)" noun="[^"]+">[^<]+<\/a>(?:<popBold\/>)?(?:'s)? #{NpcDeathPostfix}[\.!"]\r?\n?$/
+          NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix} (?:<pushBold\/>)?(?:(?:an?|some|the) )?<a exist="(?<npc_id>[^"]+)" noun="[^"]+">[^<]+<\/a>(?:<popBold\/>)?(?:'s)?,? #{NpcDeathPostfix}[\.!"]\r?\n?$/
 
           # the following are for parsing STOW LIST and setting of STOW containers
           StowListOutputStart = /^You have the following containers set as stow targets:\r?\n?$/
