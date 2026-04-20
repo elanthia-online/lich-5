@@ -138,17 +138,14 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
 
   it 'can register after the caller already admitted the feature gate without re-reading the flag' do
     fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
-    fake_server = instance_double(
-      Lich::InternalAPI::ActiveSessions::Server,
-      start: true,
-      stop: nil
+    File.write(
+      File.join(temp_dir, 'lich-active-sessions.json'),
+      JSON.dump(owner_pid: 123, auth_token: 'shared-token', updated_at: Time.now.to_i)
     )
 
-    allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(fake_server)
     allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
-    allow(fake_client).to receive(:ping).and_return(false, true)
+    allow(fake_client).to receive(:ping).and_return(true)
     allow(fake_client).to receive(:upsert).and_return(ok: true)
-    allow(fake_server).to receive(:auth_token).and_return('generated-token')
 
     expect(described_class).not_to receive(:enabled?)
 
@@ -191,17 +188,14 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
 
   it 'can unregister after the caller already admitted the feature gate without re-reading the flag' do
     fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
-    fake_server = instance_double(
-      Lich::InternalAPI::ActiveSessions::Server,
-      start: true,
-      stop: nil
+    File.write(
+      File.join(temp_dir, 'lich-active-sessions.json'),
+      JSON.dump(owner_pid: 123, auth_token: 'shared-token', updated_at: Time.now.to_i)
     )
 
-    allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(fake_server)
     allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
-    allow(fake_client).to receive(:ping).and_return(false, true)
+    allow(fake_client).to receive(:ping).and_return(true)
     allow(fake_client).to receive(:remove).and_return(ok: true)
-    allow(fake_server).to receive(:auth_token).and_return('generated-token')
 
     expect(described_class).not_to receive(:enabled?)
 
