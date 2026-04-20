@@ -213,6 +213,8 @@ module Lich
           @registration_mutex.synchronize do
             return unless registration_current?(generation)
 
+            # ActiveSessions keeps the admitted-path helpers private so the
+            # feature-gate bypass stays local to lifecycle-owned call sites.
             ActiveSessions.send(:register_session_admitted, payload)
           end
         end

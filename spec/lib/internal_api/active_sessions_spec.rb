@@ -172,8 +172,8 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
 
     allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
     allow(fake_client).to receive(:ping).and_return(false)
-    allow(described_class).to receive(:enabled?).and_return(false)
 
+    expect(described_class).not_to receive(:enabled?)
     expect(Lich::InternalAPI::ActiveSessions::Server).not_to receive(:new)
     expect(described_class.send(:ensure_service_internal!, allow_bootstrap: false)).to be(false)
   end
@@ -198,6 +198,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
     allow(fake_client).to receive(:remove).and_return(ok: true)
 
     expect(described_class).not_to receive(:enabled?)
+    expect(Lich::InternalAPI::ActiveSessions::Server).not_to receive(:new)
 
     expect(described_class.send(:unregister_session_admitted, pid: 12_345)).to be(true)
   end

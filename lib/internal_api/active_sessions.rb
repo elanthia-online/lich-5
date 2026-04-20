@@ -92,6 +92,9 @@ module Lich
         return true if service_available?
         return false unless allow_bootstrap
 
+        # Re-check the live kill switch on the bootstrap path so admitted
+        # callers can reuse an existing owner without re-reading the flag,
+        # while still preventing creation of a brand-new owner after disable.
         return false unless enabled?
 
         @mutex.synchronize do
