@@ -178,7 +178,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
     expect(described_class.send(:ensure_service_internal!, allow_bootstrap: false)).to be(false)
   end
 
-  it 'still honors the normal gate for callers that do not pass assume_enabled' do
+  it 'still honors the normal gate for callers using only the public API surface' do
     allow(described_class).to receive(:enabled?).and_return(false)
 
     expect(described_class.register_session({ pid: 12_345 })).to be(false)
