@@ -72,7 +72,7 @@ RSpec.describe 'Lich.db SQLite configuration' do
       writer = SQLite3::Database.new(db_path)
       reader = SQLite3::Database.new(db_path)
 
-      writer.execute('BEGIN IMMEDIATE TRANSACTION;')
+      writer.execute('BEGIN EXCLUSIVE TRANSACTION;')
       writer.execute("INSERT OR REPLACE INTO lich_settings(name, value) VALUES('writer_key', 'writer_value');")
 
       value = reader.get_first_value("SELECT value FROM lich_settings WHERE name='test_key';")
