@@ -283,8 +283,7 @@ RSpec.describe Lich::Common::FeatureFlags do
       allow(db).to receive(:get_first_value).and_return('on')
       allow(db).to receive(:execute)
 
-      completed = Concurrent::AtomicFixnum.new(0) if defined?(Concurrent)
-      completed = Queue.new unless defined?(Concurrent)
+      completed = defined?(Concurrent) ? Concurrent::AtomicFixnum.new(0) : Queue.new
 
       threads = 8.times.map do
         Thread.new do
