@@ -299,11 +299,18 @@ module Lich
           end
         end
 
+        # Writes a string to the game server socket.
+        #
+        # Thread-safe via mutex. Silently absorbs fatal connection errors
+        # so callers (scripts) are not killed by a broken server link.
+        #
+        # @param str [String] the raw command to send upstream
+        # @return [nil] on connection error
         def _puts(str)
           @mutex.synchronize do
             @socket.puts(str)
           end
-        rescue Errno::EPIPE, IOError => e
+        rescue Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, IOError => e
           Lich.log "error: _puts: #{e}\n\t#{e.backtrace.first}"
           nil
         end

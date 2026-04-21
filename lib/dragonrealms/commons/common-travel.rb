@@ -164,7 +164,18 @@ module Lich
         move('out') if XMLData.room_exits.include?('out')
       end
 
-      def walk_to(target_room, restart_on_fail = true)
+      # Maximum number of times walk_to will retry navigation before giving up.
+      # Prevents unbounded recursion (and eventual SystemStackError) when the
+      # game server connection is lost or go2 repeatedly fails.
+      MAX_WALK_TO_RETRIES = 3
+
+      # Navigate to +target_room+ using the go2 script.
+      #
+      # @param target_room [Integer, String] room id or map tag (e.g. 'bank')
+      # @param restart_on_fail [Boolean] retry navigation on failure
+      # @param _retry_depth [Integer] internal counter -- callers should not set this
+      # @return [Boolean] true if the character is now in the target room
+      def walk_to(target_room, restart_on_fail = true, _retry_depth: 0)
         target_room = tag_to_id(target_room) if target_room.is_a?(String) && target_room.count("a-zA-Z") > 0
 
         return false if target_room.nil?
@@ -195,7 +206,7 @@ module Lich
           else
             move way
           end
-          return walk_to(room_num)
+          return walk_to(room_num, true, _retry_depth: _retry_depth)
         end
 
         script_handle = start_script('go2', [room_num.to_s], force: true)
@@ -245,8 +256,12 @@ module Lich
         end
 
         if room_num != Room.current.id && restart_on_fail
-          Lich::Messaging.msg('bold', "DRCT: Failed to navigate to room #{room_num}, attempting again.")
-          walk_to(room_num)
+          if _retry_depth >= MAX_WALK_TO_RETRIES
+            Lich::Messaging.msg('bold', "DRCT: Failed to navigate to room #{room_num} after #{MAX_WALK_TO_RETRIES} retries, giving up.")
+            return false
+          end
+          Lich::Messaging.msg('bold', "DRCT: Failed to navigate to room #{room_num}, attempting again (#{_retry_depth + 1}/#{MAX_WALK_TO_RETRIES}).")
+          walk_to(room_num, true, _retry_depth: _retry_depth + 1)
         end
         room_num == Room.current.id
       end
