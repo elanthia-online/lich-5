@@ -146,6 +146,18 @@ RSpec.describe Lich::Common::FeatureFlags do
       expect(db).to have_received(:get_first_value).once
     end
 
+    it 'does not cache when the database handle is unavailable' do
+      allow(Lich).to receive(:db).and_return(nil)
+
+      described_class.enabled?(:no_db_flag)
+
+      # DB becomes available
+      allow(Lich).to receive(:db).and_return(db)
+      allow(db).to receive(:get_first_value).and_return('true')
+
+      expect(described_class.enabled?(:no_db_flag)).to be(true)
+    end
+
     it 'does not cache when DB raises an error so next call retries' do
       call_count = 0
       allow(db).to receive(:get_first_value) do
@@ -165,18 +177,17 @@ RSpec.describe Lich::Common::FeatureFlags do
     end
   end
 
-  describe 'cache invalidation on .set' do
-    it 'invalidates the cached value for the flag being set' do
+  describe 'cache write-through on .set' do
+    it 'writes the new resolved value to cache on successful set' do
       allow(db).to receive(:get_first_value).and_return('true')
       allow(db).to receive(:execute)
 
       described_class.enabled?(:inv_flag)
       described_class.set(:inv_flag, false)
-      # After set, cache is invalidated so enabled? must hit DB again
-      allow(db).to receive(:get_first_value).and_return('false')
-      described_class.enabled?(:inv_flag)
 
-      expect(db).to have_received(:get_first_value).twice
+      # Cache now holds the set value -- no DB read needed
+      expect(described_class.enabled?(:inv_flag)).to be(false)
+      expect(db).to have_received(:get_first_value).once
     end
 
     it 'does not affect other flags cache entries' do
@@ -194,7 +205,7 @@ RSpec.describe Lich::Common::FeatureFlags do
       expect(db).to have_received(:get_first_value).twice
     end
 
-    it 'does not invalidate cache when .set fails with a DB error' do
+    it 'does not update cache when .set fails with a DB error' do
       allow(db).to receive(:get_first_value).and_return('true')
       allow(db).to receive(:execute).and_raise(StandardError, 'write failed')
       allow(Lich).to receive(:log)
@@ -202,8 +213,8 @@ RSpec.describe Lich::Common::FeatureFlags do
       described_class.enabled?(:stable_flag)
       described_class.set(:stable_flag, false)
 
-      # Cache should still be intact -- no extra DB read
-      described_class.enabled?(:stable_flag)
+      # Cache should still hold the original value -- no extra DB read
+      expect(described_class.enabled?(:stable_flag)).to be(true)
       expect(db).to have_received(:get_first_value).once
     end
   end
@@ -298,14 +309,29 @@ RSpec.describe Lich::Common::FeatureFlags do
   end
 
   describe 'TTL edge cases' do
-    it 'considers a cache entry expired at exactly the TTL boundary' do
+    it 'keeps cache entry valid at exactly the TTL boundary' do
       now = Time.at(2000.0)
       allow(Time).to receive(:now).and_return(now)
       allow(db).to receive(:get_first_value).and_return('true')
 
       described_class.enabled?(:boundary_flag)
 
-      # Advance to exactly TTL seconds later
+      # At exactly TTL seconds, age == TTL, and the > check is false
+      ttl = described_class::CACHE_TTL_SECONDS
+      allow(Time).to receive(:now).and_return(Time.at(2000.0 + ttl))
+
+      described_class.enabled?(:boundary_flag)
+
+      expect(db).to have_received(:get_first_value).once
+    end
+
+    it 'expires cache entry just past the TTL boundary' do
+      now = Time.at(2000.0)
+      allow(Time).to receive(:now).and_return(now)
+      allow(db).to receive(:get_first_value).and_return('true')
+
+      described_class.enabled?(:boundary_flag)
+
       ttl = described_class::CACHE_TTL_SECONDS
       allow(Time).to receive(:now).and_return(Time.at(2000.0 + ttl + 0.001))
 
@@ -323,23 +349,19 @@ RSpec.describe Lich::Common::FeatureFlags do
       expect(db).to have_received(:get_first_value).exactly(3).times
     end
 
-    it 'treats backward clock movement as cache expiration (correct behavior)' do
+    it 'treats backward clock movement as cache expiration' do
       allow(db).to receive(:get_first_value).and_return('true')
 
       # Cache at t=2000
       allow(Time).to receive(:now).and_return(Time.at(2000.0))
       described_class.enabled?(:clock_flag)
 
-      # Clock jumps backward to t=1000, so (1000 - 2000) = -1000 which
-      # is NOT > CACHE_TTL_SECONDS, so cache is still valid
+      # Clock jumps backward to t=1000, age = (1000 - 2000) = -1000
+      # Negative age is treated as expired to avoid unbounded staleness
       allow(Time).to receive(:now).and_return(Time.at(1000.0))
       described_class.enabled?(:clock_flag)
 
-      # Only one DB call -- the backward clock doesn't expire the entry
-      # (negative difference is less than TTL). This is acceptable:
-      # in the worst case the entry expires after TTL seconds from the
-      # original write time, which is correct.
-      expect(db).to have_received(:get_first_value).once
+      expect(db).to have_received(:get_first_value).twice
     end
   end
 
@@ -369,14 +391,12 @@ RSpec.describe Lich::Common::FeatureFlags do
 
       described_class.enabled?(:rapid_flag)
 
-      # set invalidates cache
+      # set writes through to cache
       described_class.set(:rapid_flag, false)
 
-      # Next enabled? must hit DB for fresh value
-      allow(db).to receive(:get_first_value).and_return('false')
+      # Next enabled? serves from cache with the set value
       expect(described_class.enabled?(:rapid_flag)).to be(false)
-
-      expect(db).to have_received(:get_first_value).twice
+      expect(db).to have_received(:get_first_value).once
     end
 
     it 'serves cached values when DB goes down, then falls back to default after TTL' do

@@ -14,6 +14,14 @@ module Lich
     #
     # Keeping the API narrow makes it easier to adopt feature flags incrementally
     # without introducing a second configuration framework.
+    #
+    # == Caching
+    #
+    # Resolved flag values are cached in-memory with a TTL of
+    # {CACHE_TTL_SECONDS}. Each Lich process maintains its own independent
+    # cache, so a {.set} in one process is not visible to other processes
+    # until their cached entries expire. Cross-process convergence is
+    # bounded by the TTL.
     module FeatureFlags
       SETTINGS_PREFIX = 'feature_flag:'
       VALID_NAME_PATTERN = /\A[a-z0-9_]+\z/
@@ -47,6 +55,8 @@ module Lich
         return cached unless cached.nil?
 
         begin
+          return default_for(flag_name) unless fetch_db
+
           stored = read_flag(flag_name)
           resolved = stored.nil? ? default_for(flag_name) : truthy?(stored)
           cache_write(flag_name, resolved)
@@ -72,7 +82,7 @@ module Lich
         flag_name = validate_flag_name!(normalize_name(name))
         begin
           result = write_flag(flag_name, value)
-          cache_invalidate(flag_name) if result
+          cache_write(flag_name, truthy?(value)) if result
           result
         rescue StandardError => e
           log_failure('write', flag_name, e)
@@ -186,7 +196,8 @@ module Lich
         @cache_mutex.synchronize do
           entry = @cache[flag_name]
           return nil unless entry
-          return nil if Time.now.to_f - entry[:at] > CACHE_TTL_SECONDS
+          age = Time.now.to_f - entry[:at]
+          return nil if age > CACHE_TTL_SECONDS || age.negative?
           entry[:value]
         end
       end
@@ -203,16 +214,6 @@ module Lich
         end
       end
       private_class_method :cache_write
-
-      # Removes a single flag from the cache, forcing the next read to
-      # hit the database.
-      #
-      # @param flag_name [String]
-      # @return [void]
-      def self.cache_invalidate(flag_name)
-        @cache_mutex.synchronize { @cache.delete(flag_name) }
-      end
-      private_class_method :cache_invalidate
 
       # Logs a read or write failure without raising a second error.
       #
