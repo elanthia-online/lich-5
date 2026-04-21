@@ -206,6 +206,10 @@ module Lich
           else
             move way
           end
+          if retry_depth >= MAX_WALK_TO_RETRIES
+            Lich::Messaging.msg('bold', "DRCT: Failed to navigate from unknown room after #{MAX_WALK_TO_RETRIES} retries, giving up.")
+            return false
+          end
           return walk_to(room_num, true, retry_depth: retry_depth + 1)
         end
 
@@ -261,7 +265,7 @@ module Lich
             return false
           end
           Lich::Messaging.msg('bold', "DRCT: Failed to navigate to room #{room_num}, attempting again (#{retry_depth + 1}/#{MAX_WALK_TO_RETRIES}).")
-          walk_to(room_num, true, retry_depth: retry_depth + 1)
+          return walk_to(room_num, true, retry_depth: retry_depth + 1)
         end
         room_num == Room.current.id
       end
