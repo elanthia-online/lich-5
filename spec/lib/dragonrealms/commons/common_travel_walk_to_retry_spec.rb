@@ -137,7 +137,7 @@ RSpec.describe DRCT, '.walk_to retry depth limiting' do
       original_walk_to = DRCT.method(:walk_to)
 
       allow(DRCT).to receive(:walk_to).and_wrap_original do |_method, *args, **kwargs|
-        depth = kwargs[:_retry_depth] || 0
+        depth = kwargs[:retry_depth] || 0
         max_depth = [max_depth, depth].max
         original_walk_to.call(*args, **kwargs)
       end
@@ -153,7 +153,7 @@ RSpec.describe DRCT, '.walk_to retry depth limiting' do
     end
   end
 
-  # -- Backward compatibility: _retry_depth not required from callers ------
+  # -- Backward compatibility: retry_depth not required from callers ------
 
   describe 'backward compatibility' do
     before(:each) do
