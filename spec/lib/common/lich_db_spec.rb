@@ -2,9 +2,9 @@
 
 require_relative '../../spec_helper'
 
-# These tests exercise real SQLite3 behavior (busy_timeout, WAL mode,
-# concurrent write contention). They are skipped when the sqlite3 gem
-# is not installed in the test environment.
+# These tests exercise real SQLite3 behavior (WAL mode, schema creation).
+# They are skipped when the sqlite3 gem is not installed in the test
+# environment.
 #
 # IMPORTANT: This spec does NOT require production lib/lich.rb because that
 # file redefines Lich.display_expgains (and many other methods) using class
@@ -27,27 +27,6 @@ RSpec.describe 'Lich.db SQLite configuration' do
 
   after do
     FileUtils.remove_entry(tmpdir, true)
-  end
-
-  describe 'busy_timeout' do
-    it 'is set to 3000ms on new database connections' do
-      db = SQLite3::Database.new("#{tmpdir}/lich.db3")
-      db.busy_timeout = 3000
-
-      timeout = db.get_first_value('PRAGMA busy_timeout;')
-      expect(timeout.to_i).to eq(3000)
-    ensure
-      db&.close
-    end
-
-    it 'defaults to 0ms without explicit busy_timeout' do
-      db = SQLite3::Database.new("#{tmpdir}/lich.db3")
-
-      timeout = db.get_first_value('PRAGMA busy_timeout;')
-      expect(timeout.to_i).to eq(0)
-    ensure
-      db&.close
-    end
   end
 
   describe 'WAL journal mode' do
@@ -80,11 +59,36 @@ RSpec.describe 'Lich.db SQLite configuration' do
     ensure
       db&.close
     end
+
+    it 'allows concurrent reads during writes' do
+      db_path = "#{tmpdir}/lich.db3"
+
+      setup_db = SQLite3::Database.new(db_path)
+      setup_db.execute('PRAGMA journal_mode=WAL;')
+      setup_db.execute('CREATE TABLE IF NOT EXISTS lich_settings (name TEXT NOT NULL, value TEXT, PRIMARY KEY(name));')
+      setup_db.execute("INSERT INTO lich_settings(name, value) VALUES('test_key', 'test_value');")
+      setup_db.close
+
+      writer = SQLite3::Database.new(db_path)
+      reader = SQLite3::Database.new(db_path)
+
+      writer.execute('BEGIN IMMEDIATE TRANSACTION;')
+      writer.execute("INSERT OR REPLACE INTO lich_settings(name, value) VALUES('writer_key', 'writer_value');")
+
+      value = reader.get_first_value("SELECT value FROM lich_settings WHERE name='test_key';")
+      expect(value).to eq('test_value')
+    ensure
+      begin
+        writer&.execute('ROLLBACK;')
+      rescue StandardError
+        nil
+      end
+      reader&.close
+      writer&.close
+    end
   end
 
   describe 'init_db schema creation' do
-    # Mirrors the production Lich.init_db schema setup without loading
-    # the full production Lich module.
     def create_schema(db)
       db.execute('PRAGMA journal_mode=WAL;')
       db.execute('CREATE TABLE IF NOT EXISTS lich_settings (name TEXT NOT NULL, value TEXT, PRIMARY KEY(name));')
@@ -92,7 +96,6 @@ RSpec.describe 'Lich.db SQLite configuration' do
 
     it 'creates the lich_settings table' do
       db = SQLite3::Database.new("#{tmpdir}/lich.db3")
-      db.busy_timeout = 3000
       create_schema(db)
 
       tables = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='lich_settings';")
@@ -103,87 +106,11 @@ RSpec.describe 'Lich.db SQLite configuration' do
 
     it 'is idempotent -- can be called twice without error' do
       db = SQLite3::Database.new("#{tmpdir}/lich.db3")
-      db.busy_timeout = 3000
 
       expect { create_schema(db) }.not_to raise_error
       expect { create_schema(db) }.not_to raise_error
     ensure
       db&.close
-    end
-  end
-
-  describe 'concurrent write contention with busy_timeout' do
-    it 'allows two threads to write without BusyException' do
-      db_path = "#{tmpdir}/lich.db3"
-
-      # Set up schema
-      setup_db = SQLite3::Database.new(db_path)
-      setup_db.busy_timeout = 3000
-      setup_db.execute('PRAGMA journal_mode=WAL;')
-      setup_db.execute('CREATE TABLE IF NOT EXISTS lich_settings (name TEXT NOT NULL, value TEXT, PRIMARY KEY(name));')
-      setup_db.close
-
-      errors = []
-      mutex = Mutex.new
-      barrier = Queue.new
-
-      threads = 2.times.map do |i|
-        Thread.new do
-          conn = SQLite3::Database.new(db_path)
-          conn.busy_timeout = 3000
-          barrier << true
-          sleep 0.01 until barrier.size >= 2
-
-          begin
-            50.times do |j|
-              conn.execute(
-                'INSERT OR REPLACE INTO lich_settings(name, value) VALUES(?, ?);',
-                ["thread_#{i}_key_#{j}", "value_#{j}"]
-              )
-            end
-          rescue StandardError => e
-            mutex.synchronize { errors << e }
-          ensure
-            conn.close
-          end
-        end
-      end
-
-      threads.each(&:join)
-      expect(errors).to be_empty, "Expected no thread errors but got: #{errors.map(&:message)}"
-    end
-
-    it 'raises immediately without busy_timeout when a write lock is held' do
-      db_path = "#{tmpdir}/lich_no_timeout.db3"
-
-      setup_db = SQLite3::Database.new(db_path)
-      setup_db.execute('PRAGMA journal_mode=DELETE;')
-      setup_db.execute('CREATE TABLE IF NOT EXISTS lich_settings (name TEXT NOT NULL, value TEXT, PRIMARY KEY(name));')
-      setup_db.close
-
-      locker = SQLite3::Database.new(db_path)
-      contender = SQLite3::Database.new(db_path)
-
-      locker.execute('BEGIN EXCLUSIVE TRANSACTION;')
-      locker.execute(
-        'INSERT OR REPLACE INTO lich_settings(name, value) VALUES(?, ?);',
-        ['locked_key', 'locked_value']
-      )
-
-      expect do
-        contender.execute(
-          'INSERT OR REPLACE INTO lich_settings(name, value) VALUES(?, ?);',
-          ['contender_key', 'contender_value']
-        )
-      end.to raise_error(SQLite3::BusyException)
-    ensure
-      begin
-        locker&.execute('ROLLBACK;')
-      rescue StandardError
-        nil
-      end
-      contender&.close
-      locker&.close
     end
   end
 end

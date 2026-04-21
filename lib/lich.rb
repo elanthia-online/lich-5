@@ -169,11 +169,7 @@ module Lich
   end
 
   def Lich.db
-    @@lich_db ||= begin
-      db = SQLite3::Database.new("#{DATA_DIR}/lich.db3")
-      db.busy_timeout = 3000
-      db
-    end
+    @@lich_db ||= SQLite3::Database.new("#{DATA_DIR}/lich.db3")
   end
 
   def Lich.init_db
