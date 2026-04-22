@@ -54,7 +54,7 @@ runs:
 
     - name: Compose prerelease body
       id: compose
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         MODE: ${{ inputs.mode }}
         CONTRACT_SHA: "95f8f517411f9058bc92706310677db8cbba97fbd296bc853f2181274cb0e8bb"
@@ -219,7 +219,7 @@ runs:
 
     - name: Patch PR body (unless skipped by sentinel)
       if: steps.compose.outputs.skip != 'true'
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           const owner = context.repo.owner;
