@@ -480,9 +480,7 @@ reconnect_if_wanted = proc {
       $login_time = Time.now
 
       if $offline_mode
-        # rubocop:disable Lint/Void
         nil
-        # rubocop:enable Lint/Void
       elsif Frontend.supports_gsl?
         #
         # send the login key
