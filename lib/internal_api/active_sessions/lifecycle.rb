@@ -69,6 +69,10 @@ module Lich
           feature_enabled = ActiveSessions.enabled?
           return false unless feature_enabled
 
+          # Bootstrap once during lifecycle startup so the admitted-only
+          # heartbeat/update path has a running service to talk to.
+          ActiveSessions.ensure_service!
+
           thread = nil
           @mutex.synchronize do
             return false if @started

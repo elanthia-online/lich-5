@@ -30,6 +30,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
     reset_active_sessions_lifecycle!(described_class)
 
     allow(Lich::InternalAPI::ActiveSessions).to receive(:enabled?).and_return(true)
+    allow(Lich::InternalAPI::ActiveSessions).to receive(:ensure_service!).and_return(true)
     allow(Lich::InternalAPI::ActiveSessions).to receive(:register_session_admitted).and_return(true)
     allow(Lich::InternalAPI::ActiveSessions).to receive(:unregister_session_admitted).and_return(true)
   end
@@ -40,6 +41,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
 
       expect(described_class.start(session_name: 'Tsetem', role: 'session')).to be(false)
       expect(described_class.stop).to be(false)
+      expect(Lich::InternalAPI::ActiveSessions).not_to have_received(:ensure_service!)
       expect(Lich::InternalAPI::ActiveSessions).not_to have_received(:register_session_admitted)
     end
 
@@ -68,6 +70,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
 
       captured_block.call
 
+      expect(Lich::InternalAPI::ActiveSessions).to have_received(:ensure_service!)
       expect(Lich::InternalAPI::ActiveSessions).to have_received(:register_session_admitted).at_least(:once)
       expect(described_class.stop).to be(true)
       expect(Lich::InternalAPI::ActiveSessions).to have_received(:unregister_session_admitted).with(pid: Process.pid)
@@ -141,7 +144,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
   end
 
   describe 'feature gate usage' do
-    it 'checks the feature flag once at lifecycle start and not again for heartbeat upserts' do
+    it 'checks the feature flag during startup but not again for heartbeat upserts' do
       heartbeat_thread = instance_double(Thread)
       captured_block = nil
 
@@ -158,6 +161,10 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
         enabled_calls += 1
         true
       end
+      allow(Lich::InternalAPI::ActiveSessions).to receive(:ensure_service!) do
+        Lich::InternalAPI::ActiveSessions.enabled?
+        true
+      end
 
       sleep_calls = 0
       allow(described_class).to receive(:sleep) do |_seconds|
@@ -168,7 +175,19 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
       expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 1)).to be(true)
       captured_block.call
 
-      expect(enabled_calls).to eq(1)
+      expect(enabled_calls).to eq(2)
+    end
+
+    it 'bootstraps the service during lifecycle start' do
+      heartbeat_thread = instance_double(Thread)
+
+      allow(Thread).to receive(:new).and_return(heartbeat_thread)
+      allow(heartbeat_thread).to receive(:join).with(0.5)
+      allow(heartbeat_thread).to receive(:alive?).and_return(false)
+      allow(heartbeat_thread).to receive(:kill)
+
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 1)).to be(true)
+      expect(Lich::InternalAPI::ActiveSessions).to have_received(:ensure_service!)
     end
 
     it 'continues heartbeat upserts even if enabled? would raise after lifecycle start' do
