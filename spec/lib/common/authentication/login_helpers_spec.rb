@@ -478,6 +478,22 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     end
   end
 
+  describe '.resolve_lookup_frontend' do
+    it 'returns the requested frontend for normal CLI saved-entry matching' do
+      expect(described_class.resolve_lookup_frontend('frostbite', ['--login', 'pickasso'])).to eq('frostbite')
+    end
+
+    it 'ignores the requested frontend for headless CLI saved-entry matching' do
+      expect(
+        described_class.resolve_lookup_frontend('frostbite', ['--login', 'pickasso', '--without-frontend'])
+      ).to eq(:__unset)
+    end
+
+    it 'preserves an unset frontend when no frontend was requested' do
+      expect(described_class.resolve_lookup_frontend(:__unset, ['--login', 'pickasso'])).to eq(:__unset)
+    end
+  end
+
   describe '.format_launch_flag' do
     it 'returns nil for empty game code' do
       expect(described_class.format_launch_flag('')).to be_nil
