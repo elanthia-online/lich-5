@@ -100,6 +100,15 @@ module Lich
         @mutex.synchronize do
           return true if service_available?
 
+          # If this process previously owned a server whose accept thread
+          # died, the TCPServer socket is still bound but unserviceable.
+          # Stop it to release the port before attempting a fresh start.
+          if @server && !@server.running?
+            Lich.log('warning: ActiveSessions server thread died -- releasing zombie socket') if Lich.respond_to?(:log)
+            @server.stop
+            @server = nil
+          end
+
           @registry ||= Registry.new
           @server ||= Server.new(
             host: DEFAULT_HOST,

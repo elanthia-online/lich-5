@@ -64,8 +64,8 @@ module Lich
       def safe_load_yaml(filepath)
         OpenStruct.new(YAML.unsafe_load_file(filepath)).to_h
       rescue => e
-        echo('*** ERROR PARSING YAML FILE ***')
-        echo(e.message)
+        safe_message("bold", "*** ERROR PARSING YAML FILE ***")
+        safe_message("bold", e.message)
         {}
       end
 
@@ -83,7 +83,7 @@ module Lich
         end
         initial_include_filenames = initial_include_suffixes.map { |suffix| to_include_filename(suffix) }
         include_filenames = resolve_includes_recursively(initial_include_filenames)
-        echo "#{self.class}::#{__callee__} resolved include_filenames=#{include_filenames}" if @debug
+        safe_log "#{self.class}::#{__callee__} resolved include_filenames=#{include_filenames}" if @debug
 
         all_files = ['base.yaml', 'base-empty.yaml', include_filenames, character_filenames].flatten
 
@@ -128,9 +128,19 @@ module Lich
 
       private
 
-      # Lazy memoized path to avoid class-body evaluation of XMLData/checkname.
+      # Lazy memoized path.
       def scripts_data_path
         @scripts_data_path ||= File.join(SCRIPT_DIR, 'data')
+      end
+
+      # Returns the character name for filename construction.
+      # Prefers Account.character (available from authentication, before XML stream)
+      # with fallback to checkname (XMLData.name, available after XML stream starts).
+      #
+      # @return [String] character name
+      def character_name
+        name = defined?(Lich::Common::Account) && Lich::Common::Account.character
+        name || checkname
       end
 
       # Lazy memoized path -- supports game-instance-specific profile directories.
@@ -140,9 +150,9 @@ module Lich
           if game && defined?(DATA_DIR) &&
              File.exist?(File.join(DATA_DIR, game, "base.yaml")) &&
              File.exist?(File.join(DATA_DIR, game, "base-empty.yaml")) &&
-             File.exist?(File.join(DATA_DIR, game, "#{checkname}-setup.yaml"))
-            echo("Detected game instance-specific files. Loading settings from #{File.join(DATA_DIR, XMLData.game)}")
-            File.join(DATA_DIR, XMLData.game)
+             File.exist?(File.join(DATA_DIR, game, "#{character_name}-setup.yaml"))
+            safe_message("info", "Detected game instance-specific files. Loading settings from #{File.join(DATA_DIR, game)}")
+            File.join(DATA_DIR, game)
           else
             File.join(SCRIPT_DIR, 'profiles')
           end
@@ -175,7 +185,7 @@ module Lich
       end
 
       def to_character_filename(suffix)
-        "#{checkname}-#{suffix}.yaml"
+        "#{character_name}-#{suffix}.yaml"
       end
 
       def to_base_filename(suffix)
@@ -202,7 +212,7 @@ module Lich
           next unless file_info
 
           nested_suffixes = file_info.peek('include') || []
-          echo "#{self.class}::#{__callee__} #{filename} has nested includes: #{nested_suffixes}" if @debug && !nested_suffixes.empty?
+          safe_log "#{self.class}::#{__callee__} #{filename} has nested includes: #{nested_suffixes}" if @debug && !nested_suffixes.empty?
           nested_filenames = nested_suffixes.map { |suffix| to_include_filename(suffix) }
 
           resolve_includes_recursively(nested_filenames, visited, include_order)
@@ -213,7 +223,7 @@ module Lich
 
       def load_files(glob_patterns = [])
         synchronize do
-          echo "#{self.class}::#{__callee__} glob_patterns=#{glob_patterns}" if @debug
+          safe_log "#{self.class}::#{__callee__} glob_patterns=#{glob_patterns}" if @debug
           # Build a map of filename -> filepath for all files currently on disk
           current_files = {}
           glob_patterns.each do |glob_pattern|
@@ -236,7 +246,7 @@ module Lich
           current_files.each do |filename, filepath|
             last_modified_date = File.mtime(filepath)
             cached_file = cache_get_by_filename(filename)
-            echo "#{self.class}::#{__callee__} filepath=#{filepath}, last_modified_date=#{last_modified_date}, cached_file=#{cached_file.inspect}" if @debug
+            safe_log "#{self.class}::#{__callee__} filepath=#{filepath}, last_modified_date=#{last_modified_date}, cached_file=#{cached_file.inspect}" if @debug
             if cached_file.nil? || cached_file.mtime != last_modified_date
               cache_put_by_filepath(filepath)
             end
@@ -246,7 +256,7 @@ module Lich
 
       def cache_put_by_filepath(filepath)
         synchronize do
-          echo "#{self.class}::#{__callee__} filepath=#{filepath}" if @debug
+          safe_log "#{self.class}::#{__callee__} filepath=#{filepath}" if @debug
           @files_cache[File.basename(filepath)] = FileInfo.new(
             path: File.dirname(filepath),
             name: File.basename(filepath),
@@ -257,13 +267,13 @@ module Lich
       end
 
       def cache_get_by_filename(filename)
-        echo "#{self.class}::#{__callee__} filename=#{filename}" if @debug
+        safe_log "#{self.class}::#{__callee__} filename=#{filename}" if @debug
         @files_cache[filename]
       end
 
       # Delegates to SettingsTransformer with game-specific config if available.
       def transform_settings(settings)
-        echo "#{self.class}::#{__callee__}" if @debug
+        safe_log "#{self.class}::#{__callee__}" if @debug
         if defined?(Lich::DragonRealms::SettingsConfig)
           config = Lich::DragonRealms::SettingsConfig::TRANSFORM_CONFIG
           Lich::Common::SettingsTransformer.transform(settings, config, method(:get_data))
@@ -273,14 +283,39 @@ module Lich
       end
 
       def transform_data(original_data)
-        echo "#{self.class}::#{__callee__}" if @debug
+        safe_log "#{self.class}::#{__callee__}" if @debug
         data = OpenStruct.new(original_data)
         data
       rescue => e
-        echo "*** ERROR MODIFYING DATA ***"
-        echo e.message
-        e.backtrace.each { |msg| echo msg }
+        safe_message("bold", "*** ERROR MODIFYING DATA ***")
+        safe_message("bold", e.message)
+        e.backtrace.each { |line| safe_message("bold", line) }
         OpenStruct.new
+      end
+
+      # Guarded messaging -- safe to call before Lich::Messaging is initialized.
+      #
+      # @param type [String] message type (e.g. 'bold', 'info', 'error')
+      # @param text [String] message text
+      # @return [void]
+      def safe_message(type, text)
+        if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:msg)
+          Lich::Messaging.msg(type, text)
+        else
+          safe_log(text)
+        end
+      end
+
+      # Guarded logging -- safe to call before Lich.log is defined.
+      #
+      # @param text [String] log message
+      # @return [void]
+      def safe_log(text)
+        if defined?(Lich) && Lich.respond_to?(:log)
+          Lich.log(text)
+        else
+          $stderr.puts(text)
+        end
       end
     end
   end

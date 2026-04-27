@@ -59,7 +59,7 @@ jobs:
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
       # 1) Release Please for stable branch (creates public release, we convert to draft immediately)
-      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         id: rp
         with:
           skip-github-release: false
@@ -90,7 +90,7 @@ jobs:
       - name: Derive release vars from tag (no REST)
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         id: derive_rel
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           TAG: ${{ steps.rp.outputs.tag_name }}
         with:
@@ -105,7 +105,7 @@ jobs:
       - name: Find Release Please PR by commit SHA
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         id: find_pr
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           VERSION: ${{ steps.derive_rel.outputs.version }}
         with:
@@ -154,7 +154,7 @@ jobs:
       - name: Choose seed body (PR preferred)
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         id: choose_seed
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           PR_BODY: ${{ steps.find_pr.outputs.body }}
         with:
@@ -165,7 +165,7 @@ jobs:
       - name: Transform body (header + cleanup + footer)
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         id: transform_body
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           SEED: ${{ steps.choose_seed.outputs.body }}
           VERSION: ${{ steps.derive_rel.outputs.version }}
@@ -343,7 +343,7 @@ jobs:
 
       # Pin Ruby explicitly on windows-latest
       - name: Set up Ruby
-        uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f # v1.295.0
+        uses: ruby/setup-ruby@0cb964fd540e0a24c900370abf38a33466142735 # v1.305.0
         with:
           bundler-cache: false
 
