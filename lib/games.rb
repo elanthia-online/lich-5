@@ -467,7 +467,18 @@ module Lich
           # XMLData.name. If Vars is accessed before XMLData.name is set, it
           # loads/saves under scope "DR:" instead of "DR:CharName", overwriting
           # real data with an empty session.
-          Thread.new { Lich::Util::Update.sync_all_repos }
+          Thread.new do
+            # Wait for XMLData.name to be populated by process_xml_data
+            # before touching Vars. 200 x 50ms = 10s max wait.
+            200.times do
+              break if !XMLData.name.nil? && !XMLData.name.empty?
+
+              sleep 0.05
+            end
+            Lich::Util::Update.sync_all_repos if !XMLData.name.nil? && !XMLData.name.empty?
+          rescue StandardError => e
+            Lich.log "repo_sync(login): #{e.class}: #{e.message}"
+          end
 
           Script.start('autostart') if defined?(Script) && Script.respond_to?(:exists?) && Script.exists?('autostart')
           @@autostarted = true

@@ -69,6 +69,10 @@ RSpec.describe Lich::Common::SessionLifecycle do
       expect(described_class.resolve_role(argv: [], detachable_client_port: 7000)).to eq('detachable')
     end
 
+    it 'prefers detachable when headless mode also exposes a detachable client' do
+      expect(described_class.resolve_role(argv: ['--without-frontend'], detachable_client_port: 7000)).to eq('detachable')
+    end
+
     it 'returns session otherwise' do
       expect(described_class.resolve_role(argv: [], detachable_client_port: nil)).to eq('session')
     end
