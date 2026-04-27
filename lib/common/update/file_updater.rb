@@ -37,6 +37,11 @@ module Lich
             return
           end
 
+          if config[:custom] && type == "data"
+            respond "[lich5-update: Data file downloads are not supported for custom repos. Only --script= is available.]"
+            return
+          end
+
           case type
           when "script"
             location = config[:dest_dir] || SCRIPT_DIR

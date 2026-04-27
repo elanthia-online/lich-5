@@ -56,7 +56,7 @@ module Lich
           tree = tree_data['tree']
 
           name = config[:display_name] || repo_key
-          syncable = filter_syncable_scripts(tree, config)
+          syncable = filter_syncable_scripts(tree, config, repo_key)
           StatusReporter.respond_mono("[lich5-update: Syncing #{name} (#{syncable.length} scripts)...]")
 
           # Custom repos write to their per-repo subdir; built-in repos to SCRIPT_DIR
@@ -140,15 +140,16 @@ module Lich
         #
         # @param tree [Array<Hash>] GitHub tree API response
         # @param config [Hash] repository config from SCRIPT_REPOS or custom repo
+        # @param repo_key [String, nil] repository key for tracked script lookup
         # @return [Array<Hash>] filtered tree entries
-        def filter_syncable_scripts(tree, config)
+        def filter_syncable_scripts(tree, config, repo_key = nil)
           candidates = tree.select { |e| e['path'] =~ config[:script_pattern] && e['type'] == 'blob' }
 
           case config[:tracking_mode]
           when :all
             candidates.reject { |e| File.basename(e['path']).include?('-setup') }
           when :explicit
-            tracked = TrackedScripts.new.tracked_scripts(config)
+            tracked = TrackedScripts.new.tracked_scripts(config, repo_key: repo_key)
             candidates.select { |e| tracked.include?(File.basename(e['path'])) }
           else
             candidates

@@ -34,6 +34,7 @@ module Lich
         # @param registration [Hash] stored registration with :branch key
         # @return [Hash] config hash matching SCRIPT_REPOS entry shape
         def self.build_config(owner_repo, registration)
+          registration = {} unless registration.is_a?(Hash)
           branch = registration[:branch] || registration['branch'] || 'main'
           {
             display_name: "Custom: #{owner_repo}",
@@ -53,7 +54,8 @@ module Lich
         #
         # @return [Hash] owner_repo => registration hash
         def self.all
-          UserVars.custom_repos || {}
+          data = UserVars.custom_repos
+          data.is_a?(Hash) ? data : {}
         end
 
         # Registers a custom repository.
@@ -67,9 +69,21 @@ module Lich
             return
           end
 
+          if branch && branch !~ /^[A-Za-z0-9._\/-]+$/
+            StatusReporter.respond_mono("[lich5-update: Invalid branch name '#{branch}'. Branch names may only contain letters, digits, dots, hyphens, underscores, and slashes.]")
+            return
+          end
+
           UserVars.custom_repos ||= {}
           if UserVars.custom_repos[owner_repo]
             StatusReporter.respond_mono("[lich5-update: '#{owner_repo}' is already registered.]")
+            return
+          end
+
+          new_dir = self.class.repo_dir_name(owner_repo)
+          collider = UserVars.custom_repos.keys.find { |k| self.class.repo_dir_name(k) == new_dir }
+          if collider
+            StatusReporter.respond_mono("[lich5-update: '#{owner_repo}' collides with '#{collider}' (both map to directory '#{new_dir}'). Choose a different repo or remove the existing one first.]")
             return
           end
 
