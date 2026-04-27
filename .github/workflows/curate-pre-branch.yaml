@@ -81,7 +81,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f # v1.295.0
+        uses: ruby/setup-ruby@0cb964fd540e0a24c900370abf38a33466142735 # v1.305.0
         with:
           bundler-cache: true
 
@@ -112,7 +112,7 @@ jobs:
 
       - name: Upload union merge audit artifacts
         if: ${{ always() && (env.HAD_CONFLICTS == 'true' || failure()) }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: union-merge-audit-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: ignore
