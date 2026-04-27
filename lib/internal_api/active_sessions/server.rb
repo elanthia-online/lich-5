@@ -106,18 +106,29 @@ module Lich
         # Accepts inbound socket connections and dispatches each client to its
         # own handler thread.
         #
+        # Individual accept/dispatch errors are logged and retried so that a
+        # transient failure does not kill the thread and leave the TCPServer
+        # socket bound but unserviceable (zombie server).
+        #
         # @return [void]
         def accept_loop
           loop do
             server = @server
             break unless server
 
-            socket = server.accept
-            client_thread = @client_thread_factory.call(socket) { |client| handle_tracked_client(client) }
-            track_client_thread(client_thread)
+            socket = nil
+            begin
+              socket = server.accept
+              client_thread = @client_thread_factory.call(socket) { |client| handle_tracked_client(client) }
+              track_client_thread(client_thread)
+            rescue IOError, Errno::EBADF
+              # Server socket closed -- normal shutdown path.
+              break
+            rescue StandardError => e
+              socket&.close rescue nil
+              Lich.log("warning: ActiveSessions accept_loop error (continuing): #{e.class}: #{e.message}") if defined?(Lich) && Lich.respond_to?(:log)
+            end
           end
-        rescue IOError, Errno::EBADF
-          nil
         end
 
         # Wraps client handling so finished client threads can be removed from
