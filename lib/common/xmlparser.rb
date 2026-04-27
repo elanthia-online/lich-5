@@ -756,9 +756,14 @@ module Lich
               end
             elsif @active_ids.include?('room players')
               if @active_tags.include?('a')
-                @pc = GameObj.new_pc(@obj_exist, @obj_noun, "#{@player_title}#{text_string}", @player_status)
+                if @obj_exist.to_s.start_with?('-')
+                  @pc = GameObj.new_pc(@obj_exist, @obj_noun, "#{@player_title}#{text_string}", @player_status)
+                  @arrival_pcs.push(@pc.noun) if (defined?(Lich::Claim) && Lich::Claim::Lock.owned?)
+                else
+                  @pc = nil
+                end
                 @player_status = nil
-                @arrival_pcs.push(@pc.noun) if (defined?(Lich::Claim) && Lich::Claim::Lock.owned?)
+                @player_title = nil
               else
                 if @game =~ /^DR/
                   GameObj.clear_pcs
@@ -792,7 +797,7 @@ module Lich
                     GameObj.new_pc(nil, noun, player, status)
                   }
                 else
-                  if (text_string =~ /^ who (?:is|appears) ([\w\s]+)(?:,| and|\.|$)/) or (text_string =~ / \(([\w\s]+)\)(?: \(([\w\s]+)\))?/)
+                  if @pc && ((text_string =~ /^ who (?:is|appears) ([\w\s]+)(?:,| and|\.|$)/) || (text_string =~ / \(([\w\s]+)\)(?: \(([\w\s]+)\))?/))
                     if @pc.status
                       @pc.status.concat " #{$1}"
                     else
