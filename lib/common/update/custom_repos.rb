@@ -69,12 +69,12 @@ module Lich
             return
           end
 
-          if branch && branch !~ /^[A-Za-z0-9._\/-]+$/
+          if branch && (branch.empty? || branch !~ /^[A-Za-z0-9._\/-]+$/)
             StatusReporter.respond_mono("[lich5-update: Invalid branch name '#{branch}'. Branch names may only contain letters, digits, dots, hyphens, underscores, and slashes.]")
             return
           end
 
-          UserVars.custom_repos ||= {}
+          UserVars.custom_repos = {} unless UserVars.custom_repos.is_a?(Hash)
           if UserVars.custom_repos[owner_repo]
             StatusReporter.respond_mono("[lich5-update: '#{owner_repo}' is already registered.]")
             return
@@ -100,7 +100,7 @@ module Lich
         # @param owner_repo [String] "owner/repo" format
         # @return [void]
         def remove_custom_repo(owner_repo)
-          UserVars.custom_repos ||= {}
+          UserVars.custom_repos = {} unless UserVars.custom_repos.is_a?(Hash)
           unless UserVars.custom_repos.delete(owner_repo)
             StatusReporter.respond_mono("[lich5-update: '#{owner_repo}' is not a registered custom repo.]")
             return

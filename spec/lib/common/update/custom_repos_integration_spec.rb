@@ -36,6 +36,40 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
     end
   end
 
+  describe '#tracked_scripts identity resolution' do
+    it 'resolves custom repo scripts by key, not config equality' do
+      UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'dev' } }
+      UserVars.tracked_scripts = { 'MahtraDR/test' => ['my-script.lic'] }
+
+      config = Lich::Util::Update::CustomRepos.build_config('MahtraDR/test', { 'branch' => 'dev' })
+      result = tracker.tracked_scripts(config, repo_key: 'MahtraDR/test')
+
+      expect(result).to include('my-script.lic')
+    end
+
+    it 'still resolves when non-identity config fields differ' do
+      UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'dev' } }
+      UserVars.tracked_scripts = { 'MahtraDR/test' => ['my-script.lic'] }
+
+      config = Lich::Util::Update::CustomRepos.build_config('MahtraDR/test', { 'branch' => 'dev' })
+      config[:some_new_field] = 'added later'
+
+      result = tracker.tracked_scripts(config, repo_key: 'MahtraDR/test')
+
+      expect(result).to include('my-script.lic')
+    end
+
+    it 'would fail to resolve custom repo without explicit key' do
+      UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'dev' } }
+      UserVars.tracked_scripts = { 'MahtraDR/test' => ['my-script.lic'] }
+
+      config = Lich::Util::Update::CustomRepos.build_config('MahtraDR/test', { 'branch' => 'dev' })
+      result = tracker.tracked_scripts(config)
+
+      expect(result).not_to include('my-script.lic')
+    end
+  end
+
   describe '#untrack_script with custom repo' do
     it 'untracks a script from a custom repo' do
       UserVars.custom_repos = { 'MahtraDR/dr-scripts' => { 'branch' => 'main' } }
@@ -99,6 +133,15 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
       result = tracker.check_collision('unique-script.lic', 'dr-scripts')
 
       expect(result).to be_nil
+    end
+
+    it 'checks the right directory for :all repo installed files' do
+      File.binwrite(File.join(tmpdir, 'common.lic'), '# dr-scripts version')
+
+      result = tracker.check_collision('common.lic', 'MahtraDR/custom')
+
+      expect(result).to match(/Error:.*already installed from.*DR Scripts/)
+      expect(result).to match(/shadow/)
     end
 
     it 'blocks track when script is already installed from :all mode repo' do

@@ -118,10 +118,33 @@ RSpec.describe Lich::Util::Update::CustomRepos do
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Invalid branch name/)
     end
 
+    it 'rejects empty branch string' do
+      manager.add_custom_repo('owner/repo', '')
+
+      expect(UserVars.custom_repos).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Invalid branch name/)
+    end
+
+    it 'rejects branch with shell metacharacters' do
+      manager.add_custom_repo('owner/repo', 'main;rm -rf /')
+
+      expect(UserVars.custom_repos).to be_nil
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Invalid branch name/)
+    end
+
     it 'accepts valid branch names with slashes' do
       manager.add_custom_repo('owner/repo', 'feature/my-branch')
 
       expect(UserVars.custom_repos['owner/repo']['branch']).to eq('feature/my-branch')
+    end
+
+    it 'recovers from corrupted UserVars.custom_repos' do
+      UserVars.custom_repos = 'corrupted-string'
+
+      manager.add_custom_repo('owner/repo')
+
+      expect(UserVars.custom_repos).to be_a(Hash)
+      expect(UserVars.custom_repos).to have_key('owner/repo')
     end
   end
 
@@ -151,6 +174,13 @@ RSpec.describe Lich::Util::Update::CustomRepos do
     it 'reports error for unknown repo' do
       manager.remove_custom_repo('unknown/repo')
 
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/not a registered/)
+    end
+
+    it 'does not crash when UserVars.custom_repos is corrupted' do
+      UserVars.custom_repos = 42
+
+      expect { manager.remove_custom_repo('owner/repo') }.not_to raise_error
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/not a registered/)
     end
   end
