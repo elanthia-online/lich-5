@@ -807,6 +807,7 @@ reconnect_if_wanted = proc {
     Vars.save
     Lich.log 'info: closing connections...'
     Lich::InternalAPI::ActiveSessions::Lifecycle.stop
+    Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
     Game.close
     200.times { sleep 0.1; break if Game.closed? }
     pause 0.5
