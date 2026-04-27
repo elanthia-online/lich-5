@@ -430,6 +430,10 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(described_class.resolve_instance(['--login', 'Tsetem', '--dark-mode=true'])).to eq(:__unset)
     end
 
+    it 'ignores the public headless alias when resolving instance' do
+      expect(described_class.resolve_instance(['--login', 'Tsetem', '--headless'])).to eq(:__unset)
+    end
+
     it 'ignores optional path modifiers used by persistent launcher child sessions' do
       expect(described_class.resolve_instance(['--home=/tmp/lich', '--data=/tmp/data'])).to eq(:__unset)
     end
