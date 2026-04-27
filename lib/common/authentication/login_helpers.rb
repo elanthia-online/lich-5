@@ -507,6 +507,23 @@ module Lich
           [instance, frontend, custom_launch]
         end
 
+        # Resolves which frontend should be used when matching a saved entry for
+        # CLI login.
+        #
+        # Headless CLI launches still carry an intended frontend for downstream
+        # runtime behavior, but saved-entry matching should not reject an entry
+        # solely because `--without-frontend` was passed.
+        #
+        # @param requested_frontend [String, Symbol] frontend parsed from CLI args
+        # @param argv [Array<String>] command line arguments
+        # @return [String, Symbol] frontend for saved-entry lookup, or :__unset
+        #   when headless mode should ignore frontend during matching
+        def self.resolve_lookup_frontend(requested_frontend, argv)
+          return :__unset if argv.include?('--without-frontend')
+
+          requested_frontend
+        end
+
         # Formats the game instance launch flag for Lich based on version.
         #
         # Older versions of Lich (pre-5.12) only recognize specific lowercase flags
