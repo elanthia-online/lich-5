@@ -19,7 +19,9 @@ module Lich
           if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:mono)
             Lich::Messaging.mono(text)
           else
-            respond text
+            # respond is a top-level method (private on Object). Bare `respond`
+            # can't be called from a module class method without send.
+            send(:respond, text)
           end
         end
 

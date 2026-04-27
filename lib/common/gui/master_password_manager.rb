@@ -123,8 +123,16 @@ module Lich
           false
         end
 
+        # Returns whether the macOS Keychain CLI is available for launcher use.
+        #
+        # On some macOS + Ruby/GTK combinations, spawning a shell command here can
+        # raise during GUI startup before the launcher is fully built. Prefer a
+        # direct executable check for the system Keychain CLI.
         private_class_method def self.macos_keychain_available?
-          system('which security >/dev/null 2>&1')
+          File.executable?('/usr/bin/security')
+        rescue StandardError => e
+          Lich.log "error: Failed to check macOS keychain availability: #{e.message}"
+          false
         end
 
         private_class_method def self.store_macos_keychain(password)

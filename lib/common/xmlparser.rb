@@ -319,9 +319,7 @@ module Lich
             ActiveSpell.request_update
           end
           if name == 'resource'
-            # rubocop:disable Lint/Void
             nil
-            # rubocop:enable Lint/Void
           end
           if name == 'pushStream'
             @in_stream = true
