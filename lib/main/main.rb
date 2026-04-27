@@ -57,15 +57,18 @@ reconnect_if_wanted = proc {
     # Extract character name from --login argument
     requested_character = ARGV[ARGV.index('--login') + 1].capitalize
 
-    # Parse game code, frontend, and custom_launch from remaining arguments
+    # Parse game code, frontend, and custom_launch from remaining arguments.
+    # In headless mode, the requested frontend still matters to runtime startup
+    # semantics, but it should not constrain saved-entry lookup.
     modifiers = ARGV.dup
     requested_instance, requested_fe, requested_custom_launch = Lich::Common::Authentication::LoginHelpers.resolve_login_args(modifiers)
+    lookup_frontend = Lich::Common::Authentication::LoginHelpers.resolve_lookup_frontend(requested_fe, ARGV)
 
     # Execute CLI login flow and get launch data
     launch_data_array = Lich::Common::Authentication::CLI.execute(
       requested_character,
       game_code: requested_instance,
-      frontend: requested_fe,
+      frontend: lookup_frontend,
       custom_launch: requested_custom_launch,
       data_dir: DATA_DIR
     )
@@ -480,9 +483,7 @@ reconnect_if_wanted = proc {
       $login_time = Time.now
 
       if $offline_mode
-        # rubocop:disable Lint/Void
         nil
-        # rubocop:enable Lint/Void
       elsif Frontend.supports_gsl?
         #
         # send the login key
@@ -647,7 +648,7 @@ reconnect_if_wanted = proc {
             connected: false
           )
 
-          Lich.log "info: detachable client server listening on #{@argv_options[:detachable_client_host]}:#{@argv_options[:detachable_client_port]}"
+          Lich.log "info: detachable client server listening on #{server.local_address.ip_address}:#{server.local_address.ip_port}"
 
           accepted_socket, = server.accept
           $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(accepted_socket)

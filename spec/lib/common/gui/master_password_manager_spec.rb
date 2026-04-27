@@ -84,6 +84,22 @@ RSpec.describe Lich::Common::GUI::MasterPasswordManager do
     end
   end
 
+  describe '.macos_keychain_available?' do
+    it 'checks the system security executable directly' do
+      allow(File).to receive(:executable?).with('/usr/bin/security').and_return(true)
+
+      expect(described_class.send(:macos_keychain_available?)).to be true
+    end
+
+    it 'returns false and logs when the executable check raises' do
+      allow(File).to receive(:executable?).with('/usr/bin/security').and_raise(StandardError, 'boom')
+      allow(Lich).to receive(:log)
+
+      expect(described_class.send(:macos_keychain_available?)).to be false
+      expect(Lich).to have_received(:log).with(/Failed to check macOS keychain availability/)
+    end
+  end
+
   describe '.store_master_password' do
     context 'when keychain is available' do
       before do

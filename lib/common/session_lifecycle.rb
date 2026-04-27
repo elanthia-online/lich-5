@@ -43,8 +43,8 @@ module Lich
       # @param detachable_client_port [Integer, nil] configured detachable client port
       # @return [String] one of `headless`, `detachable`, or `session`
       def self.resolve_role(argv:, detachable_client_port:)
-        return 'headless' if argv.include?('--without-frontend')
         return 'detachable' unless detachable_client_port.nil?
+        return 'headless' if argv.include?('--without-frontend')
 
         'session'
       end
