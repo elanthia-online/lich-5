@@ -2,6 +2,7 @@
 When building Gemfile.lock file, please add additional platforms to the file via the following command:
 
 bundle lock \
+  --add-platform aarch64-darwin \
   --add-platform aarch64-linux \
   --add-platform aarch64-linux-gnu \
   --add-platform aarch64-linux-musl \
