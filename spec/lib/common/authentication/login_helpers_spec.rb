@@ -430,6 +430,10 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(described_class.resolve_instance(['--login', 'Tsetem', '--dark-mode=true'])).to eq(:__unset)
     end
 
+    it 'ignores the public headless alias when resolving instance' do
+      expect(described_class.resolve_instance(['--login', 'Tsetem', '--headless'])).to eq(:__unset)
+    end
+
     it 'ignores optional path modifiers used by persistent launcher child sessions' do
       expect(described_class.resolve_instance(['--home=/tmp/lich', '--data=/tmp/data'])).to eq(:__unset)
     end
@@ -475,6 +479,22 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(instance).to eq('GS3')
       expect(frontend).to eq('frostbite')
       expect(custom_launch).to eq(:__unset)
+    end
+  end
+
+  describe '.resolve_lookup_frontend' do
+    it 'returns the requested frontend for normal CLI saved-entry matching' do
+      expect(described_class.resolve_lookup_frontend('frostbite', ['--login', 'pickasso'])).to eq('frostbite')
+    end
+
+    it 'ignores the requested frontend for headless CLI saved-entry matching' do
+      expect(
+        described_class.resolve_lookup_frontend('frostbite', ['--login', 'pickasso', '--without-frontend'])
+      ).to eq(:__unset)
+    end
+
+    it 'preserves an unset frontend when no frontend was requested' do
+      expect(described_class.resolve_lookup_frontend(:__unset, ['--login', 'pickasso'])).to eq(:__unset)
     end
   end
 
