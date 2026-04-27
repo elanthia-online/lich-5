@@ -78,7 +78,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       JSON.dump(owner_pid: Process.pid, auth_token: 'shared-token', updated_at: Time.now.to_i)
     )
 
-    allow(described_class).to receive(:snapshot).and_return(
+    allow(described_class).to receive(:query_snapshot).and_return(
       source: 'ActiveSessionsAPI',
       total: 0,
       connected: 0,
@@ -99,7 +99,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       JSON.dump(owner_pid: Process.pid, auth_token: 'shared-token', updated_at: Time.now.to_i)
     )
 
-    allow(described_class).to receive(:snapshot).and_return(
+    allow(described_class).to receive(:query_snapshot).and_return(
       source: 'ActiveSessionsAPI',
       total: 0,
       connected: 0,
@@ -259,5 +259,92 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
     )
 
     expect(described_class.query_snapshot[:total]).to eq(1)
+  end
+
+  it 'can register after the caller already admitted the feature gate without re-reading the flag' do
+    fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
+    File.write(
+      File.join(temp_dir, 'lich-active-sessions.json'),
+      JSON.dump(owner_pid: 123, auth_token: 'shared-token', updated_at: Time.now.to_i)
+    )
+
+    allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
+    allow(fake_client).to receive(:ping).and_return(true)
+    allow(fake_client).to receive(:upsert).and_return(ok: true)
+
+    expect(described_class).not_to receive(:enabled?)
+
+    expect(described_class.send(:register_session_admitted, { pid: 12_345 })).to be(true)
+  end
+
+  it 'can reuse an existing service after the caller already admitted the feature gate' do
+    fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: true)
+    File.write(
+      File.join(temp_dir, 'lich-active-sessions.json'),
+      JSON.dump(owner_pid: 123, auth_token: 'shared-token', updated_at: Time.now.to_i)
+    )
+
+    allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
+
+    expect(described_class).not_to receive(:enabled?)
+    expect(Lich::InternalAPI::ActiveSessions::Server).not_to receive(:new)
+
+    expect(described_class.send(:ensure_service_internal!, allow_bootstrap: false)).to be(true)
+  end
+
+  it 'does not bootstrap a new service from an admitted path once the real flag is off' do
+    fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
+
+    allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
+    allow(fake_client).to receive(:ping).and_return(false)
+
+    expect(described_class).not_to receive(:enabled?)
+    expect(Lich::InternalAPI::ActiveSessions::Server).not_to receive(:new)
+    expect(described_class.send(:ensure_service_internal!, allow_bootstrap: false)).to be(false)
+  end
+
+  it 'still honors the normal gate for callers using only the public API surface' do
+    allow(described_class).to receive(:enabled?).and_return(false)
+
+    expect(described_class.register_session({ pid: 12_345 })).to be(false)
+    expect(described_class.unregister_session(pid: 12_345)).to be(false)
+    expect(described_class.ensure_service!).to be(false)
+  end
+
+  it 'can unregister after the caller already admitted the feature gate without re-reading the flag' do
+    fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
+    File.write(
+      File.join(temp_dir, 'lich-active-sessions.json'),
+      JSON.dump(owner_pid: 123, auth_token: 'shared-token', updated_at: Time.now.to_i)
+    )
+
+    allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
+    allow(fake_client).to receive(:ping).and_return(true)
+    allow(fake_client).to receive(:remove).and_return(ok: true)
+
+    expect(described_class).not_to receive(:enabled?)
+    expect(Lich::InternalAPI::ActiveSessions::Server).not_to receive(:new)
+
+    expect(described_class.send(:unregister_session_admitted, pid: 12_345)).to be(true)
+  end
+
+  it 'keeps discovery when query_snapshot reports active sessions after the flag is off' do
+    discovery_file = File.join(temp_dir, 'lich-active-sessions.json')
+    File.write(
+      discovery_file,
+      JSON.dump(owner_pid: Process.pid, auth_token: 'shared-token', updated_at: Time.now.to_i)
+    )
+
+    allow(described_class).to receive(:query_snapshot).and_return(
+      source: 'ActiveSessionsAPI',
+      total: 2,
+      connected: 2,
+      detachable: 1,
+      sessions: [{ session_name: 'Tsetem' }, { session_name: 'Another' }]
+    )
+
+    described_class.cleanup_discovery_if_last_session!
+
+    expect(File.exist?(discovery_file)).to be(true)
   end
 end
