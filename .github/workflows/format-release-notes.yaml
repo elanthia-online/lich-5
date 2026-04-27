@@ -35,7 +35,7 @@ jobs:
     steps:
       - name: Seed current release
         id: seed
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const owner = context.repo.owner;
@@ -102,7 +102,7 @@ jobs:
 
       - name: Skip if already formatted (channel sentinel present)
         id: guard
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           BODY: ${{ steps.seed.outputs.body }}
           MODE: ${{ steps.seed.outputs.mode }}
@@ -121,7 +121,7 @@ jobs:
       - name: Find merged Release Please PR for this tag
         if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
         id: findpr
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           VERSION: ${{ steps.seed.outputs.version }}
           BASE: ${{ steps.seed.outputs.base }}
@@ -180,7 +180,7 @@ jobs:
       - name: Read PR body (seed text)
         if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true' && steps.findpr.outputs.found == 'true'
         id: readpr
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           NUMBER: ${{ steps.findpr.outputs.number }}
         with:
@@ -195,7 +195,7 @@ jobs:
       - name: Choose seed body
         if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
         id: choose
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           PR_BODY: ${{ steps.readpr.outputs.body }}
           REL_BODY: ${{ steps.seed.outputs.body }}
@@ -213,7 +213,7 @@ jobs:
       - name: Transform body (normalize header, drop RP boilerplate, plain PR refs, append footer + sentinel)
         if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
         id: transform
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
         # Prefer PR body when a matching RP PR was found; otherwise, use the release body.
           PR_BODY: ${{ steps.choose.outputs.body }}
@@ -283,7 +283,7 @@ jobs:
 
       - name: Update release title (Lich v{version})
         if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RELEASE_ID: ${{ steps.seed.outputs.release_id }}
           VERSION: ${{ steps.seed.outputs.version }}
@@ -302,7 +302,7 @@ jobs:
 
       - name: Update release body
         if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RELEASE_ID: ${{ steps.seed.outputs.release_id }}
           FINAL: ${{ steps.transform.outputs.final }}
