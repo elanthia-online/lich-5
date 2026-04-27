@@ -113,6 +113,131 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
     expect(File.exist?(discovery_file)).to be(true)
   end
 
+  describe '.ensure_service!' do
+    # Stubs the service_client path to report no healthy external service,
+    # forcing ensure_service! into the "start a new server" branch.
+    #
+    # @return [void]
+    def stub_no_external_service
+      dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
+      allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
+      allow(dead_client).to receive(:ping).and_return(false)
+    end
+
+    context 'when the existing server has a dead accept thread' do
+      it 'stops the zombie, starts a replacement, and writes a fresh discovery file' do
+        zombie_server = instance_double(
+          Lich::InternalAPI::ActiveSessions::Server,
+          running?: false,
+          stop: nil,
+          auth_token: 'zombie-token'
+        )
+        described_class.instance_variable_set(:@server, zombie_server)
+        stub_no_external_service
+
+        fresh_server = instance_double(
+          Lich::InternalAPI::ActiveSessions::Server,
+          start: true,
+          stop: nil,
+          auth_token: 'fresh-token'
+        )
+        allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(fresh_server)
+
+        expect(zombie_server).to receive(:stop).ordered
+        expect(described_class.ensure_service!).to be(true)
+
+        discovery = JSON.parse(
+          File.read(File.join(temp_dir, 'lich-active-sessions.json')),
+          symbolize_names: true
+        )
+        expect(discovery[:auth_token]).to eq('fresh-token')
+        expect(discovery[:owner_pid]).to eq(Process.pid)
+
+        # Clean up injected double before after block calls stop_service!
+        described_class.instance_variable_set(:@server, nil)
+      end
+    end
+
+    context 'when the existing server has a healthy accept thread' do
+      it 'reuses the healthy service without creating a new server' do
+        healthy_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: true)
+        allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(healthy_client)
+        File.write(
+          File.join(temp_dir, 'lich-active-sessions.json'),
+          JSON.dump(owner_pid: Process.pid, auth_token: 'healthy-token', updated_at: Time.now.to_i)
+        )
+
+        expect(Lich::InternalAPI::ActiveSessions::Server).not_to receive(:new)
+        expect(described_class.ensure_service!).to be(true)
+      end
+    end
+
+    context 'when no prior server exists' do
+      it 'creates a new server without zombie cleanup' do
+        stub_no_external_service
+
+        fresh_server = instance_double(
+          Lich::InternalAPI::ActiveSessions::Server,
+          start: true,
+          stop: nil,
+          auth_token: 'cold-start-token'
+        )
+        allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(fresh_server)
+
+        expect(described_class.ensure_service!).to be(true)
+
+        discovery = JSON.parse(
+          File.read(File.join(temp_dir, 'lich-active-sessions.json')),
+          symbolize_names: true
+        )
+        expect(discovery[:auth_token]).to eq('cold-start-token')
+      end
+    end
+
+    context 'when the zombie is cleaned up but the replacement fails to start' do
+      it 'returns false without writing a discovery file' do
+        zombie_server = instance_double(
+          Lich::InternalAPI::ActiveSessions::Server,
+          running?: false,
+          stop: nil,
+          auth_token: 'zombie-token'
+        )
+        described_class.instance_variable_set(:@server, zombie_server)
+        stub_no_external_service
+
+        doomed_server = instance_double(
+          Lich::InternalAPI::ActiveSessions::Server,
+          start: false,
+          stop: nil,
+          auth_token: 'doomed-token'
+        )
+        allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(doomed_server)
+
+        expect(described_class.ensure_service!).to be(false)
+        expect(File.exist?(File.join(temp_dir, 'lich-active-sessions.json'))).to be(false)
+
+        described_class.instance_variable_set(:@server, nil)
+      end
+    end
+
+    context 'when zombie server.stop raises during cleanup' do
+      it 'catches the error at the outer rescue and returns false' do
+        zombie_server = instance_double(
+          Lich::InternalAPI::ActiveSessions::Server,
+          running?: false,
+          auth_token: 'zombie-token'
+        )
+        allow(zombie_server).to receive(:stop).and_raise(Errno::EBADF, 'bad fd during stop')
+        described_class.instance_variable_set(:@server, zombie_server)
+        stub_no_external_service
+
+        expect(described_class.ensure_service!).to be(false)
+
+        described_class.instance_variable_set(:@server, nil)
+      end
+    end
+  end
+
   it 'queries a discovered service without consulting the local feature flag state' do
     fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
     File.write(
