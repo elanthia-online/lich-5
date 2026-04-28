@@ -517,8 +517,8 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         expect(Lich::Messaging.messages).to be_empty
       end
 
-      it 'does not call custom_require' do
-        expect(described_class).not_to receive(:custom_require)
+      it 'does not call start_script' do
+        expect(described_class).not_to receive(:start_script)
         described_class.check_moonwatch
       end
     end
@@ -526,12 +526,12 @@ RSpec.describe Lich::DragonRealms::DRCMM do
     context 'when moonwatch is not running' do
       before do
         allow(Script).to receive(:running?).with('moonwatch').and_return(false)
+        allow_any_instance_of(Object).to receive(:start_script).with('moonwatch') do
+          UserVars.moons = { 'visible' => [] }
+        end
       end
 
       it 'logs a bold message about starting moonwatch' do
-        mock_require = proc { |_name| UserVars.moons = { 'visible' => [] } }
-        allow(described_class).to receive(:custom_require).and_return(mock_require)
-
         described_class.check_moonwatch
 
         bold_messages = Lich::Messaging.messages.select { |m| m[:type] == 'bold' }
@@ -539,17 +539,14 @@ RSpec.describe Lich::DragonRealms::DRCMM do
         expect(bold_messages.first[:message]).to include('moonwatch is not running')
       end
 
-      it 'calls custom_require to start moonwatch' do
-        mock_require = proc { |_name| UserVars.moons = { 'visible' => [] } }
-        expect(described_class).to receive(:custom_require).and_return(mock_require)
-
+      it 'calls start_script to start moonwatch' do
+        expect_any_instance_of(Object).to receive(:start_script).with('moonwatch') do
+          UserVars.moons = { 'visible' => [] }
+        end
         described_class.check_moonwatch
       end
 
       it 'logs a plain message about autostart with $clean_lich_char' do
-        mock_require = proc { |_name| UserVars.moons = { 'visible' => [] } }
-        allow(described_class).to receive(:custom_require).and_return(mock_require)
-
         described_class.check_moonwatch
 
         plain_messages = Lich::Messaging.messages.select { |m| m[:type] == 'plain' }
@@ -560,8 +557,9 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       it 'resets UserVars.moons before starting moonwatch' do
         UserVars.moons = { 'katamba' => { 'timer' => 10 }, 'visible' => ['katamba'] }
         populated_moons = { 'visible' => ['xibar'], 'xibar' => { 'timer' => 5 } }
-        mock_require = proc { |_name| UserVars.moons = populated_moons }
-        allow(described_class).to receive(:custom_require).and_return(mock_require)
+        allow_any_instance_of(Object).to receive(:start_script).with('moonwatch') do
+          UserVars.moons = populated_moons
+        end
 
         described_class.check_moonwatch
 
