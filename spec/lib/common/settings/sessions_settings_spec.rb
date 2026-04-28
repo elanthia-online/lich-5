@@ -264,4 +264,42 @@ RSpec.describe Lich::Common::SessionsSettings do
       expect(snapshot[:stale]).to eq(1)
     end
   end
+
+  describe 'admitted paths' do
+    it 'admitted methods are private' do
+      expect { described_class.register_session_admitted(pid: 1, session_name: 'X', role: 'session', state: 'running') }.to raise_error(NoMethodError)
+      expect { described_class.heartbeat_admitted(pid: 1, state: 'running', session_name: 'X') }.to raise_error(NoMethodError)
+      expect { described_class.unregister_session_admitted(pid: 1) }.to raise_error(NoMethodError)
+    end
+
+    it 'register_session_admitted bypasses enabled? gate' do
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(described_class::FEATURE_FLAG).and_return(false)
+      allow(adapter).to receive(:tracked_live_candidates).and_return([])
+      allow(adapter).to receive(:upsert_session)
+      allow(described_class).to receive(:os_presence).and_return(os_seen: 1, os_name: 1, os_seen_at: 1_001)
+
+      described_class.send(:register_session_admitted, pid: 50_001, session_name: 'Tsetem', role: 'session', state: 'running')
+
+      expect(adapter).to have_received(:upsert_session).with(hash_including(pid: 50_001, session_name: 'Tsetem', state: 'running'))
+    end
+
+    it 'heartbeat_admitted bypasses enabled? gate' do
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(described_class::FEATURE_FLAG).and_return(false)
+      allow(adapter).to receive(:upsert_session)
+      allow(described_class).to receive(:os_presence).and_return(os_seen: 1, os_name: 1, os_seen_at: 1_001)
+
+      described_class.send(:heartbeat_admitted, pid: 50_001, state: 'running', session_name: 'Tsetem')
+
+      expect(adapter).to have_received(:upsert_session).with(hash_including(pid: 50_001, state: 'running'))
+    end
+
+    it 'unregister_session_admitted bypasses enabled? gate' do
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(described_class::FEATURE_FLAG).and_return(false)
+      allow(adapter).to receive(:upsert_session)
+
+      described_class.send(:unregister_session_admitted, pid: 50_001)
+
+      expect(adapter).to have_received(:upsert_session).with(hash_including(pid: 50_001, state: 'exited', os_seen: 0, os_name: 0))
+    end
+  end
 end
