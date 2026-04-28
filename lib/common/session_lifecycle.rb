@@ -127,13 +127,12 @@ module Lich
                   "tick_epoch=#{Time.now.to_i}"
                 ) if Lich.respond_to?(:log)
                 SessionsSettings.send(:heartbeat_admitted,
-                  pid: Process.pid,
-                  state: 'running',
-                  session_name: session_name,
-                  role: role,
-                  frontend: frontend,
-                  game_code: game_code
-                )
+                                      pid: Process.pid,
+                                      state: 'running',
+                                      session_name: session_name,
+                                      role: role,
+                                      frontend: frontend,
+                                      game_code: game_code)
               end
             rescue StandardError => e
               Lich.log("warning: SessionLifecycle heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
@@ -239,13 +238,12 @@ module Lich
             "attempt_epoch=#{Time.now.to_i}"
           ) if Lich.respond_to?(:log)
           SessionsSettings.send(:register_session_admitted,
-            pid: Process.pid,
-            session_name: session_name,
-            role: role,
-            state: 'running',
-            frontend: frontend,
-            game_code: game_code
-          )
+                                pid: Process.pid,
+                                session_name: session_name,
+                                role: role,
+                                state: 'running',
+                                frontend: frontend,
+                                game_code: game_code)
           Lich.log(
             "info: SessionLifecycle deferred register success " \
             "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
