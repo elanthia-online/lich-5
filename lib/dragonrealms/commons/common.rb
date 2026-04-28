@@ -899,10 +899,12 @@ module Lich
         tertiary = points > 100 ? points - 100 : 0
 
         stance = case skill.downcase
-                 when 'parry'
+                 when 'evasion'
                    "100 #{secondary} #{tertiary}"
+                 when 'parry'
+                   "#{secondary} 100 #{tertiary}"
                  when 'shield'
-                   "100 #{tertiary} #{secondary}"
+                   "#{secondary} #{tertiary} 100"
                  else
                    "100 #{secondary} #{tertiary}"
                  end
