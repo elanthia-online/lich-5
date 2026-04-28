@@ -19,7 +19,7 @@ module Lich
       end
 
       def self.cutthroat?
-        Infomon.get_bool("status.cutthroat") && Effects::Debuffs.active?('Major Bleed')
+        Infomon.get_bool("status.cutthroat") && (Effects::Debuffs.active?('Major Bleed') || Effects::Debuffs.active?('Silenced'))
       end
 
       def self.silenced?
