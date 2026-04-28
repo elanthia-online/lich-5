@@ -64,12 +64,12 @@ module Lich
         # @param branch [String, nil] branch name (default: "main")
         # @return [void]
         def add_custom_repo(owner_repo, branch = nil)
-          unless owner_repo =~ %r{^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$}
+          unless owner_repo =~ %r{\A[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\z}
             StatusReporter.respond_mono("[lich5-update: Invalid format '#{owner_repo}'. Use owner/repo (e.g. MahtraDR/dr-scripts).]")
             return
           end
 
-          if branch && (branch.empty? || branch !~ /^[A-Za-z0-9._\/-]+$/)
+          if branch && (branch.empty? || branch !~ /\A[A-Za-z0-9._\/-]+\z/)
             StatusReporter.respond_mono("[lich5-update: Invalid branch name '#{branch}'. Branch names may only contain letters, digits, dots, hyphens, underscores, and slashes.]")
             return
           end
