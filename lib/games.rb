@@ -577,7 +577,6 @@ module Lich
               return process_xml_data(server_string) # Return to retry with fixed string
             end
 
-            $stdout.puts "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
             Lich.log "Invalid XML detected - please report this: #{server_string.inspect}"
             Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
           end
@@ -624,27 +623,18 @@ module Lich
 
         def send_to_client(alt_string)
           if $_DETACHABLE_CLIENT_
-            begin
-              $_DETACHABLE_CLIENT_.write(alt_string)
-            rescue
+            $_DETACHABLE_CLIENT_.write(alt_string)
+            unless $_DETACHABLE_CLIENT_.alive?
               $_DETACHABLE_CLIENT_.close rescue nil
               $_DETACHABLE_CLIENT_ = nil
-              respond "--- Lich: error: client_thread: #{$!}"
-              respond $!.backtrace.first
-              Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
             end
-          else
-            begin
-              $_CLIENT_.write(alt_string)
-            rescue Errno::EPIPE, IOError => e
-              Lich.log "error: client_thread: #{e}\n\t#{e.backtrace.join("\n\t")}"
-            end
+          elsif $_CLIENT_
+            $_CLIENT_.write(alt_string)
           end
         end
 
         def handle_thread_error(error)
           Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
-          $stdout.puts "error: server_thread: #{error}\n\t#{error.backtrace.slice(0..10).join("\n\t")}"
           sleep 0.2
 
           # Determine if we should retry

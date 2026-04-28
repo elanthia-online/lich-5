@@ -598,8 +598,6 @@ reconnect_if_wanted = proc {
           end
         end
       rescue
-        respond "--- Lich: error: client_thread: #{$!}"
-        respond $!.backtrace.first
         Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         sleep 0.2
         retry unless $_CLIENT_.closed? or Game.closed? or !Game.thread.alive? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed/i)
@@ -745,8 +743,6 @@ reconnect_if_wanted = proc {
             end
             Lich.log "info: detachable client disconnected"
           rescue => e
-            respond "--- Lich: error: client_thread: #{e}"
-            respond e.backtrace.first
             Lich.log "error: detachable_client_thread (communication): #{e}\n\t#{e.backtrace.join("\n\t")}"
           ensure
             $_DETACHABLE_CLIENT_.close rescue nil
