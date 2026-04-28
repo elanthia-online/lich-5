@@ -694,6 +694,7 @@ $fake_stormfront ||= false
 $_CLIENT_ ||= Object.new.tap do |obj|
   def obj.write(_data); end
   def obj.closed?; false; end
+  def obj.alive?; true; end
 end
 $_DETACHABLE_CLIENT_ ||= nil
 $pause_all_lock ||= Mutex.new

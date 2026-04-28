@@ -396,7 +396,7 @@ module Lich
               should_continue = handle_thread_error(e)
 
               # Only retry if handle_thread_error says it's safe and socket is still open
-              if should_continue && !@socket.closed? && !$_CLIENT_.closed?
+              if should_continue && !@socket.closed? && $_CLIENT_.alive?
                 Lich.log "Retrying server thread after error..."
                 consecutive_timeouts = 0 # Reset counter on retry
                 sleep 1 # Brief pause before retry
@@ -649,7 +649,7 @@ module Lich
             return false
           else
             # Check if socket/client are closed or if it's a known fatal error
-            if $_CLIENT_.closed? || @socket.closed?
+            if !$_CLIENT_.alive? || @socket.closed?
               Lich.log "Client or socket closed - will not retry"
               return false
             elsif error.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i
