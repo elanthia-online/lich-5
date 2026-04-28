@@ -34,6 +34,7 @@ module Lich
         # @param registration [Hash] stored registration with :branch key
         # @return [Hash] config hash matching SCRIPT_REPOS entry shape
         def self.build_config(owner_repo, registration)
+          registration = {} unless registration.is_a?(Hash)
           branch = registration[:branch] || registration['branch'] || 'main'
           {
             display_name: "Custom: #{owner_repo}",
@@ -53,7 +54,8 @@ module Lich
         #
         # @return [Hash] owner_repo => registration hash
         def self.all
-          UserVars.custom_repos || {}
+          data = UserVars.custom_repos
+          data.is_a?(Hash) ? data : {}
         end
 
         # Registers a custom repository.
@@ -62,14 +64,26 @@ module Lich
         # @param branch [String, nil] branch name (default: "main")
         # @return [void]
         def add_custom_repo(owner_repo, branch = nil)
-          unless owner_repo =~ %r{^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$}
+          unless owner_repo =~ %r{\A[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\z}
             StatusReporter.respond_mono("[lich5-update: Invalid format '#{owner_repo}'. Use owner/repo (e.g. MahtraDR/dr-scripts).]")
             return
           end
 
-          UserVars.custom_repos ||= {}
+          if branch && (branch.empty? || branch !~ /\A[A-Za-z0-9._\/-]+\z/)
+            StatusReporter.respond_mono("[lich5-update: Invalid branch name '#{branch}'. Branch names may only contain letters, digits, dots, hyphens, underscores, and slashes.]")
+            return
+          end
+
+          UserVars.custom_repos = {} unless UserVars.custom_repos.is_a?(Hash)
           if UserVars.custom_repos[owner_repo]
             StatusReporter.respond_mono("[lich5-update: '#{owner_repo}' is already registered.]")
+            return
+          end
+
+          new_dir = self.class.repo_dir_name(owner_repo)
+          collider = UserVars.custom_repos.keys.find { |k| self.class.repo_dir_name(k) == new_dir }
+          if collider
+            StatusReporter.respond_mono("[lich5-update: '#{owner_repo}' collides with '#{collider}' (both map to directory '#{new_dir}'). Choose a different repo or remove the existing one first.]")
             return
           end
 
@@ -86,7 +100,7 @@ module Lich
         # @param owner_repo [String] "owner/repo" format
         # @return [void]
         def remove_custom_repo(owner_repo)
-          UserVars.custom_repos ||= {}
+          UserVars.custom_repos = {} unless UserVars.custom_repos.is_a?(Hash)
           unless UserVars.custom_repos.delete(owner_repo)
             StatusReporter.respond_mono("[lich5-update: '#{owner_repo}' is not a registered custom repo.]")
             return
