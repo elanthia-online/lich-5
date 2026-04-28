@@ -396,7 +396,7 @@ module Lich
               should_continue = handle_thread_error(e)
 
               # Only retry if handle_thread_error says it's safe and socket is still open
-              if should_continue && !@socket.closed? && !$_CLIENT_.closed?
+              if should_continue && !@socket.closed? && $_CLIENT_.alive?
                 Lich.log "Retrying server thread after error..."
                 consecutive_timeouts = 0 # Reset counter on retry
                 sleep 1 # Brief pause before retry
@@ -577,7 +577,6 @@ module Lich
               return process_xml_data(server_string) # Return to retry with fixed string
             end
 
-            $stdout.puts "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
             Lich.log "Invalid XML detected - please report this: #{server_string.inspect}"
             Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
           end
@@ -624,27 +623,18 @@ module Lich
 
         def send_to_client(alt_string)
           if $_DETACHABLE_CLIENT_
-            begin
-              $_DETACHABLE_CLIENT_.write(alt_string)
-            rescue
+            $_DETACHABLE_CLIENT_.write(alt_string)
+            unless $_DETACHABLE_CLIENT_.alive?
               $_DETACHABLE_CLIENT_.close rescue nil
               $_DETACHABLE_CLIENT_ = nil
-              respond "--- Lich: error: client_thread: #{$!}"
-              respond $!.backtrace.first
-              Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
             end
-          else
-            begin
-              $_CLIENT_.write(alt_string)
-            rescue Errno::EPIPE, IOError => e
-              Lich.log "error: client_thread: #{e}\n\t#{e.backtrace.join("\n\t")}"
-            end
+          elsif $_CLIENT_
+            $_CLIENT_.write(alt_string)
           end
         end
 
         def handle_thread_error(error)
           Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
-          $stdout.puts "error: server_thread: #{error}\n\t#{error.backtrace.slice(0..10).join("\n\t")}"
           sleep 0.2
 
           # Determine if we should retry
@@ -659,7 +649,7 @@ module Lich
             return false
           else
             # Check if socket/client are closed or if it's a known fatal error
-            if $_CLIENT_.closed? || @socket.closed?
+            if !$_CLIENT_.alive? || @socket.closed?
               Lich.log "Client or socket closed - will not retry"
               return false
             elsif error.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i
