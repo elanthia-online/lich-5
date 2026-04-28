@@ -53,22 +53,9 @@ module Lich
       def self.register_session(pid:, session_name:, role:, state:, frontend: nil, game_code: nil, hidden: false, metadata_json: nil)
         return unless enabled?
 
-        now = Time.now.to_i
-        sweep_dead_sessions!(now: now)
-        os_presence_state = os_presence(pid: pid, session_name: session_name, now: now)
-        adapter.upsert_session(
-          pid: pid,
-          session_name: session_name,
-          role: role,
-          state: state,
-          frontend: frontend,
-          game_code: game_code,
-          hidden: hidden ? 1 : 0,
-          started_at: now,
-          last_heartbeat_at: now,
-          os_seen_at: os_presence_state[:os_seen_at],
-          os_seen: os_presence_state[:os_seen],
-          os_name: os_presence_state[:os_name],
+        register_session_admitted(
+          pid: pid, session_name: session_name, role: role, state: state,
+          frontend: frontend, game_code: game_code, hidden: hidden,
           metadata_json: metadata_json
         )
       end
@@ -87,21 +74,9 @@ module Lich
       def self.heartbeat(pid:, state: nil, hidden: nil, session_name: nil, role: nil, frontend: nil, game_code: nil, last_utilization_at: nil)
         return unless enabled?
 
-        now = Time.now.to_i
-        session_name = session_name || adapter.find_session(pid: pid)&.fetch('session_name', nil)
-        os_presence_state = os_presence(pid: pid, session_name: session_name, now: now)
-        adapter.upsert_session(
-          pid: pid,
-          session_name: session_name,
-          role: role,
-          state: state,
-          frontend: frontend,
-          game_code: game_code,
-          hidden: hidden.nil? ? nil : (hidden ? 1 : 0),
-          last_heartbeat_at: now,
-          os_seen_at: os_presence_state[:os_seen_at],
-          os_seen: os_presence_state[:os_seen],
-          os_name: os_presence_state[:os_name],
+        heartbeat_admitted(
+          pid: pid, state: state, hidden: hidden, session_name: session_name,
+          role: role, frontend: frontend, game_code: game_code,
           last_utilization_at: last_utilization_at
         )
       end
@@ -113,14 +88,7 @@ module Lich
       def self.unregister_session(pid:)
         return unless enabled?
 
-        now = Time.now.to_i
-        adapter.upsert_session(
-          pid: pid,
-          state: 'exited',
-          os_seen_at: now,
-          os_seen: 0,
-          os_name: 0
-        )
+        unregister_session_admitted(pid: pid)
       end
 
       # Builds a normalized reporting snapshot from tracked session rows.
@@ -328,6 +296,66 @@ module Lich
         }.compact
       end
       private_class_method :disabled_snapshot
+
+      # --- Admitted paths -------------------------------------------------
+      # These skip the enabled? gate and are intended for lifecycle-internal
+      # callers that latched the feature flag at startup. Keeping them
+      # private forces external callers through the public gate.
+
+      def self.register_session_admitted(pid:, session_name:, role:, state:, frontend: nil, game_code: nil, hidden: false, metadata_json: nil)
+        now = Time.now.to_i
+        sweep_dead_sessions!(now: now)
+        os_presence_state = os_presence(pid: pid, session_name: session_name, now: now)
+        adapter.upsert_session(
+          pid: pid,
+          session_name: session_name,
+          role: role,
+          state: state,
+          frontend: frontend,
+          game_code: game_code,
+          hidden: hidden ? 1 : 0,
+          started_at: now,
+          last_heartbeat_at: now,
+          os_seen_at: os_presence_state[:os_seen_at],
+          os_seen: os_presence_state[:os_seen],
+          os_name: os_presence_state[:os_name],
+          metadata_json: metadata_json
+        )
+      end
+      private_class_method :register_session_admitted
+
+      def self.heartbeat_admitted(pid:, state: nil, hidden: nil, session_name: nil, role: nil, frontend: nil, game_code: nil, last_utilization_at: nil)
+        now = Time.now.to_i
+        session_name = session_name || adapter.find_session(pid: pid)&.fetch('session_name', nil)
+        os_presence_state = os_presence(pid: pid, session_name: session_name, now: now)
+        adapter.upsert_session(
+          pid: pid,
+          session_name: session_name,
+          role: role,
+          state: state,
+          frontend: frontend,
+          game_code: game_code,
+          hidden: hidden.nil? ? nil : (hidden ? 1 : 0),
+          last_heartbeat_at: now,
+          os_seen_at: os_presence_state[:os_seen_at],
+          os_seen: os_presence_state[:os_seen],
+          os_name: os_presence_state[:os_name],
+          last_utilization_at: last_utilization_at
+        )
+      end
+      private_class_method :heartbeat_admitted
+
+      def self.unregister_session_admitted(pid:)
+        now = Time.now.to_i
+        adapter.upsert_session(
+          pid: pid,
+          state: 'exited',
+          os_seen_at: now,
+          os_seen: 0,
+          os_name: 0
+        )
+      end
+      private_class_method :unregister_session_admitted
     end
   end
 end
