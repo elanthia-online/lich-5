@@ -424,7 +424,7 @@ module Lich
 
         Lich::Messaging.msg("bold", "DRCMM: moonwatch is not running. Starting it now.")
         UserVars.moons = {}
-        custom_require.call('moonwatch')
+        start_script('moonwatch')
         Lich::Messaging.msg("plain", "DRCMM: Run `#{$clean_lich_char}e autostart('moonwatch')` to avoid this in the future.")
         pause 0.5 while UserVars.moons.empty?
       end
