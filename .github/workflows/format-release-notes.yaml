@@ -52,9 +52,9 @@ jobs:
               const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
               return data;
             }
-            async function latestStable() {
+            async function latestStable(includeDraft = false) {
               const { data } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 });
-              const hit = (data || []).find(r => !r.draft && !r.prerelease);
+              const hit = (data || []).find(r => !r.prerelease && (includeDraft || !r.draft));
               if (!hit) throw new Error('No stable release found');
               return hit;
             }
@@ -75,7 +75,7 @@ jobs:
             } else if (ev === 'workflow_run') {
               // Infer target channel from the upstream workflow name
               const wantPrerelease = /prerelease/i.test(wfName);
-              try { rel = wantPrerelease ? await latestPrerelease() : await latestStable(); } catch (e) {
+              try { rel = wantPrerelease ? await latestPrerelease() : await latestStable(true); } catch (e) {
                 core.setFailed(`Could not resolve a ${wantPrerelease ? 'prerelease' : 'stable'} release: ${e.message}`); return;
               }
             } else {
@@ -209,10 +209,11 @@ jobs:
             const prb = process.env.PR_BODY || '';
             const rel = process.env.REL_BODY || '';
 
-            // Always prefer the matched Release Please PR body when available.
-            // This keeps manual sentinel removal self-healing even if the
-            // current release body is stale or was previously truncated.
-            const seed = prb || rel;
+            // Always prefer the matched Release Please PR body when it has
+            // meaningful content. This keeps manual sentinel removal
+            // self-healing even if the current release body is stale or was
+            // previously truncated.
+            const seed = prb.trim().length > 0 ? prb : rel;
             core.setOutput('body', seed);
 
       - name: Transform body (normalize header, drop RP boilerplate, plain PR refs, append footer + sentinel)

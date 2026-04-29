@@ -186,16 +186,43 @@ jobs:
               core.setOutput('found', 'false');
             }
 
+      - name: Read current draft release body
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: read_release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TAG: ${{ steps.rp.outputs.tag_name }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = (process.env.TAG || '').trim();
+
+            if (!tag) {
+              core.setFailed('Missing tag for stable release body lookup');
+              return;
+            }
+
+            const release = await github.rest.repos.getReleaseByTag({
+              owner,
+              repo,
+              tag
+            }).then(r => r.data);
+
+            core.setOutput('body', release.body || '');
+
       - name: Choose seed body (PR preferred)
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         id: choose_seed
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           PR_BODY: ${{ steps.find_pr.outputs.body }}
+          REL_BODY: ${{ steps.read_release.outputs.body }}
         with:
           script: |
             const prb = process.env.PR_BODY || '';
-            core.setOutput('body', prb);
+            const rel = process.env.REL_BODY || '';
+            core.setOutput('body', prb.trim().length > 0 ? prb : rel);
 
       - name: Transform body (header + cleanup + footer)
         if: ${{ steps.rp.outputs.release_created == 'true' }}
