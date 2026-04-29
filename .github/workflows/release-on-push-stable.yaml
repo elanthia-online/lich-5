@@ -102,7 +102,7 @@ jobs:
             core.setOutput('version', version);
             core.setOutput('published_at', new Date().toISOString());
 
-      - name: Find Release Please PR by commit SHA
+      - name: Find merged Release Please PR for this tag
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         id: find_pr
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -111,43 +111,73 @@ jobs:
         with:
           script: |
             const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const sha = context.sha;
-            const version = process.env.VERSION || '';
-            
-            core.info(`Looking for PR associated with commit ${sha}`);
-            
-            // Find PRs associated with this commit (the merge commit that triggered this workflow)
-            let prs = [];
-            try {
-              const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+            const repo  = context.repo.repo;
+            const rawVersion = process.env.VERSION || '';
+
+            // Match standard Release Please titles for the release version.
+            const v = rawVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');
+
+            async function listClosed(opts) {
+              return github.rest.pulls.list({
                 owner,
                 repo,
-                commit_sha: sha
-              });
-              prs = data || [];
-              core.info(`Found ${prs.length} PR(s) associated with commit`);
-            } catch (e) {
-              core.warning(`Failed to find PRs by commit: ${e.message}`);
+                state: 'closed',
+                per_page: 100,
+                ...opts
+              }).then(r => r.data || []);
             }
-            
-            // Filter for merged release-please PRs matching this version
-            const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const v = esc(version);
-            const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');
-            
-            const hit = prs.find(pr => 
-              pr.merged_at && 
+
+            // Prefer the standard stable Release Please branch first.
+            const head = `${owner}:release-please--branches--main`;
+            let pulls = await listClosed({ base: 'main', head });
+            if (!pulls.length) pulls = await listClosed({ base: 'main' });
+
+            let hit = pulls.find(pr =>
+              pr.merged_at &&
               titleRe.test(pr.title || '')
             );
-            
+
+            // Fall back to search in case the branch association is unavailable.
+            if (!hit) {
+              const q = `repo:${owner}/${repo} is:pr is:merged "${rawVersion}" in:title base:main`;
+              try {
+                const search = await github.rest.search.issuesAndPullRequests({
+                  q,
+                  per_page: 10,
+                  sort: 'updated',
+                  order: 'desc'
+                });
+                const item = (search.data.items || [])[0];
+                if (item) {
+                  hit = await github.rest.pulls.get({
+                    owner,
+                    repo,
+                    pull_number: item.number
+                  }).then(r => r.data);
+                }
+              } catch (e) {
+                core.info(`Search fallback did not resolve a PR: ${e.message}`);
+              }
+            }
+
+            // Final fallback: any merged Release Please branch PR matching the version.
+            if (!hit) {
+              pulls = await listClosed({});
+              hit = pulls.find(pr =>
+                pr.merged_at &&
+                /release-please--branches--/.test(pr.head && pr.head.ref || '') &&
+                titleRe.test(pr.title || '')
+              );
+            }
+
             if (hit) {
               core.info(`Found PR #${hit.number}: ${hit.title}`);
               core.setOutput('found', 'true');
               core.setOutput('number', String(hit.number));
               core.setOutput('body', hit.body || '');
             } else {
-              core.warning(`No matching merged PR found for version ${version}`);
+              core.warning(`No matching merged PR found for version ${rawVersion}`);
               core.setOutput('found', 'false');
             }
 

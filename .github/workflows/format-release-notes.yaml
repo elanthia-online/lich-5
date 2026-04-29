@@ -201,13 +201,13 @@ jobs:
           REL_BODY: ${{ steps.seed.outputs.body }}
         with:
           script: |
-            const ev = context.eventName;
-            const action = (context.payload && context.payload.action) || '';
             const prb = process.env.PR_BODY || '';
             const rel = process.env.REL_BODY || '';
 
-            // On manual edit, prefer the current release body; otherwise prefer PR body.
-            const seed = (ev === 'release' && action === 'edited') ? (rel || prb) : (prb || rel);
+            // Always prefer the matched Release Please PR body when available.
+            // This keeps manual sentinel removal self-healing even if the
+            // current release body is stale or was previously truncated.
+            const seed = prb || rel;
             core.setOutput('body', seed);
 
       - name: Transform body (normalize header, drop RP boilerplate, plain PR refs, append footer + sentinel)
