@@ -132,6 +132,11 @@ jobs:
             const rawVersion = process.env.VERSION || '';
             const base = process.env.BASE || 'main';
 
+            if (!rawVersion.trim()) {
+              core.setFailed('Missing release version for release notes PR lookup');
+              return;
+            }
+
             // Escape VERSION for use in RegExp
             const v = rawVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');

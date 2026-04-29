@@ -114,6 +114,11 @@ jobs:
             const repo  = context.repo.repo;
             const rawVersion = process.env.VERSION || '';
 
+            if (!rawVersion.trim()) {
+              core.setFailed('Missing release version for stable release notes PR lookup');
+              return;
+            }
+
             // Match standard Release Please titles for the release version.
             const v = rawVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');
