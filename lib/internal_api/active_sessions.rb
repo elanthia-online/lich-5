@@ -141,10 +141,15 @@ module Lich
       # Registers or updates a session record from a lifecycle path that
       # already admitted the feature gate at startup.
       #
+      # When the current service owner has exited, this allows a surviving
+      # session to bootstrap a replacement owner so session visibility is
+      # maintained. The kill-switch is still enforced: ensure_service_internal!
+      # re-checks enabled? before creating a new owner.
+      #
       # @param payload [Hash] normalized session metadata
       # @return [Boolean] true when the service accepted the update
       def self.register_session_admitted(payload)
-        return false unless ensure_service_internal!(allow_bootstrap: false)
+        return false unless ensure_service_internal!(allow_bootstrap: true)
 
         service_client&.upsert(payload)&.fetch(:ok, false) || false
       end
