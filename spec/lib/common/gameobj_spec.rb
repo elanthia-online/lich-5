@@ -206,12 +206,15 @@ RSpec.describe Lich::Common::GameObj do
   end
 
   describe '.clear_reserve' do
-    it 'is a no-op when @@reserve has never been seen' do
-      expect { described_class.clear_reserve }.not_to raise_error
+    it 'initializes @@reserve to [] even when never seen' do
       expect(described_class.reserve).to be_nil
+
+      described_class.clear_reserve
+
+      expect(described_class.reserve).to eq([])
     end
 
-    it 'empties @@reserve once it has been seen' do
+    it 'empties @@reserve when it already has items' do
       described_class.new_reserve('1', 'herb', 'golden herb')
       expect(described_class.reserve).not_to be_nil
 
