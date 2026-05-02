@@ -326,6 +326,7 @@ module Lich
             @current_stream = attributes['id'].to_s
             if XMLData.game =~ /^GS/
               GameObj.clear_inv if attributes['id'].to_s == 'inv'
+              GameObj.clear_reserve if attributes['id'].to_s == 'reserve'
             end
           end
           if name == 'popStream'
@@ -831,6 +832,8 @@ module Lich
             @society_task = text_string
           elsif (@current_stream == 'inv') and @active_tags.include?('a')
             GameObj.new_inv(@obj_exist, @obj_noun, text_string, nil)
+          elsif (@current_stream == 'reserve') and @active_tags.include?('a')
+            GameObj.new_reserve(@obj_exist, @obj_noun, text_string)
           elsif @check_obvious_hiding && text_string =~ /obvious signs of someone hiding/
             @room_player_hidden = true
           elsif @current_stream == 'familiar'
