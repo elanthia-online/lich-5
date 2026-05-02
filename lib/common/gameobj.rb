@@ -466,7 +466,7 @@ module Lich
       def self.clear_inv           = @@inv.clear
 
       # @return [void]
-      def self.clear_reserve       = (@@reserve&.clear)
+      def self.clear_reserve       = (@@reserve = [])
 
       # @return [void]
       def self.clear_room_desc     = @@room_desc.clear
