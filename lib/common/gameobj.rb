@@ -269,8 +269,7 @@ module Lich
       # Creates and registers a new reserve slot item.
       #
       # +@@reserve+ is +nil+ until the first reserve stream is seen; thereafter
-      # it is always an Array (possibly empty). This mirrors the semantics of
-      # +@@inv+ so callers can distinguish "never seen" from "seen but empty".
+      # it is always an Array (possibly empty).
       #
       # @param id   [Integer, String]
       # @param noun [String, nil]
@@ -466,12 +465,8 @@ module Lich
       # @return [void]
       def self.clear_inv           = @@inv.clear
 
-      # Resets the reserve registry to an empty array once it has been seen.
-      # Has no effect before the first reserve stream is received (+@@reserve+
-      # stays +nil+ so callers can tell the stream has never arrived).
-      #
       # @return [void]
-      def self.clear_reserve       = (@@reserve = [] if @@reserve)
+      def self.clear_reserve       = (@@reserve&.clear)
 
       # @return [void]
       def self.clear_room_desc     = @@room_desc.clear
@@ -959,7 +954,7 @@ module Lich
         # All ordered search registries for +[]+, hands wrapped in an array to
         # use the same +#find+ interface.
         SEARCH_ORDER = proc do
-          [@@inv, @@reserve, @@loot, @@npcs, @@pcs,
+          [@@inv, Array(@@reserve), @@loot, @@npcs, @@pcs,
            [@@right_hand, @@left_hand].compact,
            @@room_desc,
            @@contents.values.flatten]
