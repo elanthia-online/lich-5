@@ -68,6 +68,13 @@ module Lich
             /With a thunderous crash,/,
             /Stitches pop horrendously all over the surface of/,
             /With a last inhuman twitch,/,
+            /Life and animation depart/,
+            /Gouting corrosive liquid from <pushBold\/><a exist="[^"]+" noun="[^<]+<\/a><popBold\/> great maw,/,
+            /Blinding light explodes from/,
+            /As the radiance dims around/,
+            /Half-formed arms grasp futilely at empty air and melting mouths work soundlessly as/,
+            /Electric blue light pours from/,
+            /Acid belches from/,
           )
           NpcDeathPostfix = Regexp.union(
             /body as it rises, disappearing into the heavens/,
@@ -456,8 +463,27 @@ module Lich
             /collapses to the floor in a susurrus of robes/,
             /lets out a ragged gasp before collapsing/,
             /falls down, decay rapidly eating away at <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> lifeless body/,
+            /collapses to the floor in a susurrus of robes, crying out, \"It is the end, but the moment has been prepared for!/,
+            /suddenly ceases all movement/,
+            /shudders and then whirls away into nothingness/,
+            /begins bubbling violently before evaporating into nothingness/,
+            /dissipates into a (?:cool|warm) breeze that fades rapidly away/,
+            /vanishes into a flurry of sparks that rapidly dissipates away/,
+            /hardens into a chalky rock that quickly crumbles away into nothingness/,
+            /leaving behind a spreading puddle of protoplasm/,
+            /wheels and flails, sending tremors through the ground with <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> death throes.  At last, the great worm falls still and <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> many eyes close/,
+            /collapses, reaching out one clawed hand to the heavens.  A look of sorrow crosses <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> face as death claims <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> and the misshapen hand falls to <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> side/,
+            /eyes and mouth as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> wings spread, unfurled by the throes of <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> agony.  The radiance sears <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> shadow onto the ground behind <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> topples backward, lifeless/,
+            /body, <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> shadow stretches long and strange as unsettling silence fills the air.  Heralded by a sound like the stirring of great wings, the noise of your surroundings crashes back down upon you, more noticeable for its brief absence/,
+            /collapses into a puddle of inert ectoplasm/,
+            /eye sockets and erupts from <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> tattoos, leaving only a shadowy cadaver behind as animation departs <pushBold\/>a <a exist="[^"]+" noun="[^<]+<\/a><popBold\/>/,
+            /spasms, rolling over.  <pushBold\/><a exist="[^"]+" noun="[^"]+">Its<\/a><popBold\/> tiny legs kick at the air before going still/,
+            /collapses, <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> forelegs spasming and twitching before <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> at last surrenders to death/,
+            /collapses to the ground, <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> ghostly pale legs kicking spastically before abruptly stilling as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> dies/,
+            /mouth, raising blisters on <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> face as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> gasps for breath.  Then <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> ceases to breathe, and a look of blessed peace dawns over <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> twisted features as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> gives in to death/,
+            /legs kick savagely as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> collapses, belching swarms of tiny, pale larvae.  They scatter wildly as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> surrenders to death/,
           )
-          NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix}\s(?:<pushBold\/>)?(?:(?:an?|some|the) )?<a exist="(?<npc_id>[^"]+)" noun="[^"]+">[^<]+<\/a><popBold\/>(?:'s)?,? #{NpcDeathPostfix}[\.!"]\s?\r?\n?$/
+          NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix}\s(?:<pushBold\/>)?(?:(?:an?|some|the)\s)?<a exist="(?<npc_id>[^"]+)" noun="[^"]+">[^<]+<\/a><popBold\/>(?:'s)?,?\s#{NpcDeathPostfix}[\.!"]\s?\r?\n?$/
 
           # the following are for parsing STOW LIST and setting of STOW containers
           StowListOutputStart = /^You have the following containers set as stow targets:\r?\n?$/
