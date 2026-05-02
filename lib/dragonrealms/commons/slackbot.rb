@@ -27,21 +27,17 @@ module Lich
       LNET_SCRIPT_NAME = 'lnet'
       LICHBOTS = %w[Quilsilgas].freeze
       TOKEN_REQUEST_TIMEOUT = 10
-      MAX_RETRIES = 5
+      MAX_NETWORK_RETRIES = 5
       NO_USER_PATTERN = /\[server\]: "no user .*/.freeze
 
       LNET_CONNECTION_TIMEOUT = 30
-
-      # Consider lnet connection stale if no activity for 2 minutes
       LNET_ACTIVITY_TIMEOUT = 120
 
-      # Base delay for exponential backoff on API retries.
-      # Slack recommends waiting at least 30 seconds before retrying after rate limits.
-      # See: https://api.slack.com/docs/rate-limits
       BASE_RETRY_DELAY_SECONDS = 30
+      MAX_RETRY_DELAY_SECONDS = 300
 
-      # Maximum delay before giving up on retries (2 minutes)
-      MAX_RETRY_DELAY_SECONDS = 120
+      USERS_CACHE_SCRIPT = '_slackbot_users_cache'
+      USERS_CACHE_TTL = 3600
 
       def initialize
         @initialized = false
@@ -56,6 +52,17 @@ module Lich
 
       def initialized?
         @initialized
+      end
+
+      def reconnect!
+        @error_message = nil
+        @initialized = false
+
+        ensure_slack_token unless authed?(UserVars.slack_token)
+        return false if @error_message
+
+        fetch_users_list
+        @initialized = true
       end
 
       def lnet_connected?
@@ -82,8 +89,15 @@ module Lich
       end
 
       def direct_message(username, message)
+        reconnect! unless initialized?
+
         if username.nil? || username.to_s.strip.empty?
           Lich::Messaging.msg('bold', 'SlackBot: Cannot send message - no username provided. Check your slackbot_username setting.')
+          return nil
+        end
+
+        unless initialized?
+          Lich::Messaging.msg('bold', 'SlackBot: Cannot send message - not connected. Will retry on next attempt.')
           return nil
         end
 
@@ -151,11 +165,68 @@ module Lich
       end
 
       def fetch_users_list
-        @users_list = post('users.list', { 'token' => UserVars.slack_token })
-      rescue ApiError => e
-        Lich.log "SlackBot: Error fetching user list: #{e.message}"
-        Lich::Messaging.msg('bold', "SlackBot: Failed to fetch Slack user list: #{e.message}")
-        @users_list = { 'members' => [] }
+        cached = read_users_cache
+        if cached
+          @users_list = { 'members' => cached['members'] }
+          Lich.log "SlackBot: Using cached users list (#{cached['members'].length} members)"
+          return
+        end
+
+        sleep rand(0.0..5.0)
+
+        cached = read_users_cache
+        if cached
+          @users_list = { 'members' => cached['members'] }
+          Lich.log "SlackBot: Using cached users list after jitter (#{cached['members'].length} members)"
+          return
+        end
+
+        @users_list = fetch_users_from_api
+        write_users_cache(@users_list['members']) if @users_list['members']&.any?
+      end
+
+      def fetch_users_from_api
+        retries = 0
+        begin
+          post('users.list', { 'token' => UserVars.slack_token })
+        rescue ThrottlingError => e
+          cached = read_users_cache
+          if cached
+            Lich.log "SlackBot: Throttled, but another character cached the users list"
+            return { 'members' => cached['members'] }
+          end
+
+          delay = e.retry_after || [BASE_RETRY_DELAY_SECONDS * (2**[retries, 3].min), MAX_RETRY_DELAY_SECONDS].min
+          jitter = rand(0..(delay * 0.5).to_i)
+          total_delay = delay + jitter
+          retries += 1
+          Lich.log "SlackBot: Throttled fetching users list. Retry ##{retries} in #{total_delay}s..."
+          Lich::Messaging.msg('bold', "SlackBot: Rate limited fetching users. Retrying in #{total_delay}s...") if retries <= 3
+          sleep total_delay
+          retry
+        rescue ApiError, NetworkError => e
+          Lich.log "SlackBot: Error fetching user list: #{e.message}"
+          Lich::Messaging.msg('bold', "SlackBot: Failed to fetch Slack user list: #{e.message}")
+          { 'members' => [] }
+        end
+      end
+
+      def read_users_cache
+        data = Lich::Common::DB_Store.get_data(XMLData.game, USERS_CACHE_SCRIPT)
+        return nil if data.nil? || data.empty?
+        return nil unless data['fetched_at']
+        return nil if (Time.now.to_i - data['fetched_at']) > USERS_CACHE_TTL
+
+        data
+      end
+
+      def write_users_cache(members)
+        Lich::Common::DB_Store.store_data(
+          XMLData.game,
+          USERS_CACHE_SCRIPT,
+          { 'members' => members, 'fetched_at' => Time.now.to_i }
+        )
+        Lich.log "SlackBot: Cached #{members.length} Slack users for all characters"
       end
 
       def find_token
@@ -216,30 +287,16 @@ module Lich
           body
         rescue JSON::ParserError => e
           raise ApiError, "Failed to parse Slack API response: #{e.message}"
-        rescue ThrottlingError => e
-          raise ApiError, "SlackBot: Throttled by Slack API. Max retries (#{MAX_RETRIES}) exceeded." if retries >= MAX_RETRIES
-
-          delay = e.retry_after || (BASE_RETRY_DELAY_SECONDS * (2**retries))
-          if delay > MAX_RETRY_DELAY_SECONDS
-            raise ApiError, "SlackBot: Throttled by Slack API. Retry delay (#{delay}s) exceeds maximum."
-          end
-
-          Lich.log "SlackBot: Throttled by Slack API. Retrying in #{delay} seconds..."
-          sleep delay
-          retries += 1
-          retry
         rescue Timeout::Error, Errno::EINVAL, Errno::ECONNRESET, EOFError,
                Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError, Net::ProtocolError, SocketError => e
-          raise NetworkError, "SlackBot: Network error. Max retries (#{MAX_RETRIES}) exceeded." if retries >= MAX_RETRIES
+          raise NetworkError, "SlackBot: Network error after #{MAX_NETWORK_RETRIES} retries: #{e.message}" if retries >= MAX_NETWORK_RETRIES
 
-          delay = BASE_RETRY_DELAY_SECONDS * (2**retries)
-          if delay > MAX_RETRY_DELAY_SECONDS
-            raise NetworkError, "SlackBot: Network error. Retry delay (#{delay}s) exceeds maximum."
-          end
-
-          Lich.log "SlackBot: Network error: #{e.message}. Retrying in #{delay} seconds..."
-          sleep delay
+          delay = [BASE_RETRY_DELAY_SECONDS * (2**retries), MAX_RETRY_DELAY_SECONDS].min
+          jitter = rand(0..(delay * 0.25).to_i)
+          total_delay = delay + jitter
           retries += 1
+          Lich.log "SlackBot: Network error: #{e.message}. Retry ##{retries} in #{total_delay}s..."
+          sleep total_delay
           retry
         end
       end
