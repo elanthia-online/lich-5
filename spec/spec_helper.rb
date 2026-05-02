@@ -542,11 +542,21 @@ module Lich
 
       class << self
         def read(scope, script)
-          get_data(scope, script)
+          case script
+          when 'vars', 'uservars'
+            get_vars(scope)
+          else
+            get_data(scope, script)
+          end
         end
 
         def save(scope, script, val)
-          store_data(scope, script, val)
+          case script
+          when 'vars', 'uservars'
+            store_vars(scope, val)
+          else
+            store_data(scope, script, val)
+          end
         end
 
         def get_data(scope, script)
