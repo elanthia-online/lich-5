@@ -38,6 +38,7 @@ module Lich
 
       USERS_CACHE_SCRIPT = '_slackbot_users_cache'
       USERS_CACHE_TTL = 3600
+      MAX_THROTTLE_RETRIES = 10
 
       def initialize
         @initialized = false
@@ -194,6 +195,12 @@ module Lich
           if cached
             Lich.log "SlackBot: Throttled, but another character cached the users list"
             return { 'members' => cached['members'] }
+          end
+
+          if retries >= MAX_THROTTLE_RETRIES
+            Lich.log "SlackBot: Throttle retry limit (#{MAX_THROTTLE_RETRIES}) exceeded"
+            Lich::Messaging.msg('bold', "SlackBot: Rate limit retry exhausted. User list unavailable.")
+            return { 'members' => [] }
           end
 
           delay = e.retry_after || [BASE_RETRY_DELAY_SECONDS * (2**[retries, 3].min), MAX_RETRY_DELAY_SECONDS].min

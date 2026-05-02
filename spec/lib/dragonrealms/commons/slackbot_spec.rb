@@ -96,6 +96,10 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     it 'defines USERS_CACHE_SCRIPT' do
       expect(described_class::USERS_CACHE_SCRIPT).to eq('_slackbot_users_cache')
     end
+
+    it 'defines MAX_THROTTLE_RETRIES' do
+      expect(described_class::MAX_THROTTLE_RETRIES).to eq(10)
+    end
   end
 
   # ---- Error Classes ----
@@ -415,6 +419,21 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
         result = bot.send(:fetch_users_from_api)
         expect(result['members'].first['name']).to eq('retry_user')
+      end
+    end
+
+    context 'when throttle retries exhausted with no cache' do
+      it 'returns empty members list after MAX_THROTTLE_RETRIES' do
+        Lich::Common::DB_Store.reset!
+
+        throttle_resp = double('resp_429')
+        allow(throttle_resp).to receive(:code).and_return('429')
+        allow(throttle_resp).to receive(:[]).with('Retry-After').and_return('1')
+        allow(mock_http).to receive(:request).and_return(throttle_resp)
+        allow(bot).to receive(:sleep)
+
+        result = bot.send(:fetch_users_from_api)
+        expect(result['members']).to eq([])
       end
     end
 
