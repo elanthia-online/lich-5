@@ -9,31 +9,6 @@ require 'uri'
 # Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'slackbot.rb')
 
-# Mock DB_Store for shared cache tests
-module Lich
-  module Common
-    module DB_Store
-      @store = {}
-
-      class << self
-        def get_data(scope, script)
-          @store ||= {}
-          @store["#{scope}::#{script}"] || {}
-        end
-
-        def store_data(scope, script, val)
-          @store ||= {}
-          @store["#{scope}::#{script}"] = val
-        end
-
-        def reset!
-          @store = {}
-        end
-      end
-    end
-  end
-end
-
 RSpec.describe Lich::DragonRealms::SlackBot do
   let(:lnet_buffer) { [] }
   let(:lnet_script) do
@@ -82,7 +57,6 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     allow(Lich).to receive(:log)
     allow(Lich::Messaging).to receive(:msg)
     allow(XMLData).to receive(:game).and_return('DR')
-    Lich::Common::DB_Store.reset!
   end
 
   after(:each) do
@@ -608,6 +582,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
       end
 
       it 'returns nil when data is nil' do
+        Lich::Common::DB_Store.reset!
         allow(Lich::Common::DB_Store).to receive(:get_data).and_return(nil)
         expect(bot.send(:read_users_cache)).to be_nil
       end
