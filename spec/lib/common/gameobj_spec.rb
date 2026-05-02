@@ -195,15 +195,6 @@ RSpec.describe Lich::Common::GameObj do
       expect(described_class.reserve).to be_nil
     end
 
-    it 'returns an empty array after clear_reserve transitions nil to []' do
-      described_class.clear_reserve # no-op while nil
-      expect(described_class.reserve).to be_nil
-
-      described_class.new_reserve('1', 'herb', 'golden herb')
-      described_class.clear_reserve
-      expect(described_class.reserve).to eq([])
-    end
-
     it 'returns a duplicate so mutations do not affect the registry' do
       obj = described_class.new_reserve('1', 'herb', 'golden herb')
 
@@ -215,12 +206,12 @@ RSpec.describe Lich::Common::GameObj do
   end
 
   describe '.clear_reserve' do
-    it 'is a no-op when @@reserve is nil (stream never seen)' do
+    it 'is a no-op when @@reserve has never been seen' do
       expect { described_class.clear_reserve }.not_to raise_error
       expect(described_class.reserve).to be_nil
     end
 
-    it 'resets @@reserve to an empty array once it has been seen' do
+    it 'empties @@reserve once it has been seen' do
       described_class.new_reserve('1', 'herb', 'golden herb')
       expect(described_class.reserve).not_to be_nil
 
