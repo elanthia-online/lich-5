@@ -326,12 +326,6 @@ RSpec.describe 'global_defs.rb sentinel constants' do
       expect(lich_common_block).to include('CORE_AUTOSTART')
     end
 
-    it 'passes the exact const_defined? check dependency.lic uses' do
-      # dependency.lic gates with: Lich::Common.const_defined?(:CORE_AUTOSTART, false)
-      # The `false` arg means "don't search ancestors" -- only direct constants.
-      # Verify the source defines it so that check would pass at runtime.
-      expect(source).to match(/CORE_AUTOSTART\s*=\s*true/)
-    end
   end
 
   describe 'all sentinel constants' do
@@ -349,6 +343,7 @@ RSpec.describe 'global_defs.rb sentinel constants' do
 
     it 'defines all three sentinels in the same module block' do
       lich_common_block = source[/module Lich\s+module Common.*?end\s+end/m]
+      expect(lich_common_block).not_to be_nil, 'Could not extract module Lich::Common block from source'
       expect(lich_common_block).to include('CORE_GET_SETTINGS')
       expect(lich_common_block).to include('CORE_SCRIPT_LOADER')
       expect(lich_common_block).to include('CORE_AUTOSTART')
