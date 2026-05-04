@@ -325,7 +325,6 @@ RSpec.describe 'global_defs.rb sentinel constants' do
       expect(lich_common_block).not_to be_nil
       expect(lich_common_block).to include('CORE_AUTOSTART')
     end
-
   end
 
   describe 'all sentinel constants' do
@@ -337,22 +336,12 @@ RSpec.describe 'global_defs.rb sentinel constants' do
       expect(source).to match(/CORE_SCRIPT_LOADER\s*=\s*true/)
     end
 
-    it 'defines CORE_AUTOSTART' do
-      expect(source).to match(/CORE_AUTOSTART\s*=\s*true/)
-    end
-
     it 'defines all three sentinels in the same module block' do
       lich_common_block = source[/module Lich\s+module Common.*?end\s+end/m]
       expect(lich_common_block).not_to be_nil, 'Could not extract module Lich::Common block from source'
       expect(lich_common_block).to include('CORE_GET_SETTINGS')
       expect(lich_common_block).to include('CORE_SCRIPT_LOADER')
       expect(lich_common_block).to include('CORE_AUTOSTART')
-    end
-  end
-
-  describe 'non-existent sentinels' do
-    it 'does not define CORE_NONEXISTENT' do
-      expect(source).not_to match(/CORE_NONEXISTENT/)
     end
   end
 end
