@@ -12,6 +12,10 @@ module Lich
   module Util
     module Update
       class ReleaseInstaller
+        # Top-level files (besides lib/ and lich.rbw) to copy from release archive.
+        # lich.rbw is handled separately due to its dynamic target name.
+        TOP_LEVEL_FILES = %w[Gemfile LICENSE].freeze
+
         # @param client [GitHubClient] GitHub API client instance
         # @param resolver [ChannelResolver] channel resolver instance
         # @param snapshot_manager [SnapshotManager] snapshot manager instance
@@ -251,6 +255,15 @@ module Lich
           respond "All Lich lib files have been updated."
           respond
 
+          # Copy top-level release files to LICH_DIR
+          TOP_LEVEL_FILES.each do |filename|
+            src = File.join(source_dir, filename)
+            if File.exist?(src)
+              FileUtils.cp(src, File.join(LICH_DIR, filename))
+              respond "Updated #{filename}."
+            end
+          end
+
           file_updater = FileUpdater.new(@client, @resolver)
           file_updater.update_core_data_and_scripts(version)
 
@@ -265,7 +278,7 @@ module Lich
         # @param dir [String] directory to check
         # @return [Boolean] true if valid
         def validate_lich_structure(dir)
-          required_items = ['lib', 'lich.rbw']
+          required_items = ['lib', 'lich.rbw'] + TOP_LEVEL_FILES
           required_items.all? { |item| File.exist?(File.join(dir, item)) }
         end
 
