@@ -311,3 +311,46 @@ RSpec.describe '#fput' do
     end
   end
 end
+
+require 'common/arg_parser'
+
+RSpec.describe '#parse_args / #display_args bridge' do
+  def parse_args(defn, flex_args = false)
+    Lich::Common::ArgParser.new.parse_args(defn, flex_args)
+  end
+
+  def display_args(defn)
+    Lich::Common::ArgParser.new.display_args(defn)
+  end
+
+  let(:parser) { instance_double(Lich::Common::ArgParser) }
+
+  before do
+    allow(Lich::Common::ArgParser).to receive(:new).and_return(parser)
+  end
+
+  describe '#parse_args' do
+    it 'delegates to Lich::Common::ArgParser#parse_args' do
+      defs = [[:some_defs]]
+      expect(parser).to receive(:parse_args).with(defs, false)
+
+      parse_args(defs)
+    end
+
+    it 'forwards the flex_args parameter' do
+      defs = [[:some_defs]]
+      expect(parser).to receive(:parse_args).with(defs, true)
+
+      parse_args(defs, true)
+    end
+  end
+
+  describe '#display_args' do
+    it 'delegates to Lich::Common::ArgParser#display_args' do
+      defs = [[:some_defs]]
+      expect(parser).to receive(:display_args).with(defs)
+
+      display_args(defs)
+    end
+  end
+end
