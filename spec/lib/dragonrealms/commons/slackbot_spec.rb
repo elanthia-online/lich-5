@@ -22,16 +22,8 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     http = double('Net::HTTP')
     allow(http).to receive(:use_ssl=)
     allow(http).to receive(:verify_mode=)
-    allow(http).to receive(:request).and_return(success_response)
+    allow(http).to receive(:request).and_return(auth_success_response)
     http
-  end
-
-  let(:success_response) do
-    resp = double('Net::HTTPSuccess')
-    allow(resp).to receive(:is_a?).with(Net::HTTPSuccess).and_return(true)
-    allow(resp).to receive(:code).and_return('200')
-    allow(resp).to receive(:body).and_return('{"ok":true}')
-    resp
   end
 
   let(:auth_success_response) do
@@ -57,6 +49,7 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     allow(Lich).to receive(:log)
     allow(Lich::Messaging).to receive(:msg)
     allow(XMLData).to receive(:game).and_return('DR')
+    allow_any_instance_of(described_class).to receive(:sleep)
   end
 
   after(:each) do
@@ -212,8 +205,10 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
   describe '#direct_message' do
     context 'when username is nil' do
-      it 'returns nil without attempting API call' do
-        bot = build_initialized_bot
+      it 'returns nil without attempting reconnect or API call' do
+        allow(Script).to receive(:exists?).with('lnet').and_return(false)
+        bot = described_class.new
+        expect(bot).not_to receive(:reconnect!)
         result = bot.direct_message(nil, 'hello')
         expect(result).to be_nil
       end
@@ -415,7 +410,6 @@ RSpec.describe Lich::DragonRealms::SlackBot do
           call_count += 1
           call_count <= 2 ? throttle_resp : ok_resp
         end
-        allow(bot).to receive(:sleep)
 
         result = bot.send(:fetch_users_from_api)
         expect(result['members'].first['name']).to eq('retry_user')
@@ -430,7 +424,6 @@ RSpec.describe Lich::DragonRealms::SlackBot do
         allow(throttle_resp).to receive(:code).and_return('429')
         allow(throttle_resp).to receive(:[]).with('Retry-After').and_return('1')
         allow(mock_http).to receive(:request).and_return(throttle_resp)
-        allow(bot).to receive(:sleep)
 
         result = bot.send(:fetch_users_from_api)
         expect(result['members']).to eq([])
@@ -451,7 +444,6 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     context 'when network error occurs' do
       it 'returns empty members list after retries exhaust' do
         allow(mock_http).to receive(:request).and_raise(Timeout::Error)
-        allow(bot).to receive(:sleep)
 
         result = bot.send(:fetch_users_from_api)
         expect(result['members']).to eq([])
@@ -519,7 +511,6 @@ RSpec.describe Lich::DragonRealms::SlackBot do
 
           ok_resp
         end
-        allow(bot).to receive(:sleep)
 
         result = bot.send(:post, 'test.method', { 'token' => 'test' })
         expect(result['ok']).to be true
@@ -529,7 +520,6 @@ RSpec.describe Lich::DragonRealms::SlackBot do
     context 'network error exceeds max retries' do
       it 'raises NetworkError' do
         allow(mock_http).to receive(:request).and_raise(SocketError)
-        allow(bot).to receive(:sleep)
 
         expect {
           bot.send(:post, 'test.method', { 'token' => 'test' })

@@ -7,20 +7,36 @@ require 'uri'
 
 module Lich
   module DragonRealms
+    # Slack API client for sending direct messages via DragonRealms LNet.
+    #
+    # Caches the Slack users list in a shared SQLite store (DB_Store) so all
+    # characters on the same game instance share a single cached copy with
+    # a 1-hour TTL. Randomized startup jitter prevents thundering herd on
+    # simultaneous character logins.
     class SlackBot
+      # Base error for all SlackBot failures.
       class Error < StandardError; end
+
+      # Raised on network-level failures (timeouts, connection resets).
       class NetworkError < Error; end
+
+      # Raised when the Slack API returns a non-ok response.
       class ApiError < Error; end
 
+      # Raised on HTTP 429 responses from Slack.
       class ThrottlingError < ApiError
+        # @return [Integer, nil] seconds to wait before retrying
         attr_reader :retry_after
 
+        # @param msg [String] error message
+        # @param retry_after [Integer, nil] seconds to wait before retrying
         def initialize(msg, retry_after = nil)
           super(msg)
           @retry_after = retry_after
         end
       end
 
+      # @return [String, nil] human-readable error from the last failed operation
       attr_reader :error_message
 
       API_URL = 'https://slack.com/api/'
@@ -51,10 +67,14 @@ module Lich
         @initialized = true
       end
 
+      # @return [Boolean] true if the bot has a valid token and users list
       def initialized?
         @initialized
       end
 
+      # Reinitializes the bot by re-fetching the token and users list.
+      #
+      # @return [Boolean] true if reconnection succeeded
       def reconnect!
         @error_message = nil
         @initialized = false
@@ -66,12 +86,14 @@ module Lich
         @initialized = true
       end
 
+      # Checks whether the LNet connection is alive and responsive.
+      #
+      # @return [Boolean]
       def lnet_connected?
         return false unless defined?(LNet)
         return false unless LNet.server
         return false if LNet.server.closed?
 
-        # Check last activity if method exists
         if LNet.respond_to?(:last_recv) && LNet.last_recv
           return false if (Time.now - LNet.last_recv) > LNET_ACTIVITY_TIMEOUT
         end
@@ -81,6 +103,10 @@ module Lich
         false
       end
 
+      # Tests whether a Slack API token is valid.
+      #
+      # @param token [String, nil] the token to test
+      # @return [Boolean]
       def authed?(token)
         return false unless token
 
@@ -89,13 +115,19 @@ module Lich
         false
       end
 
+      # Sends a direct message to a Slack user.
+      # Validates the username first, then reconnects if needed.
+      #
+      # @param username [String, nil] Slack username to message
+      # @param message [String] message body
+      # @return [Hash, nil] Slack API response, or nil on failure
       def direct_message(username, message)
-        reconnect! unless initialized?
-
         if username.nil? || username.to_s.strip.empty?
           Lich::Messaging.msg('bold', 'SlackBot: Cannot send message - no username provided. Check your slackbot_username setting.')
           return nil
         end
+
+        reconnect! unless initialized?
 
         unless initialized?
           Lich::Messaging.msg('bold', 'SlackBot: Cannot send message - not connected. Will retry on next attempt.')
@@ -122,15 +154,23 @@ module Lich
 
       private
 
+      # @return [Boolean] true if the LNet script object is loaded
       def lnet_available?
         !@lnet.nil?
       end
 
+      # Sets an error message and notifies the user in-game.
+      #
+      # @param message [String]
+      # @return [void]
       def set_error(message)
         @error_message = message
         Lich::Messaging.msg('bold', "SlackBot: #{message}")
       end
 
+      # Discovers and authenticates a Slack token via LNet.
+      #
+      # @return [void]
       def ensure_slack_token
         unless lnet_connected?
           unless Script.exists?(LNET_SCRIPT_NAME)
@@ -155,6 +195,9 @@ module Lich
         set_error('Unable to locate a Slack token')
       end
 
+      # Blocks until LNet connects or timeout expires.
+      #
+      # @return [Boolean] true if connected within timeout
       def wait_for_lnet_connection
         start_time = Time.now
         until lnet_connected?
@@ -165,6 +208,9 @@ module Lich
         true
       end
 
+      # Loads the users list from shared DB cache or Slack API.
+      #
+      # @return [void]
       def fetch_users_list
         cached = read_users_cache
         if cached
@@ -186,6 +232,9 @@ module Lich
         write_users_cache(@users_list['members']) if @users_list['members']&.any?
       end
 
+      # Fetches the users list from the Slack API with throttle retry.
+      #
+      # @return [Hash] response hash with 'members' key
       def fetch_users_from_api
         retries = 0
         begin
@@ -218,6 +267,9 @@ module Lich
         end
       end
 
+      # Reads cached users list from DB_Store.
+      #
+      # @return [Hash, nil] cached data with 'members' and 'fetched_at', or nil if missing/expired
       def read_users_cache
         data = Lich::Common::DB_Store.get_data(XMLData.game, USERS_CACHE_SCRIPT)
         return nil if data.nil? || data.empty?
@@ -227,6 +279,10 @@ module Lich
         data
       end
 
+      # Writes users list to DB_Store cache with a timestamp.
+      #
+      # @param members [Array<Hash>] Slack user objects to cache
+      # @return [void]
       def write_users_cache(members)
         Lich::Common::DB_Store.store_data(
           XMLData.game,
@@ -236,6 +292,9 @@ module Lich
         Lich.log "SlackBot: Cached #{members.length} Slack users for all characters"
       end
 
+      # Searches LICHBOTS for a valid Slack token via LNet chat.
+      #
+      # @return [Boolean] true if a valid token was found and stored
       def find_token
         return false unless lnet_available?
 
@@ -249,6 +308,10 @@ module Lich
         end
       end
 
+      # Requests a Slack token from a LichBot via LNet private message.
+      #
+      # @param lichbot [String] name of the LichBot to request from
+      # @return [String, false] token string, or false on failure/timeout
       def request_token(lichbot)
         return false unless lnet_available?
 
@@ -268,6 +331,14 @@ module Lich
         end
       end
 
+      # Posts to the Slack API with retry and exponential backoff on network errors.
+      #
+      # @param method [String] Slack API method name (e.g. 'chat.postMessage')
+      # @param params [Hash] request parameters including token
+      # @return [Hash] parsed JSON response body
+      # @raise [ThrottlingError] on HTTP 429
+      # @raise [NetworkError] after MAX_NETWORK_RETRIES exhausted
+      # @raise [ApiError] on non-ok Slack responses or JSON parse errors
       def post(method, params)
         retries = 0
 
@@ -308,6 +379,10 @@ module Lich
         end
       end
 
+      # Finds the DM channel ID for a Slack username.
+      #
+      # @param username [String] Slack username to look up
+      # @return [String, nil] Slack user ID, or nil if not found
       def get_dm_channel(username)
         @users_list['members']&.find { |u| u['name'] == username }&.[]('id')
       end
