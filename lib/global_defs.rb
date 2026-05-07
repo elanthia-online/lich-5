@@ -9,6 +9,7 @@ module Lich
   module Common
     CORE_GET_SETTINGS = true
     CORE_SCRIPT_LOADER = true
+    CORE_AUTOSTART = true
   end
 end
 
