@@ -311,3 +311,37 @@ RSpec.describe '#fput' do
     end
   end
 end
+
+RSpec.describe 'global_defs.rb sentinel constants' do
+  let(:source) { File.read(File.join(LIB_DIR, 'global_defs.rb')) }
+
+  describe 'CORE_AUTOSTART sentinel' do
+    it 'defines CORE_AUTOSTART in Lich::Common' do
+      expect(source).to match(/^\s+CORE_AUTOSTART\s*=\s*true\b/)
+    end
+
+    it 'is inside the Lich::Common module block' do
+      lich_common_block = source[/module Lich\s+module Common.*?end\s+end/m]
+      expect(lich_common_block).not_to be_nil
+      expect(lich_common_block).to include('CORE_AUTOSTART')
+    end
+  end
+
+  describe 'all sentinel constants' do
+    it 'defines CORE_GET_SETTINGS' do
+      expect(source).to match(/CORE_GET_SETTINGS\s*=\s*true/)
+    end
+
+    it 'defines CORE_SCRIPT_LOADER' do
+      expect(source).to match(/CORE_SCRIPT_LOADER\s*=\s*true/)
+    end
+
+    it 'defines all three sentinels in the same module block' do
+      lich_common_block = source[/module Lich\s+module Common.*?end\s+end/m]
+      expect(lich_common_block).not_to be_nil, 'Could not extract module Lich::Common block from source'
+      expect(lich_common_block).to include('CORE_GET_SETTINGS')
+      expect(lich_common_block).to include('CORE_SCRIPT_LOADER')
+      expect(lich_common_block).to include('CORE_AUTOSTART')
+    end
+  end
+end
