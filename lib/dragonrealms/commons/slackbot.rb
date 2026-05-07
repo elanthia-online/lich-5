@@ -252,7 +252,8 @@ module Lich
             return { 'members' => [] }
           end
 
-          delay = e.retry_after || [BASE_RETRY_DELAY_SECONDS * (2**[retries, 3].min), MAX_RETRY_DELAY_SECONDS].min
+          base_delay = e.retry_after || (BASE_RETRY_DELAY_SECONDS * (2**[retries, 3].min))
+          delay = [base_delay, MAX_RETRY_DELAY_SECONDS].min
           jitter = rand(0..(delay * 0.5).to_i)
           total_delay = delay + jitter
           retries += 1
