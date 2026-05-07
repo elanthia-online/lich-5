@@ -78,6 +78,29 @@ RSpec.describe Lich::DragonRealms::DRCI do
         end
       end
     end
+
+    describe 'REMOVE_ITEM_SUCCESS_PATTERNS' do
+      subject(:patterns) { described_class::REMOVE_ITEM_SUCCESS_PATTERNS }
+
+      it 'matches cold-enchanted item removal' do
+        expect(patterns.any? { |p| p.match?('A brisk chill leaves you as you remove the gloves') }).to be(true),
+                                                                                                       'REMOVE_ITEM_SUCCESS_PATTERNS should include cold-enchanted item removal pattern'
+      end
+    end
+
+    describe 'UNTIE_ITEM_FAILURE_PATTERNS' do
+      subject(:patterns) { described_class::UNTIE_ITEM_FAILURE_PATTERNS }
+
+      it 'matches "too busy" from combat' do
+        expect(patterns.any? { |p| p.match?('You are a little too busy to do that') }).to be(true),
+                                                                                          'UNTIE_ITEM_FAILURE_PATTERNS should handle combat-busy responses'
+      end
+
+      it 'matches "too busy" from playing music' do
+        expect(patterns.any? { |p| p.match?('You are a bit too busy playing your music') }).to be(true),
+                                                                                               'UNTIE_ITEM_FAILURE_PATTERNS should handle music-busy responses'
+      end
+    end
   end
 
   describe '#item_ref' do

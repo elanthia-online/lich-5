@@ -416,7 +416,7 @@ module Lich
       def visible_moons
         check_moonwatch
         UserVars.moons.select { |moon_name, moon_data| UserVars.moons['visible'].include?(moon_name) && moon_data['timer'] >= MOON_VISIBILITY_TIMER_THRESHOLD }
-                .map { |moon_name, _moon_data| moon_name }
+                      .map { |moon_name, _moon_data| moon_name }
       end
 
       def check_moonwatch

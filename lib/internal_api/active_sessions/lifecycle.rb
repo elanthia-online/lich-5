@@ -28,6 +28,7 @@ module Lich
         @mutex = Mutex.new
         @registration_mutex = Mutex.new
         @lifecycle_generation = 0
+        @feature_enabled = false
 
         # Resolves the reporting session name from runtime context.
         #
@@ -65,7 +66,12 @@ module Lich
         # @param heartbeat_interval [Integer]
         # @return [Boolean] true when lifecycle tracking started
         def self.start(session_name:, role:, heartbeat_interval: HEARTBEAT_INTERVAL_SECONDS)
-          return false unless ActiveSessions.enabled?
+          feature_enabled = ActiveSessions.enabled?
+          return false unless feature_enabled
+
+          # Bootstrap once during lifecycle startup so the admitted-only
+          # heartbeat/update path has a running service to talk to.
+          ActiveSessions.ensure_service!
 
           thread = nil
           @mutex.synchronize do
@@ -74,6 +80,7 @@ module Lich
             @session_name = session_name
             @role = role
             @started_at = Time.now.to_i
+            @feature_enabled = feature_enabled
             @running = true
             @started = true
             @lifecycle_generation += 1
@@ -105,6 +112,7 @@ module Lich
             @listener_port = nil
             @listener_connected = false
             @started_at = nil
+            @feature_enabled = false
           end
           thread.kill if thread.respond_to?(:alive?) && thread.alive?
           Lich.log("warning: ActiveSessions lifecycle start failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
@@ -130,9 +138,9 @@ module Lich
 
           thread&.join(0.5)
           thread&.kill if thread&.alive?
-          if ActiveSessions.enabled?
+          if feature_enabled?
             @registration_mutex.synchronize do
-              ActiveSessions.unregister_session(pid: Process.pid)
+              ActiveSessions.send(:unregister_session_admitted, pid: Process.pid)
               ActiveSessions.cleanup_discovery_if_last_session!
             end
           end
@@ -144,6 +152,7 @@ module Lich
             @listener_port = nil
             @listener_connected = false
             @started_at = nil
+            @feature_enabled = false
           end
           true
         rescue StandardError => e
@@ -158,7 +167,7 @@ module Lich
         # @param connected [Boolean]
         # @return [void]
         def self.update_listener(host:, port:, connected:)
-          return unless ActiveSessions.enabled?
+          return unless started?
 
           @mutex.synchronize do
             @listener_host = host
@@ -175,16 +184,14 @@ module Lich
         #
         # @return [void]
         def self.clear_listener
-          return unless ActiveSessions.enabled?
+          return unless started?
 
-          started = false
           @mutex.synchronize do
             @listener_host = nil
             @listener_port = nil
             @listener_connected = false
-            started = @started
           end
-          upsert_current_session if started
+          upsert_current_session
         end
 
         # Returns the current process session payload.
@@ -210,7 +217,9 @@ module Lich
           @registration_mutex.synchronize do
             return unless registration_current?(generation)
 
-            ActiveSessions.register_session(payload)
+            # ActiveSessions keeps the admitted-path helpers private so the
+            # feature-gate bypass stays local to lifecycle-owned call sites.
+            ActiveSessions.send(:register_session_admitted, payload)
           end
         end
         private_class_method :upsert_current_session
@@ -222,6 +231,24 @@ module Lich
           @mutex.synchronize { @running }
         end
         private_class_method :running?
+
+        # Returns whether lifecycle tracking has started.
+        #
+        # @return [Boolean]
+        def self.started?
+          @mutex.synchronize { @started }
+        end
+        private_class_method :started?
+
+        # Returns whether the current lifecycle was admitted while the feature
+        # flag was enabled. Heartbeat/listener hot paths use this latched state
+        # instead of re-reading the backing feature flag on every update.
+        #
+        # @return [Boolean]
+        def self.feature_enabled?
+          @mutex.synchronize { @feature_enabled }
+        end
+        private_class_method :feature_enabled?
 
         # Returns whether the captured lifecycle generation is still current.
         #

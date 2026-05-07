@@ -28,13 +28,19 @@ module Lich
         def update_file_from_repo(type, repo_key, filename)
           config = SCRIPT_REPOS[repo_key]
           unless config
-            respond "[lich5-update: Unknown repository '#{repo_key}'. Known: #{SCRIPT_REPOS.keys.join(', ')}]"
+            custom_reg = CustomRepos.all[repo_key]
+            config = CustomRepos.build_config(repo_key, custom_reg) if custom_reg
+          end
+          unless config
+            all_keys = (SCRIPT_REPOS.keys + CustomRepos.all.keys).join(', ')
+            respond "[lich5-update: Unknown repository '#{repo_key}'. Known: #{all_keys}]"
             return
           end
 
           case type
           when "script"
-            location = SCRIPT_DIR
+            location = config[:dest_dir] || SCRIPT_DIR
+            FileUtils.mkdir_p(location) if config[:dest_dir]
           when "data"
             data_subdir = (config[:subdirs] || {})['data']
             location = data_subdir ? data_subdir[:dest] : File.join(SCRIPT_DIR, 'data')

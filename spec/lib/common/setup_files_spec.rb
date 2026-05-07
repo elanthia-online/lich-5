@@ -221,4 +221,64 @@ RSpec.describe Lich::Common::SetupFiles do
       expect(settings.autostarts.length).to eq(3)
     end
   end
+
+  describe '#character_name (private)' do
+    it 'prefers Account.character when defined and truthy' do
+      stub_const('Lich::Common::Account', double(character: 'Mahtra'))
+      expect(setup_files.send(:character_name)).to eq('Mahtra')
+    end
+
+    it 'falls back to checkname when Account is not defined' do
+      hide_const('Lich::Common::Account')
+      allow(setup_files).to receive(:checkname).and_return('FallbackChar')
+      expect(setup_files.send(:character_name)).to eq('FallbackChar')
+    end
+
+    it 'falls back to checkname when Account.character is nil' do
+      stub_const('Lich::Common::Account', double(character: nil))
+      allow(setup_files).to receive(:checkname).and_return('FallbackChar')
+      expect(setup_files.send(:character_name)).to eq('FallbackChar')
+    end
+
+    it 'falls back to checkname when Account.character is false' do
+      stub_const('Lich::Common::Account', double(character: false))
+      allow(setup_files).to receive(:checkname).and_return('FallbackChar')
+      expect(setup_files.send(:character_name)).to eq('FallbackChar')
+    end
+
+    it 'uses character_name for profile filenames' do
+      stub_const('Lich::Common::Account', double(character: 'Mahtra'))
+      File.write(File.join(profiles_dir, 'base.yaml'), {}.to_yaml)
+      File.write(File.join(profiles_dir, 'base-empty.yaml'), {}.to_yaml)
+      File.write(File.join(profiles_dir, 'Mahtra-setup.yaml'), { hometown: 'Shard' }.to_yaml)
+      result = setup_files.get_settings
+      expect(result.hometown).to eq('Shard')
+    end
+  end
+
+  describe '#safe_message (private)' do
+    it 'delegates to Lich::Messaging.msg when available' do
+      expect(Lich::Messaging).to receive(:msg).with('info', 'test message')
+      setup_files.send(:safe_message, 'info', 'test message')
+    end
+
+    it 'falls back to safe_log when Messaging is not available' do
+      hide_const('Lich::Messaging')
+      expect(setup_files).to receive(:safe_log).with('test message')
+      setup_files.send(:safe_message, 'info', 'test message')
+    end
+  end
+
+  describe '#safe_log (private)' do
+    it 'delegates to Lich.log when available' do
+      expect(Lich).to receive(:log).with('test log')
+      setup_files.send(:safe_log, 'test log')
+    end
+
+    it 'falls back to $stderr when Lich.log is not available' do
+      allow(Lich).to receive(:respond_to?).with(:log).and_return(false)
+      expect($stderr).to receive(:puts).with('test log')
+      setup_files.send(:safe_log, 'test log')
+    end
+  end
 end

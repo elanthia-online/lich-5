@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../spec_helper'
+require 'timeout'
 
 # Load production code
 require "common/sharedbuffer"
@@ -417,6 +418,11 @@ RSpec.describe Lich::GameBase::Game do
         stub_const('RECOMMENDED_RUBY', '3.0.0')
         allow(Lich).to receive(:core_updated_with_lich_version).and_return('5.0.0')
         allow(Script).to receive(:exists?).and_return(false) if defined?(Script)
+        # Prevent background sync thread from leaking into other specs.
+        # Lich::Util::Update may not be loaded in this spec context, so
+        # stub_const ensures the module and method exist for the stub.
+        sync_stub = Module.new { def self.sync_all_repos; end }
+        stub_const('Lich::Util::Update', sync_stub)
 
         described_class.send(:handle_autostart)
         expect(described_class.autostarted?).to be true
@@ -467,21 +473,159 @@ RSpec.describe Lich::GameBase::Game do
       expect(mock_socket).to have_received(:puts).with('test')
     end
 
-    it 'rescues Errno::EPIPE and logs the error' do
-      allow(mock_socket).to receive(:puts).and_raise(Errno::EPIPE)
-      expect { described_class.send(:_puts, 'test') }.not_to raise_error
-      expect(Lich).to have_received(:log).with(/error: _puts: Broken pipe/)
+    # -- Errno::EPIPE (pre-existing) ----------------------------------------
+
+    context 'when socket raises Errno::EPIPE' do
+      before { allow(mock_socket).to receive(:puts).and_raise(Errno::EPIPE) }
+
+      it 'does not propagate the exception' do
+        expect { described_class.send(:_puts, 'test') }.not_to raise_error
+      end
+
+      it 'returns nil' do
+        expect(described_class.send(:_puts, 'test')).to be_nil
+      end
+
+      it 'logs the error' do
+        described_class.send(:_puts, 'test')
+        expect(Lich).to have_received(:log).with(/error: _puts: Broken pipe/)
+      end
     end
 
-    it 'rescues IOError and logs the error' do
-      allow(mock_socket).to receive(:puts).and_raise(IOError, 'closed stream')
-      expect { described_class.send(:_puts, 'test') }.not_to raise_error
-      expect(Lich).to have_received(:log).with(/error: _puts: closed stream/)
+    # -- IOError (pre-existing) ---------------------------------------------
+
+    context 'when socket raises IOError' do
+      before { allow(mock_socket).to receive(:puts).and_raise(IOError, 'closed stream') }
+
+      it 'does not propagate the exception' do
+        expect { described_class.send(:_puts, 'test') }.not_to raise_error
+      end
+
+      it 'returns nil' do
+        expect(described_class.send(:_puts, 'test')).to be_nil
+      end
+
+      it 'logs the error' do
+        described_class.send(:_puts, 'test')
+        expect(Lich).to have_received(:log).with(/error: _puts: closed stream/)
+      end
     end
 
-    it 'returns nil on broken pipe' do
-      allow(mock_socket).to receive(:puts).and_raise(Errno::EPIPE)
-      expect(described_class.send(:_puts, 'test')).to be_nil
+    # -- Errno::ECONNRESET (the bug that caused 9,089 lines of spam) --------
+
+    context 'when socket raises Errno::ECONNRESET' do
+      before { allow(mock_socket).to receive(:puts).and_raise(Errno::ECONNRESET) }
+
+      it 'does not propagate the exception' do
+        expect { described_class.send(:_puts, 'go north') }.not_to raise_error
+      end
+
+      it 'returns nil' do
+        expect(described_class.send(:_puts, 'go north')).to be_nil
+      end
+
+      it 'logs the error with class name and backtrace' do
+        described_class.send(:_puts, 'go north')
+        expect(Lich).to have_received(:log).with(/error: _puts:.*(?:Connection reset|forcibly closed)/i)
+      end
+
+      it 'absorbs rapid successive ECONNRESET bursts without raising' do
+        50.times do
+          expect { described_class.send(:_puts, "command_#{_1}") }.not_to raise_error
+        end
+      end
+    end
+
+    # -- Errno::ECONNABORTED ------------------------------------------------
+
+    context 'when socket raises Errno::ECONNABORTED' do
+      before { allow(mock_socket).to receive(:puts).and_raise(Errno::ECONNABORTED) }
+
+      it 'does not propagate the exception' do
+        expect { described_class.send(:_puts, 'go north') }.not_to raise_error
+      end
+
+      it 'returns nil' do
+        expect(described_class.send(:_puts, 'go north')).to be_nil
+      end
+
+      it 'logs the error' do
+        described_class.send(:_puts, 'go north')
+        expect(Lich).to have_received(:log).with(/error: _puts:/)
+      end
+    end
+
+    # -- Non-connection errors must still propagate -------------------------
+
+    context 'when socket raises a non-connection error' do
+      it 'raises RuntimeError' do
+        allow(mock_socket).to receive(:puts).and_raise(RuntimeError, 'unexpected')
+        expect { described_class.send(:_puts, 'go north') }.to raise_error(RuntimeError, 'unexpected')
+      end
+
+      it 'raises NoMethodError' do
+        allow(mock_socket).to receive(:puts).and_raise(NoMethodError, 'undefined method')
+        expect { described_class.send(:_puts, 'go north') }.to raise_error(NoMethodError)
+      end
+
+      it 'raises ArgumentError' do
+        allow(mock_socket).to receive(:puts).and_raise(ArgumentError, 'bad args')
+        expect { described_class.send(:_puts, 'go north') }.to raise_error(ArgumentError)
+      end
+    end
+
+    # -- Thread safety ------------------------------------------------------
+
+    context 'thread safety under connection failure' do
+      it 'serializes concurrent writes through the mutex even when failing' do
+        call_order = []
+        mutex = Mutex.new
+
+        allow(mock_socket).to receive(:puts) do |str|
+          mutex.synchronize { call_order << str }
+          raise Errno::ECONNRESET
+        end
+
+        threads = 10.times.map do |i|
+          Thread.new { described_class.send(:_puts, "cmd_#{i}") }
+        end
+        threads.each(&:join)
+
+        expect(call_order.size).to eq(10)
+      end
+
+      it 'does not deadlock when socket raises inside mutex' do
+        allow(mock_socket).to receive(:puts).and_raise(Errno::ECONNRESET)
+
+        result = Timeout.timeout(2) do
+          5.times { described_class.send(:_puts, 'test') }
+          :completed
+        end
+
+        expect(result).to eq(:completed)
+      end
+    end
+
+    # -- Mixed error sequences ----------------------------------------------
+
+    context 'alternating error types' do
+      it 'handles EPIPE then ECONNRESET then IOError in sequence' do
+        call_count = 0
+        allow(mock_socket).to receive(:puts) do
+          call_count += 1
+          case call_count
+          when 1 then raise Errno::EPIPE
+          when 2 then raise Errno::ECONNRESET
+          when 3 then raise IOError, 'closed stream'
+          end
+        end
+
+        3.times do
+          expect { described_class.send(:_puts, 'test') }.not_to raise_error
+        end
+
+        expect(Lich).to have_received(:log).exactly(3).times
+      end
     end
   end
 

@@ -23,6 +23,7 @@ require_relative 'common/update/github_client'
 require_relative 'common/update/channel_resolver'
 require_relative 'common/update/snapshot_manager'
 require_relative 'common/update/tracked_scripts'
+require_relative 'common/update/custom_repos'
 require_relative 'common/update/script_sync'
 require_relative 'common/update/file_updater'
 require_relative 'common/update/release_installer'
@@ -109,6 +110,12 @@ module Lich
           respond "This command has been removed."
         when /^(?:--revert|-r)\b/
           snapshot_manager.revert
+        when /^--add-custom=(\S+?)(?::(\S+))?$/
+          custom_repos_manager.add_custom_repo($1, $2)
+        when /^--remove-custom=(\S+)$/
+          custom_repos_manager.remove_custom_repo($1)
+        when /^--custom-repos$/
+          custom_repos_manager.list_custom_repos
         when /^--sync(?:=(\S+))?$/
           if $1
             script_sync.sync_repo($1)
@@ -176,6 +183,15 @@ module Lich
     #{$clean_lich_char}lich5-update --tracked=scripts                   List tracked scripts for one repo
     #{$clean_lich_char}lich5-update --track=scripts:bigshot.lic         Add a script to tracked list
     #{$clean_lich_char}lich5-update --untrack=scripts:bigshot.lic       Remove from tracked list
+
+  [Custom 3rd-party repositories]
+    #{$clean_lich_char}lich5-update --add-custom=owner/repo             Register a custom repo (default branch)
+    #{$clean_lich_char}lich5-update --add-custom=owner/repo:branch      Register with specific branch
+    #{$clean_lich_char}lich5-update --remove-custom=owner/repo          Unregister a custom repo
+    #{$clean_lich_char}lich5-update --custom-repos                      List registered custom repos
+    #{$clean_lich_char}lich5-update --track=owner/repo:script.lic       Track a script from custom repo
+    #{$clean_lich_char}lich5-update --sync=owner/repo                   Sync a custom repo
+    Custom scripts are installed to #{$clean_lich_char}scripts/custom/<owner-repo>/
 
   [Individual file updates]
     #{$clean_lich_char}lich5-update --script=<name>                     Update script (auto-detects repo)
@@ -246,8 +262,8 @@ module Lich
         branch_tracking = <<~RUBY
 
           # Branch tracking (added by lich5-update --branch)
-          LICH_BRANCH = '#{branch_name}'
-          LICH_BRANCH_REPO = '#{repo}'
+          LICH_BRANCH = #{branch_name.dump}
+          LICH_BRANCH_REPO = #{repo.dump}
           LICH_BRANCH_UPDATED_AT = #{Time.now.to_i}
         RUBY
 
@@ -298,7 +314,7 @@ module Lich
       end
 
       def self.release_installer
-        @release_installer ||= ReleaseInstaller.new(client, resolver, snapshot_manager)
+        ReleaseInstaller.new(client, resolver, snapshot_manager)
       end
 
       def self.branch_installer
@@ -313,6 +329,10 @@ module Lich
         @tracked_scripts_manager ||= TrackedScripts.new
       end
 
+      def self.custom_repos_manager
+        @custom_repos_manager ||= CustomRepos.new
+      end
+
       def self.file_updater
         @file_updater ||= FileUpdater.new(client, resolver)
       end
@@ -320,7 +340,7 @@ module Lich
       private_class_method :client, :resolver, :snapshot_manager,
                            :release_installer, :branch_installer,
                            :script_sync, :tracked_scripts_manager,
-                           :file_updater
+                           :custom_repos_manager, :file_updater
     end
   end
 end

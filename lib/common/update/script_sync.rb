@@ -3,9 +3,9 @@
 =begin
   Bulk SHA-based repository sync for script repositories.
 
-  Downloads scripts and data files from configured SCRIPT_REPOS, skipping
-  files that match local SHA1. Supports both :all (auto-sync all .lic) and
-  :explicit (tracked list) modes.
+  Downloads scripts and data files from configured SCRIPT_REPOS and
+  user-registered custom repos, skipping files that match local SHA1.
+  Supports both :all (auto-sync all .lic) and :explicit (tracked list) modes.
 =end
 
 module Lich
@@ -17,23 +17,31 @@ module Lich
           @client = client
         end
 
-        # Syncs all registered repositories for current game.
+        # Syncs all registered repositories (built-in + custom) for current game.
         #
         # @return [void]
         def sync_all_repos
           SCRIPT_REPOS.each_key { |repo_key| sync_repo(repo_key) }
+          CustomRepos.all.each_key { |repo_key| sync_repo(repo_key) }
         end
 
-        # Syncs a single repository by key.
+        # Syncs a single repository by key (built-in or custom).
         #
-        # @param repo_key [String] repository key from SCRIPT_REPOS
+        # @param repo_key [String] repository key from SCRIPT_REPOS or custom repo
         # @param force [Boolean] skip SHA check and download all (default: false)
         # @return [void]
         def sync_repo(repo_key, force: false)
           config = SCRIPT_REPOS[repo_key]
           unless config
-            respond "[lich5-update: Unknown repository '#{repo_key}'. Known: #{SCRIPT_REPOS.keys.join(', ')}]"
-            return
+            # Check custom repos
+            reg = CustomRepos.all[repo_key]
+            if reg
+              config = CustomRepos.build_config(repo_key, reg)
+            else
+              known = (SCRIPT_REPOS.keys + CustomRepos.all.keys).join(', ')
+              respond "[lich5-update: Unknown repository '#{repo_key}'. Known: #{known}]"
+              return
+            end
           end
 
           if config[:game_filter] && XMLData.game !~ config[:game_filter]
@@ -51,7 +59,11 @@ module Lich
           syncable = filter_syncable_scripts(tree, config)
           StatusReporter.respond_mono("[lich5-update: Syncing #{name} (#{syncable.length} scripts)...]")
 
-          local_shas = FileWriter.build_local_sha_map(SCRIPT_DIR)
+          # Custom repos write to their per-repo subdir; built-in repos to SCRIPT_DIR
+          dest = config[:dest_dir] || SCRIPT_DIR
+          FileUtils.mkdir_p(dest) if config[:custom]
+
+          local_shas = FileWriter.build_local_sha_map(dest)
           downloaded_scripts = []
           failed_scripts = []
           syncable.each do |entry|
@@ -65,7 +77,7 @@ module Lich
             end
 
             begin
-              FileWriter.safe_write(File.join(SCRIPT_DIR, filename), content)
+              FileWriter.safe_write(File.join(dest, filename), content)
               downloaded_scripts << filename
             rescue StandardError => e
               respond "[lich5-update: write failed for #{filename}: #{e.message}]"
@@ -127,7 +139,7 @@ module Lich
         # Filters tree entries to syncable scripts based on tracking mode.
         #
         # @param tree [Array<Hash>] GitHub tree API response
-        # @param config [Hash] repository config from SCRIPT_REPOS
+        # @param config [Hash] repository config from SCRIPT_REPOS or custom repo
         # @return [Array<Hash>] filtered tree entries
         def filter_syncable_scripts(tree, config)
           candidates = tree.select { |e| e['path'] =~ config[:script_pattern] && e['type'] == 'blob' }

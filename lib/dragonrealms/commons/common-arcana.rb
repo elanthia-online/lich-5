@@ -998,10 +998,10 @@ module Lich
 
       def choose_avtalia(charge_needed, mana_percentage)
         UserVars.avtalia.select { |_camb, data| data['time_seen'] && data['cap'] && data['mana'] }
-                .select { |_camb, data| Time.now - data['time_seen'] < 600.0 }
-                .select { |_camb, data| (data['mana'].to_f / data['cap'].to_f) * 100 >= mana_percentage }
-                .select { |_camb, data| data['mana'] > charge_needed / 10 }
-                .max_by { |_camb, data| data['mana'] }
+                        .select { |_camb, data| Time.now - data['time_seen'] < 600.0 }
+                        .select { |_camb, data| (data['mana'].to_f / data['cap'].to_f) * 100 >= mana_percentage }
+                        .select { |_camb, data| data['mana'] > charge_needed / 10 }
+                        .max_by { |_camb, data| data['mana'] }
       end
 
       # Determine the numerical range of a Warrior Mage's elemental charge.

@@ -299,11 +299,18 @@ module Lich
           end
         end
 
+        # Writes a string to the game server socket.
+        #
+        # Thread-safe via mutex. Silently absorbs fatal connection errors
+        # so callers (scripts) are not killed by a broken server link.
+        #
+        # @param str [String] the raw command to send upstream
+        # @return [nil] on connection error
         def _puts(str)
           @mutex.synchronize do
             @socket.puts(str)
           end
-        rescue Errno::EPIPE, IOError => e
+        rescue Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, IOError => e
           Lich.log "error: _puts: #{e}\n\t#{e.backtrace.first}"
           nil
         end
@@ -460,7 +467,18 @@ module Lich
           # XMLData.name. If Vars is accessed before XMLData.name is set, it
           # loads/saves under scope "DR:" instead of "DR:CharName", overwriting
           # real data with an empty session.
-          Thread.new { Lich::Util::Update.sync_all_repos }
+          Thread.new do
+            # Wait for XMLData.name to be populated by process_xml_data
+            # before touching Vars. 200 x 50ms = 10s max wait.
+            200.times do
+              break if !XMLData.name.nil? && !XMLData.name.empty?
+
+              sleep 0.05
+            end
+            Lich::Util::Update.sync_all_repos if !XMLData.name.nil? && !XMLData.name.empty?
+          rescue StandardError => e
+            Lich.log "repo_sync(login): #{e.class}: #{e.message}"
+          end
 
           Script.start('autostart') if defined?(Script) && Script.respond_to?(:exists?) && Script.exists?('autostart')
           @@autostarted = true

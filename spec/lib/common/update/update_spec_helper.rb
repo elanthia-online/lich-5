@@ -6,6 +6,7 @@
 require 'digest'
 require 'fileutils'
 require 'tmpdir'
+require 'terminal-table'
 
 LICH_VERSION = '5.15.1' unless defined?(LICH_VERSION)
 SCRIPT_DIR = Dir.mktmpdir('lich-scripts') unless defined?(SCRIPT_DIR)

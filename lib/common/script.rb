@@ -62,16 +62,31 @@ module Lich
         end
 
         # fixme: look in wizard script directory
-        # fixme: allow subdirectories?
-        file_list = Dir.children(File.join(SCRIPT_DIR, "custom")).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }.map { |s| s.prepend("/custom/") } + Dir.children(SCRIPT_DIR).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
-        if (file_name = (file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i }))
+        # Build file list: custom/ root, then custom/ subdirectories, then SCRIPT_DIR root
+        custom_base = File.join(SCRIPT_DIR, "custom")
+        custom_dirs = []
+        if File.directory?(custom_base)
+          custom_dirs << custom_base
+          Dir.children(custom_base).sort.each do |child|
+            child_path = File.join(custom_base, child)
+            custom_dirs << child_path if File.directory?(child_path)
+          end
+        end
+        file_list = custom_dirs.flat_map { |dir|
+          prefix = dir.sub(SCRIPT_DIR, '')
+          Dir.children(dir)
+             .select { |f| f =~ /\.(lic|rb|cmd|wiz)(\.(gz|Z))?$/i }
+             .sort_by { |fn| fn.sub(/\.[^.]+$/, '') }
+             .map { |s| "#{prefix}/#{s}" }
+        } + Dir.children(SCRIPT_DIR).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
+        if (file_name = (file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i }))
           script_name = file_name.sub(/\..{1,3}$/, '')
         end
         if file_name.nil?
           respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR} or #{SCRIPT_DIR}/custom"
           next nil
         end
-        if (options[:force] != true) and (Script.running + Script.hidden).find { |s| s.name =~ /^#{Regexp.escape(script_name.sub('/custom/', ''))}$/i }
+        if (options[:force] != true) and (Script.running + Script.hidden).find { |s| s.name =~ /^#{Regexp.escape(script_name.sub(%r{/custom/([^/]+/)?}, ''))}$/i }
           respond "--- Lich: #{script_name} is already running (use #{$clean_lich_char}force [scriptname] if desired)."
           next nil
         end
