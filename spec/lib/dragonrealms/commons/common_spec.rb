@@ -306,13 +306,163 @@ RSpec.describe Lich::DragonRealms::DRC do
   end
 
   describe '.set_stance' do
-    before { allow(described_class).to receive(:bput).and_return('Setting your') }
+    before do
+      allow(described_class).to receive(:bput).and_return('Setting your')
+    end
 
-    it('uses divisor 50 for Paladin') { allow(DRStats).to receive(:guild).and_return('Paladin'); allow(DRSkill).to receive(:getrank).and_return(200); described_class.set_stance('parry'); expect(described_class).to have_received(:bput).with('stance set 100 84 0', /Setting your/) }
-    it('uses divisor 60 for Barbarian') { allow(DRStats).to receive(:guild).and_return('Barbarian'); allow(DRSkill).to receive(:getrank).and_return(300); described_class.set_stance('parry'); expect(described_class).to have_received(:bput).with('stance set 100 85 0', /Setting your/) }
-    it('uses divisor 70 for other guilds') { allow(DRStats).to receive(:guild).and_return('Warrior Mage'); allow(DRSkill).to receive(:getrank).and_return(700); described_class.set_stance('parry'); expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/) }
-    it('swaps secondary and tertiary for shield') { allow(DRStats).to receive(:guild).and_return('Warrior Mage'); allow(DRSkill).to receive(:getrank).and_return(1400); described_class.set_stance('shield'); expect(described_class).to have_received(:bput).with('stance set 100 0 100', /Setting your/) }
-    it('handles overflow points for shield') { allow(DRStats).to receive(:guild).and_return('Warrior Mage'); allow(DRSkill).to receive(:getrank).and_return(2100); described_class.set_stance('shield'); expect(described_class).to have_received(:bput).with('stance set 100 10 100', /Setting your/) }
+    context 'guild divisors' do
+      it('uses divisor 50 for Paladin') do
+        allow(DRStats).to receive(:guild).and_return('Paladin')
+        allow(DRSkill).to receive(:getrank).and_return(500)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+
+      it('uses divisor 60 for Barbarian') do
+        allow(DRStats).to receive(:guild).and_return('Barbarian')
+        allow(DRSkill).to receive(:getrank).and_return(600)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+
+      it('uses divisor 60 for Ranger') do
+        allow(DRStats).to receive(:guild).and_return('Ranger')
+        allow(DRSkill).to receive(:getrank).and_return(1750)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 100 9', /Setting your/)
+      end
+
+      it('uses divisor 60 for Trader') do
+        allow(DRStats).to receive(:guild).and_return('Trader')
+        allow(DRSkill).to receive(:getrank).and_return(600)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+
+      it('uses divisor 60 for Commoner') do
+        allow(DRStats).to receive(:guild).and_return('Commoner')
+        allow(DRSkill).to receive(:getrank).and_return(600)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+
+      it('uses divisor 70 for other guilds') do
+        allow(DRStats).to receive(:guild).and_return('Warrior Mage')
+        allow(DRSkill).to receive(:getrank).and_return(700)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+    end
+
+    context 'skill priority placement (STANCE SET <evasion> <parry> <shield>)' do
+      before do
+        allow(DRStats).to receive(:guild).and_return('Warrior Mage')
+        allow(DRSkill).to receive(:getrank).and_return(700)
+      end
+
+      it 'places 100 in evasion slot for evasion' do
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+
+      it 'places 100 in parry slot for parry' do
+        described_class.set_stance('parry')
+        expect(described_class).to have_received(:bput).with('stance set 90 100 0', /Setting your/)
+      end
+
+      it 'places 100 in shield slot for shield' do
+        described_class.set_stance('shield')
+        expect(described_class).to have_received(:bput).with('stance set 90 0 100', /Setting your/)
+      end
+
+      it 'defaults to evasion for unknown skill' do
+        described_class.set_stance('stealth')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+    end
+
+    context 'secondary/tertiary overflow' do
+      before do
+        allow(DRStats).to receive(:guild).and_return('Warrior Mage')
+      end
+
+      it 'caps secondary at 100 and puts overflow into tertiary' do
+        allow(DRSkill).to receive(:getrank).and_return(2100)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 100 10', /Setting your/)
+      end
+
+      it 'distributes overflow correctly for parry priority' do
+        allow(DRSkill).to receive(:getrank).and_return(2100)
+        described_class.set_stance('parry')
+        expect(described_class).to have_received(:bput).with('stance set 100 100 10', /Setting your/)
+      end
+
+      it 'distributes overflow correctly for shield priority' do
+        allow(DRSkill).to receive(:getrank).and_return(2100)
+        described_class.set_stance('shield')
+        expect(described_class).to have_received(:bput).with('stance set 100 10 100', /Setting your/)
+      end
+    end
+
+    context 'edge cases' do
+      before do
+        allow(DRStats).to receive(:guild).and_return('Empath')
+      end
+
+      it 'handles zero Defending rank' do
+        allow(DRSkill).to receive(:getrank).and_return(0)
+        described_class.set_stance('parry')
+        expect(described_class).to have_received(:bput).with('stance set 80 100 0', /Setting your/)
+      end
+
+      it 'handles exact boundary where points equal 100' do
+        allow(DRSkill).to receive(:getrank).and_return(1400)
+        described_class.set_stance('shield')
+        expect(described_class).to have_received(:bput).with('stance set 100 0 100', /Setting your/)
+      end
+
+      it 'is case-insensitive for skill name' do
+        allow(DRSkill).to receive(:getrank).and_return(700)
+        described_class.set_stance('PARRY')
+        expect(described_class).to have_received(:bput).with('stance set 90 100 0', /Setting your/)
+      end
+
+      it 'handles mixed case skill name' do
+        allow(DRSkill).to receive(:getrank).and_return(700)
+        described_class.set_stance('Shield')
+        expect(described_class).to have_received(:bput).with('stance set 90 0 100', /Setting your/)
+      end
+
+      it 'handles very high Defending rank' do
+        allow(DRSkill).to receive(:getrank).and_return(5000)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 100 51', /Setting your/)
+      end
+    end
+
+    context 'verified in-game values' do
+      it 'Ranger 1750 Defending, evasion priority' do
+        allow(DRStats).to receive(:guild).and_return('Ranger')
+        allow(DRSkill).to receive(:getrank).and_return(1750)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 100 9', /Setting your/)
+      end
+
+      it 'Moon Mage 1750 Defending, parry priority' do
+        allow(DRStats).to receive(:guild).and_return('Moon Mage')
+        allow(DRSkill).to receive(:getrank).and_return(1750)
+        described_class.set_stance('parry')
+        expect(described_class).to have_received(:bput).with('stance set 100 100 5', /Setting your/)
+      end
+
+      it 'Empath 1527 Defending, shield priority' do
+        allow(DRStats).to receive(:guild).and_return('Empath')
+        allow(DRSkill).to receive(:getrank).and_return(1527)
+        described_class.set_stance('shield')
+        expect(described_class).to have_received(:bput).with('stance set 100 1 100', /Setting your/)
+      end
+    end
   end
 
   describe '.assess_teach' do
