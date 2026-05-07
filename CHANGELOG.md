@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.17.1](https://github.com/elanthia-online/lich-5/compare/v5.17.0...v5.17.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* **all:** Add top-level parse_args/display_args bridge to global_defs ([#1346](https://github.com/elanthia-online/lich-5/issues/1346)) ([cca6322](https://github.com/elanthia-online/lich-5/commit/cca6322316b99d7b44bd97121d23e9d4e9adc24c))
+* **all:** copy Gemfile and LICENSE during self-update ([#1345](https://github.com/elanthia-online/lich-5/issues/1345)) ([9d56522](https://github.com/elanthia-online/lich-5/commit/9d56522f12d96682bddd90f320cf1c1be00e18ca))
+* **all:** enable heartbeat-driven failover for ActiveSessions service owner ([#1340](https://github.com/elanthia-online/lich-5/issues/1340)) ([eb69403](https://github.com/elanthia-online/lich-5/commit/eb694032c67b75a833f141b0c9fdb132a4b04031))
+* **dr:** Add CORE_AUTOSTART sentinel to skip dependency.lic autostart helpers ([#1344](https://github.com/elanthia-online/lich-5/issues/1344)) ([c5db210](https://github.com/elanthia-online/lich-5/commit/c5db2103a39cd8ffc19ddd837fd6e34fb6f09ed7))
+* **dr:** cache SlackBot users list to prevent API throttling ([#1342](https://github.com/elanthia-online/lich-5/issues/1342)) ([dd7a0c7](https://github.com/elanthia-online/lich-5/commit/dd7a0c702351f7033912ac4c4d88b86426cdcfb3))
+* **dr:** replace undefined custom_require in check_moonwatch ([#1336](https://github.com/elanthia-online/lich-5/issues/1336)) ([70df672](https://github.com/elanthia-online/lich-5/commit/70df672f4ea0ed979238d950e92219ca99e67fde))
+* **dr:** set_stance places 100 in the correct positional slot ([#1337](https://github.com/elanthia-online/lich-5/issues/1337)) ([2a1ac51](https://github.com/elanthia-online/lich-5/commit/2a1ac518615a9246a1c18bf7befd20af28a57b8b))
+* **gs:** add support for RESERVE xml in GameObj.reserve ([#1341](https://github.com/elanthia-online/lich-5/issues/1341)) ([f95a728](https://github.com/elanthia-online/lich-5/commit/f95a728f2538c1f90703b63a5e87e6f7243b6765))
+* **gs:** Infomon Status.cutthroat? Effect Debuff correction ([#1331](https://github.com/elanthia-online/lich-5/issues/1331)) ([1af00de](https://github.com/elanthia-online/lich-5/commit/1af00deec063841cae04857fda0b6e11dcbc456c))
+
 ## [5.17.0](https://github.com/elanthia-online/lich-5/compare/v5.16.2...v5.17.0) (2026-04-27)
 
 
