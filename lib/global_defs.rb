@@ -10,6 +10,7 @@ module Lich
     CORE_GET_SETTINGS = true
     CORE_SCRIPT_LOADER = true
     CORE_PARSE_ARGS = true
+    CORE_AUTOSTART = true
   end
 end
 
