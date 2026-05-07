@@ -14,6 +14,7 @@ RSpec.describe Lich::Common::GameObj do
     end
     described_class.class_variable_set(:@@right_hand, nil)
     described_class.class_variable_set(:@@left_hand, nil)
+    described_class.class_variable_set(:@@reserve, nil)
 
     described_class.new_right_hand('r1', 'empty', 'Empty')
     described_class.new_left_hand('l1', 'empty', 'Empty')
@@ -150,6 +151,85 @@ RSpec.describe Lich::Common::GameObj do
       described_class.clear_inv
 
       expect(described_class.containers).to have_key('container1')
+    end
+  end
+
+  describe '.new_reserve' do
+    let(:item_id)   { '279838' }
+    let(:item_noun) { 'lilac' }
+    let(:item_name) { 'sprig of wild lilac' }
+
+    it 'adds the item to @@reserve' do
+      obj = described_class.new_reserve(item_id, item_noun, item_name)
+
+      expect(described_class.reserve).to include(obj)
+      expect(obj.id).to eq(item_id)
+      expect(obj.noun).to eq(item_noun)
+      expect(obj.name).to eq(item_name)
+    end
+
+    it 'initializes @@reserve from nil on first call' do
+      expect(described_class.reserve).to be_nil
+
+      described_class.new_reserve(item_id, item_noun, item_name)
+
+      expect(described_class.reserve).to be_an(Array)
+    end
+
+    it 'appends multiple items' do
+      first  = described_class.new_reserve('1', 'herb', 'golden herb')
+      second = described_class.new_reserve('2', 'potion', 'blue potion')
+
+      expect(described_class.reserve).to contain_exactly(first, second)
+    end
+
+    it 'converts integer id to string' do
+      obj = described_class.new_reserve(279838, item_noun, item_name)
+
+      expect(obj.id).to eq('279838')
+    end
+  end
+
+  describe '.reserve' do
+    it 'returns nil when @@reserve has never been seen' do
+      expect(described_class.reserve).to be_nil
+    end
+
+    it 'returns a duplicate so mutations do not affect the registry' do
+      obj = described_class.new_reserve('1', 'herb', 'golden herb')
+
+      copy = described_class.reserve
+      copy.clear
+
+      expect(described_class.reserve).to include(obj)
+    end
+  end
+
+  describe '.clear_reserve' do
+    it 'initializes @@reserve to [] even when never seen' do
+      expect(described_class.reserve).to be_nil
+
+      described_class.clear_reserve
+
+      expect(described_class.reserve).to eq([])
+    end
+
+    it 'empties @@reserve when it already has items' do
+      described_class.new_reserve('1', 'herb', 'golden herb')
+      expect(described_class.reserve).not_to be_nil
+
+      described_class.clear_reserve
+
+      expect(described_class.reserve).to eq([])
+    end
+
+    it 'allows new items to be added after clearing' do
+      described_class.new_reserve('1', 'herb', 'golden herb')
+      described_class.clear_reserve
+
+      obj = described_class.new_reserve('2', 'potion', 'blue potion')
+
+      expect(described_class.reserve).to contain_exactly(obj)
     end
   end
 
