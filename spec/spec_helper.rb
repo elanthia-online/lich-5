@@ -75,6 +75,7 @@ RSpec.configure do |config|
     Lich::Messaging.clear_messages! if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:clear_messages!)
     Lich.reset_display_expgains! if defined?(Lich) && Lich.respond_to?(:reset_display_expgains!)
     Lich.db.reset! if defined?(Lich) && Lich.respond_to?(:db) && Lich.db.respond_to?(:reset!)
+    Lich::Common::DB_Store.reset! if defined?(Lich::Common::DB_Store) && Lich::Common::DB_Store.respond_to?(:reset!)
 
     # DR production classes - only if they're loaded (may override mocks)
     Lich::DragonRealms::DRExpMonitor.reset! if defined?(Lich::DragonRealms::DRExpMonitor) && Lich::DragonRealms::DRExpMonitor.respond_to?(:reset!)
@@ -527,6 +528,64 @@ module Lich
     end
   end
 end
+
+# =============================================================================
+# DB_Store Mock
+# =============================================================================
+# In-memory replacement for the SQLite-backed script_auto_settings store.
+# Matches the production API from lib/common/db_store.rb.
+
+module Lich
+  module Common
+    module DB_Store
+      @store = {}
+
+      class << self
+        def read(scope, script)
+          case script
+          when 'vars', 'uservars'
+            get_vars(scope)
+          else
+            get_data(scope, script)
+          end
+        end
+
+        def save(scope, script, val)
+          case script
+          when 'vars', 'uservars'
+            store_vars(scope, val)
+          else
+            store_data(scope, script, val)
+          end
+        end
+
+        def get_data(scope, script)
+          @store ||= {}
+          @store["#{scope}::#{script}"] || {}
+        end
+
+        def get_vars(scope)
+          @store ||= {}
+          @store["#{scope}::vars"] || {}
+        end
+
+        def store_data(scope, script, val)
+          @store ||= {}
+          @store["#{scope}::#{script}"] = val
+        end
+
+        def store_vars(scope, val)
+          @store ||= {}
+          @store["#{scope}::vars"] = val
+        end
+
+        def reset!
+          @store = {}
+        end
+      end
+    end
+  end
+end unless defined?(Lich::Common::DB_Store)
 
 # =============================================================================
 # Effects Mock

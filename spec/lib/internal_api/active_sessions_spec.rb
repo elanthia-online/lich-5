@@ -277,6 +277,40 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
     expect(described_class.send(:register_session_admitted, { pid: 12_345 })).to be(true)
   end
 
+  it 'bootstraps a replacement owner from admitted registration when no healthy service remains' do
+    # No discovery file: simulates the previous owner having exited.
+    fake_server = instance_double(
+      Lich::InternalAPI::ActiveSessions::Server,
+      start: true,
+      stop: nil,
+      auth_token: 'failover-token'
+    )
+    fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
+
+    allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(fake_server)
+    allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(fake_client)
+    allow(fake_client).to receive(:upsert).and_return(ok: true)
+
+    expect(described_class).to receive(:enabled?).and_return(true)
+
+    expect(described_class.send(:register_session_admitted, { pid: Process.pid })).to be(true)
+
+    discovery = JSON.parse(
+      File.read(File.join(temp_dir, 'lich-active-sessions.json')),
+      symbolize_names: true
+    )
+    expect(discovery[:owner_pid]).to eq(Process.pid)
+    expect(discovery[:auth_token]).to eq('failover-token')
+  end
+
+  it 'does not bootstrap from admitted registration when the kill-switch is disabled' do
+    allow(described_class).to receive(:enabled?).and_return(false)
+
+    expect(Lich::InternalAPI::ActiveSessions::Server).not_to receive(:new)
+
+    expect(described_class.send(:register_session_admitted, { pid: Process.pid })).to be(false)
+  end
+
   it 'can reuse an existing service after the caller already admitted the feature gate' do
     fake_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: true)
     File.write(

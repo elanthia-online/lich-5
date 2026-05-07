@@ -9,6 +9,8 @@ module Lich
   module Common
     CORE_GET_SETTINGS = true
     CORE_SCRIPT_LOADER = true
+    CORE_PARSE_ARGS = true
+    CORE_AUTOSTART = true
   end
 end
 
@@ -75,6 +77,24 @@ end
 def get_data(type)
   $setupfiles ||= Lich::Common::SetupFiles.new
   $setupfiles.get_data(type)
+end
+
+# Parses script arguments against definition patterns.
+# Delegates to Lich::Common::ArgParser.
+#
+# @param defn [Array<Array<Hash>>] argument definition sets
+# @param flex_args [Boolean] whether to allow unmatched args
+# @return [OpenStruct] matched arguments, or exits with help
+def parse_args(defn, flex_args = false)
+  Lich::Common::ArgParser.new.parse_args(defn, flex_args)
+end
+
+# Displays help/usage information for a script's arguments.
+# Delegates to Lich::Common::ArgParser.
+#
+# @param defn [Array<Array<Hash>>] argument definition sets
+def display_args(defn)
+  Lich::Common::ArgParser.new.display_args(defn)
 end
 
 def before_dying(&code)
