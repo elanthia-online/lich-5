@@ -27,6 +27,7 @@ module Lich
       @@pcs           = []
       @@pc_status     = {}
       @@inv           = []
+      @@reserve       = nil
       @@contents      = {}
       @@right_hand    = nil
       @@left_hand     = nil
@@ -265,6 +266,20 @@ module Lich
         end
       end
 
+      # Creates and registers a new reserve slot item.
+      #
+      # +@@reserve+ is +nil+ until the first reserve stream is seen; thereafter
+      # it is always an Array (possibly empty).
+      #
+      # @param id   [Integer, String]
+      # @param noun [String, nil]
+      # @param name [String, nil]
+      # @return [GameObj]
+      def self.new_reserve(id, noun, name)
+        @@reserve ||= []
+        find_or_create(@@reserve, id, noun, name)
+      end
+
       # Creates and registers a new room description object.
       #
       # @param id   [Integer, String]
@@ -414,6 +429,9 @@ module Lich
       def self.inv         = registry_or_nil(@@inv)
 
       # @return [Array<GameObj>, nil]
+      def self.reserve     = @@reserve&.dup
+
+      # @return [Array<GameObj>, nil]
       def self.room_desc   = registry_or_nil(@@room_desc)
 
       # @return [Array<GameObj>, nil]
@@ -446,6 +464,9 @@ module Lich
 
       # @return [void]
       def self.clear_inv           = @@inv.clear
+
+      # @return [void]
+      def self.clear_reserve       = (@@reserve = [])
 
       # @return [void]
       def self.clear_room_desc     = @@room_desc.clear
@@ -918,7 +939,7 @@ module Lich
       #
       # @return [Array<GameObj>]
       def all_flat_registries
-        [*@@loot, *@@inv, *@@room_desc,
+        [*@@loot, *@@inv, *@@reserve, *@@room_desc,
          *@@fam_loot, *@@fam_npcs, *@@fam_pcs, *@@fam_room_desc,
          @@right_hand, @@left_hand].compact
       end
@@ -933,7 +954,7 @@ module Lich
         # All ordered search registries for +[]+, hands wrapped in an array to
         # use the same +#find+ interface.
         SEARCH_ORDER = proc do
-          [@@inv, @@loot, @@npcs, @@pcs,
+          [@@inv, Array(@@reserve), @@loot, @@npcs, @@pcs,
            [@@right_hand, @@left_hand].compact,
            @@room_desc,
            @@contents.values.flatten]
@@ -1014,7 +1035,7 @@ module Lich
         # @return [Set<String>, Array<String>]
         def live_registry_ids
           ids = [
-            *@@loot, *@@npcs, *@@pcs, *@@inv,
+            *@@loot, *@@npcs, *@@pcs, *@@inv, *@@reserve,
             *@@room_desc, *@@fam_loot, *@@fam_npcs, *@@fam_pcs, *@@fam_room_desc,
             *@@contents.values.flatten,
             @@right_hand, @@left_hand
