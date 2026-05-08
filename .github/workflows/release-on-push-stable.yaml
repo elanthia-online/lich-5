@@ -9,6 +9,8 @@
 # - Releases are created as DRAFT (invisible until human publishes via GitHub UI/CLI).
 # - Release body/title must be finalized before packaging begins.
 # - No reliance on a local git checkout for GH release edits/uploads.
+# - Draft release body lookup is an optional fallback; PR body lookup must keep the
+#   packaging path alive when GitHub briefly cannot resolve a draft by tag.
 # - PR labels 'skip-installer' or 'no-installer' gate the installer build (case-insensitive).
 #
 # OUTPUTS (selected)
@@ -186,43 +188,54 @@ jobs:
               core.setOutput('found', 'false');
             }
 
-      - name: Read current draft release body
-        if: ${{ steps.rp.outputs.release_created == 'true' }}
-        id: read_release
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          TAG: ${{ steps.rp.outputs.tag_name }}
-        with:
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const tag = (process.env.TAG || '').trim();
-
-            if (!tag) {
-              core.setFailed('Missing tag for stable release body lookup');
-              return;
-            }
-
-            const release = await github.rest.repos.getReleaseByTag({
-              owner,
-              repo,
-              tag
-            }).then(r => r.data);
-
-            core.setOutput('body', release.body || '');
-
       - name: Choose seed body (PR preferred)
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         id: choose_seed
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           PR_BODY: ${{ steps.find_pr.outputs.body }}
-          REL_BODY: ${{ steps.read_release.outputs.body }}
+          TAG: ${{ steps.rp.outputs.tag_name }}
         with:
           script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
             const prb = process.env.PR_BODY || '';
-            const rel = process.env.REL_BODY || '';
-            core.setOutput('body', prb.trim().length > 0 ? prb : rel);
+            const tag = (process.env.TAG || '').trim();
+
+            async function releaseBodyByTagFallback() {
+              if (!tag) {
+                core.warning('Missing tag for optional stable release body fallback');
+                return '';
+              }
+
+              try {
+                const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+                return data.body || '';
+              } catch (e) {
+                core.warning(`Could not read release by tag '${tag}': ${e.message}`);
+              }
+
+              try {
+                const { data } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 });
+                const hit = (data || []).find(r => r.tag_name === tag);
+                return hit && hit.body ? hit.body : '';
+              } catch (e) {
+                core.warning(`Could not read release list for fallback body: ${e.message}`);
+                return '';
+              }
+            }
+
+            if (prb.trim().length > 0) {
+              core.info('Using merged Release Please PR body as release seed');
+              core.setOutput('body', prb);
+              return;
+            }
+
+            const rel = await releaseBodyByTagFallback();
+            core.info(rel.trim().length > 0
+              ? 'Using current draft release body as release seed fallback'
+              : 'No PR or draft release body found; transform step will emit a header-only body');
+            core.setOutput('body', rel);
 
       - name: Transform body (header + cleanup + footer)
         if: ${{ steps.rp.outputs.release_created == 'true' }}
