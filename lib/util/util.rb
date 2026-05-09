@@ -143,6 +143,7 @@ module Lich
           end
         }
       rescue Interrupt
+        Lich.log("DEBUG drinfomon_startup: issue_command timed out after #{timeout}s for '#{command}'")
         nil
       ensure
         DownstreamHook.remove(name)

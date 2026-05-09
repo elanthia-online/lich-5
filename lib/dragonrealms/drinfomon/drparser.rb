@@ -388,9 +388,11 @@ module Lich
             DRStats.gender = match[:gender]
             DRStats.age = match[:age].to_i
             DRStats.circle = match[:circle].to_i
+            Lich.log("DEBUG drinfomon_startup: GenderAgeCircle matched - gender=#{match[:gender]} age=#{match[:age]} circle=#{match[:circle]}")
           elsif (match = line.match(Pattern::NameRaceGuild))
             DRStats.race = match[:race]
             DRStats.guild = match[:guild]
+            Lich.log("DEBUG drinfomon_startup: NameRaceGuild matched - race=#{match[:race]} guild=#{match[:guild]}")
           elsif (match = line.match(Pattern::EncumbranceValue))
             DRStats.encumbrance = match[:encumbrance]
           elsif (match = line.match(Pattern::LuckValue))

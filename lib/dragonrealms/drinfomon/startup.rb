@@ -82,6 +82,7 @@ module Lich
       end
 
       def self.startup_completed!
+        Lich.log("DEBUG drinfomon_startup: startup_completed! DRStats: race=#{DRStats.race.inspect} guild=#{DRStats.guild.inspect} gender=#{DRStats.gender.inspect} age=#{DRStats.age} circle=#{DRStats.circle}")
         @@startup_complete = true
         PostLoad.game_loaded! if defined?(PostLoad)
         post_startup_checks

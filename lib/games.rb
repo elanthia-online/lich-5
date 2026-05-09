@@ -428,7 +428,10 @@ module Lich
           # Clean server string based on game type
           if @game_instance
             server_string = @game_instance.clean_serverstring(server_string)
-            return if server_string.nil? # Buffering split component, wait for next line
+            if server_string.nil?
+              Lich.log("DEBUG drinfomon_startup: clean_serverstring returned nil, line dropped") if defined?(DRInfomon) && !DRInfomon.startup_complete?
+              return
+            end
           end
 
           # Debug output if needed
@@ -533,6 +536,7 @@ module Lich
                 retry
               else
                 handle_xml_error(server_string, e)
+                Lich.log("DEBUG drinfomon_startup: REXML unrecoverable nested quotes, line dropped: #{server_string.inspect}") if defined?(DRInfomon) && !DRInfomon.startup_complete? rescue nil
                 XMLData.reset
                 return
               end
@@ -544,6 +548,7 @@ module Lich
               retry
             else
               handle_xml_error(server_string, e)
+              Lich.log("DEBUG drinfomon_startup: REXML unhandled error, line dropped: #{server_string.inspect} error=#{e}") if defined?(DRInfomon) && !DRInfomon.startup_complete? rescue nil
               XMLData.reset
               return
             end
@@ -552,6 +557,8 @@ module Lich
           # Process game-specific data using instance
           if @game_instance && Module.const_defined?(:GameLoader)
             @game_instance.process_game_specific_data(server_string)
+          elsif server_string =~ /^Name:|^Gender:/
+            Lich.log("DEBUG drinfomon_startup: guard failed - game_instance=#{!@game_instance.nil?} GameLoader=#{Module.const_defined?(:GameLoader)} line=#{server_string.inspect}")
           end
 
           # Process downstream XML
@@ -927,7 +934,7 @@ module Lich
       def process_game_specific_data(server_string)
         # Parse directly to allow inline modifications (e.g., inline exp display)
         # The parser modifies server_string in place via line.replace()
-        Lich.log("DEBUG process_game_specific_data: #{server_string.inspect}") if server_string =~ /^Name:|^Gender:/
+        Lich.log("DEBUG drinfomon_startup: process_game_specific_data: #{server_string.inspect}") if server_string =~ /^Name:|^Gender:/
         DRParser.parse(server_string)
       end
 
