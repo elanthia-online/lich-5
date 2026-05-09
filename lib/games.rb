@@ -927,6 +927,7 @@ module Lich
       def process_game_specific_data(server_string)
         # Parse directly to allow inline modifications (e.g., inline exp display)
         # The parser modifies server_string in place via line.replace()
+        Lich.log("DEBUG process_game_specific_data: #{server_string.inspect}") if server_string =~ /^Name:|^Gender:/
         DRParser.parse(server_string)
       end
 
