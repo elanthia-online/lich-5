@@ -8,10 +8,6 @@ require 'digest'
 require 'sqlite3'
 require 'common/settings'
 require 'common/vars'
-require 'common/uservars'
-
-SCRIPT_RUNTIME_USER_VARS = Lich::Common::UserVars
-Lich::Common.send(:remove_const, :UserVars)
 
 RSpec.describe 'script runtime settings and vars contracts' do
   include ScriptRuntimeHarness
@@ -27,6 +23,18 @@ RSpec.describe 'script runtime settings and vars contracts' do
 
   describe 'Settings script_name namespaces' do
     let(:settings_db) { Lich::Common::MockDatabaseAdapter.new }
+
+    around do |example|
+      original_db_adapter = Lich::Common::Settings.instance_variable_get(:@db_adapter)
+      original_path_navigator = Lich::Common::Settings.instance_variable_get(:@path_navigator)
+      original_settings_cache = Lich::Common::Settings.instance_variable_get(:@settings_cache)
+
+      example.run
+    ensure
+      Lich::Common::Settings.instance_variable_set(:@db_adapter, original_db_adapter)
+      Lich::Common::Settings.instance_variable_set(:@path_navigator, original_path_navigator)
+      Lich::Common::Settings.instance_variable_set(:@settings_cache, original_settings_cache)
+    end
 
     before do
       Lich::Common::Settings.instance_variable_set(:@db_adapter, settings_db)
@@ -92,7 +100,24 @@ RSpec.describe 'script runtime settings and vars contracts' do
     end
   end
 
-  describe SCRIPT_RUNTIME_USER_VARS do
+  describe 'UserVars compatibility facade' do
+    let(:user_vars) { @script_runtime_user_vars }
+
+    around do |example|
+      original_defined = Lich::Common.const_defined?(:UserVars, false)
+      original_user_vars = Lich::Common.const_get(:UserVars, false) if original_defined
+
+      Lich::Common.send(:remove_const, :UserVars) if original_defined
+      load File.expand_path('../../../lib/common/uservars.rb', __dir__)
+      @script_runtime_user_vars = Lich::Common::UserVars
+
+      example.run
+    ensure
+      Lich::Common.send(:remove_const, :UserVars) if Lich::Common.const_defined?(:UserVars, false)
+      Lich::Common.const_set(:UserVars, original_user_vars) if original_defined
+      @script_runtime_user_vars = nil
+    end
+
     before do
       allow(Lich).to receive(:db).and_return(ScriptRuntimeHarness::FakeDb.new)
       allow(Lich).to receive(:db_mutex).and_return(Mutex.new)
@@ -100,26 +125,26 @@ RSpec.describe 'script runtime settings and vars contracts' do
     end
 
     it 'delegates bracket and method access to Vars' do
-      described_class['container'] = 'satchel'
-      described_class.weapon = 'sword'
+      user_vars['container'] = 'satchel'
+      user_vars.weapon = 'sword'
 
       expect(Lich::Common::Vars['container']).to eq('satchel')
       expect(Lich::Common::Vars['weapon']).to eq('sword')
-      expect(described_class.weapon).to eq('sword')
+      expect(user_vars.weapon).to eq('sword')
     end
 
     it 'preserves change/add/delete convenience helpers and ignored legacy parameters' do
-      expect(described_class.change('tags', 'foo', :ignored)).to eq('foo')
-      expect(described_class.add('tags', 'bar', :ignored)).to eq('foo, bar')
-      expect(described_class.delete('tags', :ignored)).to be_nil
-      expect(described_class['tags']).to be_nil
+      expect(user_vars.change('tags', 'foo', :ignored)).to eq('foo')
+      expect(user_vars.add('tags', 'bar', :ignored)).to eq('foo, bar')
+      expect(user_vars.delete('tags', :ignored)).to be_nil
+      expect(user_vars['tags']).to be_nil
     end
 
     it 'keeps global and character list compatibility behavior' do
-      described_class['local'] = 'value'
+      user_vars['local'] = 'value'
 
-      expect(described_class.list_global).to eq([])
-      expect(described_class.list_char).to include('local' => 'value')
+      expect(user_vars.list_global).to eq([])
+      expect(user_vars.list_char).to include('local' => 'value')
     end
   end
 end
