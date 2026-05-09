@@ -600,7 +600,7 @@ reconnect_if_wanted = proc {
       rescue
         Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         sleep 0.2
-        retry unless $_CLIENT_.closed? or Game.closed? or !Game.thread.alive? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed/i)
+        retry unless !$_CLIENT_.alive? or Game.closed? or !Game.thread.alive? or ($!.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed/i)
       ensure
         Frontend.cleanup_session_file
       end

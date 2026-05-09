@@ -624,10 +624,7 @@ module Lich
         def send_to_client(alt_string)
           if $_DETACHABLE_CLIENT_
             $_DETACHABLE_CLIENT_.write(alt_string)
-            unless $_DETACHABLE_CLIENT_.alive?
-              $_DETACHABLE_CLIENT_.close rescue nil
-              $_DETACHABLE_CLIENT_ = nil
-            end
+            $_DETACHABLE_CLIENT_ = nil unless $_DETACHABLE_CLIENT_&.alive?
           elsif $_CLIENT_
             $_CLIENT_.write(alt_string)
           end

@@ -653,11 +653,12 @@ RSpec.describe Lich::GameBase::Game do
         expect(raw_socket).to have_received(:write).with('test data')
       end
 
-      it 'cleans up detachable client when write fails' do
+      it 'nils the global and closes delegate when write fails' do
         allow(raw_socket).to receive(:write).and_raise(Errno::EPIPE)
         allow(raw_socket).to receive(:close)
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
         expect($_DETACHABLE_CLIENT_).to be_nil
+        expect(raw_socket).to have_received(:close)
       end
     end
 
@@ -678,12 +679,14 @@ RSpec.describe Lich::GameBase::Game do
 
       it 'absorbs Errno::EPIPE without raising' do
         allow(raw_socket).to receive(:write).and_raise(Errno::EPIPE)
+        allow(raw_socket).to receive(:close)
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
         expect(Lich).to have_received(:log).with(/client socket write failed.*EPIPE/)
       end
 
       it 'absorbs IOError without raising' do
         allow(raw_socket).to receive(:write).and_raise(IOError, 'closed stream')
+        allow(raw_socket).to receive(:close)
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
         expect(Lich).to have_received(:log).with(/client socket write failed.*closed stream/)
       end
