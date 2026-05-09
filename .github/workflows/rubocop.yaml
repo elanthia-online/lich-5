@@ -56,21 +56,26 @@ jobs:
               const cmp = await github.rest.repos.compareCommits({ owner, repo, base: before, head });
               return (cmp.data.files || []).map(f => f.filename);
             }
-            let files = null;
-            if (ev === 'pull_request') {
-              const num = context.payload.pull_request && context.payload.pull_request.number;
-              files = num ? await changedFilesForPR(num) : null;
-            } else if (ev === 'push') {
-              files = await changedFilesForPush();
-            }
-            if (!files || files.length === 0) {
-              core.notice('Preflight: could not determine changed files; defaulting to run RuboCop.');
+            try {
+              let files = null;
+              if (ev === 'pull_request') {
+                const num = context.payload.pull_request && context.payload.pull_request.number;
+                files = num ? await changedFilesForPR(num) : null;
+              } else if (ev === 'push') {
+                files = await changedFilesForPush();
+              }
+              if (!files || files.length === 0) {
+                core.notice('Preflight: could not determine changed files; defaulting to run RuboCop.');
+                core.setOutput('should_lint', 'true');
+              } else {
+                const lintable = files.filter(isRubyLintable);
+                const should = lintable.length > 0;
+                core.notice(`Preflight: changed files = ${files.length}, lintable = ${lintable.length}; should_lint=${should}`);
+                core.setOutput('should_lint', should ? 'true' : 'false');
+              }
+            } catch (error) {
+              core.error(`Preflight failed: ${error.message || error}`);
               core.setOutput('should_lint', 'true');
-            } else {
-              const lintable = files.filter(isRubyLintable);
-              const should = lintable.length > 0;
-              core.notice(`Preflight: changed files = ${files.length}, lintable = ${lintable.length}; should_lint=${should}`);
-              core.setOutput('should_lint', should ? 'true' : 'false');
             }
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         if: steps.preflight.outputs.should_lint == 'true'
