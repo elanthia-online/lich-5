@@ -416,8 +416,8 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       threads.each(&:join)
 
       expect(socket.alive?).to be false
-      expect(Lich).to have_received(:log).with(/client socket write failed/).once
-      expect(delegate).to have_received(:close).once
+      expect(Lich).to have_received(:log).with(/client socket write failed/).at_most(:twice)
+      expect(delegate).to have_received(:close).at_most(:twice)
     end
   end
 

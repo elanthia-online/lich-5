@@ -22,6 +22,7 @@ module Lich
         Errno::ECONNRESET,
         Errno::EPIPE,
         Errno::ECONNABORTED,
+        Errno::ENOTCONN,
         IOError,
       ].freeze
 

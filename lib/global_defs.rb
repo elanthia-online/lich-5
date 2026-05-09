@@ -1836,8 +1836,8 @@ def _respond(first = "", *messages)
     # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
-    str_sent = false
     if $_CLIENT_
+      str_sent = false
       until str_sent
         break unless $_CLIENT_.alive?
         wait_while { !XMLData.safe_to_respond? }
