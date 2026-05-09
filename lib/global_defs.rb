@@ -1808,6 +1808,7 @@ def respond(first = "", *messages)
         break unless $_CLIENT_.alive?
         wait_while { !XMLData.safe_to_respond? }
         str_sent = $_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
+        sleep 0.01 unless str_sent
       end
     end
     if $_DETACHABLE_CLIENT_
@@ -1816,6 +1817,7 @@ def respond(first = "", *messages)
         break unless $_DETACHABLE_CLIENT_.alive?
         wait_while { !XMLData.safe_to_respond? }
         str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
+        sleep 0.01 unless str_sent
       end
     end
   rescue => e
@@ -1840,6 +1842,7 @@ def _respond(first = "", *messages)
         break unless $_CLIENT_.alive?
         wait_while { !XMLData.safe_to_respond? }
         str_sent = $_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
+        sleep 0.01 unless str_sent
       end
     end
     if $_DETACHABLE_CLIENT_
@@ -1848,6 +1851,7 @@ def _respond(first = "", *messages)
         break unless $_DETACHABLE_CLIENT_.alive?
         wait_while { !XMLData.safe_to_respond? }
         str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
+        sleep 0.01 unless str_sent
       end
     end
   rescue => e
