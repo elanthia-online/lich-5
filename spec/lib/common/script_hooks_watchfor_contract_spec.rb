@@ -15,11 +15,19 @@ RSpec.describe 'script runtime hooks and watchfor contracts' do
   around do |example|
     original_client = $_CLIENT_
     original_detachable_client = $_DETACHABLE_CLIENT_
+    original_downstream_hooks = Lich::Common::DownstreamHook.class_variable_get(:@@downstream_hooks)
+    original_downstream_hook_sources = Lich::Common::DownstreamHook.class_variable_get(:@@downstream_hook_sources)
+    original_upstream_hooks = Lich::Common::UpstreamHook.class_variable_get(:@@upstream_hooks)
+    original_upstream_hook_sources = Lich::Common::UpstreamHook.class_variable_get(:@@upstream_hook_sources)
 
     example.run
   ensure
     $_CLIENT_ = original_client
     $_DETACHABLE_CLIENT_ = original_detachable_client
+    Lich::Common::DownstreamHook.class_variable_set(:@@downstream_hooks, original_downstream_hooks)
+    Lich::Common::DownstreamHook.class_variable_set(:@@downstream_hook_sources, original_downstream_hook_sources)
+    Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hooks, original_upstream_hooks)
+    Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hook_sources, original_upstream_hook_sources)
   end
 
   before do

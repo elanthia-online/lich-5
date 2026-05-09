@@ -12,6 +12,18 @@ require 'common/vars'
 RSpec.describe 'script runtime settings and vars contracts' do
   include ScriptRuntimeHarness
 
+  around do |example|
+    original_game = Lich::Common::MockXMLData.game
+    original_name = Lich::Common::MockXMLData.name
+    original_current_name = Lich::Common::MockScript.current_name
+
+    example.run
+  ensure
+    Lich::Common::MockXMLData.game = original_game
+    Lich::Common::MockXMLData.name = original_name
+    Lich::Common::MockScript.current_name = original_current_name
+  end
+
   before do
     Lich::Common::MockXMLData.game = 'GSIV'
     Lich::Common::MockXMLData.name = 'TestCharacter'
@@ -62,6 +74,10 @@ RSpec.describe 'script runtime settings and vars contracts' do
     before do
       allow(Lich).to receive(:db).and_return(fake_db)
       allow(Lich).to receive(:db_mutex).and_return(mutex)
+      reset_vars_state
+    end
+
+    after do
       reset_vars_state
     end
 
@@ -121,6 +137,10 @@ RSpec.describe 'script runtime settings and vars contracts' do
     before do
       allow(Lich).to receive(:db).and_return(ScriptRuntimeHarness::FakeDb.new)
       allow(Lich).to receive(:db_mutex).and_return(Mutex.new)
+      reset_vars_state
+    end
+
+    after do
       reset_vars_state
     end
 
