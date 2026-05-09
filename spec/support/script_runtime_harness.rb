@@ -96,14 +96,14 @@ module ScriptRuntimeHarness
 
     def get_first_value(query, params = [])
       @queries << [:get_first_value, query, params]
-      return @uservars[params.first] if query.include?('FROM uservars')
+      return @uservars[params.first] if query.match?(/\bfrom\s+uservars\b/i)
 
       nil
     end
 
     def execute(query, params = [])
       @queries << [:execute, query, params]
-      if query.include?('INTO uservars')
+      if query.match?(/\binto\s+uservars\b/i)
         @uservars[params[0]] = params[1]
       end
     end

@@ -12,6 +12,16 @@ RSpec.describe 'script runtime hooks and watchfor contracts' do
 
   let(:script) { ScriptRuntimeHarness::FakeScript.new(name: 'hook-owner') }
 
+  around do |example|
+    original_client = $_CLIENT_
+    original_detachable_client = $_DETACHABLE_CLIENT_
+
+    example.run
+  ensure
+    $_CLIENT_ = original_client
+    $_DETACHABLE_CLIENT_ = original_detachable_client
+  end
+
   before do
     stub_const('Buffer', Class.new)
     Buffer.const_set(:SCRIPT_OUTPUT, :script_output)
