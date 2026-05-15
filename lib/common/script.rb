@@ -694,7 +694,11 @@ module Lich
                     respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} has exited.")
                   end
                 end
-                GC.start
+                if defined?(Gtk)
+                  Gtk.queue { Lich::Util::MemoryReleaser.release }
+                else
+                  Lich::Util::MemoryReleaser.release
+                end
               rescue
                 respond "--- Lich: error: #{$!}"
                 Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
