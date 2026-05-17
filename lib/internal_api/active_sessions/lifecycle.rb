@@ -94,7 +94,7 @@ module Lich
               begin
                 upsert_current_session
               rescue StandardError => e
-                Lich.log("warning: ActiveSessions heartbeat tick failed (continuing): #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+                Lich.log("warning: ActiveSessions heartbeat tick failed (continuing): #{e.class}: #{e.message}\n\t#{e.backtrace&.first(3)&.join("\n\t")}") if Lich.respond_to?(:log)
               end
             end
           end
