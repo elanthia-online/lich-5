@@ -135,8 +135,10 @@ module Lich
               Lich.log("warning: ActiveSessions accept_loop error (continuing): #{e.class}: #{e.message}") if defined?(Lich) && Lich.respond_to?(:log)
             end
           end
-        rescue Exception => e
+        rescue StandardError => e
           Lich.log("error: ActiveSessions accept_loop fatal: #{e.class}: #{e.message}\n\t#{e.backtrace&.first(5)&.join("\n\t")}") if defined?(Lich) && Lich.respond_to?(:log)
+        ensure
+          Lich.log("warning: ActiveSessions accept_loop thread exiting pid=#{Process.pid}") if defined?(Lich) && Lich.respond_to?(:log)
         end
 
         # Wraps client handling so finished client threads can be removed from

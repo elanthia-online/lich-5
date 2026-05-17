@@ -113,6 +113,8 @@ module Lich
           # whose service is unresponsive (dead accept thread holding the port).
           discovery = load_discovery
           if discovery[:owner_pid] && discovery[:owner_pid] != Process.pid
+            return true if service_available?
+
             owner_alive = begin
               Process.kill(0, discovery[:owner_pid])
               true
