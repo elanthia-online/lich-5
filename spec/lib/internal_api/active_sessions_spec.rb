@@ -236,6 +236,66 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
         described_class.instance_variable_set(:@server, nil)
       end
     end
+
+    context 'when discovery points to a dead owner process' do
+      it 'deletes the stale discovery file and bootstraps a new server' do
+        stub_no_external_service
+        File.write(
+          File.join(temp_dir, 'lich-active-sessions.json'),
+          JSON.dump(owner_pid: 99_999_999, auth_token: 'dead-owner-token', updated_at: Time.now.to_i)
+        )
+        allow(Process).to receive(:kill).with(0, 99_999_999).and_raise(Errno::ESRCH)
+
+        fresh_server = instance_double(
+          Lich::InternalAPI::ActiveSessions::Server,
+          start: true,
+          stop: nil,
+          auth_token: 'replacement-token'
+        )
+        allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(fresh_server)
+
+        expect(described_class.ensure_service!).to be(true)
+
+        discovery = JSON.parse(
+          File.read(File.join(temp_dir, 'lich-active-sessions.json')),
+          symbolize_names: true
+        )
+        expect(discovery[:owner_pid]).to eq(Process.pid)
+        expect(discovery[:auth_token]).to eq('replacement-token')
+      end
+    end
+
+    context 'when discovery points to an alive but unresponsive owner' do
+      it 'deletes the stale discovery file and returns false without attempting to bind' do
+        stub_no_external_service
+        File.write(
+          File.join(temp_dir, 'lich-active-sessions.json'),
+          JSON.dump(owner_pid: 99_999_998, auth_token: 'zombie-owner-token', updated_at: Time.now.to_i)
+        )
+        allow(Process).to receive(:kill).with(0, 99_999_998).and_return(nil)
+
+        expect(Lich::InternalAPI::ActiveSessions::Server).not_to receive(:new)
+        expect(described_class.ensure_service!).to be(false)
+        expect(File.exist?(File.join(temp_dir, 'lich-active-sessions.json'))).to be(false)
+      end
+    end
+
+    context 'when server start fails' do
+      it 'clears the @server reference so subsequent ticks do not report a zombie' do
+        stub_no_external_service
+
+        doomed_server = instance_double(
+          Lich::InternalAPI::ActiveSessions::Server,
+          start: false,
+          stop: nil,
+          auth_token: 'doomed-token'
+        )
+        allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(doomed_server)
+
+        expect(described_class.ensure_service!).to be(false)
+        expect(described_class.instance_variable_get(:@server)).to be_nil
+      end
+    end
   end
 
   it 'queries a discovered service without consulting the local feature flag state' do

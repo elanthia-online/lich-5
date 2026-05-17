@@ -104,9 +104,34 @@ module Lich
           # died, the TCPServer socket is still bound but unserviceable.
           # Stop it to release the port before attempting a fresh start.
           if @server && !@server.running?
-            Lich.log('warning: ActiveSessions server thread died -- releasing zombie socket') if Lich.respond_to?(:log)
+            Lich.log("warning: ActiveSessions in-process zombie detected pid=#{Process.pid} -- releasing socket") if Lich.respond_to?(:log)
             @server.stop
             @server = nil
+          end
+
+          # Detect cross-process zombie: discovery points to another process
+          # whose service is unresponsive (dead accept thread holding the port).
+          discovery = load_discovery
+          if discovery[:owner_pid] && discovery[:owner_pid] != Process.pid
+            owner_alive = begin
+              Process.kill(0, discovery[:owner_pid])
+              true
+            rescue Errno::ESRCH
+              false
+            rescue Errno::EPERM
+              true
+            end
+
+            if owner_alive
+              Lich.log(
+                "warning: ActiveSessions cross-process zombie: " \
+                "owner pid=#{discovery[:owner_pid]} alive but unresponsive, clearing stale discovery"
+              ) if Lich.respond_to?(:log)
+              File.delete(discovery_path) rescue nil
+              return false
+            end
+
+            File.delete(discovery_path) rescue nil
           end
 
           @registry ||= Registry.new
@@ -116,7 +141,10 @@ module Lich
             registry: @registry,
             auth_token: SecureRandom.hex(32)
           )
-          return false unless @server.start
+          unless @server.start
+            @server = nil
+            return false
+          end
 
           write_discovery(owner_pid: Process.pid, auth_token: @server.auth_token)
           true
