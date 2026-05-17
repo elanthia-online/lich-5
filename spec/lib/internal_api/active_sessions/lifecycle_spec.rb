@@ -76,6 +76,38 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Lifecycle do
       expect(Lich::InternalAPI::ActiveSessions).to have_received(:unregister_session_admitted).with(pid: Process.pid)
     end
 
+    it 'survives a transient error in upsert and continues heartbeat ticks' do
+      heartbeat_thread = instance_double(Thread)
+      captured_block = nil
+
+      allow(Thread).to receive(:new) do |&block|
+        captured_block = block
+        heartbeat_thread
+      end
+      allow(heartbeat_thread).to receive(:join).with(0.5)
+      allow(heartbeat_thread).to receive(:alive?).and_return(false)
+      allow(heartbeat_thread).to receive(:kill)
+
+      sleep_calls = 0
+      allow(described_class).to receive(:sleep) do |_seconds|
+        sleep_calls += 1
+        described_class.instance_variable_set(:@running, false) if sleep_calls >= 3
+      end
+
+      expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 1)).to be(true)
+
+      upsert_calls = 0
+      allow(Lich::InternalAPI::ActiveSessions).to receive(:register_session_admitted) do
+        upsert_calls += 1
+        raise 'transient network error' if upsert_calls == 1
+
+        true
+      end
+
+      expect { captured_block.call }.not_to raise_error
+      expect(upsert_calls).to be >= 2
+    end
+
     it 'still stops cleanly when enabled? would raise after startup' do
       heartbeat_thread = instance_double(Thread)
       captured_block = nil

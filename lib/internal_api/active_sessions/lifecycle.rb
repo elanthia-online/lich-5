@@ -91,10 +91,12 @@ module Lich
               sleep heartbeat_interval
               break unless running?
 
-              upsert_current_session
+              begin
+                upsert_current_session
+              rescue StandardError => e
+                Lich.log("warning: ActiveSessions heartbeat tick failed (continuing): #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+              end
             end
-          rescue StandardError => e
-            Lich.log("warning: ActiveSessions heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
           end
 
           @mutex.synchronize { @heartbeat_thread = thread if @started }
