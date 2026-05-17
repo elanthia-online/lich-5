@@ -14,7 +14,7 @@ module Lich
         # detecting service-owner failover quickly enough for multi-session use.
         #
         # @return [Integer]
-        HEARTBEAT_INTERVAL_SECONDS = 5
+        HEARTBEAT_INTERVAL_SECONDS = 2
 
         @heartbeat_thread = nil
         @running = false
