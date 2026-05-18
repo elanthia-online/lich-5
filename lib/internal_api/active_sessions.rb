@@ -129,7 +129,7 @@ module Lich
                 "warning: ActiveSessions cross-process zombie: " \
                 "owner pid=#{discovery[:owner_pid]} alive but unresponsive, clearing stale discovery"
               ) if Lich.respond_to?(:log)
-              delete_discovery_if_owner(discovery[:owner_pid])
+              delete_discovery_if_owner(discovery[:owner_pid], discovery[:auth_token])
               return false
             end
 
@@ -378,10 +378,13 @@ module Lich
       # deletion attempt.
       #
       # @param expected_owner_pid [Integer]
+      # @param expected_auth_token [String, nil] when provided, also requires
+      #   the token to match so a fresh rewrite by the same PID is not deleted
       # @return [void]
-      def self.delete_discovery_if_owner(expected_owner_pid)
+      def self.delete_discovery_if_owner(expected_owner_pid, expected_auth_token = nil)
         current = load_discovery
         return unless current[:owner_pid].to_i == expected_owner_pid.to_i
+        return if expected_auth_token && current[:auth_token] != expected_auth_token
 
         File.delete(discovery_path) if File.exist?(discovery_path)
       rescue StandardError
