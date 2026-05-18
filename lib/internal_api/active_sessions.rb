@@ -129,11 +129,11 @@ module Lich
                 "warning: ActiveSessions cross-process zombie: " \
                 "owner pid=#{discovery[:owner_pid]} alive but unresponsive, clearing stale discovery"
               ) if Lich.respond_to?(:log)
-              File.delete(discovery_path) rescue nil
+              delete_discovery_if_owner(discovery[:owner_pid])
               return false
             end
 
-            File.delete(discovery_path) rescue nil
+            delete_discovery_if_owner(discovery[:owner_pid])
           end
 
           @registry ||= Registry.new
@@ -367,15 +367,27 @@ module Lich
       #
       # @return [void]
       def self.delete_discovery_if_owned
-        discovery = load_discovery
-        return unless discovery[:owner_pid].to_i == Process.pid
-        return unless File.exist?(discovery_path)
+        delete_discovery_if_owner(Process.pid)
+      end
+      private_class_method :delete_discovery_if_owned
 
-        File.delete(discovery_path)
+      # Deletes the discovery file only when it still belongs to the given owner.
+      #
+      # Re-reads the file before deletion to avoid a race where another process
+      # has written a fresh discovery between the caller's initial read and this
+      # deletion attempt.
+      #
+      # @param expected_owner_pid [Integer]
+      # @return [void]
+      def self.delete_discovery_if_owner(expected_owner_pid)
+        current = load_discovery
+        return unless current[:owner_pid].to_i == expected_owner_pid.to_i
+
+        File.delete(discovery_path) if File.exist?(discovery_path)
       rescue StandardError
         nil
       end
-      private_class_method :delete_discovery_if_owned
+      private_class_method :delete_discovery_if_owner
 
       # Removes the discovery file when the current process still owns the
       # service and the shared registry is now empty.
