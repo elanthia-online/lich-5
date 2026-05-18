@@ -158,7 +158,7 @@ module Lich
           REVEALED_YOU_REVEAL = /You reveal <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> from hiding\!/
           REVEALED_WALL_THORNS = /The thorny barrier surrounding you blocks the attack from the <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>\!/
           REVEALED_FLAMING_AURA = /The flaming aura surrounding you lashes out at <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>, who is forced into view!/
-          REVEALED_EXPLODES = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> explodes from the shadows!  <pushBold\/><a exist="\d+" noun="\w+">\w+<\/a><popBold\/> shining eyes agleam with cunning, <pushBold\/>\w+ <a exist="\d+" noun="\w+">\w+<\/a><popBold\/> lashes out at you with <pushBold\/><a exist="\d+" noun="\w+">\w+<\/a><popBold\/> <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a>\!/
+          REVEALED_EXPLODES = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> explodes from the shadows!  <pushBold\/><a exist="\d+" noun="\w+">\w+<\/a><popBold\/> shining eyes agleam with cunning, <pushBold\/>\w+ <a exist="\d+" noun="\w+">[\w\s]+<\/a><popBold\/> lashes out at you with <pushBold\/><a exist="\d+" noun="\w+">\w+<\/a><popBold\/> <a exist="\d+" noun="\w+">[^<]+<\/a>\!/
 
           # Animal companion reveals
           REVEALED_AC_CAT = /<pushBold\/>\w+ <a exist="\d+" noun="\w+">[^<]+<\/a><popBold\/> leaps suddenly forward, uncovering <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>, who was hidden\!/
