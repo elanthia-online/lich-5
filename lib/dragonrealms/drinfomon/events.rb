@@ -22,7 +22,6 @@ module Lich
       end
 
       def self.reset(key)
-        @@counts[key] = 0
         @@flags[key] = false
       end
 
@@ -45,7 +44,11 @@ module Lich
       end
 
       def self.counts
-        @@counts
+        @@counts.dup.freeze
+      end
+
+      def self.increment_count(key)
+        @@counts[key] = (@@counts[key] || 0) + 1
       end
     end
   end
