@@ -296,7 +296,7 @@ reconnect_if_wanted = proc {
         Lich.msgbox(:message => "error: timeout waiting for client to connect", :icon => :error)
         #        end
         if sal_filename
-          File.delete(sal_filename) # rescue() # rubocop complaint, but is it even necessary?
+          File.delete(sal_filename) rescue nil
         end
         listener.close rescue nil
         $_CLIENT_&.close rescue nil
@@ -346,7 +346,7 @@ reconnect_if_wanted = proc {
         end
       rescue
         Lich.log "error: #{$!}"
-        $_CLIENT_.close rescue nil
+        $_CLIENT_&.close rescue nil
         reconnect_if_wanted.call
         Lich.log "info: exiting..."
         Gtk.queue { Gtk.main_quit } if defined?(Gtk)
@@ -803,7 +803,8 @@ reconnect_if_wanted = proc {
   ensure
     # Guarantee lifecycle stop even on abnormal exit (e.g. abort_on_exception).
     # Both .stop methods are idempotent -- safe to call if already stopped.
-    Lich::InternalAPI::ActiveSessions::Lifecycle.stop if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
-    Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
+    # Each is individually rescued so that a failure in one does not skip the other.
+    Lich::InternalAPI::ActiveSessions::Lifecycle.stop rescue nil if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
+    Lich::Common::SessionLifecycle.stop rescue nil if defined?(Lich::Common::SessionLifecycle)
   end
 }
