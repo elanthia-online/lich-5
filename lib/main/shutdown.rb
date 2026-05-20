@@ -17,10 +17,10 @@ module Lich
     #   6. (caller-supplied reconnect hook)
     #   7. Signal UI exit and terminate process
     #
-    # Each phase is deliberately tolerant of errors in earlier phases so that
-    # the remaining cleanup still runs.  The ensure block in main.rb calls
-    # the lifecycle stops a second time as a safety net for abnormal exits;
-    # both modules are idempotent.
+    # Every phase rescues StandardError so that a failure in one phase never
+    # prevents the remaining cleanup from running.  The ensure block in
+    # main.rb calls the lifecycle stops a second time as a safety net for
+    # abnormal exits; both modules are idempotent.
     module Shutdown
       # Maximum seconds to wait for all scripts to finish their +before_dying+
       # hooks and remove themselves from +Script.running+/+Script.hidden+.
@@ -42,7 +42,11 @@ module Lich
         stop_scripts
         save_state
         close_connections
-        reconnect_if_wanted.call
+        begin
+          reconnect_if_wanted.call
+        rescue StandardError => e
+          Lich.log "warning: reconnect hook failed during shutdown: #{e.class}: #{e.message}"
+        end
         quit_ui
       end
 
@@ -60,7 +64,11 @@ module Lich
         rescue StandardError => e
           Lich.log "warning: ActiveSessions lifecycle stop failed during shutdown: #{e.class}: #{e.message}"
         end
-        Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
+        begin
+          Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
+        rescue StandardError => e
+          Lich.log "warning: SessionLifecycle stop failed during shutdown: #{e.class}: #{e.message}"
+        end
       end
 
       # Terminates the client and detachable-client reader threads.
@@ -93,6 +101,8 @@ module Lich
 
           sleep 0.1
         end
+      rescue StandardError => e
+        Lich.log "warning: stop_scripts failed during shutdown: #{e.class}: #{e.message}"
       end
       private_class_method :stop_scripts
 
@@ -106,6 +116,8 @@ module Lich
       def self.save_state
         Lich.log 'info: saving state...'
         Vars.save
+      rescue StandardError => e
+        Lich.log "warning: Vars.save failed during shutdown: #{e.class}: #{e.message}"
       end
       private_class_method :save_state
 

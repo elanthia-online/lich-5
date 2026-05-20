@@ -41,6 +41,44 @@ RSpec.describe Lich::Main::Shutdown do
                             save_state close_connections reconnect quit_ui
                           ])
     end
+
+    it 'still calls quit_ui when reconnect_if_wanted raises' do
+      allow(described_class).to receive(:unregister_sessions)
+      allow(described_class).to receive(:kill_threads)
+      allow(described_class).to receive(:stop_scripts)
+      allow(described_class).to receive(:save_state)
+      allow(described_class).to receive(:close_connections)
+      allow(described_class).to receive(:quit_ui)
+
+      reconnect = proc { raise RuntimeError, 'exec failed' }
+
+      described_class.run(
+        client_thread: nil,
+        detachable_client_thread: nil,
+        reconnect_if_wanted: reconnect
+      )
+
+      expect(described_class).to have_received(:quit_ui)
+    end
+
+    it 'logs a warning when reconnect_if_wanted raises' do
+      allow(described_class).to receive(:unregister_sessions)
+      allow(described_class).to receive(:kill_threads)
+      allow(described_class).to receive(:stop_scripts)
+      allow(described_class).to receive(:save_state)
+      allow(described_class).to receive(:close_connections)
+      allow(described_class).to receive(:quit_ui)
+
+      reconnect = proc { raise RuntimeError, 'exec failed' }
+
+      described_class.run(
+        client_thread: nil,
+        detachable_client_thread: nil,
+        reconnect_if_wanted: reconnect
+      )
+
+      expect(Lich).to have_received(:log).with(/reconnect hook failed.*exec failed/)
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -95,6 +133,28 @@ RSpec.describe Lich::Main::Shutdown do
       described_class.unregister_sessions
 
       expect(Lich).to have_received(:log).with(/ActiveSessions lifecycle stop failed.*TCP service gone/)
+    end
+
+    it 'does not raise when SessionLifecycle.stop raises' do
+      session_lifecycle = Module.new { def self.stop; end }
+      stub_const('Lich::Common::SessionLifecycle', session_lifecycle)
+      hide_const('Lich::InternalAPI::ActiveSessions::Lifecycle') if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
+
+      allow(session_lifecycle).to receive(:stop).and_raise(RuntimeError, 'file lock')
+
+      expect { described_class.unregister_sessions }.not_to raise_error
+    end
+
+    it 'logs a warning when SessionLifecycle.stop raises' do
+      session_lifecycle = Module.new { def self.stop; end }
+      stub_const('Lich::Common::SessionLifecycle', session_lifecycle)
+      hide_const('Lich::InternalAPI::ActiveSessions::Lifecycle') if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
+
+      allow(session_lifecycle).to receive(:stop).and_raise(RuntimeError, 'file lock')
+
+      described_class.unregister_sessions
+
+      expect(Lich).to have_received(:log).with(/SessionLifecycle stop failed.*file lock/)
     end
   end
 
@@ -184,6 +244,20 @@ RSpec.describe Lich::Main::Shutdown do
 
       described_class.send(:stop_scripts)
     end
+
+    it 'does not propagate when Script.running raises' do
+      allow(Script).to receive(:running).and_raise(RuntimeError, 'corrupted runtime')
+
+      expect { described_class.send(:stop_scripts) }.not_to raise_error
+    end
+
+    it 'logs a warning when an exception occurs' do
+      allow(Script).to receive(:running).and_raise(RuntimeError, 'corrupted runtime')
+
+      described_class.send(:stop_scripts)
+
+      expect(Lich).to have_received(:log).with(/stop_scripts failed.*corrupted runtime/)
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -212,10 +286,18 @@ RSpec.describe Lich::Main::Shutdown do
       expect(settings).not_to have_received(:save)
     end
 
-    it 'propagates exceptions from Vars.save' do
+    it 'does not propagate when Vars.save raises' do
       allow(Vars).to receive(:save).and_raise(RuntimeError, 'database locked')
 
-      expect { described_class.send(:save_state) }.to raise_error(RuntimeError, 'database locked')
+      expect { described_class.send(:save_state) }.not_to raise_error
+    end
+
+    it 'logs a warning when Vars.save raises' do
+      allow(Vars).to receive(:save).and_raise(RuntimeError, 'database locked')
+
+      described_class.send(:save_state)
+
+      expect(Lich).to have_received(:log).with(/Vars\.save failed.*database locked/)
     end
   end
 
@@ -271,12 +353,39 @@ RSpec.describe Lich::Main::Shutdown do
       expect(client).to have_received(:close)
     end
 
+    it 'does not raise when Lich.db is nil' do
+      allow(Lich).to receive(:db).and_return(nil)
+
+      expect { described_class.send(:close_connections) }.not_to raise_error
+      expect(game).to have_received(:close)
+      expect(client).to have_received(:close)
+    end
+
     it 'survives when all three close calls raise' do
       allow(game).to receive(:close).and_raise(IOError)
       allow(client).to receive(:close).and_raise(IOError)
       allow(db).to receive(:close).and_raise(IOError)
 
       expect { described_class.send(:close_connections) }.not_to raise_error
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Phase 7: quit_ui
+  # ---------------------------------------------------------------------------
+
+  describe '.quit_ui (private)' do
+    it 'calls exit' do
+      expect { described_class.send(:quit_ui) }.to raise_error(SystemExit)
+    end
+
+    it 'queues Gtk.main_quit when Gtk is defined' do
+      gtk = Module.new { def self.queue; end; def self.main_quit; end }
+      stub_const('Gtk', gtk)
+      allow(gtk).to receive(:queue).and_yield
+
+      expect { described_class.send(:quit_ui) }.to raise_error(SystemExit)
+      expect(gtk).to have_received(:queue)
     end
   end
 end
