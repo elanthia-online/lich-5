@@ -49,6 +49,7 @@ reconnect_if_wanted = proc {
   # Lifecycle tracker is loaded here because startup context (argv/account)
   # and shutdown sequencing both live in main runtime orchestration.
   require File.join(LIB_DIR, 'common', 'session_lifecycle.rb')
+  require File.join(LIB_DIR, 'main', 'shutdown.rb')
 
   if ARGV.include?('--login')
     # CLI login flow: character authentication via saved entries
@@ -794,30 +795,11 @@ reconnect_if_wanted = proc {
     $_CLIENT_.puts "\n--- Lich v#{LICH_VERSION} is active.  Type #{$clean_lich_char}help for usage info.\n\n"
 
     Game.thread.join
-    client_thread.kill rescue nil
-    detachable_client_thread.kill rescue nil
-
-    Lich.log 'info: stopping scripts...'
-    Script.running.each { |script| script.kill }
-    Script.hidden.each { |script| script.kill }
-    200.times { sleep 0.1; break if Script.running.empty? and Script.hidden.empty? }
-    Lich.log 'info: saving script settings...'
-    Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
-    Settings.save
-    Vars.save
-    Lich.log 'info: closing connections...'
-    Lich::InternalAPI::ActiveSessions::Lifecycle.stop
-    Game.close
-    200.times { sleep 0.1; break if Game.closed? }
-    pause 0.5
-    $_CLIENT_.close
-    200.times { sleep 0.1; break if $_CLIENT_.closed? }
-    Lich.db.close
-    200.times { sleep 0.1; break if Lich.db.closed? }
-    reconnect_if_wanted.call # taking this out of play but may need to see if anyone's using it
-    Lich.log "info: exiting..."
-    Gtk.queue { Gtk.main_quit } if defined?(Gtk)
-    exit
+    Lich::Main::Shutdown.run(
+      client_thread: client_thread,
+      detachable_client_thread: detachable_client_thread,
+      reconnect_if_wanted: reconnect_if_wanted
+    )
   ensure
     # Guarantee lifecycle stop even on abnormal exit (e.g. abort_on_exception).
     # Both .stop methods are idempotent -- safe to call if already stopped.
