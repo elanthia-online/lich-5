@@ -298,8 +298,8 @@ reconnect_if_wanted = proc {
         if sal_filename
           File.delete(sal_filename) # rescue() # rubocop complaint, but is it even necessary?
         end
-        listener.close # rescue() # rubocop complaint, but is it even necessary?
-        $_CLIENT_.close # rescue() # rubocop complaint, but is it even necessary?
+        listener.close rescue nil
+        $_CLIENT_&.close rescue nil
         reconnect_if_wanted.call
         Lich.log "info: exiting..."
         Gtk.queue { Gtk.main_quit } if defined?(Gtk)
