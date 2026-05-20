@@ -77,10 +77,9 @@ module Lich
       # @param detachable_client_thread [Thread, nil]
       # @return [void]
       def self.kill_threads(client_thread, detachable_client_thread)
-        client_thread&.kill
-        detachable_client_thread&.kill
-      rescue StandardError
-        nil
+        Lich.log 'info: killing client threads...'
+        client_thread&.kill rescue nil
+        detachable_client_thread&.kill rescue nil
       end
       private_class_method :kill_threads
 

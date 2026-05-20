@@ -185,6 +185,16 @@ RSpec.describe Lich::Main::Shutdown do
 
       expect { described_class.send(:kill_threads, t1, nil) }.not_to raise_error
     end
+
+    it 'still kills detachable_client_thread when client_thread.kill raises' do
+      t1 = instance_double(Thread)
+      t2 = instance_double(Thread)
+      allow(t1).to receive(:kill).and_raise(ThreadError, 'already dead')
+      allow(t2).to receive(:kill)
+
+      expect { described_class.send(:kill_threads, t1, t2) }.not_to raise_error
+      expect(t2).to have_received(:kill)
+    end
   end
 
   # ---------------------------------------------------------------------------
