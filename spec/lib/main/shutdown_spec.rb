@@ -355,12 +355,44 @@ RSpec.describe Lich::Main::Shutdown do
       expect(db).to have_received(:close)
     end
 
+    it 'logs a warning when Game.close raises' do
+      allow(game).to receive(:close).and_raise(IOError, 'socket error')
+
+      described_class.send(:close_connections)
+
+      expect(Lich).to have_received(:log).with(/Game\.close failed.*socket error/)
+    end
+
     it 'still closes game and client when Lich.db.close raises' do
       allow(db).to receive(:close).and_raise(RuntimeError, 'already closed')
 
       expect { described_class.send(:close_connections) }.not_to raise_error
       expect(game).to have_received(:close)
       expect(client).to have_received(:close)
+    end
+
+    it 'logs a warning when Lich.db.close raises' do
+      allow(db).to receive(:close).and_raise(RuntimeError, 'already closed')
+
+      described_class.send(:close_connections)
+
+      expect(Lich).to have_received(:log).with(/Lich\.db\.close failed.*already closed/)
+    end
+
+    it 'still closes game and db when $_CLIENT_.close raises' do
+      allow(client).to receive(:close).and_raise(IOError, 'broken pipe')
+
+      expect { described_class.send(:close_connections) }.not_to raise_error
+      expect(game).to have_received(:close)
+      expect(db).to have_received(:close)
+    end
+
+    it 'logs a warning when $_CLIENT_.close raises' do
+      allow(client).to receive(:close).and_raise(IOError, 'broken pipe')
+
+      described_class.send(:close_connections)
+
+      expect(Lich).to have_received(:log).with(/\$_CLIENT_\.close failed.*broken pipe/)
     end
 
     it 'does not raise when Lich.db is nil' do
@@ -371,12 +403,15 @@ RSpec.describe Lich::Main::Shutdown do
       expect(client).to have_received(:close)
     end
 
-    it 'survives when all three close calls raise' do
-      allow(game).to receive(:close).and_raise(IOError)
-      allow(client).to receive(:close).and_raise(IOError)
-      allow(db).to receive(:close).and_raise(IOError)
+    it 'survives and logs when all three close calls raise' do
+      allow(game).to receive(:close).and_raise(IOError, 'game socket')
+      allow(client).to receive(:close).and_raise(IOError, 'client socket')
+      allow(db).to receive(:close).and_raise(IOError, 'db locked')
 
       expect { described_class.send(:close_connections) }.not_to raise_error
+      expect(Lich).to have_received(:log).with(/Game\.close failed/)
+      expect(Lich).to have_received(:log).with(/\$_CLIENT_\.close failed/)
+      expect(Lich).to have_received(:log).with(/Lich\.db\.close failed/)
     end
   end
 

@@ -123,16 +123,27 @@ module Lich
       # Closes the game server socket, frontend client socket, and SQLite
       # database connection.
       #
-      # All three close operations are synchronous and return immediately.
       # Each is individually rescued so that a failure in one does not
       # prevent the others from closing.
       #
       # @return [void]
       def self.close_connections
         Lich.log 'info: closing connections...'
-        Game.close rescue nil
-        $_CLIENT_&.close rescue nil
-        Lich.db&.close rescue nil
+        begin
+          Game.close
+        rescue StandardError => e
+          Lich.log "warning: Game.close failed during shutdown: #{e.class}: #{e.message}"
+        end
+        begin
+          $_CLIENT_&.close
+        rescue StandardError => e
+          Lich.log "warning: $_CLIENT_.close failed during shutdown: #{e.class}: #{e.message}"
+        end
+        begin
+          Lich.db&.close
+        rescue StandardError => e
+          Lich.log "warning: Lich.db.close failed during shutdown: #{e.class}: #{e.message}"
+        end
       end
       private_class_method :close_connections
 
