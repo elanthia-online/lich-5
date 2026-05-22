@@ -866,6 +866,9 @@ reconnect_if_wanted = proc {
     Lich.log 'info: saving script settings...'
     shutdown_step.call('Vars.save') { Vars.save }
     Lich.log 'info: closing connections...'
+    shutdown_step.call('Game.close') { Game.close }
+    shutdown_step.call('$_CLIENT_.close') { $_CLIENT_&.close }
+    shutdown_step.call('Lich.db.close') { Lich.db.close }
     Lich.log 'info: unregistering session...'
     shutdown_step.call('ActiveSessions lifecycle stop') do
       Lich::InternalAPI::ActiveSessions::Lifecycle.stop if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
@@ -873,9 +876,6 @@ reconnect_if_wanted = proc {
     shutdown_step.call('SessionLifecycle stop') do
       Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
     end
-    shutdown_step.call('Game.close') { Game.close }
-    shutdown_step.call('$_CLIENT_.close') { $_CLIENT_&.close }
-    shutdown_step.call('Lich.db.close') { Lich.db.close }
     shutdown_step.call('reconnect hook') { reconnect_if_wanted.call } # taking this out of play but may need to see if anyone's using it
     flush_shutdown_trace.call
     Lich.log "info: exiting..."
