@@ -7,8 +7,26 @@ module Lich
       #
       # This module adapts Lich runtime state into active-sessions payloads. It
       # intentionally keeps only a small amount of mutable process-local state:
-      # identifying metadata, detachable listener details, and a heartbeat
-      # thread handle.
+      # identifying metadata, connection state, detachable listener details,
+      # and a heartbeat thread handle.
+      #
+      # ActiveSessions API contract:
+      #
+      # * A session record being present in the registry means the Lich process
+      #   is still known to the active-sessions service.  Presence is not a
+      #   promise that the game connection is still usable.
+      # * The `connected` field is the authoritative connection signal exposed
+      #   to API consumers.  Shutdown code must set it to `false` when the game
+      #   connection has ended, before slower teardown work such as script
+      #   before_dying hooks, state persistence, socket closeout, and database
+      #   closeout runs.
+      # * Lifecycle `stop` unregisters the process from ActiveSessions.  That
+      #   removal means the process is no longer reporting as an active session;
+      #   it should not be used merely to mean "the game connection dropped."
+      # * For detachable sessions, the public `connected` value is true only
+      #   when both the game connection and detachable listener connection are
+      #   active.  A disconnected game session stays disconnected even if the
+      #   detachable listener was last reported as connected.
       module Lifecycle
         # Default heartbeat cadence for refreshing the current process entry and
         # detecting service-owner failover quickly enough for multi-session use.
@@ -22,6 +40,7 @@ module Lich
         @listener_host = nil
         @listener_port = nil
         @listener_connected = false
+        @connected = true
         @session_name = nil
         @role = nil
         @started_at = nil
@@ -80,6 +99,7 @@ module Lich
             @session_name = session_name
             @role = role
             @started_at = Time.now.to_i
+            @connected = true
             @feature_enabled = feature_enabled
             @running = true
             @started = true
@@ -111,6 +131,7 @@ module Lich
             @listener_host = nil
             @listener_port = nil
             @listener_connected = false
+            @connected = true
             @started_at = nil
             @feature_enabled = false
           end
@@ -151,6 +172,7 @@ module Lich
             @listener_host = nil
             @listener_port = nil
             @listener_connected = false
+            @connected = true
             @started_at = nil
             @feature_enabled = false
           end
@@ -191,6 +213,42 @@ module Lich
             @listener_port = nil
             @listener_connected = false
           end
+          upsert_current_session
+        end
+
+        # Updates the current process connection state without unregistering
+        # the session from the active-sessions registry.
+        #
+        # This method exists because MahtraDR's shutdown testing demonstrated
+        # that immediate unregister is too blunt an API signal: it hides a
+        # still-running Lich process from ActiveSessions while scripts, saves,
+        # socket closeout, and database closeout may still be executing.  The
+        # narrower contract is to keep the session present while publishing
+        # `connected: false`.
+        #
+        # API contract for callers:
+        #
+        # * `update_connected(false)` means the game/session connection is no
+        #   longer available for normal use, but the Lich process may still be
+        #   performing shutdown work.
+        # * `update_connected(true)` may restore the connection state for a
+        #   started lifecycle without changing identity, uptime, listener
+        #   metadata, or registration ownership.
+        # * The method is a no-op before `start`; it must not create a registry
+        #   record or bootstrap ActiveSessions on its own.
+        # * The method updates the existing registry record through the same
+        #   admitted lifecycle path used by heartbeats and listener updates; it
+        #   must not unregister the session.
+        # * The published `connected` value is combined with detachable listener
+        #   state, so a detachable session reports connected only when both the
+        #   game connection and listener connection are active.
+        #
+        # @param connected [Boolean]
+        # @return [void]
+        def self.update_connected(connected)
+          return unless started?
+
+          @mutex.synchronize { @connected = !!connected }
           upsert_current_session
         end
 
@@ -270,7 +328,7 @@ module Lich
             frontend: resolve_frontend,
             game_code: resolve_game_code,
             started_at: @started_at,
-            connected: @listener_port.nil? ? true : @listener_connected,
+            connected: @connected && (@listener_port.nil? || @listener_connected),
             listener_host: @listener_host,
             listener_port: @listener_port,
             hidden: false

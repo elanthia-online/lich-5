@@ -140,24 +140,52 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Server do
     end
 
     context 'when server.accept raises IOError' do
-      it 'breaks the loop without logging' do
+      it 'logs the unexpected close and breaks the loop' do
         server = build_server(accept_results: [IOError])
 
-        expect(Lich).not_to receive(:log)
+        allow(Lich).to receive(:log)
         server.start
+
+        expect(Lich).to have_received(:log).with(/ActiveSessions accept_loop closed unexpectedly: IOError/)
+        expect(Lich).to have_received(:log).with(/ActiveSessions accept_loop thread exiting/)
       ensure
         server&.stop
       end
     end
 
     context 'when server.accept raises Errno::EBADF' do
-      it 'breaks the loop without logging' do
+      it 'logs the unexpected close and breaks the loop' do
         server = build_server(accept_results: [Errno::EBADF])
 
-        expect(Lich).not_to receive(:log)
+        allow(Lich).to receive(:log)
         server.start
+
+        expect(Lich).to have_received(:log).with(/ActiveSessions accept_loop closed unexpectedly: Errno::EBADF/)
+        expect(Lich).to have_received(:log).with(/ActiveSessions accept_loop thread exiting/)
       ensure
         server&.stop
+      end
+    end
+
+    context 'when server.accept raises during intentional stop' do
+      it 'logs a clean stopped message without warning' do
+        server = described_class.new(
+          host: '127.0.0.1',
+          port: 0,
+          registry: registry,
+          auth_token: 'test-token',
+          server_factory: ->(_h, _p) { listener }
+        )
+        allow(listener).to receive(:accept).and_raise(IOError, 'closed')
+        allow(Lich).to receive(:log)
+
+        server.instance_variable_set(:@server, listener)
+        server.instance_variable_set(:@stopping, true)
+        server.send(:accept_loop)
+
+        expect(Lich).to have_received(:log).with(/ActiveSessions accept_loop stopped/)
+        expect(Lich).not_to have_received(:log).with(/closed unexpectedly/)
+        expect(Lich).not_to have_received(:log).with(/thread exiting/)
       end
     end
   end
