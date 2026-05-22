@@ -670,7 +670,17 @@ module Lich
         # return self
       end
 
-      def kill
+      # Stops this script and runs its before_dying/at_exit handlers.
+      #
+      # Normal runtime kills release reclaimed Ruby/GObject memory back toward
+      # the operating system because the Lich process continues running. During
+      # process shutdown, callers may pass `context: :shutdown` to skip that
+      # expensive release; the OS is about to reclaim the process anyway.
+      #
+      # @param context [Symbol] :runtime for ordinary script stops, :shutdown
+      #   when the owning Lich process is closing
+      # @return [String] script name
+      def kill(context: :runtime)
         source = @kill_source || caller[0..2]
         Thread.new {
           @killer_mutex.synchronize {
@@ -694,10 +704,12 @@ module Lich
                     respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} has exited.")
                   end
                 end
-                if defined?(Gtk)
-                  Gtk.queue { Lich::Util::MemoryReleaser.release }
-                else
-                  Lich::Util::MemoryReleaser.release
+                unless context == :shutdown
+                  if defined?(Gtk)
+                    Gtk.queue { Lich::Util::MemoryReleaser.release }
+                  else
+                    Lich::Util::MemoryReleaser.release
+                  end
                 end
               rescue
                 respond "--- Lich: error: #{$!}"
