@@ -876,8 +876,8 @@ reconnect_if_wanted = proc {
     shutdown_step.call('SessionLifecycle stop') do
       Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
     end
-    shutdown_step.call('reconnect hook') { reconnect_if_wanted.call } # taking this out of play but may need to see if anyone's using it
     flush_shutdown_trace.call
+    shutdown_step.call('reconnect hook') { reconnect_if_wanted.call } # taking this out of play but may need to see if anyone's using it
     Lich.log "info: exiting..."
     Gtk.queue { Gtk.main_quit } if defined?(Gtk)
     exit
