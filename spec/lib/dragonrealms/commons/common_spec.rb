@@ -2,7 +2,7 @@
 
 require_relative '../../../spec_helper'
 
-# Helper class for GameObj mock — used with stub_const in tests
+# Helper class for GameObj mock - used with stub_const in tests
 # NOTE: GameObj is NOT defined at top level to avoid conflicts with qstrike_spec
 DRC_MOCK_GAME_OBJ = Class.new do
   attr_accessor :name, :noun
