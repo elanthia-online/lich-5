@@ -859,8 +859,10 @@ reconnect_if_wanted = proc {
 
     shutdown_step.call('script shutdown') do
       Lich.log 'info: stopping scripts...'
-      Script.running.each { |script| script.kill }
-      Script.hidden.each { |script| script.kill }
+      # Shutdown context preserves before_dying/at_exit handlers while skipping
+      # MemoryReleaser work; process exit will reclaim memory.
+      Script.running.each { |script| script.kill(context: :shutdown) }
+      Script.hidden.each { |script| script.kill(context: :shutdown) }
       200.times { sleep 0.1; break if Script.running.empty? and Script.hidden.empty? }
     end
     Lich.log 'info: saving script settings...'
@@ -877,7 +879,7 @@ reconnect_if_wanted = proc {
       Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
     end
     flush_shutdown_trace.call
-    shutdown_step.call('reconnect hook') { reconnect_if_wanted.call } # taking this out of play but may need to see if anyone's using it
+    shutdown_step.call('reconnect hook') { reconnect_if_wanted.call } # keep after closeout; may launch a replacement session
     Lich.log "info: exiting..."
     Gtk.queue { Gtk.main_quit } if defined?(Gtk)
     exit

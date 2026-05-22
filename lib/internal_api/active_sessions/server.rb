@@ -270,7 +270,9 @@ module Lich
         private :untrack_current_thread
 
         def stopping?
-          @stopping
+          return @stopping if @mutex.owned?
+
+          @mutex.synchronize { @stopping }
         end
         private :stopping?
       end
