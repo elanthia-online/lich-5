@@ -56,7 +56,10 @@ module Lich
             @server = @server_factory.call(@host, @port)
             @server.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, 1) rescue nil
             @port = @server.addr[1]
-            @thread = @accept_thread_factory.call { accept_loop }
+            @thread = @accept_thread_factory.call do
+              Lich.log("info: ActiveSessions accept thread started pid=#{Process.pid} port=#{@port}") if defined?(Lich) && Lich.respond_to?(:log)
+              accept_loop
+            end
           end
           true
         rescue StandardError

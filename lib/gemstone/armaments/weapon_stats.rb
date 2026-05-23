@@ -106,7 +106,7 @@ module Lich
         end
 
         ##
-        # Returns a simplified hash of a weapon’s damage type breakdown.
+        # Returns a simplified hash of a weapon's damage type breakdown.
         #
         # @param name [String] a weapon name or alias
         # @param category [Symbol, nil] optional category to narrow the search

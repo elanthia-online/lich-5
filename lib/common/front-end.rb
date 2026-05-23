@@ -40,7 +40,7 @@ module Lich
       @frontend_pid = nil
       @pid_mutex = Mutex.new
 
-      # ─── Frontend Registry ─────────────────────────────────────
+      # --- Frontend Registry -------------------------------------
       # Each registered frontend has:
       #   - capabilities: Set of symbols (e.g., :xml, :streams, :mono)
       #   - metadata: Hash of additional data (e.g., client_string)
@@ -92,7 +92,7 @@ module Lich
         @registry.select { |_name, data| data[:capabilities].include?(capability.to_sym) }.keys
       end
 
-      # ─── Default Frontend Registrations ────────────────────────
+      # --- Default Frontend Registrations ------------------------
       # Ideally this would live in a separate config file loaded during init.
 
       register(:wrayth,
@@ -116,11 +116,11 @@ module Lich
       register(:avalon,
                capabilities: %i[gsl])
 
-      # ─── Client String ─────────────────────────────────────────
+      # --- Client String -----------------------------------------
       # Default client string (Wrayth identity) sent during handshake
       CLIENT_STRING = "/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML"
 
-      # ─── Backward-Compatible Constants ─────────────────────────
+      # --- Backward-Compatible Constants -------------------------
       # These arrays are derived from the registry for backward compatibility.
       # External code may still reference these constants directly.
       XML_FRONTENDS    = frontends_with_capability(:xml).freeze
@@ -128,7 +128,7 @@ module Lich
       STREAM_FRONTENDS = frontends_with_capability(:streams).freeze
       MONO_FRONTENDS   = frontends_with_capability(:mono).freeze
 
-      # ─── Predicate Methods ─────────────────────────────────────
+      # --- Predicate Methods -------------------------------------
       # These now delegate to has_capability? for consistency.
 
       def self.supports_xml?(fe = $frontend)

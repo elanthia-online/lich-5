@@ -42,9 +42,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     allow(DRC).to receive(:bput).and_return('default')
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # Constants
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe 'constants' do
     it 'freezes CYCLIC_RELEASE_SUCCESS_PATTERNS' do
       expect(DRCA::CYCLIC_RELEASE_SUCCESS_PATTERNS).to be_frozen
@@ -117,9 +117,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # infuse_om
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.infuse_om' do
     it 'returns early when Osrel Meraud is not active' do
       DRSpells.active_spells = {}
@@ -156,9 +156,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # harness? / harness_mana
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.harness?' do
     it 'returns truthy on success' do
       allow(DRC).to receive(:bput).with(/harness/, anything, anything).and_return('You tap into')
@@ -183,9 +183,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # activate_barb_buff?
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.activate_barb_buff?' do
     it 'returns true when ability is already active' do
       DRSpells.active_spells = { 'Famine' => 300 }
@@ -208,9 +208,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # prepare?
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.prepare?' do
     it 'returns false for nil abbrev' do
       expect(DRCA.prepare?(nil, 10)).to be false
@@ -235,9 +235,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # spell_preparing / spell_prepared? / spell_preparing?
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.spell_preparing' do
     it 'returns nil when no spell prepared' do
       XMLData.prepared_spell = 'None'
@@ -267,9 +267,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # cast?
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.cast?' do
     before(:each) do
       allow(DRC).to receive(:bput).with('cast', anything).and_return('You gesture')
@@ -325,18 +325,18 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # backfired?
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.backfired?' do
     it 'returns false by default' do
       expect(DRCA.backfired?).to be false
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # find_focus
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.find_focus' do
     it 'returns nil when focus is nil' do
       expect(DRCA.find_focus(nil, false, nil, false)).to be_nil
@@ -368,9 +368,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # stow_focus
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.stow_focus' do
     it 'returns nil when focus is nil' do
       expect(DRCA.stow_focus(nil, false, nil, false)).to be_nil
@@ -409,9 +409,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # find_cambrinth / stow_cambrinth / skilled_to_charge_while_worn?
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.find_cambrinth' do
     it 'gets stored cambrinth from stow or tries remove' do
       expect(DRCI).to receive(:get_item_if_not_held?).with('armband').and_return(true)
@@ -461,9 +461,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # charge_and_invoke
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.charge_and_invoke' do
     it 'returns early for nil charges' do
       expect(DRCA).not_to receive(:charge?)
@@ -499,9 +499,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # invoke
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.invoke' do
     it 'returns early for nil cambrinth' do
       expect(DRC).not_to receive(:bput)
@@ -523,9 +523,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # charge?
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.charge?' do
     it 'returns truthy on success' do
       allow(DRC).to receive(:bput).and_return('Your cambrinth absorbs all of the energy')
@@ -546,9 +546,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # release_cyclics
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.release_cyclics' do
     it 'releases active cyclics' do
       spell_data = {
@@ -572,9 +572,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # prepare_to_cast_runestone? / get_runestone?
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.prepare_to_cast_runestone?' do
     let(:settings) { OpenStruct.new(runestone_storage: 'pouch') }
     let(:spell) { { 'runestone_name' => 'moonstone' } }
@@ -622,9 +622,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # cast_spell? / cast_spell
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.cast_spell?' do
     it 'returns true when cast_spell returns truthy' do
       allow(DRCA).to receive(:cast_spell).and_return('You gesture')
@@ -647,9 +647,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # segue?
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.segue?' do
     it 'returns true on successful segue' do
       allow(DRC).to receive(:bput).and_return('You segue')
@@ -662,9 +662,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # check_to_harness
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.check_to_harness' do
     it 'returns false when should_harness is false' do
       expect(DRCA.check_to_harness(false)).to be false
@@ -683,9 +683,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # normalize_cambrinth_items (private, tested via cast_spell)
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe 'normalize_cambrinth_items (via cast_spell)' do
     it 'normalizes settings when cambrinth_items name is nil' do
       settings = OpenStruct.new(
@@ -710,9 +710,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # choose_avtalia
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.choose_avtalia' do
     it 'returns nil when no cambrinth matches' do
       allow(UserVars).to receive(:avtalia).and_return({})
@@ -720,9 +720,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # check_elemental_charge
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.check_elemental_charge' do
     it 'returns 0 for non-warrior-mages' do
       DRStats.guild = 'Bard'
@@ -736,9 +736,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # perc_symbiotic_research / release_magical_research
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.perc_symbiotic_research' do
     it 'returns symbiosis type when active' do
       allow(DRC).to receive(:bput).and_return('combine the weaves of the lunar symbiosis')
@@ -758,9 +758,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # perc_mana
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.perc_mana' do
     it 'returns nil for barbarians' do
       DRStats.guild = 'Barbarian'
@@ -801,9 +801,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # shatter_regalia?
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.shatter_regalia?' do
     it 'returns false for non-traders' do
       DRStats.guild = 'Warrior Mage'
@@ -822,9 +822,9 @@ RSpec.describe Lich::DragonRealms::DRCA do
     end
   end
 
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   # find_charge_invoke_stow
-  # ──────────────────────────────────────────────
+  # ----------------------------------------------
   describe '.find_charge_invoke_stow' do
     it 'returns early for nil charges' do
       expect(DRCA).not_to receive(:find_cambrinth)

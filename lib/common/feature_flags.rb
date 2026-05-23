@@ -150,9 +150,26 @@ module Lich
       def self.fetch_db
         return nil unless Lich.respond_to?(:db)
 
-        Lich.db
+        db = Lich.db
+        return nil if db.nil?
+        return nil if db_closed?(db)
+
+        db
       end
       private_class_method :fetch_db
+
+      # Indicates whether a database handle can no longer service queries.
+      #
+      # Feature flag reads are used broadly across startup and shutdown code,
+      # so a closed database should be treated as unavailable rather than
+      # surfacing secondary SQLite errors from teardown paths.
+      #
+      # @param db [Object] database handle returned by {Lich.db}
+      # @return [Boolean]
+      def self.db_closed?(db)
+        db.respond_to?(:closed?) && db.closed?
+      end
+      private_class_method :db_closed?
 
       # Logs a read or write failure without raising a second error.
       #
