@@ -53,7 +53,7 @@ module Lich
             return 0
           end
 
-          puts "Changing encryption mode: #{current_mode} → #{new_mode}"
+          puts "Changing encryption mode: #{current_mode} -> #{new_mode}"
           puts "Accounts to re-encrypt: #{account_count}"
           puts ""
 
@@ -130,10 +130,10 @@ module Lich
             return 1
           end
 
-          puts "✓ Encryption mode changed: #{current_mode} → #{new_mode}"
+          puts "✓ Encryption mode changed: #{current_mode} -> #{new_mode}"
           puts "✓ #{account_count} accounts re-encrypted" if account_count > 0
 
-          Lich.log "info: CLI encryption mode change successful: #{current_mode} → #{new_mode}"
+          Lich.log "info: CLI encryption mode change successful: #{current_mode} -> #{new_mode}"
           0
         rescue StandardError => e
           puts "error: Unexpected error during encryption mode change: #{e.message}"

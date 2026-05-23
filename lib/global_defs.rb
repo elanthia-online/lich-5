@@ -1802,28 +1802,26 @@ def respond(first = "", *messages)
     elsif Frontend.client.eql?('profanity')
       str = str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
     end
-    # Double-checked locking to avoid interrupting a stream and crashing the client
-    str_sent = false
     if $_CLIENT_
+      str_sent = false
       until str_sent
+        break unless $_CLIENT_.alive?
         wait_while { !XMLData.safe_to_respond? }
         str_sent = $_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
+        sleep 0.01 unless str_sent
       end
     end
     if $_DETACHABLE_CLIENT_
       str_sent = false
       until str_sent
+        break unless $_DETACHABLE_CLIENT_.alive?
         wait_while { !XMLData.safe_to_respond? }
-        begin
-          str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
-        rescue
-          break
-        end
+        str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
+        sleep 0.01 unless str_sent
       end
     end
-  rescue
-    puts $!
-    puts $!.backtrace.first
+  rescue => e
+    Lich.log "error: respond: #{e}\n\t#{e.backtrace.first}"
   end
 end
 
@@ -1837,28 +1835,27 @@ def _respond(first = "", *messages)
     end
     # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
-    str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) } # fixme: strip/separate script output?
-    str_sent = false
+    str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
     if $_CLIENT_
+      str_sent = false
       until str_sent
+        break unless $_CLIENT_.alive?
         wait_while { !XMLData.safe_to_respond? }
         str_sent = $_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
+        sleep 0.01 unless str_sent
       end
     end
     if $_DETACHABLE_CLIENT_
       str_sent = false
       until str_sent
+        break unless $_DETACHABLE_CLIENT_.alive?
         wait_while { !XMLData.safe_to_respond? }
-        begin
-          str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
-        rescue
-          break
-        end
+        str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
+        sleep 0.01 unless str_sent
       end
     end
-  rescue
-    puts $!
-    puts $!.backtrace.first
+  rescue => e
+    Lich.log "error: _respond: #{e}\n\t#{e.backtrace.first}"
   end
 end
 

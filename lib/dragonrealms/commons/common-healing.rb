@@ -374,7 +374,7 @@ module Lich
       end
 
       # Skill check to tend a bleeding wound.
-      # Returns false if unskilled — tending when unskilled may worsen the wound.
+      # Returns false if unskilled - tending when unskilled may worsen the wound.
       def skilled_to_tend_wound?(bleed_rate, internal = false)
         bleed_info = BLEED_RATE_TO_SEVERITY[bleed_rate]
         return false unless bleed_info

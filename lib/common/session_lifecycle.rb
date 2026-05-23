@@ -12,6 +12,7 @@ module Lich
       @heartbeat_thread = nil
       @running = false
       @started = false
+      @feature_enabled = false
       @mutex = Mutex.new
 
       # Resolves the reporting session name from launch/runtime context.
@@ -58,11 +59,13 @@ module Lich
       # @param registration_delay [Integer] initial registration delay in seconds
       # @return [Boolean] true when started, false when already started or failed
       def self.start(session_name:, role:, heartbeat_interval: SessionsSettings::HEARTBEAT_INTERVAL_SECONDS, registration_delay: REGISTRATION_DELAY_SECONDS)
-        return false unless SessionsSettings.enabled?
+        feature_enabled = SessionsSettings.enabled?
+        return false unless feature_enabled
 
         @mutex.synchronize do
           return false if @started
 
+          @feature_enabled = feature_enabled
           frontend = resolve_frontend
           started_epoch = Time.now.to_i
           started_iso = Time.at(started_epoch).utc.iso8601
@@ -123,14 +126,13 @@ module Lich
                   "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
                   "tick_epoch=#{Time.now.to_i}"
                 ) if Lich.respond_to?(:log)
-                SessionsSettings.heartbeat(
-                  pid: Process.pid,
-                  state: 'running',
-                  session_name: session_name,
-                  role: role,
-                  frontend: frontend,
-                  game_code: game_code
-                )
+                SessionsSettings.send(:heartbeat_admitted,
+                                      pid: Process.pid,
+                                      state: 'running',
+                                      session_name: session_name,
+                                      role: role,
+                                      frontend: frontend,
+                                      game_code: game_code)
               end
             rescue StandardError => e
               Lich.log("warning: SessionLifecycle heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
@@ -138,6 +140,7 @@ module Lich
           rescue StandardError
             @running = false
             @started = false
+            @feature_enabled = false
             @heartbeat_thread = nil
             raise
           end
@@ -152,12 +155,12 @@ module Lich
       #
       # @return [Boolean] true when stop/unregister succeeded, false when not running or failed
       def self.stop
-        return false unless SessionsSettings.enabled?
-
         heartbeat_thread = nil
+        was_enabled = false
         @mutex.synchronize do
           return false unless @started
 
+          was_enabled = @feature_enabled
           @running = false
           heartbeat_thread = @heartbeat_thread
           @heartbeat_thread = nil
@@ -170,8 +173,9 @@ module Lich
 
         @mutex.synchronize do
           @heartbeat_thread = nil
-          SessionsSettings.unregister_session(pid: Process.pid)
+          SessionsSettings.send(:unregister_session_admitted, pid: Process.pid) if was_enabled
           @started = false
+          @feature_enabled = false
         end
         true
       rescue StandardError => e
@@ -204,6 +208,16 @@ module Lich
         !resolve_game_code.nil?
       end
 
+      # Returns whether the current lifecycle was admitted while the feature
+      # flag was enabled. Stop uses this latched state instead of re-reading
+      # the backing feature flag, which may require a database query.
+      #
+      # @return [Boolean]
+      def self.feature_enabled?
+        @mutex.synchronize { @feature_enabled }
+      end
+      private_class_method :feature_enabled?
+
       # Performs deferred register attempt once game context is available.
       #
       # @param session_name [String]
@@ -223,14 +237,13 @@ module Lich
             "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
             "attempt_epoch=#{Time.now.to_i}"
           ) if Lich.respond_to?(:log)
-          SessionsSettings.register_session(
-            pid: Process.pid,
-            session_name: session_name,
-            role: role,
-            state: 'running',
-            frontend: frontend,
-            game_code: game_code
-          )
+          SessionsSettings.send(:register_session_admitted,
+                                pid: Process.pid,
+                                session_name: session_name,
+                                role: role,
+                                state: 'running',
+                                frontend: frontend,
+                                game_code: game_code)
           Lich.log(
             "info: SessionLifecycle deferred register success " \
             "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \

@@ -2228,7 +2228,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
   end
 
-  # ─── DRY helper methods ───────────────────────────────────────────
+  # --- DRY helper methods -------------------------------------------
 
   describe '#execute_dispose_command' do
     it 'returns :success when drop succeeds' do

@@ -165,7 +165,7 @@ module Lich
         retries = 0
         loop do
           if retries >= INFUSE_OM_MAX_RETRIES
-            Lich::Messaging.msg("bold", "DRCA: infuse_om exhausted #{INFUSE_OM_MAX_RETRIES} retries — giving up")
+            Lich::Messaging.msg("bold", "DRCA: infuse_om exhausted #{INFUSE_OM_MAX_RETRIES} retries - giving up")
             break
           end
           retries += 1
@@ -250,7 +250,7 @@ module Lich
         return true if DRSpells.active_spells[name]
 
         if retries <= 0
-          Lich::Messaging.msg("bold", "DRCA: activate_barb_buff? exhausted #{BARB_BUFF_MAX_RETRIES} retries for '#{name}' — giving up")
+          Lich::Messaging.msg("bold", "DRCA: activate_barb_buff? exhausted #{BARB_BUFF_MAX_RETRIES} retries for '#{name}' - giving up")
           return false
         end
 
@@ -268,7 +268,7 @@ module Lich
           DRC.retreat
           case DRC.bput('sit', 'You sit', 'You are already', 'You rise', 'While swimming?')
           when 'While swimming?'
-            Lich::Messaging.msg("bold", "DRCA: cannot sit to activate '#{name}' — water is too deep")
+            Lich::Messaging.msg("bold", "DRCA: cannot sit to activate '#{name}' - water is too deep")
             activated = false
           else
             activated = activate_barb_buff?(name, meditation_pause_timer, sit_to_meditate, retries: retries - 1)
@@ -305,7 +305,7 @@ module Lich
         case match
         when 'Your desire to prepare this offensive spell suddenly slips away'
           if retries <= 0
-            Lich::Messaging.msg("bold", "DRCA: prepare? exhausted #{PREPARE_MAX_RETRIES} retries for '#{abbrev}' — giving up")
+            Lich::Messaging.msg("bold", "DRCA: prepare? exhausted #{PREPARE_MAX_RETRIES} retries for '#{abbrev}' - giving up")
             return false
           end
           pause 1
@@ -391,7 +391,7 @@ module Lich
         )
         if USELESS_RUNESTONE_PATTERNS.any? { |pat| pat.match?(result) }
           DRCI.dispose_trash(runestone)
-          Lich::Messaging.msg("bold", "DRCA: got a useless #{runestone} — disposing and giving up")
+          Lich::Messaging.msg("bold", "DRCA: got a useless #{runestone} - disposing and giving up")
           return false
         elsif GET_RUNESTONE_FAILURE_PATTERNS.any? { |pat| pat.match?(result) }
           Lich::Messaging.msg("bold", "DRCA: could not find #{runestone} in #{settings.runestone_storage}")
@@ -427,13 +427,13 @@ module Lich
         if cast_command =~ /\b(barrage)\b/i && (Flags['unknown-command'] || Flags['barrage-fail'])
           return cast?('cast', symbiosis, [], after, retries: retries - 1) if retries > 0
 
-          Lich::Messaging.msg("bold", "DRCA: cast? barrage fallback exhausted retries — giving up")
+          Lich::Messaging.msg("bold", "DRCA: cast? barrage fallback exhausted retries - giving up")
           return false
         end
 
         if Flags['cyclic-too-recent'] || Flags['spell-full-prep']
           if retries <= 0
-            Lich::Messaging.msg("bold", "DRCA: cast? exhausted #{CAST_MAX_RETRIES} retries waiting for cyclic/full-prep — giving up")
+            Lich::Messaging.msg("bold", "DRCA: cast? exhausted #{CAST_MAX_RETRIES} retries waiting for cyclic/full-prep - giving up")
             return false
           end
           pause 1
@@ -487,7 +487,7 @@ module Lich
           result = DRCI.tie_item?(focus, tied)
           unless result
             if retries <= 0
-              Lich::Messaging.msg("bold", "DRCA: stow_focus exhausted #{STOW_FOCUS_MAX_RETRIES} retries tying #{focus} — giving up")
+              Lich::Messaging.msg("bold", "DRCA: stow_focus exhausted #{STOW_FOCUS_MAX_RETRIES} retries tying #{focus} - giving up")
               return false
             end
             DRC.retreat

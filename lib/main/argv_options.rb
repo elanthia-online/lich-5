@@ -2,7 +2,7 @@
 
 # CLI argument processing and orchestration (Layer 2)
 # Three-layer architecture:
-#   - Layer 1 (Opts): Pure parsing of ARGV → frozen OpenStruct
+#   - Layer 1 (Opts): Pure parsing of ARGV -> frozen OpenStruct
 #   - Layer 2 (this file): Validation, routing to handlers, side effects
 #   - Layer 3 (CliPasswordManager): Domain-specific handlers
 
@@ -13,7 +13,7 @@ require File.join(LIB_DIR, 'main', 'help_text.rb')
 
 module Lich
   module Main
-    # Orchestrates ARGV processing: parsing → validation → handler execution → side effects
+    # Orchestrates ARGV processing: parsing -> validation -> handler execution -> side effects
     module ArgvOptions
       # CLI operations are now handled by lib/common/cli/cli_orchestration.rb
       # which handles early-exit operations (password mgmt, conversion)

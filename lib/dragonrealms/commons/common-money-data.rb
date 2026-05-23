@@ -69,7 +69,7 @@ module Lich
     end
   end
 
-  # Backward compatibility — global variable aliases for third-party scripts
+  # Backward compatibility - global variable aliases for third-party scripts
   $DENOMINATION_REGEX_MAP = DragonRealms::DRCM::DENOMINATION_REGEX_MAP
   $CURRENCY_REGEX_MAP = DragonRealms::DRCM::CURRENCY_REGEX_MAP
 end
