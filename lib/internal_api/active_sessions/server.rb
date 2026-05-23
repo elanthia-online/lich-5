@@ -42,6 +42,7 @@ module Lich
           @thread = nil
           @mutex = Mutex.new
           @client_threads = []
+          @stopping = false
         end
 
         # Starts the TCP server and accept loop.
@@ -51,6 +52,7 @@ module Lich
           @mutex.synchronize do
             return true if running?
 
+            @stopping = false
             @server = @server_factory.call(@host, @port)
             @server.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, 1) rescue nil
             @port = @server.addr[1]
@@ -80,6 +82,7 @@ module Lich
             server = @server
             client_threads = @client_threads.dup
             @client_threads.clear
+            @stopping = true
             @thread = nil
             @server = nil
           end
@@ -118,7 +121,9 @@ module Lich
           loop do
             server = @server
             unless server
-              Lich.log("warning: ActiveSessions accept_loop exiting: @server is nil pid=#{Process.pid}") if defined?(Lich) && Lich.respond_to?(:log)
+              unless stopping?
+                Lich.log("warning: ActiveSessions accept_loop exiting: @server is nil pid=#{Process.pid}") if defined?(Lich) && Lich.respond_to?(:log)
+              end
               break
             end
 
@@ -128,7 +133,7 @@ module Lich
               client_thread = @client_thread_factory.call(socket) { |client| handle_tracked_client(client) }
               track_client_thread(client_thread)
             rescue IOError, Errno::EBADF => e
-              Lich.log("info: ActiveSessions accept_loop shutdown: #{e.class} pid=#{Process.pid}") if defined?(Lich) && Lich.respond_to?(:log)
+              Lich.log("warning: ActiveSessions accept_loop closed unexpectedly: #{e.class} pid=#{Process.pid}") if !stopping? && defined?(Lich) && Lich.respond_to?(:log)
               break
             rescue StandardError => e
               socket&.close rescue nil
@@ -138,7 +143,13 @@ module Lich
         rescue StandardError => e
           Lich.log("error: ActiveSessions accept_loop fatal: #{e.class}: #{e.message}\n\t#{e.backtrace&.first(5)&.join("\n\t")}") if defined?(Lich) && Lich.respond_to?(:log)
         ensure
-          Lich.log("warning: ActiveSessions accept_loop thread exiting pid=#{Process.pid}") if defined?(Lich) && Lich.respond_to?(:log)
+          if defined?(Lich) && Lich.respond_to?(:log)
+            if stopping?
+              Lich.log("info: ActiveSessions accept_loop stopped pid=#{Process.pid}")
+            else
+              Lich.log("warning: ActiveSessions accept_loop thread exiting pid=#{Process.pid}")
+            end
+          end
         end
 
         # Wraps client handling so finished client threads can be removed from
@@ -260,6 +271,13 @@ module Lich
           @mutex.synchronize { @client_threads.delete(Thread.current) }
         end
         private :untrack_current_thread
+
+        def stopping?
+          return @stopping if @mutex.owned?
+
+          @mutex.synchronize { @stopping }
+        end
+        private :stopping?
       end
     end
   end

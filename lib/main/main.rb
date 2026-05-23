@@ -483,7 +483,7 @@ reconnect_if_wanted = proc {
       $login_time = Time.now
 
       if $offline_mode
-        nil
+        next nil
       elsif Frontend.supports_gsl?
         #
         # send the login key
@@ -792,35 +792,99 @@ reconnect_if_wanted = proc {
     $_CLIENT_.puts "\n--- Lich v#{LICH_VERSION} is active.  Type #{$clean_lich_char}help for usage info.\n\n"
 
     Game.thread.join
-    client_thread.kill rescue nil
-    detachable_client_thread.kill rescue nil
 
-    Lich.log 'info: stopping scripts...'
-    Script.running.each { |script| script.kill }
-    Script.hidden.each { |script| script.kill }
-    200.times { sleep 0.1; break if Script.running.empty? and Script.hidden.empty? }
+    shutdown_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    shutdown_step_index = 0
+    shutdown_trace_needed = false
+    shutdown_trace = []
+    shutdown_total_trace_threshold = 3.0
+    shutdown_step_trace_thresholds = {
+      'Vars.save'     => 0.5,
+      'Lich.db.close' => 0.5
+    }
+
+    shutdown_step = proc { |description, &block|
+      shutdown_step_index += 1
+      step_index = shutdown_step_index
+      step_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      step_failed = false
+
+      begin
+        block.call
+      rescue StandardError => e
+        step_failed = true
+        shutdown_trace_needed = true
+        elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - step_started_at
+        Lich.log "warning: #{description} failed during shutdown after #{format('%.3f', elapsed)}s: #{e.class}: #{e.message}"
+      ensure
+        elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - step_started_at
+        total = Process.clock_gettime(Process::CLOCK_MONOTONIC) - shutdown_started_at
+        threshold = shutdown_step_trace_thresholds.fetch(description, 0.75)
+        shutdown_trace_needed ||= elapsed >= threshold
+        shutdown_trace << "debug: shutdown[#{step_index}] #{description} #{step_failed ? 'failed' : 'finished'} elapsed=#{format('%.3f', elapsed)}s total=#{format('%.3f', total)}s"
+      end
+    }
+
+    flush_shutdown_trace = proc {
+      total = Process.clock_gettime(Process::CLOCK_MONOTONIC) - shutdown_started_at
+      shutdown_trace_needed ||= total >= shutdown_total_trace_threshold
+      next unless shutdown_trace_needed
+
+      Lich.log "debug: shutdown trace total=#{format('%.3f', total)}s"
+      shutdown_trace.each { |trace_line| Lich.log trace_line }
+    }
+
+    # ActiveSessions exposes two distinct signals:
+    #
+    # * registry presence: this Lich process is still known to the
+    #   active-sessions service
+    # * connected: the game/session connection is still available for normal
+    #   use
+    #
+    # MahtraDR's shutdown testing showed that immediate unregister solves stale
+    # listings but changes the API meaning by making a still-closing process
+    # disappear.  Marking the session disconnected here preserves the sharper
+    # contract: external tooling can see that the game connection ended while
+    # Lich continues script before_dying hooks, Vars.save, socket closeout, and
+    # database closeout.  Lifecycle.stop remains later in shutdown and is the
+    # point where this process is removed from the ActiveSessions registry.
+    Lich.log 'info: marking session disconnected...'
+    shutdown_step.call('ActiveSessions connection update') do
+      Lich::InternalAPI::ActiveSessions::Lifecycle.update_connected(false) if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
+    end
+    shutdown_step.call('client_thread.kill') { client_thread.kill }
+    shutdown_step.call('detachable_client_thread.kill') { detachable_client_thread.kill if detachable_client_thread }
+
+    shutdown_step.call('script shutdown') do
+      Lich.log 'info: stopping scripts...'
+      # Shutdown context preserves before_dying/at_exit handlers while skipping
+      # MemoryReleaser work; process exit will reclaim memory.
+      Script.running.each { |script| script.kill(context: :shutdown) }
+      Script.hidden.each { |script| script.kill(context: :shutdown) }
+      200.times { sleep 0.1; break if Script.running.empty? and Script.hidden.empty? }
+    end
     Lich.log 'info: saving script settings...'
-    Infomon::Monitor.save_proc if defined?(Infomon::Monitor)
-    Settings.save
-    Vars.save
+    shutdown_step.call('Vars.save') { Vars.save }
     Lich.log 'info: closing connections...'
-    Lich::InternalAPI::ActiveSessions::Lifecycle.stop
-    Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
-    Game.close
-    200.times { sleep 0.1; break if Game.closed? }
-    pause 0.5
-    $_CLIENT_.close
-    200.times { sleep 0.1; break if $_CLIENT_.closed? }
-    Lich.db.close
-    200.times { sleep 0.1; break if Lich.db.closed? }
-    reconnect_if_wanted.call # taking this out of play but may need to see if anyone's using it
+    shutdown_step.call('Game.close') { Game.close }
+    shutdown_step.call('$_CLIENT_.close') { $_CLIENT_&.close }
+    shutdown_step.call('Lich.db.close') { Lich.db.close }
+    Lich.log 'info: unregistering session...'
+    shutdown_step.call('ActiveSessions lifecycle stop') do
+      Lich::InternalAPI::ActiveSessions::Lifecycle.stop if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
+    end
+    shutdown_step.call('SessionLifecycle stop') do
+      Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
+    end
+    flush_shutdown_trace.call
+    shutdown_step.call('reconnect hook') { reconnect_if_wanted.call } # keep after closeout; may launch a replacement session
     Lich.log "info: exiting..."
     Gtk.queue { Gtk.main_quit } if defined?(Gtk)
     exit
   ensure
     # Guarantee lifecycle stop even on abnormal exit (e.g. abort_on_exception).
     # Both .stop methods are idempotent -- safe to call if already stopped.
-    Lich::InternalAPI::ActiveSessions::Lifecycle.stop if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
-    Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
+    Lich::InternalAPI::ActiveSessions::Lifecycle.stop rescue nil if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
+    Lich::Common::SessionLifecycle.stop rescue nil if defined?(Lich::Common::SessionLifecycle)
   end
 }
