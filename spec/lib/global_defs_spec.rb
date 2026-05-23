@@ -12,7 +12,7 @@ require_relative '../spec_helper'
 # are scoped to this example group and resolve stubs via normal method lookup.
 
 RSpec.describe '#fput' do
-  # Production fput — mirrors lib/global_defs.rb exactly.
+  # Production fput - mirrors lib/global_defs.rb exactly.
   # Defined locally to avoid polluting the global method table.
   def fput(message, *waitingfor)
     unless (script = Script.current) then respond('--- waitfor: Unable to identify calling script.'); return false; end
@@ -262,7 +262,7 @@ RSpec.describe '#fput' do
     end
 
     it 'resets the timer on any game response' do
-      # nil, nil → unmatched response (resets timer) → nil, nil → matching response
+      # nil, nil -> unmatched response (resets timer) -> nil, nil -> matching response
       responses = [nil, nil, 'Some unmatched text.', nil, nil, 'Expected match.']
       resp_index = 0
       allow(self).to receive(:get?) do
@@ -273,7 +273,7 @@ RSpec.describe '#fput' do
       allow(self).to receive(:pause)
       allow(self).to receive(:sleep)
 
-      # Time progresses: 30s before response, then 25s after reset — never exceeds 60s window
+      # Time progresses: 30s before response, then 25s after reset - never exceeds 60s window
       frozen_time = Time.now
       time_calls = 0
       allow(Time).to receive(:now) do

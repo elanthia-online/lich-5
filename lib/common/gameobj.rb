@@ -41,7 +41,7 @@ module Lich
       @@sellable_data = {}
 
       # ---------------------------------------------------------------------------
-      # Shared identity index — single persistent O(1) lookup pool with TTL.
+      # Shared identity index - single persistent O(1) lookup pool with TTL.
       #
       # Maps composite key String <tt>"id|noun|name"</tt> to a two-element array
       # <tt>[GameObj, last_seen_at]</tt> where +last_seen_at+ is a Float timestamp
@@ -63,13 +63,13 @@ module Lich
       # Garbage collection is handled by +prune_index!+, which removes entries
       # whose +last_seen_at+ is older than a given TTL (default 15 minutes).
       # Call it at natural session breakpoints (e.g. after a room transition or
-      # from a script's idle loop). It is safe to call frequently — entries that
+      # from a script's idle loop). It is safe to call frequently - entries that
       # were just accessed will never be pruned regardless of how often it runs.
       #
       # Use +index_stats+ to inspect the current state of the index at any time.
       #
       # For very long automated sessions an alternative +LruIndex+ drop-in is
-      # also available — see +Lich::Common::LruIndex+ below.
+      # also available - see +Lich::Common::LruIndex+ below.
       # ---------------------------------------------------------------------------
 
       @@index = {}
@@ -115,7 +115,7 @@ module Lich
         @noun
       end
 
-      # Legacy coercion method — returns the noun.
+      # Legacy coercion method - returns the noun.
       # Kept for backwards-compatibility with scripts calling +obj.GameObj+.
       #
       # @return [String, nil]
@@ -334,7 +334,7 @@ module Lich
       #
       # Routes through the shared identity index so the same item picked up
       # again returns the existing +GameObj+ instance rather than allocating
-      # a new one. Replace semantics are preserved — +@@right_hand+ is always
+      # a new one. Replace semantics are preserved - +@@right_hand+ is always
       # overwritten with the result.
       #
       # @param id   [Integer, String]
@@ -349,7 +349,7 @@ module Lich
       #
       # Routes through the shared identity index so the same item picked up
       # again returns the existing +GameObj+ instance rather than allocating
-      # a new one. Replace semantics are preserved — +@@left_hand+ is always
+      # a new one. Replace semantics are preserved - +@@left_hand+ is always
       # overwritten with the result.
       #
       # @param id   [Integer, String]
@@ -378,7 +378,7 @@ module Lich
       #   # Before:
       #   obj = GameObj.new(id, noun, name, before, after)
       #
-      #   # After — participates in the shared index:
+      #   # After - participates in the shared index:
       #   obj = GameObj.index_or_create(id, noun, name, before, after)
       #
       # @param id     [Integer, String]
@@ -542,7 +542,7 @@ module Lich
           # Single-word noun lookup
           search_registries { |o| o.noun == val }
         else
-          # Name lookup — exact first, then suffix, then fuzzy suffix
+          # Name lookup - exact first, then suffix, then fuzzy suffix
           escaped     = Regexp.escape(val.strip)
           fuzzy       = Regexp.escape(val).sub(' ', ' .*')
           search_registries { |o| o.name == val } ||
@@ -594,7 +594,7 @@ module Lich
       end
 
       # ---------------------------------------------------------------------------
-      # Index lifecycle — pruning & diagnostics
+      # Index lifecycle - pruning & diagnostics
       # ---------------------------------------------------------------------------
 
       # Removes entries from the shared identity index whose +last_seen_at+
@@ -631,21 +631,21 @@ module Lich
       #   GameObj.prune_index!(ttl: 300, verbose: true)
       #
       # @param ttl     [Integer] seconds since last access before a *stale* entry
-      #   is eligible for eviction (default: 900 — 15 minutes)
+      #   is eligible for eviction (default: 900 - 15 minutes)
       # @param verbose [Boolean] when +true+, prints a memory report to stdout
       #   (default: +false+)
       # @return [Hash] with the following keys:
-      #   - +:pruned+               [Integer] — stale entries removed
-      #   - +:skipped_live+         [Integer] — entries skipped because object is
+      #   - +:pruned+               [Integer] - stale entries removed
+      #   - +:skipped_live+         [Integer] - entries skipped because object is
       #       still present in at least one active registry
-      #   - +:remaining+            [Integer] — entries still in the index
-      #   - +:gameobj_bytes_before+ [Integer] — estimated GameObj memory before prune
-      #   - +:gameobj_bytes_after+  [Integer] — estimated GameObj memory after prune
-      #   - +:gameobj_bytes_freed+  [Integer] — difference (before - after)
-      #   - +:heap_bytes_before+    [Integer] — Ruby heap size before GC hint
-      #   - +:heap_bytes_after+     [Integer] — Ruby heap size after GC hint
-      #   - +:heap_bytes_freed+     [Integer] — difference (before - after)
-      #   - +:elapsed_ms+           [Float]   — wall time of the prune operation
+      #   - +:remaining+            [Integer] - entries still in the index
+      #   - +:gameobj_bytes_before+ [Integer] - estimated GameObj memory before prune
+      #   - +:gameobj_bytes_after+  [Integer] - estimated GameObj memory after prune
+      #   - +:gameobj_bytes_freed+  [Integer] - difference (before - after)
+      #   - +:heap_bytes_before+    [Integer] - Ruby heap size before GC hint
+      #   - +:heap_bytes_after+     [Integer] - Ruby heap size after GC hint
+      #   - +:heap_bytes_freed+     [Integer] - difference (before - after)
+      #   - +:elapsed_ms+           [Float]   - wall time of the prune operation
       # @api private Operational maintenance hook. No compatibility guarantee across versions.
       def self.prune_index!(ttl: 900, verbose: false)
         require 'objspace'
@@ -664,7 +664,7 @@ module Lich
 
         @@index.delete_if do |_key, (obj, last_seen)|
           if live_ids.include?(obj.id)
-            # Object is currently held in a registry — never prune regardless of age.
+            # Object is currently held in a registry - never prune regardless of age.
             skipped_live += 1
             false
           elsif last_seen < cutoff
@@ -739,15 +739,15 @@ module Lich
       # @param verbose [Boolean] when +true+, prints a report to stdout
       #   (default: +false+)
       # @return [Hash] with the following keys:
-      #   - +:total_entries+        [Integer] — total keys in +@@index+
-      #   - +:live_in_registries+   [Integer] — objects in at least one registry
-      #   - +:stale_entries+        [Integer] — objects in no active registry
-      #   - +:oldest_entry_seconds+ [Float]   — age of the oldest entry in seconds
-      #   - +:age_buckets+          [Hash{String => Integer}] — entry counts by
+      #   - +:total_entries+        [Integer] - total keys in +@@index+
+      #   - +:live_in_registries+   [Integer] - objects in at least one registry
+      #   - +:stale_entries+        [Integer] - objects in no active registry
+      #   - +:oldest_entry_seconds+ [Float]   - age of the oldest entry in seconds
+      #   - +:age_buckets+          [Hash{String => Integer}] - entry counts by
       #       last-seen age: under5m, 5-15m, 15-30m, 30-60m, over60m
-      #   - +:gameobj_bytes+        [Integer] — estimated memory held by all indexed
+      #   - +:gameobj_bytes+        [Integer] - estimated memory held by all indexed
       #       GameObj instances (via +ObjectSpace.memsize_of+)
-      #   - +:heap_bytes+           [Integer] — current Ruby heap size
+      #   - +:heap_bytes+           [Integer] - current Ruby heap size
       # @api private Diagnostics-only surface. No compatibility guarantee across versions.
       def self.index_stats(verbose: false)
         require 'objspace'
@@ -994,7 +994,7 @@ module Lich
         # called, the registry array is emptied but the index is left intact.
         # If the same entity is encountered again (e.g. re-entering a room),
         # the existing +GameObj+ instance is returned, its timestamp refreshed,
-        # and it is re-added to the cleared registry — no allocation required.
+        # and it is re-added to the cleared registry - no allocation required.
         #
         # When a duplicate is found, +before_name+ and +after_name+ are
         # backfilled if they were previously +nil+ and the incoming values are
@@ -1064,7 +1064,7 @@ module Lich
         # directly attributed to the GameObj instances themselves (not their
         # internal string fields, which Ruby may share via frozen literals).
         #
-        # Requires +objspace+ — caller must +require 'objspace'+ first.
+        # Requires +objspace+ - caller must +require 'objspace'+ first.
         #
         # @return [Integer] bytes
         def gameobj_memory_bytes
@@ -1074,8 +1074,8 @@ module Lich
         # Returns the current size of the Ruby heap in bytes, measured as
         # heap slots in use multiplied by the slot size reported by +GC.stat+.
         #
-        # This is a process-level view — it reflects all live objects, not just
-        # GameObjs — but is useful as a before/after marker around +prune_index!+
+        # This is a process-level view - it reflects all live objects, not just
+        # GameObjs - but is useful as a before/after marker around +prune_index!+
         # to confirm that a GC cycle reclaimed the expected working set.
         #
         # @return [Integer] bytes
@@ -1153,7 +1153,7 @@ module Lich
     class RoomObj < GameObj; end
 
     # ---------------------------------------------------------------------------
-    # Lich::Common::LruIndex — optional drop-in replacement for +@@index+
+    # Lich::Common::LruIndex - optional drop-in replacement for +@@index+
     #
     # A size-capped Least Recently Used (LRU) cache that stores the same
     # <tt>[GameObj, last_seen_at]</tt> tuple format as the default plain Hash,
@@ -1163,7 +1163,7 @@ module Lich
     # heavily automated sessions. Combines LRU eviction (by access recency)
     # with the same TTL-based +prune_older_than+ interface as +prune_index!+.
     #
-    # Usage — swap the initializer inside GameObj:
+    # Usage - swap the initializer inside GameObj:
     #
     #   @@index = Lich::Common::LruIndex.new(2000)
     #

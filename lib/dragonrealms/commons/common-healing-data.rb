@@ -259,7 +259,7 @@ module Lich
       ].freeze
     end
 
-    # Backward compatibility — global variable aliases for third-party scripts
+    # Backward compatibility - global variable aliases for third-party scripts
     $DRCH_BLEED_RATE_TO_SEVERITY_MAP = DRCH::BLEED_RATE_TO_SEVERITY
     $DRCH_LODGED_TO_SEVERITY_MAP = DRCH::LODGED_SEVERITY
     $DRCH_WOUND_TO_SEVERITY_MAP = DRCH::WOUND_SEVERITY
