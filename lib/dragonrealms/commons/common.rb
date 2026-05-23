@@ -599,6 +599,8 @@ module Lich
           x = $NUM_MAP.fetch(word, nil)
           if word.eql?('hundred') && (g != 0)
             g *= 100
+          elsif word.eql?('thousand') && (g != 0)
+            g *= 1000
           elsif x.nil?
             Lich::Messaging.msg("bold", "DRC: Unknown number word '#{word}' in '#{text_num}'")
             return nil
