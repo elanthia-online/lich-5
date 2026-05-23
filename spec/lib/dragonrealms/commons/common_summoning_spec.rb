@@ -18,7 +18,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     Lich::Messaging.clear_messages!
   end
 
-  # ─── Constants ──────────────────────────────────────────────────────
+  # --- Constants ------------------------------------------------------
 
   describe 'constants' do
     it 'freezes all array/hash constants' do
@@ -42,7 +42,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── get_ingot ──────────────────────────────────────────────────────
+  # --- get_ingot ------------------------------------------------------
 
   describe '.get_ingot' do
     it 'returns true and does nothing when ingot is nil' do
@@ -74,7 +74,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── stow_ingot ────────────────────────────────────────────────────
+  # --- stow_ingot ----------------------------------------------------
 
   describe '.stow_ingot' do
     it 'returns true and does nothing when ingot is nil' do
@@ -94,7 +94,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── break_summoned_weapon ─────────────────────────────────────────
+  # --- break_summoned_weapon -----------------------------------------
 
   describe '.break_summoned_weapon' do
     it 'returns early when item is nil' do
@@ -108,7 +108,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── summon_admittance ─────────────────────────────────────────────
+  # --- summon_admittance ---------------------------------------------
 
   describe '.summon_admittance' do
     it 'sends summon admittance and waits' do
@@ -131,7 +131,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── summon_weapon ─────────────────────────────────────────────────
+  # --- summon_weapon -------------------------------------------------
 
   describe '.summon_weapon' do
     context 'as a Moon Mage' do
@@ -201,7 +201,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── identify_summoned_weapon ──────────────────────────────────────
+  # --- identify_summoned_weapon --------------------------------------
 
   describe '.identify_summoned_weapon' do
     context 'as a Moon Mage' do
@@ -293,7 +293,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── shape_summoned_weapon ─────────────────────────────────────────
+  # --- shape_summoned_weapon -----------------------------------------
 
   describe '.shape_summoned_weapon' do
     context 'as a Moon Mage' do
@@ -377,7 +377,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── turn_summoned_weapon ──────────────────────────────────────────
+  # --- turn_summoned_weapon ------------------------------------------
 
   describe '.turn_summoned_weapon' do
     before do
@@ -397,7 +397,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── push_summoned_weapon ──────────────────────────────────────────
+  # --- push_summoned_weapon ------------------------------------------
 
   describe '.push_summoned_weapon' do
     before do
@@ -422,7 +422,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── pull_summoned_weapon ──────────────────────────────────────────
+  # --- pull_summoned_weapon ------------------------------------------
 
   describe '.pull_summoned_weapon' do
     before do

@@ -154,7 +154,7 @@ module Lich
         count.times do
           buy_item(room, "#{lockpick_type} lockpick")
           unless DRCI.put_away_item_unsafe?('my lockpick', "my #{container}", 'on')
-            Lich::Messaging.msg('bold', "DRCT: Failed to put lockpick on #{container}. Check your lockpick settings — mixing types in a container is not allowed.")
+            Lich::Messaging.msg('bold', "DRCT: Failed to put lockpick on #{container}. Check your lockpick settings - mixing types in a container is not allowed.")
             break
           end
         end

@@ -59,7 +59,7 @@ module Lich
         get_data('town')[hometown_name]['currency']
       end
 
-      # Alias for backward compatibility — common-crafting.rb uses this name.
+      # Alias for backward compatibility - common-crafting.rb uses this name.
       def town_currency(town)
         hometown_currency(town)
       end
