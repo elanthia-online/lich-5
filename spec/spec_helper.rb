@@ -75,11 +75,12 @@ RSpec.configure do |config|
     Lich::Messaging.clear_messages! if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:clear_messages!)
     Lich.reset_display_expgains! if defined?(Lich) && Lich.respond_to?(:reset_display_expgains!)
     Lich.db.reset! if defined?(Lich) && Lich.respond_to?(:db) && Lich.db.respond_to?(:reset!)
+    Lich::Common::DB_Store.reset! if defined?(Lich::Common::DB_Store) && Lich::Common::DB_Store.respond_to?(:reset!)
 
     # DR production classes - only if they're loaded (may override mocks)
     Lich::DragonRealms::DRExpMonitor.reset! if defined?(Lich::DragonRealms::DRExpMonitor) && Lich::DragonRealms::DRExpMonitor.respond_to?(:reset!)
 
-    # Game objects — clear registries via class_variable_set (no test methods in production)
+    # Game objects - clear registries via class_variable_set (no test methods in production)
     # NOTE: class_variable_set used because GameObj is a production class with no reset! method
     if defined?(Lich::Common::GameObj)
       g = Lich::Common::GameObj
@@ -91,7 +92,7 @@ RSpec.configure do |config|
       g.class_variable_set(:@@left_hand, nil) if g.class_variable_defined?(:@@left_hand)
     end
 
-    # DR mocks from spec_helper — these have reset! defined in the mock (not production)
+    # DR mocks from spec_helper - these have reset! defined in the mock (not production)
     Flags.reset! if defined?(Flags) && Flags.respond_to?(:reset!)
     UserVars.reset! if defined?(UserVars) && UserVars.respond_to?(:reset!)
     DRC.reset! if defined?(DRC) && DRC.respond_to?(:reset!)
@@ -100,7 +101,7 @@ RSpec.configure do |config|
     DRSpells.reset! if defined?(DRSpells) && DRSpells.respond_to?(:reset!)
     DRRoom.reset! if defined?(DRRoom) && DRRoom.respond_to?(:reset!)
 
-    # DR production classes — use class_variable_set (no reset! in production)
+    # DR production classes - use class_variable_set (no reset! in production)
     # NOTE: class_variable_set used because DRParser is a production module with no reset! method
     if defined?(Lich::DragonRealms::DRParser) && Lich::DragonRealms::DRParser.class_variable_defined?(:@@parsing_exp_mods_output)
       Lich::DragonRealms::DRParser.class_variable_set(:@@parsing_exp_mods_output, false)
@@ -441,7 +442,7 @@ end unless defined?(ExecScript)
 # =============================================================================
 # Core Lich namespace. Fine-grained per-component guards let this file load in
 # either order relative to login_spec_helper (which may define a minimal Lich
-# first). Each piece is added only if absent — no coarse all-or-nothing guard.
+# first). Each piece is added only if absent - no coarse all-or-nothing guard.
 
 module Lich
   # MockDB: in-memory store answering the SQL query patterns used by lich-5's
@@ -480,7 +481,7 @@ module Lich
   @db = MockDB.new unless instance_variable_defined?(:@db)
 
   class << self
-    # attr_accessor is idempotent — reopening Lich and re-declaring these is safe.
+    # attr_accessor is idempotent - reopening Lich and re-declaring these is safe.
     attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits
     attr_accessor :display_expgains
 
@@ -518,7 +519,7 @@ module Lich
         @messages ||= []
       end unless respond_to?(:messages)
 
-      # clear_messages! is test-only infrastructure — production Lich::Messaging
+      # clear_messages! is test-only infrastructure - production Lich::Messaging
       # never defines it. Always add it so assertion teardown works regardless of
       # which Messaging (mock or production) was loaded first.
       def clear_messages!
@@ -527,6 +528,64 @@ module Lich
     end
   end
 end
+
+# =============================================================================
+# DB_Store Mock
+# =============================================================================
+# In-memory replacement for the SQLite-backed script_auto_settings store.
+# Matches the production API from lib/common/db_store.rb.
+
+module Lich
+  module Common
+    module DB_Store
+      @store = {}
+
+      class << self
+        def read(scope, script)
+          case script
+          when 'vars', 'uservars'
+            get_vars(scope)
+          else
+            get_data(scope, script)
+          end
+        end
+
+        def save(scope, script, val)
+          case script
+          when 'vars', 'uservars'
+            store_vars(scope, val)
+          else
+            store_data(scope, script, val)
+          end
+        end
+
+        def get_data(scope, script)
+          @store ||= {}
+          @store["#{scope}::#{script}"] || {}
+        end
+
+        def get_vars(scope)
+          @store ||= {}
+          @store["#{scope}::vars"] || {}
+        end
+
+        def store_data(scope, script, val)
+          @store ||= {}
+          @store["#{scope}::#{script}"] = val
+        end
+
+        def store_vars(scope, val)
+          @store ||= {}
+          @store["#{scope}::vars"] = val
+        end
+
+        def reset!
+          @store = {}
+        end
+      end
+    end
+  end
+end unless defined?(Lich::Common::DB_Store)
 
 # =============================================================================
 # Effects Mock
@@ -694,6 +753,7 @@ $fake_stormfront ||= false
 $_CLIENT_ ||= Object.new.tap do |obj|
   def obj.write(_data); end
   def obj.closed?; false; end
+  def obj.alive?; true; end
 end
 $_DETACHABLE_CLIENT_ ||= nil
 $pause_all_lock ||= Mutex.new
@@ -1455,7 +1515,7 @@ module Kernel
 
   def put(_cmd); end unless method_defined?(:put)
 
-  # NOTE: `clear` MUST be private — a public Kernel `clear` is inherited by all objects,
+  # NOTE: `clear` MUST be private - a public Kernel `clear` is inherited by all objects,
   # causing `Effects::Buffs.respond_to?(:clear)` to return true in qstrike_spec,
   # which breaks buff cleanup.
   def clear; end unless method_defined?(:clear)

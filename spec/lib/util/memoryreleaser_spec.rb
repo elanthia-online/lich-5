@@ -10,13 +10,13 @@ RSpec.describe Lich::Util::MemoryReleaser do
   before do
     described_class.instance_variable_set(:@instance, nil)
 
-    # InstanceSettings is a simple key/value store — stub it as a hash-like
+    # InstanceSettings is a simple key/value store - stub it as a hash-like
     # module so tests do not touch real persistent storage.
     stub_const('Lich::Common::InstanceSettings', Module.new)
     allow(Lich::Common::InstanceSettings).to receive(:[]).and_return(nil)
     allow(Lich::Common::InstanceSettings).to receive(:[]=)
 
-    # GameObj.prune_index! is called during release — stub it out so tests
+    # GameObj.prune_index! is called during release - stub it out so tests
     # do not depend on the GameObj index being in a known state.
     stub_const('Lich::Common::GameObj', Module.new)
     allow(Lich::Common::GameObj).to receive(:prune_index!)

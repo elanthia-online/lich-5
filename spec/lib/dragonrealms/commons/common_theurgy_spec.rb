@@ -12,7 +12,7 @@ DRCA.define_singleton_method(:cast_spell) { |*_args| nil } unless DRCA.respond_t
 require_relative '../../../../lib/dragonrealms/commons/common-theurgy'
 
 RSpec.describe Lich::DragonRealms::DRCTH do
-  # ─── Constants ───────────────────────────────────────────────────────
+  # --- Constants -------------------------------------------------------
 
   describe 'constants' do
     describe 'CLERIC_ITEMS' do
@@ -82,7 +82,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── CommuneSenseResult ─────────────────────────────────────────────
+  # --- CommuneSenseResult ---------------------------------------------
 
   describe described_class::CommuneSenseResult do
     describe '#initialize' do
@@ -147,7 +147,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── parse_commune_sense_lines ──────────────────────────────────────
+  # --- parse_commune_sense_lines --------------------------------------
 
   describe '.parse_commune_sense_lines' do
     # Test cases ported from dr-scripts test/test_common_theurgy.rb
@@ -309,7 +309,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── has_holy_water? ────────────────────────────────────────────────
+  # --- has_holy_water? ------------------------------------------------
 
   describe '.has_holy_water?' do
     let(:container) { 'portal' }
@@ -365,7 +365,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── has_*? predicates ──────────────────────────────────────────────
+  # --- has_*? predicates ----------------------------------------------
 
   describe '.has_flint?' do
     it 'delegates to DRCI.have_item_by_look?' do
@@ -395,7 +395,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── buying_cleric_item_requires_bless? ─────────────────────────────
+  # --- buying_cleric_item_requires_bless? -----------------------------
 
   describe '.buying_cleric_item_requires_bless?' do
     before do
@@ -441,7 +441,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── buy_cleric_item? ──────────────────────────────────────────────
+  # --- buy_cleric_item? ----------------------------------------------
 
   describe '.buy_cleric_item?' do
     let(:container) { 'portal' }
@@ -516,7 +516,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── buy_single_supply ─────────────────────────────────────────────
+  # --- buy_single_supply ---------------------------------------------
 
   describe '.buy_single_supply' do
     context 'when shop has no custom method' do
@@ -562,7 +562,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── sprinkle? ──────────────────────────────────────────────────────
+  # --- sprinkle? ------------------------------------------------------
 
   describe '.sprinkle?' do
     it 'returns true on successful sprinkle' do
@@ -589,7 +589,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── sprinkle_holy_water? ───────────────────────────────────────────
+  # --- sprinkle_holy_water? -------------------------------------------
 
   describe '.sprinkle_holy_water?' do
     let(:container) { 'portal' }
@@ -640,7 +640,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── sprinkle_holy_oil? ─────────────────────────────────────────────
+  # --- sprinkle_holy_oil? ---------------------------------------------
 
   describe '.sprinkle_holy_oil?' do
     let(:container) { 'portal' }
@@ -690,7 +690,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── sprinkle_holy_water (non-predicate) ───────────────────────────
+  # --- sprinkle_holy_water (non-predicate) ---------------------------
 
   describe '.sprinkle_holy_water' do
     let(:container) { 'portal' }
@@ -711,7 +711,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── sprinkle_holy_oil (non-predicate) ──────────────────────────────
+  # --- sprinkle_holy_oil (non-predicate) ------------------------------
 
   describe '.sprinkle_holy_oil' do
     let(:container) { 'portal' }
@@ -743,7 +743,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── apply_jalbreth_balm ───────────────────────────────────────────
+  # --- apply_jalbreth_balm -------------------------------------------
 
   describe '.apply_jalbreth_balm' do
     let(:container) { 'portal' }
@@ -779,7 +779,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── empty_cleric_hands ────────────────────────────────────────────
+  # --- empty_cleric_hands --------------------------------------------
 
   describe '.empty_cleric_hands' do
     let(:container) { 'portal' }
@@ -800,9 +800,9 @@ RSpec.describe Lich::DragonRealms::DRCTH do
       allow(DRC).to receive(:left_hand).and_return('steel sword')
       allow(DRCI).to receive(:put_away_item?).and_return(true)
 
-      # Right hand has cleric item → theurgy container
+      # Right hand has cleric item -> theurgy container
       expect(DRCI).to receive(:put_away_item?).with('some incense', 'portal')
-      # Left hand has non-cleric item → nil container
+      # Left hand has non-cleric item -> nil container
       expect(DRCI).to receive(:put_away_item?).with('steel sword', nil)
       described_class.empty_cleric_hands(container)
     end
@@ -813,7 +813,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── empty_cleric_right_hand / empty_cleric_left_hand ───────────────
+  # --- empty_cleric_right_hand / empty_cleric_left_hand ---------------
 
   describe '.empty_cleric_right_hand' do
     let(:container) { 'portal' }
@@ -886,7 +886,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── quick_bless_item ───────────────────────────────────────────────
+  # --- quick_bless_item -----------------------------------------------
 
   describe '.quick_bless_item' do
     it 'casts bless with correct spell data' do
@@ -898,7 +898,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── commune_sense (integration with issue_command) ─────────────────
+  # --- commune_sense (integration with issue_command) -----------------
 
   describe '.commune_sense' do
     context 'when issue_command returns nil (timeout)' do
@@ -944,7 +944,7 @@ RSpec.describe Lich::DragonRealms::DRCTH do
     end
   end
 
-  # ─── wave_incense? ──────────────────────────────────────────────────
+  # --- wave_incense? --------------------------------------------------
 
   describe '.wave_incense?' do
     let(:container) { 'portal' }

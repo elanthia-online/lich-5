@@ -36,6 +36,40 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
     end
   end
 
+  describe '#tracked_scripts identity resolution' do
+    it 'resolves custom repo scripts by key, not config equality' do
+      UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'dev' } }
+      UserVars.tracked_scripts = { 'MahtraDR/test' => ['my-script.lic'] }
+
+      config = Lich::Util::Update::CustomRepos.build_config('MahtraDR/test', { 'branch' => 'dev' })
+      result = tracker.tracked_scripts(config, repo_key: 'MahtraDR/test')
+
+      expect(result).to include('my-script.lic')
+    end
+
+    it 'still resolves when non-identity config fields differ' do
+      UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'dev' } }
+      UserVars.tracked_scripts = { 'MahtraDR/test' => ['my-script.lic'] }
+
+      config = Lich::Util::Update::CustomRepos.build_config('MahtraDR/test', { 'branch' => 'dev' })
+      config[:some_new_field] = 'added later'
+
+      result = tracker.tracked_scripts(config, repo_key: 'MahtraDR/test')
+
+      expect(result).to include('my-script.lic')
+    end
+
+    it 'would fail to resolve custom repo without explicit key' do
+      UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'dev' } }
+      UserVars.tracked_scripts = { 'MahtraDR/test' => ['my-script.lic'] }
+
+      config = Lich::Util::Update::CustomRepos.build_config('MahtraDR/test', { 'branch' => 'dev' })
+      result = tracker.tracked_scripts(config)
+
+      expect(result).not_to include('my-script.lic')
+    end
+  end
+
   describe '#untrack_script with custom repo' do
     it 'untracks a script from a custom repo' do
       UserVars.custom_repos = { 'MahtraDR/dr-scripts' => { 'branch' => 'main' } }
@@ -61,10 +95,18 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
   end
 
   describe '#check_collision' do
-    it 'warns about collision with :all tracking mode repo' do
+    it 'blocks collision with :all tracking mode repo when file is installed' do
+      File.binwrite(File.join(tmpdir, 'anything.lic'), '# existing')
+
       result = tracker.check_collision('anything.lic', 'MahtraDR/custom')
 
-      expect(result).to match(/may conflict.*DR Scripts/)
+      expect(result).to match(/Error:.*already installed from.*DR Scripts/)
+    end
+
+    it 'allows tracking when :all repo file is not installed locally' do
+      result = tracker.check_collision('not-installed.lic', 'MahtraDR/custom')
+
+      expect(result).to be_nil
     end
 
     it 'detects collision with built-in explicit repo (excluding :all repos)' do
@@ -75,57 +117,62 @@ RSpec.describe 'Custom repos integration with TrackedScripts' do
       expect(result).to match(/already tracked.*Core Scripts/)
     end
 
-    it 'detects collision between custom repos (excluding built-in :all repos)' do
-      # Use a game filter to skip DR Scripts (which is :all mode and would match first)
-      # Instead, test with repos that are :explicit only
+    it 'detects collision between custom repos' do
       UserVars.custom_repos = {
         'Repo1/scripts' => { 'branch' => 'main' },
         'Repo2/scripts' => { 'branch' => 'main' }
       }
       UserVars.tracked_scripts = { 'Repo1/scripts' => ['conflict.lic'] }
 
-      # Exclude all built-in :all repos from check
-      result = tracker.check_collision('conflict.lic', 'dr-scripts')
+      result = tracker.check_collision('conflict.lic', 'Repo2/scripts')
 
-      # First hit will be the :all mode warning from dr-scripts, but we're excluding it
-      # Actually dr-scripts is excluded, so it should check scripts (explicit) then custom
-      expect(result).to match(/already tracked.*Repo1\/scripts/)
+      expect(result).to match(/Error:.*already tracked.*Repo1\/scripts/)
     end
 
-    it 'returns nil when no collision (excluding :all repos from check)' do
-      # dr-scripts is the only :all mode repo in SCRIPT_REPOS. Excluding it
-      # leaves only :explicit repos (scripts, gs-scripts) with no user additions,
-      # so check_collision returns nil.
+    it 'returns nil when no collision exists' do
       result = tracker.check_collision('unique-script.lic', 'dr-scripts')
 
       expect(result).to be_nil
     end
 
-    it 'warns but allows track when collision is a warning' do
-      # :all mode collision is a warning, not a blocking error
+    it 'checks the right directory for :all repo installed files' do
+      File.binwrite(File.join(tmpdir, 'common.lic'), '# dr-scripts version')
+
+      result = tracker.check_collision('common.lic', 'MahtraDR/custom')
+
+      expect(result).to match(/Error:.*already installed from.*DR Scripts/)
+      expect(result).to match(/shadow/)
+    end
+
+    it 'blocks track when script is already installed from :all mode repo' do
       UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'main' } }
+      File.binwrite(File.join(tmpdir, 'something.lic'), '# existing dr-scripts version')
 
       tracker.track_script('MahtraDR/test', 'something.lic')
 
-      expect(UserVars.tracked_scripts['MahtraDR/test']).to include('something.lic')
-      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/may conflict/)
-      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Added/)
+      expect(UserVars.tracked_scripts['MahtraDR/test']).not_to include('something.lic')
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Error:.*already installed from.*DR Scripts/)
     end
 
-    it 'blocks track when collision is an error (explicit repo)' do
+    it 'allows tracking when script is not installed from :all mode repo' do
+      UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'main' } }
+
+      tracker.track_script('MahtraDR/test', 'new-script.lic')
+
+      expect(UserVars.tracked_scripts['MahtraDR/test']).to include('new-script.lic')
+    end
+
+    it 'blocks track when collision with another custom repo' do
       UserVars.custom_repos = {
         'Repo1/scripts' => { 'branch' => 'main' },
         'Repo2/scripts' => { 'branch' => 'main' }
       }
       UserVars.tracked_scripts = { 'Repo1/scripts' => ['conflict.lic'] }
 
-      # check_collision finds the hard Error: collision in Repo1/scripts
-      # even though dr-scripts (:all) would also produce a soft warning.
-      # Hard errors take priority and block tracking.
       tracker.track_script('Repo2/scripts', 'conflict.lic')
 
       expect(UserVars.tracked_scripts['Repo2/scripts']).not_to include('conflict.lic')
-      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Error:.*already tracked/)
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(/Error:.*already tracked.*Repo1/)
     end
   end
 
@@ -241,5 +288,28 @@ RSpec.describe 'Custom repos integration with ScriptSync' do
       expect(client).not_to receive(:http_get)
       sync.sync_repo('MahtraDR/test')
     end
+  end
+end
+
+RSpec.describe 'Custom repos integration with FileUpdater' do
+  let(:tmpdir) { Dir.mktmpdir('custom-file-updater-test') }
+  let(:client) { instance_double(Lich::Util::Update::GitHubClient) }
+  let(:resolver) { instance_double(Lich::Util::Update::ChannelResolver) }
+  let(:updater) { Lich::Util::Update::FileUpdater.new(client, resolver) }
+
+  before do
+    stub_const('SCRIPT_DIR', tmpdir)
+    UserVars.custom_repos = nil
+    allow(updater).to receive(:respond)
+  end
+
+  after { FileUtils.remove_entry(tmpdir) }
+
+  it 'rejects data downloads from custom repos' do
+    UserVars.custom_repos = { 'MahtraDR/test' => { 'branch' => 'main' } }
+
+    updater.update_file_from_repo('data', 'MahtraDR/test', 'some-file.yaml')
+
+    expect(updater).to have_received(:respond).with(/not supported for custom repos/)
   end
 end

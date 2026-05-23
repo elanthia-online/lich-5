@@ -5,7 +5,7 @@ module Lich
     # Factory for creating TCP server sockets with SO_REUSEADDR set before binding.
     #
     # Ruby's +TCPServer.new+ calls +bind+ and +listen+ internally during construction,
-    # so any +setsockopt+ call made after construction is too late — the port is already
+    # so any +setsockopt+ call made after construction is too late - the port is already
     # bound without the reuse flag. This causes "Address already in use" failures when
     # restarting quickly because the kernel holds the port in TIME_WAIT for ~60 seconds.
     #

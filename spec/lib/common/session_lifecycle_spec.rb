@@ -10,15 +10,16 @@ RSpec.describe Lich::Common::SessionLifecycle do
   before(:each) do
     stub_const('Lich::Common::SessionsSettings', Module.new)
     allow(Lich::Common::SessionsSettings).to receive(:enabled?).and_return(true)
-    allow(Lich::Common::SessionsSettings).to receive(:register_session)
-    allow(Lich::Common::SessionsSettings).to receive(:heartbeat)
-    allow(Lich::Common::SessionsSettings).to receive(:unregister_session)
+    allow(Lich::Common::SessionsSettings).to receive(:register_session_admitted)
+    allow(Lich::Common::SessionsSettings).to receive(:heartbeat_admitted)
+    allow(Lich::Common::SessionsSettings).to receive(:unregister_session_admitted)
     allow(Lich::Common::SessionsSettings).to receive(:HEARTBEAT_INTERVAL_SECONDS).and_return(90)
     stub_const('Lich', Lich) unless defined?(Lich)
     allow(Lich).to receive(:log) if Lich.respond_to?(:log)
 
     described_class.instance_variable_set(:@running, false)
     described_class.instance_variable_set(:@started, false)
+    described_class.instance_variable_set(:@feature_enabled, false)
     described_class.instance_variable_set(:@heartbeat_thread, nil)
     described_class.instance_variable_set(:@mutex, Mutex.new)
   end
@@ -91,9 +92,9 @@ RSpec.describe Lich::Common::SessionLifecycle do
 
       expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 999)).to be(false)
       expect(described_class.stop).to be(false)
-      expect(Lich::Common::SessionsSettings).not_to have_received(:register_session)
-      expect(Lich::Common::SessionsSettings).not_to have_received(:heartbeat)
-      expect(Lich::Common::SessionsSettings).not_to have_received(:unregister_session)
+      expect(Lich::Common::SessionsSettings).not_to have_received(:register_session_admitted)
+      expect(Lich::Common::SessionsSettings).not_to have_received(:heartbeat_admitted)
+      expect(Lich::Common::SessionsSettings).not_to have_received(:unregister_session_admitted)
     end
 
     it 'starts once and unregisters on stop (registration is deferred)' do
@@ -106,11 +107,11 @@ RSpec.describe Lich::Common::SessionLifecycle do
 
       expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 999)).to be true
       expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 999)).to be false
-      expect(Lich::Common::SessionsSettings).not_to have_received(:register_session)
+      expect(Lich::Common::SessionsSettings).not_to have_received(:register_session_admitted)
 
       expect(described_class.stop).to be true
       expect(described_class.stop).to be false
-      expect(Lich::Common::SessionsSettings).to have_received(:unregister_session).with(pid: Process.pid).once
+      expect(Lich::Common::SessionsSettings).to have_received(:unregister_session_admitted).with(pid: Process.pid).once
     end
 
     it 'prefers cooperative heartbeat shutdown before hard kill' do
@@ -175,7 +176,7 @@ RSpec.describe Lich::Common::SessionLifecycle do
       captured_block.call
 
       expect(described_class).to have_received(:attempt_register).at_least(:once)
-      expect(Lich::Common::SessionsSettings).to have_received(:heartbeat).with(
+      expect(Lich::Common::SessionsSettings).to have_received(:heartbeat_admitted).with(
         hash_including(
           pid: Process.pid,
           state: 'running',
@@ -196,7 +197,87 @@ RSpec.describe Lich::Common::SessionLifecycle do
       expect(described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 999)).to be(false)
       expect(described_class.instance_variable_get(:@running)).to be(false)
       expect(described_class.instance_variable_get(:@started)).to be(false)
+      expect(described_class.instance_variable_get(:@feature_enabled)).to be(false)
       expect(described_class.instance_variable_get(:@heartbeat_thread)).to be_nil
+    end
+  end
+
+  describe 'feature-flag latching' do
+    let(:heartbeat_thread) do
+      t = instance_double(Thread)
+      allow(t).to receive(:join).with(0.5)
+      allow(t).to receive(:alive?).and_return(true)
+      allow(t).to receive(:kill)
+      t
+    end
+
+    before(:each) do
+      allow(Thread).to receive(:new).and_return(heartbeat_thread)
+      allow(described_class).to receive(:resolve_frontend).and_return('stormfront')
+      allow(described_class).to receive(:resolve_game_code).and_return('DR')
+    end
+
+    def start_lifecycle
+      described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 999)
+    end
+
+    it 'stop succeeds when the feature flag flips off after start' do
+      start_lifecycle
+      allow(Lich::Common::SessionsSettings).to receive(:enabled?).and_return(false)
+
+      expect(described_class.stop).to be(true)
+      expect(Lich::Common::SessionsSettings).to have_received(:unregister_session_admitted).with(pid: Process.pid)
+    end
+
+    it 'stop succeeds when enabled? would raise after startup' do
+      start_lifecycle
+      allow(Lich::Common::SessionsSettings).to receive(:enabled?).and_raise(RuntimeError, 'prepare called on a closed database')
+
+      expect(described_class.stop).to be(true)
+      expect(Lich::Common::SessionsSettings).to have_received(:unregister_session_admitted).with(pid: Process.pid)
+    end
+
+    it 'clears @feature_enabled after stop completes' do
+      start_lifecycle
+      expect(described_class.instance_variable_get(:@feature_enabled)).to be(true)
+
+      described_class.stop
+      expect(described_class.instance_variable_get(:@feature_enabled)).to be(false)
+    end
+
+    it 'returns false when stop is called without a prior start' do
+      expect(described_class.stop).to be(false)
+      expect(Lich::Common::SessionsSettings).not_to have_received(:unregister_session_admitted)
+    end
+
+    it 'calls unregister_session_admitted only once on double stop' do
+      start_lifecycle
+
+      expect(described_class.stop).to be(true)
+      expect(described_class.stop).to be(false)
+      expect(Lich::Common::SessionsSettings).to have_received(:unregister_session_admitted).with(pid: Process.pid).once
+    end
+
+    it 'attempt_register uses register_session_admitted instead of public register_session' do
+      allow(Lich::Common::SessionsSettings).to receive(:register_session)
+
+      captured_block = nil
+      allow(Thread).to receive(:new) do |&blk|
+        captured_block = blk
+        heartbeat_thread
+      end
+
+      sleep_calls = 0
+      allow(described_class).to receive(:sleep) do |_seconds|
+        sleep_calls += 1
+        described_class.instance_variable_set(:@running, false) if sleep_calls >= 2
+      end
+
+      described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 1, registration_delay: 0)
+      captured_block.call
+
+      expect(Lich::Common::SessionsSettings).to have_received(:register_session_admitted).at_least(:once)
+      expect(Lich::Common::SessionsSettings).not_to have_received(:register_session)
     end
   end
 
