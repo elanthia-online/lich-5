@@ -1117,7 +1117,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   end
 
   # ================================================================
-  # get_telescope (deprecated — delegates to get_telescope?)
+  # get_telescope (deprecated - delegates to get_telescope?)
   # ================================================================
   describe '.get_telescope' do
     context 'when get_telescope? succeeds' do
@@ -1160,7 +1160,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   end
 
   # ================================================================
-  # store_telescope (deprecated — delegates to store_telescope?)
+  # store_telescope (deprecated - delegates to store_telescope?)
   # ================================================================
   describe '.store_telescope' do
     context 'when store_telescope? succeeds' do
@@ -1296,7 +1296,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   end
 
   # ================================================================
-  # get_bones (deprecated — delegates to get_bones?)
+  # get_bones (deprecated - delegates to get_bones?)
   # ================================================================
   describe '.get_bones' do
     context 'when get_bones? succeeds' do
@@ -1328,7 +1328,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   end
 
   # ================================================================
-  # store_bones (deprecated — delegates to store_bones?)
+  # store_bones (deprecated - delegates to store_bones?)
   # ================================================================
   describe '.store_bones' do
     context 'when store_bones? succeeds' do
@@ -1496,7 +1496,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   end
 
   # ================================================================
-  # get_div_tool (deprecated — delegates to get_div_tool?)
+  # get_div_tool (deprecated - delegates to get_div_tool?)
   # ================================================================
   describe '.get_div_tool' do
     context 'when get_div_tool? succeeds' do
@@ -1535,7 +1535,7 @@ RSpec.describe Lich::DragonRealms::DRCMM do
   end
 
   # ================================================================
-  # store_div_tool (deprecated — delegates to store_div_tool?)
+  # store_div_tool (deprecated - delegates to store_div_tool?)
   # ================================================================
   describe '.store_div_tool' do
     context 'when store_div_tool? succeeds' do

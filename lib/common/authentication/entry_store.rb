@@ -445,7 +445,7 @@ module Lich
             # Clean up backup on success
             FileUtils.rm(backup_file) if File.exist?(backup_file)
 
-            Lich.log "info: Encryption mode changed successfully: #{current_mode} → #{new_mode}"
+            Lich.log "info: Encryption mode changed successfully: #{current_mode} -> #{new_mode}"
             true
           rescue StandardError => e
             Lich.log "error: Encryption mode change failed: #{e.class}: #{e.message}"

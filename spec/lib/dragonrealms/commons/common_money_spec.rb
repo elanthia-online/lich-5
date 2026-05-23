@@ -9,7 +9,7 @@ require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-money.rb')
 DRCM = Lich::DragonRealms::DRCM unless defined?(DRCM)
 
 RSpec.describe Lich::DragonRealms::DRCM do
-  # ─── Data constants ──────────────────────────────────────────────────
+  # --- Data constants --------------------------------------------------
 
   describe 'data constants' do
     describe 'DENOMINATIONS' do
@@ -150,7 +150,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── strip_xml ───────────────────────────────────────────────────────
+  # --- strip_xml -------------------------------------------------------
 
   describe '.strip_xml' do
     it 'removes XML tags from lines' do
@@ -181,7 +181,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── minimize_coins ──────────────────────────────────────────────────
+  # --- minimize_coins --------------------------------------------------
 
   describe '.minimize_coins' do
     it 'converts 0 copper to an empty array' do
@@ -218,7 +218,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── convert_to_copper ───────────────────────────────────────────────
+  # --- convert_to_copper -----------------------------------------------
 
   describe '.convert_to_copper' do
     before { Lich::Messaging.clear_messages! }
@@ -290,7 +290,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── get_canonical_currency ──────────────────────────────────────────
+  # --- get_canonical_currency ------------------------------------------
 
   describe '.get_canonical_currency' do
     it 'returns kronars for full name' do
@@ -319,7 +319,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── convert_currency ───────────────────────────────────────────────
+  # --- convert_currency -----------------------------------------------
 
   describe '.convert_currency' do
     it 'returns the same amount for same-currency conversion with no fee' do
@@ -351,7 +351,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── get_total_wealth ────────────────────────────────────────────────
+  # --- get_total_wealth ------------------------------------------------
 
   describe '.get_total_wealth' do
     before do
@@ -426,7 +426,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── town_currency / hometown_currency ───────────────────────────────
+  # --- town_currency / hometown_currency -------------------------------
 
   describe '.town_currency' do
     before do
@@ -450,7 +450,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── check_wealth ───────────────────────────────────────────────────
+  # --- check_wealth ---------------------------------------------------
 
   describe '.check_wealth' do
     it 'parses copper amount from wealth response' do
@@ -464,7 +464,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── wealth ─────────────────────────────────────────────────────────
+  # --- wealth ---------------------------------------------------------
 
   describe '.wealth' do
     it 'delegates to check_wealth with hometown currency' do
@@ -477,7 +477,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── debt ───────────────────────────────────────────────────────────
+  # --- debt -----------------------------------------------------------
 
   describe '.debt' do
     it 'parses debt amount from wealth response' do
@@ -499,7 +499,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── ensure_copper_on_hand ──────────────────────────────────────────
+  # --- ensure_copper_on_hand ------------------------------------------
 
   describe '.ensure_copper_on_hand' do
     let(:settings) do
@@ -543,7 +543,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── get_money_from_bank ────────────────────────────────────────────
+  # --- get_money_from_bank --------------------------------------------
 
   describe '.get_money_from_bank' do
     let(:settings) { double('settings', hometown: 'Crossing') }
@@ -606,7 +606,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── withdraw_exact_amount? ─────────────────────────────────────────
+  # --- withdraw_exact_amount? -----------------------------------------
 
   describe '.withdraw_exact_amount?' do
     let(:base_settings) do
@@ -661,7 +661,7 @@ RSpec.describe Lich::DragonRealms::DRCM do
     end
   end
 
-  # ─── deposit_coins ──────────────────────────────────────────────────
+  # --- deposit_coins --------------------------------------------------
 
   describe '.deposit_coins' do
     let(:settings) do

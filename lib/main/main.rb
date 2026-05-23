@@ -655,7 +655,7 @@ reconnect_if_wanted = proc {
           $_DETACHABLE_CLIENT_.sync = true
           Lich.log "info: detachable client connected"
 
-          # Close server socket after accepting — only one client connects at a time
+          # Close server socket after accepting - only one client connects at a time
           Lich::InternalAPI::ActiveSessions::Lifecycle.update_listener(
             host: server.local_address.ip_address,
             port: server.local_address.ip_port,
