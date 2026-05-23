@@ -14,7 +14,7 @@ module Lich
         # detecting service-owner failover quickly enough for multi-session use.
         #
         # @return [Integer]
-        HEARTBEAT_INTERVAL_SECONDS = 5
+        HEARTBEAT_INTERVAL_SECONDS = 2
 
         @heartbeat_thread = nil
         @running = false
@@ -91,10 +91,12 @@ module Lich
               sleep heartbeat_interval
               break unless running?
 
-              upsert_current_session
+              begin
+                upsert_current_session
+              rescue StandardError => e
+                Lich.log("warning: ActiveSessions heartbeat tick failed (continuing): #{e.class}: #{e.message}\n\t#{e.backtrace&.first(3)&.join("\n\t")}") if Lich.respond_to?(:log)
+              end
             end
-          rescue StandardError => e
-            Lich.log("warning: ActiveSessions heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
           end
 
           @mutex.synchronize { @heartbeat_thread = thread if @started }

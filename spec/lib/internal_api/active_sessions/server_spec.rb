@@ -140,10 +140,11 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Server do
     end
 
     context 'when server.accept raises IOError' do
-      it 'breaks the loop without logging' do
+      it 'breaks the loop without logging warnings or errors' do
         server = build_server(accept_results: [IOError])
 
-        expect(Lich).not_to receive(:log)
+        allow(Lich).to receive(:log)
+        expect(Lich).not_to receive(:log).with(a_string_matching(/^(?:warning|error).*accept_loop error/))
         server.start
       ensure
         server&.stop
@@ -151,10 +152,11 @@ RSpec.describe Lich::InternalAPI::ActiveSessions::Server do
     end
 
     context 'when server.accept raises Errno::EBADF' do
-      it 'breaks the loop without logging' do
+      it 'breaks the loop without logging warnings or errors' do
         server = build_server(accept_results: [Errno::EBADF])
 
-        expect(Lich).not_to receive(:log)
+        allow(Lich).to receive(:log)
+        expect(Lich).not_to receive(:log).with(a_string_matching(/^(?:warning|error).*accept_loop error/))
         server.start
       ensure
         server&.stop

@@ -54,7 +54,10 @@ module Lich
             @server = @server_factory.call(@host, @port)
             @server.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, 1) rescue nil
             @port = @server.addr[1]
-            @thread = @accept_thread_factory.call { accept_loop }
+            @thread = @accept_thread_factory.call do
+              Lich.log("info: ActiveSessions accept thread started pid=#{Process.pid} port=#{@port}") if defined?(Lich) && Lich.respond_to?(:log)
+              accept_loop
+            end
           end
           true
         rescue StandardError
@@ -114,21 +117,28 @@ module Lich
         def accept_loop
           loop do
             server = @server
-            break unless server
+            unless server
+              Lich.log("warning: ActiveSessions accept_loop exiting: @server is nil pid=#{Process.pid}") if defined?(Lich) && Lich.respond_to?(:log)
+              break
+            end
 
             socket = nil
             begin
               socket = server.accept
               client_thread = @client_thread_factory.call(socket) { |client| handle_tracked_client(client) }
               track_client_thread(client_thread)
-            rescue IOError, Errno::EBADF
-              # Server socket closed -- normal shutdown path.
+            rescue IOError, Errno::EBADF => e
+              Lich.log("info: ActiveSessions accept_loop shutdown: #{e.class} pid=#{Process.pid}") if defined?(Lich) && Lich.respond_to?(:log)
               break
             rescue StandardError => e
               socket&.close rescue nil
               Lich.log("warning: ActiveSessions accept_loop error (continuing): #{e.class}: #{e.message}") if defined?(Lich) && Lich.respond_to?(:log)
             end
           end
+        rescue StandardError => e
+          Lich.log("error: ActiveSessions accept_loop fatal: #{e.class}: #{e.message}\n\t#{e.backtrace&.first(5)&.join("\n\t")}") if defined?(Lich) && Lich.respond_to?(:log)
+        ensure
+          Lich.log("warning: ActiveSessions accept_loop thread exiting pid=#{Process.pid}") if defined?(Lich) && Lich.respond_to?(:log)
         end
 
         # Wraps client handling so finished client threads can be removed from

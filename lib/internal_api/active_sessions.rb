@@ -104,9 +104,36 @@ module Lich
           # died, the TCPServer socket is still bound but unserviceable.
           # Stop it to release the port before attempting a fresh start.
           if @server && !@server.running?
-            Lich.log('warning: ActiveSessions server thread died -- releasing zombie socket') if Lich.respond_to?(:log)
+            Lich.log("warning: ActiveSessions in-process zombie detected pid=#{Process.pid} -- releasing socket") if Lich.respond_to?(:log)
             @server.stop
             @server = nil
+          end
+
+          # Detect cross-process zombie: discovery points to another process
+          # whose service is unresponsive (dead accept thread holding the port).
+          discovery = load_discovery
+          if discovery[:owner_pid] && discovery[:owner_pid] != Process.pid
+            return true if service_available?
+
+            owner_alive = begin
+              Process.kill(0, discovery[:owner_pid])
+              true
+            rescue Errno::ESRCH
+              false
+            rescue Errno::EPERM
+              true
+            end
+
+            if owner_alive
+              Lich.log(
+                "warning: ActiveSessions cross-process zombie: " \
+                "owner pid=#{discovery[:owner_pid]} alive but unresponsive, clearing stale discovery"
+              ) if Lich.respond_to?(:log)
+              delete_discovery_if_owner(discovery[:owner_pid], discovery[:auth_token])
+              return false
+            end
+
+            delete_discovery_if_owner(discovery[:owner_pid])
           end
 
           @registry ||= Registry.new
@@ -116,7 +143,10 @@ module Lich
             registry: @registry,
             auth_token: SecureRandom.hex(32)
           )
-          return false unless @server.start
+          unless @server.start
+            @server = nil
+            return false
+          end
 
           write_discovery(owner_pid: Process.pid, auth_token: @server.auth_token)
           true
@@ -337,15 +367,30 @@ module Lich
       #
       # @return [void]
       def self.delete_discovery_if_owned
-        discovery = load_discovery
-        return unless discovery[:owner_pid].to_i == Process.pid
-        return unless File.exist?(discovery_path)
+        delete_discovery_if_owner(Process.pid)
+      end
+      private_class_method :delete_discovery_if_owned
 
-        File.delete(discovery_path)
+      # Deletes the discovery file only when it still belongs to the given owner.
+      #
+      # Re-reads the file before deletion to avoid a race where another process
+      # has written a fresh discovery between the caller's initial read and this
+      # deletion attempt.
+      #
+      # @param expected_owner_pid [Integer]
+      # @param expected_auth_token [String, nil] when provided, also requires
+      #   the token to match so a fresh rewrite by the same PID is not deleted
+      # @return [void]
+      def self.delete_discovery_if_owner(expected_owner_pid, expected_auth_token = nil)
+        current = load_discovery
+        return unless current[:owner_pid].to_i == expected_owner_pid.to_i
+        return if expected_auth_token && current[:auth_token] != expected_auth_token
+
+        File.delete(discovery_path) if File.exist?(discovery_path)
       rescue StandardError
         nil
       end
-      private_class_method :delete_discovery_if_owned
+      private_class_method :delete_discovery_if_owner
 
       # Removes the discovery file when the current process still owns the
       # service and the shared registry is now empty.
