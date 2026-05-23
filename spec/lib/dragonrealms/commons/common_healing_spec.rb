@@ -7,7 +7,7 @@ require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-healing-data.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-healing.rb')
 
 RSpec.describe Lich::DragonRealms::DRCH do
-  # ─── Wound class ──────────────────────────────────────────────────────
+  # --- Wound class ------------------------------------------------------
 
   describe described_class::Wound do
     describe '#initialize' do
@@ -168,7 +168,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── HealthResult class ───────────────────────────────────────────────
+  # --- HealthResult class -----------------------------------------------
 
   describe described_class::HealthResult do
     describe '#initialize' do
@@ -257,7 +257,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── strip_xml ────────────────────────────────────────────────────────
+  # --- strip_xml --------------------------------------------------------
 
   describe '.strip_xml' do
     it 'strips XML pushStream and other tags from health output lines' do
@@ -286,7 +286,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── calculate_score ──────────────────────────────────────────────────
+  # --- calculate_score --------------------------------------------------
 
   describe '.calculate_score' do
     it 'returns 0 for no wounds' do
@@ -315,7 +315,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── parse_health_lines ──────────────────────────────────────────────
+  # --- parse_health_lines ----------------------------------------------
 
   describe '.parse_health_lines' do
     it 'parses a healthy person' do
@@ -488,7 +488,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── parse_bleeders ──────────────────────────────────────────────────
+  # --- parse_bleeders --------------------------------------------------
 
   describe '.parse_bleeders' do
     it 'returns empty hash when no bleeding section' do
@@ -570,7 +570,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── parse_wounds ────────────────────────────────────────────────────
+  # --- parse_wounds ----------------------------------------------------
 
   describe '.parse_wounds' do
     it 'returns empty hash for nil' do
@@ -636,7 +636,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── parse_parasites ─────────────────────────────────────────────────
+  # --- parse_parasites -------------------------------------------------
 
   describe '.parse_parasites' do
     it 'returns empty hash for nil' do
@@ -662,7 +662,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── parse_lodged_items ──────────────────────────────────────────────
+  # --- parse_lodged_items ----------------------------------------------
 
   describe '.parse_lodged_items' do
     it 'returns empty hash for nil' do
@@ -694,7 +694,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── parse_perceived_health_lines ────────────────────────────────────
+  # --- parse_perceived_health_lines ------------------------------------
 
   describe '.parse_perceived_health_lines' do
     it 'parses wound details from perceive output' do
@@ -823,7 +823,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── skilled_to_tend_wound? ──────────────────────────────────────────
+  # --- skilled_to_tend_wound? ------------------------------------------
 
   describe '.skilled_to_tend_wound?' do
     it 'returns true when skilled enough for external' do
@@ -862,7 +862,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── Game I/O methods ────────────────────────────────────────────────
+  # --- Game I/O methods ------------------------------------------------
 
   describe '.check_health' do
     it 'returns HealthResult on timeout' do
@@ -1054,7 +1054,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── Data constants ──────────────────────────────────────────────────
+  # --- Data constants --------------------------------------------------
 
   describe 'data constants' do
     it 'freezes BLEED_RATE_TO_SEVERITY' do

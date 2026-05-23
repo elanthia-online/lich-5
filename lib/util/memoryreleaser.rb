@@ -263,7 +263,7 @@ module Lich
         # Perform a complete memory release cycle
         #
         # Prunes stale entries from the GameObj shared identity index using the
-        # current interval as the TTL — any index entry not seen within the last
+        # current interval as the TTL - any index entry not seen within the last
         # +@interval+ seconds (and not held in an active registry) is evicted
         # before the GC and OS-level release steps run. This ensures the index
         # stays lean and the subsequent GC pass has the most to reclaim.
@@ -778,12 +778,12 @@ module Lich
       @instance = nil
 
       class << self
-        # @api private Internal plumbing for Manager → launcher communication.
+        # @api private Internal plumbing for Manager -> launcher communication.
         #   No compatibility guarantee. Do not call from external scripts.
         # @return [Queue] the command queue for communicating with the launcher thread
         attr_reader :command_queue
 
-        # @api private Internal plumbing for Manager → launcher communication.
+        # @api private Internal plumbing for Manager -> launcher communication.
         #   No compatibility guarantee. Do not call from external scripts.
         # @return [Thread, nil] the current worker thread
         attr_reader :worker_thread

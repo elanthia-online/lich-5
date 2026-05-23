@@ -32,7 +32,7 @@ FE = Lich::Common::Frontend unless defined?(FE)
 RSpec.describe Lich::Common::Frontend do
   let(:frontend) { Lich::Common::Frontend }
 
-  # ─── Constants ─────────────────────────────────────────────
+  # --- Constants ---------------------------------------------
 
   describe 'CLIENT_STRING' do
     it 'is defined' do
@@ -61,7 +61,7 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
-  # ─── Capability Sets ───────────────────────────────────────
+  # --- Capability Sets ---------------------------------------
 
   describe 'XML_FRONTENDS' do
     it 'is frozen' do
@@ -181,7 +181,7 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
-  # ─── Predicate Methods ─────────────────────────────────────
+  # --- Predicate Methods -------------------------------------
 
   describe '.supports_xml?' do
     context 'with explicit argument' do
@@ -360,7 +360,7 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
-  # ─── Client Accessor ─────────────────────────────────────
+  # --- Client Accessor -------------------------------------
 
   describe '.client' do
     around do |example|
@@ -410,7 +410,7 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
-  # ─── send_handshake ────────────────────────────────────────
+  # --- send_handshake ----------------------------------------
 
   describe '.send_handshake' do
     it 'is defined as a module method' do
@@ -422,7 +422,7 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
-  # ─── Behavioral Consistency ────────────────────────────────
+  # --- Behavioral Consistency --------------------------------
 
   describe 'predicate consistency across all known frontends' do
     all_frontends = %w[stormfront wrayth frostbite profanity genie wizard avalon unknown suks]
@@ -442,7 +442,7 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
-  # ─── Existing Functionality Preserved ──────────────────────
+  # --- Existing Functionality Preserved ----------------------
 
   describe 'existing session file functionality' do
     it 'still responds to create_session_file' do
@@ -476,7 +476,7 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
-  # ─── Registry API ────────────────────────────────────────────
+  # --- Registry API --------------------------------------------
 
   describe '.register' do
     it 'is defined as a module method' do
@@ -623,7 +623,7 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
-  # ─── Registry-Backed Constants ────────────────────────────────
+  # --- Registry-Backed Constants --------------------------------
 
   describe 'backward-compatible constants are derived from registry' do
     it 'XML_FRONTENDS matches frontends_with_capability(:xml)' do
@@ -643,7 +643,7 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
-  # ─── Regression: Old Patterns Still Match ──────────────────
+  # --- Regression: Old Patterns Still Match ------------------
 
   describe 'regression: predicate methods match old regex patterns' do
     # These tests verify that the new predicate methods produce the same

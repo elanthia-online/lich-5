@@ -135,7 +135,7 @@ module Lich
       #
       # This factory ensures the proxy directly targets the cached root object
       # for the (script_name, scope) pair. By using the cached root, it avoids
-      # "identity drift" bugs where the proxy’s @target differs from the object
+      # "identity drift" bugs where the proxy's @target differs from the object
       # being persisted by save_proxy_changes.
       #
       # @param scope [String] A logical scope identifier (for example,
@@ -219,7 +219,7 @@ module Lich
         end
         # -------------------------------------------------------------
 
-        # EMPTY PATH → Save *current root* (not proxy.target). Also covers detached "view" proxies.
+        # EMPTY PATH -> Save *current root* (not proxy.target). Also covers detached "view" proxies.
         if path.empty?
           _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: Empty path; saving CURRENT ROOT for scope #{scope.inspect}" })
 
@@ -257,7 +257,7 @@ module Lich
 
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> { "save_proxy_changes: script_name: #{script_name.inspect}, cache_key: #{cache_key}" })
 
-        # From here on, we’re saving into a nested path. Ensure root is a container.
+        # From here on, we're saving into a nested path. Ensure root is a container.
         unless current_root_for_scope.is_a?(Hash) || current_root_for_scope.is_a?(Array)
           _log(LOG_LEVEL_INFO, @@log_prefix, -> { "save_proxy_changes: Root not a container; initializing {} for scope #{scope.inspect}" })
           current_root_for_scope = {}
@@ -269,7 +269,7 @@ module Lich
 
         # Pre-navigation diagnostics
         _log(LOG_LEVEL_DEBUG, @@log_prefix, -> {
-          "save_proxy_changes: Navigation preflight — parent_path=#{parent_path.inspect} (#{parent_path.map { |s| s.class }.inspect}), leaf_key=#{leaf_key.inspect} (#{leaf_key.class}), root_class=#{current_root_for_scope.class}"
+          "save_proxy_changes: Navigation preflight - parent_path=#{parent_path.inspect} (#{parent_path.map { |s| s.class }.inspect}), leaf_key=#{leaf_key.inspect} (#{leaf_key.class}), root_class=#{current_root_for_scope.class}"
         })
 
         # Navigate **within the freshly-loaded root** (do NOT re-fetch via PathNavigator here).

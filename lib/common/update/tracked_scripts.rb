@@ -15,10 +15,11 @@ module Lich
         # Returns all tracked scripts for a repository config.
         #
         # @param config [Hash] repository config from SCRIPT_REPOS or custom repo
+        # @param repo_key [String, nil] explicit repo key (avoids config-equality lookup)
         # @return [Array<String>] list of tracked script filenames
-        def tracked_scripts(config)
+        def tracked_scripts(config, repo_key: nil)
           defaults = config[:default_tracked] || []
-          repo_key = SCRIPT_REPOS.key(config) || CustomRepos.all.find { |k, v| CustomRepos.build_config(k, v) == config }&.first
+          repo_key ||= SCRIPT_REPOS.key(config)
           user_additions = UserVars.tracked_scripts&.dig(repo_key) || [] rescue []
           (defaults + user_additions).uniq
         end
@@ -43,14 +44,14 @@ module Lich
         # @param exclude_repo [String] repo key to exclude from check
         # @return [String, nil] warning message if collision found, nil otherwise
         def check_collision(script_name, exclude_repo)
-          all_repo_warning = nil
-
           # Check built-in repos
           SCRIPT_REPOS.each do |key, config|
             next if key == exclude_repo
 
             if config[:tracking_mode] == :all
-              all_repo_warning ||= "Warning: '#{script_name}' may conflict with #{config[:display_name]} (syncs all .lic files)."
+              if File.exist?(File.join(SCRIPT_DIR, script_name))
+                return "Error: '#{script_name}' is already installed from #{config[:display_name]}. The custom version would shadow it at runtime."
+              end
               next
             end
 
@@ -70,7 +71,7 @@ module Lich
             end
           end
 
-          all_repo_warning
+          nil
         end
 
         # Adds a script to user's tracked list for a repository.
@@ -91,11 +92,10 @@ module Lich
             StatusReporter.respond_mono("[lich5-update: '#{script_name}' is already tracked in #{name}.]")
           else
             collision = check_collision(script_name, repo_key)
-            if collision&.start_with?('Error:')
+            if collision
               StatusReporter.respond_mono("[lich5-update: #{collision}]")
               return
             end
-            StatusReporter.respond_mono("[lich5-update: #{collision}]") if collision
             UserVars.tracked_scripts[repo_key].push(script_name)
             Vars.save
             StatusReporter.respond_mono("[lich5-update: Added '#{script_name}' to #{name} tracked list.]")

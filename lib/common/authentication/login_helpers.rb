@@ -398,8 +398,8 @@ module Lich
         #   selector is present, or nil for probable invalid instance intent.
         #
         # Supports shorthand aliases:
-        #   --gs  → equivalent to --gemstone
-        #   --dr  → equivalent to --dragonrealms
+        #   --gs  -> equivalent to --gemstone
+        #   --dr  -> equivalent to --dragonrealms
         def self.resolve_instance(argv)
           instance_flags_seen = false
           resolved_instance = nil
@@ -491,10 +491,10 @@ module Lich
         # against VALID_GAME_CODES.
         #
         # Examples:
-        #   --gemstone --platinum        → ['GSX', :__unset, :__unset]
-        #   --dragonrealms --fallen      → ['DRF', :__unset, :__unset]
-        #   --GS4 --wizard               → ['GS3', 'wizard', :__unset]
-        #   --GS3 --custom-launch=warlock → ['GS3', :__unset, 'warlock']
+        #   --gemstone --platinum        -> ['GSX', :__unset, :__unset]
+        #   --dragonrealms --fallen      -> ['DRF', :__unset, :__unset]
+        #   --GS4 --wizard               -> ['GS3', 'wizard', :__unset]
+        #   --GS3 --custom-launch=warlock -> ['GS3', :__unset, 'warlock']
         #
         # @param argv [Array<String>] e.g. ARGV
         # @return [Array(String, String, String)] [game_code, frontend, custom_launch]
@@ -564,7 +564,7 @@ module Lich
         #
         # This constructs and launches a Ruby + Lich command line with proper login arguments.
         # It is aware of the Lich version and formats launch flags (e.g., `--gst`, `--GSX`) accordingly.
-        # Only the character name and game instance are passed — all sensitive data is handled by Lich internally.
+        # Only the character name and game instance are passed - all sensitive data is handled by Lich internally.
         #
         # @param entry [Hash] the login entry (must include :char_name and :game_code)
         # @param lich_path [String, nil] optional path to lich.rbw; defaults to LICH_DIR/lich.rbw
