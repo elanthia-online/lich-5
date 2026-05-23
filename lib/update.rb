@@ -191,7 +191,7 @@ module Lich
     #{$clean_lich_char}lich5-update --custom-repos                      List registered custom repos
     #{$clean_lich_char}lich5-update --track=owner/repo:script.lic       Track a script from custom repo
     #{$clean_lich_char}lich5-update --sync=owner/repo                   Sync a custom repo
-    Custom scripts are installed to #{$clean_lich_char}scripts/custom/<owner-repo>/
+    Custom scripts install to #{$clean_lich_char}scripts/custom/<owner-repo>/ (name collisions rejected)
 
   [Individual file updates]
     #{$clean_lich_char}lich5-update --script=<name>                     Update script (auto-detects repo)
@@ -314,7 +314,7 @@ module Lich
       end
 
       def self.release_installer
-        ReleaseInstaller.new(client, resolver, snapshot_manager)
+        @release_installer ||= ReleaseInstaller.new(client, resolver, snapshot_manager)
       end
 
       def self.branch_installer
