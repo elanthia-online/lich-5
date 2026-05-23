@@ -523,7 +523,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
 
     context 'when hands need freeing repeatedly' do
       it 'does not infinite loop (counter increments on every iteration)' do
-        # Simulate "two free hands" every time — counter should stop it
+        # Simulate "two free hands" every time - counter should stop it
         allow(DRC).to receive(:bput).and_return('You must have two free hands')
         allow(DRCI).to receive(:stow_hand)
         allow(DRC).to receive(:left_hand).and_return('sword')
@@ -684,7 +684,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
   end
 
-  # ─── return_held_gear failure_patterns ────────────────────────────────
+  # --- return_held_gear failure_patterns --------------------------------
 
   describe '#return_held_gear passes failure_patterns to stow_helper' do
     let(:settings) do
@@ -722,7 +722,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
   end
 
-  # ─── Item lookup and configuration ───────────────────────────────────
+  # --- Item lookup and configuration -----------------------------------
 
   describe '#item_by_desc' do
     let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
@@ -763,7 +763,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
   end
 
-  # ─── wear_item? ─────────────────────────────────────────────────────
+  # --- wear_item? -----------------------------------------------------
 
   describe '#wear_item?' do
     let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
@@ -788,7 +788,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
   end
 
-  # ─── turn_to_weapon? ────────────────────────────────────────────────
+  # --- turn_to_weapon? ------------------------------------------------
 
   describe '#turn_to_weapon?' do
     let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
@@ -812,7 +812,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
   end
 
-  # ─── stow_by_type ───────────────────────────────────────────────────
+  # --- stow_by_type ---------------------------------------------------
 
   describe '#stow_by_type' do
     let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
@@ -849,7 +849,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
   end
 
-  # ─── empty_hands ────────────────────────────────────────────────────
+  # --- empty_hands ----------------------------------------------------
 
   describe '#empty_hands' do
     let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
@@ -863,7 +863,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
   end
 
-  # ─── get_item? branches ─────────────────────────────────────────────
+  # --- get_item? branches ---------------------------------------------
 
   describe '#get_item?' do
     let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
@@ -881,7 +881,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
                             wield: false, transforms_to: nil, tie_to: nil,
                             worn: false, container: nil, name: 'sword')
       allow(DRCI).to receive(:in_hands?).and_return(false)
-      # get_item_helper(:stowed) is the last resort — stub it to return nil (not found)
+      # get_item_helper(:stowed) is the last resort - stub it to return nil (not found)
       allow(em).to receive(:get_item_helper).and_return(nil)
       expect(Lich::Messaging).to receive(:msg).with('bold', /Could not find sword anywhere/)
       expect(em.get_item?(item)).to be false
@@ -897,7 +897,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
   end
 
-  # ─── get_item_helper post-recovery snapshot check ────────────────────
+  # --- get_item_helper post-recovery snapshot check --------------------
 
   describe '#get_item_helper post-recovery uses snapshot comparison' do
     let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
@@ -956,7 +956,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
   end
 
-  # ─── item_noun_in_hands? ─────────────────────────────────────────────
+  # --- item_noun_in_hands? ---------------------------------------------
 
   describe '#item_noun_in_hands?' do
     let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
@@ -987,7 +987,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
   end
 
-  # ─── get_item_helper XML noun verification (PR #1286 approach) ──────
+  # --- get_item_helper XML noun verification (PR #1286 approach) ------
 
   describe '#get_item_helper XML noun verification' do
     let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
@@ -1114,7 +1114,7 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
   end
 
-  # ─── transform recovery proc verb_data access ───────────────────────
+  # --- transform recovery proc verb_data access -----------------------
 
   describe '#verb_data transform recovery proc' do
     let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
