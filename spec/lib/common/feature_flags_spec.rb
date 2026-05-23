@@ -47,6 +47,13 @@ RSpec.describe Lich::Common::FeatureFlags do
       expect(described_class.enabled?(:demo_flag)).to be(false)
     end
 
+    it 'returns false when the database handle is already closed' do
+      allow(db).to receive(:closed?).and_return(true)
+      expect(db).not_to receive(:get_first_value)
+
+      expect(described_class.enabled?(:demo_flag)).to be(false)
+    end
+
     it 'returns the default value and logs when the read raises an error' do
       stub_const("#{described_class}::DEFAULTS", { demo_flag: true }.freeze)
       allow(db).to receive(:get_first_value).and_raise(StandardError, 'read failed')
@@ -77,6 +84,13 @@ RSpec.describe Lich::Common::FeatureFlags do
 
     it 'returns false when the database handle is unavailable' do
       allow(Lich).to receive(:db).and_return(nil)
+
+      expect(described_class.set(:demo_flag, true)).to be(false)
+    end
+
+    it 'returns false when the database handle is already closed' do
+      allow(db).to receive(:closed?).and_return(true)
+      expect(db).not_to receive(:execute)
 
       expect(described_class.set(:demo_flag, true)).to be(false)
     end
