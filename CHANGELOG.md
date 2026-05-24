@@ -1,5 +1,24 @@
 # Changelog
 
+## [5.17.2](https://github.com/elanthia-online/lich-5/compare/v5.17.1...v5.17.2) (2026-05-24)
+
+
+### Bug Fixes
+
+* **all:** correct RP timing issue for release notes ([#1348](https://github.com/elanthia-online/lich-5/issues/1348)) ([b85f087](https://github.com/elanthia-online/lich-5/commit/b85f0877a95abdb640ea048686fbe8ba19272b90))
+* **all:** gate object cleanup in GTK queue ([#1354](https://github.com/elanthia-online/lich-5/issues/1354)) ([4828aca](https://github.com/elanthia-online/lich-5/commit/4828acab5b2049467b4a266088dfdb2319ef0cb0))
+* **all:** harden custom repo identity, collision, and contract boundaries ([#1333](https://github.com/elanthia-online/lich-5/issues/1333)) ([b3d5daf](https://github.com/elanthia-online/lich-5/commit/b3d5daf3db2ac08d54237673c3ed0e59ba67c32b))
+* **all:** harden FeatureFlags for closed db handle ([#1335](https://github.com/elanthia-online/lich-5/issues/1335)) ([8195b73](https://github.com/elanthia-online/lich-5/commit/8195b737f55d6ca5d6436d591c6b1efe8fad1ee9))
+* **all:** Improve shutdown session state handling ([#1359](https://github.com/elanthia-online/lich-5/issues/1359)) ([db8cf8f](https://github.com/elanthia-online/lich-5/commit/db8cf8f07f8a9fe7949b47b42b04d5eac7c9e9d3))
+* **all:** non-ascii hygeine to address rubocop errors ([#1360](https://github.com/elanthia-online/lich-5/issues/1360)) ([a1dfea8](https://github.com/elanthia-online/lich-5/commit/a1dfea84f1532e6a76eccb2c431f3d7336a566cd))
+* **all:** recover from cross-process zombie in ActiveSessions service ([#1355](https://github.com/elanthia-online/lich-5/issues/1355)) ([17642a5](https://github.com/elanthia-online/lich-5/commit/17642a52396e10dbc97b0a7d6fc022ebcf61db01))
+* **all:** Remove debug log IO from heartbeat tick loop ([#1363](https://github.com/elanthia-online/lich-5/issues/1363)) ([475cefa](https://github.com/elanthia-online/lich-5/commit/475cefaeef3c2b3c97b32d9fab826261f1bb5ddd))
+* **all:** stop SessionLifecycle before closing database on normal exit ([#1334](https://github.com/elanthia-online/lich-5/issues/1334)) ([2f0517f](https://github.com/elanthia-online/lich-5/commit/2f0517f269d642e149faf6b95c69bf3d2b0a4739))
+* **all:** SynchronizedSocket write resilience and zombie client elimination ([#1338](https://github.com/elanthia-online/lich-5/issues/1338)) ([9c38b4d](https://github.com/elanthia-online/lich-5/commit/9c38b4d845c652098745cb99ef8bd4e26f06c1ce))
+* **dr:** DRC text2num correction for thousand ([#1343](https://github.com/elanthia-online/lich-5/issues/1343)) ([ee3528e](https://github.com/elanthia-online/lich-5/commit/ee3528e3a8fb1224795b66d7ba22c95addb49da5))
+* **gs:** Overwatch add REVEALED_EXPLODES regex pattern ([#1356](https://github.com/elanthia-online/lich-5/issues/1356)) ([9a14b70](https://github.com/elanthia-online/lich-5/commit/9a14b7052c2f4ea9d4f58e03e575b9be9537a9b9))
+* **gs:** Stash add_to_bag result type check before regex compare ([#1357](https://github.com/elanthia-online/lich-5/issues/1357)) ([a6c1061](https://github.com/elanthia-online/lich-5/commit/a6c1061167ed97f1ee0a458b0972665ac8940589))
+
 ## [5.17.1](https://github.com/elanthia-online/lich-5/compare/v5.17.0...v5.17.1) (2026-05-07)
 
 
