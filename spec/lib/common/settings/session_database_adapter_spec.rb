@@ -6,6 +6,20 @@ require 'tmpdir'
 
 # Contract spec for the row-oriented session summary adapter.
 # This verifies DB-level behavior independently from higher-level Settings proxies.
+module Lich
+  DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 5000 unless const_defined?(:DEFAULT_SQLITE_BUSY_TIMEOUT_MS)
+
+  def self.sqlite_busy_timeout_ms
+    DEFAULT_SQLITE_BUSY_TIMEOUT_MS
+  end
+
+  def self.open_sqlite_db(path)
+    db = SQLite3::Database.new(path)
+    db.busy_timeout(sqlite_busy_timeout_ms)
+    db
+  end
+end
+
 require_relative '../../../../lib/common/settings/session_database_adapter'
 
 RSpec.describe Lich::Common::SessionDatabaseAdapter do
@@ -20,6 +34,7 @@ RSpec.describe Lich::Common::SessionDatabaseAdapter do
   end
 
   after(:each) do
+    @fallback_db&.close
     sqlite_db.close if sqlite_db
     File.delete(db_path) if File.exist?(db_path)
     Dir.rmdir(tmp_dir) if Dir.exist?(tmp_dir)
@@ -54,6 +69,13 @@ RSpec.describe Lich::Common::SessionDatabaseAdapter do
       expect { described_class.new(db: sqlite_db) }.not_to raise_error
       row = sqlite_db.get_first_row("SELECT name FROM sqlite_master WHERE type='table' AND name='session_summary_state';")
       expect(row['name']).to eq('session_summary_state')
+    end
+
+    it 'opens fallback storage with the core sqlite busy timeout when available' do
+      adapter = described_class.new(data_dir: tmp_dir)
+      @fallback_db = adapter.instance_variable_get(:@db)
+
+      expect(@fallback_db.get_first_value('PRAGMA busy_timeout;')).to eq(Lich.sqlite_busy_timeout_ms)
     end
   end
 
