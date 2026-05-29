@@ -313,16 +313,6 @@ module Lich
       attr_accessor :quiet, :no_echo, :jump_label, :current_label, :want_downstream, :want_downstream_xml, :want_upstream, :want_script_output, :hidden, :paused, :silent, :no_pause_all, :no_kill_all, :downstream_buffer, :upstream_buffer, :unique_buffer, :die_with, :match_stack_labels, :match_stack_strings, :watchfor, :command_line, :ignore_pause, :killed_externally, :kill_source
 
       KILL_METRICS_FEATURE_FLAG = :script_kill_metrics
-      KILL_METRICS_FEATURE_FLAG_RECORD = {
-        :name            => KILL_METRICS_FEATURE_FLAG.to_s,
-        :owner           => 'script_runtime',
-        :intent          => 'Opt-in aggregate diagnostics for non-shutdown Script#kill activity.',
-        :introduced_in   => '5.17.3',
-        :default_state   => false,
-        :default_flip_in => nil,
-        :remove_in       => nil,
-        :status          => :ops_debug
-      }.freeze
 
       class JumpError < StandardError; end
       JUMP = JumpError.exception('JUMP')

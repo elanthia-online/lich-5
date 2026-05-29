@@ -72,9 +72,41 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
         'debug: script kill metrics runtime_stops_last_minute=1 avg_ms=25.00 max_ms=25.00 failures=0'
       )
     end
+
+    it 'records a failed metric when an at_exit proc raises during runtime kill' do
+      first = build_script(name: 'first')
+      second = build_script(name: 'second')
+      first.at_exit { raise 'cleanup failed' }
+      script_class.class_variable_set(:@@running, [first, second])
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(true)
+      allow(Time).to receive(:now).and_return(Time.at(60), Time.at(120))
+      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC).and_return(10.0, 10.025, 20.0, 20.050)
+
+      first.kill
+      second.kill
+
+      expect(Lich).to have_received(:log).with(
+        'debug: script kill metrics runtime_stops_last_minute=1 avg_ms=25.00 max_ms=25.00 failures=1'
+      )
+    end
   end
 
   describe 'internal kill metric helpers' do
+    it 'returns false when feature flags are unavailable' do
+      feature_flags = Lich::Common.send(:remove_const, :FeatureFlags)
+
+      expect(script_class.__send__(:__script_kill_metrics_enabled?)).to be(false)
+    ensure
+      Lich::Common.const_set(:FeatureFlags, feature_flags) if feature_flags
+    end
+
+    it 'returns false and logs when feature flag lookup raises' do
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_raise(StandardError, 'flag read failed')
+
+      expect(script_class.__send__(:__script_kill_metrics_enabled?)).to be(false)
+      expect(Lich).to have_received(:log).with('warning: script kill metrics flag check failed: StandardError: flag read failed')
+    end
+
     it 'counts failed runtime kills in the next aggregate summary' do
       allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(true)
       allow(Time).to receive(:now).and_return(Time.at(60), Time.at(120))
