@@ -121,11 +121,6 @@ module Lich
                   )
                 end
 
-                Lich.log(
-                  "debug: SessionLifecycle heartbeat tick " \
-                  "pid=#{Process.pid} session=#{session_name.inspect} role=#{role.inspect} " \
-                  "tick_epoch=#{Time.now.to_i}"
-                ) if Lich.respond_to?(:log)
                 SessionsSettings.send(:heartbeat_admitted,
                                       pid: Process.pid,
                                       state: 'running',

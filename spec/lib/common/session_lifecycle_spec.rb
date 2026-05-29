@@ -190,6 +190,48 @@ RSpec.describe Lich::Common::SessionLifecycle do
       expect(described_class.stop).to be(true)
     end
 
+    it 'does not emit debug log on heartbeat ticks' do
+      heartbeat_thread = instance_double(Thread)
+      allow(heartbeat_thread).to receive(:join).with(0.5)
+      allow(heartbeat_thread).to receive(:alive?).and_return(false)
+      allow(heartbeat_thread).to receive(:kill)
+
+      captured_block = nil
+      allow(Thread).to receive(:new) do |&blk|
+        captured_block = blk
+        heartbeat_thread
+      end
+
+      allow(described_class).to receive(:resolve_frontend).and_return('stormfront')
+      allow(described_class).to receive(:resolve_game_code).and_return('DR')
+      allow(described_class).to receive(:attempt_register).and_return(true)
+
+      lich_mod = Module.new do
+        def self.log(_msg); end
+
+        def self.respond_to?(method, *args)
+          return true if method == :log
+
+          super
+        end
+      end
+      stub_const('Lich', lich_mod)
+      allow(lich_mod).to receive(:log).and_call_original
+
+      sleep_calls = 0
+      allow(described_class).to receive(:sleep) do |_seconds|
+        sleep_calls += 1
+        described_class.instance_variable_set(:@running, false) if sleep_calls >= 3
+      end
+
+      described_class.start(session_name: 'Tsetem', role: 'session', heartbeat_interval: 1, registration_delay: 0)
+      captured_block.call
+
+      expect(lich_mod).not_to have_received(:log).with(a_string_matching(/debug: SessionLifecycle heartbeat tick/))
+
+      described_class.stop
+    end
+
     it 'resets lifecycle state when thread creation raises' do
       allow(described_class).to receive(:resolve_frontend).and_return('stormfront')
       allow(Thread).to receive(:new).and_raise(StandardError, 'thread create failed')
