@@ -706,9 +706,9 @@ module Lich
                 end
                 unless context == :shutdown
                   if defined?(Gtk)
-                    Gtk.queue { Lich::Util::MemoryReleaser.release }
+                    Gtk.queue { GC.start }
                   else
-                    Lich::Util::MemoryReleaser.release
+                    GC.start
                   end
                 end
               rescue
