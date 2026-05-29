@@ -300,9 +300,29 @@ module Lich
         end
       }
       @@running = Array.new
+      @@kill_metrics_mutex = Mutex.new
+      @@kill_metrics = {
+        :minute            => nil,
+        :runtime_stops     => 0,
+        :duration_total_ms => 0.0,
+        :duration_max_ms   => 0.0,
+        :failures          => 0
+      }
 
       attr_reader :name, :vars, :safe, :file_name, :label_order, :at_exit_procs
       attr_accessor :quiet, :no_echo, :jump_label, :current_label, :want_downstream, :want_downstream_xml, :want_upstream, :want_script_output, :hidden, :paused, :silent, :no_pause_all, :no_kill_all, :downstream_buffer, :upstream_buffer, :unique_buffer, :die_with, :match_stack_labels, :match_stack_strings, :watchfor, :command_line, :ignore_pause, :killed_externally, :kill_source
+
+      KILL_METRICS_FEATURE_FLAG = :script_kill_metrics
+      KILL_METRICS_FEATURE_FLAG_RECORD = {
+        :name            => KILL_METRICS_FEATURE_FLAG.to_s,
+        :owner           => 'script_runtime',
+        :intent          => 'Opt-in aggregate diagnostics for non-shutdown Script#kill activity.',
+        :introduced_in   => '5.17.3',
+        :default_state   => false,
+        :default_flip_in => nil,
+        :remove_in       => nil,
+        :status          => :ops_debug
+      }.freeze
 
       class JumpError < StandardError; end
       JUMP = JumpError.exception('JUMP')
@@ -586,6 +606,90 @@ module Lich
         end
       end
 
+      class << self
+        private
+
+        # Returns whether script-kill aggregate metrics should be collected.
+        #
+        # The feature flag defaults off. Keeping the check behind this helper
+        # gives later runtime-facade work one narrow place to replace the flag
+        # lookup with a cached runtime mode or diagnostics service.
+        #
+        # @return [Boolean]
+        def __script_kill_metrics_enabled?
+          return false unless defined?(Lich::Common::FeatureFlags)
+
+          Lich::Common::FeatureFlags.enabled?(KILL_METRICS_FEATURE_FLAG)
+        rescue StandardError => e
+          Lich.log("warning: script kill metrics flag check failed: #{e.class}: #{e.message}") if defined?(Lich) && Lich.respond_to?(:log)
+          false
+        end
+
+        # Records one non-shutdown script kill and logs the completed previous
+        # minute when the current event rolls into a new minute bucket.
+        #
+        # This intentionally stores process-local, aggregate-only telemetry.
+        # It does not persist script names, emit per-kill logs, or count process
+        # shutdown stops. The goal is low-noise lifecycle diagnostics for
+        # release validation, not user-visible runtime reporting.
+        #
+        # @param duration_ms [Float] elapsed kill processing time in milliseconds
+        # @param failed [Boolean] whether the kill cleanup path raised
+        # @return [void]
+        # @api private
+        def __record_kill_metric(duration_ms:, failed:)
+          current_minute = Time.now.to_i / 60
+          summary = nil
+
+          @@kill_metrics_mutex.synchronize {
+            if @@kill_metrics[:minute] && @@kill_metrics[:minute] != current_minute
+              summary = @@kill_metrics.dup
+              __reset_kill_metrics_bucket
+            end
+
+            @@kill_metrics[:minute] = current_minute
+            @@kill_metrics[:runtime_stops] += 1
+            @@kill_metrics[:duration_total_ms] += duration_ms
+            @@kill_metrics[:duration_max_ms] = [@@kill_metrics[:duration_max_ms], duration_ms].max
+            @@kill_metrics[:failures] += 1 if failed
+          }
+
+          __log_kill_metric_summary(summary) if summary
+        end
+
+        # Clears the current script-kill metric bucket while preserving the
+        # mutex and hash identity used by tests and future runtime adapters.
+        #
+        # @return [void]
+        # @api private
+        def __reset_kill_metrics_bucket
+          @@kill_metrics[:runtime_stops] = 0
+          @@kill_metrics[:duration_total_ms] = 0.0
+          @@kill_metrics[:duration_max_ms] = 0.0
+          @@kill_metrics[:failures] = 0
+        end
+
+        # Emits a compact aggregate summary for a completed minute bucket.
+        #
+        # Callers only reach this method when the kill metrics feature flag is
+        # enabled and a minute rollover has occurred. The message is deliberately
+        # aggregate-only to avoid noisy per-script diagnostics in normal play.
+        #
+        # @param summary [Hash] completed metric bucket
+        # @return [void]
+        # @api private
+        def __log_kill_metric_summary(summary)
+          return unless summary[:runtime_stops].positive?
+
+          avg_ms = summary[:duration_total_ms] / summary[:runtime_stops]
+          Lich.log(
+            "debug: script kill metrics runtime_stops_last_minute=#{summary[:runtime_stops]} " \
+            "avg_ms=#{format('%.2f', avg_ms)} max_ms=#{format('%.2f', summary[:duration_max_ms])} " \
+            "failures=#{summary[:failures]}"
+          )
+        end
+      end
+
       def initialize(args)
         @file_name = args[:file]
         @name = /.*[\/\\]+([^\.]+)\./.match(@file_name).captures.first
@@ -672,10 +776,10 @@ module Lich
 
       # Stops this script and runs its before_dying/at_exit handlers.
       #
-      # Normal runtime kills release reclaimed Ruby/GObject memory back toward
-      # the operating system because the Lich process continues running. During
-      # process shutdown, callers may pass `context: :shutdown` to skip that
-      # expensive release; the OS is about to reclaim the process anyway.
+      # Runtime kills can optionally feed aggregate lifecycle metrics. Shutdown
+      # kills still run normal script cleanup, but are ignored by those metrics
+      # because process exit can stop many scripts for reasons unrelated to
+      # ordinary script churn.
       #
       # @param context [Symbol] :runtime for ordinary script stops, :shutdown
       #   when the owning Lich process is closing
@@ -685,6 +789,9 @@ module Lich
         Thread.new {
           @killer_mutex.synchronize {
             if @@running.include?(self)
+              instrument_kill = (context != :shutdown) && Script.__send__(:__script_kill_metrics_enabled?)
+              started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) if instrument_kill
+              failed = false
               begin
                 @thread_group.list.dup.each { |t|
                   unless t == Thread.current
@@ -704,16 +811,19 @@ module Lich
                     respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} has exited.")
                   end
                 end
-                unless context == :shutdown
-                  if defined?(Gtk)
-                    Gtk.queue { GC.start }
-                  else
-                    GC.start
-                  end
-                end
               rescue
+                failed = true
                 respond "--- Lich: error: #{$!}"
                 Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+              ensure
+                if instrument_kill
+                  finished_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                  Script.__send__(
+                    :__record_kill_metric,
+                    :duration_ms => (finished_at - started_at) * 1000.0,
+                    :failed      => failed
+                  )
+                end
               end
             end
           }
