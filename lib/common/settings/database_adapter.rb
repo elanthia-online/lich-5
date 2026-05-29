@@ -4,7 +4,7 @@ module Lich
     class DatabaseAdapter
       def initialize(data_dir, table_name)
         @file = File.join(data_dir, "lich.db3")
-        @db = Sequel.sqlite(@file)
+        @db = Lich.open_sequel_sqlite(@file)
         @table_name = table_name
         setup!
       end
