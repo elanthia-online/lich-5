@@ -12,7 +12,7 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
   end
 
   after(:context) do
-    %i[Script Scripting TRUSTED_SCRIPT_BINDING].each do |const_name|
+    %i[ExecScript WizardScript Script Scripting TRUSTED_SCRIPT_BINDING].each do |const_name|
       Lich::Common.send(:remove_const, const_name) if Lich::Common.const_defined?(const_name, false)
     end
     $LOADED_FEATURES.delete_if { |path| path.end_with?('/lib/common/script.rb') }
@@ -46,6 +46,19 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
 
       expect(script_class.list).to be_empty
       expect(GC).not_to have_received(:start)
+    end
+
+    it 'falls back to inline cleanup when Ruby cannot allocate a cleanup thread' do
+      script = build_script
+      script_class.class_variable_set(:@@running, [script])
+      allow(Thread).to receive(:new).and_raise(ThreadError, "can't alloc thread")
+
+      expect(script.kill).to eq('metric-target')
+
+      expect(script_class.list).to be_empty
+      expect(Lich).to have_received(:log).with(
+        "warning: Script#kill cleanup thread unavailable for metric-target: ThreadError: can't alloc thread; running cleanup inline"
+      )
     end
 
     it 'uses shutdown context to skip runtime kill metrics' do

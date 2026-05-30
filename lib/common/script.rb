@@ -776,50 +776,84 @@ module Lich
       # @return [String] script name
       def kill(context: :runtime)
         source = @kill_source || caller[0..2]
-        Thread.new {
-          @killer_mutex.synchronize {
-            if @@running.include?(self)
-              instrument_kill = (context != :shutdown) && Script.__send__(:__script_kill_metrics_enabled?)
-              started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) if instrument_kill
-              failed = false
-              begin
-                @thread_group.list.dup.each { |t|
-                  unless t == Thread.current
-                    t.kill rescue nil
-                  end
-                }
-                @thread_group.add(Thread.current)
-                @die_with.each { |script_name| Script.kill(script_name) }
-                @paused = false
-                @at_exit_procs.each { |p| report_errors { p.call } }
-                @die_with = @at_exit_procs = @downstream_buffer = @upstream_buffer = @match_stack_labels = @match_stack_strings = nil
-                @@running.delete(self)
-                unless @quiet
-                  if @killed_externally
-                    respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} was killed. (#{source.first})")
-                  else
-                    respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} has exited.")
-                  end
-                end
-              rescue
-                failed = true
-                respond "--- Lich: error: #{$!}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              ensure
-                if instrument_kill
-                  finished_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-                  Script.__send__(
-                    :__record_kill_metric,
-                    :duration_ms => (finished_at - started_at) * 1000.0,
-                    :failed      => failed
-                  )
-                end
-              end
-            end
-          }
-        }
+
+        begin
+          Thread.new { __run_kill_cleanup(source: source, context: context) }
+        rescue ThreadError => e
+          __log_kill_thread_fallback(e)
+          __run_kill_cleanup(source: source, context: context)
+        end
+
         @name
       end
+
+      # Runs the script cleanup body used by {#kill}.
+      #
+      # The normal lifecycle path runs this body in a separate cleanup thread,
+      # preserving existing return/timing behavior. If Ruby cannot allocate that
+      # thread, {#kill} calls this method inline as a degraded fallback so the
+      # script is still removed from the registry and at-exit handlers still get
+      # a chance to run.
+      #
+      # @param source [Array<String>] caller lines used for external-kill logging
+      # @param context [Symbol] kill context, such as :runtime or :shutdown
+      # @return [void]
+      # @api private
+      def __run_kill_cleanup(source:, context:)
+        @killer_mutex.synchronize {
+          if @@running.include?(self)
+            instrument_kill = (context != :shutdown) && Script.__send__(:__script_kill_metrics_enabled?)
+            started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) if instrument_kill
+            failed = false
+            begin
+              @thread_group.list.dup.each { |t|
+                unless t == Thread.current
+                  t.kill rescue nil
+                end
+              }
+              @thread_group.add(Thread.current)
+              @die_with.each { |script_name| Script.kill(script_name) }
+              @paused = false
+              @at_exit_procs.each { |p| report_errors { p.call } }
+              @die_with = @at_exit_procs = @downstream_buffer = @upstream_buffer = @match_stack_labels = @match_stack_strings = nil
+              @@running.delete(self)
+              unless @quiet
+                if @killed_externally
+                  respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} was killed. (#{source.first})")
+                else
+                  respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} has exited.")
+                end
+              end
+            rescue
+              failed = true
+              respond "--- Lich: error: #{$!}"
+              Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            ensure
+              if instrument_kill
+                finished_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                Script.__send__(
+                  :__record_kill_metric,
+                  :duration_ms => (finished_at - started_at) * 1000.0,
+                  :failed      => failed
+                )
+              end
+            end
+          end
+        }
+      end
+      private :__run_kill_cleanup
+
+      # Logs when {#kill} cannot allocate its normal cleanup thread.
+      #
+      # @param error [ThreadError] allocation failure from `Thread.new`
+      # @return [void]
+      # @api private
+      def __log_kill_thread_fallback(error)
+        return unless defined?(Lich) && Lich.respond_to?(:log)
+
+        Lich.log("warning: Script#kill cleanup thread unavailable for #{@name}: #{error.class}: #{error.message}; running cleanup inline")
+      end
+      private :__log_kill_thread_fallback
 
       def at_exit(&block)
         if block
