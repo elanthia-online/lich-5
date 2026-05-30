@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.17.3](https://github.com/elanthia-online/lich-5/compare/v5.17.2...v5.17.3) (2026-05-30)
+
+
+### Bug Fixes
+
+* **all:** Add sqlite busy timeout policy to core ([#1365](https://github.com/elanthia-online/lich-5/issues/1365)) ([c6bd57c](https://github.com/elanthia-online/lich-5/commit/c6bd57c5a5ae630ef835febdbacf591790d6f843))
+* **all:** reorder shutdown ala MahtraDR and detect script teardown de… ([#1369](https://github.com/elanthia-online/lich-5/issues/1369)) ([5831d98](https://github.com/elanthia-online/lich-5/commit/5831d98fd60f0c1308547152d6ded0fd8ce436ff))
+* **all:** Script module replace MemoryReleaser with GC.start for cleanup ([#1364](https://github.com/elanthia-online/lich-5/issues/1364)) ([9a89d26](https://github.com/elanthia-online/lich-5/commit/9a89d26a2e3a08ce032a251b4b7a2ed1e5274919))
+* **all:** Script#kill remove GC.start and add optional instrumentation ([#1368](https://github.com/elanthia-online/lich-5/issues/1368)) ([0233e4b](https://github.com/elanthia-online/lich-5/commit/0233e4b30c769ffd6978159a6700f6b60dec1c72))
+
 ## [5.17.2](https://github.com/elanthia-online/lich-5/compare/v5.17.1...v5.17.2) (2026-05-24)
 
 
