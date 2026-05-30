@@ -778,10 +778,10 @@ module Lich
         source = @kill_source || caller[0..2]
 
         begin
-          Thread.new { __run_kill_cleanup(source: source, context: context) }
+          Thread.new { __run_kill_cleanup(source: source, context: context, record_metrics: true) }
         rescue ThreadError => e
           __log_kill_thread_fallback(e)
-          __run_kill_cleanup(source: source, context: context)
+          __run_kill_cleanup(source: source, context: context, record_metrics: false)
         end
 
         @name
@@ -795,14 +795,19 @@ module Lich
       # script is still removed from the registry and at-exit handlers still get
       # a chance to run.
       #
+      # Inline fallback cleanup does not record runtime metrics. Thread
+      # allocation failure is usually exit pressure or resource exhaustion, not
+      # ordinary script churn, and should not pollute the runtime stop bucket.
+      #
       # @param source [Array<String>] caller lines used for external-kill logging
       # @param context [Symbol] kill context, such as :runtime or :shutdown
+      # @param record_metrics [Boolean] whether this cleanup can feed runtime metrics
       # @return [void]
       # @api private
-      def __run_kill_cleanup(source:, context:)
+      def __run_kill_cleanup(source:, context:, record_metrics:)
         @killer_mutex.synchronize {
           if @@running.include?(self)
-            instrument_kill = (context != :shutdown) && Script.__send__(:__script_kill_metrics_enabled?)
+            instrument_kill = record_metrics && (context != :shutdown) && Script.__send__(:__script_kill_metrics_enabled?)
             started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) if instrument_kill
             failed = false
             begin

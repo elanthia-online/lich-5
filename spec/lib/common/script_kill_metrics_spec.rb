@@ -52,6 +52,8 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       script = build_script
       script_class.class_variable_set(:@@running, [script])
       allow(Thread).to receive(:new).and_raise(ThreadError, "can't alloc thread")
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(true)
+      expect(script_class).not_to receive(:__record_kill_metric)
 
       expect(script.kill).to eq('metric-target')
 
