@@ -12,6 +12,14 @@ RSpec.describe Lich::Common::ShutdownScriptDrain do
     end.new(name, [])
   end
 
+  def build_failing_script(name)
+    Struct.new(:name) do
+      def kill(context:)
+        raise StandardError, "cannot kill #{name} with #{context}"
+      end
+    end.new(name)
+  end
+
   it 'kills each unique script with shutdown context' do
     script = build_script('fast')
 
@@ -26,6 +34,25 @@ RSpec.describe Lich::Common::ShutdownScriptDrain do
     expect(script.kill_contexts).to eq([:shutdown])
     expect(result.details).to eq(
       'scripts_started=1 slow_script_threshold=1.500s slow_scripts=[] scripts_remaining=0 remaining_scripts=[]'
+    )
+  end
+
+  it 'continues killing scripts when one shutdown kill raises' do
+    failing_script = build_failing_script('broken')
+    later_script = build_script('later')
+    allow(Lich).to receive(:log)
+
+    described_class.run(
+      initial_scripts: [failing_script, later_script],
+      remaining_scripts: proc { [] },
+      slow_threshold: 1.5,
+      clock: proc { 0.0 },
+      sleeper: proc { |_duration| raise 'should not sleep' }
+    )
+
+    expect(later_script.kill_contexts).to eq([:shutdown])
+    expect(Lich).to have_received(:log).with(
+      'warning: shutdown script kill failed for broken: StandardError: cannot kill broken with shutdown'
     )
   end
 

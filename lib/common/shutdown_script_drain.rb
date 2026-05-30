@@ -50,7 +50,7 @@ module Lich
         finished_at_by_script = {}
         remaining = []
 
-        scripts.each { |script| script.kill(context: :shutdown) }
+        scripts.each { |script| kill_script(script) }
 
         drain_attempts.times do
           remaining = remaining_scripts.call.uniq
@@ -79,6 +79,30 @@ module Lich
           remaining_scripts: script_names(remaining)
         )
       end
+
+      # Attempts shutdown kill for a script and logs failures without stopping
+      # the remaining shutdown drain.
+      #
+      # @param script [#kill,#name] script to stop
+      # @return [void]
+      def self.kill_script(script)
+        script.kill(context: :shutdown)
+      rescue StandardError => e
+        log_kill_error(script, e)
+      end
+      private_class_method :kill_script
+
+      # Logs a script shutdown kill failure.
+      #
+      # @param script [Object] script-like object whose kill failed
+      # @param error [StandardError] raised kill error
+      # @return [void]
+      def self.log_kill_error(script, error)
+        return unless defined?(Lich) && Lich.respond_to?(:log)
+
+        Lich.log("warning: shutdown script kill failed for #{script_name(script)}: #{error.class}: #{error.message}")
+      end
+      private_class_method :log_kill_error
 
       # Returns formatted slow-script entries sorted by script name.
       #
