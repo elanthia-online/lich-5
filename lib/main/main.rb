@@ -49,6 +49,7 @@ reconnect_if_wanted = proc {
   # Lifecycle tracker is loaded here because startup context (argv/account)
   # and shutdown sequencing both live in main runtime orchestration.
   require File.join(LIB_DIR, 'common', 'session_lifecycle.rb')
+  require File.join(LIB_DIR, 'common', 'shutdown_script_drain.rb')
 
   if ARGV.include?('--login')
     # CLI login flow: character authentication via saved entries
@@ -803,7 +804,7 @@ reconnect_if_wanted = proc {
       'Lich.db.close' => 0.5
     }
 
-    shutdown_step = proc { |description, &block|
+    shutdown_step = proc { |description, details: nil, &block|
       shutdown_step_index += 1
       step_index = shutdown_step_index
       step_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -820,8 +821,20 @@ reconnect_if_wanted = proc {
         elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - step_started_at
         total = Process.clock_gettime(Process::CLOCK_MONOTONIC) - shutdown_started_at
         threshold = shutdown_step_trace_thresholds.fetch(description, 0.75)
+        detail_text = nil
+
+        if details
+          begin
+            detail_text = details.respond_to?(:call) ? details.call : details
+          rescue StandardError => e
+            shutdown_trace_needed = true
+            detail_text = "shutdown_details_error=#{e.class}: #{e.message}"
+          end
+        end
+
+        trace_details = detail_text.to_s.empty? ? '' : " #{detail_text}"
         shutdown_trace_needed ||= elapsed >= threshold
-        shutdown_trace << "debug: shutdown[#{step_index}] #{description} #{step_failed ? 'failed' : 'finished'} elapsed=#{format('%.3f', elapsed)}s total=#{format('%.3f', total)}s"
+        shutdown_trace << "debug: shutdown[#{step_index}] #{description} #{step_failed ? 'failed' : 'finished'} elapsed=#{format('%.3f', elapsed)}s total=#{format('%.3f', total)}s#{trace_details}"
       end
     }
 
@@ -852,21 +865,27 @@ reconnect_if_wanted = proc {
     shutdown_step.call('ActiveSessions connection update') do
       Lich::InternalAPI::ActiveSessions::Lifecycle.update_connected(false) if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
     end
-    shutdown_step.call('client_thread.kill') { client_thread.kill }
-    shutdown_step.call('detachable_client_thread.kill') { detachable_client_thread.kill if detachable_client_thread }
 
-    shutdown_step.call('script shutdown') do
+    script_shutdown_result = nil
+    shutdown_step.call('script shutdown', details: proc { script_shutdown_result&.details }) do
       Lich.log 'info: stopping scripts...'
       # Shutdown context preserves before_dying/at_exit handlers while skipping
       # MemoryReleaser work; process exit will reclaim memory.
-      Script.running.each { |script| script.kill(context: :shutdown) }
-      Script.hidden.each { |script| script.kill(context: :shutdown) }
-      200.times { sleep 0.1; break if Script.running.empty? and Script.hidden.empty? }
+      # Individual script names are reported at 2x the step threshold so normal
+      # teardown stays quiet while slow exits remain visible.
+      script_shutdown_slow_threshold = shutdown_step_trace_thresholds.fetch('script shutdown', 0.75) * 2
+      script_shutdown_result = Lich::Common::ShutdownScriptDrain.run(
+        initial_scripts: (Script.running + Script.hidden),
+        remaining_scripts: proc { Script.running + Script.hidden },
+        slow_threshold: script_shutdown_slow_threshold
+      )
     end
     Lich.log 'info: saving script settings...'
     shutdown_step.call('Vars.save') { Vars.save }
     Lich.log 'info: closing connections...'
     shutdown_step.call('Game.close') { Game.close }
+    shutdown_step.call('client_thread.kill') { client_thread.kill }
+    shutdown_step.call('detachable_client_thread.kill') { detachable_client_thread.kill if detachable_client_thread }
     shutdown_step.call('$_CLIENT_.close') { $_CLIENT_&.close }
     shutdown_step.call('Lich.db.close') { Lich.db.close }
     Lich.log 'info: unregistering session...'
