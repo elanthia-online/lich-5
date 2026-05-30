@@ -827,6 +827,7 @@ reconnect_if_wanted = proc {
           begin
             detail_text = details.respond_to?(:call) ? details.call : details
           rescue StandardError => e
+            shutdown_trace_needed = true
             detail_text = "shutdown_details_error=#{e.class}: #{e.message}"
           end
         end
@@ -870,10 +871,13 @@ reconnect_if_wanted = proc {
       Lich.log 'info: stopping scripts...'
       # Shutdown context preserves before_dying/at_exit handlers while skipping
       # MemoryReleaser work; process exit will reclaim memory.
+      # Individual script names are reported at 2x the step threshold so normal
+      # teardown stays quiet while slow exits remain visible.
+      script_shutdown_slow_threshold = shutdown_step_trace_thresholds.fetch('script shutdown', 0.75) * 2
       script_shutdown_result = Lich::Common::ShutdownScriptDrain.run(
         initial_scripts: (Script.running + Script.hidden),
         remaining_scripts: proc { Script.running + Script.hidden },
-        slow_threshold: shutdown_step_trace_thresholds.fetch('script shutdown', 0.75) * 2
+        slow_threshold: script_shutdown_slow_threshold
       )
     end
     Lich.log 'info: saving script settings...'

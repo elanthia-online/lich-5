@@ -18,6 +18,9 @@ module Lich
         :remaining_scripts,
         keyword_init: true
       ) do
+        # Formats the shutdown drain result for the existing shutdown trace log.
+        #
+        # @return [String]
         def details
           "scripts_started=#{scripts_started} " \
             "slow_script_threshold=#{format('%.3f', slow_script_threshold)}s " \
@@ -77,6 +80,14 @@ module Lich
         )
       end
 
+      # Returns formatted slow-script entries sorted by script name.
+      #
+      # @param scripts [Array<#name>] scripts observed during shutdown
+      # @param finished_at_by_script [Hash{Object=>Float}] observed completion times
+      # @param started_at [Float] drain start time
+      # @param finished_at [Float] final drain time
+      # @param slow_threshold [Float] minimum elapsed seconds for reporting
+      # @return [Array<String>]
       def self.slow_script_names(scripts, finished_at_by_script, started_at, finished_at, slow_threshold)
         scripts.filter_map do |script|
           elapsed = (finished_at_by_script[script] || finished_at) - started_at
@@ -87,11 +98,19 @@ module Lich
       end
       private_class_method :slow_script_names
 
+      # Returns sorted display names for scripts still registered after drain.
+      #
+      # @param scripts [Array<#name>] remaining script objects
+      # @return [Array<String>]
       def self.script_names(scripts)
         scripts.map { |script| script_name(script) }.sort
       end
       private_class_method :script_names
 
+      # Returns a stable display name for a script-like object.
+      #
+      # @param script [Object]
+      # @return [String]
       def self.script_name(script)
         script.respond_to?(:name) ? script.name.to_s : script.to_s
       end
