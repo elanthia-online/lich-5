@@ -2,7 +2,10 @@
 # this needs work to break up and improve 2024-06-13
 
 reconnect_if_wanted = proc {
-  if ARGV.include?('--reconnect') and ARGV.include?('--login') and not $_CLIENTBUFFER_.any? { |cmd| cmd =~ /^(?:\[.*?\])?(?:<c>)?(?:quit|exit)/i }
+  explicit_shutdown = Lich::Common::ShutdownCoordinator.orderly_user_exit?
+  explicit_exit_buffered = $_CLIENTBUFFER_.any? { |cmd| cmd =~ /^(?:\[.*?\])?(?:<c>)?(?:quit|exit)/i }
+
+  if ARGV.include?('--reconnect') and ARGV.include?('--login') and not explicit_shutdown and not explicit_exit_buffered
     if (reconnect_arg = ARGV.find { |arg| arg =~ /^\-\-reconnect\-delay=[0-9]+(?:\+[0-9]+)?$/ })
       reconnect_arg =~ /^\-\-reconnect\-delay=([0-9]+)(\+[0-9]+)?/
       reconnect_delay = $1.to_i
@@ -49,6 +52,8 @@ reconnect_if_wanted = proc {
   # Lifecycle tracker is loaded here because startup context (argv/account)
   # and shutdown sequencing both live in main runtime orchestration.
   require File.join(LIB_DIR, 'common', 'session_lifecycle.rb')
+  require File.join(LIB_DIR, 'common', 'shutdown_coordinator.rb')
+  require File.join(LIB_DIR, 'common', 'shutdown_intent.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_script_drain.rb')
 
   if ARGV.include?('--login')
@@ -588,6 +593,9 @@ reconnect_if_wanted = proc {
           elsif Frontend.client.eql?('frostbite')
             client_string = fb_to_sf(client_string)
           end
+          if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
+            Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
+          end
           # Lich.log(client_string)
           begin
             $_IDLETIMESTAMP_ = Time.now
@@ -606,6 +614,7 @@ reconnect_if_wanted = proc {
       ensure
         Frontend.cleanup_session_file
       end
+      Lich::Common::ShutdownCoordinator.request(reason: :client_disconnect, source: :primary_frontend)
       Game.close
     }
   end
@@ -734,6 +743,9 @@ reconnect_if_wanted = proc {
                 next # swallow the control line; don't pass it to do_client
               end
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
+              if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
+                Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :detachable_frontend)
+              end
               begin
                 $_IDLETIMESTAMP_ = Time.now
                 do_client(client_string)
