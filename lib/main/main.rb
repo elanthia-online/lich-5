@@ -52,9 +52,22 @@ reconnect_if_wanted = proc {
   # Lifecycle tracker is loaded here because startup context (argv/account)
   # and shutdown sequencing both live in main runtime orchestration.
   require File.join(LIB_DIR, 'common', 'session_lifecycle.rb')
+  require File.join(LIB_DIR, 'common', 'orderly_shutdown.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_coordinator.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_intent.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_script_drain.rb')
+
+  run_orderly_user_shutdown = proc {
+    Lich::Common::OrderlyShutdown.run(
+      coordinator: Lich::Common::ShutdownCoordinator,
+      initial_scripts: (Script.running + Script.hidden),
+      remaining_scripts: proc { Script.running + Script.hidden },
+      script_drain: Lich::Common::ShutdownScriptDrain,
+      vars: Vars,
+      game: Game,
+      active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
+    )
+  }
 
   if ARGV.include?('--login')
     # CLI login flow: character authentication via saved entries
@@ -595,6 +608,8 @@ reconnect_if_wanted = proc {
           end
           if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
             Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
+            run_orderly_user_shutdown.call
+            break
           end
           # Lich.log(client_string)
           begin
@@ -745,6 +760,8 @@ reconnect_if_wanted = proc {
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
               if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
                 Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :detachable_frontend)
+                run_orderly_user_shutdown.call
+                break
               end
               begin
                 $_IDLETIMESTAMP_ = Time.now
@@ -772,6 +789,8 @@ reconnect_if_wanted = proc {
             Lich.log "info: detachable client cleaned up, ready for new connection"
           end
         end
+        break if Lich::Common::ShutdownCoordinator.orderly_user_exit?
+
         sleep 0.1
       }
     }
@@ -878,22 +897,30 @@ reconnect_if_wanted = proc {
       Lich::InternalAPI::ActiveSessions::Lifecycle.update_connected(false) if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
     end
 
-    script_shutdown_result = nil
-    shutdown_step.call('script shutdown', details: proc { script_shutdown_result&.details }) do
-      Lich.log 'info: stopping scripts...'
-      # Shutdown context preserves before_dying/at_exit handlers while skipping
-      # MemoryReleaser work; process exit will reclaim memory.
-      # Individual script names are reported at 2x the step threshold so normal
-      # teardown stays quiet while slow exits remain visible.
-      script_shutdown_slow_threshold = shutdown_step_trace_thresholds.fetch('script shutdown', 0.75) * 2
-      script_shutdown_result = Lich::Common::ShutdownScriptDrain.run(
-        initial_scripts: (Script.running + Script.hidden),
-        remaining_scripts: proc { Script.running + Script.hidden },
-        slow_threshold: script_shutdown_slow_threshold
-      )
+    if Lich::Common::ShutdownCoordinator.orderly_scripts_drained?
+      Lich.log 'info: script shutdown already completed before closing game connection...'
+    else
+      script_shutdown_result = nil
+      shutdown_step.call('script shutdown', details: proc { script_shutdown_result&.details }) do
+        Lich.log 'info: stopping scripts...'
+        # Shutdown context preserves before_dying/at_exit handlers while skipping
+        # MemoryReleaser work; process exit will reclaim memory.
+        # Individual script names are reported at 2x the step threshold so normal
+        # teardown stays quiet while slow exits remain visible.
+        script_shutdown_slow_threshold = shutdown_step_trace_thresholds.fetch('script shutdown', 0.75) * 2
+        script_shutdown_result = Lich::Common::ShutdownScriptDrain.run(
+          initial_scripts: (Script.running + Script.hidden),
+          remaining_scripts: proc { Script.running + Script.hidden },
+          slow_threshold: script_shutdown_slow_threshold
+        )
+      end
     end
-    Lich.log 'info: saving script settings...'
-    shutdown_step.call('Vars.save') { Vars.save }
+    if Lich::Common::ShutdownCoordinator.orderly_vars_saved?
+      Lich.log 'info: script settings already saved before closing game connection...'
+    else
+      Lich.log 'info: saving script settings...'
+      shutdown_step.call('Vars.save') { Vars.save }
+    end
     Lich.log 'info: closing connections...'
     shutdown_step.call('Game.close') { Game.close }
     shutdown_step.call('client_thread.kill') { client_thread.kill }

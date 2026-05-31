@@ -395,9 +395,13 @@ module Lich
                 end
               end
             rescue StandardError => e
+              if intentional_shutdown_close_error?(e)
+                Lich.log "info: server thread exiting after orderly user shutdown"
+                next
+              end
+
               # Handle any other errors
               should_continue = handle_thread_error(e)
-
               # Only retry if handle_thread_error says it's safe and socket is still open
               if should_continue && !@socket.closed? && $_CLIENT_.alive?
                 Lich.log "Retrying server thread after error..."
@@ -684,6 +688,14 @@ module Lich
           Lich::Common::ShutdownCoordinator.request(reason: reason, source: source, detail: detail)
         rescue StandardError => e
           Lich.log "warning: failed to record shutdown reason #{reason.inspect}: #{e.class}: #{e.message}"
+        end
+
+        def intentional_shutdown_close_error?(error)
+          return false unless defined?(Lich::Common::ShutdownCoordinator)
+          return false unless Lich::Common::ShutdownCoordinator.orderly_user_exit?
+          return false unless @socket&.closed?
+
+          error.to_s =~ /stream closed in another thread|closed stream/i
         end
 
         protected

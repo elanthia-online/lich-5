@@ -64,4 +64,45 @@ RSpec.describe Lich::Common::ShutdownCoordinator do
       described_class.request(reason: :game_eof, source: '')
     }.to raise_error(ArgumentError, 'shutdown source must be present')
   end
+
+  describe '.begin_orderly_shutdown' do
+    def result(scripts_drained: true, vars_saved: true, completed: true)
+      Struct.new(:completed, :scripts_drained, :vars_saved, keyword_init: true) do
+        def completed?
+          completed
+        end
+
+        def scripts_drained?
+          scripts_drained
+        end
+
+        def vars_saved?
+          vars_saved
+        end
+      end.new(completed: completed, scripts_drained: scripts_drained, vars_saved: vars_saved)
+    end
+
+    it 'stores the first orderly shutdown result and exposes progress predicates' do
+      stored = described_class.begin_orderly_shutdown(result(scripts_drained: true, vars_saved: false, completed: false))
+
+      expect(described_class.orderly_shutdown_result).to equal(stored)
+      expect(described_class).not_to be_orderly_shutdown_completed
+      expect(described_class).to be_orderly_scripts_drained
+      expect(described_class).not_to be_orderly_vars_saved
+    end
+
+    it 'keeps the first orderly shutdown result' do
+      first = described_class.begin_orderly_shutdown(result)
+      second = described_class.begin_orderly_shutdown(result(completed: false))
+
+      expect(second).to equal(first)
+      expect(described_class.orderly_shutdown_result).to equal(first)
+    end
+
+    it 'rejects invalid orderly shutdown results' do
+      expect {
+        described_class.begin_orderly_shutdown(Object.new)
+      }.to raise_error(ArgumentError, 'orderly shutdown result must respond to #completed?')
+    end
+  end
 end
