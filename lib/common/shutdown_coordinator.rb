@@ -16,6 +16,7 @@ module Lich
         :connection_reset,
         :connection_pipe,
         :connection_aborted,
+        :game_stream_desync,
         :unrecoverable_game_thread_error,
       ].freeze
 
@@ -26,6 +27,7 @@ module Lich
         :connection_reset,
         :connection_pipe,
         :connection_aborted,
+        :game_stream_desync,
         :unrecoverable_game_thread_error,
       ].freeze
 

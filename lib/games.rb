@@ -195,6 +195,10 @@ module Lich
       end
     end
 
+    # Raised when the game XML stream is structurally desynchronized beyond
+    # the parser's known repair rules.
+    class GameStreamDesyncError < StandardError; end
+
     # Base Game class with common functionality
     class Game
       class << self
@@ -365,6 +369,8 @@ module Lich
 
                   begin
                     process_server_string(server_string)
+                  rescue GameStreamDesyncError
+                    raise
                   rescue StandardError => e
                     log_error("Error processing server string", e)
                   end
@@ -409,8 +415,9 @@ module Lich
                 sleep 1 # Brief pause before retry
                 retry
               else
-                record_shutdown_reason(shutdown_reason_for_thread_exit(e), source: :game_reader, detail: e.class)
-                Lich.log "Server thread exiting due to unrecoverable error"
+                reason = shutdown_reason_for_thread_exit(e)
+                record_shutdown_reason(reason, source: :game_reader, detail: e.class)
+                Lich.log "Server thread exiting due to #{reason}"
               end
             end
           end
@@ -585,6 +592,12 @@ module Lich
               return process_xml_data(server_string) # Return to retry with fixed string
             end
 
+            if stream_desync_xml_error?(error)
+              XMLData.reset
+              Lich.log "Invalid XML stream desync detected; discarding fragment bytes=#{server_string.bytesize} error=#{error.class}: #{error.message.lines.first&.strip}"
+              raise GameStreamDesyncError, error.message
+            end
+
             Lich.log "Invalid XML detected - please report this: #{server_string.inspect}"
             Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
           end
@@ -639,7 +652,11 @@ module Lich
         end
 
         def handle_thread_error(error)
-          Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
+          if recognized_connection_disruption?(error)
+            Lich.log "info: server_thread: #{error.class}: #{error.message}"
+          else
+            Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
+          end
           sleep 0.2
 
           # Determine if we should retry
@@ -651,6 +668,9 @@ module Lich
           when Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED
             # Connection errors are fatal
             Lich.log "Fatal connection error - will not retry"
+            return false
+          when GameStreamDesyncError
+            Lich.log "Game stream desync detected - will not retry"
             return false
           else
             # Check if socket/client are closed or if it's a known fatal error
@@ -677,6 +697,8 @@ module Lich
             :connection_pipe
           when Errno::ECONNABORTED
             :connection_aborted
+          when GameStreamDesyncError
+            :game_stream_desync
           else
             :unrecoverable_game_thread_error
           end
@@ -696,6 +718,23 @@ module Lich
           return false unless @socket&.closed?
 
           error.to_s =~ /stream closed in another thread|closed stream/i
+        end
+
+        def recognized_connection_disruption?(error)
+          error.is_a?(Errno::ETIMEDOUT) ||
+            error.is_a?(Errno::EWOULDBLOCK) ||
+            error.is_a?(IO::TimeoutError) ||
+            error.is_a?(Errno::ECONNRESET) ||
+            error.is_a?(Errno::EPIPE) ||
+            error.is_a?(Errno::ECONNABORTED) ||
+            error.is_a?(GameStreamDesyncError)
+        end
+
+        def stream_desync_xml_error?(error)
+          message = error.to_s
+
+          message.match?(/Missing end tag for '[^']+' \(got 'root'\)/) ||
+            message.include?('Last 80 unconsumed characters')
         end
 
         protected

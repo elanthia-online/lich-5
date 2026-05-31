@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative '../spec_helper'
+require 'rexml/document'
+require 'rexml/streamlistener'
 require 'timeout'
 
 # Load production code
@@ -60,6 +62,40 @@ RSpec.describe Lich::GameBase do
       input = +"</component>\r\n"
       output = Lich::GameBase::XMLCleaner.fix_xml_tags(input)
       expect(output).to eq("")
+    end
+  end
+
+  describe Lich::GameBase::Game do
+    before do
+      allow(Lich).to receive(:log)
+      allow(XMLData).to receive(:tag_start)
+      allow(XMLData).to receive(:tag_end)
+      allow(XMLData).to receive(:text)
+    end
+
+    it 'raises stream desync for structurally incomplete XML beyond known repairs' do
+      bad_xml = +"<compDef id='room desc'>Following <component id='room objs'>orc</component>\r\n"
+
+      expect {
+        described_class.process_xml_data(bad_xml)
+      }.to raise_error(Lich::GameBase::GameStreamDesyncError)
+
+      expect(Lich).to have_received(:log).with(/Invalid XML stream desync detected/)
+    end
+
+    it 'maps stream desync errors to shutdown reason' do
+      error = Lich::GameBase::GameStreamDesyncError.new('Missing end tag')
+
+      expect(described_class.shutdown_reason_for_thread_exit(error)).to eq(:game_stream_desync)
+    end
+
+    it 'handles connection reset as a recognized fatal disruption without a backtrace log' do
+      error = Errno::ECONNRESET.new
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log).with(/info: server_thread: Errno::ECONNRESET:/)
+      expect(Lich).to have_received(:log).with('Fatal connection error - will not retry')
+      expect(Lich).not_to have_received(:log).with(/error: server_thread:.*\n\t/m)
     end
   end
 end

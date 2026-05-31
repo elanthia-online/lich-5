@@ -45,6 +45,13 @@ RSpec.describe Lich::Common::ShutdownCoordinator do
     expect(described_class).not_to be_orderly_user_exit
   end
 
+  it 'classifies game stream desync as connection loss' do
+    described_class.request(reason: :game_stream_desync, source: :game_reader)
+
+    expect(described_class).to be_connection_loss
+    expect(described_class).not_to be_orderly_user_exit
+  end
+
   it 'logs the first shutdown request with reason and source' do
     described_class.request(reason: :game_timeout, source: :game_reader, detail: Errno::ETIMEDOUT)
 
