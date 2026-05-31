@@ -95,9 +95,27 @@ module Lich
           end
         end
 
+        # Stores the in-progress or completed best-effort cleanup result once.
+        #
+        # @param result [#completed?] result object produced by a cleanup runner
+        # @return [Object] stored result; may be a previously stored result
+        # @raise [ArgumentError] when result is nil or missing expected predicates
+        def begin_best_effort_cleanup(result)
+          validate_cleanup_result!(result)
+
+          mutex.synchronize do
+            @best_effort_cleanup_result ||= result
+          end
+        end
+
         # @return [Object, nil] orderly-shutdown result if a user-exit runner started
         def orderly_shutdown_result
           mutex.synchronize { @orderly_shutdown_result }
+        end
+
+        # @return [Object, nil] best-effort cleanup result if cleanup started
+        def best_effort_cleanup_result
+          mutex.synchronize { @best_effort_cleanup_result }
         end
 
         # @return [Boolean] whether the orderly-shutdown runner completed all steps
@@ -105,14 +123,19 @@ module Lich
           orderly_shutdown_result&.completed?
         end
 
+        # @return [Boolean] whether best-effort cleanup completed all local steps
+        def best_effort_cleanup_completed?
+          best_effort_cleanup_result&.completed?
+        end
+
         # @return [Boolean] whether orderly shutdown fully drained scripts
-        def orderly_scripts_drained?
-          orderly_shutdown_result&.scripts_drained?
+        def scripts_drained?
+          orderly_shutdown_result&.scripts_drained? || best_effort_cleanup_result&.scripts_drained?
         end
 
         # @return [Boolean] whether orderly shutdown saved script settings
-        def orderly_vars_saved?
-          orderly_shutdown_result&.vars_saved?
+        def vars_saved?
+          orderly_shutdown_result&.vars_saved? || best_effort_cleanup_result&.vars_saved?
         end
 
         # Clears coordinator state for tests and process reinitialization.
@@ -122,6 +145,7 @@ module Lich
           mutex.synchronize do
             @request = nil
             @orderly_shutdown_result = nil
+            @best_effort_cleanup_result = nil
           end
         end
 
@@ -148,6 +172,13 @@ module Lich
           raise ArgumentError, "orderly shutdown result must respond to #completed?" unless result.respond_to?(:completed?)
           raise ArgumentError, "orderly shutdown result must respond to #scripts_drained?" unless result.respond_to?(:scripts_drained?)
           raise ArgumentError, "orderly shutdown result must respond to #vars_saved?" unless result.respond_to?(:vars_saved?)
+        end
+
+        def validate_cleanup_result!(result)
+          raise ArgumentError, "best-effort cleanup result must be present" if result.nil?
+          raise ArgumentError, "best-effort cleanup result must respond to #completed?" unless result.respond_to?(:completed?)
+          raise ArgumentError, "best-effort cleanup result must respond to #scripts_drained?" unless result.respond_to?(:scripts_drained?)
+          raise ArgumentError, "best-effort cleanup result must respond to #vars_saved?" unless result.respond_to?(:vars_saved?)
         end
 
         def log_request(shutdown_request)

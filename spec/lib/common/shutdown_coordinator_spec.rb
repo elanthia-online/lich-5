@@ -87,8 +87,8 @@ RSpec.describe Lich::Common::ShutdownCoordinator do
 
       expect(described_class.orderly_shutdown_result).to equal(stored)
       expect(described_class).not_to be_orderly_shutdown_completed
-      expect(described_class).to be_orderly_scripts_drained
-      expect(described_class).not_to be_orderly_vars_saved
+      expect(described_class).to be_scripts_drained
+      expect(described_class).not_to be_vars_saved
     end
 
     it 'keeps the first orderly shutdown result' do
@@ -103,6 +103,47 @@ RSpec.describe Lich::Common::ShutdownCoordinator do
       expect {
         described_class.begin_orderly_shutdown(Object.new)
       }.to raise_error(ArgumentError, 'orderly shutdown result must respond to #completed?')
+    end
+  end
+
+  describe '.begin_best_effort_cleanup' do
+    def result(scripts_drained: true, vars_saved: true, completed: true)
+      Struct.new(:completed, :scripts_drained, :vars_saved, keyword_init: true) do
+        def completed?
+          completed
+        end
+
+        def scripts_drained?
+          scripts_drained
+        end
+
+        def vars_saved?
+          vars_saved
+        end
+      end.new(completed: completed, scripts_drained: scripts_drained, vars_saved: vars_saved)
+    end
+
+    it 'stores the first best-effort cleanup result and exposes progress predicates' do
+      stored = described_class.begin_best_effort_cleanup(result(scripts_drained: false, vars_saved: true, completed: false))
+
+      expect(described_class.best_effort_cleanup_result).to equal(stored)
+      expect(described_class).not_to be_best_effort_cleanup_completed
+      expect(described_class).not_to be_scripts_drained
+      expect(described_class).to be_vars_saved
+    end
+
+    it 'keeps the first best-effort cleanup result' do
+      first = described_class.begin_best_effort_cleanup(result)
+      second = described_class.begin_best_effort_cleanup(result(completed: false))
+
+      expect(second).to equal(first)
+      expect(described_class.best_effort_cleanup_result).to equal(first)
+    end
+
+    it 'rejects invalid best-effort cleanup results' do
+      expect {
+        described_class.begin_best_effort_cleanup(Object.new)
+      }.to raise_error(ArgumentError, 'best-effort cleanup result must respond to #completed?')
     end
   end
 end

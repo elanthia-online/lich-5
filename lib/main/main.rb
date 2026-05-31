@@ -51,6 +51,7 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'account.rb')
   # Lifecycle tracker is loaded here because startup context (argv/account)
   # and shutdown sequencing both live in main runtime orchestration.
+  require File.join(LIB_DIR, 'common', 'best_effort_shutdown_cleanup.rb')
   require File.join(LIB_DIR, 'common', 'session_lifecycle.rb')
   require File.join(LIB_DIR, 'common', 'orderly_shutdown.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_coordinator.rb')
@@ -65,6 +66,17 @@ reconnect_if_wanted = proc {
       script_drain: Lich::Common::ShutdownScriptDrain,
       vars: Vars,
       game: Game,
+      active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
+    )
+  }
+
+  run_best_effort_shutdown_cleanup = proc {
+    Lich::Common::BestEffortShutdownCleanup.run(
+      coordinator: Lich::Common::ShutdownCoordinator,
+      initial_scripts: (Script.running + Script.hidden),
+      remaining_scripts: proc { Script.running + Script.hidden },
+      script_drain: Lich::Common::ShutdownScriptDrain,
+      vars: Vars,
       active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
     )
   }
@@ -897,7 +909,11 @@ reconnect_if_wanted = proc {
       Lich::InternalAPI::ActiveSessions::Lifecycle.update_connected(false) if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
     end
 
-    if Lich::Common::ShutdownCoordinator.orderly_scripts_drained?
+    unless Lich::Common::ShutdownCoordinator.scripts_drained? && Lich::Common::ShutdownCoordinator.vars_saved?
+      run_best_effort_shutdown_cleanup.call
+    end
+
+    if Lich::Common::ShutdownCoordinator.scripts_drained?
       Lich.log 'info: script shutdown already completed before closing game connection...'
     else
       script_shutdown_result = nil
@@ -915,7 +931,7 @@ reconnect_if_wanted = proc {
         )
       end
     end
-    if Lich::Common::ShutdownCoordinator.orderly_vars_saved?
+    if Lich::Common::ShutdownCoordinator.vars_saved?
       Lich.log 'info: script settings already saved before closing game connection...'
     else
       Lich.log 'info: saving script settings...'
