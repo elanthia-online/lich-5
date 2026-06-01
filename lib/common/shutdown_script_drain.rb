@@ -9,9 +9,13 @@ module Lich
     # This helper keeps the shutdown orchestration in `main.rb` readable while
     # making the slow-script accounting independently testable.
     module ShutdownScriptDrain
+      # Maximum number of polling attempts while waiting for scripts to exit.
       DEFAULT_DRAIN_ATTEMPTS = 200
+
+      # Seconds slept between drain polling attempts.
       DEFAULT_DRAIN_INTERVAL = 0.1
 
+      # Script shutdown drain metrics and remaining-script detail.
       Result = Struct.new(
         :scripts_started,
         :slow_script_threshold,
