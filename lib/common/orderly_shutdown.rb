@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'shutdown_log'
+
 module Lich
   module Common
     # Runs the explicit user-requested shutdown sequence while game I/O is alive.
@@ -77,7 +79,7 @@ module Lich
           stored_result = coordinator.begin_orderly_shutdown(result)
           return stored_result unless stored_result.equal?(result)
 
-          log("info: orderly user shutdown starting")
+          log_info("orderly user shutdown starting")
           update_active_sessions(result, active_sessions_lifecycle)
           drain_scripts(result, initial_scripts, remaining_scripts, script_drain, slow_threshold)
           save_vars(result, vars)
@@ -106,7 +108,7 @@ module Lich
 
         def drain_scripts(result, initial_scripts, remaining_scripts, script_drain, slow_threshold)
           run_step(result, "script shutdown") do
-            log("info: stopping scripts before closing game connection...")
+            log_info("stopping scripts before closing game connection...")
             result.script_shutdown_result = script_drain.run(
               initial_scripts: initial_scripts,
               remaining_scripts: remaining_scripts,
@@ -119,7 +121,7 @@ module Lich
 
         def save_vars(result, vars)
           run_step(result, "Vars.save") do
-            log("info: saving script settings before closing game connection...")
+            log_info("saving script settings before closing game connection...")
             vars.save
             result.vars_saved = true
           end
@@ -127,7 +129,7 @@ module Lich
 
         def close_game(result, game)
           run_step(result, "Game.close") do
-            log("info: closing game connection after orderly user shutdown...")
+            log_info("closing game connection after orderly user shutdown...")
             game.close
             result.game_closed = true
           end
@@ -135,7 +137,7 @@ module Lich
 
         def finish(result)
           result.completed = !result.failed? && result.scripts_drained? && result.vars_saved? && result.game_closed?
-          log("info: orderly user shutdown #{result.completed? ? 'finished' : 'finished with warnings'}")
+          log_info("orderly user shutdown #{result.completed? ? 'finished' : 'finished with warnings'}")
           result
         end
 
@@ -143,7 +145,7 @@ module Lich
           yield
         rescue StandardError => e
           result.failures << "#{description}: #{e.class}: #{e.message}"
-          log("warning: #{description} failed during orderly user shutdown: #{e.class}: #{e.message}")
+          log_warning("#{description} failed during orderly user shutdown: #{e.class}: #{e.message}")
         end
 
         def script_drain_complete?(script_shutdown_result)
@@ -160,14 +162,19 @@ module Lich
           return if slow_scripts.empty? && scripts_remaining.zero?
 
           details = script_shutdown_result.respond_to?(:details) ? script_shutdown_result.details : script_shutdown_result.inspect
-          level = scripts_remaining.positive? ? "warning" : "info"
-          log("#{level}: orderly user shutdown script drain #{details}")
+          if scripts_remaining.positive?
+            log_warning("orderly user shutdown script drain #{details}")
+          else
+            log_info("orderly user shutdown script drain #{details}")
+          end
         end
 
-        def log(message)
-          return unless defined?(Lich) && Lich.respond_to?(:log)
+        def log_info(message)
+          ShutdownLog.info(message)
+        end
 
-          Lich.log(message)
+        def log_warning(message)
+          ShutdownLog.warning(message)
         end
       end
     end

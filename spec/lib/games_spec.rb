@@ -82,7 +82,7 @@ RSpec.describe Lich::GameBase do
         described_class.process_xml_data(bad_xml)
       }.to raise_error(Lich::GameBase::GameStreamDesyncError)
 
-      expect(Lich).to have_received(:log).with(/Invalid XML stream desync detected/)
+      expect(Lich).to have_received(:log).with(/warning: invalid XML stream desync detected/)
     end
 
     it 'maps stream desync errors to shutdown reason' do
@@ -124,11 +124,22 @@ RSpec.describe Lich::GameBase do
 
     it 'handles connection reset as a recognized fatal disruption without a backtrace log' do
       error = Errno::ECONNRESET.new
+      error.set_backtrace(['games.rb:1'])
 
       expect(described_class.handle_thread_error(error)).to be(false)
       expect(Lich).to have_received(:log).with(/info: server_thread: Errno::ECONNRESET:/)
-      expect(Lich).to have_received(:log).with('Fatal connection error - will not retry')
+      expect(Lich).to have_received(:log).with('info: connection error - will not retry')
       expect(Lich).not_to have_received(:log).with(/error: server_thread:.*\n\t/m)
+      expect(Lich).not_to have_received(:log).with(/debug: server_thread backtrace:/)
+    end
+
+    it 'logs recognized disruption backtraces only when shutdown diagnostics are enabled' do
+      error = Errno::ECONNRESET.new
+      error.set_backtrace(['games.rb:1'])
+      allow(ARGV).to receive(:include?).with('--debug').and_return(true)
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log).with("debug: server_thread backtrace: games.rb:1")
     end
 
     it 'handles repeated timeout as a recognized fatal disruption after threshold' do
@@ -150,7 +161,7 @@ RSpec.describe Lich::GameBase do
 
       expect(described_class.handle_thread_error(error)).to be(false)
       expect(Lich).to have_received(:log).with('info: server_thread: GameStreamDesyncError: Missing end tag')
-      expect(Lich).to have_received(:log).with('Game stream desync detected - will not retry')
+      expect(Lich).to have_received(:log).with('info: game stream desync detected - will not retry')
     end
 
     it 'treats bad file descriptor from a closed game socket as expected during orderly user shutdown' do

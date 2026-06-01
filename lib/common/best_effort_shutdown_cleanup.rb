@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'shutdown_log'
+
 module Lich
   module Common
     # Performs local cleanup after the frontend or game connection is disrupted.
@@ -68,7 +70,7 @@ module Lich
           stored_result = coordinator.begin_best_effort_cleanup(result)
           return stored_result unless stored_result.equal?(result)
 
-          log("info: best-effort shutdown cleanup starting reason=#{coordinator.reason || :unknown}")
+          log_info("best-effort shutdown cleanup starting reason=#{coordinator.reason || :unknown}")
           update_active_sessions(result, active_sessions_lifecycle)
           drain_scripts(result, initial_scripts, remaining_scripts, script_drain, slow_threshold)
           save_vars(result, vars)
@@ -95,7 +97,7 @@ module Lich
 
         def drain_scripts(result, initial_scripts, remaining_scripts, script_drain, slow_threshold)
           run_step(result, "script shutdown") do
-            log("info: stopping scripts during best-effort shutdown cleanup...")
+            log_info("stopping scripts during best-effort shutdown cleanup...")
             result.script_shutdown_result = script_drain.run(
               initial_scripts: initial_scripts,
               remaining_scripts: remaining_scripts,
@@ -108,7 +110,7 @@ module Lich
 
         def save_vars(result, vars)
           run_step(result, "Vars.save") do
-            log("info: saving script settings during best-effort shutdown cleanup...")
+            log_info("saving script settings during best-effort shutdown cleanup...")
             vars.save
             result.vars_saved = true
           end
@@ -116,7 +118,7 @@ module Lich
 
         def finish(result)
           result.completed = !result.failed? && result.scripts_drained? && result.vars_saved?
-          log("info: best-effort shutdown cleanup #{result.completed? ? 'finished' : 'finished with warnings'}")
+          log_info("best-effort shutdown cleanup #{result.completed? ? 'finished' : 'finished with warnings'}")
           result
         end
 
@@ -124,7 +126,7 @@ module Lich
           yield
         rescue StandardError => e
           result.failures << "#{description}: #{e.class}: #{e.message}"
-          log("warning: #{description} failed during best-effort shutdown cleanup: #{e.class}: #{e.message}")
+          log_warning("#{description} failed during best-effort shutdown cleanup: #{e.class}: #{e.message}")
         end
 
         def script_drain_complete?(script_shutdown_result)
@@ -141,14 +143,19 @@ module Lich
           return if slow_scripts.empty? && scripts_remaining.zero?
 
           details = script_shutdown_result.respond_to?(:details) ? script_shutdown_result.details : script_shutdown_result.inspect
-          level = scripts_remaining.positive? ? "warning" : "info"
-          log("#{level}: best-effort shutdown cleanup script drain #{details}")
+          if scripts_remaining.positive?
+            log_warning("best-effort shutdown cleanup script drain #{details}")
+          else
+            log_info("best-effort shutdown cleanup script drain #{details}")
+          end
         end
 
-        def log(message)
-          return unless defined?(Lich) && Lich.respond_to?(:log)
+        def log_info(message)
+          ShutdownLog.info(message)
+        end
 
-          Lich.log(message)
+        def log_warning(message)
+          ShutdownLog.warning(message)
         end
       end
     end

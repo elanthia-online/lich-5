@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'shutdown_log'
+
 module Lich
   module Common
     # Tracks script teardown during process shutdown.
@@ -98,9 +100,7 @@ module Lich
       # @param error [StandardError] raised kill error
       # @return [void]
       def self.log_kill_error(script, error)
-        return unless defined?(Lich) && Lich.respond_to?(:log)
-
-        Lich.log("warning: shutdown script kill failed for #{script_name(script)}: #{error.class}: #{error.message}")
+        ShutdownLog.warning("shutdown script kill failed for #{script_name(script)}: #{error.class}: #{error.message}")
       end
       private_class_method :log_kill_error
 
