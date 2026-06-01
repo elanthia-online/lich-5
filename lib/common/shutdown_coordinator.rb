@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'shutdown_log'
+
 module Lich
   module Common
     # Records process shutdown attribution and coarse shutdown progress.
@@ -186,13 +188,7 @@ module Lich
         def log_request(shutdown_request)
           detail = shutdown_request.detail
           detail_text = detail.nil? || detail.to_s.empty? ? "" : " detail=#{detail}"
-          log("info: shutdown requested reason=#{shutdown_request.reason} source=#{shutdown_request.source}#{detail_text}")
-        end
-
-        def log(message)
-          return unless defined?(Lich) && Lich.respond_to?(:log)
-
-          Lich.log(message)
+          ShutdownLog.info("shutdown requested reason=#{shutdown_request.reason} source=#{shutdown_request.source}#{detail_text}")
         end
       end
     end

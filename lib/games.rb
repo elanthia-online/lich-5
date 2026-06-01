@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'common/shutdown_log'
+
 # Modernized version of games.rb with separated DR and GS functionality
 # Original module carve out from lich.rbw
 # Refactored on 2025-04-01
@@ -383,17 +385,17 @@ module Lich
                 rescue Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
                   consecutive_timeouts += 1
 
-                  Lich.log "info: socket read timeout #{consecutive_timeouts}/#{max_consecutive_timeouts} (no game data for #{READ_TIMEOUT_SECONDS}s)"
+                  shutdown_log.info("socket read timeout #{consecutive_timeouts}/#{max_consecutive_timeouts} (no game data for #{READ_TIMEOUT_SECONDS}s)")
 
                   if consecutive_timeouts >= max_consecutive_timeouts
                     total_timeout = total_read_timeout_seconds(max_consecutive_timeouts)
-                    Lich.log "warning: game connection timed out after #{max_consecutive_timeouts} consecutive read timeouts (#{total_timeout}s)"
+                    shutdown_log.warning("game connection timed out after #{max_consecutive_timeouts} consecutive read timeouts (#{total_timeout}s)")
                     raise IO::TimeoutError, "no game data for #{total_timeout} seconds"
                   end
 
                   # Check if socket is still alive
                   if @socket.closed?
-                    Lich.log "Socket is closed, exiting thread"
+                    shutdown_log.info("game socket is closed; exiting server thread")
                     break
                   end
 
@@ -402,13 +404,13 @@ module Lich
                   retry
                 rescue Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED => conn_error
                   # Connection was reset/broken - these are fatal
-                  Lich.log "Connection error: #{conn_error.class} - #{conn_error.message}"
+                  shutdown_log.info("connection error: #{conn_error.class} - #{conn_error.message}")
                   raise conn_error
                 end
               end
             rescue StandardError => e
               if intentional_shutdown_close_error?(e)
-                Lich.log "info: server thread exiting after orderly user shutdown"
+                shutdown_log.info("server thread exiting after orderly user shutdown")
                 next
               end
 
@@ -416,14 +418,14 @@ module Lich
               should_continue = handle_thread_error(e)
               # Only retry if handle_thread_error says it's safe and socket is still open
               if should_continue && !@socket.closed? && $_CLIENT_.alive?
-                Lich.log "Retrying server thread after error..."
+                shutdown_log.debug("retrying server thread after error")
                 consecutive_timeouts = 0 # Reset counter on retry
                 sleep 1 # Brief pause before retry
                 retry
               else
                 reason = shutdown_reason_for_thread_exit(e)
                 record_shutdown_reason(reason, source: :game_reader, detail: e.class)
-                Lich.log "Server thread exiting due to #{reason}"
+                shutdown_log.info("server thread exiting due to #{reason}")
               end
             end
           end
@@ -620,7 +622,7 @@ module Lich
 
             if stream_desync_xml_error?(error)
               XMLData.reset
-              Lich.log "Invalid XML stream desync detected; discarding fragment bytes=#{server_string.bytesize} error=#{error.class}: #{error.message.lines.first&.strip}"
+              shutdown_log.warning("invalid XML stream desync detected; discarding fragment bytes=#{server_string.bytesize} error=#{error.class}: #{error.message.lines.first&.strip}")
               raise GameStreamDesyncError, error.message
             end
 
@@ -679,34 +681,35 @@ module Lich
 
         def handle_thread_error(error)
           if recognized_connection_disruption?(error)
-            Lich.log "info: server_thread: #{connection_disruption_log_message(error)}"
+            shutdown_log.info("server_thread: #{connection_disruption_log_message(error)}")
+            shutdown_log.debug("server_thread backtrace: #{error.backtrace.join("\n\t")}") if error.backtrace
           else
-            Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
+            shutdown_log.error("server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}")
           end
           sleep 0.2
 
           # Determine if we should retry
           case error
           when Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
-            Lich.log "info: game timeout - will not retry"
+            shutdown_log.info("game timeout - will not retry")
             return false
           when Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED
             # Connection errors are fatal
-            Lich.log "Fatal connection error - will not retry"
+            shutdown_log.info("connection error - will not retry")
             return false
           when GameStreamDesyncError
-            Lich.log "Game stream desync detected - will not retry"
+            shutdown_log.info("game stream desync detected - will not retry")
             return false
           else
             # Check if socket/client are closed or if it's a known fatal error
             if !$_CLIENT_.alive? || @socket.closed?
-              Lich.log "Client or socket closed - will not retry"
+              shutdown_log.info("client or socket closed - will not retry")
               return false
             elsif error.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i
-              Lich.log "Fatal error pattern detected - will not retry"
+              shutdown_log.info("fatal error pattern detected - will not retry")
               return false
             else
-              Lich.log "Unknown error - will attempt retry"
+              shutdown_log.debug("unknown server thread error - will attempt retry")
               return true
             end
           end
@@ -734,7 +737,11 @@ module Lich
 
           Lich::Common::ShutdownCoordinator.request(reason: reason, source: source, detail: detail)
         rescue StandardError => e
-          Lich.log "warning: failed to record shutdown reason #{reason.inspect}: #{e.class}: #{e.message}"
+          shutdown_log.warning("failed to record shutdown reason #{reason.inspect}: #{e.class}: #{e.message}")
+        end
+
+        def shutdown_log
+          Lich::Common::ShutdownLog
         end
 
         def intentional_shutdown_close_error?(error)
