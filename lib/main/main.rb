@@ -620,6 +620,7 @@ reconnect_if_wanted = proc {
             client_string = fb_to_sf(client_string)
           end
           if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
+            Lich::Common::ShutdownLog.begin_user_exit_summary!
             Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
             run_orderly_user_shutdown.call
             break
@@ -772,6 +773,7 @@ reconnect_if_wanted = proc {
               end
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
               if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
+                Lich::Common::ShutdownLog.begin_user_exit_summary!
                 Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :detachable_frontend)
                 run_orderly_user_shutdown.call
                 break
@@ -960,6 +962,17 @@ reconnect_if_wanted = proc {
     end
     flush_shutdown_trace.call
     shutdown_step.call('reconnect hook') { reconnect_if_wanted.call } # keep after closeout; may launch a replacement session
+    clean_user_shutdown = Lich::Common::ShutdownCoordinator.orderly_user_exit? &&
+                          Lich::Common::ShutdownCoordinator.orderly_shutdown_completed? &&
+                          Lich::Common::ShutdownCoordinator.scripts_drained? &&
+                          Lich::Common::ShutdownCoordinator.vars_saved? &&
+                          Lich::Common::ShutdownCoordinator.best_effort_cleanup_result.nil? &&
+                          !shutdown_trace_needed
+    if clean_user_shutdown
+      Lich::Common::ShutdownLog.complete_user_exit_summary('user-initiated shutdown completed cleanly')
+    else
+      Lich::Common::ShutdownLog.flush_user_exit_summary!
+    end
     Lich::Common::ShutdownLog.info('exiting...')
     Gtk.queue { Gtk.main_quit } if defined?(Gtk)
     exit

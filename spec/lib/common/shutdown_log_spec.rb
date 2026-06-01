@@ -5,7 +5,12 @@ require_relative '../../../lib/common/shutdown_log'
 
 RSpec.describe Lich::Common::ShutdownLog do
   before do
+    described_class.flush_user_exit_summary!
     allow(Lich).to receive(:log)
+  end
+
+  after do
+    described_class.flush_user_exit_summary!
   end
 
   it 'formats always-on info, warning, and error messages' do
@@ -30,5 +35,40 @@ RSpec.describe Lich::Common::ShutdownLog do
     described_class.debug('step finished in 0.001s')
 
     expect(Lich).to have_received(:log).with('debug: step finished in 0.001s')
+  end
+
+  it 'summarizes clean user exits instead of emitting buffered routine info' do
+    described_class.begin_user_exit_summary!
+    described_class.info('shutdown requested reason=user_exit source=primary_frontend')
+    described_class.info('orderly user shutdown finished')
+
+    result = described_class.complete_user_exit_summary('user-initiated shutdown completed cleanly')
+
+    expect(result).to be true
+    expect(Lich).to have_received(:log).with('info: user-initiated shutdown completed cleanly')
+    expect(Lich).not_to have_received(:log).with('info: shutdown requested reason=user_exit source=primary_frontend')
+    expect(Lich).not_to have_received(:log).with('info: orderly user shutdown finished')
+  end
+
+  it 'flushes buffered routine info before warning when clean summary is disqualified' do
+    described_class.begin_user_exit_summary!
+    described_class.info('shutdown requested reason=user_exit source=primary_frontend')
+    described_class.warning('shutdown step Vars.save exceeded threshold')
+
+    result = described_class.complete_user_exit_summary('user-initiated shutdown completed cleanly')
+
+    expect(result).to be false
+    expect(Lich).to have_received(:log).with('info: shutdown requested reason=user_exit source=primary_frontend').ordered
+    expect(Lich).to have_received(:log).with('warning: shutdown step Vars.save exceeded threshold').ordered
+    expect(Lich).not_to have_received(:log).with('info: user-initiated shutdown completed cleanly')
+  end
+
+  it 'flushes buffered routine info on request' do
+    described_class.begin_user_exit_summary!
+    described_class.info('shutdown requested reason=user_exit source=primary_frontend')
+
+    described_class.flush_user_exit_summary!
+
+    expect(Lich).to have_received(:log).with('info: shutdown requested reason=user_exit source=primary_frontend')
   end
 end
