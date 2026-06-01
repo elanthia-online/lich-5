@@ -711,6 +711,33 @@ module Lich
 
         type.nil? ? h : h[type]
       end
+
+      def create_mechanisms(settings, material, number, speed = 6)
+        DRCC.find_shaping_room(settings.hometown)
+        case DRC.bput("turn press to #{speed}", /You dial the device to \d+ and ready it for pressing/, /The press cannot be turned to a speed greater than 12/, /The press cannot be turned to a volume less than 1/)
+        when /The press cannot be turned to a speed greater than 12/, /The press cannot be turned to a volume less than 1/
+          DRC.message("Invalid press speed specified.  Valid values are from 1-12.")
+          return
+        end
+        count = number
+        count.times do
+          DRCC.get_crafting_item("#{material} ingot", settings.crafting_container, settings.crafting_items_in_container, settings.forging_belt)
+          break unless DRCI.in_hands?("#{material} ingot")
+          DRCC.get_crafting_item('shovel', settings.crafting_container, settings.crafting_items_in_container, settings.forging_belt) unless DRCI.in_hands?('shovel')
+          DRC.bput("push fuel with my shovel", /^Roundtime/)
+          DRCC.stow_crafting_item('shovel', settings.crafting_container, settings.forging_belt)
+          DRCC.get_crafting_item('pliers', settings.crafting_container, settings.crafting_items_in_container, settings.forging_belt)
+          DRC.bput('push my ingot with press', /Roundtime/)
+          DRC.bput('pull my mech with press', /Roundtime/)
+          DRCC.stow_crafting_item('pliers', settings.crafting_container, settings.forging_belt)
+          DRCC.get_crafting_item('mechanisms', settings.crafting_container, settings.crafting_items_in_container, nil, true)
+          fput('combine') if DRC.right_hand && DRC.left_hand
+          DRCC.stow_crafting_item('mechanisms', settings.crafting_container, nil)
+          count -= 1
+        end
+        DRCC.get_crafting_item("#{material} ingot", nil, nil, nil, true)
+        DRCC.stow_crafting_item("#{material} ingot", settings.crafting_container, nil) if DRC.right_hand
+      end
     end
   end
 end
