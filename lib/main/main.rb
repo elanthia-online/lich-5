@@ -909,7 +909,8 @@ reconnect_if_wanted = proc {
       Lich::InternalAPI::ActiveSessions::Lifecycle.update_connected(false) if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
     end
 
-    unless Lich::Common::ShutdownCoordinator.scripts_drained? && Lich::Common::ShutdownCoordinator.vars_saved?
+    if Lich::Common::ShutdownCoordinator.connection_loss? &&
+       !(Lich::Common::ShutdownCoordinator.scripts_drained? && Lich::Common::ShutdownCoordinator.vars_saved?)
       run_best_effort_shutdown_cleanup.call
     end
 

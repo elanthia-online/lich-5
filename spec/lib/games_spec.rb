@@ -97,6 +97,23 @@ RSpec.describe Lich::GameBase do
       expect(Lich).to have_received(:log).with('Fatal connection error - will not retry')
       expect(Lich).not_to have_received(:log).with(/error: server_thread:.*\n\t/m)
     end
+
+    it 'handles repeated timeout as a recognized fatal disruption after threshold' do
+      error = IO::TimeoutError.new('read timed out')
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log).with('info: server_thread: IO::TimeoutError: read timed out')
+      expect(Lich).to have_received(:log).with('Fatal timeout error - will not retry')
+      expect(described_class.shutdown_reason_for_thread_exit(error)).to eq(:game_timeout)
+    end
+
+    it 'keeps stream desync disruption logging to one line in the thread handler' do
+      error = Lich::GameBase::GameStreamDesyncError.new("Missing end tag\nLine: 2")
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log).with('info: server_thread: GameStreamDesyncError: Missing end tag')
+      expect(Lich).to have_received(:log).with('Game stream desync detected - will not retry')
+    end
   end
 end
 

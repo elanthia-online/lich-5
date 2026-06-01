@@ -653,7 +653,7 @@ module Lich
 
         def handle_thread_error(error)
           if recognized_connection_disruption?(error)
-            Lich.log "info: server_thread: #{error.class}: #{error.message}"
+            Lich.log "info: server_thread: #{connection_disruption_log_message(error)}"
           else
             Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
           end
@@ -662,9 +662,8 @@ module Lich
           # Determine if we should retry
           case error
           when Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
-            # Timeout errors are potentially recoverable if we haven't seen too many
-            Lich.log "Timeout error detected - may attempt retry"
-            return true
+            Lich.log "Fatal timeout error - will not retry"
+            return false
           when Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED
             # Connection errors are fatal
             Lich.log "Fatal connection error - will not retry"
@@ -728,6 +727,12 @@ module Lich
             error.is_a?(Errno::EPIPE) ||
             error.is_a?(Errno::ECONNABORTED) ||
             error.is_a?(GameStreamDesyncError)
+        end
+
+        def connection_disruption_log_message(error)
+          return "GameStreamDesyncError: #{error.message.lines.first&.strip}" if error.is_a?(GameStreamDesyncError)
+
+          "#{error.class}: #{error.message}"
         end
 
         def stream_desync_xml_error?(error)

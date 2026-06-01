@@ -23,7 +23,7 @@ module Lich
           completed
         end
 
-        # @return [Boolean] whether any local cleanup step raised or drain was incomplete
+        # @return [Boolean] whether any local cleanup step raised
         def failed?
           !failures.empty?
         end
