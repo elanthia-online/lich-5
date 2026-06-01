@@ -6,6 +6,22 @@ require_relative '../../mock_database_adapter'
 
 require 'digest'
 require 'sqlite3'
+require 'sequel'
+
+module Lich
+  DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 5000 unless const_defined?(:DEFAULT_SQLITE_BUSY_TIMEOUT_MS)
+
+  def self.sqlite_busy_timeout_ms
+    DEFAULT_SQLITE_BUSY_TIMEOUT_MS
+  end
+
+  def self.open_sequel_sqlite(path)
+    db = Sequel.sqlite(path)
+    db.run("PRAGMA busy_timeout = #{sqlite_busy_timeout_ms}")
+    db
+  end
+end
+
 require 'common/settings'
 require 'common/vars'
 

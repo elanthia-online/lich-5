@@ -25,6 +25,8 @@ module ScriptRuntimeHarness
     Module.new.tap do |mod|
       nodes.sort_by { |node| node.location.start_line }.each do |node|
         source = lines[(node.location.start_line - 1)..(node.location.end_line - 1)].join
+        # Evaluate only the selected helper definitions so characterization specs
+        # track global_defs.rb without loading the full runtime and its globals.
         mod.module_eval(source, GLOBAL_DEFS_PATH, node.location.start_line)
       end
     end
