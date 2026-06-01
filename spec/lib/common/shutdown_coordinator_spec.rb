@@ -18,6 +18,8 @@ RSpec.describe Lich::Common::ShutdownCoordinator do
 
     expect(request.reason).to eq(:user_exit)
     expect(request.source).to eq('primary_frontend')
+    expect(request).to be_frozen
+    expect(described_class.current).to be_frozen
     expect(described_class.reason).to eq(:user_exit)
     expect(described_class).to be_requested
   end

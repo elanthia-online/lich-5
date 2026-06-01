@@ -42,7 +42,10 @@ module Lich
               source: source.to_s,
               detail: detail,
               requested_at: Time.now
-            ).tap { |shutdown_request| log_request(shutdown_request) }
+            ).tap do |shutdown_request|
+              log_request(shutdown_request)
+              shutdown_request.freeze
+            end
           end
         end
 
