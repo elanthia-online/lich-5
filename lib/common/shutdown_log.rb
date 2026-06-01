@@ -42,6 +42,11 @@ module Lich
 
         private
 
+        # Writes a formatted shutdown log line when Lich logging is available.
+        #
+        # @param level [Symbol] shutdown log severity
+        # @param message [String] human-readable shutdown message
+        # @return [void]
         def write(level, message)
           return unless defined?(Lich) && Lich.respond_to?(:log)
 
