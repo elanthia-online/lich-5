@@ -135,8 +135,13 @@ RSpec.describe Lich::GameBase do
 
       expect(described_class.handle_thread_error(error)).to be(false)
       expect(Lich).to have_received(:log).with('info: server_thread: IO::TimeoutError: read timed out')
-      expect(Lich).to have_received(:log).with('Fatal timeout error - will not retry')
+      expect(Lich).to have_received(:log).with('info: game timeout - will not retry')
       expect(described_class.shutdown_reason_for_thread_exit(error)).to eq(:game_timeout)
+    end
+
+    it 'reports total elapsed no-data time for consecutive read timeouts' do
+      expect(described_class.total_read_timeout_seconds).to eq(90)
+      expect(described_class.total_read_timeout_seconds(2)).to eq(60)
     end
 
     it 'keeps stream desync disruption logging to one line in the thread handler' do

@@ -79,6 +79,8 @@ RSpec.describe Lich::Common::BestEffortShutdownCleanup do
     expect(result).to be_vars_saved
     expect(result.script_shutdown_result).to equal(script_drain_result)
     expect(coordinator.best_effort_cleanup_result).to equal(result)
+    expect(Lich).to have_received(:log).with('info: stopping scripts during best-effort shutdown cleanup...')
+    expect(Lich).to have_received(:log).with('info: saving script settings during best-effort shutdown cleanup...')
   end
 
   it 'only runs the best-effort cleanup sequence once' do

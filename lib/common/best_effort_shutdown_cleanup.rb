@@ -95,7 +95,7 @@ module Lich
 
         def drain_scripts(result, initial_scripts, remaining_scripts, script_drain, slow_threshold)
           run_step(result, "script shutdown") do
-            log("info: stopping scripts after connection disruption...")
+            log("info: stopping scripts during best-effort shutdown cleanup...")
             result.script_shutdown_result = script_drain.run(
               initial_scripts: initial_scripts,
               remaining_scripts: remaining_scripts,
@@ -108,7 +108,7 @@ module Lich
 
         def save_vars(result, vars)
           run_step(result, "Vars.save") do
-            log("info: saving script settings after connection disruption...")
+            log("info: saving script settings during best-effort shutdown cleanup...")
             vars.save
             result.vars_saved = true
           end

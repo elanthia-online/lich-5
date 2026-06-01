@@ -380,14 +380,15 @@ module Lich
                   rescue StandardError => e
                     log_error("Error processing server string", e)
                   end
-                rescue Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError => timeout_error
+                rescue Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
                   consecutive_timeouts += 1
 
-                  Lich.log "Socket read timeout #{consecutive_timeouts}/#{max_consecutive_timeouts} (no data for #{READ_TIMEOUT_SECONDS}s)"
+                  Lich.log "info: socket read timeout #{consecutive_timeouts}/#{max_consecutive_timeouts} (no game data for #{READ_TIMEOUT_SECONDS}s)"
 
                   if consecutive_timeouts >= max_consecutive_timeouts
-                    Lich.log "Too many consecutive timeouts, connection may be dead"
-                    raise timeout_error # Let the outer rescue handle it
+                    total_timeout = total_read_timeout_seconds(max_consecutive_timeouts)
+                    Lich.log "warning: game connection timed out after #{max_consecutive_timeouts} consecutive read timeouts (#{total_timeout}s)"
+                    raise IO::TimeoutError, "no game data for #{total_timeout} seconds"
                   end
 
                   # Check if socket is still alive
@@ -441,6 +442,12 @@ module Lich
           return READ_TIMEOUT unless IO.select([@socket], nil, nil, read_timeout)
 
           @socket.gets
+        end
+
+        # @param timeout_count [Integer] number of consecutive read waits
+        # @return [Integer] total elapsed no-data seconds represented by count
+        def total_read_timeout_seconds(timeout_count = MAX_CONSECUTIVE_READ_TIMEOUTS)
+          READ_TIMEOUT_SECONDS * timeout_count
         end
 
         def process_server_string(server_string)
@@ -681,7 +688,7 @@ module Lich
           # Determine if we should retry
           case error
           when Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
-            Lich.log "Fatal timeout error - will not retry"
+            Lich.log "info: game timeout - will not retry"
             return false
           when Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED
             # Connection errors are fatal
