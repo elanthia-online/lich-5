@@ -719,8 +719,7 @@ module Lich
           DRC.message("Invalid press speed specified.  Valid values are from 1-12.")
           return
         end
-        count = number
-        count.times do
+        number.times do
           DRCC.get_crafting_item("#{material} ingot", settings.crafting_container, settings.crafting_items_in_container, settings.forging_belt)
           break unless DRCI.in_hands?("#{material} ingot")
           DRCC.get_crafting_item('shovel', settings.crafting_container, settings.crafting_items_in_container, settings.forging_belt) unless DRCI.in_hands?('shovel')
@@ -733,7 +732,6 @@ module Lich
           DRCC.get_crafting_item('mechanisms', settings.crafting_container, settings.crafting_items_in_container, nil, true)
           fput('combine') if DRC.right_hand && DRC.left_hand
           DRCC.stow_crafting_item('mechanisms', settings.crafting_container, nil)
-          count -= 1
         end
         DRCC.get_crafting_item("#{material} ingot", nil, nil, nil, true)
         DRCC.stow_crafting_item("#{material} ingot", settings.crafting_container, nil) if DRC.right_hand
