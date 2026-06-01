@@ -139,12 +139,12 @@ module Lich
           best_effort_cleanup_result&.completed?
         end
 
-        # @return [Boolean] whether orderly shutdown fully drained scripts
+        # @return [Boolean] whether orderly shutdown or best-effort cleanup fully drained scripts
         def scripts_drained?
           orderly_shutdown_result&.scripts_drained? || best_effort_cleanup_result&.scripts_drained?
         end
 
-        # @return [Boolean] whether orderly shutdown saved script settings
+        # @return [Boolean] whether orderly shutdown or best-effort cleanup saved script settings
         def vars_saved?
           orderly_shutdown_result&.vars_saved? || best_effort_cleanup_result&.vars_saved?
         end
