@@ -24,7 +24,7 @@ module Lich
           completed
         end
 
-        # @return [Boolean] whether any step raised or script drain was incomplete
+        # @return [Boolean] whether any teardown step raised
         def failed?
           !failures.empty?
         end
@@ -52,7 +52,7 @@ module Lich
         # closing the game connection. If another frontend thread already started
         # the same sequence, this method returns that existing result.
         #
-        # @param coordinator [ShutdownCoordinator] state/intent coordinator
+        # @param coordinator [Lich::Common::ShutdownCoordinator] state/intent coordinator
         # @param initial_scripts [Array<#kill,#name>] scripts present at shutdown start
         # @param remaining_scripts [#call] returns scripts still registered
         # @param script_drain [#run] script drain service
