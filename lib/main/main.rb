@@ -3,7 +3,7 @@
 
 reconnect_if_wanted = proc {
   explicit_shutdown = Lich::Common::ShutdownCoordinator.orderly_user_exit?
-  explicit_exit_buffered = $_CLIENTBUFFER_.any? { |cmd| cmd =~ /^(?:\[.*?\])?(?:<c>)?(?:quit|exit)/i }
+  explicit_exit_buffered = $_CLIENTBUFFER_.any? { |cmd| Lich::Common::ShutdownIntent.user_exit_command?(cmd) }
 
   if ARGV.include?('--reconnect') and ARGV.include?('--login') and not explicit_shutdown and not explicit_exit_buffered
     if (reconnect_arg = ARGV.find { |arg| arg =~ /^\-\-reconnect\-delay=[0-9]+(?:\+[0-9]+)?$/ })
