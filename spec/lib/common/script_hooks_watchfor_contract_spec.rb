@@ -70,6 +70,8 @@ RSpec.describe 'script runtime hooks and watchfor contracts' do
       described_class.add('named', proc { |line| line })
 
       expect(described_class.hook_sources).to eq('named' => 'hook-owner')
+      expect(described_class.remove('named')).to be_a(Proc)
+      expect(described_class.hook_sources).not_to include('named')
     end
   end
 
@@ -94,8 +96,7 @@ RSpec.describe 'script runtime hooks and watchfor contracts' do
 
       described_class.new('a.b', action)
 
-      expect(script.watchfor.keys.first).to eq(/a\.b/)
-      expect(script.watchfor.values.first).to eq(action)
+      expect(script.watchfor).to eq(/a\.b/ => action)
     end
 
     it 'registers regexp triggers with a block' do
