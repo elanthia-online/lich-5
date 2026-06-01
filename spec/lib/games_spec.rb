@@ -151,6 +151,25 @@ RSpec.describe Lich::GameBase do
       expect(Lich).to have_received(:log).with('info: server_thread: GameStreamDesyncError: Missing end tag')
       expect(Lich).to have_received(:log).with('Game stream desync detected - will not retry')
     end
+
+    it 'treats bad file descriptor from a closed game socket as expected during orderly user shutdown' do
+      socket = instance_double(TCPSocket, closed?: true)
+      described_class.instance_variable_set(:@socket, socket)
+      Lich::Common::ShutdownCoordinator.reset!
+      Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
+
+      expect(described_class.intentional_shutdown_close_error?(Errno::EBADF.new)).to be_truthy
+    ensure
+      Lich::Common::ShutdownCoordinator.reset!
+    end
+
+    it 'does not treat bad file descriptor as expected without orderly user shutdown' do
+      socket = instance_double(TCPSocket, closed?: true)
+      described_class.instance_variable_set(:@socket, socket)
+      Lich::Common::ShutdownCoordinator.reset!
+
+      expect(described_class.intentional_shutdown_close_error?(Errno::EBADF.new)).to be(false)
+    end
   end
 end
 

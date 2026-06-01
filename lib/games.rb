@@ -742,7 +742,8 @@ module Lich
           return false unless Lich::Common::ShutdownCoordinator.orderly_user_exit?
           return false unless @socket&.closed?
 
-          error.to_s =~ /stream closed in another thread|closed stream/i
+          error.is_a?(Errno::EBADF) ||
+            error.to_s =~ /stream closed in another thread|closed stream|bad file descriptor/i
         end
 
         def recognized_connection_disruption?(error)
