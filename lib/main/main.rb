@@ -711,7 +711,7 @@ reconnect_if_wanted = proc {
           begin
             Frontend.cleanup_session_file
           rescue => cleanup_error
-            Lich.log "warning: failed to cleanup session file: #{cleanup_error}\n\t#{cleanup_error.backtrace.join("\n\t")}"
+            Lich::Common::ShutdownLog.warning("failed to cleanup session file: #{cleanup_error}\n\t#{cleanup_error.backtrace.join("\n\t")}")
           end
 
           Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
@@ -787,7 +787,7 @@ reconnect_if_wanted = proc {
                 Lich.log "error: client_thread: #{e}\n\t#{e.backtrace.join("\n\t")}"
               end
             end
-            Lich.log "info: detachable client disconnected"
+            Lich::Common::ShutdownLog.info('detachable client disconnected')
           rescue => e
             _respond "--- Lich: error: detachable client: #{e}"
             Lich.log "error: detachable_client_thread (communication): #{e}\n\t#{e.backtrace.join("\n\t")}"
@@ -798,10 +798,10 @@ reconnect_if_wanted = proc {
             begin
               Frontend.cleanup_session_file
             rescue => cleanup_error
-              Lich.log "warning: failed to cleanup session file: #{cleanup_error}\n\t#{cleanup_error.backtrace.join("\n\t")}"
+              Lich::Common::ShutdownLog.warning("failed to cleanup session file: #{cleanup_error}\n\t#{cleanup_error.backtrace.join("\n\t")}")
             end
 
-            Lich.log "info: detachable client cleaned up, ready for new connection"
+            Lich::Common::ShutdownLog.info('detachable client cleaned up, ready for new connection')
           end
         end
         break if Lich::Common::ShutdownCoordinator.orderly_user_exit?
@@ -979,6 +979,7 @@ reconnect_if_wanted = proc {
   ensure
     # Guarantee lifecycle stop even on abnormal exit (e.g. abort_on_exception).
     # Both .stop methods are idempotent -- safe to call if already stopped.
+    Lich::Common::ShutdownLog.flush_user_exit_summary! rescue nil
     Lich::InternalAPI::ActiveSessions::Lifecycle.stop rescue nil if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
     Lich::Common::SessionLifecycle.stop rescue nil if defined?(Lich::Common::SessionLifecycle)
   end
