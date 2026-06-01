@@ -3,6 +3,7 @@
 require_relative '../spec_helper'
 require 'rexml/document'
 require 'rexml/streamlistener'
+require 'socket'
 require 'timeout'
 
 # Load production code
@@ -87,6 +88,37 @@ RSpec.describe Lich::GameBase do
       error = Lich::GameBase::GameStreamDesyncError.new('Missing end tag')
 
       expect(described_class.shutdown_reason_for_thread_exit(error)).to eq(:game_stream_desync)
+    end
+
+    it 'returns a read timeout sentinel when the game socket has no readable data' do
+      socket = instance_double(TCPSocket)
+      described_class.instance_variable_set(:@socket, socket)
+
+      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return(nil)
+      allow(socket).to receive(:gets)
+
+      expect(described_class.read_server_string(read_timeout: 0.01)).to equal(Lich::GameBase::Game::READ_TIMEOUT)
+      expect(socket).not_to have_received(:gets)
+    end
+
+    it 'reads a game line when the socket is readable' do
+      socket = instance_double(TCPSocket)
+      described_class.instance_variable_set(:@socket, socket)
+
+      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return([[socket], [], []])
+      allow(socket).to receive(:gets).and_return("<prompt/>\r\n")
+
+      expect(described_class.read_server_string(read_timeout: 0.01)).to eq("<prompt/>\r\n")
+    end
+
+    it 'preserves nil reads as game EOF after the socket becomes readable' do
+      socket = instance_double(TCPSocket)
+      described_class.instance_variable_set(:@socket, socket)
+
+      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return([[socket], [], []])
+      allow(socket).to receive(:gets).and_return(nil)
+
+      expect(described_class.read_server_string(read_timeout: 0.01)).to be_nil
     end
 
     it 'handles connection reset as a recognized fatal disruption without a backtrace log' do

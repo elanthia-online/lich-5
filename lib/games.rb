@@ -201,6 +201,10 @@ module Lich
 
     # Base Game class with common functionality
     class Game
+      READ_TIMEOUT_SECONDS = 30
+      MAX_CONSECUTIVE_READ_TIMEOUTS = 3
+      READ_TIMEOUT = Object.new.freeze
+
       class << self
         attr_reader :thread, :buffer, :_buffer, :game_instance
 
@@ -347,15 +351,17 @@ module Lich
         def start_main_thread
           @thread = Thread.new do
             consecutive_timeouts = 0
-            max_consecutive_timeouts = 3 # Allow 3 timeouts before giving up
+            max_consecutive_timeouts = MAX_CONSECUTIVE_READ_TIMEOUTS
 
             begin
               while true
                 begin
-                  # Try to read from socket with timeout
-                  server_string = @socket.gets
+                  server_string = read_server_string
 
-                  # Successfully received data - reset timeout counter
+                  if server_string.equal?(READ_TIMEOUT)
+                    raise IO::TimeoutError, "no game data for #{READ_TIMEOUT_SECONDS} seconds"
+                  end
+
                   consecutive_timeouts = 0
 
                   # Break if socket closed (gets returns nil)
@@ -375,10 +381,9 @@ module Lich
                     log_error("Error processing server string", e)
                   end
                 rescue Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError => timeout_error
-                  # Socket read timed out - this is expected if server is quiet
                   consecutive_timeouts += 1
 
-                  Lich.log "Socket read timeout #{consecutive_timeouts}/#{max_consecutive_timeouts} (no data for 30s)"
+                  Lich.log "Socket read timeout #{consecutive_timeouts}/#{max_consecutive_timeouts} (no data for #{READ_TIMEOUT_SECONDS}s)"
 
                   if consecutive_timeouts >= max_consecutive_timeouts
                     Lich.log "Too many consecutive timeouts, connection may be dead"
@@ -422,6 +427,20 @@ module Lich
             end
           end
           @thread.priority = 4
+        end
+
+        # Reads one game-server line after an explicit readiness wait.
+        #
+        # Ruby does not reliably surface SO_RCVTIMEO through TCPSocket#gets on
+        # every supported platform. Waiting with IO.select makes the reader's
+        # no-data timeout deterministic while preserving gets-based EOF handling.
+        #
+        # @param read_timeout [Numeric] seconds to wait for game socket data
+        # @return [String, nil, Object] a server line, nil for EOF, or READ_TIMEOUT
+        def read_server_string(read_timeout: READ_TIMEOUT_SECONDS)
+          return READ_TIMEOUT unless IO.select([@socket], nil, nil, read_timeout)
+
+          @socket.gets
         end
 
         def process_server_string(server_string)
