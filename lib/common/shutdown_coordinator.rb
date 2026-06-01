@@ -8,6 +8,8 @@ module Lich
     # intent and stores the result of any higher-level shutdown runner, but it
     # does not perform teardown work itself.
     module ShutdownCoordinator
+      @mutex = Mutex.new
+
       ALLOWED_REASONS = [
         :user_exit,
         :client_disconnect,
@@ -131,7 +133,7 @@ module Lich
         private
 
         def mutex
-          @mutex ||= Mutex.new
+          @mutex
         end
 
         def validate_reason!(reason)
