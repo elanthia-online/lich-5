@@ -9,6 +9,7 @@ require 'timeout'
 # Load production code
 require "common/class_exts/synchronizedsocket"
 require "common/sharedbuffer"
+require "common/shutdown_coordinator"
 require "games"
 require "gemstone/wounds"
 require "gemstone/scars"
@@ -496,6 +497,55 @@ end
 # from instance variables (@) to class variables (@@). This is testing the
 # implementation detail by design, not testing through public API.
 RSpec.describe Lich::GameBase::Game do
+  describe '.intentional_shutdown_close_error?' do
+    let(:closed_socket) { double('socket', closed?: true) }
+    let(:open_socket) { double('socket', closed?: false) }
+
+    before do
+      Lich::Common::ShutdownCoordinator.reset!
+      described_class.instance_variable_set(:@socket, closed_socket)
+    end
+
+    after do
+      Lich::Common::ShutdownCoordinator.reset!
+      described_class.instance_variable_set(:@socket, nil)
+    end
+
+    it 'recognizes reader-thread close errors during orderly user shutdown' do
+      Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
+
+      result = described_class.send(
+        :intentional_shutdown_close_error?,
+        IOError.new('stream closed in another thread')
+      )
+
+      expect(result).to be_truthy
+    end
+
+    it 'does not recognize close errors outside orderly user shutdown' do
+      Lich::Common::ShutdownCoordinator.request(reason: :game_eof, source: :game_reader)
+
+      result = described_class.send(
+        :intentional_shutdown_close_error?,
+        IOError.new('stream closed in another thread')
+      )
+
+      expect(result).to be false
+    end
+
+    it 'does not recognize orderly shutdown errors while the socket is open' do
+      Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
+      described_class.instance_variable_set(:@socket, open_socket)
+
+      result = described_class.send(
+        :intentional_shutdown_close_error?,
+        IOError.new('stream closed in another thread')
+      )
+
+      expect(result).to be false
+    end
+  end
+
   describe '.autostarted?' do
     before do
       # Reset the class variable for test isolation
