@@ -201,8 +201,13 @@ module Lich
 
     # Base Game class with common functionality
     class Game
+      # Seconds to wait for readable game socket data before one read timeout.
       READ_TIMEOUT_SECONDS = 30
+
+      # Consecutive read timeouts allowed before treating the game link as dead.
       MAX_CONSECUTIVE_READ_TIMEOUTS = 3
+
+      # Sentinel returned when the game socket has no readable data before timeout.
       READ_TIMEOUT = Object.new.freeze
 
       class << self

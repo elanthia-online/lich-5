@@ -46,7 +46,7 @@ module Lich
         # has already stopped or become unreliable. It avoids closing the game
         # socket itself and does not describe script hooks as graceful.
         #
-        # @param coordinator [ShutdownCoordinator] state/intent coordinator
+        # @param coordinator [Lich::Common::ShutdownCoordinator] state/intent coordinator
         # @param initial_scripts [Array<#kill,#name>] scripts present at cleanup start
         # @param remaining_scripts [#call] returns scripts still registered
         # @param script_drain [#run] script drain service
