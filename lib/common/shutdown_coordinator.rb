@@ -10,6 +10,7 @@ module Lich
     module ShutdownCoordinator
       @mutex = Mutex.new
 
+      # Shutdown reasons accepted by {request}.
       ALLOWED_REASONS = [
         :user_exit,
         :client_disconnect,
@@ -22,6 +23,7 @@ module Lich
         :unrecoverable_game_thread_error,
       ].freeze
 
+      # Reasons that indicate local frontend loss or remote game connection loss.
       CONNECTION_LOSS_REASONS = [
         :client_disconnect,
         :game_eof,
