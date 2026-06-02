@@ -163,25 +163,6 @@ RSpec.describe Lich::GameBase do
       expect(Lich).to have_received(:log).with('info: server_thread: GameStreamDesyncError: Missing end tag')
       expect(Lich).to have_received(:log).with('info: game stream desync detected - will not retry')
     end
-
-    it 'treats bad file descriptor from a closed game socket as expected during orderly user shutdown' do
-      socket = instance_double(TCPSocket, closed?: true)
-      described_class.instance_variable_set(:@socket, socket)
-      Lich::Common::ShutdownCoordinator.reset!
-      Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
-
-      expect(described_class.intentional_shutdown_close_error?(Errno::EBADF.new)).to be_truthy
-    ensure
-      Lich::Common::ShutdownCoordinator.reset!
-    end
-
-    it 'does not treat bad file descriptor as expected without orderly user shutdown' do
-      socket = instance_double(TCPSocket, closed?: true)
-      described_class.instance_variable_set(:@socket, socket)
-      Lich::Common::ShutdownCoordinator.reset!
-
-      expect(described_class.intentional_shutdown_close_error?(Errno::EBADF.new)).to be(false)
-    end
   end
 end
 
@@ -514,35 +495,22 @@ RSpec.describe Lich::GameBase::Game do
     it 'recognizes reader-thread close errors during orderly user shutdown' do
       Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
 
-      result = described_class.send(
-        :intentional_shutdown_close_error?,
-        IOError.new('stream closed in another thread')
-      )
-
-      expect(result).to be_truthy
+      expect(described_class.intentional_shutdown_close_error?(IOError.new('stream closed in another thread'))).to be_truthy
+      expect(described_class.intentional_shutdown_close_error?(Errno::EBADF.new)).to be_truthy
     end
 
     it 'does not recognize close errors outside orderly user shutdown' do
       Lich::Common::ShutdownCoordinator.request(reason: :game_eof, source: :game_reader)
 
-      result = described_class.send(
-        :intentional_shutdown_close_error?,
-        IOError.new('stream closed in another thread')
-      )
-
-      expect(result).to be false
+      expect(described_class.intentional_shutdown_close_error?(IOError.new('stream closed in another thread'))).to be false
+      expect(described_class.intentional_shutdown_close_error?(Errno::EBADF.new)).to be false
     end
 
     it 'does not recognize orderly shutdown errors while the socket is open' do
       Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
       described_class.instance_variable_set(:@socket, open_socket)
 
-      result = described_class.send(
-        :intentional_shutdown_close_error?,
-        IOError.new('stream closed in another thread')
-      )
-
-      expect(result).to be false
+      expect(described_class.intentional_shutdown_close_error?(IOError.new('stream closed in another thread'))).to be false
     end
   end
 

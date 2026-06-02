@@ -693,9 +693,10 @@ module Lich
           end
           sleep 0.2
 
-          # Determine if we should retry
           case error
           when Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
+            # Timeout errors reach this outer handler only after the inner
+            # reader loop has exhausted its consecutive-timeout threshold.
             shutdown_log.info("game timeout - will not retry")
             return false
           when Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED
