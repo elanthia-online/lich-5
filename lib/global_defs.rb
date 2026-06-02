@@ -2151,7 +2151,7 @@ def sf_to_wiz(line, bypass_multiline: false)
     line = line.gsub("</prompt>\r\n", "</prompt>")
     line = line.gsub("<pushBold/>", "\034GSL\r\n")
     line = line.gsub("<popBold/>", "\034GSM\r\n")
-    line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
+    line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|reserve|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
     line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
     line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
     line = line.gsub(/<[^>]+>/, '')
@@ -2184,7 +2184,7 @@ def strip_xml(line, type: 'main')
   end
   $strip_xml_multiline[type] = nil
 
-  line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
+  line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|reserve|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
   line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
   line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
   line = line.gsub(/<[^>]+>/, '')
