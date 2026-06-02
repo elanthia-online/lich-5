@@ -50,6 +50,13 @@ RSpec.describe Lich::Common::ShutdownLog do
     expect(Lich).not_to have_received(:log).with('info: orderly user shutdown finished')
   end
 
+  it 'does not emit a clean user-exit summary when summary mode was not started' do
+    result = described_class.complete_user_exit_summary('user-initiated shutdown completed cleanly')
+
+    expect(result).to be false
+    expect(Lich).not_to have_received(:log).with('info: user-initiated shutdown completed cleanly')
+  end
+
   it 'flushes buffered routine info before warning when clean summary is disqualified' do
     described_class.begin_user_exit_summary!
     described_class.info('shutdown requested reason=user_exit source=primary_frontend')
