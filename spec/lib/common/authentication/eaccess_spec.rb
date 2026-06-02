@@ -5,6 +5,7 @@
 # the SGE protocol handling works standalone without network dependencies.
 
 require 'rspec'
+require 'tmpdir'
 
 # Mock dependencies before requiring the code
 # Use Dir.tmpdir which always exists on all platforms
@@ -92,7 +93,6 @@ RSpec.describe Lich::Common::Authentication::EAccess do
     # - Account state setting happens at the start of auth before any network ops
 
     it 'requires password and account parameters' do
-      # The auth method signature requires these kwargs
       expect(described_class.method(:auth).parameters).to include([:keyreq, :password])
       expect(described_class.method(:auth).parameters).to include([:keyreq, :account])
     end
@@ -106,6 +106,84 @@ RSpec.describe Lich::Common::Authentication::EAccess do
     it 'has optional legacy parameter' do
       params = described_class.method(:auth).parameters
       expect(params).to include([:key, :legacy])
+    end
+  end
+
+  describe 'NEW_CHARACTER_CODE' do
+    it 'equals "0"' do
+      expect(described_class::NEW_CHARACTER_CODE).to eq('0')
+    end
+  end
+
+  describe 'NEW_CHARACTER_PATTERN' do
+    it 'matches "new" case-insensitively' do
+      pattern = described_class::NEW_CHARACTER_PATTERN
+      expect('new').to match(pattern)
+      expect('NEW').to match(pattern)
+      expect('New').to match(pattern)
+      expect('nEw').to match(pattern)
+    end
+
+    it 'does not match substrings containing "new"' do
+      pattern = described_class::NEW_CHARACTER_PATTERN
+      expect('newchar').not_to match(pattern)
+      expect('anew').not_to match(pattern)
+      expect('renew').not_to match(pattern)
+    end
+  end
+
+  describe '.resolve_char_code' do
+    let(:c_response) { "C\t2\t16\t1\t1\tW_ACCT_W002\tGrimaldo\tW_ACCT_W003\tIdavoll" }
+
+    context 'when character is "NEW" (case-insensitive)' do
+      it 'returns NEW_CHARACTER_CODE for "NEW"' do
+        result = described_class.resolve_char_code(c_response, 'NEW')
+        expect(result).to eq('0')
+      end
+
+      it 'returns NEW_CHARACTER_CODE for "new"' do
+        result = described_class.resolve_char_code(c_response, 'new')
+        expect(result).to eq('0')
+      end
+
+      it 'returns NEW_CHARACTER_CODE for "New"' do
+        result = described_class.resolve_char_code(c_response, 'New')
+        expect(result).to eq('0')
+      end
+
+      it 'skips character lookup entirely' do
+        empty_response = "C\t0\t16\t0\t1"
+        result = described_class.resolve_char_code(empty_response, 'NEW')
+        expect(result).to eq('0')
+      end
+    end
+
+    context 'when character is a normal name' do
+      it 'returns the matching character code' do
+        result = described_class.resolve_char_code(c_response, 'Grimaldo')
+        expect(result).to eq('W_ACCT_W002')
+      end
+
+      it 'returns the correct code for the second character' do
+        result = described_class.resolve_char_code(c_response, 'Idavoll')
+        expect(result).to eq('W_ACCT_W003')
+      end
+    end
+
+    context 'when character is not found' do
+      it 'raises AuthenticationError with CHARACTER_NOT_FOUND' do
+        expect {
+          described_class.resolve_char_code(c_response, 'NonExistent')
+        }.to raise_error(described_class::AuthenticationError, /CHARACTER_NOT_FOUND/)
+      end
+    end
+
+    context 'when character is nil' do
+      it 'raises AuthenticationError with CHARACTER_NOT_FOUND' do
+        expect {
+          described_class.resolve_char_code(c_response, nil)
+        }.to raise_error(described_class::AuthenticationError, /CHARACTER_NOT_FOUND/)
+      end
     end
   end
 end

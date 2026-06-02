@@ -21,6 +21,14 @@ module Lich
 
         PACKET_SIZE = 8192
 
+        # Character code that enters the character generator instead of selecting an existing character.
+        # When sent via the L command, the game server starts the character creation flow.
+        NEW_CHARACTER_CODE = "0"
+
+        # Pattern for detecting the special "NEW" character name (case-insensitive).
+        # @api private
+        NEW_CHARACTER_PATTERN = /\Anew\z/i
+
         # @api private
         def self.pem
           @pem ||= File.join(DATA_DIR, "simu.pem")
@@ -72,6 +80,19 @@ module Lich
           return ssl_socket
         end
 
+        # Authenticates with the EAccess server and launches a character session.
+        #
+        # When +character+ matches "NEW" (case-insensitive), the character lookup
+        # is skipped and the server enters the character generator instead of
+        # selecting an existing character.
+        #
+        # @param password [String] account password (plaintext, will be hashed)
+        # @param account [String] account name
+        # @param character [String, nil] character name to select, or "NEW" for character generator
+        # @param game_code [String, nil] game instance code (e.g. "DR", "GS3")
+        # @param legacy [Boolean] use legacy multi-game enumeration flow
+        # @return [Hash, Array] login info hash (normal) or array of character hashes (legacy)
+        # @raise [AuthenticationError] on auth failure or character not found
         def self.auth(password:, account:, character: nil, game_code: nil, legacy: false)
           # Set Account module state
           if defined?(Lich::Common::Account)
@@ -124,13 +145,7 @@ module Lich
               if defined?(Lich::Common::Account)
                 Lich::Common::Account.members = response
               end
-              char_entry = response.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '')
-                                   .scan(/[^\t]+\t[^\t^\n]+/)
-                                   .find { |c| c.split("\t")[1] == character }
-              unless char_entry
-                raise AuthenticationError, "CHARACTER_NOT_FOUND"
-              end
-              char_code = char_entry.split("\t")[0]
+              char_code = resolve_char_code(response, character)
               conn.puts "L\t#{char_code}\tSTORM\n"
               response = EAccess.read(conn)
               raise StandardError, response unless response =~ /^L\t/
@@ -178,6 +193,26 @@ module Lich
           ensure
             conn&.close unless conn&.closed?
           end
+        end
+
+        # Resolves the character code from the C response, or returns the
+        # character generator code when the character name is "NEW".
+        #
+        # @param c_response [String] raw C command response from the server
+        # @param character [String] character name to look up, or "NEW" for generator
+        # @return [String] character code for the L command
+        # @raise [AuthenticationError] when the character is not found in the response
+        # @api private
+        def self.resolve_char_code(c_response, character)
+          return NEW_CHARACTER_CODE if character&.match?(NEW_CHARACTER_PATTERN)
+
+          char_entry = c_response.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '')
+                                 .scan(/[^\t]+\t[^\t^\n]+/)
+                                 .find { |c| c.split("\t")[1] == character }
+
+          raise AuthenticationError, "CHARACTER_NOT_FOUND" unless char_entry
+
+          char_entry.split("\t")[0]
         end
 
         # @api private

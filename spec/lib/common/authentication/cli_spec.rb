@@ -55,6 +55,118 @@ RSpec.describe Lich::Common::Authentication::CLI do
     FileUtils.rm_rf(data_dir) if File.exist?(data_dir)
   end
 
+  describe '.execute_new_character' do
+    before do
+      allow(Lich).to receive(:log)
+      allow(Lich::Common::Authentication::CLIPassword).to receive(:validate_master_password_available).and_return(true)
+    end
+
+    context 'with missing account name' do
+      it 'returns nil when account_name is nil' do
+        result = described_class.execute_new_character(nil, game_code: 'DR', data_dir: data_dir)
+
+        expect(result).to be_nil
+        expect(Lich).to have_received(:log).with(/Account name is required/)
+      end
+
+      it 'returns nil when account_name is empty' do
+        result = described_class.execute_new_character('', game_code: 'DR', data_dir: data_dir)
+
+        expect(result).to be_nil
+        expect(Lich).to have_received(:log).with(/Account name is required/)
+      end
+    end
+
+    context 'with missing game code' do
+      it 'returns nil when game_code is nil' do
+        result = described_class.execute_new_character('TESTUSER', game_code: nil, data_dir: data_dir)
+
+        expect(result).to be_nil
+        expect(Lich).to have_received(:log).with(/Game code is required/)
+      end
+    end
+
+    context 'with missing YAML file' do
+      it 'returns nil when entry.yaml does not exist' do
+        result = described_class.execute_new_character('TESTUSER', game_code: 'DR', data_dir: data_dir)
+
+        expect(result).to be_nil
+        expect(Lich).to have_received(:log).with(/No saved entries YAML file found/)
+      end
+    end
+
+    context 'with valid YAML file' do
+      let(:yaml_data) do
+        {
+          'accounts'        => {
+            'TESTUSER' => {
+              'password'   => 'testpass',
+              'characters' => [
+                { 'char_name' => 'ExistingChar', 'game_code' => 'DR', 'frontend' => 'profanity' }
+              ]
+            }
+          },
+          'encryption_mode' => 'plaintext'
+        }
+      end
+
+      before do
+        File.write(yaml_file, yaml_data.to_yaml)
+      end
+
+      it 'returns nil when account is not found' do
+        result = described_class.execute_new_character('NONEXISTENT', game_code: 'DR', data_dir: data_dir)
+
+        expect(result).to be_nil
+        expect(Lich).to have_received(:log).with(/Account not found/)
+      end
+
+      it 'finds account case-insensitively' do
+        allow(Lich::Common::Authentication::EntryStore).to receive(:decrypt_password).and_return('testpass')
+        allow(Lich::Common::Authentication).to receive(:authenticate).and_return({ 'key' => 'abc' })
+        allow(Lich::Common::Authentication::LaunchData).to receive(:prepare).and_return(['GAME=DR'])
+
+        result = described_class.execute_new_character('testuser', game_code: 'DR', data_dir: data_dir)
+
+        expect(result).to eq(['GAME=DR'])
+      end
+
+      it 'authenticates with character name NEW' do
+        allow(Lich::Common::Authentication::EntryStore).to receive(:decrypt_password).and_return('testpass')
+        allow(Lich::Common::Authentication::LaunchData).to receive(:prepare).and_return(['GAME=DR'])
+
+        expect(Lich::Common::Authentication).to receive(:authenticate).with(
+          account: 'TESTUSER',
+          password: 'testpass',
+          character: 'NEW',
+          game_code: 'DR'
+        ).and_return({ 'key' => 'abc' })
+
+        described_class.execute_new_character('TESTUSER', game_code: 'DR', data_dir: data_dir)
+      end
+    end
+
+    context 'with account missing password' do
+      before do
+        yaml_data = {
+          'accounts' => {
+            'NOPASS' => {
+              'characters' => []
+            }
+          }
+        }
+        File.write(yaml_file, yaml_data.to_yaml)
+      end
+
+      it 'returns nil and logs error' do
+        result = described_class.execute_new_character('NOPASS', game_code: 'DR', data_dir: data_dir)
+
+        expect(result).to be_nil
+        expect(Lich).to have_received(:log).with(/No password saved/)
+      end
+    end
+  end
+
   describe '.execute' do
     context 'with missing character name' do
       it 'returns nil when character_name is nil' do

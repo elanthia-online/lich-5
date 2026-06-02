@@ -65,13 +65,21 @@ reconnect_if_wanted = proc {
     lookup_frontend = Lich::Common::Authentication::LoginHelpers.resolve_lookup_frontend(requested_fe, ARGV)
 
     # Execute CLI login flow and get launch data
-    launch_data_array = Lich::Common::Authentication::CLI.execute(
-      requested_character,
-      game_code: requested_instance,
-      frontend: lookup_frontend,
-      custom_launch: requested_custom_launch,
-      data_dir: DATA_DIR
-    )
+    launch_data_array = if requested_character.match?(/\Anew\z/i) && @argv_options[:account]
+                          Lich::Common::Authentication::CLI.execute_new_character(
+                            @argv_options[:account],
+                            game_code: requested_instance,
+                            data_dir: DATA_DIR
+                          )
+                        else
+                          Lich::Common::Authentication::CLI.execute(
+                            requested_character,
+                            game_code: requested_instance,
+                            frontend: lookup_frontend,
+                            custom_launch: requested_custom_launch,
+                            data_dir: DATA_DIR
+                          )
+                        end
 
     if launch_data_array
       Lich.log "info: CLI login successful for #{requested_character}"
