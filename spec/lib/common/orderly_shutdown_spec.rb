@@ -86,6 +86,7 @@ RSpec.describe Lich::Common::OrderlyShutdown do
   end
 
   after do
+    Lich::Common::ShutdownLog.flush_user_exit_summary!
     coordinator.reset!
   end
 
