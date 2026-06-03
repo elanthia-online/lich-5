@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'shutdown_log'
+require_relative 'shutdown_result_predicates'
 
 module Lich
   module Common
@@ -20,25 +21,7 @@ module Lich
         :vars_saved,
         keyword_init: true
       ) do
-        # @return [Boolean] whether all local cleanup steps completed
-        def completed?
-          completed
-        end
-
-        # @return [Boolean] whether any local cleanup step raised
-        def failed?
-          !failures.empty?
-        end
-
-        # @return [Boolean] whether script shutdown ran and left no registered scripts
-        def scripts_drained?
-          scripts_drained
-        end
-
-        # @return [Boolean] whether local script settings were saved
-        def vars_saved?
-          vars_saved
-        end
+        include ShutdownResultPredicates
       end
 
       class << self

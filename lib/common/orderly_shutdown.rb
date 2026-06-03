@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'shutdown_log'
+require_relative 'shutdown_result_predicates'
 
 module Lich
   module Common
@@ -21,25 +22,7 @@ module Lich
         :game_closed,
         keyword_init: true
       ) do
-        # @return [Boolean] whether every required orderly-shutdown step completed
-        def completed?
-          completed
-        end
-
-        # @return [Boolean] whether any teardown step raised
-        def failed?
-          !failures.empty?
-        end
-
-        # @return [Boolean] whether script shutdown ran and left no registered scripts
-        def scripts_drained?
-          scripts_drained
-        end
-
-        # @return [Boolean] whether local script settings were saved
-        def vars_saved?
-          vars_saved
-        end
+        include ShutdownResultPredicates
 
         # @return [Boolean] whether the game connection close step ran
         def game_closed?
