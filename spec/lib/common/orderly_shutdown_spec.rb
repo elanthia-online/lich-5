@@ -18,6 +18,19 @@ RSpec.describe Lich::Common::OrderlyShutdown do
     )
   end
 
+  def request_user_exit(**overrides)
+    described_class.request_user_exit(
+      source: overrides.fetch(:source, :script),
+      current_script: overrides[:current_script],
+      coordinator: overrides.fetch(:coordinator, coordinator),
+      scripts_provider: overrides.fetch(:scripts_provider, proc { [] }),
+      script_drain: overrides.fetch(:script_drain, script_drain),
+      vars: overrides.fetch(:vars, vars),
+      game: overrides.fetch(:game, game),
+      active_sessions_lifecycle: overrides.fetch(:active_sessions_lifecycle, active_sessions_lifecycle)
+    )
+  end
+
   let(:coordinator) { Lich::Common::ShutdownCoordinator }
 
   let(:script_drain_result) do
@@ -100,6 +113,24 @@ RSpec.describe Lich::Common::OrderlyShutdown do
     expect(script_drain.calls.length).to eq(1)
     expect(vars.calls).to eq([:save])
     expect(game.calls).to eq([:close])
+  end
+
+  it 'requests user exit and excludes the calling script from the drain' do
+    coordinator.reset!
+    current_script = Struct.new(:name).new('shutdown-caller')
+    other_script = Struct.new(:name).new('other')
+
+    result = request_user_exit(
+      source: 'script:shutdown-caller',
+      current_script: current_script,
+      scripts_provider: proc { [current_script, other_script] }
+    )
+
+    expect(result).to be_completed
+    expect(coordinator.reason).to eq(:user_exit)
+    expect(coordinator.current.source).to eq('script:shutdown-caller')
+    expect(script_drain.calls.first[:initial_scripts]).to eq([other_script])
+    expect(script_drain.calls.first[:remaining_scripts].call).to eq([other_script])
   end
 
   it 'continues later cleanup steps when one step fails' do

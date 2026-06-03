@@ -60,13 +60,8 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'shutdown_script_drain.rb')
 
   run_orderly_user_shutdown = proc {
-    Lich::Common::OrderlyShutdown.run(
-      coordinator: Lich::Common::ShutdownCoordinator,
-      initial_scripts: (Script.running + Script.hidden),
-      remaining_scripts: proc { Script.running + Script.hidden },
-      script_drain: Lich::Common::ShutdownScriptDrain,
-      vars: Vars,
-      game: Game,
+    Lich::Common::OrderlyShutdown.request_user_exit(
+      source: :primary_frontend,
       active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
     )
   }
@@ -620,8 +615,6 @@ reconnect_if_wanted = proc {
             client_string = fb_to_sf(client_string)
           end
           if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
-            Lich::Common::ShutdownLog.begin_user_exit_summary!
-            Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
             run_orderly_user_shutdown.call
             break
           end
@@ -773,9 +766,10 @@ reconnect_if_wanted = proc {
               end
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
               if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
-                Lich::Common::ShutdownLog.begin_user_exit_summary!
-                Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :detachable_frontend)
-                run_orderly_user_shutdown.call
+                Lich::Common::OrderlyShutdown.request_user_exit(
+                  source: :detachable_frontend,
+                  active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
+                )
                 break
               end
               begin

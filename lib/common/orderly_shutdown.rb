@@ -48,6 +48,33 @@ module Lich
       end
 
       class << self
+        # Requests the same orderly shutdown path used by explicit frontend exits.
+        #
+        # Script callers can pass themselves as +current_script+ so the drain stops
+        # other scripts without killing the script that is initiating shutdown.
+        #
+        # @param source [#to_s] source recorded in shutdown logs
+        # @param current_script [Object, nil] script to exclude from shutdown drain
+        # @return [Result] stored orderly-shutdown result
+        def request_user_exit(source:, current_script: nil, coordinator: ShutdownCoordinator, scripts_provider: nil, script_drain: ShutdownScriptDrain, vars: Vars, game: Game, active_sessions_lifecycle: nil, slow_threshold: 1.5)
+          ShutdownLog.begin_user_exit_summary!
+          coordinator.request(reason: :user_exit, source: source)
+
+          scripts_provider ||= proc { Script.running + Script.hidden }
+          remaining_scripts = proc { scripts_provider.call.reject { |script| script.equal?(current_script) } }
+
+          run(
+            coordinator: coordinator,
+            initial_scripts: remaining_scripts.call,
+            remaining_scripts: remaining_scripts,
+            script_drain: script_drain,
+            vars: vars,
+            game: game,
+            active_sessions_lifecycle: active_sessions_lifecycle,
+            slow_threshold: slow_threshold
+          )
+        end
+
         # Executes orderly user shutdown once.
         #
         # The sequence intentionally runs script hooks and local state save before
