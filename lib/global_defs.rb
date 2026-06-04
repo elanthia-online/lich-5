@@ -1692,6 +1692,13 @@ def put(*messages)
   messages.each { |message| Game.puts(message) }
 end
 
+# Requests an orderly Lich shutdown from a running script.
+#
+# This follows the explicit user-exit shutdown path without sending an `exit`
+# command through game or frontend I/O. The calling script is excluded from the
+# script drain so it can finish the shutdown request.
+#
+# @return [Lich::Common::OrderlyShutdown::Result] shutdown result
 def lich_shutdown
   current_script = Script.current
   source = current_script ? "script:#{current_script.name}" : :script
