@@ -74,6 +74,56 @@ RSpec.describe Lich::Common::ShutdownCoordinator do
     }.to raise_error(ArgumentError, 'shutdown source must be present')
   end
 
+  describe '.record_client_socket_write_failure' do
+    it 'records client disconnect when no shutdown request exists' do
+      error = Errno::EPIPE.new('broken pipe')
+
+      described_class.record_client_socket_write_failure(error: error)
+
+      expect(described_class.reason).to eq(:client_disconnect)
+      expect(described_class.current.source).to eq('client_socket_write')
+      expect(described_class.current.detail).to start_with('Errno::EPIPE:')
+      expect(described_class.client_socket_write_failure).to equal(error)
+      expect(described_class).to be_client_socket_write_failed
+    end
+
+    it 'preserves first-wins shutdown attribution while recording the write failure' do
+      request = described_class.request(reason: :user_exit, source: :primary_frontend)
+      error = Errno::ECONNRESET.new('reset')
+
+      described_class.record_client_socket_write_failure(error: error)
+
+      expect(described_class.current).to equal(request)
+      expect(described_class.reason).to eq(:user_exit)
+      expect(described_class.client_socket_write_failure).to equal(error)
+    end
+
+    it 'keeps the first client socket write failure' do
+      first = Errno::EPIPE.new('first')
+      second = Errno::ECONNRESET.new('second')
+
+      described_class.record_client_socket_write_failure(error: first)
+      described_class.record_client_socket_write_failure(error: second)
+
+      expect(described_class.client_socket_write_failure).to equal(first)
+    end
+
+    it 'rejects missing errors' do
+      expect {
+        described_class.record_client_socket_write_failure(error: nil)
+      }.to raise_error(ArgumentError, 'client socket write failure error must be present')
+    end
+
+    it 'clears write failure state on reset' do
+      described_class.record_client_socket_write_failure(error: Errno::EPIPE.new('broken pipe'))
+
+      described_class.reset!
+
+      expect(described_class).not_to be_client_socket_write_failed
+      expect(described_class.client_socket_write_failure).to be_nil
+    end
+  end
+
   describe '.begin_orderly_shutdown' do
     def result(scripts_drained: true, vars_saved: true, completed: true)
       Struct.new(:completed, :scripts_drained, :vars_saved, keyword_init: true) do

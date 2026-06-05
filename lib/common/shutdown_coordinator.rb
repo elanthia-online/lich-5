@@ -147,6 +147,43 @@ module Lich
           orderly_shutdown_result&.vars_saved? || best_effort_cleanup_result&.vars_saved?
         end
 
+        # Records fatal client socket write failure context once.
+        #
+        # If no shutdown request exists yet, the write failure is treated as a
+        # client disconnect. If another shutdown reason already exists, first-wins
+        # attribution is preserved while the transport failure remains visible.
+        #
+        # @param error [Exception] fatal socket write error
+        # @param source [#to_s] subsystem that observed the failed write
+        # @return [Exception] stored first client socket write failure
+        def record_client_socket_write_failure(error:, source: :client_socket_write)
+          raise ArgumentError, "client socket write failure error must be present" if error.nil?
+
+          validate_source!(source)
+
+          mutex.synchronize do
+            @client_socket_write_failure ||= error
+          end
+
+          request(
+            reason: :client_disconnect,
+            source: source,
+            detail: "#{error.class}: #{error.message}"
+          ) unless requested?
+
+          client_socket_write_failure
+        end
+
+        # @return [Exception, nil] first fatal client socket write failure
+        def client_socket_write_failure
+          mutex.synchronize { @client_socket_write_failure }
+        end
+
+        # @return [Boolean] whether the client socket write path failed fatally
+        def client_socket_write_failed?
+          !client_socket_write_failure.nil?
+        end
+
         # Clears coordinator state for tests and process reinitialization.
         #
         # @return [nil]
@@ -155,6 +192,7 @@ module Lich
             @request = nil
             @orderly_shutdown_result = nil
             @best_effort_cleanup_result = nil
+            @client_socket_write_failure = nil
           end
         end
 
