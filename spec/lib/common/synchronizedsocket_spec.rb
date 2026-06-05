@@ -4,6 +4,7 @@ require_relative '../../spec_helper'
 require 'socket'
 require 'common/class_exts/synchronizedsocket'
 require 'common/shutdown_coordinator'
+require 'common/shutdown_log'
 
 RSpec.describe Lich::Common::SynchronizedSocket do
   let(:delegate) { instance_double(TCPSocket) }
@@ -123,6 +124,17 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       expect(Lich::Common::ShutdownCoordinator.reason).to eq(:user_exit)
       expect(Lich::Common::ShutdownCoordinator.current.source).to eq('primary_frontend')
       expect(Lich::Common::ShutdownCoordinator).to be_client_socket_write_failed
+    end
+
+    it 'flushes buffered user-exit context before logging a write failure' do
+      Lich::Common::ShutdownLog.begin_user_exit_summary!
+      Lich::Common::ShutdownLog.info('shutdown requested reason=user_exit source=primary_frontend')
+      allow(delegate).to receive(:write).and_raise(Errno::EPIPE)
+
+      socket.write('data')
+
+      expect(Lich).to have_received(:log).with('info: shutdown requested reason=user_exit source=primary_frontend').ordered
+      expect(Lich).to have_received(:log).with(/error: client socket write failed: Errno::EPIPE/).ordered
     end
 
     it 'closes the delegate exactly once under repeated failures' do
