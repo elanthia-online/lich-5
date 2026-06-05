@@ -967,6 +967,7 @@ reconnect_if_wanted = proc {
                           Lich::Common::ShutdownCoordinator.scripts_drained? &&
                           Lich::Common::ShutdownCoordinator.vars_saved? &&
                           Lich::Common::ShutdownCoordinator.best_effort_cleanup_result.nil? &&
+                          !Lich::Common::ShutdownCoordinator.client_socket_write_failed? &&
                           !shutdown_trace_needed
     if clean_user_shutdown
       Lich::Common::ShutdownLog.complete_user_exit_summary('user-initiated shutdown completed cleanly')
