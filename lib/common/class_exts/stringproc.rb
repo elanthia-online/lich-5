@@ -4,21 +4,11 @@
 module Lich
   module Common
     class StringProc
-      # Creates a delayed-evaluation wrapper for map/script mini-code.
-      #
-      # Map data and legacy serialized StringProc payloads may contain bare
-      # carriage returns from older editors, imports, or platform-specific
-      # line endings. Ruby warns when `eval` receives `\r` in the middle of a
-      # line, even though it treats the character as whitespace. Normalize
-      # CRLF and bare CR to LF at construction time so later evaluation is
-      # warning-free and serialized output is kept in the canonical newline
-      # form.
-      #
-      # @param string [String, #to_s] Ruby source text to evaluate when called.
       ##
       # Create a StringProc that wraps the provided source text and normalizes CRLF and CR newlines to LF.
       # The input is converted with `to_s` and stored with all `\r\n` and `\r` replaced by `\n`.
       # @param [Object] string - The source text to wrap; will be converted to a String and normalized.
+      # @param string [String, #to_s] Ruby source text to evaluate when called.
       def initialize(string)
         @string = string.to_s.gsub(/\r\n?/, "\n")
       end
