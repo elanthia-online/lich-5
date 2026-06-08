@@ -481,7 +481,7 @@ module Lich
             /mouth, raising blisters on <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> face as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> gasps for breath.  Then <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> ceases to breathe, and a look of blessed peace dawns over <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> twisted features as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> gives in to death/,
             /legs kick savagely as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> collapses, belching swarms of tiny, pale larvae.  They scatter wildly as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> surrenders to death/,
             /eyes slowly fades away/,
-            /collapses to the ground, a thick grey mist pouring from <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> nostrils/,
+            /collapses to the ground, a thick grey mist pouring from (?:<pushBold\/><a exist="[^"]+" noun="[^"]+">)?(?:hi[ms]|her|s?he|its?)(?:<\/a><popBold\/>)? nostrils/,
             /horn dims, and <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> falls to the ground dead/,
             /growls one last time and dies/,
             /crashes to the floor in a plume of dust/,
