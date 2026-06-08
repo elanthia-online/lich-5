@@ -122,6 +122,9 @@ module Lich
 
     # XML string cleaner module
     module XMLCleaner
+      POORLY_ENCODED_APOSTROPHE_BYTE = 0x92
+      ASCII_APOSTROPHE_BYTE = 0x27
+
       class << self
         def clean_nested_quotes(server_string)
           # Fix nested single quotes
@@ -161,9 +164,13 @@ module Lich
           end
 
           # Fix poorly encoded apostrophes
-          if server_string =~ /\\x92/
+          if server_string.bytes.include?(POORLY_ENCODED_APOSTROPHE_BYTE)
             Lich.log "Detected poorly encoded apostrophe: #{server_string.inspect}"
-            server_string.gsub!("\x92", "'")
+            original_encoding = server_string.encoding
+            repaired_bytes = server_string.bytes.map do |byte|
+              byte == POORLY_ENCODED_APOSTROPHE_BYTE ? ASCII_APOSTROPHE_BYTE : byte
+            end
+            server_string.replace(repaired_bytes.pack('C*').force_encoding(original_encoding))
             Lich.log "Changed poorly encoded apostrophe to: #{server_string.inspect}"
           end
 
