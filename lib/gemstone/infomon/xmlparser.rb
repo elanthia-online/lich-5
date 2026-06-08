@@ -371,7 +371,6 @@ module Lich
             /slams to the deck, dead as a salmon bear snack/,
             /collapses to the deck, dead as a pickled herring/,
             /thuds to the deck in a plume of dust/,
-            /tries to crawl away on the deck but collapses and goes still/,
             /clatters to the ground into a heap of jumbled bones/,
             /glares forward, then collapses in a motionless heap/,
             /blinks in astonishment, then falls flat on <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> face with a loud \*THUD\*/,
@@ -408,7 +407,7 @@ module Lich
             /releases a horrible wail then lies still/,
             /screams (?:emotionlessly )?one last time and lies still/,
             /collapses into a heap of quivering jelly/,
-            /tries to crawl away on the (?:floor|ground) but collapses and goes still/,
+            /tries to crawl away on the (?:floor|ground|deck) but collapses and goes still/,
             /collapses to the ground, dead as a pickled herring/,
             /crashes to the ground in a plume of dust/,
             /flattens out on the ground, dead as a salted flounder/,
@@ -417,7 +416,6 @@ module Lich
             /slams to the ground, dead as a salmon bear snack/,
             /crashes to the ground, dead as a carp on a rock/,
             /thuds to the ground in a plume of dust/,
-            /tries to crawl away on the ground but is instead consumed by ethereal light/,
             /collapses to the ground as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> flickers in and out of existence/,
             /falls to the ground motionless as small motes of light encompass <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> body/,
             /body falls to the ground as it is consumed by ethereal flame/,
@@ -482,6 +480,13 @@ module Lich
             /collapses to the ground, <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> ghostly pale legs kicking spastically before abruptly stilling as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> dies/,
             /mouth, raising blisters on <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> face as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> gasps for breath.  Then <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> ceases to breathe, and a look of blessed peace dawns over <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> twisted features as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> gives in to death/,
             /legs kick savagely as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> collapses, belching swarms of tiny, pale larvae.  They scatter wildly as <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> surrenders to death/,
+            /eyes slowly fades away/,
+            /collapses to the ground, a thick grey mist pouring from <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> nostrils/,
+            /horn dims, and <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> falls to the ground dead/,
+            /growls one last time and dies/,
+            /crashes to the floor in a plume of dust/,
+            /falls lifeless to the floor with a heavy thump/,
+            /screams, shudders one last time and dies/,
           )
           NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix}\s(?:<pushBold\/>)?(?:(?:an?|some|the)\s)?<a exist="(?<npc_id>[^"]+)" noun="[^"]+">[^<]+<\/a><popBold\/>(?:'s)?,?\s#{NpcDeathPostfix}[\.!"]\s?\r?\n?$/
 
