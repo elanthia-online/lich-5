@@ -166,7 +166,11 @@ module Lich
                         .reject { |item| [DRC.right_hand, DRC.left_hand].grep(item.short_regex).any? ? (stow_weapon(item.short_name) || true) : false }
 
         Lich::Messaging.msg("plain", "EquipmentManager: wear missing items #{missing_items}") if !missing_items.empty? && UserVars.equipmanager_debug
-        missing_items.reject { |item| wear_item?(item) }
+        missing_items.reject do |item|
+          item_copy = item.dup
+          item_copy.instance_variable_set(:@worn, false)
+          wear_item?(item_copy)
+        end
       end
 
       # Removes currently worn combat items that are not in the target gear set.
