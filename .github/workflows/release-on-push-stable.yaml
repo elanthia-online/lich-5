@@ -9,6 +9,8 @@
 # - Releases are created as DRAFT (invisible until human publishes via GitHub UI/CLI).
 # - Release body/title must be finalized before packaging begins.
 # - No reliance on a local git checkout for GH release edits/uploads.
+# - Draft release body lookup is an optional fallback; PR body lookup must keep the
+#   packaging path alive when GitHub briefly cannot resolve a draft by tag.
 # - PR labels 'skip-installer' or 'no-installer' gate the installer build (case-insensitive).
 #
 # OUTPUTS (selected)
@@ -59,7 +61,7 @@ jobs:
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
       # 1) Release Please for stable branch (creates public release, we convert to draft immediately)
-      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         id: rp
         with:
           skip-github-release: false
@@ -90,7 +92,7 @@ jobs:
       - name: Derive release vars from tag (no REST)
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         id: derive_rel
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           TAG: ${{ steps.rp.outputs.tag_name }}
         with:
@@ -102,70 +104,143 @@ jobs:
             core.setOutput('version', version);
             core.setOutput('published_at', new Date().toISOString());
 
-      - name: Find Release Please PR by commit SHA
+      - name: Find merged Release Please PR for this tag
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         id: find_pr
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           VERSION: ${{ steps.derive_rel.outputs.version }}
         with:
           script: |
             const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const sha = context.sha;
-            const version = process.env.VERSION || '';
-            
-            core.info(`Looking for PR associated with commit ${sha}`);
-            
-            // Find PRs associated with this commit (the merge commit that triggered this workflow)
-            let prs = [];
-            try {
-              const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+            const repo  = context.repo.repo;
+            const rawVersion = process.env.VERSION || '';
+
+            if (!rawVersion.trim()) {
+              core.setFailed('Missing release version for stable release notes PR lookup');
+              return;
+            }
+
+            // Match standard Release Please titles for the release version.
+            const v = rawVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');
+
+            async function listClosed(opts) {
+              return github.rest.pulls.list({
                 owner,
                 repo,
-                commit_sha: sha
-              });
-              prs = data || [];
-              core.info(`Found ${prs.length} PR(s) associated with commit`);
-            } catch (e) {
-              core.warning(`Failed to find PRs by commit: ${e.message}`);
+                state: 'closed',
+                per_page: 100,
+                ...opts
+              }).then(r => r.data || []);
             }
-            
-            // Filter for merged release-please PRs matching this version
-            const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const v = esc(version);
-            const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');
-            
-            const hit = prs.find(pr => 
-              pr.merged_at && 
+
+            // Prefer the standard stable Release Please branch first.
+            const head = `${owner}:release-please--branches--main`;
+            let pulls = await listClosed({ base: 'main', head });
+            if (!pulls.length) pulls = await listClosed({ base: 'main' });
+
+            let hit = pulls.find(pr =>
+              pr.merged_at &&
               titleRe.test(pr.title || '')
             );
-            
+
+            // Fall back to search in case the branch association is unavailable.
+            if (!hit) {
+              const q = `repo:${owner}/${repo} is:pr is:merged "${rawVersion}" in:title base:main`;
+              try {
+                const search = await github.rest.search.issuesAndPullRequests({
+                  q,
+                  per_page: 10,
+                  sort: 'updated',
+                  order: 'desc'
+                });
+                const item = (search.data.items || [])[0];
+                if (item) {
+                  hit = await github.rest.pulls.get({
+                    owner,
+                    repo,
+                    pull_number: item.number
+                  }).then(r => r.data);
+                }
+              } catch (e) {
+                core.info(`Search fallback did not resolve a PR: ${e.message}`);
+              }
+            }
+
+            // Final fallback: any merged Release Please branch PR matching the version.
+            if (!hit) {
+              pulls = await listClosed({});
+              hit = pulls.find(pr =>
+                pr.merged_at &&
+                /release-please--branches--/.test(pr.head && pr.head.ref || '') &&
+                titleRe.test(pr.title || '')
+              );
+            }
+
             if (hit) {
               core.info(`Found PR #${hit.number}: ${hit.title}`);
               core.setOutput('found', 'true');
               core.setOutput('number', String(hit.number));
               core.setOutput('body', hit.body || '');
             } else {
-              core.warning(`No matching merged PR found for version ${version}`);
+              core.warning(`No matching merged PR found for version ${rawVersion}`);
               core.setOutput('found', 'false');
             }
 
       - name: Choose seed body (PR preferred)
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         id: choose_seed
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           PR_BODY: ${{ steps.find_pr.outputs.body }}
+          TAG: ${{ steps.rp.outputs.tag_name }}
         with:
           script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
             const prb = process.env.PR_BODY || '';
-            core.setOutput('body', prb);
+            const tag = (process.env.TAG || '').trim();
+
+            async function releaseBodyByTagFallback() {
+              if (!tag) {
+                core.warning('Missing tag for optional stable release body fallback');
+                return '';
+              }
+
+              try {
+                const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+                return data.body || '';
+              } catch (e) {
+                core.warning(`Could not read release by tag '${tag}': ${e.message}`);
+              }
+
+              try {
+                const { data } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 });
+                const hit = (data || []).find(r => r.tag_name === tag);
+                return hit && hit.body ? hit.body : '';
+              } catch (e) {
+                core.warning(`Could not read release list for fallback body: ${e.message}`);
+                return '';
+              }
+            }
+
+            if (prb.trim().length > 0) {
+              core.info('Using merged Release Please PR body as release seed');
+              core.setOutput('body', prb);
+              return;
+            }
+
+            const rel = await releaseBodyByTagFallback();
+            core.info(rel.trim().length > 0
+              ? 'Using current draft release body as release seed fallback'
+              : 'No PR or draft release body found; transform step will emit a header-only body');
+            core.setOutput('body', rel);
 
       - name: Transform body (header + cleanup + footer)
         if: ${{ steps.rp.outputs.release_created == 'true' }}
         id: transform_body
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           SEED: ${{ steps.choose_seed.outputs.body }}
           VERSION: ${{ steps.derive_rel.outputs.version }}
@@ -343,7 +418,7 @@ jobs:
 
       # Pin Ruby explicitly on windows-latest
       - name: Set up Ruby
-        uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f # v1.295.0
+        uses: ruby/setup-ruby@0cb964fd540e0a24c900370abf38a33466142735 # v1.305.0
         with:
           bundler-cache: false
 

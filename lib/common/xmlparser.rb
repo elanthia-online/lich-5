@@ -319,15 +319,14 @@ module Lich
             ActiveSpell.request_update
           end
           if name == 'resource'
-            # rubocop:disable Lint/Void
             nil
-            # rubocop:enable Lint/Void
           end
           if name == 'pushStream'
             @in_stream = true
             @current_stream = attributes['id'].to_s
             if XMLData.game =~ /^GS/
               GameObj.clear_inv if attributes['id'].to_s == 'inv'
+              GameObj.clear_reserve if attributes['id'].to_s == 'reserve'
             end
           end
           if name == 'popStream'
@@ -658,7 +657,6 @@ module Lich
             Game._puts("#{$cmd_prefix}_flag Display Inventory Boxes 1")
           end
         rescue
-          $stdout.puts "--- error: XMLParser.tag_start: #{$!}"
           Lich.log "error: XMLParser.tag_start: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
           sleep 0.1
           reset
@@ -758,9 +756,14 @@ module Lich
               end
             elsif @active_ids.include?('room players')
               if @active_tags.include?('a')
-                @pc = GameObj.new_pc(@obj_exist, @obj_noun, "#{@player_title}#{text_string}", @player_status)
+                if @obj_exist.to_s.start_with?('-')
+                  @pc = GameObj.new_pc(@obj_exist, @obj_noun, "#{@player_title}#{text_string}", @player_status)
+                  @arrival_pcs.push(@pc.noun) if (defined?(Lich::Claim) && Lich::Claim::Lock.owned?)
+                else
+                  @pc = nil
+                end
                 @player_status = nil
-                @arrival_pcs.push(@pc.noun) if (defined?(Lich::Claim) && Lich::Claim::Lock.owned?)
+                @player_title = nil
               else
                 if @game =~ /^DR/
                   GameObj.clear_pcs
@@ -794,7 +797,7 @@ module Lich
                     GameObj.new_pc(nil, noun, player, status)
                   }
                 else
-                  if (text_string =~ /^ who (?:is|appears) ([\w\s]+)(?:,| and|\.|$)/) or (text_string =~ / \(([\w\s]+)\)(?: \(([\w\s]+)\))?/)
+                  if @pc && ((text_string =~ /^ who (?:is|appears) ([\w\s]+)(?:,| and|\.|$)/) || (text_string =~ / \(([\w\s]+)\)(?: \(([\w\s]+)\))?/))
                     if @pc.status
                       @pc.status.concat " #{$1}"
                     else
@@ -828,6 +831,8 @@ module Lich
             @society_task = text_string
           elsif (@current_stream == 'inv') and @active_tags.include?('a')
             GameObj.new_inv(@obj_exist, @obj_noun, text_string, nil)
+          elsif (@current_stream == 'reserve') and @active_tags.include?('a')
+            GameObj.new_reserve(@obj_exist, @obj_noun, text_string)
           elsif @check_obvious_hiding && text_string =~ /obvious signs of someone hiding/
             @room_player_hidden = true
           elsif @current_stream == 'familiar'
@@ -878,7 +883,6 @@ module Lich
             end
           end
         rescue
-          $stdout.puts "--- error: XMLParser.text: #{$!}"
           Lich.log "error: XMLParser.text: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
           sleep 0.1
           reset
@@ -942,7 +946,6 @@ module Lich
           @last_tag = @active_tags.pop
           @last_id = @active_ids.pop
         rescue
-          $stdout.puts "--- error: XMLParser.tag_end: #{$!}"
           Lich.log "error: XMLParser.tag_end: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
           sleep 0.1
           reset

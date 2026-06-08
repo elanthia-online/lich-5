@@ -102,4 +102,110 @@ RSpec.describe Lich::DragonRealms::DRInfomon do
       expect(described_class.startup_complete?).to be true
     end
   end
+
+  describe '.startup_script flag handling' do
+    it 'wraps issue_command output with Array() for nil safety' do
+      script = described_class.startup_script
+      expect(script).to include('Array(Lich::Util.issue_command("flag"')
+    end
+  end
+
+  describe '.post_startup_checks' do
+    before do
+      allow(described_class).to receive(:warn_obsolete_scripts)
+      allow(described_class).to receive(:warn_obsolete_data_files)
+      allow(described_class).to receive(:warn_custom_scripts)
+    end
+
+    it 'calls all warning methods' do
+      described_class.post_startup_checks
+      expect(described_class).to have_received(:warn_obsolete_scripts)
+      expect(described_class).to have_received(:warn_obsolete_data_files)
+      expect(described_class).to have_received(:warn_custom_scripts)
+    end
+
+    it 'reloads $setupfiles when defined' do
+      setupfiles = double('setupfiles')
+      allow(setupfiles).to receive(:reload)
+      original = $setupfiles
+      $setupfiles = setupfiles
+      described_class.post_startup_checks
+      expect(setupfiles).to have_received(:reload)
+    ensure
+      $setupfiles = original
+    end
+
+    it 'rescues and logs errors without raising' do
+      allow(described_class).to receive(:warn_obsolete_scripts).and_raise(StandardError, 'test error')
+      expect { described_class.post_startup_checks }.not_to raise_error
+    end
+  end
+
+  describe '.warn_custom_scripts' do
+    let(:tmpdir) { Dir.mktmpdir('startup-test') }
+    let(:custom_dir) { File.join(tmpdir, 'custom') }
+
+    before do
+      stub_const('SCRIPT_DIR', tmpdir)
+      FileUtils.mkdir_p(custom_dir)
+    end
+
+    after { FileUtils.remove_entry(tmpdir, true) }
+
+    it 'only checks .lic files' do
+      # Create a non-.lic file that shadows a curated name
+      File.write(File.join(custom_dir, 'moonwatch.txt'), '')
+      File.write(File.join(tmpdir, 'moonwatch.txt'), '')
+
+      expect(Lich::Messaging).not_to receive(:msg)
+      described_class.warn_custom_scripts
+    end
+
+    it 'warns when custom .lic files shadow curated scripts' do
+      File.write(File.join(custom_dir, 'moonwatch.lic'), '')
+      File.write(File.join(tmpdir, 'moonwatch.lic'), '')
+
+      expect(Lich::Messaging).to receive(:msg).with('info', /curated scripts/)
+      expect(Lich::Messaging).to receive(:msg).with('info', /moonwatch\.lic/)
+      described_class.warn_custom_scripts
+    end
+
+    it 'does not warn when custom scripts do not shadow curated ones' do
+      File.write(File.join(custom_dir, 'my-custom-script.lic'), '')
+
+      expect(Lich::Messaging).not_to receive(:msg)
+      described_class.warn_custom_scripts
+    end
+
+    it 'does nothing when custom directory does not exist' do
+      FileUtils.rm_rf(custom_dir)
+      expect { described_class.warn_custom_scripts }.not_to raise_error
+    end
+  end
+
+  describe '.safe_message' do
+    it 'delegates to Lich::Messaging.msg when available' do
+      expect(Lich::Messaging).to receive(:msg).with('error', 'test')
+      described_class.safe_message('error', 'test')
+    end
+
+    it 'falls back to safe_log when Messaging is unavailable' do
+      allow(Lich::Messaging).to receive(:respond_to?).with(:msg).and_return(false)
+      expect(described_class).to receive(:safe_log).with('test')
+      described_class.safe_message('error', 'test')
+    end
+  end
+
+  describe '.safe_log' do
+    it 'delegates to Lich.log when available' do
+      expect(Lich).to receive(:log).with('test log')
+      described_class.safe_log('test log')
+    end
+
+    it 'falls back to $stderr when Lich.log is unavailable' do
+      allow(Lich).to receive(:respond_to?).with(:log).and_return(false)
+      expect($stderr).to receive(:puts).with('test log')
+      described_class.safe_log('test log')
+    end
+  end
 end

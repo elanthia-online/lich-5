@@ -6,6 +6,9 @@
 ## - workflow_run path handles when Release Please updates the PR using GITHUB_TOKEN,
 ##   which does not emit pull_request events. Chaining off the upstream workflow
 ##   restores deterministic formatting after RP updates.
+## - workflow_run formatting is state-driven: even if Prepare Stable Release
+##   reports failure after updating the RP branch/body, an open pending stable
+##   RP PR is still formatted.
 ##
 ## Block scalars for `if:`:
 ## - Prefer the folded scalar (>) for multi-line expressions because GitHub's `if:`
@@ -59,16 +62,17 @@ jobs:
           mode: stable
 
 
-  format_from_release_please_run:
+  format_from_prepare_stable_release:
     # Job: Format PR Body on Workflow Complete
     # Why: Release Please updates the PR using GITHUB_TOKEN, which does not emit
     #      pull_request events. This job chains off the upstream workflow completion
     #      as a reliable signal to re-format the open RP PR.
     name: Format PR Body on Workflow Complete
-    # Gate strictly to successful workflow_run events from "Prepare Stable Release".
+    # Gate to completed Prepare Stable Release runs only. Do not require success:
+    # Prepare can update the RP PR body and then fail later (for example, on a
+    # stale ref update), leaving the open PR in raw Release Please format.
     if: >
       github.event_name == 'workflow_run' &&
-      github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.name == 'Prepare Stable Release'
     runs-on: ubuntu-latest
     steps:
@@ -82,7 +86,7 @@ jobs:
       #   - Author is RP bot (release-please[bot] or github-actions[bot])
       # Adjust here if your labeling/authoring conventions change.
         id: find
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const { owner, repo } = context.repo;

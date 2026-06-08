@@ -1,3 +1,18 @@
+# ------------------------------------------------------------------------------
+# RuboCop CI: required-check-safe preflight
+#
+# Purpose
+# - Keep the RuboCop check present and green for branch protection on every
+#   push/PR, while skipping the expensive Ruby setup and lint run when a change
+#   only touches files RuboCop cannot inspect.
+#
+# How preflight decides
+# - For pull_request: lists changed files via pulls.listFiles.
+# - For push: compares commits between before and the new SHA.
+# - If any changed file is Ruby-lintable, should_lint = true.
+# - If it cannot determine the file list, it defaults to should_lint = true for
+#   safety.
+# ------------------------------------------------------------------------------
 name: Rubocop
 on: 
   push:
@@ -5,15 +20,7 @@ on:
       - master
       - staging
       - main
-    paths:
-      - "**/*.lic"
-      - "**/*.rb"
-      - "lich.rbw"
   pull_request:
-    paths:
-      - "**/*.lic"
-      - "**/*.rb"
-      - "lich.rbw"
 
 jobs:
   rubocop:
@@ -22,14 +29,68 @@ jobs:
       BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     name: Run Rubocop on Ruby
     steps:
+      - name: Classify changed files (preflight)
+        id: preflight
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const ev    = context.eventName;
+            function isRubyLintable(path) {
+              return path.endsWith('.rb') ||
+                path.endsWith('.lic') ||
+                path === 'lich.rbw';
+            }
+            async function changedFilesForPR(number) {
+              const files = await github.paginate(
+                github.rest.pulls.listFiles,
+                { owner, repo, pull_number: number, per_page: 100 }
+              );
+              return files.map(f => f.filename);
+            }
+            async function changedFilesForPush() {
+              const before = (context.payload.before || '').trim();
+              const head   = context.sha;
+              if (!before) return null;
+              const cmp = await github.rest.repos.compareCommits({ owner, repo, base: before, head });
+              return (cmp.data.files || []).map(f => f.filename);
+            }
+            try {
+              let files = null;
+              if (ev === 'pull_request') {
+                const num = context.payload.pull_request && context.payload.pull_request.number;
+                files = num ? await changedFilesForPR(num) : null;
+              } else if (ev === 'push') {
+                files = await changedFilesForPush();
+              }
+              if (!files || files.length === 0) {
+                core.notice('Preflight: could not determine changed files; defaulting to run RuboCop.');
+                core.setOutput('should_lint', 'true');
+              } else {
+                const lintable = files.filter(isRubyLintable);
+                const should = lintable.length > 0;
+                core.notice(`Preflight: changed files = ${files.length}, lintable = ${lintable.length}; should_lint=${should}`);
+                core.setOutput('should_lint', should ? 'true' : 'false');
+              }
+            } catch (error) {
+              core.error(`Preflight failed: ${error.message || error}`);
+              core.setOutput('should_lint', 'true');
+            }
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: steps.preflight.outputs.should_lint == 'true'
         with:
           fetch-depth: 0
       
-      - uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f # v1.295.0
+      - uses: ruby/setup-ruby@0cb964fd540e0a24c900370abf38a33466142735 # v1.305.0
+        if: steps.preflight.outputs.should_lint == 'true'
         with:
           bundler-cache: true
 
       - name: Rubocop
+        if: steps.preflight.outputs.should_lint == 'true'
         run: |
           bundle exec rubocop
+      - name: RuboCop skipped (no Ruby-lintable files changed)
+        if: steps.preflight.outputs.should_lint != 'true'
+        run: echo "Preflight determined no Ruby-lintable files changed; skipping RuboCop."

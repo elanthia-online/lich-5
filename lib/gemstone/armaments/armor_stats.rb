@@ -491,7 +491,7 @@ module Lich
         # This method is useful when you want to list the name variants associated
         # with a particular armor subgroup (ASG).
         #
-        # @param asg [Integer, Symbol] the Armor Sub Group number (1–20) or symbol (e.g., :asg_18)
+        # @param asg [Integer, Symbol] the Armor Sub Group number (1-20) or symbol (e.g., :asg_18)
         # @return [Array<String>] list of all known aliases for the armor type, or an empty array if not found
         def self.names_in_asg(asg)
           asg_sym = asg.is_a?(Integer) ? :"asg_#{asg}" : asg.to_sym

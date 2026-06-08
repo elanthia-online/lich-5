@@ -299,11 +299,18 @@ module Lich
           end
         end
 
+        # Writes a string to the game server socket.
+        #
+        # Thread-safe via mutex. Silently absorbs fatal connection errors
+        # so callers (scripts) are not killed by a broken server link.
+        #
+        # @param str [String] the raw command to send upstream
+        # @return [nil] on connection error
         def _puts(str)
           @mutex.synchronize do
             @socket.puts(str)
           end
-        rescue Errno::EPIPE, IOError => e
+        rescue Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, IOError => e
           Lich.log "error: _puts: #{e}\n\t#{e.backtrace.first}"
           nil
         end
@@ -389,7 +396,7 @@ module Lich
               should_continue = handle_thread_error(e)
 
               # Only retry if handle_thread_error says it's safe and socket is still open
-              if should_continue && !@socket.closed? && !$_CLIENT_.closed?
+              if should_continue && !@socket.closed? && $_CLIENT_.alive?
                 Lich.log "Retrying server thread after error..."
                 consecutive_timeouts = 0 # Reset counter on retry
                 sleep 1 # Brief pause before retry
@@ -460,7 +467,18 @@ module Lich
           # XMLData.name. If Vars is accessed before XMLData.name is set, it
           # loads/saves under scope "DR:" instead of "DR:CharName", overwriting
           # real data with an empty session.
-          Thread.new { Lich::Util::Update.sync_all_repos }
+          Thread.new do
+            # Wait for XMLData.name to be populated by process_xml_data
+            # before touching Vars. 200 x 50ms = 10s max wait.
+            200.times do
+              break if !XMLData.name.nil? && !XMLData.name.empty?
+
+              sleep 0.05
+            end
+            Lich::Util::Update.sync_all_repos if !XMLData.name.nil? && !XMLData.name.empty?
+          rescue StandardError => e
+            Lich.log "repo_sync(login): #{e.class}: #{e.message}"
+          end
 
           Script.start('autostart') if defined?(Script) && Script.respond_to?(:exists?) && Script.exists?('autostart')
           @@autostarted = true
@@ -559,7 +577,6 @@ module Lich
               return process_xml_data(server_string) # Return to retry with fixed string
             end
 
-            $stdout.puts "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
             Lich.log "Invalid XML detected - please report this: #{server_string.inspect}"
             Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
           end
@@ -606,27 +623,15 @@ module Lich
 
         def send_to_client(alt_string)
           if $_DETACHABLE_CLIENT_
-            begin
-              $_DETACHABLE_CLIENT_.write(alt_string)
-            rescue
-              $_DETACHABLE_CLIENT_.close rescue nil
-              $_DETACHABLE_CLIENT_ = nil
-              respond "--- Lich: error: client_thread: #{$!}"
-              respond $!.backtrace.first
-              Lich.log "error: client_thread: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            end
-          else
-            begin
-              $_CLIENT_.write(alt_string)
-            rescue Errno::EPIPE, IOError => e
-              Lich.log "error: client_thread: #{e}\n\t#{e.backtrace.join("\n\t")}"
-            end
+            $_DETACHABLE_CLIENT_.write(alt_string)
+            $_DETACHABLE_CLIENT_ = nil unless $_DETACHABLE_CLIENT_&.alive?
+          elsif $_CLIENT_
+            $_CLIENT_.write(alt_string)
           end
         end
 
         def handle_thread_error(error)
           Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
-          $stdout.puts "error: server_thread: #{error}\n\t#{error.backtrace.slice(0..10).join("\n\t")}"
           sleep 0.2
 
           # Determine if we should retry
@@ -641,7 +646,7 @@ module Lich
             return false
           else
             # Check if socket/client are closed or if it's a known fatal error
-            if $_CLIENT_.closed? || @socket.closed?
+            if !$_CLIENT_.alive? || @socket.closed?
               Lich.log "Client or socket closed - will not retry"
               return false
             elsif error.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i

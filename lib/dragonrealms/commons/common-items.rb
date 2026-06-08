@@ -211,6 +211,8 @@ module Lich
       UNTIE_ITEM_FAILURE_PATTERNS = [
         /^You don't seem to be able to move/,
         /^You fumble with the ties/,
+        /^You are a little too busy/,
+        /^You are a bit too busy/,
         /^Untie what/,
         /^What were you referring/
       ].freeze
@@ -238,7 +240,8 @@ module Lich
         /^You slam the heels/,
         /^You work your way out/,
         /^Grunting with momentary exertion/, # Grunting with momentary exertion, you grip each of your heavy combat boots in turn by the heel, and pull them off.
-        /^With masterful grace, you ready/
+        /^With masterful grace, you ready/,
+        /^A brisk chill leaves you as you/ # cold-enchanted items (e.g., ice-veined leather gloves)
       ].freeze
 
       REMOVE_ITEM_FAILURE_PATTERNS = [
