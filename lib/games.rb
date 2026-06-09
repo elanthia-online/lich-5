@@ -362,7 +362,10 @@ module Lich
                   consecutive_timeouts = 0
 
                   # Break if socket closed (gets returns nil)
-                  break if server_string.nil?
+                  if server_string.nil?
+                    record_shutdown_reason(:game_eof, source: :game_reader)
+                    break
+                  end
 
                   @last_recv = Time.now
                   @_buffer.update(server_string) if defined?(TESTING) && TESTING
@@ -399,9 +402,13 @@ module Lich
                 end
               end
             rescue StandardError => e
+              if intentional_shutdown_close_error?(e)
+                Lich.log "info: server thread exiting after orderly user shutdown"
+                next
+              end
+
               # Handle any other errors
               should_continue = handle_thread_error(e)
-
               # Only retry if handle_thread_error says it's safe and socket is still open
               if should_continue && !@socket.closed? && $_CLIENT_.alive?
                 Lich.log "Retrying server thread after error..."
@@ -409,6 +416,7 @@ module Lich
                 sleep 1 # Brief pause before retry
                 retry
               else
+                record_shutdown_reason(shutdown_reason_for_thread_exit(e), source: :game_reader, detail: e.class)
                 Lich.log "Server thread exiting due to unrecoverable error"
               end
             end
@@ -664,6 +672,37 @@ module Lich
               return true
             end
           end
+        end
+
+        def shutdown_reason_for_thread_exit(error)
+          case error
+          when Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
+            :game_timeout
+          when Errno::ECONNRESET
+            :connection_reset
+          when Errno::EPIPE
+            :connection_pipe
+          when Errno::ECONNABORTED
+            :connection_aborted
+          else
+            :unrecoverable_game_thread_error
+          end
+        end
+
+        def record_shutdown_reason(reason, source:, detail: nil)
+          return unless defined?(Lich::Common::ShutdownCoordinator)
+
+          Lich::Common::ShutdownCoordinator.request(reason: reason, source: source, detail: detail)
+        rescue StandardError => e
+          Lich.log "warning: failed to record shutdown reason #{reason.inspect}: #{e.class}: #{e.message}"
+        end
+
+        def intentional_shutdown_close_error?(error)
+          return false unless defined?(Lich::Common::ShutdownCoordinator)
+          return false unless Lich::Common::ShutdownCoordinator.orderly_user_exit?
+          return false unless @socket&.closed?
+
+          error.to_s =~ /stream closed in another thread|closed stream/i
         end
 
         protected
