@@ -265,11 +265,13 @@ module Lich
               match = Regexp.last_match
               @expr_hold.push(['experience.fame', match[:fame].delete(',').to_i])
               :ok
+=begin
             when Pattern::RealExp
               match = Regexp.last_match
               @expr_hold.push(['experience.field_experience_current', match[:fxp_current].delete(',').to_i],
                               ['experience.field_experience_max', match[:fxp_max].delete(',').to_i])
               :ok
+=end
             when Pattern::AscExp
               match = Regexp.last_match
               @expr_hold.push(['experience.ascension_experience', match[:ascension_experience].delete(',').to_i])
