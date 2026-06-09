@@ -5,6 +5,7 @@ module Lich
     class Flags
       @@flags = {}
       @@matchers = {}
+      @@counts = {}
 
       def self.[](key)
         @@flags[key]
@@ -16,6 +17,7 @@ module Lich
 
       def self.add(key, *matchers)
         @@flags[key] = false
+        @@counts[key] = 0
         @@matchers[key] = matchers.map { |item| item.is_a?(Regexp) ? item : /#{item}/i }
       end
 
@@ -25,6 +27,7 @@ module Lich
 
       def self.delete(key)
         @@matchers.delete key
+        @@counts.delete key
         @@flags.delete key
       end
 
@@ -34,6 +37,18 @@ module Lich
 
       def self.matchers
         @@matchers
+      end
+
+      def self.count(key)
+        @@counts[key] || 0
+      end
+
+      def self.counts
+        @@counts.dup.freeze
+      end
+
+      def self.increment_count(key)
+        @@counts[key] = (@@counts[key] || 0) + 1
       end
     end
   end
