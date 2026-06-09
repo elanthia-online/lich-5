@@ -1,34 +1,5 @@
 =begin
 xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
-
-    Maintainer: Elanthia-Online
-    Original Author: Tillmen, others
-    game: Gemstone
-    tags: CORE, spells
-    required: Lich > 5.7
-    version: 1.3.4
-
-  changelog:
-    v1.3.4 (2025-01-04)
-      Feature: Add support for room IDs in DR
-    v1.3.3 (2024-10-31)
-      Feature: Add DR Active Spells to XMLData
-    v1.3.2 (2024-10-17)
-      Bugfix: Simu breaking change for UID and roomname logic
-    v1.3.1 (2024-09-11)
-      Split out if/elif block for better tag detection in DR
-    v1.3.0 (2023-11-19)
-      Add usage of new Lich::Claim module
-    v1.2.1 (2022-05-29)
-      Logic to avoid adding 'Cooldown' tag to any spell with text 'Recovery'
-      (for 599, Rapid Fire Recovery) in XMLData.active_spells
-    v1.2.0 (2022-03-09)
-      Adding the tags 'Cooldown' and 'Debuff' so that spell-list.xml spell detection of 'Cooldown' and recovery is back in operation.
-    v1.1.0 (2022-03-08)
-      rebaselined as xmlparser.rb to support continuing game changes
-    v1.0.0
-      Initial release and subsequent modifications as SIMU XML changes warranted
-
 =end
 
 require File.join(LIB_DIR, 'common', 'xml_entities.rb')
@@ -47,7 +18,8 @@ module Lich
                   :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
                   :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
                   :dialogs, :room_id, :previous_nav_rm, :concentration, :max_concentration,
-                  :arrival_pcs, :room_player_hidden
+                  :arrival_pcs, :room_player_hidden, :field_exp, :max_field_exp,
+                  :room_climate, :room_terrain
       attr_accessor :send_fake_tags
 
       @@warned_deprecated_spellfront = 0
@@ -97,6 +69,8 @@ module Lich
         @room_description = String.new
         @room_exits = Array.new
         @room_exits_string = String.new
+        @room_climate = 0
+        @room_terrain = 0
 
         @familiar_room_title = String.new
         @familiar_room_description = String.new
@@ -129,6 +103,8 @@ module Lich
         @stance_value = 0
         @mind_text = String.new
         @mind_value = 0
+        @field_exp = 0
+        @max_field_exp = 0
         @prepared_spell = 'None'
         @encumbrance_text = String.new
         @encumbrance_full_text = String.new
@@ -373,6 +349,10 @@ module Lich
           if name == 'resource'
             nil
           end
+          if name == 'roommeta'
+            @room_climate = attributes['climate'].to_i if attributes['climate']
+            @room_terrain = attributes['terrain'].to_i if attributes['terrain']
+          end
           if name == 'pushStream'
             @in_stream = true
             @current_stream = attributes['id'].to_s
@@ -483,6 +463,8 @@ module Lich
             elsif attributes['id'] == 'mindState'
               @mind_text = attributes['text']
               @mind_value = attributes['value'].to_i
+              @field_exp = attributes['field_exp'].to_i if attributes['field_exp']
+              @max_field_exp = attributes['max_field_exp'].to_i if attributes['max_field_exp']
               $_CLIENT_.puts "\034GSr#{MINDMAP[@mind_text]}\r\n" if @send_fake_tags
             elsif attributes['id'] == 'health'
               @health, @max_health = attributes['text'].scan(/-?\d+/).collect { |num| num.to_i }
