@@ -35,6 +35,7 @@ require 'json'
 require 'monitor'
 require 'net/http'
 require 'ostruct'
+require 'ox'
 require 'resolv'
 require 'rexml/document'
 require 'rexml/streamlistener'
@@ -75,7 +76,6 @@ require File.join(LIB_DIR, 'common', 'class_exts', 'stringproc.rb')
 require File.join(LIB_DIR, 'common', 'class_exts', 'synchronizedsocket.rb')
 require File.join(LIB_DIR, 'common', 'limitedarray.rb')
 require File.join(LIB_DIR, 'common', 'xmlparser.rb')
-require File.join(LIB_DIR, 'common', 'xml_bridge.rb')
 require File.join(LIB_DIR, 'common', 'upstreamhook.rb')
 require File.join(LIB_DIR, 'common', 'downstreamhook.rb')
 require File.join(LIB_DIR, 'common', 'settings.rb')
