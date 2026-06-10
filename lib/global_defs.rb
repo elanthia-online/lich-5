@@ -2170,19 +2170,18 @@ def sf_to_wiz(line, bypass_multiline: false)
   end
 end
 
-def strip_xml(line, type: 'main')
+def strip_xml(line)
   return line if line == "\r\n"
 
-  if $strip_xml_multiline[type]
-    $strip_xml_multiline[type] = $strip_xml_multiline[type] + line
-    line = $strip_xml_multiline[type]
+  if $strip_xml_multiline
+    $strip_xml_multiline = $strip_xml_multiline + line
+    line = $strip_xml_multiline
   end
-  if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
-    $strip_xml_multiline ||= {}
-    $strip_xml_multiline[type] = line
+  if line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length
+    $strip_xml_multiline = line
     return nil
   end
-  $strip_xml_multiline[type] = nil
+  $strip_xml_multiline = nil
 
   line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
   line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
