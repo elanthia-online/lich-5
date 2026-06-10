@@ -24,7 +24,7 @@
 # Usage:
 #   ruby benchmark.rb [options]
 #     -i, --iterations N   body-block repeats per run (default 1)
-#     -r, --runs R         timed runs (default 500)
+#     -r, --runs R         timed runs (default 100)
 #     -w, --warmup W       untimed warmup runs (default 5)
 #     -f, --fixture PATH   server-stream fixture (default benchmark/fixtures/gs_sample.xml)
 #         --keep           keep the temp dir for inspection
@@ -43,7 +43,7 @@ CLOCK = Process::CLOCK_MONOTONIC
 
 options = {
   iterations: 1,
-  runs: 500,
+  runs: 100,
   warmup: 5,
   fixture: File.join(REPO, 'benchmark', 'fixtures', 'gs_sample.xml'),
   keep: false
@@ -61,6 +61,12 @@ end.parse!
 raw = File.read(options[:fixture])
 HEADER, BODY = raw.include?(MARKER) ? raw.split("#{MARKER}\n", 2) : ['', raw]
 BODY_LINES = BODY.count("\n")
+
+# Detect the game from the fixture's settingsInfo. Lich loads game-specific
+# modules via the launch GAMECODE (which drives `include Lich::Gemstone` /
+# `DragonRealms` in main.rb); without the matching include, GameLoader can't
+# resolve that game's constants (e.g. DRInfomon).
+GAME_CODE = (HEADER + BODY) =~ /instance=['"]DR/ ? 'DR' : 'GS'
 
 def fmt(secs)
   format('%.3fs', secs)
@@ -114,11 +120,15 @@ def benchmark(opts)
     server.close rescue nil
   end
 
+  # The loopback host can't be sniffed for the game, so pass an explicit game
+  # flag (--dragonrealms / --gemstone) to load the right module under --pipe.
+  game_flag = GAME_CODE == 'DR' ? '--dragonrealms' : '--gemstone'
+
   args = [
     'bundle', 'exec', 'ruby', 'lich.rbw',
     "--data=#{tmp}/data", "--temp=#{tmp}/temp", "--logs=#{tmp}/logs",
     "--scripts=#{tmp}/scripts", "--maps=#{tmp}/maps", "--backup=#{tmp}/backup",
-    '-g', "127.0.0.1:#{port}", '--pipe', '--no-gtk'
+    '-g', "127.0.0.1:#{port}", '--pipe', '--no-gtk', game_flag
   ]
   env = { 'BUNDLE_WITHOUT' => 'gtk:vscode:profanity' }
 
@@ -180,7 +190,7 @@ end
 
 puts 'Lich --pipe throughput benchmark'
 puts "  ruby:       #{RUBY_DESCRIPTION}"
-puts "  fixture:    #{options[:fixture]}"
+puts "  fixture:    #{options[:fixture]} (#{GAME_CODE})"
 puts "  header:     #{HEADER.empty? ? '(none)' : "#{HEADER.count("\n")} lines, sent once"}"
 puts "  body:       #{BODY_LINES} lines/block x #{options[:iterations]} = #{BODY_LINES * options[:iterations]} lines/run"
 puts "  warmup:     #{options[:warmup]}, timed runs: #{options[:runs]}"
