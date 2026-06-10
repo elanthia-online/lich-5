@@ -27,11 +27,7 @@ module Lich
       end
 
       def attr(name, value)
-        # Ox hands back ASCII-8BIT strings; REXML produced UTF-8. Retag (O(1), no
-        # copy) so XMLData text/attributes match REXML's encoding -- otherwise
-        # non-ASCII content (accented names, smart quotes) would compare unequal
-        # to UTF-8 literals and break concatenation into UTF-8 buffers.
-        @attributes[name.to_s] = value.force_encoding(Encoding::UTF_8)
+        @attributes[name.to_s] = value.force_encoding(Encoding::WINDOWS_1252)
       end
 
       def attrs_done
@@ -39,12 +35,12 @@ module Lich
       end
 
       def text(value)
-        @listener.text(value.force_encoding(Encoding::UTF_8))
+        @listener.text(value.force_encoding(Encoding::WINDOWS_1252))
       end
 
       # REXML routes CDATA content through the same text handling.
       def cdata(value)
-        @listener.text(value.force_encoding(Encoding::UTF_8))
+        @listener.text(value.force_encoding(Encoding::WINDOWS_1252))
       end
 
       def end_element(name)
