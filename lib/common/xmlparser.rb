@@ -50,8 +50,6 @@ module Lich
 
       @@warned_deprecated_spellfront = 0
 
-      include REXML::StreamListener
-
       def initialize
         @buffer = String.new
         # @unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
@@ -237,6 +235,34 @@ module Lich
       end
 
       PSM_3_DIALOG_IDS = ["Buffs", "Active Spells", "Debuffs", "Cooldowns"]
+
+      # Ox::Sax interface: Ox parses the server stream directly into XMLData (see
+      # Game.process_xml_data). Ox fires start_element, then attr per attribute,
+      # then attrs_done, then text/children, then end_element. Attributes are
+      # accumulated and flushed to tag_start (matching the old REXML-style single
+      # tag_start(name, hash) call). The game stream is Windows-1252, so byte
+      # content is tagged with that encoding; names are ASCII.
+      def start_element(name)
+        @sax_element = name
+        @sax_attributes = {}
+      end
+
+      def attr(name, value)
+        @sax_attributes[name] = value.force_encoding(Encoding::WINDOWS_1252)
+      end
+
+      def attrs_done
+        tag_start(@sax_element, @sax_attributes)
+      end
+
+      def end_element(name)
+        tag_end(name)
+      end
+
+      # REXML routed CDATA through text handling; do the same.
+      def cdata(value)
+        text(value)
+      end
 
       def tag_start(name, attributes)
         # This is called once per element by REXML in games.rb
@@ -664,8 +690,9 @@ module Lich
       end
 
       def text(text_string)
-        # This is called once per element with text in it by REXML in games.rb
-        # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
+        # Called by Ox once per text node. The game stream is Windows-1252; tag
+        # the bytes with their actual encoding (was done in the old Ox bridge).
+        text_string = text_string.force_encoding(Encoding::WINDOWS_1252)
         begin
           # fixme: /<stream id="Spells">.*?<\/stream>/m
           # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))

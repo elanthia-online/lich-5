@@ -61,7 +61,7 @@ module Lich
           raise NotImplementedError, "#{self.class} must implement #get_documentation_url"
         end
 
-        def process_game_specific_data(server_string)
+        def process_game_specific_data(server_string, stripped_server = nil)
           raise NotImplementedError, "#{self.class} must implement #process_game_specific_data"
         end
 
@@ -528,44 +528,32 @@ module Lich
 
         def process_xml_data(server_string)
           begin
-            # Check for valid XML
-            REXML::Document.parse_stream("<root>#{server_string}</root>", XMLData)
+            # Ox is a permissive parser: it handles Simu's not-quite-XML stream
+            # without the clean/retry dance REXML required (nested quotes, missing
+            # 'd' end tags, etc. are tolerated rather than raised). XMLData itself
+            # implements the Ox::Sax interface, so Ox parses straight into it. No
+            # <root> wrapper needed: that was a REXML requirement (single root); Ox
+            # handles multiple top-level elements and bare text directly.
+            Ox.sax_parse(XMLData, server_string, convert_special: true, symbolize: false, skip: :skip_none)
           rescue => e
-            case e.to_s
-            # Missing attribute equal: <s> - in dynamic dialogs with a single apostrophe for possessive 'Tsetem's Items'
-            when /nested single quotes|nested double quotes|Missing attribute equal: <[^>]+>|Invalid attribute name: <[^>]+>/
-              original_server_string = server_string.dup
-              server_string = XMLCleaner.clean_nested_quotes(server_string)
-              if original_server_string != server_string
-                retry
-              else
-                handle_xml_error(server_string, e)
-                XMLData.reset
-                return
-              end
-            when /invalid characters/
-              server_string = XMLCleaner.fix_invalid_characters(server_string)
-              retry
-            when /Missing end tag for 'd'/
-              server_string = XMLCleaner.fix_xml_tags(server_string)
-              retry
-            else
-              handle_xml_error(server_string, e)
-              XMLData.reset
-              return
-            end
+            # Permissive parsing rarely raises; if it does, log and reset rather
+            # than killing the server thread.
+            handle_xml_error(server_string, e)
+            XMLData.reset
+            return
           end
+
+          stripped_server = strip_xml(server_string)
 
           # Process game-specific data using instance
           if @game_instance && Module.const_defined?(:GameLoader)
-            @game_instance.process_game_specific_data(server_string)
+            @game_instance.process_game_specific_data(server_string, stripped_server)
           end
 
           # Process downstream XML
           Script.new_downstream_xml(server_string) if defined?(Script)
 
           # Process stripped server string
-          stripped_server = strip_xml(server_string, type: 'main')
           stripped_server.split("\r\n").each do |line|
             @buffer.update(line) if defined?(TESTING) && TESTING
             Script.new_downstream(line) if defined?(Script) && !line.empty?
@@ -765,11 +753,12 @@ module Lich
         "https://gswiki.play.net/Lich:Software/Installation"
       end
 
-      def process_game_specific_data(server_string)
-        infomon_serverstring = server_string.dup
-        Infomon::XMLParser.parse(infomon_serverstring)
-        stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
-        stripped_infomon_serverstring.split("\r\n").each do |line|
+      def process_game_specific_data(server_string, stripped_server = nil)
+        # Infomon's XML-level parse needs the raw string; its line parser reuses
+        # the text already stripped by process_xml_data (XMLParser.parse does not
+        # mutate, so no dup or second strip_xml is needed).
+        Infomon::XMLParser.parse(server_string)
+        stripped_server.split("\r\n").each do |line|
           Infomon::Parser.parse(line) unless line.empty?
         end
       end
@@ -918,7 +907,7 @@ module Lich
         "https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich"
       end
 
-      def process_game_specific_data(server_string)
+      def process_game_specific_data(server_string, _stripped_server = nil)
         # Parse directly to allow inline modifications (e.g., inline exp display)
         # The parser modifies server_string in place via line.replace()
         DRParser.parse(server_string)
