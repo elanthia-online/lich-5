@@ -89,7 +89,9 @@ module Lich
           SilenceNoActive = /^The pall of silence leaves you\./.freeze
           CalmActive = /^A calm washes over you\./.freeze
           CalmNoActive = /^You are enraged by .*? attack!|^The feeling of calm leaves you\./.freeze
-          CutthroatActive = /slices deep into your vocal cords!$|^All you manage to do is cough up some blood\.$/.freeze
+          CutthroatActiveMid = /slices deep into your vocal cords!$/.freeze # mid-line: cannot be part of the anchored fast path
+          CutthroatActiveStart = /^All you manage to do is cough up some blood\.$/.freeze
+          CutthroatActive = Regexp.union(CutthroatActiveMid, CutthroatActiveStart).freeze
           CutthroatNoActive = /^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$|^That tingles, but there are no head injuries to repair\.$/.freeze
           ThornPoisonStart = /^One of the vines surrounding .*? lashes out at you, driving a thorn into your skin!  You feel poison coursing through your veins\.$/.freeze
           ThornPoisonProgression = /^You begin to feel a strange fatigue, spreading throughout your body\.$|^The strange lassitude is growing worse, making it difficult to keep up with any strenuous activities\.$|^You find yourself gradually slowing down, your muscles trembling with fatigue\.$|^It\'s getting increasingly difficult to move. It feels almost as if the air itself is growing thick as molasses\.$|^No longer able to fight this odd paralysis, you collapse to the ground, as limp as an old washrag\.$/.freeze
@@ -126,7 +128,7 @@ module Lich
           ALL_LIST = [CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
                       ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
                       Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
-                      BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
+                      BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActiveStart,
                       CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
                       SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
                       Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketGold,
@@ -140,14 +142,16 @@ module Lich
                       EnhanciveMartialSection, EnhanciveMartialSkill, EnhanciveSpellsSection, EnhanciveSpells,
                       EnhanciveStatisticsSection, EnhanciveStatistic, EnhanciveEnd, EnhanciveNone,
                       EnhanciveOn, EnhanciveOff, EnhancivePauses].freeze
-          All = Regexp.union(ALL_LIST)
-          # Fast-path guard for Parser.parse. Every pattern above is anchored to the
-          # start of the line EXCEPT CutthroatActive (whose first branch can occur
-          # mid-line). Anchoring the union with \A lets the engine attempt it only at
-          # position 0 instead of scanning every position of long (usually
-          # non-matching) lines -- that scan was ~half of all server-thread CPU.
-          # CutthroatActive keeps its own (scanning) check.
-          AllStart = Regexp.new('\A(?:' + Regexp.union(ALL_LIST - [CutthroatActive]).source + ')').freeze
+          # Mid-line patterns are matched anywhere in the line, so they cannot be part
+          # of the \A-anchored fast path. Add future mid-line patterns here (wrap in
+          # Regexp.union for more than one); the Parser.parse guard does not change.
+          AllMid = CutthroatActiveMid
+          # Fast-path guard for Parser.parse. Every pattern in ALL_LIST is anchored to
+          # the start of the line, so anchoring the union with \A lets the engine
+          # attempt it only at position 0 instead of scanning every position of long
+          # (usually non-matching) lines -- that scan was ~half of all server-thread
+          # CPU. Mid-line patterns (AllMid) keep their own scanning check.
+          AllStart = Regexp.new('\A(?:' + Regexp.union(ALL_LIST).source + ')').freeze
         end
 
         module State
@@ -208,9 +212,9 @@ module Lich
         end
 
         def self.parse(line)
-          # O(1) vs O(N): anchored union is attempted only at line start; the lone
-          # mid-line pattern (CutthroatActive) is checked separately.
-          return :noop unless Pattern::AllStart.match?(line) || Pattern::CutthroatActive.match?(line)
+          # O(1) vs O(N): anchored union is attempted only at line start; mid-line
+          # patterns (AllMid) are checked separately.
+          return :noop unless Pattern::AllStart.match?(line) || Pattern::AllMid.match?(line)
 
           begin
             case line
