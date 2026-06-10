@@ -123,23 +123,31 @@ module Lich
           EnhanciveOff = /^You (?:are no longer|already are not|are not currently) accepting the benefit(?:s)? of (?:your|any) enhancive (?:inventory )?items(?: in your inventory)?\./.freeze
           EnhancivePauses = /^You currently have (?<pauses>\d+) enhancive pauses? available\.$/.freeze
 
-          All = Regexp.union(CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
-                             ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
-                             Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
-                             BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
-                             CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
-                             SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
-                             Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketGold,
-                             TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
-                             WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, InnCheckedOut, SpellsongRenewed,
-                             ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
-                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, ResignConfirmCHE,
-                             ShadowEssence, ShadowEssenceGain, ShadowEssenceCap, SacrificeMana, SacrificeChannel, SacrificeInfest,
-                             SacrificeFate, SacrificeShift, GemstoneDust, EnhanciveStart, EnhanciveStat, EnhanciveSkillsSection,
-                             EnhanciveSkillRanks, EnhanciveSkillBonus, EnhanciveResourcesSection, EnhanciveResource,
-                             EnhanciveMartialSection, EnhanciveMartialSkill, EnhanciveSpellsSection, EnhanciveSpells,
-                             EnhanciveStatisticsSection, EnhanciveStatistic, EnhanciveEnd, EnhanciveNone,
-                             EnhanciveOn, EnhanciveOff, EnhancivePauses)
+          ALL_LIST = [CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
+                      ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
+                      Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
+                      BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
+                      CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
+                      SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
+                      Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketGold,
+                      TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
+                      WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, InnCheckedOut, SpellsongRenewed,
+                      ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
+                      AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, ResignConfirmCHE,
+                      ShadowEssence, ShadowEssenceGain, ShadowEssenceCap, SacrificeMana, SacrificeChannel, SacrificeInfest,
+                      SacrificeFate, SacrificeShift, GemstoneDust, EnhanciveStart, EnhanciveStat, EnhanciveSkillsSection,
+                      EnhanciveSkillRanks, EnhanciveSkillBonus, EnhanciveResourcesSection, EnhanciveResource,
+                      EnhanciveMartialSection, EnhanciveMartialSkill, EnhanciveSpellsSection, EnhanciveSpells,
+                      EnhanciveStatisticsSection, EnhanciveStatistic, EnhanciveEnd, EnhanciveNone,
+                      EnhanciveOn, EnhanciveOff, EnhancivePauses].freeze
+          All = Regexp.union(ALL_LIST)
+          # Fast-path guard for Parser.parse. Every pattern above is anchored to the
+          # start of the line EXCEPT CutthroatActive (whose first branch can occur
+          # mid-line). Anchoring the union with \A lets the engine attempt it only at
+          # position 0 instead of scanning every position of long (usually
+          # non-matching) lines -- that scan was ~half of all server-thread CPU.
+          # CutthroatActive keeps its own (scanning) check.
+          AllStart = Regexp.new('\A(?:' + Regexp.union(ALL_LIST - [CutthroatActive]).source + ')').freeze
         end
 
         module State
@@ -200,8 +208,9 @@ module Lich
         end
 
         def self.parse(line)
-          # O(1) vs O(N)
-          return :noop unless line =~ Pattern::All
+          # O(1) vs O(N): anchored union is attempted only at line start; the lone
+          # mid-line pattern (CutthroatActive) is checked separately.
+          return :noop unless Pattern::AllStart.match?(line) || Pattern::CutthroatActive.match?(line)
 
           begin
             case line
