@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
-require 'rexml/document' # populate_inventory_get parses <d> fragments via REXML (loaded by lich.rbw in production)
+require 'ox' # populate_inventory_get parses <d> fragments via Ox (loaded by lich.rbw in production)
 
 # Load dependencies
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
@@ -680,6 +680,11 @@ RSpec.describe Lich::DragonRealms::DRParser do
     it 'parses a nested item with its container' do
       expect(GameObj).to receive(:new_inv).with('1', nil, 'sack', '2', 'get #1 in #2', nil)
       described_class.populate_inventory_get("<d cmd='get #1 in #2'>a sack</d>")
+    end
+
+    it 'parses an item line with trailing location prose' do
+      expect(GameObj).to receive(:new_inv).with('8761784', nil, 'seagull feather quill', nil, 'get #8761784', nil)
+      described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your right hand.")
     end
 
     it 'stops parsing on the output-class-empty tag' do
