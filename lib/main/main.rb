@@ -373,11 +373,11 @@ reconnect_if_wanted = proc {
     Lich.log 'info: --pipe mode: using stdin/stdout as client transport'
     @argv_options[:game_host], @argv_options[:game_port] = Lich.fix_game_host_port(@argv_options[:game_host], @argv_options[:game_port])
     # Bring a concrete Game class into scope so bare Game.* references (here and
-    # in the client thread / shutdown) resolve to one consistent class. Default
-    # to Gemstone when the host is not obviously DragonRealms (matches the
-    # launch-data path); the actual game instance is still derived from the
-    # server's <settingsInfo> once data flows.
-    if @argv_options[:game_host] =~ /dr/i
+    # in the client thread / shutdown) resolve to one consistent class. Prefer an
+    # explicit --dragonrealms/--gemstone flag (useful when -g points at a loopback
+    # host that can't be sniffed); otherwise fall back to the host name. The
+    # actual game instance is still derived from the server's <settingsInfo>.
+    if Lich::Common::Authentication::LoginHelpers.dragonrealms_flag?(ARGV) || @argv_options[:game_host] =~ /dr/i
       include Lich::DragonRealms
     else
       include Lich::Gemstone
