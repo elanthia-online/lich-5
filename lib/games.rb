@@ -530,14 +530,11 @@ module Lich
           begin
             # Ox is a permissive parser: it handles Simu's not-quite-XML stream
             # without the clean/retry dance REXML required (nested quotes, missing
-            # 'd' end tags, etc. are tolerated rather than raised). The bridge maps
-            # Ox SAX callbacks to XMLData's REXML-style tag_start/text/tag_end.
-            # No <root> wrapper needed: that was a REXML requirement (single root).
-            # Ox's SAX parser permissively handles multiple top-level elements and
-            # bare text, so we parse the server string directly -- saving a per-line
-            # string allocation and the synthetic root tag_start/tag_end callbacks.
-            @ox_bridge ||= Lich::Common::OxStreamBridge.new(XMLData)
-            Ox.sax_parse(@ox_bridge, server_string, convert_special: true, symbolize: false, skip: :skip_none)
+            # 'd' end tags, etc. are tolerated rather than raised). XMLData itself
+            # implements the Ox::Sax interface, so Ox parses straight into it. No
+            # <root> wrapper needed: that was a REXML requirement (single root); Ox
+            # handles multiple top-level elements and bare text directly.
+            Ox.sax_parse(XMLData, server_string, convert_special: true, symbolize: false, skip: :skip_none)
           rescue => e
             # Permissive parsing rarely raises; if it does, log and reset rather
             # than killing the server thread.
