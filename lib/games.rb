@@ -543,10 +543,7 @@ module Lich
             return
           end
 
-          # Strip tags once and reuse: both the game-specific (Infomon) parser and
-          # the downstream-script feed need the same stripped text. strip_xml is
-          # relatively expensive and previously ran twice per line.
-          stripped_server = strip_xml(server_string, type: 'main')
+          stripped_server = strip_xml(server_string)
 
           # Process game-specific data using instance
           if @game_instance && Module.const_defined?(:GameLoader)
