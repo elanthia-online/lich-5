@@ -21,13 +21,21 @@
 # then the body block that gets repeated. With no marker, the whole file is the
 # (repeated) body and no header is sent.
 #
+# Each timed run floods enough body repeats to process about --target-lines
+# lines (default 5000). Tiny fixtures otherwise finish in a few milliseconds,
+# where fixed per-run latency (TCP handshake, scheduler jitter, the sentinel
+# round-trip) dominates the timing and throughput swings wildly run to run.
+# Sizing every run to the same line budget amortizes that overhead, so the
+# numbers are steady and comparable across fixtures. Pass -i to override.
+#
 # Usage:
 #   ruby benchmark.rb [options]
-#     -i, --iterations N   body-block repeats per run (default 1)
-#     -r, --runs R         timed runs (default 100)
-#     -w, --warmup W       untimed warmup runs (default 5)
-#     -f, --fixture PATH   server-stream fixture (default benchmark/fixtures/gs_sample.xml)
-#         --keep           keep the temp dir for inspection
+#     -i, --iterations N    body-block repeats per run (default: auto from --target-lines)
+#     -t, --target-lines N  approx lines processed per run when auto-sizing (default 5000)
+#     -r, --runs R          timed runs (default 30)
+#     -w, --warmup W        untimed warmup runs (default 5)
+#     -f, --fixture PATH    server-stream fixture (default benchmark/fixtures/gs_sample.xml)
+#         --keep            keep the temp dir for inspection
 ######
 
 require 'socket'
@@ -42,8 +50,9 @@ SENTINEL = 'LICH_BENCH_SENTINEL_END'
 CLOCK = Process::CLOCK_MONOTONIC
 
 options = {
-  iterations: 1,
-  runs: 100,
+  iterations: nil, # nil => auto-size from :target_lines
+  target_lines: 5000,
+  runs: 30,
   warmup: 5,
   fixture: File.join(REPO, 'benchmark', 'fixtures', 'gs_sample.xml'),
   keep: false
@@ -51,16 +60,22 @@ options = {
 
 OptionParser.new do |o|
   o.banner = 'Usage: ruby benchmark.rb [options]'
-  o.on('-i', '--iterations N', Integer) { |v| options[:iterations] = v }
-  o.on('-r', '--runs R', Integer)       { |v| options[:runs] = v }
-  o.on('-w', '--warmup W', Integer)     { |v| options[:warmup] = v }
-  o.on('-f', '--fixture PATH')          { |v| options[:fixture] = v }
-  o.on('--keep')                        { options[:keep] = true }
+  o.on('-i', '--iterations N', Integer)    { |v| options[:iterations] = v }
+  o.on('-t', '--target-lines N', Integer)  { |v| options[:target_lines] = v }
+  o.on('-r', '--runs R', Integer)          { |v| options[:runs] = v }
+  o.on('-w', '--warmup W', Integer)        { |v| options[:warmup] = v }
+  o.on('-f', '--fixture PATH')             { |v| options[:fixture] = v }
+  o.on('--keep')                           { options[:keep] = true }
 end.parse!
 
 raw = File.read(options[:fixture])
 HEADER, BODY = raw.include?(MARKER) ? raw.split("#{MARKER}\n", 2) : ['', raw]
 BODY_LINES = BODY.count("\n")
+
+# Auto-size body repeats to the target line budget unless -i was given, so each
+# run does enough work to swamp fixed per-run latency (see header note).
+AUTO_SIZED = options[:iterations].nil?
+options[:iterations] = [(options[:target_lines].to_f / [BODY_LINES, 1].max).round, 1].max if AUTO_SIZED
 
 # Detect the game from the fixture's settingsInfo. Lich loads game-specific
 # modules via the launch GAMECODE (which drives `include Lich::Gemstone` /
@@ -95,6 +110,10 @@ def benchmark(opts)
 
   srv = Thread.new do
     conn = server.accept
+    # Disable Nagle so body/sentinel writes hit the wire immediately instead of
+    # being coalesced on a timer -- coalescing adds variable latency that shows
+    # up as timing noise, especially on the small per-write bursts.
+    conn.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
     conn.gets # login key
     # Drain client->server bytes so the eventual close is a clean FIN, not RST.
     drain = Thread.new do
@@ -192,20 +211,26 @@ puts 'Lich --pipe throughput benchmark'
 puts "  ruby:       #{RUBY_DESCRIPTION}"
 puts "  fixture:    #{options[:fixture]} (#{GAME_CODE})"
 puts "  header:     #{HEADER.empty? ? '(none)' : "#{HEADER.count("\n")} lines, sent once"}"
-puts "  body:       #{BODY_LINES} lines/block x #{options[:iterations]} = #{BODY_LINES * options[:iterations]} lines/run"
+puts "  body:       #{BODY_LINES} lines/block x #{options[:iterations]} = #{BODY_LINES * options[:iterations]} lines/run#{AUTO_SIZED ? " (auto-sized to ~#{options[:target_lines]})" : ''}"
 puts "  warmup:     #{options[:warmup]}, timed runs: #{options[:runs]}"
 puts
 
 results = benchmark(options)
 abort 'no successful runs' if results.empty?
 
-times = results.map { |r| r[:elapsed] }.sort
-lines = results.map { |r| r[:lines_s] }.sort
-best  = results.max_by { |r| r[:lines_s] }
+times  = results.map { |r| r[:elapsed] }.sort
+lines  = results.map { |r| r[:lines_s] }.sort
+median = percentile(lines, 0.5)
+mean   = lines.sum / lines.length
+stddev = Math.sqrt(lines.sum { |x| (x - mean)**2 } / lines.length)
+cv     = mean.zero? ? 0.0 : (stddev / mean * 100)
+best   = results.max_by { |r| r[:lines_s] }
 
 puts "Summary (#{results.length} runs):"
 puts "  elapsed   min #{fmt(times.first)}  median #{fmt(percentile(times, 0.5))}  p95 #{fmt(percentile(times, 0.95))}  max #{fmt(times.last)}"
-puts "  lines/s   min #{lines.first.round}  median #{percentile(lines, 0.5).round}  max #{lines.last.round}"
-puts "  best run  #{best[:lines_s].round} lines/s  in #{best[:in_mb_s].round(2)} MB/s  out #{best[:out_mb_s].round(2)} MB/s"
+puts "  lines/s   median #{median.round}  (min #{lines.first.round}, max #{lines.last.round})"
+puts "  noise     CV #{cv.round(1)}%  (stddev #{stddev.round} lines/s; lower is steadier)"
+puts "  peak      #{best[:lines_s].round} lines/s  in #{best[:in_mb_s].round(2)} MB/s  out #{best[:out_mb_s].round(2)} MB/s"
 puts "  out/in    #{(results.map { |r| r[:out_in] }.max * 100).round}% of body bytes reached stdout"
+warn '  WARNING: CV above 10% - results still noisy; raise --target-lines or close background load' if cv > 10
 warn '  WARNING: low out/in ratio - stream may be dropped/buffered; check the fixture' if results.map { |r| r[:out_in] }.max < 0.5
