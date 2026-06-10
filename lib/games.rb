@@ -61,7 +61,7 @@ module Lich
           raise NotImplementedError, "#{self.class} must implement #get_documentation_url"
         end
 
-        def process_game_specific_data(server_string)
+        def process_game_specific_data(server_string, stripped_server = nil)
           raise NotImplementedError, "#{self.class} must implement #process_game_specific_data"
         end
 
@@ -543,16 +543,20 @@ module Lich
             return
           end
 
+          # Strip tags once and reuse: both the game-specific (Infomon) parser and
+          # the downstream-script feed need the same stripped text. strip_xml is
+          # relatively expensive and previously ran twice per line.
+          stripped_server = strip_xml(server_string, type: 'main')
+
           # Process game-specific data using instance
           if @game_instance && Module.const_defined?(:GameLoader)
-            @game_instance.process_game_specific_data(server_string)
+            @game_instance.process_game_specific_data(server_string, stripped_server)
           end
 
           # Process downstream XML
           Script.new_downstream_xml(server_string) if defined?(Script)
 
           # Process stripped server string
-          stripped_server = strip_xml(server_string, type: 'main')
           stripped_server.split("\r\n").each do |line|
             @buffer.update(line) if defined?(TESTING) && TESTING
             Script.new_downstream(line) if defined?(Script) && !line.empty?
@@ -752,11 +756,12 @@ module Lich
         "https://gswiki.play.net/Lich:Software/Installation"
       end
 
-      def process_game_specific_data(server_string)
-        infomon_serverstring = server_string.dup
-        Infomon::XMLParser.parse(infomon_serverstring)
-        stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
-        stripped_infomon_serverstring.split("\r\n").each do |line|
+      def process_game_specific_data(server_string, stripped_server = nil)
+        # Infomon's XML-level parse needs the raw string; its line parser reuses
+        # the text already stripped by process_xml_data (XMLParser.parse does not
+        # mutate, so no dup or second strip_xml is needed).
+        Infomon::XMLParser.parse(server_string)
+        stripped_server.split("\r\n").each do |line|
           Infomon::Parser.parse(line) unless line.empty?
         end
       end
@@ -905,7 +910,7 @@ module Lich
         "https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich"
       end
 
-      def process_game_specific_data(server_string)
+      def process_game_specific_data(server_string, _stripped_server = nil)
         # Parse directly to allow inline modifications (e.g., inline exp display)
         # The parser modifies server_string in place via line.replace()
         DRParser.parse(server_string)
