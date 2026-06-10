@@ -63,13 +63,14 @@ RSpec.describe Lich::Common::OxStreamBridge do
     expect(events).to include([:text, '>'])
   end
 
-  it 'returns UTF-8 text matching REXML (not Ox-default ASCII-8BIT)' do
-    fragment = '<component id="room desc">a caf&#233; in the corner</component>'
+  it 'tags text as Windows-1252 (the stream encoding) and preserves raw bytes' do
+    smart_apostrophe = 146.chr # 0x92 in Windows-1252 == right single quote
+    fragment = "<component id='room desc'>it#{smart_apostrophe}s here</component>".b
     text = ox_events(fragment).find { |e| e[0] == :text }[1]
-    expect(text.encoding).to eq(Encoding::UTF_8)
-    expect(text).to eq('a caf' + [233].pack('U') + ' in the corner') # cafe-with-accent
-    # and it concatenates cleanly into a UTF-8 buffer (the XMLData.text pattern)
-    expect { (+'desc: ').concat(text) }.not_to raise_error
+    expect(text.encoding).to eq(Encoding::WINDOWS_1252)
+    expect(text.bytes).to eq('it'.bytes + [146] + 's here'.bytes)
+    # ASCII content compares equal across encodings (the common case)
+    expect('a sword'.encode(Encoding::WINDOWS_1252)).to eq('a sword')
   end
 
   it 'parses multiple top-level elements without a root wrapper' do
