@@ -528,32 +528,18 @@ module Lich
 
         def process_xml_data(server_string)
           begin
-            # Check for valid XML
-            REXML::Document.parse_stream("<root>#{server_string}</root>", XMLData)
+            # Ox is a permissive parser: it handles Simu's not-quite-XML stream
+            # without the clean/retry dance REXML required (nested quotes, missing
+            # 'd' end tags, etc. are tolerated rather than raised). The bridge maps
+            # Ox SAX callbacks to XMLData's REXML-style tag_start/text/tag_end.
+            @ox_bridge ||= Lich::Common::OxStreamBridge.new(XMLData)
+            Ox.sax_parse(@ox_bridge, "<root>#{server_string}</root>", convert_special: true, symbolize: false, skip: :skip_none)
           rescue => e
-            case e.to_s
-            # Missing attribute equal: <s> - in dynamic dialogs with a single apostrophe for possessive 'Tsetem's Items'
-            when /nested single quotes|nested double quotes|Missing attribute equal: <[^>]+>|Invalid attribute name: <[^>]+>/
-              original_server_string = server_string.dup
-              server_string = XMLCleaner.clean_nested_quotes(server_string)
-              if original_server_string != server_string
-                retry
-              else
-                handle_xml_error(server_string, e)
-                XMLData.reset
-                return
-              end
-            when /invalid characters/
-              server_string = XMLCleaner.fix_invalid_characters(server_string)
-              retry
-            when /Missing end tag for 'd'/
-              server_string = XMLCleaner.fix_xml_tags(server_string)
-              retry
-            else
-              handle_xml_error(server_string, e)
-              XMLData.reset
-              return
-            end
+            # Permissive parsing rarely raises; if it does, log and reset rather
+            # than killing the server thread.
+            handle_xml_error(server_string, e)
+            XMLData.reset
+            return
           end
 
           # Process game-specific data using instance
