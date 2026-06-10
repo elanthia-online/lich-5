@@ -72,6 +72,22 @@ RSpec.describe Lich::Common::OxStreamBridge do
     expect { (+'desc: ').concat(text) }.not_to raise_error
   end
 
+  it 'parses multiple top-level elements without a root wrapper' do
+    # process_xml_data feeds the raw server string (often several top-level
+    # elements, or bare text) directly -- no <root> wrapper, unlike REXML.
+    listener = RecordingListener.new
+    Ox.sax_parse(described_class.new(listener),
+                 '<pushStream id="combat"/><pushBold/>You swing!<popBold/><popStream/>',
+                 convert_special: true, symbolize: false, skip: :skip_none)
+    expect(listener.events).to eq([
+                                    [:start, 'pushStream', { 'id' => 'combat' }], [:end, 'pushStream'],
+                                    [:start, 'pushBold', {}], [:end, 'pushBold'],
+                                    [:text, 'You swing!'],
+                                    [:start, 'popBold', {}], [:end, 'popBold'],
+                                    [:start, 'popStream', {}], [:end, 'popStream']
+                                  ])
+  end
+
   it 'passes element names to tag_end as strings' do
     events = ox_events('<dialogData id="minivitals"></dialogData>')
     expect(events).to include([:start, 'dialogData', { 'id' => 'minivitals' }], [:end, 'dialogData'])
