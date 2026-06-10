@@ -228,6 +228,15 @@ reconnect_if_wanted = proc {
     Lich.log "info: game: #{game}"
     if ARGV.include?('--without-frontend')
       $_CLIENT_ = nil
+    elsif ARGV.include?('--pipe')
+      # Use stdin/stdout as the client transport instead of a front-end socket.
+      # Pair with -g HOST:PORT to connect directly to the game server (no SGE).
+      # stdin supplies what a front-end would send (including the initial login
+      # key); processed server output is written to stdout. EOF on stdin marks
+      # the client dead (PipeIO#closed?) and triggers the normal shutdown path.
+      Frontend.client = 'unknown'
+      $_CLIENT_ = SynchronizedSocket.new(Lich::Common::PipeIO.new)
+      Lich.log 'info: --pipe mode: using stdin/stdout as client transport'
     elsif Frontend.client.eql?('suks')
       nil
     else
@@ -354,6 +363,34 @@ reconnect_if_wanted = proc {
       end
     end
     Lich.log 'info: connected'
+  elsif ARGV.include?('--pipe') and @argv_options[:game_host] and @argv_options[:game_port]
+    # --pipe with -g: no front-end socket and no hosts-file redirection.
+    # stdin/stdout act as the client transport; connect straight to the game
+    # server named by -g (SGE/eaccess login already bypassed by -g). stdin
+    # supplies the login key + version; processed server output goes to stdout.
+    Frontend.client = 'unknown'
+    $_CLIENT_ = SynchronizedSocket.new(Lich::Common::PipeIO.new)
+    Lich.log 'info: --pipe mode: using stdin/stdout as client transport'
+    @argv_options[:game_host], @argv_options[:game_port] = Lich.fix_game_host_port(@argv_options[:game_host], @argv_options[:game_port])
+    # Bring a concrete Game class into scope so bare Game.* references (here and
+    # in the client thread / shutdown) resolve to one consistent class. Default
+    # to Gemstone when the host is not obviously DragonRealms (matches the
+    # launch-data path); the actual game instance is still derived from the
+    # server's <settingsInfo> once data flows.
+    if @argv_options[:game_host] =~ /dr/i
+      include Lich::DragonRealms
+    else
+      include Lich::Gemstone
+    end
+    Lich.log "info: connecting to game server (#{@argv_options[:game_host]}:#{@argv_options[:game_port]})"
+    begin
+      Game.open(@argv_options[:game_host], @argv_options[:game_port])
+    rescue
+      Lich.log "error: #{$!}"
+      $stdout.puts "error: #{$!}"
+      exit
+    end
+    Lich.log 'info: connection with the game host is open'
   elsif @argv_options[:game_host] and @argv_options[:game_port]
     unless Lich.hosts_file
       Lich.log "error: cannot find hosts file"
@@ -460,20 +497,22 @@ reconnect_if_wanted = proc {
     }
   else
     #
-    # shutdown listening socket
+    # shutdown listening socket (pipe mode never opened one)
     #
-    error_count = 0
-    begin
-      # Somehow... for some ridiculous reason... Windows doesn't let us close the socket if we shut it down first...
-      # listener.shutdown
-      listener.close unless listener.closed?
-    rescue
-      Lich.log "warning: failed to close listener socket: #{$!}"
-      if (error_count += 1) > 20
-        Lich.log 'warning: giving up...'
-      else
-        sleep 0.05
-        retry
+    unless ARGV.include?('--pipe')
+      error_count = 0
+      begin
+        # Somehow... for some ridiculous reason... Windows doesn't let us close the socket if we shut it down first...
+        # listener.shutdown
+        listener.close unless listener.closed?
+      rescue
+        Lich.log "warning: failed to close listener socket: #{$!}"
+        if (error_count += 1) > 20
+          Lich.log 'warning: giving up...'
+        else
+          sleep 0.05
+          retry
+        end
       end
     end
 
