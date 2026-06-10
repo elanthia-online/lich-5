@@ -1,0 +1,17 @@
+<streamWindow id='room' title='Room' subtitle=" - [Wehnimer's Landing, Town Square Central]" location='center' target='drop'/>
+<component id='room objs'>You also see a town gate guard and a small fountain.</component>
+<component id='room players'>Also here: Lord Bristenn, Lady Caoimhe.</component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>east</d>, <d>southwest</d>.<compass></compass></component>
+<resource picture='0'/><style id="roomName" />[Wehnimer's Landing, Town Square Central]
+<style id="roomDesc"/>A cobblestone street winds through the heart of the Landing, flanked by sturdy timber buildings.
+<pushBold/>A large kobold lumbers in, brandishing a rusty cudgel.<popBold/>
+<pushStream id="combat"/><pushBold/>You swing a broadsword at a large kobold!<popBold/> AS: +210 vs DS: +95 with AvD: +30 + d100 roll: +58 = +203
+   ... and hit for 41 points of damage!<popStream/>
+<output class="mono"/><prompt time="1700000000">&gt;</prompt><output class=""/>
+<roundTime value='1700000005'/>
+<dialogData id='minivitals'><progressBar id='health' value='94' text='health 94%' left='0%' customText='t' anchor_top='f' top='0%' width='25%'/><progressBar id='mana' value='100' text='mana 100%'/><progressBar id='stamina' value='88' text='stamina 88%'/><progressBar id='spirit' value='100' text='spirit 100%'/></dialogData>
+<indicator id='IconSTANDING' visible='y'/><indicator id='IconKNEELING' visible='n'/>
+<left exist="123456" noun="broadsword">a fine broadsword</left><right exist="654321" noun="shield">a tower shield</right>
+<spell>None</spell>
+<component id='exp Shield Usage'><preset id='whisper'> Shield Usage: 142 56% mind lock</preset></component>
+You see nothing unusual about the area.
