@@ -45,12 +45,11 @@ RSpec.describe Lich::GameBase do
       expect(output).not_to include("\a")
     end
 
-    # Need to figure out how to send this bad character string - FIXME
-    # it 'fixes poorly encoded apostrophes' do
-    #  input = "Membrach\x92s Greed"
-    #  output = Lich::GameBase::XMLCleaner.fix_invalid_characters(input)
-    #  expect(output).to eq("Membrach's Greed")
-    # end
+    it 'fixes poorly encoded apostrophes' do
+      input = [*'Membrach'.bytes, 0x92, *'s Greed'.bytes].pack('C*')
+      output = Lich::GameBase::XMLCleaner.fix_invalid_characters(input)
+      expect(output).to eq("Membrach's Greed")
+    end
 
     it 'fixes open-ended XML tags' do
       # Use +@ to unfreeze string for in-place modification
