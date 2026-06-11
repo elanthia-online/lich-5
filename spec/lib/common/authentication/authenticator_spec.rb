@@ -56,7 +56,8 @@ RSpec.describe Lich::Common::Authentication do
         account: 'testuser',
         password: 'testpass',
         character: 'TestChar',
-        game_code: 'GS3'
+        game_code: 'GS3',
+        generator: false
       ).and_return(auth_result)
 
       result = described_class.authenticate(
@@ -67,6 +68,24 @@ RSpec.describe Lich::Common::Authentication do
       )
 
       expect(result).to eq(auth_result)
+    end
+
+    it 'forwards the generator flag to EAccess.auth' do
+      expect(Lich::Common::Authentication::EAccess).to receive(:auth).with(
+        account: 'testuser',
+        password: 'testpass',
+        character: 'NEW',
+        game_code: 'GS3',
+        generator: true
+      ).and_return(auth_result)
+
+      described_class.authenticate(
+        account: 'testuser',
+        password: 'testpass',
+        character: 'NEW',
+        game_code: 'GS3',
+        generator: true
+      )
     end
 
     it 'calls EAccess.auth with legacy flag when specified' do

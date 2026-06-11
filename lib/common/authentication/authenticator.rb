@@ -29,16 +29,18 @@ module Lich
       # @param character [String, nil] Character name (optional)
       # @param game_code [String, nil] Game code (optional)
       # @param legacy [Boolean] Whether to use legacy authentication
+      # @param generator [Boolean] Whether to enter the character generator instead of selecting a character
       # @return [Hash, Array] Authentication data containing connection information
       # @raise [StandardError] Re-raises the last error after all retries exhausted
-      def self.authenticate(account:, password:, character: nil, game_code: nil, legacy: false)
+      def self.authenticate(account:, password:, character: nil, game_code: nil, legacy: false, generator: false)
         with_retry do
           if character && game_code
             EAccess.auth(
               account: account,
               password: password,
               character: character,
-              game_code: game_code
+              game_code: game_code,
+              generator: generator
             )
           elsif legacy
             EAccess.auth(
