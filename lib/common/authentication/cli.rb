@@ -35,26 +35,8 @@ module Lich
             return nil
           end
 
-          # Validate master password availability before attempting login (required for Enhanced encryption mode)
-          unless CLIPassword.validate_master_password_available
-            Lich.log "error: Master password validation failed during CLI login"
-            return nil
-          end
-
-          # Load raw YAML data (not decrypted yet)
-          yaml_file = EntryStore.yaml_file_path(data_dir)
-          unless File.exist?(yaml_file)
-            Lich.log "error: No saved entries YAML file found"
-            return nil
-          end
-
-          begin
-            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
-            entry_data = LoginHelpers.symbolize_keys(yaml_data)
-          rescue StandardError => e
-            Lich.log "error: Failed to load YAML data: #{e.message}"
-            return nil
-          end
+          entry_data = load_entry_data(data_dir)
+          return nil unless entry_data
 
           # Find matching character(s) using login_helpers
           matching_entries = LoginHelpers.find_character_by_name_game_and_frontend(
@@ -87,6 +69,126 @@ module Lich
           decrypt_and_authenticate(char_entry, entry_data)
         end
 
+        # Executes CLI login flow to enter the character generator on an existing account.
+        #
+        # Looks up the account by name in saved entries, decrypts its password,
+        # and authenticates with character name "NEW" to reach the character
+        # creation flow on the game server.
+        #
+        # @param account_name [String] account name as stored in entry.yaml
+        # @param game_code [String, nil] game instance code (e.g. "DR", "GS3")
+        # @param frontend [String, Symbol, nil] requested frontend for the launched session
+        #   (nil or the :__unset sentinel default to 'profanity')
+        # @param custom_launch [String, Symbol, nil] custom launch command (the :__unset sentinel is treated as none)
+        # @param custom_launch_dir [String, Symbol, nil] custom launch directory (the :__unset sentinel is treated as none)
+        # @param data_dir [String, nil] directory containing saved login entries
+        # @return [Array<String>, nil] launch data strings if successful, nil on failure
+        #
+        # @example
+        #   launch_data = CLI.execute_new_character('MYACCOUNT', game_code: 'DR', data_dir: '/path/to/data')
+        def self.execute_new_character(account_name, game_code: nil, frontend: nil, custom_launch: nil, custom_launch_dir: nil, data_dir: nil)
+          data_dir ||= DATA_DIR
+
+          unless account_name && !account_name.empty?
+            Lich.log "error: Account name is required for new character creation"
+            return nil
+          end
+
+          unless game_code && LoginHelpers::VALID_GAME_CODES.include?(game_code.to_s)
+            Lich.log "error: A valid game code is required for new character creation (e.g. --dr, --gemstone). Got: #{game_code.inspect}"
+            return nil
+          end
+
+          entry_data = load_entry_data(data_dir)
+          return nil unless entry_data
+
+          canonical_name, account_data = find_account(entry_data, account_name)
+          return nil unless account_data
+
+          char_entry = {
+            username: canonical_name,
+            password: account_data[:password],
+            char_name: 'NEW',
+            game_code: game_code,
+            frontend: unset_login_value?(frontend) ? 'profanity' : frontend,
+            custom_launch: unset_login_value?(custom_launch) ? nil : custom_launch,
+            custom_launch_dir: unset_login_value?(custom_launch_dir) ? nil : custom_launch_dir,
+            generator: true,
+          }
+
+          decrypt_and_authenticate(char_entry, entry_data)
+        end
+
+        # Treats nil and the :__unset CLI sentinel as "value not provided".
+        #
+        # @param value [Object] a parsed CLI login value
+        # @return [Boolean] true when the value should be treated as absent
+        # @api private
+        def self.unset_login_value?(value)
+          value.nil? || value == :__unset
+        end
+
+        # Loads and parses entry.yaml from the given data directory.
+        #
+        # @param data_dir [String] directory containing entry.yaml
+        # @return [Hash, nil] symbolized entry data, or nil on failure
+        # @api private
+        def self.load_entry_data(data_dir)
+          unless CLIPassword.validate_master_password_available
+            Lich.log "error: Master password validation failed during CLI login"
+            return nil
+          end
+
+          yaml_file = EntryStore.yaml_file_path(data_dir)
+          unless File.exist?(yaml_file)
+            Lich.log "error: No saved entries YAML file found"
+            return nil
+          end
+
+          yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
+          LoginHelpers.symbolize_keys(yaml_data)
+        rescue StandardError => e
+          Lich.log "error: Failed to load YAML data: #{e.message}"
+          nil
+        end
+
+        # Finds an account by name in the entry data (case-insensitive).
+        #
+        # Returns the stored canonical account key alongside the account data so
+        # callers authenticate with the canonical identifier rather than the
+        # caller-supplied casing.
+        #
+        # @param entry_data [Hash] symbolized entry data with :accounts key
+        # @param account_name [String] account name to search for
+        # @return [Array(String, Hash), nil] [canonical account name, account data], or nil if not found
+        # @api private
+        def self.find_account(entry_data, account_name)
+          accounts = entry_data[:accounts]
+          unless accounts
+            Lich.log "error: No accounts found in saved entries"
+            return nil
+          end
+
+          canonical_name, account_data = accounts.find { |key, _v| key.to_s.casecmp?(account_name) }
+          unless account_data
+            Lich.log "error: Account not found: #{account_name}"
+            return nil
+          end
+
+          unless account_data[:password]
+            Lich.log "error: No password saved for account: #{account_name}"
+            return nil
+          end
+
+          [canonical_name.to_s, account_data]
+        end
+
+        # Decrypts the password from a character entry and authenticates with the game server.
+        #
+        # @param char_entry [Hash] character entry with :username, :password, :char_name, :game_code, :frontend keys
+        #   and an optional :generator flag for character-generator entry
+        # @param entry_data [Hash] full entry data (needed for encryption mode)
+        # @return [Array<String>, nil] launch data strings if successful, nil on failure
         def self.decrypt_and_authenticate(char_entry, entry_data)
           # Get encryption mode from YAML
           encryption_mode = (entry_data[:encryption_mode] || 'plaintext').to_sym
@@ -114,7 +216,8 @@ module Lich
               account: char_entry[:username],
               password: plaintext_password,
               character: char_entry[:char_name],
-              game_code: char_entry[:game_code]
+              game_code: char_entry[:game_code],
+              generator: char_entry[:generator] || false
             )
 
             # Format and return launch data
