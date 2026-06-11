@@ -114,7 +114,9 @@ RSpec.describe Lich::Common::GUI::PasswordCipher do
       end
 
       it 'handles password with unicode characters' do
+        # rubocop:disable Custom/AsciiOnlySource -- Intentional Unicode password fixture exercises cipher round-trip behavior.
         unicode_password = 'пароль密码🔐'
+        # rubocop:enable Custom/AsciiOnlySource
         encrypted = described_class.encrypt(unicode_password, mode: :standard, account_name: account_name)
         decrypted = described_class.decrypt(encrypted, mode: :standard, account_name: account_name)
         expect(decrypted).to eq(unicode_password)
