@@ -202,6 +202,36 @@ module Lich
       end
     end
 
+    # Raised when a server fragment is structurally truncated (cut off
+    # mid-element) -- the stream has desynced from XML framing. Pre-Ox, strict
+    # REXML raised on these fragments and Game.process_xml_data's rescue logged
+    # the fragment and reset XMLData, so parser strictness doubled as desync
+    # detection. Ox is permissive: it parses truncated fragments without
+    # raising (auto-closing elements, fabricating empty attribute values) and
+    # only reports the damage through its optional error callback. That
+    # callback is now the only desync signal, so process_xml_data promotes
+    # truncation-class parse errors to this exception to keep the old
+    # recovery path (log + XMLData.reset).
+    class GameStreamDesyncError < StandardError; end
+
+    # Ox error-callback messages that indicate a truncated fragment. Ox also
+    # fires the callback for Simu's routine almost-XML -- bare text and
+    # multiple top-level elements ('text not terminated', 'multiple top level
+    # elements'), nested quotes ('no attribute value'), unescaped ampersands
+    # ('Invalid special character sequence'), missing </d> end tags ('Start
+    # End Mismatch: ... not closed') -- none of which match these patterns, so
+    # they stay tolerated. The message prefix matters: 'Unexpected Character:
+    # element not closed' (a start tag that never got its '>') is truncation,
+    # while the similarly worded 'Start End Mismatch: element ... not closed'
+    # (an element missing its end tag) is routine.
+    STREAM_DESYNC_ERRORS = [
+      /\ANot Terminated: attributes not terminated/,
+      /\ANot Terminated: quoted value not terminated/,
+      /\ANot Terminated: document not terminated/,
+      /\AUnexpected Character: element not closed/,
+      /\AUnexpected Character: attribute value not in quotes/
+    ].freeze
+
     # Base Game class with common functionality
     class Game
       class << self
@@ -534,10 +564,12 @@ module Lich
             # implements the Ox::Sax interface, so Ox parses straight into it. No
             # <root> wrapper needed: that was a REXML requirement (single root); Ox
             # handles multiple top-level elements and bare text directly.
+            XMLData.sax_parse_errors.clear
             Ox.sax_parse(XMLData, server_string, convert_special: true, symbolize: false, skip: :skip_none)
+            check_stream_desync!(XMLData.sax_parse_errors)
           rescue => e
-            # Permissive parsing rarely raises; if it does, log and reset rather
-            # than killing the server thread.
+            # GameStreamDesyncError from the check above, or (rarely) Ox itself;
+            # either way log and reset rather than killing the server thread.
             handle_xml_error(server_string, e)
             XMLData.reset
             return
@@ -558,6 +590,18 @@ module Lich
             @buffer.update(line) if defined?(TESTING) && TESTING
             Script.new_downstream(line) if defined?(Script) && !line.empty?
           end
+        end
+
+        # Promote truncation-class Ox parse errors to GameStreamDesyncError so
+        # a desynced stream still hits the log + reset recovery path instead of
+        # being silently absorbed (see the GameStreamDesyncError comment).
+        # parse_errors is XMLData's collected Ox error-callback messages for
+        # the fragment just parsed.
+        def check_stream_desync!(parse_errors)
+          desync = parse_errors.find do |message|
+            STREAM_DESYNC_ERRORS.any? { |pattern| pattern.match?(message) }
+          end
+          raise GameStreamDesyncError, desync if desync
         end
 
         def handle_xml_error(server_string, error)

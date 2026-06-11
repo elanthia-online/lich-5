@@ -146,6 +146,9 @@ module Lich
         @arrival_pcs = []
         @check_obvious_hiding = false
         @room_player_hidden = false
+
+        # Ox parse-error messages for the fragment currently being parsed
+        @sax_parse_errors = []
       end
 
       # for backwards compatibility
@@ -180,6 +183,7 @@ module Lich
         @active_ids = Array.new
         @current_stream = String.new
         @current_style = String.new
+        @sax_parse_errors = []
       end
 
       def safe_to_respond?
@@ -262,6 +266,17 @@ module Lich
       # REXML routed CDATA through text handling; do the same.
       def cdata(value)
         text(value)
+      end
+
+      # Ox reports parse problems here instead of raising, then keeps parsing,
+      # auto-balancing whatever was malformed. Collect the messages so
+      # Game.process_xml_data can tell Simu's routine almost-XML from a
+      # genuinely truncated (desynced) fragment once the parse completes.
+      # The caller clears this between fragments.
+      attr_reader :sax_parse_errors
+
+      def error(message, line, column)
+        @sax_parse_errors << "#{message} (line #{line}, column #{column})"
       end
 
       def tag_start(name, attributes)
