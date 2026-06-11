@@ -90,8 +90,8 @@ module Lich
             return nil
           end
 
-          unless game_code
-            Lich.log "error: Game code is required for new character creation (e.g. --dr, --gemstone)"
+          unless game_code && LoginHelpers::VALID_GAME_CODES.include?(game_code.to_s)
+            Lich.log "error: A valid game code is required for new character creation (e.g. --dr, --gemstone). Got: #{game_code.inspect}"
             return nil
           end
 

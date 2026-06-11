@@ -77,12 +77,26 @@ RSpec.describe Lich::Common::Authentication::CLI do
       end
     end
 
-    context 'with missing game code' do
+    context 'with missing or invalid game code' do
       it 'returns nil when game_code is nil' do
         result = described_class.execute_new_character('TESTUSER', game_code: nil, data_dir: data_dir)
 
         expect(result).to be_nil
-        expect(Lich).to have_received(:log).with(/Game code is required/)
+        expect(Lich).to have_received(:log).with(/valid game code is required/i)
+      end
+
+      it 'returns nil when game_code is the :__unset sentinel' do
+        result = described_class.execute_new_character('TESTUSER', game_code: :__unset, data_dir: data_dir)
+
+        expect(result).to be_nil
+        expect(Lich).to have_received(:log).with(/valid game code is required/i)
+      end
+
+      it 'returns nil when game_code is not a known game code' do
+        result = described_class.execute_new_character('TESTUSER', game_code: 'BOGUS', data_dir: data_dir)
+
+        expect(result).to be_nil
+        expect(Lich).to have_received(:log).with(/valid game code is required/i)
       end
     end
 
