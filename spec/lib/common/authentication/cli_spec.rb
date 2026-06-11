@@ -135,10 +135,19 @@ RSpec.describe Lich::Common::Authentication::CLI do
         expect(Lich).to have_received(:log).with(/Account not found/)
       end
 
-      it 'finds account case-insensitively' do
+      it 'finds account case-insensitively and authenticates with the canonical account key' do
         allow(Lich::Common::Authentication::EntryStore).to receive(:decrypt_password).and_return('testpass')
-        allow(Lich::Common::Authentication).to receive(:authenticate).and_return({ 'key' => 'abc' })
         allow(Lich::Common::Authentication::LaunchData).to receive(:prepare).and_return(['GAME=DR'])
+
+        # Looked up with lower-case 'testuser' but the stored key is 'TESTUSER';
+        # authentication must use the canonical 'TESTUSER'.
+        expect(Lich::Common::Authentication).to receive(:authenticate).with(
+          account: 'TESTUSER',
+          password: 'testpass',
+          character: 'NEW',
+          game_code: 'DR',
+          generator: true
+        ).and_return({ 'key' => 'abc' })
 
         result = described_class.execute_new_character('testuser', game_code: 'DR', data_dir: data_dir)
 
