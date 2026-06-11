@@ -699,10 +699,21 @@ module Lich
     #
     # @return [void]
     def close_launcher_window
-      Gtk.queue do
-        save_window_geometry unless @window.nil? || (@window.respond_to?(:destroyed?) && @window.destroyed?)
-        @window.destroy unless @window.nil? || (@window.respond_to?(:destroyed?) && @window.destroyed?)
-      end
+      queued = Gtk.queue { destroy_launcher_window }
+      return if queued
+
+      destroy_launcher_window
+      handle_window_destroy
+    end
+
+    # Saves launcher geometry and destroys the window when it is still live.
+    #
+    # @return [void]
+    def destroy_launcher_window
+      return if @window.nil? || (@window.respond_to?(:destroyed?) && @window.destroyed?)
+
+      save_window_geometry
+      @window.destroy
     end
 
     # Runs core GTK teardown and waits for the queued shutdown work to finish.

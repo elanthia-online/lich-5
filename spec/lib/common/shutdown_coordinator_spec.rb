@@ -108,6 +108,17 @@ RSpec.describe Lich::Common::ShutdownCoordinator do
       expect(described_class.client_socket_write_failure).to equal(first)
     end
 
+    it 'uses the stored first write failure when requesting shutdown attribution' do
+      first = Errno::EPIPE.new('first')
+      second = Errno::ECONNRESET.new('second')
+      described_class.instance_variable_set(:@client_socket_write_failure, first)
+
+      described_class.record_client_socket_write_failure(error: second)
+
+      expect(described_class.current.detail).to start_with('Errno::EPIPE:')
+      expect(described_class.client_socket_write_failure).to equal(first)
+    end
+
     it 'rejects missing errors' do
       expect {
         described_class.record_client_socket_write_failure(error: nil)

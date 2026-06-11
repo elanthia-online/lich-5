@@ -376,5 +376,16 @@ RSpec.describe Lich::Common, "#gui_login" do
 
       expect(test_instance.instance_variable_get(:@done)).to be true
     end
+
+    it "falls back to immediate launcher cleanup when GTK rejects queueing" do
+      test_instance.instance_variable_set(:@done, false)
+      allow(Gtk).to receive(:queue).and_return(nil)
+
+      test_instance.send(:close_launcher_window)
+
+      expect(test_instance).to have_received(:save_window_geometry)
+      expect(window).to have_received(:destroy)
+      expect(test_instance.instance_variable_get(:@done)).to be true
+    end
   end
 end

@@ -163,17 +163,22 @@ module Lich
 
           validate_source!(source)
 
+          stored_error = nil
+          detail = nil
+          request_needed = false
           mutex.synchronize do
-            @client_socket_write_failure ||= error
+            stored_error = (@client_socket_write_failure ||= error)
+            detail = "#{stored_error.class}: #{stored_error.message}"
+            request_needed = @request.nil?
           end
 
           request(
             reason: :client_disconnect,
             source: source,
-            detail: "#{error.class}: #{error.message}"
-          ) unless requested?
+            detail: detail
+          ) if request_needed
 
-          client_socket_write_failure
+          stored_error
         end
 
         # @return [Exception, nil] first fatal client socket write failure
