@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.18.0](https://github.com/elanthia-online/lich-5/compare/v5.17.3...v5.18.0) (2026-06-08)
+
+
+### Features
+
+* **dr:** common-crafting add method for creating mechanisms ([#1375](https://github.com/elanthia-online/lich-5/issues/1375)) ([a341bb1](https://github.com/elanthia-online/lich-5/commit/a341bb1b174842056d6a32662ac4ccfe04c143b1))
+
+
+### Bug Fixes
+
+* **all:** rubocop custom cop ascii only cleanup ([#1382](https://github.com/elanthia-online/lich-5/issues/1382)) ([eab6757](https://github.com/elanthia-online/lich-5/commit/eab6757ffcefc876938738390a8534fc8d2bf836))
+* **all:** stringproc normalize CRLF | CR to LF ([#1378](https://github.com/elanthia-online/lich-5/issues/1378)) ([04bd9ec](https://github.com/elanthia-online/lich-5/commit/04bd9ec519eedd784f56fbc75191e1d4e3382220))
+* **dr:** equipmanager update to assume missing items aren't worn ([#1376](https://github.com/elanthia-online/lich-5/issues/1376)) ([4e32548](https://github.com/elanthia-online/lich-5/commit/4e325486b253566eee67588498b22e25e13cbcb9))
+* **gs:** Infomon xmlparser additional npc death messaging ([#1326](https://github.com/elanthia-online/lich-5/issues/1326)) ([940894a](https://github.com/elanthia-online/lich-5/commit/940894a4c88f3f2b09e539237ed8372052c47d21))
+
 ## [5.17.3](https://github.com/elanthia-online/lich-5/compare/v5.17.2...v5.17.3) (2026-05-30)
 
 

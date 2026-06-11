@@ -80,7 +80,7 @@ module Lich
               return 1
             end
 
-            puts "✓ Master password validated"
+            puts "ok: Master password validated"
             puts ""
           end
 
@@ -98,13 +98,13 @@ module Lich
               return 4
             end
 
-            puts "✓ Master password accepted"
+            puts "ok: Master password accepted"
             puts ""
           end
 
           # Warn about plaintext mode
           if new_mode == :plaintext
-            puts "⚠️  WARNING: Plaintext mode disables encryption"
+            puts "warning: Plaintext mode disables encryption"
             puts "Passwords will be stored unencrypted and visible in the file."
             puts ""
             print "Continue? (yes/no): "
@@ -130,8 +130,8 @@ module Lich
             return 1
           end
 
-          puts "✓ Encryption mode changed: #{current_mode} -> #{new_mode}"
-          puts "✓ #{account_count} accounts re-encrypted" if account_count > 0
+          puts "ok: Encryption mode changed: #{current_mode} -> #{new_mode}"
+          puts "ok: #{account_count} accounts re-encrypted" if account_count > 0
 
           Lich.log "info: CLI encryption mode change successful: #{current_mode} -> #{new_mode}"
           0

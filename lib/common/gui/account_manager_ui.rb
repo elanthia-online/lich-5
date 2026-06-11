@@ -902,7 +902,9 @@ module Lich
 
                   # Toggle favorite status with frontend precision
                   new_status = FavoritesManager.toggle_favorite(data_dir, account, character, game_code, frontend)
+                  # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
                   iter[5] = new_status ? '★' : '☆'
+                  # rubocop:enable Custom/AsciiOnlySource
 
                   # Notify other tabs of data change
                   notify_data_changed(:favorite_toggled, {
@@ -1208,7 +1210,9 @@ module Lich
 
               # Add favorites information with frontend precision
               is_favorite = FavoritesManager.is_favorite?(@data_dir, account, character[:char_name], character[:game_code], character[:frontend])
+              # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
               char_iter[5] = is_favorite ? '★' : '☆'
+              # rubocop:enable Custom/AsciiOnlySource
             end
           end
         end
