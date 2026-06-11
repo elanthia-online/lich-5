@@ -362,7 +362,10 @@ module Lich
                   consecutive_timeouts = 0
 
                   # Break if socket closed (gets returns nil)
-                  break if server_string.nil?
+                  if server_string.nil?
+                    record_shutdown_reason(:game_eof, source: :game_reader)
+                    break
+                  end
 
                   @last_recv = Time.now
                   @_buffer.update(server_string) if defined?(TESTING) && TESTING
@@ -409,6 +412,7 @@ module Lich
                 sleep 1 # Brief pause before retry
                 retry
               else
+                record_shutdown_reason(shutdown_reason_for_thread_exit(e), source: :game_reader, detail: e.class)
                 Lich.log "Server thread exiting due to unrecoverable error"
               end
             end
@@ -664,6 +668,29 @@ module Lich
               return true
             end
           end
+        end
+
+        def shutdown_reason_for_thread_exit(error)
+          case error
+          when Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
+            :game_timeout
+          when Errno::ECONNRESET
+            :connection_reset
+          when Errno::EPIPE
+            :connection_pipe
+          when Errno::ECONNABORTED
+            :connection_aborted
+          else
+            :unrecoverable_game_thread_error
+          end
+        end
+
+        def record_shutdown_reason(reason, source:, detail: nil)
+          return unless defined?(Lich::Common::ShutdownCoordinator)
+
+          Lich::Common::ShutdownCoordinator.request(reason: reason, source: source, detail: detail)
+        rescue StandardError => e
+          Lich.log "warning: failed to record shutdown reason #{reason.inspect}: #{e.class}: #{e.message}"
         end
 
         protected
