@@ -107,6 +107,7 @@ module Lich
             char_name: 'NEW',
             game_code: game_code,
             frontend: 'profanity',
+            generator: true,
           }
 
           decrypt_and_authenticate(char_entry, entry_data)
@@ -166,6 +167,7 @@ module Lich
         # Decrypts the password from a character entry and authenticates with the game server.
         #
         # @param char_entry [Hash] character entry with :username, :password, :char_name, :game_code, :frontend keys
+        #   and an optional :generator flag for character-generator entry
         # @param entry_data [Hash] full entry data (needed for encryption mode)
         # @return [Array<String>, nil] launch data strings if successful, nil on failure
         def self.decrypt_and_authenticate(char_entry, entry_data)
@@ -195,7 +197,8 @@ module Lich
               account: char_entry[:username],
               password: plaintext_password,
               character: char_entry[:char_name],
-              game_code: char_entry[:game_code]
+              game_code: char_entry[:game_code],
+              generator: char_entry[:generator] || false
             )
 
             # Format and return launch data

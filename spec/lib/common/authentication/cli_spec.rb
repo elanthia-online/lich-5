@@ -131,7 +131,7 @@ RSpec.describe Lich::Common::Authentication::CLI do
         expect(result).to eq(['GAME=DR'])
       end
 
-      it 'authenticates with character name NEW' do
+      it 'authenticates with explicit generator intent' do
         allow(Lich::Common::Authentication::EntryStore).to receive(:decrypt_password).and_return('testpass')
         allow(Lich::Common::Authentication::LaunchData).to receive(:prepare).and_return(['GAME=DR'])
 
@@ -139,7 +139,8 @@ RSpec.describe Lich::Common::Authentication::CLI do
           account: 'TESTUSER',
           password: 'testpass',
           character: 'NEW',
-          game_code: 'DR'
+          game_code: 'DR',
+          generator: true
         ).and_return({ 'key' => 'abc' })
 
         described_class.execute_new_character('TESTUSER', game_code: 'DR', data_dir: data_dir)
