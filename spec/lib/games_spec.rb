@@ -1,11 +1,15 @@
 # frozen_string_literal: true
 
 require_relative '../spec_helper'
+require 'rexml/document'
+require 'rexml/streamlistener'
+require 'socket'
 require 'timeout'
 
 # Load production code
 require "common/class_exts/synchronizedsocket"
 require "common/sharedbuffer"
+require "common/shutdown_coordinator"
 require "games"
 require "gemstone/wounds"
 require "gemstone/scars"
@@ -59,6 +63,104 @@ RSpec.describe Lich::GameBase do
       input = +"</component>\r\n"
       output = Lich::GameBase::XMLCleaner.fix_xml_tags(input)
       expect(output).to eq("")
+    end
+  end
+
+  describe Lich::GameBase::Game do
+    before do
+      allow(Lich).to receive(:log)
+      allow(XMLData).to receive(:tag_start)
+      allow(XMLData).to receive(:tag_end)
+      allow(XMLData).to receive(:text)
+    end
+
+    it 'raises stream desync for structurally incomplete XML beyond known repairs' do
+      bad_xml = +"<compDef id='room desc'>Following <component id='room objs'>orc</component>\r\n"
+
+      expect {
+        described_class.process_xml_data(bad_xml)
+      }.to raise_error(Lich::GameBase::GameStreamDesyncError)
+
+      expect(Lich).to have_received(:log).with(/warning: invalid XML stream desync detected/)
+    end
+
+    it 'maps stream desync errors to shutdown reason' do
+      error = Lich::GameBase::GameStreamDesyncError.new('Missing end tag')
+
+      expect(described_class.shutdown_reason_for_thread_exit(error)).to eq(:game_stream_desync)
+    end
+
+    it 'returns a read timeout sentinel when the game socket has no readable data' do
+      socket = instance_double(TCPSocket)
+      described_class.instance_variable_set(:@socket, socket)
+
+      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return(nil)
+      allow(socket).to receive(:gets)
+
+      expect(described_class.read_server_string(read_timeout: 0.01)).to equal(Lich::GameBase::Game::READ_TIMEOUT)
+      expect(socket).not_to have_received(:gets)
+    end
+
+    it 'reads a game line when the socket is readable' do
+      socket = instance_double(TCPSocket)
+      described_class.instance_variable_set(:@socket, socket)
+
+      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return([[socket], [], []])
+      allow(socket).to receive(:gets).and_return("<prompt/>\r\n")
+
+      expect(described_class.read_server_string(read_timeout: 0.01)).to eq("<prompt/>\r\n")
+    end
+
+    it 'preserves nil reads as game EOF after the socket becomes readable' do
+      socket = instance_double(TCPSocket)
+      described_class.instance_variable_set(:@socket, socket)
+
+      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return([[socket], [], []])
+      allow(socket).to receive(:gets).and_return(nil)
+
+      expect(described_class.read_server_string(read_timeout: 0.01)).to be_nil
+    end
+
+    it 'handles connection reset as a recognized fatal disruption without a backtrace log' do
+      error = Errno::ECONNRESET.new
+      error.set_backtrace(['games.rb:1'])
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log).with(/info: server_thread: Errno::ECONNRESET:/)
+      expect(Lich).to have_received(:log).with('info: connection error - will not retry')
+      expect(Lich).not_to have_received(:log).with(/error: server_thread:.*\n\t/m)
+      expect(Lich).not_to have_received(:log).with(/debug: server_thread backtrace:/)
+    end
+
+    it 'logs recognized disruption backtraces only when shutdown diagnostics are enabled' do
+      error = Errno::ECONNRESET.new
+      error.set_backtrace(['games.rb:1'])
+      allow(ARGV).to receive(:include?).with('--debug').and_return(true)
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log).with("debug: server_thread backtrace: games.rb:1")
+    end
+
+    it 'handles repeated timeout as a recognized fatal disruption after threshold' do
+      error = IO::TimeoutError.new('read timed out')
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log).with('info: server_thread: IO::TimeoutError: read timed out')
+      expect(Lich).to have_received(:log).with('info: game timeout - will not retry')
+      expect(described_class.shutdown_reason_for_thread_exit(error)).to eq(:game_timeout)
+    end
+
+    it 'reports total elapsed no-data time for consecutive read timeouts' do
+      expect(described_class.total_read_timeout_seconds).to eq(90)
+      expect(described_class.total_read_timeout_seconds(2)).to eq(60)
+    end
+
+    it 'keeps stream desync disruption logging to one line in the thread handler' do
+      error = Lich::GameBase::GameStreamDesyncError.new("Missing end tag\nLine: 2")
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log).with('info: server_thread: GameStreamDesyncError: Missing end tag')
+      expect(Lich).to have_received(:log).with('info: game stream desync detected - will not retry')
     end
   end
 end
@@ -375,6 +477,42 @@ end
 # from instance variables (@) to class variables (@@). This is testing the
 # implementation detail by design, not testing through public API.
 RSpec.describe Lich::GameBase::Game do
+  describe '.intentional_shutdown_close_error?' do
+    let(:closed_socket) { double('socket', closed?: true) }
+    let(:open_socket) { double('socket', closed?: false) }
+
+    before do
+      Lich::Common::ShutdownCoordinator.reset!
+      described_class.instance_variable_set(:@socket, closed_socket)
+    end
+
+    after do
+      Lich::Common::ShutdownCoordinator.reset!
+      described_class.instance_variable_set(:@socket, nil)
+    end
+
+    it 'recognizes reader-thread close errors during orderly user shutdown' do
+      Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
+
+      expect(described_class.intentional_shutdown_close_error?(IOError.new('stream closed in another thread'))).to be_truthy
+      expect(described_class.intentional_shutdown_close_error?(Errno::EBADF.new)).to be_truthy
+    end
+
+    it 'does not recognize close errors outside orderly user shutdown' do
+      Lich::Common::ShutdownCoordinator.request(reason: :game_eof, source: :game_reader)
+
+      expect(described_class.intentional_shutdown_close_error?(IOError.new('stream closed in another thread'))).to be false
+      expect(described_class.intentional_shutdown_close_error?(Errno::EBADF.new)).to be false
+    end
+
+    it 'does not recognize orderly shutdown errors while the socket is open' do
+      Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
+      described_class.instance_variable_set(:@socket, open_socket)
+
+      expect(described_class.intentional_shutdown_close_error?(IOError.new('stream closed in another thread'))).to be false
+    end
+  end
+
   describe '.autostarted?' do
     before do
       # Reset the class variable for test isolation
