@@ -2170,18 +2170,25 @@ def sf_to_wiz(line, bypass_multiline: false)
   end
 end
 
-def strip_xml(line)
-  return line if line == "\r\n"
+# Strip game markup from one server line, returning [text, carry].
+#
+# A line whose <pushStream> tags outnumber its <popStream> tags opens a
+# multi-line element whose body arrives over later server reads. The unfinished
+# text is handed back as +carry+; the caller passes it in on the next call so
+# the whole element is reassembled before stripping. +text+ is nil while a
+# multi-line element is still being accumulated (carry holds the partial), and
+# nil when stripping leaves nothing printable.
+#
+# The carry used to be a hidden $strip_xml_multiline global mutated in place;
+# it is now an explicit value the caller owns, so this function keeps no state
+# between calls. Call it as `text, carry = strip_xml(line, carry)`.
+def strip_xml(line, carry = nil)
+  return [line, nil] if line == "\r\n"
 
-  if $strip_xml_multiline
-    $strip_xml_multiline = $strip_xml_multiline + line
-    line = $strip_xml_multiline
-  end
+  line = carry + line if carry
   if line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length
-    $strip_xml_multiline = line
-    return nil
+    return [nil, line]
   end
-  $strip_xml_multiline = nil
 
   line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
   line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
@@ -2190,9 +2197,9 @@ def strip_xml(line)
   line = line.gsub('&gt;', '>')
   line = line.gsub('&lt;', '<')
 
-  return nil if line.gsub("\n", '').gsub("\r", '').gsub(' ', '').length < 1
+  return [nil, nil] if line.gsub("\n", '').gsub("\r", '').gsub(' ', '').length < 1
 
-  return line
+  [line, nil]
 end
 
 def monsterbold_start
