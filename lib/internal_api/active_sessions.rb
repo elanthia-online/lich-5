@@ -76,10 +76,65 @@ module Lich
       def self.ensure_service!
         return false unless enabled?
 
+        ensure_service_internal!(allow_bootstrap: true)
+      end
+
+      # Returns whether an already-admitted call path can reach a healthy
+      # service without re-reading the feature flag on every hot-path call.
+      #
+      # This helper preserves the operational kill switch by requiring the
+      # real feature flag before bootstrapping a *new* owner while still
+      # allowing healthy existing owners to be reused by admitted callers.
+      #
+      # @param allow_bootstrap [Boolean] when false, never start a new server
+      # @return [Boolean]
+      def self.ensure_service_internal!(allow_bootstrap:)
         return true if service_available?
+        return false unless allow_bootstrap
+
+        # Re-check the live kill switch on the bootstrap path so admitted
+        # callers can reuse an existing owner without re-reading the flag,
+        # while still preventing creation of a brand-new owner after disable.
+        return false unless enabled?
 
         @mutex.synchronize do
           return true if service_available?
+
+          # If this process previously owned a server whose accept thread
+          # died, the TCPServer socket is still bound but unserviceable.
+          # Stop it to release the port before attempting a fresh start.
+          if @server && !@server.running?
+            Lich.log("warning: ActiveSessions in-process zombie detected pid=#{Process.pid} -- releasing socket") if Lich.respond_to?(:log)
+            @server.stop
+            @server = nil
+          end
+
+          # Detect cross-process zombie: discovery points to another process
+          # whose service is unresponsive (dead accept thread holding the port).
+          discovery = load_discovery
+          if discovery[:owner_pid] && discovery[:owner_pid] != Process.pid
+            return true if service_available?
+
+            owner_alive = begin
+              Process.kill(0, discovery[:owner_pid])
+              true
+            rescue Errno::ESRCH
+              false
+            rescue Errno::EPERM
+              true
+            end
+
+            if owner_alive
+              Lich.log(
+                "warning: ActiveSessions cross-process zombie: " \
+                "owner pid=#{discovery[:owner_pid]} alive but unresponsive, clearing stale discovery"
+              ) if Lich.respond_to?(:log)
+              delete_discovery_if_owner(discovery[:owner_pid], discovery[:auth_token])
+              return false
+            end
+
+            delete_discovery_if_owner(discovery[:owner_pid])
+          end
 
           @registry ||= Registry.new
           @server ||= Server.new(
@@ -88,7 +143,10 @@ module Lich
             registry: @registry,
             auth_token: SecureRandom.hex(32)
           )
-          return false unless @server.start
+          unless @server.start
+            @server = nil
+            return false
+          end
 
           write_discovery(owner_pid: Process.pid, auth_token: @server.auth_token)
           true
@@ -97,6 +155,7 @@ module Lich
         Lich.log("warning: ActiveSessions service unavailable: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
         false
       end
+      private_class_method :ensure_service_internal!
 
       # Registers or updates a session record in the local service.
       #
@@ -109,6 +168,23 @@ module Lich
         service_client&.upsert(payload)&.fetch(:ok, false) || false
       end
 
+      # Registers or updates a session record from a lifecycle path that
+      # already admitted the feature gate at startup.
+      #
+      # When the current service owner has exited, this allows a surviving
+      # session to bootstrap a replacement owner so session visibility is
+      # maintained. The kill-switch is still enforced: ensure_service_internal!
+      # re-checks enabled? before creating a new owner.
+      #
+      # @param payload [Hash] normalized session metadata
+      # @return [Boolean] true when the service accepted the update
+      def self.register_session_admitted(payload)
+        return false unless ensure_service_internal!(allow_bootstrap: true)
+
+        service_client&.upsert(payload)&.fetch(:ok, false) || false
+      end
+      private_class_method :register_session_admitted
+
       # Removes a session record by pid.
       #
       # @param pid [Integer]
@@ -119,6 +195,18 @@ module Lich
 
         service_client&.remove(pid)&.fetch(:ok, false) || false
       end
+
+      # Removes a session record from a lifecycle path that already admitted
+      # the feature gate at startup.
+      #
+      # @param pid [Integer]
+      # @return [Boolean] true when the service accepted the removal request
+      def self.unregister_session_admitted(pid:)
+        return false unless ensure_service_internal!(allow_bootstrap: false)
+
+        service_client&.remove(pid)&.fetch(:ok, false) || false
+      end
+      private_class_method :unregister_session_admitted
 
       # Returns the current active sessions snapshot.
       #
@@ -279,15 +367,30 @@ module Lich
       #
       # @return [void]
       def self.delete_discovery_if_owned
-        discovery = load_discovery
-        return unless discovery[:owner_pid].to_i == Process.pid
-        return unless File.exist?(discovery_path)
+        delete_discovery_if_owner(Process.pid)
+      end
+      private_class_method :delete_discovery_if_owned
 
-        File.delete(discovery_path)
+      # Deletes the discovery file only when it still belongs to the given owner.
+      #
+      # Re-reads the file before deletion to avoid a race where another process
+      # has written a fresh discovery between the caller's initial read and this
+      # deletion attempt.
+      #
+      # @param expected_owner_pid [Integer]
+      # @param expected_auth_token [String, nil] when provided, also requires
+      #   the token to match so a fresh rewrite by the same PID is not deleted
+      # @return [void]
+      def self.delete_discovery_if_owner(expected_owner_pid, expected_auth_token = nil)
+        current = load_discovery
+        return unless current[:owner_pid].to_i == expected_owner_pid.to_i
+        return if expected_auth_token && current[:auth_token] != expected_auth_token
+
+        File.delete(discovery_path) if File.exist?(discovery_path)
       rescue StandardError
         nil
       end
-      private_class_method :delete_discovery_if_owned
+      private_class_method :delete_discovery_if_owner
 
       # Removes the discovery file when the current process still owns the
       # service and the shared registry is now empty.
@@ -297,7 +400,7 @@ module Lich
         discovery = load_discovery
         return unless discovery[:owner_pid].to_i == Process.pid
 
-        current_snapshot = snapshot
+        current_snapshot = query_snapshot
         return if current_snapshot[:error]
         return unless current_snapshot[:source] == 'ActiveSessionsAPI'
         return unless current_snapshot[:total].to_i.zero?

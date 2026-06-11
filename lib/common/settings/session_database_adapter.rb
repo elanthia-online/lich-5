@@ -15,7 +15,7 @@ module Lich
       # @param data_dir [String] directory containing lich.db3 when db is not injected
       # @param table_name [String] session summary table name
       def initialize(db: nil, data_dir: DATA_DIR, table_name: DEFAULT_TABLE_NAME)
-        @db = db || SQLite3::Database.new(File.join(data_dir, 'lich.db3'))
+        @db = db || open_database(File.join(data_dir, 'lich.db3'))
         @table_name = table_name
       end
 
@@ -112,6 +112,12 @@ module Lich
       end
 
       private
+
+      def open_database(path)
+        return Lich.open_sqlite_db(path) if defined?(Lich) && Lich.respond_to?(:open_sqlite_db)
+
+        SQLite3::Database.new(path)
+      end
 
       # Binds payload values in stable column order for upsert SQL.
       #

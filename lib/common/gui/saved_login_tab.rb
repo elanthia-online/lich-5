@@ -417,7 +417,9 @@ module Lich
           # Add favorites to the tab
           if favorite_entries.empty?
             # Show message when no favorites exist
+            # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
             no_favorites_label = Gtk::Label.new("No favorite characters yet.\n\nMark characters as favorites using the ★ button\nin the account tabs or saved entries list.")
+            # rubocop:enable Custom/AsciiOnlySource
             no_favorites_label.set_justify(:center)
             no_favorites_label.set_margin_top(50)
             no_favorites_label.set_margin_bottom(50)
@@ -434,7 +436,9 @@ module Lich
           scrolled_window.set_policy(:never, :automatic)
           scrolled_window.add(favorites_box)
 
+          # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
           @account_book.prepend_page(scrolled_window, Gtk::Label.new("★ FAVORITES"))
+          # rubocop:enable Custom/AsciiOnlySource
         end
 
         # Creates a list layout for accounts (non-tabbed)
@@ -526,7 +530,9 @@ module Lich
           @play_button = Gtk::Button.new()
 
           # Add favorite indicator to character name if it's a favorite
+          # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
           char_name_text = is_favorite ? "★ #{login_params.char_name}" : login_params.char_name
+          # rubocop:enable Custom/AsciiOnlySource
           char_label = Gtk::Label.new(char_name_text)
           char_label.set_width_chars(15)
 
@@ -569,7 +575,9 @@ module Lich
           @favorite_button = nil
           if @favorites_enabled
             @favorite_button = Gtk::Button.new()
+            # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
             favorite_text = is_favorite ? '★' : '☆'
+            # rubocop:enable Custom/AsciiOnlySource
             favorite_label = Gtk::Label.new(favorite_text)
             favorite_label.set_width_chars(3)
             @favorite_button.add(favorite_label)
@@ -619,12 +627,16 @@ module Lich
               new_status = FavoritesManager.toggle_favorite(@data_dir, login_params.user_id, login_params.char_name, login_params.game_code, login_params.frontend)
 
               # Update button appearance
+              # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
               favorite_text = new_status ? '★' : '☆'
+              # rubocop:enable Custom/AsciiOnlySource
               favorite_label.text = favorite_text
               favorite_button.tooltip_text = new_status ? 'Remove from favorites' : 'Add to favorites'
 
               # Update character name display
+              # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
               char_name_text = new_status ? "★ #{login_params.char_name}" : login_params.char_name
+              # rubocop:enable Custom/AsciiOnlySource
               char_label.text = char_name_text
 
               # Update play button styling

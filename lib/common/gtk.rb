@@ -325,8 +325,8 @@ module Lich
       end
     end
 
-    unless File.exist?('logo.png')
-      File.open('logo.png', 'wb') { |f|
+    unless File.exist?(File.join(LICH_DIR, 'logo.png'))
+      File.open(File.join(LICH_DIR, 'logo.png'), 'wb') { |f|
         f.write '
       iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAA
       CqaXHeAAAPrUlEQVR4Ae1bDVRT5xl+t7azXY/b2rOu7ep2zuaZm5unbqX7s7
@@ -424,7 +424,7 @@ module Lich
 
     begin
       Gtk.queue {
-        @default_icon = GdkPixbuf::Pixbuf.new(:file => 'logo.png')
+        @default_icon = GdkPixbuf::Pixbuf.new(:file => File.join(LICH_DIR, 'logo.png'))
         # Keep an idle callback active so GTK continues pumping work while the
         # launcher is open; this callback is intentionally perpetual.
         GLib::Idle.add do

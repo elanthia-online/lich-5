@@ -62,16 +62,31 @@ module Lich
         end
 
         # fixme: look in wizard script directory
-        # fixme: allow subdirectories?
-        file_list = Dir.children(File.join(SCRIPT_DIR, "custom")).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }.map { |s| s.prepend("/custom/") } + Dir.children(SCRIPT_DIR).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
-        if (file_name = (file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i }))
+        # Build file list: custom/ root, then custom/ subdirectories, then SCRIPT_DIR root
+        custom_base = File.join(SCRIPT_DIR, "custom")
+        custom_dirs = []
+        if File.directory?(custom_base)
+          custom_dirs << custom_base
+          Dir.children(custom_base).sort.each do |child|
+            child_path = File.join(custom_base, child)
+            custom_dirs << child_path if File.directory?(child_path)
+          end
+        end
+        file_list = custom_dirs.flat_map { |dir|
+          prefix = dir.sub(SCRIPT_DIR, '')
+          Dir.children(dir)
+             .select { |f| f =~ /\.(lic|rb|cmd|wiz)(\.(gz|Z))?$/i }
+             .sort_by { |fn| fn.sub(/\.[^.]+$/, '') }
+             .map { |s| "#{prefix}/#{s}" }
+        } + Dir.children(SCRIPT_DIR).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
+        if (file_name = (file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i }))
           script_name = file_name.sub(/\..{1,3}$/, '')
         end
         if file_name.nil?
           respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR} or #{SCRIPT_DIR}/custom"
           next nil
         end
-        if (options[:force] != true) and (Script.running + Script.hidden).find { |s| s.name =~ /^#{Regexp.escape(script_name.sub('/custom/', ''))}$/i }
+        if (options[:force] != true) and (Script.running + Script.hidden).find { |s| s.name =~ /^#{Regexp.escape(script_name.sub(%r{/custom/([^/]+/)?}, ''))}$/i }
           respond "--- Lich: #{script_name} is already running (use #{$clean_lich_char}force [scriptname] if desired)."
           next nil
         end
@@ -285,9 +300,19 @@ module Lich
         end
       }
       @@running = Array.new
+      @@kill_metrics_mutex = Mutex.new
+      @@kill_metrics = {
+        :minute            => nil,
+        :runtime_stops     => 0,
+        :duration_total_ms => 0.0,
+        :duration_max_ms   => 0.0,
+        :failures          => 0
+      }
 
       attr_reader :name, :vars, :safe, :file_name, :label_order, :at_exit_procs
       attr_accessor :quiet, :no_echo, :jump_label, :current_label, :want_downstream, :want_downstream_xml, :want_upstream, :want_script_output, :hidden, :paused, :silent, :no_pause_all, :no_kill_all, :downstream_buffer, :upstream_buffer, :unique_buffer, :die_with, :match_stack_labels, :match_stack_strings, :watchfor, :command_line, :ignore_pause, :killed_externally, :kill_source
+
+      KILL_METRICS_FEATURE_FLAG = :script_kill_metrics
 
       class JumpError < StandardError; end
       JUMP = JumpError.exception('JUMP')
@@ -571,6 +596,90 @@ module Lich
         end
       end
 
+      class << self
+        private
+
+        # Returns whether script-kill aggregate metrics should be collected.
+        #
+        # The feature flag defaults off. Keeping the check behind this helper
+        # gives later runtime-facade work one narrow place to replace the flag
+        # lookup with a cached runtime mode or diagnostics service.
+        #
+        # @return [Boolean]
+        def __script_kill_metrics_enabled?
+          return false unless defined?(Lich::Common::FeatureFlags)
+
+          Lich::Common::FeatureFlags.enabled?(KILL_METRICS_FEATURE_FLAG)
+        rescue StandardError => e
+          Lich.log("warning: script kill metrics flag check failed: #{e.class}: #{e.message}") if defined?(Lich) && Lich.respond_to?(:log)
+          false
+        end
+
+        # Records one non-shutdown script kill and logs the completed previous
+        # minute when the current event rolls into a new minute bucket.
+        #
+        # This intentionally stores process-local, aggregate-only telemetry.
+        # It does not persist script names, emit per-kill logs, or count process
+        # shutdown stops. The goal is low-noise lifecycle diagnostics for
+        # release validation, not user-visible runtime reporting.
+        #
+        # @param duration_ms [Float] elapsed kill processing time in milliseconds
+        # @param failed [Boolean] whether the kill cleanup path raised
+        # @return [void]
+        # @api private
+        def __record_kill_metric(duration_ms:, failed:)
+          current_minute = Time.now.to_i / 60
+          summary = nil
+
+          @@kill_metrics_mutex.synchronize {
+            if @@kill_metrics[:minute] && @@kill_metrics[:minute] != current_minute
+              summary = @@kill_metrics.dup
+              __reset_kill_metrics_bucket
+            end
+
+            @@kill_metrics[:minute] = current_minute
+            @@kill_metrics[:runtime_stops] += 1
+            @@kill_metrics[:duration_total_ms] += duration_ms
+            @@kill_metrics[:duration_max_ms] = [@@kill_metrics[:duration_max_ms], duration_ms].max
+            @@kill_metrics[:failures] += 1 if failed
+          }
+
+          __log_kill_metric_summary(summary) if summary
+        end
+
+        # Clears the current script-kill metric bucket while preserving the
+        # mutex and hash identity used by tests and future runtime adapters.
+        #
+        # @return [void]
+        # @api private
+        def __reset_kill_metrics_bucket
+          @@kill_metrics[:runtime_stops] = 0
+          @@kill_metrics[:duration_total_ms] = 0.0
+          @@kill_metrics[:duration_max_ms] = 0.0
+          @@kill_metrics[:failures] = 0
+        end
+
+        # Emits a compact aggregate summary for a completed minute bucket.
+        #
+        # Callers only reach this method when the kill metrics feature flag is
+        # enabled and a minute rollover has occurred. The message is deliberately
+        # aggregate-only to avoid noisy per-script diagnostics in normal play.
+        #
+        # @param summary [Hash] completed metric bucket
+        # @return [void]
+        # @api private
+        def __log_kill_metric_summary(summary)
+          return unless summary[:runtime_stops].positive?
+
+          avg_ms = summary[:duration_total_ms] / summary[:runtime_stops]
+          Lich.log(
+            "debug: script kill metrics runtime_stops_last_minute=#{summary[:runtime_stops]} " \
+            "avg_ms=#{format('%.2f', avg_ms)} max_ms=#{format('%.2f', summary[:duration_max_ms])} " \
+            "failures=#{summary[:failures]}"
+          )
+        end
+      end
+
       def initialize(args)
         @file_name = args[:file]
         @name = /.*[\/\\]+([^\.]+)\./.match(@file_name).captures.first
@@ -655,40 +764,101 @@ module Lich
         # return self
       end
 
-      def kill
+      # Stops this script and runs its before_dying/at_exit handlers.
+      #
+      # Runtime kills can optionally feed aggregate lifecycle metrics. Shutdown
+      # kills still run normal script cleanup, but are ignored by those metrics
+      # because process exit can stop many scripts for reasons unrelated to
+      # ordinary script churn.
+      #
+      # @param context [Symbol] :runtime for ordinary script stops, :shutdown
+      #   when the owning Lich process is closing
+      # @return [String] script name
+      def kill(context: :runtime)
         source = @kill_source || caller[0..2]
-        Thread.new {
-          @killer_mutex.synchronize {
-            if @@running.include?(self)
-              begin
-                @thread_group.list.dup.each { |t|
-                  unless t == Thread.current
-                    t.kill rescue nil
-                  end
-                }
-                @thread_group.add(Thread.current)
-                @die_with.each { |script_name| Script.kill(script_name) }
-                @paused = false
-                @at_exit_procs.each { |p| report_errors { p.call } }
-                @die_with = @at_exit_procs = @downstream_buffer = @upstream_buffer = @match_stack_labels = @match_stack_strings = nil
-                @@running.delete(self)
-                unless @quiet
-                  if @killed_externally
-                    respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} was killed. (#{source.first})")
-                  else
-                    respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} has exited.")
-                  end
-                end
-                GC.start
-              rescue
-                respond "--- Lich: error: #{$!}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              end
-            end
-          }
-        }
+
+        begin
+          Thread.new { __run_kill_cleanup(source: source, context: context, record_metrics: true) }
+        rescue ThreadError => e
+          __log_kill_thread_fallback(e)
+          __run_kill_cleanup(source: source, context: context, record_metrics: false)
+        end
+
         @name
       end
+
+      # Runs the script cleanup body used by {#kill}.
+      #
+      # The normal lifecycle path runs this body in a separate cleanup thread,
+      # preserving existing return/timing behavior. If Ruby cannot allocate that
+      # thread, {#kill} calls this method inline as a degraded fallback so the
+      # script is still removed from the registry and at-exit handlers still get
+      # a chance to run.
+      #
+      # Inline fallback cleanup does not record runtime metrics. Thread
+      # allocation failure is usually exit pressure or resource exhaustion, not
+      # ordinary script churn, and should not pollute the runtime stop bucket.
+      #
+      # @param source [Array<String>] caller lines used for external-kill logging
+      # @param context [Symbol] kill context, such as :runtime or :shutdown
+      # @param record_metrics [Boolean] whether this cleanup can feed runtime metrics
+      # @return [void]
+      # @api private
+      def __run_kill_cleanup(source:, context:, record_metrics:)
+        @killer_mutex.synchronize {
+          if @@running.include?(self)
+            instrument_kill = record_metrics && (context != :shutdown) && Script.__send__(:__script_kill_metrics_enabled?)
+            started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) if instrument_kill
+            failed = false
+            begin
+              @thread_group.list.dup.each { |t|
+                unless t == Thread.current
+                  t.kill rescue nil
+                end
+              }
+              @thread_group.add(Thread.current)
+              @die_with.each { |script_name| Script.kill(script_name) }
+              @paused = false
+              @at_exit_procs.each { |p| report_errors { p.call } }
+              @die_with = @at_exit_procs = @downstream_buffer = @upstream_buffer = @match_stack_labels = @match_stack_strings = nil
+              @@running.delete(self)
+              unless @quiet
+                if @killed_externally
+                  respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} was killed. (#{source.first})")
+                else
+                  respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} has exited.")
+                end
+              end
+            rescue
+              failed = true
+              respond "--- Lich: error: #{$!}"
+              Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            ensure
+              if instrument_kill
+                finished_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                Script.__send__(
+                  :__record_kill_metric,
+                  :duration_ms => (finished_at - started_at) * 1000.0,
+                  :failed      => failed
+                )
+              end
+            end
+          end
+        }
+      end
+      private :__run_kill_cleanup
+
+      # Logs when {#kill} cannot allocate its normal cleanup thread.
+      #
+      # @param error [ThreadError] allocation failure from `Thread.new`
+      # @return [void]
+      # @api private
+      def __log_kill_thread_fallback(error)
+        return unless defined?(Lich) && Lich.respond_to?(:log)
+
+        Lich.log("warning: Script#kill cleanup thread unavailable for #{@name}: #{error.class}: #{error.message}; running cleanup inline")
+      end
+      private :__log_kill_thread_fallback
 
       def at_exit(&block)
         if block

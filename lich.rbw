@@ -1,10 +1,10 @@
 #!/usr/bin/env ruby
 # encoding: US-ASCII
 
-#####
+######
 # Lich - https://github.com/elanthia-online/lich-5
 # Licensed under BSD 3-Clause License (see LICENSE file)
-#####
+######
 
 # process ARGV for constants before loading constants.rb: issue #304
 for arg in ARGV

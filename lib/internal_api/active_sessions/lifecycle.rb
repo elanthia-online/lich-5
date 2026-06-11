@@ -7,14 +7,32 @@ module Lich
       #
       # This module adapts Lich runtime state into active-sessions payloads. It
       # intentionally keeps only a small amount of mutable process-local state:
-      # identifying metadata, detachable listener details, and a heartbeat
-      # thread handle.
+      # identifying metadata, connection state, detachable listener details,
+      # and a heartbeat thread handle.
+      #
+      # ActiveSessions API contract:
+      #
+      # * A session record being present in the registry means the Lich process
+      #   is still known to the active-sessions service.  Presence is not a
+      #   promise that the game connection is still usable.
+      # * The `connected` field is the authoritative connection signal exposed
+      #   to API consumers.  Shutdown code must set it to `false` when the game
+      #   connection has ended, before slower teardown work such as script
+      #   before_dying hooks, state persistence, socket closeout, and database
+      #   closeout runs.
+      # * Lifecycle `stop` unregisters the process from ActiveSessions.  That
+      #   removal means the process is no longer reporting as an active session;
+      #   it should not be used merely to mean "the game connection dropped."
+      # * For detachable sessions, the public `connected` value is true only
+      #   when both the game connection and detachable listener connection are
+      #   active.  A disconnected game session stays disconnected even if the
+      #   detachable listener was last reported as connected.
       module Lifecycle
         # Default heartbeat cadence for refreshing the current process entry and
         # detecting service-owner failover quickly enough for multi-session use.
         #
         # @return [Integer]
-        HEARTBEAT_INTERVAL_SECONDS = 5
+        HEARTBEAT_INTERVAL_SECONDS = 2
 
         @heartbeat_thread = nil
         @running = false
@@ -22,12 +40,14 @@ module Lich
         @listener_host = nil
         @listener_port = nil
         @listener_connected = false
+        @connected = true
         @session_name = nil
         @role = nil
         @started_at = nil
         @mutex = Mutex.new
         @registration_mutex = Mutex.new
         @lifecycle_generation = 0
+        @feature_enabled = false
 
         # Resolves the reporting session name from runtime context.
         #
@@ -65,7 +85,12 @@ module Lich
         # @param heartbeat_interval [Integer]
         # @return [Boolean] true when lifecycle tracking started
         def self.start(session_name:, role:, heartbeat_interval: HEARTBEAT_INTERVAL_SECONDS)
-          return false unless ActiveSessions.enabled?
+          feature_enabled = ActiveSessions.enabled?
+          return false unless feature_enabled
+
+          # Bootstrap once during lifecycle startup so the admitted-only
+          # heartbeat/update path has a running service to talk to.
+          ActiveSessions.ensure_service!
 
           thread = nil
           @mutex.synchronize do
@@ -74,6 +99,8 @@ module Lich
             @session_name = session_name
             @role = role
             @started_at = Time.now.to_i
+            @connected = true
+            @feature_enabled = feature_enabled
             @running = true
             @started = true
             @lifecycle_generation += 1
@@ -84,10 +111,12 @@ module Lich
               sleep heartbeat_interval
               break unless running?
 
-              upsert_current_session
+              begin
+                upsert_current_session
+              rescue StandardError => e
+                Lich.log("warning: ActiveSessions heartbeat tick failed (continuing): #{e.class}: #{e.message}\n\t#{e.backtrace&.first(3)&.join("\n\t")}") if Lich.respond_to?(:log)
+              end
             end
-          rescue StandardError => e
-            Lich.log("warning: ActiveSessions heartbeat failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
           end
 
           @mutex.synchronize { @heartbeat_thread = thread if @started }
@@ -104,7 +133,9 @@ module Lich
             @listener_host = nil
             @listener_port = nil
             @listener_connected = false
+            @connected = true
             @started_at = nil
+            @feature_enabled = false
           end
           thread.kill if thread.respond_to?(:alive?) && thread.alive?
           Lich.log("warning: ActiveSessions lifecycle start failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
@@ -130,9 +161,9 @@ module Lich
 
           thread&.join(0.5)
           thread&.kill if thread&.alive?
-          if ActiveSessions.enabled?
+          if feature_enabled?
             @registration_mutex.synchronize do
-              ActiveSessions.unregister_session(pid: Process.pid)
+              ActiveSessions.send(:unregister_session_admitted, pid: Process.pid)
               ActiveSessions.cleanup_discovery_if_last_session!
             end
           end
@@ -143,7 +174,9 @@ module Lich
             @listener_host = nil
             @listener_port = nil
             @listener_connected = false
+            @connected = true
             @started_at = nil
+            @feature_enabled = false
           end
           true
         rescue StandardError => e
@@ -158,7 +191,7 @@ module Lich
         # @param connected [Boolean]
         # @return [void]
         def self.update_listener(host:, port:, connected:)
-          return unless ActiveSessions.enabled?
+          return unless started?
 
           @mutex.synchronize do
             @listener_host = host
@@ -175,16 +208,50 @@ module Lich
         #
         # @return [void]
         def self.clear_listener
-          return unless ActiveSessions.enabled?
+          return unless started?
 
-          started = false
           @mutex.synchronize do
             @listener_host = nil
             @listener_port = nil
             @listener_connected = false
-            started = @started
           end
-          upsert_current_session if started
+          upsert_current_session
+        end
+
+        # Updates the current process connection state without unregistering
+        # the session from the active-sessions registry.
+        #
+        # This method exists because MahtraDR's shutdown testing demonstrated
+        # that immediate unregister is too blunt an API signal: it hides a
+        # still-running Lich process from ActiveSessions while scripts, saves,
+        # socket closeout, and database closeout may still be executing.  The
+        # narrower contract is to keep the session present while publishing
+        # `connected: false`.
+        #
+        # API contract for callers:
+        #
+        # * `update_connected(false)` means the game/session connection is no
+        #   longer available for normal use, but the Lich process may still be
+        #   performing shutdown work.
+        # * `update_connected(true)` may restore the connection state for a
+        #   started lifecycle without changing identity, uptime, listener
+        #   metadata, or registration ownership.
+        # * The method is a no-op before `start`; it must not create a registry
+        #   record or bootstrap ActiveSessions on its own.
+        # * The method updates the existing registry record through the same
+        #   admitted lifecycle path used by heartbeats and listener updates; it
+        #   must not unregister the session.
+        # * The published `connected` value is combined with detachable listener
+        #   state, so a detachable session reports connected only when both the
+        #   game connection and listener connection are active.
+        #
+        # @param connected [Boolean]
+        # @return [void]
+        def self.update_connected(connected)
+          return unless started?
+
+          @mutex.synchronize { @connected = !!connected }
+          upsert_current_session
         end
 
         # Returns the current process session payload.
@@ -210,7 +277,9 @@ module Lich
           @registration_mutex.synchronize do
             return unless registration_current?(generation)
 
-            ActiveSessions.register_session(payload)
+            # ActiveSessions keeps the admitted-path helpers private so the
+            # feature-gate bypass stays local to lifecycle-owned call sites.
+            ActiveSessions.send(:register_session_admitted, payload)
           end
         end
         private_class_method :upsert_current_session
@@ -222,6 +291,24 @@ module Lich
           @mutex.synchronize { @running }
         end
         private_class_method :running?
+
+        # Returns whether lifecycle tracking has started.
+        #
+        # @return [Boolean]
+        def self.started?
+          @mutex.synchronize { @started }
+        end
+        private_class_method :started?
+
+        # Returns whether the current lifecycle was admitted while the feature
+        # flag was enabled. Heartbeat/listener hot paths use this latched state
+        # instead of re-reading the backing feature flag on every update.
+        #
+        # @return [Boolean]
+        def self.feature_enabled?
+          @mutex.synchronize { @feature_enabled }
+        end
+        private_class_method :feature_enabled?
 
         # Returns whether the captured lifecycle generation is still current.
         #
@@ -243,7 +330,7 @@ module Lich
             frontend: resolve_frontend,
             game_code: resolve_game_code,
             started_at: @started_at,
-            connected: @listener_port.nil? ? true : @listener_connected,
+            connected: @connected && (@listener_port.nil? || @listener_connected),
             listener_host: @listener_host,
             listener_port: @listener_port,
             hidden: false

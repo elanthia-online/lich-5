@@ -65,6 +65,18 @@ module Lich
           #   - Thieves: parsed by check_known_thief_khri
           Lich::Util.issue_command("ability", /^You (?:know the Berserks|recall the spells you have learned from your training)|^From (?:your apprenticeship you remember practicing|the \\w+ tree)/, /^You (?:recall that you have \\d+ training sessions|can use SPELL STANCE \\[HELP\\]|have \\d+ available slot)/, quiet: true, timeout: 1)
 
+          # Ensure ShowRoomID and MonsterBold flags are enabled (one-time per character)
+          unless UserVars.dependency_setflags
+            flags = Array(Lich::Util.issue_command("flag", /^Usage/, /^For other setting options, see AVOID, SET, and TOGGLE/, quiet: true, timeout: 1, usexml: false))
+            required = ["ShowRoomID", "MonsterBold"]
+            required.each do |flag|
+              fput("flag \#{flag} on") unless flags.any? { |f| f.match?(/\#{Regexp.escape(flag)}\\s+ON/) }
+            end
+            # Re-query to verify flags applied; only mark sentinel if all confirmed
+            flags = Array(Lich::Util.issue_command("flag", /^Usage/, /^For other setting options, see AVOID, SET, and TOGGLE/, quiet: true, timeout: 1, usexml: false))
+            UserVars.dependency_setflags = Time.now if required.all? { |flag| flags.any? { |f| f.match?(/\#{Regexp.escape(flag)}\\s+ON/) } }
+          end
+
           Lich::DragonRealms::DRInfomon.startup_completed!
         SCRIPT
       end
@@ -72,7 +84,108 @@ module Lich
       def self.startup_completed!
         @@startup_complete = true
         PostLoad.game_loaded! if defined?(PostLoad)
+        post_startup_checks
+      end
+
+      # Best-effort filesystem checks that run once after startup completes.
+      # These don't need game commands, just file existence checks and warnings.
+      # Failures are logged but do not block the PostLoad lifecycle.
+      #
+      # @return [void]
+      def self.post_startup_checks
+        warn_obsolete_scripts
+        warn_obsolete_data_files
+        warn_custom_scripts
+        $setupfiles.reload if defined?($setupfiles) && $setupfiles
+      rescue StandardError => e
+        safe_message('error', "DRInfomon: post_startup_checks failed: #{e.message}")
+        safe_log("DRInfomon: post_startup_checks error: #{e.inspect}\n\t#{e.backtrace&.first(5)&.join("\n\t")}")
+      end
+
+      # Guarded messaging -- safe to call if Lich::Messaging is unavailable.
+      #
+      # @param type [String] message type (e.g. 'error', 'info')
+      # @param text [String] message text
+      # @return [void]
+      def self.safe_message(type, text)
+        if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:msg)
+          Lich::Messaging.msg(type, text)
+        else
+          safe_log(text)
+        end
+      end
+
+      # Guarded logging -- safe to call if Lich.log is unavailable.
+      #
+      # @param text [String] log message
+      # @return [void]
+      def self.safe_log(text)
+        if defined?(Lich) && Lich.respond_to?(:log)
+          Lich.log(text)
+        else
+          $stderr.puts(text)
+        end
+      end
+
+      # Script names that are obsolete and should be deleted.
+      # Checked on login to warn users about stale files.
+      DR_OBSOLETE_SCRIPTS = %w[
+        events slackbot spellmonitor exp-monitor
+        common-travel common-validation common drinfomon equipmanager
+        common-money common-moonmage common-summoning common-theurgy common-arcana
+        bootstrap common-crafting common-healing-data common-healing common-items
+        update-shops
+      ].freeze
+
+      # Data filenames that are obsolete and should be deleted.
+      DR_OBSOLETE_DATA_FILES = %w[].freeze
+
+      # Warns about obsolete .lic files still present in SCRIPT_DIR.
+      #
+      # @return [void]
+      def self.warn_obsolete_scripts
+        DR_OBSOLETE_SCRIPTS.each do |script_name|
+          path = File.join(SCRIPT_DIR, "#{script_name}.lic")
+          next unless File.exist?(path)
+
+          _respond Lich::Messaging.monsterbold("--- Lich: '#{script_name}.lic' is obsolete and should be deleted from #{SCRIPT_DIR}. It is no longer needed and may cause problems.")
+        end
+      end
+
+      # Warns about obsolete data files still present in SCRIPT_DIR/data.
+      #
+      # @return [void]
+      def self.warn_obsolete_data_files
+        data_dir = File.join(SCRIPT_DIR, 'data')
+        DR_OBSOLETE_DATA_FILES.each do |filename|
+          path = File.join(data_dir, filename)
+          next unless File.exist?(path)
+
+          _respond Lich::Messaging.monsterbold("--- Lich: '#{filename}' is obsolete and can be safely deleted from #{data_dir}.")
+        end
+      end
+
+      # Warns when scripts/custom/ contains files that shadow curated scripts,
+      # preventing the curated versions from receiving updates.
+      #
+      # @return [void]
+      def self.warn_custom_scripts
+        custom_dir = File.join(SCRIPT_DIR, 'custom')
+        return unless File.directory?(custom_dir)
+
+        custom_scripts = Dir.entries(custom_dir).select { |f| f.end_with?('.lic') }
+        curated_scripts = Dir.entries(SCRIPT_DIR).select { |f| f.end_with?('.lic') }
+        shadowed = custom_scripts.select { |script| curated_scripts.include?(script) }
+
+        unless shadowed.empty?
+          Lich::Messaging.msg("info", "NOTE: The following curated scripts are in your custom folder and will not receive updates")
+          Lich::Messaging.msg("info", shadowed.join(', '))
+        end
       end
     end
+  end
+
+  module Common
+    CORE_DR_STARTUP = true
   end
 end

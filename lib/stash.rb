@@ -43,7 +43,7 @@ module Lich
       bag = container(bag)
       try_or_fail(command: "_drag ##{item.id} ##{bag.id}") do |result|
         # Check for vapor message first (bandolier)
-        if result =~ /As you drop .+ it dissolves into vapor\./
+        if result.is_a?(String) && result =~ /As you drop .+ it dissolves into vapor\./
           @bandolier_weapon[item.name] = "unknown"
           return true
         end
