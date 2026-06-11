@@ -267,6 +267,17 @@ RSpec.describe Lich::Common, "#gui_login" do
       expect { test_instance.gui_login }.to raise_error(SystemExit)
       expect(Lich::Common).to have_received(:shutdown_gtk!)
     end
+
+    it "falls back if queued GTK shutdown work does not complete" do
+      allow(Gtk).to receive(:queue).and_return(1)
+      allow(Process).to receive(:clock_gettime).and_return(0.0, 2.1)
+      allow(test_instance).to receive(:sleep)
+
+      test_instance.send(:shutdown_gtk_before_exit)
+
+      expect(Lich).to have_received(:log).with(/GTK shutdown queue did not complete/)
+      expect(Lich::Common).to have_received(:clear_gtk_retention_registries)
+    end
   end
 
   context "when handling on_play callbacks by launcher mode" do

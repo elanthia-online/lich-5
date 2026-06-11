@@ -723,7 +723,23 @@ module Lich
       end
 
       if queued
-        shutdown_complete.pop
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 2.0
+        completed = false
+        until completed
+          begin
+            shutdown_complete.pop(true)
+            completed = true
+          rescue ThreadError
+            break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+            sleep 0.01
+          end
+        end
+
+        unless completed
+          Lich.log "warning: GTK shutdown queue did not complete before exit"
+          Lich::Common.clear_gtk_retention_registries
+        end
       else
         Lich::Common.clear_gtk_retention_registries
       end

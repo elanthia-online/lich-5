@@ -98,6 +98,15 @@ module Lich
       Thread.current[:lich_allow_gtk_main_quit] = previous
     end
 
+    # Requests a GTK main-loop shutdown through the guarded core escape hatch.
+    #
+    # @return [Object, nil] GTK shutdown result when GTK is available
+    def self.quit_gtk_main_loop
+      return unless defined?(Gtk)
+      return Gtk.lich_main_quit if Gtk.respond_to?(:lich_main_quit)
+      return Gtk.main_quit if Gtk.respond_to?(:main_quit)
+    end
+
     # Returns log context for GTK guard messages.
     #
     # Prefers the currently running script name when available so blocked GTK
@@ -150,9 +159,7 @@ module Lich
               rescue StandardError
                 Lich::Common.with_gtk_registry_lock do
                   entry[:handlers].delete(cleanup)
-                  entry[:handlers].delete(block)
                   entry[:cleanup_installed] = false
-                  Lich::Common.gtk_signal_handlers.delete(receiver) if entry[:handlers].empty?
                 end
               end
             end

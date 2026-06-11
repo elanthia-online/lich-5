@@ -70,14 +70,15 @@ RSpec.describe 'Lich::Common GTK hardening' do
     expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
   end
 
-  it 'rolls back retained signal handlers if destroy cleanup registration fails' do
+  it 'retains signal handlers even if destroy cleanup registration fails' do
     widget = Gtk::Widget.new
     handler = proc { :clicked }
     widget.fail_next_destroy_connection!
 
     widget.signal_connect('clicked', &handler)
 
-    expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
+    retained = Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }
+    expect(retained[:handlers]).to include(handler)
   end
 
   it 'rolls back retained signal handlers if signal registration fails after retention' do
@@ -154,5 +155,10 @@ RSpec.describe 'Lich::Common GTK hardening' do
     expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers }).to be_empty
     expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks }).to be_empty
     expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks }).to be_empty
+  end
+
+  it 'routes shared GTK shutdown through the guarded helper' do
+    expect(Lich::Common.quit_gtk_main_loop).to eq(:main_quit_called)
+    expect(Gtk.main_quit_calls).to eq(1)
   end
 end
