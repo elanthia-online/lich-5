@@ -155,7 +155,7 @@ module Lich
                                    }.to_h
             else
               login_info = Array.new
-              for game in response.sub(/^M\t/, '').scan(/[^\t]+\t[^\t^\n]+/)
+              for game in response.sub(/^M\t/, '').scan(/[^\t]+\t[^\t\n]+/)
                 game_code, game_name = game.split("\t")
                 # pp "M:response = %s" % response
                 conn.puts "N\t#{game_code}\n"
@@ -176,7 +176,7 @@ module Lich
                     if defined?(Lich::Common::Account)
                       Lich::Common::Account.members = response
                     end
-                    for code_name in response.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '').scan(/[^\t]+\t[^\t^\n]+/)
+                    for code_name in response.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '').scan(/[^\t]+\t[^\t\n]+/)
                       char_code, char_name = code_name.split("\t")
                       hash = { :game_code => "#{game_code}", :game_name => "#{game_name}",
                               :char_code => "#{char_code}", :char_name => "#{char_name}" }
