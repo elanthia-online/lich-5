@@ -70,6 +70,8 @@ reconnect_if_wanted = proc {
                           Lich::Common::Authentication::CLI.execute_new_character(
                             @argv_options[:account],
                             game_code: requested_instance,
+                            frontend: requested_fe,
+                            custom_launch: requested_custom_launch,
                             data_dir: DATA_DIR
                           )
                         else

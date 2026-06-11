@@ -77,12 +77,16 @@ module Lich
         #
         # @param account_name [String] account name as stored in entry.yaml
         # @param game_code [String, nil] game instance code (e.g. "DR", "GS3")
+        # @param frontend [String, Symbol, nil] requested frontend for the launched session
+        #   (nil or the :__unset sentinel default to 'profanity')
+        # @param custom_launch [String, Symbol, nil] custom launch command (the :__unset sentinel is treated as none)
+        # @param custom_launch_dir [String, Symbol, nil] custom launch directory (the :__unset sentinel is treated as none)
         # @param data_dir [String, nil] directory containing saved login entries
         # @return [Array<String>, nil] launch data strings if successful, nil on failure
         #
         # @example
         #   launch_data = CLI.execute_new_character('MYACCOUNT', game_code: 'DR', data_dir: '/path/to/data')
-        def self.execute_new_character(account_name, game_code: nil, data_dir: nil)
+        def self.execute_new_character(account_name, game_code: nil, frontend: nil, custom_launch: nil, custom_launch_dir: nil, data_dir: nil)
           data_dir ||= DATA_DIR
 
           unless account_name && !account_name.empty?
@@ -106,11 +110,22 @@ module Lich
             password: account_data[:password],
             char_name: 'NEW',
             game_code: game_code,
-            frontend: 'profanity',
+            frontend: unset_login_value?(frontend) ? 'profanity' : frontend,
+            custom_launch: unset_login_value?(custom_launch) ? nil : custom_launch,
+            custom_launch_dir: unset_login_value?(custom_launch_dir) ? nil : custom_launch_dir,
             generator: true,
           }
 
           decrypt_and_authenticate(char_entry, entry_data)
+        end
+
+        # Treats nil and the :__unset CLI sentinel as "value not provided".
+        #
+        # @param value [Object] a parsed CLI login value
+        # @return [Boolean] true when the value should be treated as absent
+        # @api private
+        def self.unset_login_value?(value)
+          value.nil? || value == :__unset
         end
 
         # Loads and parses entry.yaml from the given data directory.
