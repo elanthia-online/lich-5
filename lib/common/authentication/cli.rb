@@ -102,11 +102,11 @@ module Lich
           entry_data = load_entry_data(data_dir)
           return nil unless entry_data
 
-          account_data = find_account(entry_data, account_name)
+          canonical_name, account_data = find_account(entry_data, account_name)
           return nil unless account_data
 
           char_entry = {
-            username: account_name,
+            username: canonical_name,
             password: account_data[:password],
             char_name: 'NEW',
             game_code: game_code,
@@ -154,9 +154,13 @@ module Lich
 
         # Finds an account by name in the entry data (case-insensitive).
         #
+        # Returns the stored canonical account key alongside the account data so
+        # callers authenticate with the canonical identifier rather than the
+        # caller-supplied casing.
+        #
         # @param entry_data [Hash] symbolized entry data with :accounts key
         # @param account_name [String] account name to search for
-        # @return [Hash, nil] account data hash, or nil if not found
+        # @return [Array(String, Hash), nil] [canonical account name, account data], or nil if not found
         # @api private
         def self.find_account(entry_data, account_name)
           accounts = entry_data[:accounts]
@@ -165,7 +169,7 @@ module Lich
             return nil
           end
 
-          _name, account_data = accounts.find { |key, _v| key.to_s.casecmp?(account_name) }
+          canonical_name, account_data = accounts.find { |key, _v| key.to_s.casecmp?(account_name) }
           unless account_data
             Lich.log "error: Account not found: #{account_name}"
             return nil
@@ -176,7 +180,7 @@ module Lich
             return nil
           end
 
-          account_data
+          [canonical_name.to_s, account_data]
         end
 
         # Decrypts the password from a character entry and authenticates with the game server.
