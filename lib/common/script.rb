@@ -67,10 +67,10 @@ module Lich
         custom_dirs = []
         if File.directory?(custom_base)
           custom_dirs << custom_base
-          Dir.children(custom_base).sort.each do |child|
-            child_path = File.join(custom_base, child)
-            custom_dirs << child_path if File.directory?(child_path)
-          end
+          # Dir.glob with trailing '/' matches directories only via libc readdir d_type,
+          # avoiding a File.directory? stat() per file. Critical on slower filesystems
+          # where each stat() costs ~5-10ms.
+          custom_dirs.concat(Dir.glob(File.join(custom_base, "*/")).map { |p| p.chomp("/") }.sort)
         end
         file_list = custom_dirs.flat_map { |dir|
           prefix = dir.sub(SCRIPT_DIR, '')
