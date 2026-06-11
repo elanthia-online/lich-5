@@ -159,6 +159,34 @@ RSpec.describe Lich::Common::Authentication::CLI do
 
         described_class.execute_new_character('TESTUSER', game_code: 'DR', data_dir: data_dir)
       end
+
+      it 'forwards the requested frontend and custom launch to LaunchData' do
+        allow(Lich::Common::Authentication::EntryStore).to receive(:decrypt_password).and_return('testpass')
+        allow(Lich::Common::Authentication).to receive(:authenticate).and_return({ 'key' => 'abc' })
+
+        expect(Lich::Common::Authentication::LaunchData).to receive(:prepare).with(
+          { 'key' => 'abc' }, 'wizard', 'warlock', nil
+        ).and_return(['GAME=WIZ'])
+
+        result = described_class.execute_new_character(
+          'TESTUSER', game_code: 'DR', frontend: 'wizard', custom_launch: 'warlock', data_dir: data_dir
+        )
+
+        expect(result).to eq(['GAME=WIZ'])
+      end
+
+      it 'defaults frontend to profanity and drops unset custom launch' do
+        allow(Lich::Common::Authentication::EntryStore).to receive(:decrypt_password).and_return('testpass')
+        allow(Lich::Common::Authentication).to receive(:authenticate).and_return({ 'key' => 'abc' })
+
+        expect(Lich::Common::Authentication::LaunchData).to receive(:prepare).with(
+          { 'key' => 'abc' }, 'profanity', nil, nil
+        ).and_return(['GAME=DR'])
+
+        described_class.execute_new_character(
+          'TESTUSER', game_code: 'DR', frontend: :__unset, custom_launch: :__unset, data_dir: data_dir
+        )
+      end
     end
 
     context 'with account missing password' do
