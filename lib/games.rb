@@ -61,7 +61,7 @@ module Lich
           raise NotImplementedError, "#{self.class} must implement #get_documentation_url"
         end
 
-        def process_game_specific_data(server_string)
+        def process_game_specific_data(server_string, stripped_server = nil)
           raise NotImplementedError, "#{self.class} must implement #process_game_specific_data"
         end
 
@@ -202,6 +202,36 @@ module Lich
       end
     end
 
+    # Raised when a server fragment is structurally truncated (cut off
+    # mid-element) -- the stream has desynced from XML framing. Pre-Ox, strict
+    # REXML raised on these fragments and Game.process_xml_data's rescue logged
+    # the fragment and reset XMLData, so parser strictness doubled as desync
+    # detection. Ox is permissive: it parses truncated fragments without
+    # raising (auto-closing elements, fabricating empty attribute values) and
+    # only reports the damage through its optional error callback. That
+    # callback is now the only desync signal, so process_xml_data promotes
+    # truncation-class parse errors to this exception to keep the old
+    # recovery path (log + XMLData.reset).
+    class GameStreamDesyncError < StandardError; end
+
+    # Ox error-callback messages that indicate a truncated fragment. Ox also
+    # fires the callback for Simu's routine almost-XML -- bare text and
+    # multiple top-level elements ('text not terminated', 'multiple top level
+    # elements'), nested quotes ('no attribute value'), unescaped ampersands
+    # ('Invalid special character sequence'), missing </d> end tags ('Start
+    # End Mismatch: ... not closed') -- none of which match these patterns, so
+    # they stay tolerated. The message prefix matters: 'Unexpected Character:
+    # element not closed' (a start tag that never got its '>') is truncation,
+    # while the similarly worded 'Start End Mismatch: element ... not closed'
+    # (an element missing its end tag) is routine.
+    STREAM_DESYNC_ERRORS = [
+      /\ANot Terminated: attributes not terminated/,
+      /\ANot Terminated: quoted value not terminated/,
+      /\ANot Terminated: document not terminated/,
+      /\AUnexpected Character: element not closed/,
+      /\AUnexpected Character: attribute value not in quotes/
+    ].freeze
+
     # Base Game class with common functionality
     class Game
       class << self
@@ -229,6 +259,7 @@ module Lich
           @room_number_after_ready = false
           @last_id_shown_room_window = 0
           @game_instance = nil
+          @strip_xml_buffer = nil
         end
 
         def set_game_instance(game_type)
@@ -528,48 +559,53 @@ module Lich
 
         def process_xml_data(server_string)
           begin
-            # Check for valid XML
-            REXML::Document.parse_stream("<root>#{server_string}</root>", XMLData)
+            # Ox is a permissive parser: it handles Simu's not-quite-XML stream
+            # without the clean/retry dance REXML required (nested quotes, missing
+            # 'd' end tags, etc. are tolerated rather than raised). XMLData itself
+            # implements the Ox::Sax interface, so Ox parses straight into it. No
+            # <root> wrapper needed: that was a REXML requirement (single root); Ox
+            # handles multiple top-level elements and bare text directly.
+            XMLData.sax_parse_errors.clear
+            Ox.sax_parse(XMLData, server_string, convert_special: true, symbolize: false, skip: :skip_none)
+            check_stream_desync!(XMLData.sax_parse_errors)
           rescue => e
-            case e.to_s
-            # Missing attribute equal: <s> - in dynamic dialogs with a single apostrophe for possessive 'Tsetem's Items'
-            when /nested single quotes|nested double quotes|Missing attribute equal: <[^>]+>|Invalid attribute name: <[^>]+>/
-              original_server_string = server_string.dup
-              server_string = XMLCleaner.clean_nested_quotes(server_string)
-              if original_server_string != server_string
-                retry
-              else
-                handle_xml_error(server_string, e)
-                XMLData.reset
-                return
-              end
-            when /invalid characters/
-              server_string = XMLCleaner.fix_invalid_characters(server_string)
-              retry
-            when /Missing end tag for 'd'/
-              server_string = XMLCleaner.fix_xml_tags(server_string)
-              retry
-            else
-              handle_xml_error(server_string, e)
-              XMLData.reset
-              return
-            end
+            # GameStreamDesyncError from the check above, or (rarely) Ox itself;
+            # either way log and reset rather than killing the server thread.
+            handle_xml_error(server_string, e)
+            XMLData.reset
+            return
           end
+
+          # strip_xml carries the unfinished text of a multi-line element
+          # between server reads; we own that carry rather than letting it hide
+          # in a global, so it resets cleanly with the rest of our buffers.
+          stripped_server, @strip_xml_buffer = strip_xml(server_string, @strip_xml_buffer)
 
           # Process game-specific data using instance
           if @game_instance && Module.const_defined?(:GameLoader)
-            @game_instance.process_game_specific_data(server_string)
+            @game_instance.process_game_specific_data(server_string, stripped_server)
           end
 
           # Process downstream XML
           Script.new_downstream_xml(server_string) if defined?(Script)
 
           # Process stripped server string
-          stripped_server = strip_xml(server_string, type: 'main')
           stripped_server.split("\r\n").each do |line|
             @buffer.update(line) if defined?(TESTING) && TESTING
             Script.new_downstream(line) if defined?(Script) && !line.empty?
           end
+        end
+
+        # Promote truncation-class Ox parse errors to GameStreamDesyncError so
+        # a desynced stream still hits the log + reset recovery path instead of
+        # being silently absorbed (see the GameStreamDesyncError comment).
+        # parse_errors is XMLData's collected Ox error-callback messages for
+        # the fragment just parsed.
+        def check_stream_desync!(parse_errors)
+          desync = parse_errors.find do |message|
+            STREAM_DESYNC_ERRORS.any? { |pattern| pattern.match?(message) }
+          end
+          raise GameStreamDesyncError, desync if desync
         end
 
         def handle_xml_error(server_string, error)
@@ -765,11 +801,12 @@ module Lich
         "https://gswiki.play.net/Lich:Software/Installation"
       end
 
-      def process_game_specific_data(server_string)
-        infomon_serverstring = server_string.dup
-        Infomon::XMLParser.parse(infomon_serverstring)
-        stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
-        stripped_infomon_serverstring.split("\r\n").each do |line|
+      def process_game_specific_data(server_string, stripped_server = nil)
+        # Infomon's XML-level parse needs the raw string; its line parser reuses
+        # the text already stripped by process_xml_data (XMLParser.parse does not
+        # mutate, so no dup or second strip_xml is needed).
+        Infomon::XMLParser.parse(server_string)
+        stripped_server.split("\r\n").each do |line|
           Infomon::Parser.parse(line) unless line.empty?
         end
       end
@@ -918,7 +955,7 @@ module Lich
         "https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich"
       end
 
-      def process_game_specific_data(server_string)
+      def process_game_specific_data(server_string, _stripped_server = nil)
         # Parse directly to allow inline modifications (e.g., inline exp display)
         # The parser modifies server_string in place via line.replace()
         DRParser.parse(server_string)

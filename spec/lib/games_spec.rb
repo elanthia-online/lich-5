@@ -4,8 +4,10 @@ require_relative '../spec_helper'
 require 'timeout'
 
 # Load production code
+require "ox"
 require "common/class_exts/synchronizedsocket"
 require "common/sharedbuffer"
+require "common/xmlparser"
 require "games"
 require "gemstone/wounds"
 require "gemstone/scars"
@@ -689,6 +691,115 @@ RSpec.describe Lich::GameBase::Game do
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
         expect(Lich).to have_received(:log).with(/client socket write failed.*closed stream/)
       end
+    end
+  end
+end
+
+# The stream desync guard: pre-Ox, strict REXML raised on truncated fragments
+# and Game.process_xml_data's rescue logged the fragment and reset XMLData --
+# parser strictness doubled as stream-desync detection. Ox is permissive: it
+# parses truncated fragments without raising (auto-closing elements,
+# fabricating empty attribute values) and reports problems only through the
+# optional error callback. These specs prove the callback-based guard restores
+# the pre-Ox failure mode (GameStreamDesyncError -> log + reset) for
+# truncation, while still tolerating the routine almost-XML that Ox was
+# adopted to absorb without REXML's clean-and-retry dance.
+RSpec.describe 'Lich::GameBase stream desync guard' do
+  # Collects Ox parse errors through the real XMLParser error callback while
+  # neutering tag handlers (parser state side effects are irrelevant here).
+  let(:quiet_parser_class) do
+    Class.new(Lich::Common::XMLParser) do
+      def tag_start(_name, _attributes); end
+
+      def tag_end(_name); end
+
+      def text(_value); end
+    end
+  end
+
+  def parse_errors(parser, fragment)
+    Ox.sax_parse(parser, fragment, convert_special: true, symbolize: false, skip: :skip_none)
+    parser.sax_parse_errors
+  end
+
+  def check!(fragment)
+    Lich::GameBase::Game.check_stream_desync!(parse_errors(quiet_parser_class.new, fragment))
+  end
+
+  describe 'Game.check_stream_desync!' do
+    context 'with truncated (desynced) fragments REXML used to raise on' do
+      it 'raises when a fragment is cut off inside a quoted attribute value' do
+        expect { check!('<a exist="123" noun="swo') }
+          .to raise_error(Lich::GameBase::GameStreamDesyncError, /quoted value not terminated/)
+      end
+
+      it 'raises when a fragment is cut off after an attribute equals sign' do
+        expect { check!('<pushStream id="room"/><compDef id=') }
+          .to raise_error(Lich::GameBase::GameStreamDesyncError)
+      end
+
+      it 'raises when a fragment is cut off inside an element name' do
+        expect { check!('<dialogDa') }
+          .to raise_error(Lich::GameBase::GameStreamDesyncError, /document not terminated/)
+      end
+
+      it 'raises when a start tag never gets its closing bracket' do
+        expect { check!('<dialogData id="minivitals"><progressBar id="health"') }
+          .to raise_error(Lich::GameBase::GameStreamDesyncError, /not terminated|not closed/)
+      end
+    end
+
+    context 'with routine almost-XML the stream sends constantly' do
+      it 'tolerates plain prose lines (Ox still reports text not terminated)' do
+        errors = parse_errors(quiet_parser_class.new, 'You also see a wooden barrel.')
+        expect(errors).not_to be_empty # proves toleration is a choice, not absence of errors
+        expect { Lich::GameBase::Game.check_stream_desync!(errors) }.not_to raise_error
+      end
+
+      it 'tolerates multiple top-level elements with trailing text' do
+        expect { check!('<popBold/><pushStream id="room"/>text after') }.not_to raise_error
+      end
+
+      it 'tolerates nested single quotes in attribute values' do
+        expect { check!("<d cmd='look Tsetem's pack'>Tsetem's pack</d>") }.not_to raise_error
+      end
+
+      it "tolerates elements missing their end tag (Simu's </d> bug)" do
+        expect { check!("<d cmd='go gate'>gate<d>more") }.not_to raise_error
+      end
+
+      it 'tolerates unescaped ampersands' do
+        expect { check!('a large bin labeled "Lost & Found"') }.not_to raise_error
+      end
+
+      it 'tolerates the settingsInfo space-not-found server bug' do
+        expect { check!("<settingsInfo  crc='612586004' instance='GS4' space not found ItemCmds='1' />") }
+          .not_to raise_error
+      end
+    end
+  end
+
+  describe 'Game.process_xml_data with a truncated fragment' do
+    it 'routes the desync through handle_xml_error and resets XMLData' do
+      parser = quiet_parser_class.new
+      stub_const('XMLData', parser)
+      allow(Lich).to receive(:log)
+      allow(parser).to receive(:reset).and_call_original
+      Lich::GameBase::Game.process_xml_data(+'<a exist="123" noun="swo')
+      expect(Lich).to have_received(:log).with(/Invalid XML detected/)
+      expect(parser).to have_received(:reset)
+    end
+
+    it 'does not reset XMLData for a clean fragment' do
+      parser = quiet_parser_class.new
+      stub_const('XMLData', parser)
+      # strip_xml lives outside games.rb and is not loaded here; the assertion
+      # under test is only that the parse stage does not trigger recovery.
+      # It returns [stripped_line, carry]; the callsite destructures both.
+      allow(Lich::GameBase::Game).to receive(:strip_xml).and_return(['', nil])
+      allow(parser).to receive(:reset).and_call_original
+      Lich::GameBase::Game.process_xml_data(+"<prompt time=\"1746000000\">&gt;</prompt>\r\n")
+      expect(parser).not_to have_received(:reset)
     end
   end
 end
