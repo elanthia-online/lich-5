@@ -167,10 +167,14 @@ def benchmark(opts)
         lines += chunk.count("\n")
         buf << chunk
         while (idx = buf.index(SENTINEL))
-          dones.push([Process.clock_gettime(CLOCK), bytes, lines])
-          bytes = 0
-          lines = 0
-          buf = buf[(idx + SENTINEL.length)..]
+          # Output after the sentinel belongs to the next run, not this one;
+          # subtract the trailing bytes/lines and carry them forward so a
+          # sentinel that shares a chunk with later output is accounted right.
+          tail = buf[(idx + SENTINEL.length)..] || +''
+          dones.push([Process.clock_gettime(CLOCK), bytes - tail.bytesize, lines - tail.count("\n")])
+          bytes = tail.bytesize
+          lines = tail.count("\n")
+          buf = tail
         end
         buf = buf[-4096..] if buf.bytesize > 4096 # sentinel is short; bound memory
       end

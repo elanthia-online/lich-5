@@ -147,7 +147,11 @@ module Lich
         @check_obvious_hiding = false
         @room_player_hidden = false
 
-        # Ox parse-error messages for the fragment currently being parsed
+        # Ox SAX bridge state (see start_element/attr/attrs_done/error below):
+        # the element/attributes being accumulated and parse errors for the
+        # fragment currently being parsed.
+        @sax_element = nil
+        @sax_attributes = {}
         @sax_parse_errors = []
       end
 

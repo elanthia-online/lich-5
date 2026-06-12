@@ -90,6 +90,13 @@ module Lich
       class InventoryItemSax
         attr_reader :cmd, :name
 
+        def initialize
+          @in_d = false
+          @done = false
+          @cmd = nil
+          @name = nil
+        end
+
         def start_element(name)
           @in_d = true if name == "d" && !@done
         end

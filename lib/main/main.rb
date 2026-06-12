@@ -384,7 +384,19 @@ reconnect_if_wanted = proc {
     end
     Lich.log "info: connecting to game server (#{@argv_options[:game_host]}:#{@argv_options[:game_port]})"
     begin
-      Game.open(@argv_options[:game_host], @argv_options[:game_port])
+      # Match the bounded connect used by the other paths: a stuck Game.open
+      # would otherwise hang pipe mode indefinitely on an unreachable host.
+      connect_thread = Thread.new {
+        Game.open(@argv_options[:game_host], @argv_options[:game_port])
+      }
+      300.times {
+        sleep 0.1
+        break unless connect_thread.status
+      }
+      if connect_thread.status
+        connect_thread.kill rescue nil
+        raise "timed out connecting to #{@argv_options[:game_host]}:#{@argv_options[:game_port]}"
+      end
     rescue
       Lich.log "error: #{$!}"
       $stdout.puts "error: #{$!}"
@@ -504,7 +516,7 @@ reconnect_if_wanted = proc {
       begin
         # Somehow... for some ridiculous reason... Windows doesn't let us close the socket if we shut it down first...
         # listener.shutdown
-        listener.close unless listener.closed?
+        listener.close if listener && !listener.closed?
       rescue
         Lich.log "warning: failed to close listener socket: #{$!}"
         if (error_count += 1) > 20

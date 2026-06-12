@@ -11,6 +11,8 @@ RSpec.describe Lich::Common::PipeIO do
 
   describe 'initialization' do
     it 'enables sync on the output stream so pipe output is flushed' do
+      output.sync = false # the constructor must be what turns sync on
+      pipe # force construction (let is lazy)
       expect(output.sync).to be true
     end
   end
