@@ -215,6 +215,7 @@ RSpec.shared_context 'DRParser stubs' do
     allow(drstats_class).to receive(:tdps=)
     allow(drstats_class).to receive(:favors=)
     allow(drstats_class).to receive(:balance=)
+    allow(drstats_class).to receive(:position=)
     allow(drstats_class).to receive(:strength=)
     allow(drstats_class).to receive(:agility=)
     allow(drstats_class).to receive(:discipline=)
