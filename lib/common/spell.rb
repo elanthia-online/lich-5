@@ -3,6 +3,7 @@ spell.rb: Core lich file for spell management and for spell related scripts.
 =end
 
 require 'open-uri'
+require 'ox'
 
 module Lich
   module Common
@@ -61,48 +62,48 @@ module Lich
       )
 
       def initialize(xml_spell)
-        @num = xml_spell.attributes['number'].to_i
-        @name = xml_spell.attributes['name']
-        @type = xml_spell.attributes['type']
-        @no_incant = ((xml_spell.attributes['incant'] == 'no') ? true : false)
-        if xml_spell.attributes['availability'] == 'all'
+        @num = xml_spell['number'].to_i
+        @name = xml_spell['name']
+        @type = xml_spell['type']
+        @no_incant = ((xml_spell['incant'] == 'no') ? true : false)
+        if xml_spell['availability'] == 'all'
           @availability = 'all'
-        elsif xml_spell.attributes['availability'] == 'group'
+        elsif xml_spell['availability'] == 'group'
           @availability = 'group'
         else
           @availability = 'self-cast'
         end
         @bonus = Hash.new
-        xml_spell.elements.find_all { |e| e.name == 'bonus' }.each { |e|
-          @bonus[e.attributes['type']] = e.text
+        xml_spell.locate('bonus').each { |e|
+          @bonus[e['type']] = e.text
         }
-        @msgup = xml_spell.elements.find_all { |e| (e.name == 'message') and (e.attributes['type'].downcase == 'start') }.collect { |e| e.text }.join('$|^')
+        @msgup = xml_spell.locate('message').select { |e| e['type'].downcase == 'start' }.collect { |e| e.text }.join('$|^')
         @msgup = nil if @msgup.empty?
-        @msgdn = xml_spell.elements.find_all { |e| (e.name == 'message') and (e.attributes['type'].downcase == 'end') }.collect { |e| e.text }.join('$|^')
+        @msgdn = xml_spell.locate('message').select { |e| e['type'].downcase == 'end' }.collect { |e| e.text }.join('$|^')
         @msgdn = nil if @msgdn.empty?
-        @stance = ((xml_spell.attributes['stance'] =~ /^(yes|true)$/i) ? true : false)
-        @channel = ((xml_spell.attributes['channel'] =~ /^(yes|true)$/i) ? true : false)
+        @stance = ((xml_spell['stance'] =~ /^(yes|true)$/i) ? true : false)
+        @channel = ((xml_spell['channel'] =~ /^(yes|true)$/i) ? true : false)
         @cost = Hash.new
-        xml_spell.elements.find_all { |e| e.name == 'cost' }.each { |xml_cost|
-          cost_type = xml_cost.attributes['type']&.downcase
+        xml_spell.locate('cost').each { |xml_cost|
+          cost_type = xml_cost['type']&.downcase
           next unless cost_type # skip malformed cost elements
 
           @cost[cost_type] ||= Hash.new
           # cast-type defaults to 'self' if not specified (most cost elements omit it)
-          if xml_cost.attributes['cast-type']&.downcase == 'target'
+          if xml_cost['cast-type']&.downcase == 'target'
             @cost[cost_type]['target'] = xml_cost.text
           else
             @cost[cost_type]['self'] = xml_cost.text
           end
         }
         @duration = Hash.new
-        xml_spell.elements.find_all { |e| e.name == 'duration' }.each { |xml_duration|
+        xml_spell.locate('duration').each { |xml_duration|
           # cast-type defaults to 'self' if not specified
-          if xml_duration.attributes['cast-type']&.downcase == 'target'
+          if xml_duration['cast-type']&.downcase == 'target'
             cast_type = 'target'
           else
             cast_type = 'self'
-            if xml_duration.attributes['real-time'] =~ /^(yes|true)$/i
+            if xml_duration['real-time'] =~ /^(yes|true)$/i
               @real_time = true
             else
               @real_time = false
@@ -110,26 +111,26 @@ module Lich
           end
           @duration[cast_type] = Hash.new
           @duration[cast_type][:duration] = xml_duration.text
-          span = xml_duration.attributes['span']&.downcase
+          span = xml_duration['span']&.downcase
           @duration[cast_type][:stackable] = (span == 'stackable')
           @duration[cast_type][:refreshable] = (span == 'refreshable')
-          if xml_duration.attributes['multicastable'] =~ /^(yes|true)$/i
+          if xml_duration['multicastable'] =~ /^(yes|true)$/i
             @duration[cast_type][:multicastable] = true
           else
             @duration[cast_type][:multicastable] = false
           end
-          if xml_duration.attributes['persist-on-death'] =~ /^(yes|true)$/i
+          if xml_duration['persist-on-death'] =~ /^(yes|true)$/i
             @persist_on_death = true
           else
             @persist_on_death = false
           end
-          if xml_duration.attributes['max']
-            @duration[cast_type][:max_duration] = xml_duration.attributes['max'].to_f
+          if xml_duration['max']
+            @duration[cast_type][:max_duration] = xml_duration['max'].to_f
           else
             @duration[cast_type][:max_duration] = 250.0
           end
         }
-        @cast_proc = xml_spell.elements['cast-proc']&.text
+        @cast_proc = xml_spell.locate('cast-proc').first&.text
         @last_cast = Time.at(0)
         @timestamp = Time.now
         @timeleft = 0
@@ -174,11 +175,15 @@ module Lich
               @@list.each { |spell| spell_times[spell.num] = spell.timeleft if spell.active? }
               @@list.clear
             end
-            File.open(filename) { |file|
-              xml_doc = REXML::Document.new(file)
-              xml_root = xml_doc.root
-              xml_root.elements.each { |xml_spell| Spell.new(xml_spell) }
-            }
+            # skip: :skip_none preserves whitespace verbatim -- spell up/down
+            # messages are stored as regexes, and Ox's default whitespace
+            # collapsing would turn the double spaces after periods into single
+            # spaces and stop those patterns matching the real game lines.
+            # Ox.load returns an Ox::Document when the file has an XML prolog
+            # (effect-list.xml does) and the bare root Ox::Element otherwise.
+            parsed = Ox.load(File.read(filename), mode: :generic, skip: :skip_none)
+            xml_root = parsed.is_a?(Ox::Document) ? parsed.root : parsed
+            xml_root.locate('spell').each { |xml_spell| Spell.new(xml_spell) }
             @@list.each { |spell|
               if spell_times[spell.num]
                 spell.timeleft = spell_times[spell.num]
