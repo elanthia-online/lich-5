@@ -2183,8 +2183,6 @@ end
 # it is now an explicit value the caller owns, so this function keeps no state
 # between calls. Call it as `text, carry = strip_xml(line, carry)`.
 def strip_xml(line, carry = nil)
-  return [line, nil] if line == "\r\n"
-
   line = carry + line if carry
   if line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length
     return [nil, line]
@@ -2197,7 +2195,7 @@ def strip_xml(line, carry = nil)
   line = line.gsub('&gt;', '>')
   line = line.gsub('&lt;', '<')
 
-  return [nil, nil] if line.gsub("\n", '').gsub("\r", '').gsub(' ', '').length < 1
+  return [nil, nil] if line.match?(/\A\s*\z/)
 
   [line, nil]
 end

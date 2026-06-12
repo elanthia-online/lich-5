@@ -43,6 +43,7 @@ require 'open3'
 require 'fileutils'
 require 'optparse'
 require 'timeout'
+require 'tmpdir'
 
 REPO = File.expand_path(__dir__)
 MARKER = '### benchmark:body-repeats-below ###'
@@ -94,7 +95,7 @@ end
 # Run the whole benchmark in one Lich process. Returns an array of per-run
 # measurement hashes (warmup runs excluded).
 def benchmark(opts)
-  tmp = "/tmp/lich_bench_#{Process.pid}"
+  tmp = File.join(Dir.tmpdir, "lich_bench_#{Process.pid}")
   FileUtils.rm_rf(tmp)
   %w[data scripts logs maps backup temp].each { |d| FileUtils.mkdir_p(File.join(tmp, d)) }
 

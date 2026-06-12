@@ -46,6 +46,11 @@ reconnect_if_wanted = proc {
   @launch_data = nil
   require File.join(LIB_DIR, 'common', 'authentication', 'eaccess.rb')
   require File.join(LIB_DIR, 'common', 'account.rb')
+  # PipeIO is only consumed here (--pipe mode client adapter), so it loads with
+  # main rather than from lich.rbw's top-level require chain -- that chain also
+  # runs during self-update against older lib snapshots where pipe_io.rb may not
+  # exist yet, and an unconditional require there would break the update path.
+  require File.join(LIB_DIR, 'common', 'pipe_io.rb')
   # Lifecycle tracker is loaded here because startup context (argv/account)
   # and shutdown sequencing both live in main runtime orchestration.
   require File.join(LIB_DIR, 'common', 'session_lifecycle.rb')
@@ -410,6 +415,7 @@ reconnect_if_wanted = proc {
     rescue
       Lich.log "error: #{$!}"
       $stdout.puts "error: #{$!}"
+      $_CLIENT_.close rescue nil
       exit
     end
     Lich.log 'info: connection with the game host is open'

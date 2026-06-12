@@ -75,7 +75,10 @@ module Lich
         end
         @bonus = Hash.new
         xml_spell.locate('bonus').each { |e|
-          @bonus[e['type']] = e.text
+          bonus_type = e['type']
+          next unless bonus_type # skip malformed bonus elements
+
+          @bonus[bonus_type] = e.text
         }
         @msgup = xml_spell.locate('message').select { |e| e['type'].downcase == 'start' }.collect { |e| e.text }.join('$|^')
         @msgup = nil if @msgup.empty?

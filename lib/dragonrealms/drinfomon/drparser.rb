@@ -143,7 +143,7 @@ module Lich
             handler = InventoryItemSax.new
             Ox.sax_parse(handler, server_string.strip, convert_special: true, symbolize: false, skip: :skip_none)
 
-            return unless handler.cmd
+            return server_string unless handler.cmd
 
             # Normalize the item name by removing leading articles ('a', 'an', 'some').
             item_name = handler.name.to_s.sub(/^(?:a|an|some)\s/, '').strip
