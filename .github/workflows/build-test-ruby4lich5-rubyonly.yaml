@@ -1,0 +1,489 @@
+name: build test Ruby4Lich5 Ruby-only installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      retention-days:
+        description: "Actions artifact retention days (1-90). Use release upload for longer retention."
+        required: false
+        default: "90"
+      upload-to-release:
+        description: "Also upload Test-Ruby4Lich5-RubyOnly.exe to a draft GitHub release."
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      release-tag:
+        description: "Existing draft release tag to receive the installer when upload-to-release is true."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  GTK3_GEM_VERSION: "4.3.3"
+  RUBY_ONLY_INSTALLER: "Test-Ruby4Lich5-RubyOnly.exe"
+  EXP_PRUNE_PYTHON_MODE: files
+  EXP_PRUNE_BULK: "true"
+  EXP_VALIDATE_RUBY_GTK: "true"
+
+jobs:
+  build_rubyonly_installer:
+    name: Build Ruby-only Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Validate dispatch inputs
+        shell: powershell
+        run: |
+          $retentionRaw = '${{ inputs.retention-days }}'
+          $uploadToRelease = '${{ inputs.upload-to-release }}'
+          $releaseTag = '${{ inputs.release-tag }}'
+
+          if ($retentionRaw -notmatch '^\d+$') {
+            Write-Error "retention-days must be an integer from 1 to 90; received '$retentionRaw'."
+            exit 1
+          }
+
+          $retention = [int]$retentionRaw
+          if ($retention -lt 1 -or $retention -gt 90) {
+            Write-Error "retention-days must be between 1 and 90 because GitHub Actions artifact retention is capped; received $retention."
+            exit 1
+          }
+
+          if ($uploadToRelease -eq 'true' -and [string]::IsNullOrWhiteSpace($releaseTag)) {
+            Write-Error "release-tag is required when upload-to-release is true. Create or choose an existing draft release tag for long-term retention."
+            exit 1
+          }
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@0cb964fd540e0a24c900370abf38a33466142735 # v1.305.0
+        with:
+          bundler-cache: false
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          choco feature disable -n=showDownloadProgress
+          choco install -y --limit-output innosetup
+
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) {
+            Write-Error "Inno Setup install failed: ISCC.exe was not found at $iscc."
+            exit 1
+          }
+
+      - name: Install MSYS2 into app tree
+        shell: powershell
+        run: |
+          choco feature disable -n=showDownloadProgress
+          choco install -y --limit-output msys2 --params '"/InstallDir:C:\Ruby4Lich5\msys64 /NoUpdate"'
+
+          $msys = 'C:\Ruby4Lich5\msys64'
+          if (!(Test-Path $msys)) {
+            Write-Error "MSYS2 install failed: expected $msys to exist."
+            exit 1
+          }
+
+      - name: Build sanitized PATH for vendored MSYS2
+        id: vendormsys
+        shell: powershell
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          if (!(Test-Path $msys)) {
+            Write-Error "Cannot build vendored MSYS2 PATH because $msys does not exist."
+            exit 1
+          }
+
+          $orig = $env:Path -split ';'
+          $filtered = $orig | Where-Object {
+            $_ -and
+            ($_ -notlike '*\Ruby\*\x64\msys64\*') -and
+            ($_ -ne 'C:\mingw64\bin') -and
+            ($_ -notmatch '^C:\\Strawberry(\\|$)')
+          }
+          $san = @("$msys\ucrt64\bin", "$msys\usr\bin") + $filtered
+          $joined = ($san -join ';')
+
+          "PATH_VENDOR_MSYS=$joined" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "path=$joined" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "RI_DEVKIT=" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Initialize MSYS2 GTK3/sqlite toolchain
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ""
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          $pacman = Join-Path $msys 'usr\bin\pacman.exe'
+          if (!(Test-Path $pacman)) {
+            Write-Error "MSYS2 dependency install failed: pacman not found at $pacman."
+            exit 1
+          }
+
+          $env:MSYSTEM = 'UCRT64'
+          & $pacman -Sy --noconfirm
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "MSYS2 dependency install failed: pacman database refresh failed."
+            exit $LASTEXITCODE
+          }
+
+          & $pacman -S --needed --noconfirm `
+            mingw-w64-ucrt-x86_64-gcc `
+            mingw-w64-ucrt-x86_64-gcc-libs `
+            mingw-w64-ucrt-x86_64-make `
+            mingw-w64-ucrt-x86_64-pkgconf `
+            mingw-w64-ucrt-x86_64-gobject-introspection `
+            mingw-w64-ucrt-x86_64-sqlite3 `
+            mingw-w64-ucrt-x86_64-gtk3 `
+            make
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "MSYS2 dependency install failed: one or more GTK3/sqlite/build packages could not be installed."
+            exit $LASTEXITCODE
+          }
+
+      - name: Dependency validation (toolchain, pkg-config, GTK3)
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ""
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          $gcc = Join-Path $msys 'ucrt64\bin\gcc.exe'
+          $pkgc = Join-Path $msys 'ucrt64\bin\pkg-config.exe'
+          $pacman = Join-Path $msys 'usr\bin\pacman.exe'
+
+          if (!(Test-Path $pacman)) { Write-Error "Dependency validation failed: pacman not found at $pacman."; exit 1 }
+          if (!(Test-Path $gcc)) { Write-Error "Dependency validation failed: vendored gcc not found at $gcc."; exit 1 }
+          if (!(Test-Path $pkgc)) { Write-Error "Dependency validation failed: vendored pkg-config not found at $pkgc."; exit 1 }
+
+          & $gcc --version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) { Write-Error "Dependency validation failed: vendored gcc could not execute."; exit 1 }
+
+          & $pkgc --version
+          if ($LASTEXITCODE -ne 0) { Write-Error "Dependency validation failed: vendored pkg-config could not execute."; exit 1 }
+
+          $checks = @(
+            'gtk+-3.0',
+            'gobject-introspection-1.0',
+            'gobject-2.0',
+            'glib-2.0',
+            'gio-2.0',
+            'cairo',
+            'cairo-gobject',
+            'gdk-pixbuf-2.0',
+            'pango',
+            'pangocairo',
+            'sqlite3'
+          )
+
+          foreach ($pkg in $checks) {
+            cmd /c `"$pkgc`" --print-errors --exists $pkg
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "Dependency validation failed: pkg-config cannot resolve '$pkg'. GTK3 gem native compilation is unlikely to succeed."
+              exit 1
+            }
+            $version = (& $pkgc --modversion $pkg)
+            Write-Host "$pkg $version"
+          }
+
+          Write-Host "::group::Installed MSYS2 packages"
+          & $pacman -Q
+          Write-Host "::endgroup::"
+
+          "CC=$gcc" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "PKG_CONFIG=$pkgc" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "PKG_CONFIG_PATH=$($msys)\ucrt64\lib\pkgconfig;$($msys)\lib\pkgconfig" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Install sqlite3 native gem
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ""
+          CC: gcc
+          PKG_CONFIG: pkg-config
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          gem install sqlite3 --platform ruby -- `
+            --enable-system-libraries `
+            --with-sqlite3-include="$msys/ucrt64/include" `
+            --with-sqlite3-lib="$msys/ucrt64/lib"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Gem install failed: sqlite3 could not compile against the vendored MSYS2 sqlite3 library."
+            exit $LASTEXITCODE
+          }
+
+      - name: Install GTK3 Ruby-GNOME gem 4.3.3
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ""
+          CC: gcc
+          PKG_CONFIG: pkg-config
+        run: |
+          Write-Host "Installing gtk3 gem version ${env:GTK3_GEM_VERSION}."
+          Write-Host "This intentionally pins before ruby-gnome 4.3.4, where the GTK4-oriented GC repair from ruby-gnome issue 1688 entered the release line."
+
+          gem install gtk3 --version "${env:GTK3_GEM_VERSION}" --no-document
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Gem install failed: gtk3 ${env:GTK3_GEM_VERSION} could not build/load against the vendored GTK3 libraries. Check pkg-config versions above and native extension output in this step."
+            exit $LASTEXITCODE
+          }
+
+      - name: Install remaining Ruby gems
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ""
+          CC: gcc
+          PKG_CONFIG: pkg-config
+        run: |
+          gem install ascii_charts ffi json kramdown logger os ostruct redis sequel terminal-table tzinfo tzinfo-data webrick --no-document
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Gem install failed: one or more non-GTK Ruby gems failed to install."
+            exit $LASTEXITCODE
+          }
+
+      - name: Validate Ruby GTK/sqlite3 runtime
+        if: ${{ env.EXP_VALIDATE_RUBY_GTK == 'true' }}
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ""
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          $env:Path = "$msys\ucrt64\bin;$msys\usr\bin;$env:Path"
+
+          $rubyExe = (& "$env:SystemRoot\System32\where.exe" ruby 2>$null | Select-Object -First 1)
+          if (-not $rubyExe) {
+            Write-Error "Ruby runtime validation failed: ruby.exe not found on PATH."
+            exit 1
+          }
+
+          $gccFirst = @(& "$env:SystemRoot\System32\where.exe" gcc 2>$null)[0]
+          $pcFirst = @(& "$env:SystemRoot\System32\where.exe" pkg-config 2>$null)[0]
+          if (-not $gccFirst -or -not $pcFirst) {
+            Write-Error "Ruby runtime validation failed: missing gcc or pkg-config on PATH."
+            exit 1
+          }
+          if (-not $gccFirst.StartsWith('C:\Ruby4Lich5\msys64', 'OrdinalIgnoreCase')) {
+            Write-Error "Ruby runtime validation failed: gcc resolves to non-vendored path '$gccFirst'."
+            exit 1
+          }
+          if (-not $pcFirst.StartsWith('C:\Ruby4Lich5\msys64', 'OrdinalIgnoreCase')) {
+            Write-Error "Ruby runtime validation failed: pkg-config resolves to non-vendored path '$pcFirst'."
+            exit 1
+          }
+
+          cmd /c pkg-config --print-errors --exists gtk+-3.0
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Ruby runtime validation failed: pkg-config cannot resolve gtk+-3.0."
+            exit 1
+          }
+
+          $rb = 'require "gtk3"; require "sqlite3"; puts "ruby=#{RUBY_VERSION}"; puts "gtk3 gem=#{Gem.loaded_specs["gtk3"].version}"; abort "wrong gtk3 gem" unless Gem.loaded_specs["gtk3"].version.to_s == ENV["GTK3_GEM_VERSION"]; Gtk.init([]); puts "GTK.init OK"'
+          & $rubyExe -e $rb
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Ruby runtime validation failed: gtk3 ${env:GTK3_GEM_VERSION} and sqlite3 did not load and initialize cleanly."
+            exit $LASTEXITCODE
+          }
+
+          Write-Host "::group::Installed Ruby gems"
+          gem list
+          Write-Host "::endgroup::"
+
+      - name: Prune Python from bundled MSYS2
+        if: ${{ env.EXP_PRUNE_PYTHON_MODE != 'off' }}
+        shell: powershell
+        env:
+          EXP_PRUNE_PYTHON_MODE: ${{ env.EXP_PRUNE_PYTHON_MODE }}
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          if (!(Test-Path $msys)) {
+            Write-Host "No MSYS2 at $msys; skipping Python prune."
+            exit 0
+          }
+
+          $beforeMB = [math]::Round((Get-ChildItem -Recurse $msys | Measure-Object Length -Sum).Sum / 1MB)
+          Write-Host "Python-prune: before = $beforeMB MB"
+
+          $mode = "${env:EXP_PRUNE_PYTHON_MODE}"
+          if (-not $mode) { $mode = 'files' }
+          $pacman = Join-Path $msys 'usr\bin\pacman.exe'
+
+          if ($mode -eq 'pacman' -and (Test-Path $pacman)) {
+            $env:MSYSTEM = 'UCRT64'
+            $installed = & $pacman -Qq 2>$null
+            if ($LASTEXITCODE -ne 0) { $installed = @() }
+
+            $pattern = '^(python($|[0-9]))|(mingw-w64-(ucrt-)?x86_64-python.*)$'
+            $py = @($installed | Where-Object { $_ -match $pattern })
+            if ($py.Count -gt 0) {
+              Write-Host "pacman removing: $($py -join ' ')"
+              & $pacman -Rns --noconfirm @py 1>$null 2>$null
+              if ($LASTEXITCODE -ne 0) {
+                Write-Warning "pacman -Rns failed; retrying -Rdd."
+                & $pacman -Rdd --noconfirm @py 1>$null 2>$null
+              }
+            } else {
+              Write-Host "pacman: no python packages installed."
+            }
+          } else {
+            Write-Host "pacman phase skipped (mode='$mode' or pacman missing); doing files sweep."
+          }
+
+          $targets = @(
+            "$msys\ucrt64\bin\python*.exe",
+            "$msys\ucrt64\lib\python*",
+            "$msys\mingw64\bin\python*.exe",
+            "$msys\mingw64\lib\python*",
+            "$msys\usr\bin\python*.exe",
+            "$msys\usr\lib\python*"
+          )
+          $removed = 0
+          foreach ($g in $targets) {
+            Get-ChildItem -Path $g -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+              Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $_.FullName
+              $removed++
+            }
+          }
+          Write-Host "files sweep removed approximately $removed paths."
+
+          $afterMB = [math]::Round((Get-ChildItem -Recurse $msys | Measure-Object Length -Sum).Sum / 1MB)
+          $savedMB = [math]::Max(0, $beforeMB - $afterMB)
+          Write-Host "Python-prune: after = $afterMB MB (saved $savedMB MB)"
+
+      - name: Bulk prune non-runtime MSYS2 trees
+        if: ${{ env.EXP_PRUNE_BULK == 'true' }}
+        shell: powershell
+        env:
+          PATH: ${{ steps.vendormsys.outputs.path }}
+          RI_DEVKIT: ""
+        run: |
+          $msys = 'C:\Ruby4Lich5\msys64'
+          if (!(Test-Path $msys)) {
+            Write-Host "No MSYS2 at $msys; skipping bulk prune."
+            exit 0
+          }
+
+          Write-Host "::group::MSYS2 size report and prune"
+          $beforeMB = [math]::Round((Get-ChildItem -Recurse $msys | Measure-Object Length -Sum).Sum / 1MB)
+          Write-Host "MSYS2-prune: before = $beforeMB MB"
+
+          $paths = @(
+            Join-Path $msys 'var\cache\pacman\pkg'
+            Join-Path $msys 'usr\share\man'
+            Join-Path $msys 'usr\share\doc'
+            Join-Path $msys 'usr\share\info'
+            Join-Path $msys 'usr\share\locale'
+            Join-Path $msys 'usr\lib\clang'
+          )
+
+          foreach ($p in $paths) {
+            if (Test-Path $p) {
+              Write-Host "Removing $p ..."
+              Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue
+            } else {
+              Write-Host "Skip (not present): $p"
+            }
+          }
+
+          $afterMB = [math]::Round((Get-ChildItem -Recurse $msys | Measure-Object Length -Sum).Sum / 1MB)
+          $savedMB = [math]::Max(0, $beforeMB - $afterMB)
+          Write-Host "MSYS2-prune: after = $afterMB MB (saved $savedMB MB)"
+          Write-Host "::endgroup::"
+
+      - name: Prepare Ruby-only Inno Setup script
+        shell: powershell
+        run: |
+          $source = 'R4LGTK3.iss'
+          $target = 'R4LGTK3-rubyonly.generated.iss'
+          if (!(Test-Path $source)) {
+            Write-Error "Ruby-only installer preparation failed: expected $source in repository root."
+            exit 1
+          }
+
+          $lines = Get-Content $source
+          $out = foreach ($line in $lines) {
+            if ($line -match '^\s*Name:\s*"full";') { continue }
+            if ($line -match '^\s*Name:\s*"lichonly";') { continue }
+            if ($line -match '^\s*Name:\s*"lich";') { continue }
+            if ($line -match '^\s*Name:\s*Lich') { continue }
+            if ($line -match '^\s*Source:\s*"\.\\fly64\.ico";.*Components:\s*lich;') { continue }
+            if ($line -match '^\s*Source:\s*"\.\\Lich5\\\*";.*Components:\s*lich;') { continue }
+            if ($line -match '^\s*Filename:.*Tasks:\s*Lich') { continue }
+            if ($line -match '^\s*Name:\s*"rubygem";') {
+              'Name: "rubygem";  Description: "Ruby {#RubyVersion} (64-bit) with Gems"; Types: rubyonly'
+              continue
+            }
+            if ($line -match '^OutputBaseFilename=') {
+              "OutputBaseFilename=Test-Ruby4Lich5-RubyOnly"
+              continue
+            }
+            if ($line -match '^AppVerName=') {
+              'AppVerName={#MyAppName} Ruby {#RubyVersion} Test Ruby-only'
+              continue
+            }
+            $line
+          }
+
+          $out | Set-Content $target -Encoding UTF8
+          Write-Host "Generated $target without Lich payload file sources."
+          Select-String -Path $target -Pattern 'Lich5\\\*|Components:\s*lich|Tasks:\s*Lich|OutputBaseFilename|Name:\s*"rubygem"' -SimpleMatch:$false
+
+      - name: Build Ruby-only Windows installer with Inno Setup
+        shell: powershell
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) {
+            Write-Error "Installer build failed: ISCC.exe not found at $iscc."
+            exit 1
+          }
+
+          & $iscc "R4LGTK3-rubyonly.generated.iss"
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Write-Error "Installer build failed: ISCC exited with code $code."
+            exit $code
+          }
+
+          $built = ".\Output\${env:RUBY_ONLY_INSTALLER}"
+          if (!(Test-Path $built)) {
+            Write-Error "Installer build failed: expected $built but it was not found."
+            exit 1
+          }
+
+          Move-Item -Path $built -Destination ".\${env:RUBY_ONLY_INSTALLER}" -Force
+          Write-Host "Built ${env:RUBY_ONLY_INSTALLER}."
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Test-Ruby4Lich5-RubyOnly
+          path: ${{ env.RUBY_ONLY_INSTALLER }}
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+      - name: Upload installer to draft release for long-term retention
+        if: ${{ inputs.upload-to-release == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          RUBY_ONLY_INSTALLER: ${{ env.RUBY_ONLY_INSTALLER }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' | grep -qx 'true'; then
+            echo "::error::release-tag '$RELEASE_TAG' must identify an existing draft release for long-term retention."
+            exit 1
+          fi
+
+          gh release upload "$RELEASE_TAG" "$RUBY_ONLY_INSTALLER" --clobber
