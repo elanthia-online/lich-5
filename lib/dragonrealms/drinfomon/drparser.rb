@@ -13,7 +13,8 @@ module Lich
         TDPValue = /You have (?<tdp>\d+) TDPs\./.freeze
         EncumbranceValue = /^\s*Encumbrance\s+:\s+(?<encumbrance>[\w\s'?!]+)$/.freeze
         LuckValue = /^\s*Luck\s+:\s+.*\((?<luck>[-\d]+)\/3\)/.freeze
-        BalanceValue = /^(?:You are|\[You're) (?<balance>#{Regexp.union(DR_BALANCE_VALUES)}) balanced?/.freeze
+        BalanceValue = /^(?:You are|\[You're)(?:.*,)? (?<balance>#{Regexp.union(DR_BALANCE_VALUES)}) balanced?\b/.freeze
+        PositionValue = /balanced? (?:and|with) (?<position>#{Regexp.union(DR_POSITION_VALUES.keys)})/.freeze
         ExpClearMindstate = %r{<component id='exp (?<skill>[a-zA-Z\s]+)'><\/component>}.freeze
         RoomPlayers = %r{\'room players\'>Also here: (?<players>.*)\.</component>}.freeze
         RoomPlayersEmpty = %r{\'room players\'></component>}.freeze
@@ -403,6 +404,9 @@ module Lich
             DRStats.tdps = match[:tdp].to_i
           elsif (match = line.match(Pattern::BalanceValue))
             DRStats.balance = DR_BALANCE_VALUES.index(match[:balance])
+            if (position_match = line.match(Pattern::PositionValue))
+              DRStats.position = DR_POSITION_VALUES[position_match[:position]]
+            end
           elsif Pattern::RoomPlayersEmpty.match?(line)
             DRRoom.pcs = []
           elsif (match = line.match(Pattern::RoomPlayers))

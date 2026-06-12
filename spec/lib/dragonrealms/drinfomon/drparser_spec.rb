@@ -207,9 +207,140 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(match[:rate].strip).to eq('learning')
       end
     end
+
+    describe 'BalanceValue' do
+      it 'matches a standalone balance line' do
+        line = "You are solidly balanced."
+        match = line.match(described_class::Pattern::BalanceValue)
+        expect(match).not_to be_nil
+        expect(match[:balance]).to eq('solidly')
+      end
+
+      it 'matches a bracketed balance line' do
+        line = "[You're adeptly balanced]"
+        match = line.match(described_class::Pattern::BalanceValue)
+        expect(match).not_to be_nil
+        expect(match[:balance]).to eq('adeptly')
+      end
+
+      it 'matches a balance line preceded by wound and condition status' do
+        line = "[You're battered (71%), winded (100%), mighty (100%), incredibly balanced and in dominating position.]"
+        match = line.match(described_class::Pattern::BalanceValue)
+        expect(match).not_to be_nil
+        expect(match[:balance]).to eq('incredibly')
+      end
+
+      it 'matches the "off balance" form without a trailing d' do
+        line = "[You're battered (73%), winded (100%), off balance with opponent dominating.]"
+        match = line.match(described_class::Pattern::BalanceValue)
+        expect(match).not_to be_nil
+        expect(match[:balance]).to eq('off')
+      end
+
+      it 'captures the full multi-word balance value rather than a substring' do
+        # "slightly off" must not be truncated to "off"; "somewhat off" likewise.
+        {
+          "[You're battered (70%), winded (97%), slightly off balance and in strong position.]" => 'slightly off',
+          "[You're somewhat off balance.]"                                                      => 'somewhat off',
+          "[You're very badly balanced with opponent overwhelming you.]"                        => 'very badly'
+        }.each do |line, expected|
+          match = line.match(described_class::Pattern::BalanceValue)
+          expect(match).not_to be_nil, "expected #{line.inspect} to match"
+          expect(match[:balance]).to eq(expected)
+        end
+      end
+    end
+
+    describe 'PositionValue' do
+      it 'captures the "and" position clause' do
+        line = "[You're solidly balanced and in good position.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('in good position')
+      end
+
+      it 'captures the "with" position clause' do
+        line = "[You're badly balanced with opponent dominating.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('opponent dominating')
+      end
+
+      it 'captures the neutral "no advantage" clause' do
+        line = "[You're nimbly balanced with no advantage.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('no advantage')
+      end
+
+      it 'captures both "overwhelming opponent" phrasings' do
+        {
+          "[You're incredibly balanced and overwhelming opponent.]"      => 'overwhelming opponent',
+          "[You're incredibly balanced and overwhelming your opponent.]" => 'overwhelming your opponent'
+        }.each do |line, expected|
+          match = line.match(described_class::Pattern::PositionValue)
+          expect(match).not_to be_nil, "expected #{line.inspect} to match"
+          expect(match[:position]).to eq(expected)
+        end
+      end
+
+      it 'captures the full multi-word position rather than a substring' do
+        line = "[You're solidly balanced and in very strong position.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('in very strong position')
+      end
+    end
   end
 
   describe '.parse' do
+    describe 'balance parsing' do
+      it 'sets balance index from a combat-status line' do
+        # 'incredibly' is the last entry in DR_BALANCE_VALUES
+        expected_index = Lich::DragonRealms::DR_BALANCE_VALUES.index('incredibly')
+        expect(drstats_class).to receive(:balance=).with(expected_index)
+
+        line = "[You're battered (71%), winded (100%), mighty (100%), incredibly balanced and in dominating position.]"
+        described_class.parse(line)
+      end
+
+      it 'sets both balance and position from a combat-status line' do
+        expect(drstats_class).to receive(:balance=).with(Lich::DragonRealms::DR_BALANCE_VALUES.index('solidly'))
+        expect(drstats_class).to receive(:position=).with(-1)
+
+        line = "[You're bruised, solidly balanced and opponent has slight advantage.]"
+        described_class.parse(line)
+      end
+
+      it 'sets a positive position when winning' do
+        expect(drstats_class).to receive(:position=).with(8)
+
+        line = "[You're incredibly balanced and in dominating position.]"
+        described_class.parse(line)
+      end
+
+      it 'maps "overwhelming your opponent" to the maximum position' do
+        expect(drstats_class).to receive(:position=).with(9)
+
+        line = "[You're incredibly balanced and overwhelming your opponent.]"
+        described_class.parse(line)
+      end
+
+      it 'sets a neutral position for "no advantage"' do
+        expect(drstats_class).to receive(:position=).with(0)
+
+        line = "[You're nimbly balanced with no advantage.]"
+        described_class.parse(line)
+      end
+
+      it 'does not set position for a bare balance line' do
+        expect(drstats_class).not_to receive(:position=)
+
+        line = "You are solidly balanced."
+        described_class.parse(line)
+      end
+    end
+
     describe 'gender/age/circle parsing' do
       it 'sets DRStats values from INFO output' do
         # Real code strips whitespace

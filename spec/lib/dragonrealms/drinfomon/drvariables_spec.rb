@@ -61,6 +61,42 @@ RSpec.describe 'Lich::DragonRealms constants' do
     end
   end
 
+  describe 'DR_POSITION_VALUES' do
+    let(:values) { Lich::DragonRealms::DR_POSITION_VALUES }
+
+    it 'DR_POSITION_VALUES hash is frozen to prevent modification' do
+      expect(values).to be_frozen
+    end
+
+    it 'maps "no advantage" to the neutral value 0' do
+      expect(values['no advantage']).to eq(0)
+    end
+
+    it 'uses positive values when you hold the advantage' do
+      expect(values['in good position']).to be > 0
+      expect(values['overwhelming opponent']).to eq(9)
+    end
+
+    it 'uses negative values when the opponent holds the advantage' do
+      expect(values['opponent in good position']).to be < 0
+      expect(values['opponent overwhelming you']).to eq(-9)
+    end
+
+    it 'is symmetric around the neutral value' do
+      expect(values['in excellent position']).to eq(-values['opponent in excellent position'])
+      expect(values['have slight advantage']).to eq(-values['opponent has slight advantage'])
+    end
+
+    it 'ranks excellent above superior and very strong' do
+      expect(values['in excellent position']).to be > values['in superior position']
+      expect(values['in superior position']).to be > values['in very strong position']
+    end
+
+    it 'maps both "overwhelming opponent" phrasings to the same value' do
+      expect(values['overwhelming opponent']).to eq(values['overwhelming your opponent'])
+    end
+  end
+
   describe 'DR_SKILLS_DATA' do
     let(:data) { Lich::DragonRealms::DR_SKILLS_DATA }
 
