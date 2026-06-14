@@ -1,0 +1,193 @@
+name: Build Ruby4Lich5 Installer (thin)
+
+# Lives on Lich5/lich-5 (the build/test fork). Builds the thin, non-DevKit
+# installer: stock RubyInstaller (fetched live) + precompiled binary gems
+# (fetched from a lich5-gtk3-gems public Release) + the Lich payload (assembled
+# in-repo, reusing the proven rebuild-release-assets logic). No MSYS2 bake, no
+# gem compile, no prune. Compiles Ruby4Lich5-installer.iss with Inno Setup.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ruby-series:
+        description: "RubyInstaller series to resolve to its latest patch (ABI-locked to the gems)."
+        required: false
+        default: "4.0"
+      gem-repo:
+        description: "Repo publishing the gem-bundle Release."
+        required: false
+        default: "Lich5/lich5-gtk3-gems"
+      gem-release-tag:
+        description: "Gem-bundle Release tag to pull. Empty = newest release (incl. prerelease)."
+        required: false
+        default: ""
+      lich-tag:
+        description: "Lich ref/tag to build from. Empty = the ref this workflow is dispatched on."
+        required: false
+        default: ""
+      app-version:
+        description: "Installer/app version label. Empty = read .release-please-manifest.json, else 0.0.0-dev."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build_lich_payload:
+    name: Assemble Lich payload
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.lich-tag }}
+          fetch-depth: 0
+
+      # Verbatim from rebuild-release-assets.yaml — the "flawless for months" assembly.
+      - name: Create core Lich-5 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p Lich5 Lich5/data Lich5/scripts
+
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/alias.lic         > Lich5/scripts/alias.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/autostart.lic     > Lich5/scripts/autostart.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/ewaggle.lic       > Lich5/scripts/ewaggle.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/go2.lic           > Lich5/scripts/go2.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/jinx.lic          > Lich5/scripts/jinx.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/lich5-update.lic  > Lich5/scripts/lich5-update.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/log.lic           > Lich5/scripts/log.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/map.lic           > Lich5/scripts/map.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/repository.lic    > Lich5/scripts/repository.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/vars.lic          > Lich5/scripts/vars.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/version.lic       > Lich5/scripts/version.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/dr-scripts/master/dependency.lic         > Lich5/scripts/dependency.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml   > Lich5/data/effect-list.xml
+
+          cp lich.rbw Lich5/
+          cp Gemfile  Lich5/
+          cp LICENSE  Lich5/
+          cp -r lib   Lich5/
+
+          zip -qr lich-5.zip Lich5/
+
+      - name: Upload Lich payload
+        uses: actions/upload-artifact@v5
+        with:
+          name: lich-payload
+          path: lich-5.zip
+          if-no-files-found: error
+
+  build_installer:
+    name: Build installer (windows)
+    needs: build_lich_payload
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout (installer assets)
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.lich-tag }}
+
+      - name: Restore Lich payload
+        uses: actions/download-artifact@v5
+        with:
+          name: lich-payload
+      - name: Expand Lich payload
+        shell: bash
+        run: unzip -q lich-5.zip      # -> .\Lich5\
+
+      - name: Resolve latest RubyInstaller in series (+ ABI guard)
+        shell: powershell
+        run: |
+          $series = '${{ inputs.ruby-series }}'
+          if ($series -notmatch '^\d+\.\d+$') { Write-Error "ruby-series must look like 4.0; got '$series'."; exit 1 }
+          if ($series -ne '4.0') {
+            Write-Error "ABI guard: gem bundle is ruby400 (4.0.x); refusing series $series."
+            exit 1
+          }
+          $escaped = [regex]::Escape($series)
+          $rels = gh api repos/oneclick/rubyinstaller2/releases --paginate | ConvertFrom-Json
+          $rel = $rels |
+            Where-Object { $_.tag_name -match "^RubyInstaller-$escaped\.\d+-\d+$" } |
+            Sort-Object { [version]($_.tag_name -replace '^RubyInstaller-([\d.]+)-\d+$', '$1') },
+                        { [int]($_.tag_name -replace '^RubyInstaller-[\d.]+-(\d+)$', '$1') } |
+            Select-Object -Last 1
+          if (-not $rel) { Write-Error "No RubyInstaller release for series $series."; exit 1 }
+          $tag = $rel.tag_name -replace '^RubyInstaller-', ''
+          $rubyVersion = ($tag -split '-')[0]
+          $exeName = "rubyinstaller-$tag-x64.exe"     # non-DevKit
+          $asset = $rel.assets | Where-Object { $_.name -eq $exeName }
+          if (-not $asset) { Write-Error "Asset $exeName not found on $($rel.tag_name)."; exit 1 }
+          "RUBY_VERSION=$rubyVersion"   | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RUBY_INSTALLER_EXE=$exeName" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RUBY_INSTALLER_URL=$($asset.browser_download_url)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "RubyInstaller $tag -> $exeName"
+
+      - name: Download RubyInstaller (embedded, non-DevKit)
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri $env:RUBY_INSTALLER_URL -OutFile (".\" + $env:RUBY_INSTALLER_EXE) -UseBasicParsing
+          if (!(Test-Path (".\" + $env:RUBY_INSTALLER_EXE))) { Write-Error "RubyInstaller download failed."; exit 1 }
+
+      - name: Fetch gem bundle from Release (public, no secret)
+        shell: powershell
+        run: |
+          $repo = '${{ inputs.gem-repo }}'
+          $tag  = '${{ inputs.gem-release-tag }}'
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            $tag = gh api "repos/$repo/releases" --jq '.[0].tag_name'   # newest, incl. prerelease
+            if ([string]::IsNullOrWhiteSpace($tag)) { Write-Error "No releases on $repo."; exit 1 }
+          }
+          Write-Host "Gem bundle release: $repo @ $tag"
+          gh release download $tag --repo $repo --pattern '*.zip' --dir .
+          $zip = Get-ChildItem -Filter '*.zip' | Where-Object { $_.Name -ne 'lich-5.zip' } | Select-Object -First 1
+          if (-not $zip) { Write-Error "Gem-bundle zip not found in release $tag."; exit 1 }
+          New-Item -ItemType Directory -Path .\gems -Force | Out-Null
+          Expand-Archive -Path $zip.FullName -DestinationPath .\gems -Force
+          if (-not (Get-ChildItem .\gems -Filter '*.gem' -Recurse)) { Write-Error "No .gem files after unzip."; exit 1 }
+          if (-not (Get-ChildItem .\gems -Filter 'install-runtime-gems.cmd' -Recurse)) { Write-Error "install-runtime-gems.cmd missing."; exit 1 }
+
+      - name: Resolve app version
+        shell: powershell
+        run: |
+          $v = '${{ inputs.app-version }}'
+          if ([string]::IsNullOrWhiteSpace($v)) {
+            if (Test-Path .release-please-manifest.json) {
+              $m = Get-Content .release-please-manifest.json -Raw | ConvertFrom-Json
+              $v = $m.'.'
+            }
+          }
+          if ([string]::IsNullOrWhiteSpace($v)) { $v = '0.0.0-dev' }
+          "APP_VERSION=$v" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "App version: $v"
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          choco feature disable -n=showDownloadProgress
+          choco install -y --no-progress innosetup
+
+      - name: Compile installer
+        shell: powershell
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { Write-Error "ISCC not found at $iscc."; exit 1 }
+          & $iscc `
+            "/DRubyVersion=$env:RUBY_VERSION" `
+            "/DRubyInstallerExe=$env:RUBY_INSTALLER_EXE" `
+            "/DMyAppVersion=$env:APP_VERSION" `
+            "Ruby4Lich5-installer.iss"
+          if ($LASTEXITCODE -ne 0) { Write-Error "Inno Setup compile failed."; exit $LASTEXITCODE }
+          if (!(Test-Path .\Output\Ruby4Lich5.exe)) { Write-Error "Output\Ruby4Lich5.exe not produced."; exit 1 }
+          Get-Item .\Output\Ruby4Lich5.exe | ForEach-Object { Write-Host "Built: $($_.Name) ($([math]::Round($_.Length/1MB,1)) MB)" }
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v5
+        with:
+          name: ruby4lich5-installer
+          path: .\Output\Ruby4Lich5.exe
+          if-no-files-found: error
