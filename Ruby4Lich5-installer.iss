@@ -1,22 +1,17 @@
-; Ruby4Lich5 — thin installer (non-DevKit, gem-factory model)
+; Ruby4Lich5 — baked installer (non-DevKit, binary-gem factory model)
 ;
-; Replaces the old "bake a Ruby tree + MSYS2 and embed it" approach (R4LGTK3.iss)
-; with: embed the stock RubyInstaller .exe + the precompiled gem bundle, then
-;   1. run RubyInstaller silently (non-DevKit),
-;   2. optionally run `ridk install` for developers (downloads MSYS2),
-;   3. `gem install --local` the binary gems (offline, no compile).
-; No baked tree, no prune.
+; The Ruby tree is built on the CI runner: stock RubyInstaller (.7z) extracted,
+; then the precompiled binary gems are `gem install --local`'d straight into it.
+; No MSYS2, no compilation, no prune — the binary gems are self-contained
+; (they vendor their own DLLs). This installer just lays that finished tree down:
+; one app, file-copy fast, responsive. DevKit stays optional via ridk.
 ;
 ; Build-time injected defines (workflow passes via ISCC /D...):
-;   RubyVersion        e.g. 4.0.5   (resolved "latest 4.0.x")
-;   RubyInstallerExe   e.g. rubyinstaller-4.0.5-1-x64.exe
-;   MyAppVersion       Lich version (x-release-please-version on the gem/lich side)
+;   RubyVersion    e.g. 4.0.5   (resolved "latest 4.0.x")
+;   MyAppVersion   Lich version
 
 #ifndef RubyVersion
   #define RubyVersion "4.0.5"
-#endif
-#ifndef RubyInstallerExe
-  #define RubyInstallerExe "rubyinstaller-4.0.5-1-x64.exe"
 #endif
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0"
@@ -25,7 +20,6 @@
 #define MyAppName "Ruby4Lich5"
 #define MyAppPublisher "Elanthia-Online"
 #define MyAppURL "https://github.com/elanthia-online/lich-5/"
-#define MyAppExeName "Ruby4Lich5.exe"
 
 [Setup]
 ; AppId identifies the Lich 5 application; do NOT change it (new GUID only at Lich 6).
@@ -75,36 +69,31 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "{app}\R4LInstall"; Attribs: hidden
 
 [Files]
-; Stock RubyInstaller (non-DevKit) — run, not unpacked, by [Run] below.
-Source: ".\{#RubyInstallerExe}";  DestDir: "{app}\R4LInstall";                     Components: rubygem; Flags: ignoreversion deleteafterinstall
-; Precompiled gem bundle from the gem factory: *.gem + install-runtime-gems.cmd + runtime-gems-install-targets.txt
-Source: ".\gems\*";               DestDir: "{app}\R4LInstall\gems";                Components: rubygem; Flags: ignoreversion createallsubdirs recursesubdirs
-Source: ".\fly64.ico";            DestDir: "{app}\R4LInstall";                     Components: lich;    Flags: ignoreversion
-Source: ".\Lich5\*";              DestDir: "{app}\R4LInstall\Lich{#MyAppVersion}"; Components: lich;    Flags: ignoreversion createallsubdirs recursesubdirs
+; The pre-baked Ruby tree: RubyInstaller + binary gems already installed in, staged by CI at .\ruby.
+Source: ".\ruby\*";    DestDir: "{app}\{#RubyVersion}";                 Components: rubygem; Flags: ignoreversion createallsubdirs recursesubdirs
+Source: ".\fly64.ico"; DestDir: "{app}\R4LInstall";                     Components: lich;    Flags: ignoreversion
+Source: ".\Lich5\*";   DestDir: "{app}\R4LInstall\Lich{#MyAppVersion}"; Components: lich;    Flags: ignoreversion createallsubdirs recursesubdirs
 
-; NOTE: Ruby PATH + .rb/.rbw associations are delegated to RubyInstaller's own
-; `modpath,assocfiles` tasks (see [Run]), so the old [Registry] block is gone.
+[Registry]
+; We lay down a tree (no RubyInstaller run), so we set associations + PATH ourselves.
+; Restored verbatim from the legacy R4LGTK3.iss — proven for months.
+Root: HKCU; Subkey: "SOFTWARE\Classes\.rb";                          ValueType: string; ValueName: ""; ValueData: "RubyFile";                                         Components: rubygem; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "SOFTWARE\Classes\.rbw";                         ValueType: string; ValueName: ""; ValueData: "RubyWFile";                                        Components: rubygem; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile";                     ValueType: string; ValueName: ""; ValueData: "RubyFile";                                         Components: rubygem; Flags: uninsdeletekey
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile";                    ValueType: string; ValueName: ""; ValueData: "RubyWFile";                                        Components: rubygem; Flags: uninsdeletekey
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\DefaultIcon";         ValueType: string; ValueName: ""; ValueData: "{app}\{#RubyVersion}\bin\ruby.exe,0";              Components: rubygem; Flags: uninsdeletekey
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\DefaultIcon";        ValueType: string; ValueName: ""; ValueData: "{app}\{#RubyVersion}\bin\rubyw.exe,0";             Components: rubygem; Flags: uninsdeletekey
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyFile\shell\open\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\ruby.exe"" ""%1"" %*";  Components: rubygem; Flags: uninsdeletekey
+Root: HKCU; Subkey: "SOFTWARE\Classes\RubyWFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#RubyVersion}\bin\rubyw.exe"" ""%1"" %*"; Components: rubygem; Flags: uninsdeletekey
+; Put Ruby bin, then the old PATH
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{app}\{#RubyVersion}\bin;{olddata}"; Flags: preservestringtype
 
 [Run]
-; 1. Install Ruby, non-DevKit, into {app}\{RubyVersion}. RubyInstaller is itself an
-;    Inno Setup app, so it honors /verysilent /dir /tasks. ridkinstall is omitted.
-Filename: "{app}\R4LInstall\{#RubyInstallerExe}"; \
-  Parameters: "/verysilent /norestart /dir=""{app}\{#RubyVersion}"" /tasks=""assocfiles,modpath"""; \
-  StatusMsg: "Installing Ruby {#RubyVersion} (non-DevKit)..."; \
-  Components: rubygem; Flags: waituntilterminated
-
-; 2. (Optional) DevKit for developers — pulls MSYS2 base + toolchain. Needs network.
+; Optional DevKit for developers — ridk ships in the baked tree; pulls MSYS2 (network).
 Filename: "{app}\{#RubyVersion}\bin\ridk.cmd"; Parameters: "install 2 3"; \
   StatusMsg: "Installing Ruby DevKit (MSYS2)..."; \
   Components: rubygem; Tasks: devkit; Flags: waituntilterminated runhidden
 
-; 3. Install the precompiled binary gems against the freshly installed Ruby (offline --local).
-;    install-runtime-gems.cmd lives in the bundle and runs `gem install --local` per target.
-Filename: "{cmd}"; \
-  Parameters: "/c ""set ""PATH={app}\{#RubyVersion}\bin;%PATH%"" && cd /d ""{app}\R4LInstall\gems"" && call install-runtime-gems.cmd"""; \
-  StatusMsg: "Installing Lich runtime gems..."; \
-  Components: rubygem; Flags: waituntilterminated runhidden
-
-; 4. Place Lich where the user chose (unchanged from the legacy installer).
+; Place Lich where the user chose (unchanged from the legacy installer).
 Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s /y ""{app}\R4LInstall\Lich{#MyAppVersion}"" ""{userdesktop}\Lich5"""""; Tasks: LichGS
 Filename: "{cmd}"; Parameters: "/c""xcopy /i /e /s /y ""{app}\R4LInstall\Lich{#MyAppVersion}"" ""{app}\Lich5""""";         Tasks: LichDR
