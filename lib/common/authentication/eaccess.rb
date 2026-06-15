@@ -125,7 +125,15 @@ module Lich
             unless legacy
               conn.puts "F\t#{game_code}\n"
               response = EAccess.read(conn)
-              raise StandardError, response unless response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/
+              # F reports the account's tier for this instance. NEW_TO_GAME is the
+              # normal response for any instance the account is not subscribed to --
+              # not an error. The generator path tolerates it because character
+              # creation is exactly the flow that targets instances the account does
+              # not already hold; whether creation is permitted is decided later by
+              # the L response, not here.
+              unless response =~ /NORMAL|PREMIUM|TRIAL|INTERNAL|FREE/ || (generator && response =~ /NEW_TO_GAME/)
+                raise StandardError, response
+              end
               if defined?(Lich::Common::Account)
                 Lich::Common::Account.subscription = response
               end
@@ -145,7 +153,18 @@ module Lich
               char_code = generator ? NEW_CHARACTER_CODE : resolve_char_code(response, character)
               conn.puts "L\t#{char_code}\tSTORM\n"
               response = EAccess.read(conn)
-              raise StandardError, response unless response =~ /^L\t/
+              # Both success and failure are prefixed with "L\t" (e.g. the server
+              # returns "L\tPROBLEM\t1" when the account is not entitled to create on
+              # this instance), so require the explicit OK before parsing the launch
+              # payload -- otherwise a PROBLEM line is parsed into a garbage hash.
+              unless response =~ /^L\tOK\t/
+                # On the generator path a PROBLEM here means the account has no
+                # entitlement to create a character on this instance (e.g. an
+                # unsubscribed Fallen/Shattered). Fail fast with a clear code rather
+                # than crash or launch broken data.
+                raise AuthenticationError, "GENERATOR_NOT_AVAILABLE" if generator
+                raise StandardError, response
+              end
               # pp "L:response=%s" % response
               login_info = response.sub(/^L\tOK\t/, '')
                                    .split("\t")

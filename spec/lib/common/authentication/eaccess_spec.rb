@@ -174,4 +174,92 @@ RSpec.describe Lich::Common::Authentication::EAccess do
       end
     end
   end
+
+  describe '.auth protocol guards' do
+    # These exercise the full protocol exchange with the socket and read steps
+    # stubbed, to cover the entitlement-tolerance behavior of the generator path.
+    let(:conn) { instance_double('SSLSocket') }
+    let(:hashkey) { 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012345' }
+
+    before do
+      allow(described_class).to receive(:socket).and_return(conn)
+      allow(described_class).to receive(:verify_pem)
+      allow(conn).to receive(:puts)
+      allow(conn).to receive(:close)
+      allow(conn).to receive(:closed?).and_return(false)
+    end
+
+    # Scripts the read responses for one full A -> M -> F -> G -> P -> C -> L pass.
+    def stub_protocol(f_response:, l_response:, c_response: "C\t0\t0\t0\t0\n", g_tier: 'TRIAL')
+      allow(described_class).to receive(:read).and_return(
+        hashkey,                                # K
+        "A\tACCT\tKEY\tSESSIONKEY\tHolder\n",   # A
+        "M\tDR\tDragonRealms\n",                # M
+        f_response,                             # F
+        "G\tDragonRealms\t#{g_tier}\t31\t\n",   # G
+        "P\tDR\t1495\n",                        # P
+        c_response,                             # C
+        l_response                              # L
+      )
+    end
+
+    context 'on the generator path when F returns NEW_TO_GAME' do
+      it 'tolerates NEW_TO_GAME and returns launch info when the server grants entry' do
+        stub_protocol(
+          f_response: "F\tNEW_TO_GAME\n",
+          l_response: "L\tOK\tGAMEHOST=dr.simutronics.net\tGAMEPORT=11124\tKEY=abc\n"
+        )
+
+        result = described_class.auth(account: 'ACCT', password: 'pass', game_code: 'DRX', generator: true)
+
+        expect(result['gamehost']).to eq('dr.simutronics.net')
+        expect(result['gameport']).to eq('11124')
+      end
+
+      it 'sends the generator character code 0 on the L command' do
+        stub_protocol(f_response: "F\tNEW_TO_GAME\n", l_response: "L\tOK\tKEY=abc\n")
+
+        expect(conn).to receive(:puts).with("L\t0\tSTORM\n")
+
+        described_class.auth(account: 'ACCT', password: 'pass', game_code: 'DRX', generator: true)
+      end
+    end
+
+    context 'on the normal (non-generator) path when F returns NEW_TO_GAME' do
+      it 'still raises (entitlement tolerance is generator-only)' do
+        stub_protocol(f_response: "F\tNEW_TO_GAME\n", l_response: "L\tOK\tKEY=abc\n")
+
+        expect {
+          described_class.auth(account: 'ACCT', password: 'pass', character: 'X', game_code: 'DRX')
+        }.to raise_error(StandardError, /NEW_TO_GAME/)
+      end
+    end
+
+    context 'when the server refuses generator entry with L PROBLEM' do
+      # Unsubscribed Fallen/Shattered: F is NEW_TO_GAME and the server returns
+      # "L\tPROBLEM\t1" because the account is not entitled to create there.
+      it 'raises GENERATOR_NOT_AVAILABLE instead of parsing a garbage launch payload' do
+        stub_protocol(f_response: "F\tNEW_TO_GAME\n", l_response: "L\tPROBLEM\t1\n", g_tier: 'UNKNOWN')
+
+        expect {
+          described_class.auth(account: 'ACCT', password: 'pass', game_code: 'GSF', generator: true)
+        }.to raise_error(described_class::AuthenticationError, /GENERATOR_NOT_AVAILABLE/)
+      end
+    end
+
+    context 'on the normal path when L returns PROBLEM' do
+      it 'raises instead of accepting the PROBLEM line as success' do
+        stub_protocol(
+          f_response: "F\tPREMIUM\n",
+          c_response: "C\t1\t16\t1\t1\tW_ACCT_W002\tGrimaldo\n",
+          l_response: "L\tPROBLEM\t1\n",
+          g_tier: 'PREMIUM'
+        )
+
+        expect {
+          described_class.auth(account: 'ACCT', password: 'pass', character: 'Grimaldo', game_code: 'DR')
+        }.to raise_error(StandardError, /PROBLEM/)
+      end
+    end
+  end
 end
