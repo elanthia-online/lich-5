@@ -35,7 +35,7 @@ module Lich
       # @raise [StandardError] Re-raises the last error after all retries exhausted
       def self.authenticate(account:, password:, character: nil, game_code: nil, legacy: false, generator: false)
         with_retry do
-          if character && game_code
+          if game_code && (character || generator)
             EAccess.auth(
               account: account,
               password: password,

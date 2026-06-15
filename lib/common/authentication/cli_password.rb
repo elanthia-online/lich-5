@@ -374,9 +374,9 @@ module Lich
         # Validates if master password is available in keychain for enhanced mode
         # Checks: YAML exists, validation test present, keychain available with password
         #
+        # @param data_dir [String] directory containing entry.yaml (defaults to DATA_DIR)
         # @return [Boolean] true if ready for operations, false if issues found
-        def self.validate_master_password_available
-          data_dir = DATA_DIR
+        def self.validate_master_password_available(data_dir: DATA_DIR)
           yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           unless File.exist?(yaml_file)

@@ -88,6 +88,23 @@ RSpec.describe Lich::Common::Authentication do
       )
     end
 
+    it 'routes to EAccess.auth on generator intent without a character' do
+      expect(Lich::Common::Authentication::EAccess).to receive(:auth).with(
+        account: 'testuser',
+        password: 'testpass',
+        character: nil,
+        game_code: 'GS3',
+        generator: true
+      ).and_return(auth_result)
+
+      described_class.authenticate(
+        account: 'testuser',
+        password: 'testpass',
+        game_code: 'GS3',
+        generator: true
+      )
+    end
+
     it 'calls EAccess.auth with legacy flag when specified' do
       expect(Lich::Common::Authentication::EAccess).to receive(:auth).with(
         account: 'testuser',

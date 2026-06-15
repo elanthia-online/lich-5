@@ -134,7 +134,7 @@ module Lich
         # @return [Hash, nil] symbolized entry data, or nil on failure
         # @api private
         def self.load_entry_data(data_dir)
-          unless CLIPassword.validate_master_password_available
+          unless CLIPassword.validate_master_password_available(data_dir: data_dir)
             Lich.log "error: Master password validation failed during CLI login"
             return nil
           end
@@ -163,8 +163,15 @@ module Lich
         # @return [Array(String, Hash), nil] [canonical account name, account data], or nil if not found
         # @api private
         def self.find_account(entry_data, account_name)
+          # New character creation requires the accounts-based YAML format. Legacy
+          # array-format entries have no account container to look up by name.
+          unless entry_data.is_a?(Hash)
+            Lich.log "error: New character creation requires the accounts-based entry format"
+            return nil
+          end
+
           accounts = entry_data[:accounts]
-          unless accounts
+          unless accounts.is_a?(Hash)
             Lich.log "error: No accounts found in saved entries"
             return nil
           end

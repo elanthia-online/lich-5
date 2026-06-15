@@ -17,7 +17,7 @@ module Lich
   module Common
     module Authentication
       module CLIPassword
-        def self.validate_master_password_available
+        def self.validate_master_password_available(**)
           true
         end
       end unless defined?(Lich::Common::Authentication::CLIPassword)
@@ -215,6 +215,26 @@ RSpec.describe Lich::Common::Authentication::CLI do
 
         expect(result).to be_nil
         expect(Lich).to have_received(:log).with(/No password saved/)
+      end
+    end
+
+    context 'with legacy array-format entry.yaml' do
+      before do
+        # Legacy installs store a top-level array of character entries rather
+        # than the accounts-based Hash; generator entry has no account to look up.
+        legacy_data = [
+          { 'char_name' => 'ExistingChar', 'game_code' => 'DR', 'frontend' => 'profanity' }
+        ]
+        File.write(yaml_file, legacy_data.to_yaml)
+      end
+
+      it 'fails gracefully instead of raising on the non-Hash entry data' do
+        result = nil
+        expect { result = described_class.execute_new_character('TESTUSER', game_code: 'DR', data_dir: data_dir) }
+          .not_to raise_error
+
+        expect(result).to be_nil
+        expect(Lich).to have_received(:log).with(/accounts-based entry format/)
       end
     end
   end
