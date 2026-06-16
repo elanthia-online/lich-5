@@ -102,10 +102,10 @@ module Lich
         Timeout::timeout(timeout, Interrupt) {
           DownstreamHook.add(name, proc { |line|
             if filter
-              if ignore_end || line =~ end_pattern
+              if line =~ end_pattern
                 DownstreamHook.remove(name)
                 filter = false
-                if quiet && !ignore_end
+                if quiet
                   next(nil)
                 else
                   line
