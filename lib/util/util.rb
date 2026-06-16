@@ -87,7 +87,8 @@ module Lich
       result = []
       name = self.anon_hook
       filter = false
-      ignore_end = end_pattern.eql?(:ignore)
+      end_pattern = start_pattern if end_pattern.eql?(:ignore)
+      matched_start_and_end = false
 
       save_script_silent = Script.current.silent
       save_want_downstream = Script.current.want_downstream
@@ -116,6 +117,14 @@ module Lich
                   line
                 end
               end
+            elsif line =~ start_pattern && line =~ end_pattern
+              matched_start_and_end = true
+              DownstreamHook.remove(name)
+              if quiet
+                next(nil)
+              else
+                line
+              end
             elsif line =~ start_pattern
               filter = true
               if quiet
@@ -131,16 +140,10 @@ module Lich
 
           until (line = get) =~ start_pattern; end
           result << line.rstrip
-          unless ignore_end
-            until (line = get) =~ end_pattern
-              result << line.rstrip
-            end
+          until matched_start_and_end || (line = get) =~ end_pattern
+            result << line.rstrip
           end
-          unless ignore_end
-            if include_end
-              result << line.rstrip
-            end
-          end
+          result << line.rstrip if include_end && !matched_start_and_end 
         }
       rescue Interrupt
         nil
