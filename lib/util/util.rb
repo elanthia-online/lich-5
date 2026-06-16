@@ -143,7 +143,7 @@ module Lich
           until matched_start_and_end || (line = get) =~ end_pattern
             result << line.rstrip
           end
-          result << line.rstrip if include_end && !matched_start_and_end 
+          result << line.rstrip if include_end && !matched_start_and_end
         }
       rescue Interrupt
         nil
