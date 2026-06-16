@@ -228,7 +228,7 @@ reconnect_if_wanted = proc {
     Lich.log "info: game: #{game}"
     if ARGV.include?('--without-frontend')
       $_CLIENT_ = nil
-    elsif ARGV.include?('--pipe')
+    elsif @argv_options[:pipe]
       # Use stdin/stdout as the client transport instead of a front-end socket.
       # Pair with -g HOST:PORT to connect directly to the game server (no SGE).
       # stdin supplies what a front-end would send (including the initial login
@@ -363,7 +363,7 @@ reconnect_if_wanted = proc {
       end
     end
     Lich.log 'info: connected'
-  elsif ARGV.include?('--pipe') and @argv_options[:game_host] and @argv_options[:game_port]
+  elsif @argv_options[:pipe] and @argv_options[:game_host] and @argv_options[:game_port]
     # --pipe with -g: no front-end socket and no hosts-file redirection.
     # stdin/stdout act as the client transport; connect straight to the game
     # server named by -g (SGE/eaccess login already bypassed by -g). stdin
@@ -499,7 +499,7 @@ reconnect_if_wanted = proc {
     #
     # shutdown listening socket (pipe mode never opened one)
     #
-    unless ARGV.include?('--pipe')
+    unless @argv_options[:pipe]
       error_count = 0
       begin
         # Somehow... for some ridiculous reason... Windows doesn't let us close the socket if we shut it down first...
