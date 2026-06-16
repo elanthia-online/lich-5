@@ -241,7 +241,7 @@ reconnect_if_wanted = proc {
         Frontend.client = 'unknown'
       end
       begin
-        listener = TCPServer.new('127.0.0.1', nil)
+        listener = TCPServer.new(@argv_options[:bind_address] || '127.0.0.1', nil)
       rescue
         $stdout.puts "--- error: cannot bind listen socket to local port: #{$!}"
         Lich.log "error: cannot bind listen socket to local port: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
@@ -259,7 +259,9 @@ reconnect_if_wanted = proc {
         scrubbed_launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, '[scrubbed key]')
         Lich.log "info: launcher_cmd: #{scrubbed_launcher_cmd}"
       else
-        if RUBY_PLATFORM =~ /darwin/i
+        if @argv_options[:bind_address]
+          localhost = @argv_options[:bind_address]
+        elsif RUBY_PLATFORM =~ /darwin/i
           localhost = "127.0.0.1"
         else
           localhost = "localhost"
@@ -363,7 +365,7 @@ reconnect_if_wanted = proc {
     IPSocket.getaddress(@argv_options[:game_host])
     error_count = 0
     begin
-      listener = Lich::Common::ReusableTCPServer.create('127.0.0.1', @argv_options[:game_port])
+      listener = Lich::Common::ReusableTCPServer.create(@argv_options[:bind_address] || '127.0.0.1', @argv_options[:game_port])
     rescue
       sleep 1
       if (error_count += 1) >= 30
