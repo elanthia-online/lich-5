@@ -2170,23 +2170,16 @@ def sf_to_wiz(line, bypass_multiline: false)
   end
 end
 
-# Strip game markup from one server line, returning [text, carry].
-#
-# A line whose <pushStream> tags outnumber its <popStream> tags opens a
-# multi-line element whose body arrives over later server reads. The unfinished
-# text is handed back as +carry+; the caller passes it in on the next call so
-# the whole element is reassembled before stripping. +text+ is nil while a
-# multi-line element is still being accumulated (carry holds the partial), and
-# nil when stripping leaves nothing printable.
-#
-# The carry used to be a hidden $strip_xml_multiline global mutated in place;
-# it is now an explicit value the caller owns, so this function keeps no state
-# between calls. Call it as `text, carry = strip_xml(line, carry)`.
-def strip_xml(line, carry = nil)
-  line = carry + line if carry
-  if line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length
-    return [nil, line]
+def strip_xml(line, type = nil)
+  if type.nil?
+    strip_xml_simple(line)
+  else
+    strip_xml_multiline(line, type)
   end
+end
+
+def strip_xml_simple(line)
+  return line if line.match?(/\A\s*\z/) # preserve genuinely-blank lines
 
   line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
   line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
@@ -2195,10 +2188,24 @@ def strip_xml(line, carry = nil)
   line = line.gsub('&gt;', '>')
   line = line.gsub('&lt;', '<')
 
-  return [nil, nil] if line.match?(/\A\s*\z/)
+  return nil if line.match?(/\A\s*\z/) # but drop lines that were pure markup
 
-  [line, nil]
+  line
 end
+
+def strip_xml_multiline(line, type)
+  $strip_xml_multiline ||= {}
+  line = $strip_xml_multiline[type] + line if $strip_xml_multiline[type]
+  if line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length
+    $strip_xml_multiline[type] = line
+    return nil
+  end
+  $strip_xml_multiline[type] = nil
+  strip_xml_simple(line)
+end
+
+# Internal helpers for strip_xml; not part of the script-facing API.
+private :strip_xml_simple, :strip_xml_multiline
 
 def monsterbold_start
   if Frontend.supports_gsl?

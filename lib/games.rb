@@ -259,7 +259,6 @@ module Lich
           @room_number_after_ready = false
           @last_id_shown_room_window = 0
           @game_instance = nil
-          @strip_xml_buffer = nil
         end
 
         def set_game_instance(game_type)
@@ -576,10 +575,7 @@ module Lich
             return
           end
 
-          # strip_xml carries the unfinished text of a multi-line element
-          # between server reads; we own that carry rather than letting it hide
-          # in a global, so it resets cleanly with the rest of our buffers.
-          stripped_server, @strip_xml_buffer = strip_xml(server_string, @strip_xml_buffer)
+          stripped_server = strip_xml(server_string, "main")
 
           # Process game-specific data using instance
           if @game_instance && Module.const_defined?(:GameLoader)

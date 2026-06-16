@@ -795,8 +795,8 @@ RSpec.describe 'Lich::GameBase stream desync guard' do
       stub_const('XMLData', parser)
       # strip_xml lives outside games.rb and is not loaded here; the assertion
       # under test is only that the parse stage does not trigger recovery.
-      # It returns [stripped_line, carry]; the callsite destructures both.
-      allow(Lich::GameBase::Game).to receive(:strip_xml).and_return(['', nil])
+      # It returns the stripped line as a String; the callsite splits it on CRLF.
+      allow(Lich::GameBase::Game).to receive(:strip_xml).and_return('')
       allow(parser).to receive(:reset).and_call_original
       Lich::GameBase::Game.process_xml_data(+"<prompt time=\"1746000000\">&gt;</prompt>\r\n")
       expect(parser).not_to have_received(:reset)
