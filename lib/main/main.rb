@@ -259,12 +259,7 @@ reconnect_if_wanted = proc {
         scrubbed_launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, '[scrubbed key]')
         Lich.log "info: launcher_cmd: #{scrubbed_launcher_cmd}"
       else
-        # GAMEHOST tells the spawned frontend where to connect. Mirror a specific
-        # --bind-address (the listener only binds that one address), but fall back
-        # to loopback for wildcard binds since a frontend cannot connect to 0.0.0.0/::.
-        if @argv_options[:bind_address] && !%w[0.0.0.0 ::].include?(@argv_options[:bind_address])
-          localhost = @argv_options[:bind_address]
-        elsif RUBY_PLATFORM =~ /darwin/i
+        if RUBY_PLATFORM =~ /darwin/i
           localhost = "127.0.0.1"
         else
           localhost = "localhost"
