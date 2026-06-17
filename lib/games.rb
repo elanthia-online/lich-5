@@ -283,13 +283,18 @@ module Lich
         # lib/main/main.rb so its behavior can be tested.
         def open_with_timeout(host, port, timeout = 30)
           connect_thread = Thread.new {
-            open(host, port)
+            # report_on_exception off: a failed open is surfaced by the join below
+            # (which re-raises it), not by an auto-printed thread warning.
+            Thread.current.report_on_exception = false
+            self.open(host, port)
           }
-          (timeout / 0.1).to_i.times {
-            sleep 0.1
-            break unless connect_thread.status
-          }
-          if connect_thread.status
+          # join returns nil on timeout, the thread on success, and re-raises the
+          # thread's exception on failure -- so a Game.open that errors (e.g.
+          # connection refused) propagates to the caller's rescue instead of being
+          # silently swallowed (the old `if connect_thread.status` could not tell a
+          # thread that died with an exception, status nil, from a normal finish,
+          # status false).
+          if connect_thread.join(timeout).nil?
             connect_thread.kill rescue nil
             raise "error: timed out connecting to #{host}:#{port}"
           end
