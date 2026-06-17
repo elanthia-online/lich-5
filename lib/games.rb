@@ -197,22 +197,33 @@ module Lich
     # recovery path (log + XMLData.reset).
     class GameStreamDesyncError < StandardError; end
 
-    # Ox error-callback messages that indicate a truncated fragment. Ox also
-    # fires the callback for Simu's routine almost-XML -- bare text and
+    # Ox error-callback messages that mean the fragment ended mid-token -- the
+    # only unambiguous truncation signal, since a complete line cannot end inside
+    # an open tag, attribute list, or quoted value. (In practice genuine
+    # truncation is an edge case: reads are newline-delimited via @socket.gets,
+    # Simu keeps each tag on one line, multi-line content is reassembled upstream
+    # by buffer_room_objs, and #4's tag_end guard keeps @active_tags balanced
+    # regardless. This is a backstop for a partial read at disconnect.)
+    #
+    # Ox also fires the callback for Simu's routine almost-XML -- bare text and
     # multiple top-level elements ('text not terminated', 'multiple top level
     # elements'), nested quotes ('no attribute value'), unescaped ampersands
-    # ('Invalid special character sequence'), missing </d> end tags ('Start
-    # End Mismatch: ... not closed') -- none of which match these patterns, so
-    # they stay tolerated. The message prefix matters: 'Unexpected Character:
-    # element not closed' (a start tag that never got its '>') is truncation,
-    # while the similarly worded 'Start End Mismatch: element ... not closed'
-    # (an element missing its end tag) is routine.
+    # ('Invalid special character sequence'), missing </d> end tags ('Start End
+    # Mismatch: ... not closed') -- none of which match these patterns, so they
+    # stay tolerated. The message prefix matters: 'Unexpected Character: element
+    # not closed' (a start tag that never got its '>') is truncation, while the
+    # similarly worded 'Start End Mismatch: element ... not closed' (an element
+    # missing its end tag) is routine.
+    #
+    # 'attribute value not in quotes' is intentionally NOT here: it fires on a
+    # *complete* unquoted-attribute line (<a x=y>), so matching it false-resets a
+    # fully-parsed fragment. A truncated unquoted attr (<a x=y) still resets via
+    # 'attributes not terminated' / 'element not closed' below.
     STREAM_DESYNC_ERRORS = [
       /\ANot Terminated: attributes not terminated/,
       /\ANot Terminated: quoted value not terminated/,
       /\ANot Terminated: document not terminated/,
-      /\AUnexpected Character: element not closed/,
-      /\AUnexpected Character: attribute value not in quotes/
+      /\AUnexpected Character: element not closed/
     ].freeze
 
     # Ox's signature when a tag scatters into valueless attributes: the

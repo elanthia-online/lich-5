@@ -763,6 +763,12 @@ RSpec.describe 'Lich::GameBase stream desync guard' do
         expect { check!("<settingsInfo  crc='612586004' instance='GS4' space not found ItemCmds='1' />") }
           .not_to raise_error
       end
+
+      it 'tolerates a complete unquoted attribute value (not a truncation)' do
+        # <a x=y> emits "attribute value not in quotes" but is a complete line;
+        # matching it would false-reset a fully-parsed fragment.
+        expect { check!('<a x=y>text</a>') }.not_to raise_error
+      end
     end
   end
 
