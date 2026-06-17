@@ -212,8 +212,15 @@ module Lich
         end
 
         def self.parse(line)
-          # O(1) vs O(N): anchored union is attempted only at line start; mid-line
+          # O(1) vs O(N): the anchored union is attempted only at line start; mid-line
           # patterns (AllMid) are checked separately.
+          #
+          # No multi-line fallback is needed here (unlike infomon/xmlparser.rb, which
+          # is handed the raw, possibly multi-line server_string). Parser.parse is fed
+          # one physical line at a time -- Game.process_xml_data does
+          # stripped_server.split("\r\n").each { |l| Infomon::Parser.parse(l) } -- and
+          # the server stream is \r\n-aligned, so +line+ never carries an interior
+          # newline whose 2nd+ line an inner ^ anchor would need to match.
           return :noop unless Pattern::AllStart.match?(line) || Pattern::AllMid.match?(line)
 
           begin
