@@ -1898,6 +1898,7 @@ def unnoded_pulse
 end
 
 require_relative File.join(LIB_DIR, "stash.rb")
+require File.join(LIB_DIR, 'common', 'xml_entities.rb')
 
 def empty_hands
   waitrt?
@@ -2181,10 +2182,9 @@ end
 #   (type: "main"); the keyword form is the supported call shape.
 # @return [String, nil]
 #   - the stripped text when printable content remains
-#   - the original line unchanged when it is entirely whitespace (this preserves
-#     blank-line spacing for the front end)
-#   - nil when stripping leaves no printable text, or while a typed multiline
-#     fragment is still being accumulated
+#   - nil when the line is entirely whitespace, when stripping leaves no
+#     printable text, or while a typed multiline fragment is still being
+#     accumulated
 # @note nil is a normal return, not an error. Callers commonly feed the result
 #   straight to String#split; that is safe because NilClass#split is patched to
 #   return [] (see lib/common/class_exts/nilclass.rb), so no nil guard is needed.
@@ -2197,16 +2197,15 @@ def strip_xml(line, type: nil)
 end
 
 def strip_xml_simple(line)
-  return line if line.match?(/\A\s*\z/) # preserve genuinely-blank lines
+  return nil if line == "\r\n" # short-circuit empty links
 
   line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
   line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
   line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
   line = line.gsub(/<[^>]+>/, '')
-  line = line.gsub('&gt;', '>')
-  line = line.gsub('&lt;', '<')
+  line = Lich::Common::XmlEntities.decode(line)
 
-  return nil if line.match?(/\A\s*\z/) # but drop lines that were pure markup
+  return nil if line.match?(/\A\s*\z/)
 
   line
 end
