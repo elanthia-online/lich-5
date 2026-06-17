@@ -29,24 +29,11 @@ RSpec.describe Lich::GameBase do
       expect(output).to include('&quot;The')
     end
 
-    it 'fixes invalid ampersands' do
-      # Use +@ to unfreeze string for in-place modification
-      input = +'You also see a large bin labeled "Lost & Found"'
-      output = Lich::GameBase::XMLCleaner.fix_invalid_characters(input)
-      expect(output).to include('&amp;')
-    end
-
     it 'removes bell characters' do
       # Use +@ to unfreeze string for in-place modification
       input = +"\aYOU HAVE BEEN IDLE TOO LONG. PLEASE RESPOND.\a\n"
       output = Lich::GameBase::XMLCleaner.fix_invalid_characters(input)
       expect(output).not_to include("\a")
-    end
-
-    it 'fixes poorly encoded apostrophes' do
-      input = [*'Membrach'.bytes, 0x92, *'s Greed'.bytes].pack('C*')
-      output = Lich::GameBase::XMLCleaner.fix_invalid_characters(input)
-      expect(output).to eq("Membrach's Greed")
     end
 
     it 'fixes open-ended XML tags' do
@@ -718,7 +705,7 @@ RSpec.describe 'Lich::GameBase stream desync guard' do
   end
 
   def parse_errors(parser, fragment)
-    Ox.sax_parse(parser, fragment, convert_special: true, symbolize: false, skip: :skip_none)
+    Ox.sax_parse(parser, fragment, convert_special: false, symbolize: false, skip: :skip_none)
     parser.sax_parse_errors
   end
 

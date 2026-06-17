@@ -31,6 +31,8 @@ xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
 
 =end
 
+require File.join(LIB_DIR, 'common', 'xml_entities.rb')
+
 module Lich
   module Common
     class XMLParser
@@ -255,8 +257,13 @@ module Lich
         @sax_attributes = {}
       end
 
+      # Values are left in Ox's native encoding rather than retagged: REXML handed
+      # these callbacks UTF-8 (effectively ASCII for the scrubbed game stream), so
+      # force-tagging Windows-1252 was both a divergence from the pre-Ox behavior
+      # and the source of the entity corruption. Ox runs with convert_special:
+      # false, so XmlEntities.decode restores the standard entities here.
       def attr(name, value)
-        @sax_attributes[name] = value.force_encoding(Encoding::WINDOWS_1252)
+        @sax_attributes[name] = XmlEntities.decode(value)
       end
 
       def attrs_done
@@ -709,9 +716,9 @@ module Lich
       end
 
       def text(text_string)
-        # Called by Ox once per text node. The game stream is Windows-1252; tag
-        # the bytes with their actual encoding (was done in the old Ox bridge).
-        text_string = text_string.force_encoding(Encoding::WINDOWS_1252)
+        # Called by Ox once per text node. Decode the standard XML entities (Ox
+        # runs with convert_special: false; see Lich::Common::XmlEntities).
+        text_string = XmlEntities.decode(text_string)
         begin
           # fixme: /<stream id="Spells">.*?<\/stream>/m
           # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))

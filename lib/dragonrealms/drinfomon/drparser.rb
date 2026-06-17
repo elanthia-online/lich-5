@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require File.join(LIB_DIR, 'common', 'xml_entities.rb')
+
 module Lich
   module DragonRealms
     module DRParser
@@ -141,12 +143,15 @@ module Lich
             # trailing prose (e.g. "... is in your right hand.") -- which is not valid XML
             # and would break a tree parse -- is reached.
             handler = InventoryItemSax.new
-            Ox.sax_parse(handler, server_string.strip, convert_special: true, symbolize: false, skip: :skip_none)
+            # convert_special: false matches Game.process_xml_data: Ox never turns a
+            # numeric entity into UTF-8. Ox leaves the standard entities literal, so
+            # XmlEntities.decode restores them in the item name below.
+            Ox.sax_parse(handler, server_string.strip, convert_special: false, symbolize: false, skip: :skip_none)
 
             return server_string unless handler.cmd
 
             # Normalize the item name by removing leading articles ('a', 'an', 'some').
-            item_name = handler.name.to_s.sub(/^(?:a|an|some)\s/, '').strip
+            item_name = Lich::Common::XmlEntities.decode(handler.name.to_s).sub(/^(?:a|an|some)\s/, '').strip
 
             # Extract the command and the unique item ID from the 'cmd' attribute.
             cmd = handler.cmd.to_s.downcase.strip

@@ -122,9 +122,6 @@ module Lich
 
     # XML string cleaner module
     module XMLCleaner
-      POORLY_ENCODED_APOSTROPHE_BYTE = 0x92
-      ASCII_APOSTROPHE_BYTE = 0x27
-
       class << self
         def clean_nested_quotes(server_string)
           # Fix nested single quotes
@@ -149,29 +146,15 @@ module Lich
         end
 
         def fix_invalid_characters(server_string)
-          # Fix ampersands
-          if server_string.include?('&') && !server_string.include?('&amp;') && !server_string.include?('&gt;') && !server_string.include?('&lt;') && !server_string.include?('&apos;') && !server_string.include?('&quot;')
-            Lich.log "Invalid & detected: #{server_string.inspect}"
-            server_string.gsub!('&', '&amp;')
-            Lich.log "Invalid & fixed to: #{server_string.inspect}"
-          end
+          # Note: a bare '&' is intentionally not escaped here. REXML raised on it
+          # (hence the old escaping); Ox tolerates it (convert_special: false emits
+          # it verbatim with no error), so escaping is no longer needed for parsing.
 
           # Fix bell character
           if server_string.include?("\a")
             Lich.log "Invalid \\a detected: #{server_string.inspect}"
             server_string.gsub!("\a", '')
             Lich.log "Invalid \\a stripped out: #{server_string.inspect}"
-          end
-
-          # Fix poorly encoded apostrophes
-          if server_string.bytes.include?(POORLY_ENCODED_APOSTROPHE_BYTE)
-            Lich.log "Detected poorly encoded apostrophe: #{server_string.inspect}"
-            original_encoding = server_string.encoding
-            repaired_bytes = server_string.bytes.map do |byte|
-              byte == POORLY_ENCODED_APOSTROPHE_BYTE ? ASCII_APOSTROPHE_BYTE : byte
-            end
-            server_string.replace(repaired_bytes.pack('C*').force_encoding(original_encoding))
-            Lich.log "Changed poorly encoded apostrophe to: #{server_string.inspect}"
           end
 
           server_string
@@ -569,7 +552,13 @@ module Lich
             # <root> wrapper needed: that was a REXML requirement (single root); Ox
             # handles multiple top-level elements and bare text directly.
             XMLData.sax_parse_errors.clear
-            Ox.sax_parse(XMLData, server_string, convert_special: true, symbolize: false, skip: :skip_none)
+            # convert_special: false keeps Ox in bytes-land: it never decodes a
+            # numeric entity (e.g. &#8217;) into UTF-8. The five standard XML
+            # entities are decoded by XMLData#attr/#text instead. Values are left
+            # in Ox's native (ASCII-8BIT) encoding -- REXML effectively produced
+            # ASCII for this (high-byte-scrubbed) stream, so retagging to
+            # Windows-1252 was a divergence and caused entity corruption.
+            Ox.sax_parse(XMLData, server_string, convert_special: false, symbolize: false, skip: :skip_none)
             check_stream_desync!(XMLData.sax_parse_errors)
           rescue => e
             # GameStreamDesyncError from the check above, or (rarely) Ox itself;
