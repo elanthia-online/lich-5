@@ -399,16 +399,18 @@ reconnect_if_wanted = proc {
     end
     Lich.log "info: connecting to game server (#{@argv_options[:game_host]}:#{@argv_options[:game_port]})"
     begin
-      # Match the bounded connect used by the other paths: a stuck Game.open
-      # would otherwise hang pipe mode indefinitely on an unreachable host.
+      # Bounded connect so a stuck Game.open cannot hang pipe mode indefinitely on
+      # an unreachable host.
       connect_thread = Thread.new {
+        # report_on_exception off: a failed Game.open is surfaced by the join below
+        # (which re-raises it), not by an auto-printed thread warning.
+        Thread.current.report_on_exception = false
         Game.open(@argv_options[:game_host], @argv_options[:game_port])
       }
-      300.times {
-        sleep 0.1
-        break unless connect_thread.status
-      }
-      if connect_thread.status
+      # join(30) returns nil on timeout, the thread on success, and re-raises if
+      # Game.open errored (e.g. connection refused) -- so a failed connect reaches
+      # the rescue below instead of silently proceeding with a dead game socket.
+      if connect_thread.join(30).nil?
         connect_thread.kill rescue nil
         raise "timed out connecting to #{@argv_options[:game_host]}:#{@argv_options[:game_port]}"
       end
