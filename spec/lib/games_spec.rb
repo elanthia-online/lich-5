@@ -788,6 +788,44 @@ RSpec.describe 'Lich::GameBase stream desync guard' do
       Lich::GameBase::Game.process_xml_data(+"<prompt time=\"1746000000\">&gt;</prompt>\r\n")
       expect(parser).not_to have_received(:reset)
     end
+
+    it 'repairs nested quotes and reparses when Ox flags a valueless attribute' do
+      parser = quiet_parser_class.new
+      stub_const('XMLData', parser)
+      allow(Lich::GameBase::Game).to receive(:strip_xml).and_return('')
+      allow(parser).to receive(:reset).and_call_original
+      # title='Tsetem's Items' makes Ox emit "no attribute value"; the retry
+      # escapes the inner quote, resets the junk first parse, and reparses.
+      server_string = +"<openDialog id='quux' title='Tsetem's Items'/>"
+      Lich::GameBase::Game.process_xml_data(server_string)
+      expect(server_string).to include("title='Tsetem&apos;s Items'")
+      expect(parser).to have_received(:reset)
+    end
+
+    it 'does not reparse a genuinely valueless attribute (nothing to escape)' do
+      parser = quiet_parser_class.new
+      stub_const('XMLData', parser)
+      allow(Lich::GameBase::Game).to receive(:strip_xml).and_return('')
+      allow(parser).to receive(:reset).and_call_original
+      # <a foo> also emits "no attribute value", but clean_nested_quotes finds
+      # no nested quote to escape, so there is no reset/reparse.
+      Lich::GameBase::Game.process_xml_data(+"<a foo>x</a>")
+      expect(parser).not_to have_received(:reset)
+    end
+
+    it 'repairs a malformed settingsInfo via the retry path and flags an init re-seed' do
+      parser = quiet_parser_class.new
+      stub_const('XMLData', parser)
+      allow(Lich::GameBase::Game).to receive(:strip_xml).and_return('')
+      allow(parser).to receive(:reset).and_call_original
+      # @@settings_init_needed is a production class variable with no reset! hook.
+      Lich::GameBase::Game.class_variable_set(:@@settings_init_needed, false)
+      server_string = +"<settingsInfo crc='0' instance='GS4' space not found ItemCmds='1'/>"
+      Lich::GameBase::Game.process_xml_data(server_string)
+      expect(server_string).to include("client='1.0.1.28'")
+      expect(Lich::GameBase::Game.settings_init_needed?).to be true
+      expect(parser).to have_received(:reset)
+    end
   end
 
   # Ox tolerates the malformed settingsInfo (see the check_stream_desync! test

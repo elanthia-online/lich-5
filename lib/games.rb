@@ -215,6 +215,13 @@ module Lich
       /\AUnexpected Character: attribute value not in quotes/
     ].freeze
 
+    # Ox's signature when a tag scatters into valueless attributes: the
+    # settingsInfo space-not-found bug, or a same-quote inside a quoted value
+    # (e.g. title='Tsetem's Items'), where the inner quote ends the value early.
+    # (A genuinely valueless attribute, <a foo>, reports the same thing, but the
+    # repairs leave it unchanged so no reparse happens.)
+    NO_ATTRIBUTE_VALUE_ERROR = /\AUnexpected Character: no attribute value/
+
     # Base Game class with common functionality
     class Game
       class << self
@@ -544,7 +551,6 @@ module Lich
         end
 
         def process_xml_data(server_string)
-          fix_invalid_settings_info(server_string)
           begin
             # Ox is a permissive parser: it handles Simu's not-quite-XML stream
             # without the clean/retry dance REXML required (nested quotes, missing
@@ -561,6 +567,7 @@ module Lich
             # Windows-1252 was a divergence and caused entity corruption.
             Ox.sax_parse(XMLData, server_string, convert_special: false, symbolize: false, skip: :skip_none)
             check_stream_desync!(XMLData.sax_parse_errors)
+            repair_malformed_attributes_and_reparse(server_string)
           rescue GameStreamDesyncError => e
             # A truncated/desynced fragment. Ox never raises on malformed stream
             # content -- it reports via the error callback, and check_stream_desync!
@@ -600,16 +607,36 @@ module Lich
           raise GameStreamDesyncError, desync if desync
         end
 
-        # The server sends a malformed <settingsInfo ... space not found .../>
-        # (an attribute with no '=') to characters that have never connected with
-        # the Wrayth/StormFront client. REXML raised on it, so the rescue path
-        # repaired it; Ox tolerates it -- it emits "Unexpected Character: no
-        # attribute value" (not in STREAM_DESYNC_ERRORS) and parses the bad tokens
-        # into junk attributes (space="", not="", found="") -- so detect and
-        # repair it here in the normal flow, before the Ox parse. The repair lets
-        # XMLData read a valid settingsInfo, and @@settings_init_needed makes
-        # gameloader's PostLoad seed a valid client record (see
-        # settings_init_needed? and lib/common/gameloader.rb).
+        # Ox reports "no attribute value" for two repairable malformations that
+        # scatter a tag into junk attributes: the settingsInfo space-not-found
+        # server bug, and a same-quote inside a quoted value (Simu's dynamic
+        # dialogs, e.g. title='Tsetem's Items'). Both raised in REXML and were
+        # repaired in the rescue; Ox tolerates them, so drive the repair off its
+        # error report -- only the rare flagged line pays the cost. Apply the
+        # repairs; if any changed the line, drop the junk the first parse committed
+        # and parse once more, ignoring any errors on that pass so we never loop.
+        # Escaped &apos;/&quot; round-trip back to the literal char via
+        # XmlEntities.decode and the front-end's own entity decoding.
+        def repair_malformed_attributes_and_reparse(server_string)
+          return unless XMLData.sax_parse_errors.any? { |message| NO_ATTRIBUTE_VALUE_ERROR.match?(message) }
+
+          before = server_string.dup
+          fix_invalid_settings_info(server_string)
+          XMLCleaner.clean_nested_quotes(server_string)
+          return if server_string == before # nothing to repair (e.g. a genuine valueless attribute)
+
+          XMLData.reset
+          XMLData.sax_parse_errors.clear
+          Ox.sax_parse(XMLData, server_string, convert_special: false, symbolize: false, skip: :skip_none)
+        end
+
+        # The server sends a malformed <settingsInfo ... space not found .../> (an
+        # attribute with no '=') to characters that have never connected with the
+        # Wrayth/StormFront client. REXML raised on it (the rescue repaired it); Ox
+        # tolerates it and emits "no attribute value", so it is repaired from
+        # repair_malformed_attributes_and_reparse. @@settings_init_needed makes
+        # gameloader's PostLoad seed a valid client record (see settings_init_needed?
+        # and lib/common/gameloader.rb).
         def fix_invalid_settings_info(server_string)
           return unless server_string =~ /<settingsInfo .*?space not found /
 
