@@ -277,6 +277,24 @@ module Lich
           @socket
         end
 
+        # Opens the game socket on a background thread so a stuck Game.open cannot
+        # hang startup forever; raises if the connect does not complete within
+        # +timeout+ seconds. Extracted verbatim from the inline connect loop in
+        # lib/main/main.rb so its behavior can be tested.
+        def open_with_timeout(host, port, timeout = 30)
+          connect_thread = Thread.new {
+            open(host, port)
+          }
+          (timeout / 0.1).to_i.times {
+            sleep 0.1
+            break unless connect_thread.status
+          }
+          if connect_thread.status
+            connect_thread.kill rescue nil
+            raise "error: timed out connecting to #{host}:#{port}"
+          end
+        end
+
         def start_wrap_thread
           begin
             Lich.db_vacuum_if_due!(months: 6)
