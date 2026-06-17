@@ -78,6 +78,10 @@ RSpec.describe Lich::Util::TextStripper do
       expect(strip('two  spaces  here')).to eq('two  spaces  here')
     end
 
+    it 'preserves whitespace between sibling elements' do
+      expect(strip('<a>x</a>  <b>y</b>')).to eq('x  y')
+    end
+
     it 'trims leading and trailing whitespace' do
       expect(strip('  trimmed  ')).to eq('trimmed')
     end

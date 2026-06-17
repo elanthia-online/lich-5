@@ -303,8 +303,10 @@ module Lich
       #
       # @return [String] Plain text with XML tags removed and whitespace trimmed
       #
-      # @note skip: :skip_none keeps text whitespace verbatim (Ox otherwise
-      #   collapses runs of whitespace).
+      # @note skip: :skip_off keeps whitespace verbatim, including whitespace-only
+      #   text nodes between sibling elements. (:skip_none still drops those
+      #   inter-element nodes, so "<a>x</a>  <b>y</b>" would strip to "xy" not
+      #   "x  y".)
       #
       # @note This method handles:
       #   * XML namespaces
@@ -318,10 +320,10 @@ module Lich
       def self.strip_xml_with_ox(text)
         # Try to parse as-is first (in case it's already well-formed XML)
         begin
-          parsed = Ox.load("<root>#{text}</root>", mode: :generic, skip: :skip_none)
+          parsed = Ox.load("<root>#{text}</root>", mode: :generic, skip: :skip_off)
         rescue Ox::ParseError
           # If parsing fails due to unescaped characters, wrap in CDATA
-          parsed = Ox.load("<root><![CDATA[#{text}]]></root>", mode: :generic, skip: :skip_none)
+          parsed = Ox.load("<root><![CDATA[#{text}]]></root>", mode: :generic, skip: :skip_off)
         end
 
         # Ox.load returns an Ox::Document when the input has an XML prolog and
