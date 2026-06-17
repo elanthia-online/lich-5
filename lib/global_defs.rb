@@ -2170,7 +2170,25 @@ def sf_to_wiz(line, bypass_multiline: false)
   end
 end
 
-def strip_xml(line, type = nil)
+# Strip game markup from a server-stream fragment.
+#
+# @param line [String] one server-stream fragment
+# @param type [String, Symbol, nil] optional multiline buffer key. When nil (the
+#   default) the fragment is stripped statelessly. When given, unfinished
+#   pushStream content is accumulated in a process-global, type-keyed buffer
+#   ($strip_xml_multiline) until a balancing popStream arrives, so an element
+#   split across reads is reassembled before stripping. Pass it as a keyword
+#   (type: "main"); the keyword form is the supported call shape.
+# @return [String, nil]
+#   - the stripped text when printable content remains
+#   - the original line unchanged when it is entirely whitespace (this preserves
+#     blank-line spacing for the front end)
+#   - nil when stripping leaves no printable text, or while a typed multiline
+#     fragment is still being accumulated
+# @note nil is a normal return, not an error. Callers commonly feed the result
+#   straight to String#split; that is safe because NilClass#split is patched to
+#   return [] (see lib/common/class_exts/nilclass.rb), so no nil guard is needed.
+def strip_xml(line, type: nil)
   if type.nil?
     strip_xml_simple(line)
   else

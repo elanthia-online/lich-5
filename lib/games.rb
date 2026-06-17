@@ -259,6 +259,10 @@ module Lich
           @room_number_after_ready = false
           @last_id_shown_room_window = 0
           @game_instance = nil
+          # strip_xml's multiline carry is a process-global; clear it here so a
+          # fragment left open before a reconnect/session reset does not bleed
+          # into the next session.
+          $strip_xml_multiline = {}
         end
 
         def set_game_instance(game_type)
@@ -575,7 +579,7 @@ module Lich
             return
           end
 
-          stripped_server = strip_xml(server_string, "main")
+          stripped_server = strip_xml(server_string, type: "main")
 
           # Process game-specific data using instance
           if @game_instance && Module.const_defined?(:GameLoader)

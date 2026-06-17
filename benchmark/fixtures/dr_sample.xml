@@ -22,7 +22,7 @@ You go south.
 <component id='room exits'>Obvious paths: <d>north</d>, <d>south</d>.<compass></compass></component>
 <component id='room extra'></component>
 <resource picture="0"/><style id="roomName" />[The Crossing, Oralana Ramble]
-<style id=""/><preset id='roomDesc'>A great deal of traffic passes through here, as travelers, merchants, rogues, adventurers, ne'er-do-wells and savants make their way to and from the Eastern Tier.  The Ramble continues south, leading into the heart of the Crossing, while a stone's throw away are the northeast gates.  All these pedestrians make this the ideal location for the shop of Talmai the Cobbler, whose business in new footwear and repairs prospers despite his lack of shrewdness.</preset>  
+<style id=""/><preset id='roomDesc'>A great deal of traffic passes through here, as travelers, merchants, rogues, adventurers, ne'er-do-wells and savants make their way to and from the Eastern Tier.  The Ramble continues south, leading into the heart of the Crossing, while a stone's throw away are the northeast gates.  All these pedestrians make this the ideal location for the shop of Talmai the Cobbler, whose business in new footwear and repairs prospers despite his lack of shrewdness.</preset>
 Obvious paths: <d>north</d>, <d>south</d>.
 <compass><dir value="n"/><dir value="s"/></compass><component id='room players'></component>
 <prompt time="1751802634">&gt;</prompt>
@@ -36,7 +36,7 @@ You go south.
 <component id='room exits'>Obvious paths: <d>north</d>, <d>south</d>, <d>west</d>.<compass></compass></component>
 <component id='room extra'></component>
 <resource picture="0"/><style id="roomName" />[The Crossing, Oralana Ramble]
-<style id=""/><preset id='roomDesc'>The road continues north and south, and merges on the west with Trothfang Street.  In that direction, you see the turquoise- and crimson-tiled dome of the Champions' Arena.  Your proximity to the town wall blocks out any view of the Eastern Tier which lies beyond it.  Lowering your gaze to the path beneath your feet, you notice a spotted beetle wriggle into a chink in the wall and disappear.</preset>  
+<style id=""/><preset id='roomDesc'>The road continues north and south, and merges on the west with Trothfang Street.  In that direction, you see the turquoise- and crimson-tiled dome of the Champions' Arena.  Your proximity to the town wall blocks out any view of the Eastern Tier which lies beyond it.  Lowering your gaze to the path beneath your feet, you notice a spotted beetle wriggle into a chink in the wall and disappear.</preset>
 Obvious paths: <d>north</d>, <d>south</d>, <d>west</d>.
 <compass><dir value="n"/><dir value="s"/><dir value="w"/></compass><component id='room players'></component>
 <prompt time="1751802635">&gt;</prompt>
@@ -50,7 +50,7 @@ You go south.
 <component id='room exits'>Obvious paths: <d>north</d>, <d>southwest</d>.<compass></compass></component>
 <component id='room extra'></component>
 <resource picture="0"/><style id="roomName" />[The Crossing, Oralana Ramble]
-<style id=""/><preset id='roomDesc'>You are traveling just inside the eastern town wall.  Mosses, grasses, and weeds blooming with brilliant wildflowers grow between the road and the wall, climbing right up to the edge of the rampart itself.  The way bends to the southwest, and continues straight north toward the northeastern gate.</preset>  
+<style id=""/><preset id='roomDesc'>You are traveling just inside the eastern town wall.  Mosses, grasses, and weeds blooming with brilliant wildflowers grow between the road and the wall, climbing right up to the edge of the rampart itself.  The way bends to the southwest, and continues straight north toward the northeastern gate.</preset>
 Obvious paths: <d>north</d>, <d>southwest</d>.
 <compass><dir value="n"/><dir value="sw"/></compass><component id='room players'></component>
 <prompt time="1751802636">&gt;</prompt>
@@ -78,7 +78,7 @@ You go south.
 <component id='room exits'>Obvious paths: <d>north</d>, <d>south</d>.<compass></compass></component>
 <component id='room extra'></component>
 <resource picture="0"/><style id="roomName" />[The Crossing, Dafora Row]
-<style id=""/><preset id='roomDesc'>The town wall marking the Eastern Tier continues north-south along here.  A back door with a thick iron padlock is opposite the wall.  You notice that there are marks and scratches around the padlock, as though it had been a target for thieves.</preset>  
+<style id=""/><preset id='roomDesc'>The town wall marking the Eastern Tier continues north-south along here.  A back door with a thick iron padlock is opposite the wall.  You notice that there are marks and scratches around the padlock, as though it had been a target for thieves.</preset>
 Obvious paths: <d>north</d>, <d>south</d>.
 <compass><dir value="n"/><dir value="s"/></compass><component id='room objs'></component>
 <component id='room players'></component>
