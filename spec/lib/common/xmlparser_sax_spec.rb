@@ -90,4 +90,22 @@ RSpec.describe 'Lich::Common::XMLParser Ox SAX interface' do
     expect(xml.prepared_spell.bytes).to eq('Pal'.bytes + [146] + 'din'.bytes)
     expect(xml.prepared_spell.encoding).to eq(Encoding::ASCII_8BIT)
   end
+
+  # Ox synthesizes an end for a stray closing tag (a close with no matching open,
+  # e.g. a desynced </prompt>). tag_start never pushed it, so tag_end must ignore
+  # it rather than popping the wrong tag or running end-handlers spuriously.
+  it 'ignores a stray closing tag whose element was never opened' do
+    xml = Lich::Common::XMLParser.new
+    xml.instance_variable_set(:@last_tag, 'sentinel')
+    parse(xml, '</prompt>')
+    expect(xml.instance_variable_get(:@last_tag)).to eq('sentinel')
+    expect(xml.instance_variable_get(:@active_tags)).to be_empty
+  end
+
+  it 'still processes a properly matched closing tag' do
+    xml = Lich::Common::XMLParser.new
+    parse(xml, '<spell>Fire</spell>')
+    expect(xml.instance_variable_get(:@active_tags)).to be_empty
+    expect(xml.instance_variable_get(:@last_tag)).to eq('spell')
+  end
 end

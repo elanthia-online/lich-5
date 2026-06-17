@@ -943,8 +943,13 @@ module Lich
       end
 
       def tag_end(name)
-        # This is called once per element by REXML in games.rb
-        # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
+        # Called once per element close. Ox synthesizes an end for a stray closing
+        # tag -- a close with no matching open (e.g. a desynced </prompt> whose
+        # <prompt> was in a prior, truncated read). tag_start never pushed it (Ox
+        # fires no attrs_done for a synthetic start), so popping here would remove
+        # the wrong element and the inv/compass end-handlers would fire spuriously.
+        # Ignore any close that does not match the currently-open tag.
+        return unless @active_tags.last == name
 
         begin
           if @game =~ /^DR/
