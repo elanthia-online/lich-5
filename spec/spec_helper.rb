@@ -90,6 +90,17 @@ RSpec.configure do |config|
       end
       g.class_variable_set(:@@right_hand, nil) if g.class_variable_defined?(:@@right_hand)
       g.class_variable_set(:@@left_hand, nil) if g.class_variable_defined?(:@@left_hand)
+
+      # Staged registry refresh buffers (present once lib/common/gameobj.rb is
+      # loaded). nil when idle; reset to nil so a refresh left open by one
+      # example never leaks into the next.
+      %i[@@staging_inv @@staging_reserve @@staging_loot @@staging_npcs
+         @@staging_npc_status @@staging_pcs @@staging_pc_status @@staging_room_desc
+         @@staging_fam_room_desc @@staging_fam_loot @@staging_fam_npcs
+         @@staging_fam_pcs].each do |cv|
+        g.class_variable_set(cv, nil) if g.class_variable_defined?(cv)
+      end
+      g.class_variable_set(:@@staging_contents, {}) if g.class_variable_defined?(:@@staging_contents)
     end
 
     # DR mocks from spec_helper - these have reset! defined in the mock (not production)
@@ -319,6 +330,7 @@ module XMLData
   class << self
     attr_accessor :game, :name, :room_id, :room_title, :room_description, :room_exits, :injury_mode, :stamina, :server_time
     attr_accessor :dr_active_spells, :dr_active_spells_slivers, :dr_active_spells_stellar_percentage
+    attr_accessor :current_target_ids, :current_target_id
 
     def indicator
       { 'IconSTUNNED' => 'n', 'IconDEAD' => 'n', 'IconWEBBED' => false }
@@ -360,11 +372,27 @@ module XMLData
       @dr_active_spells = {}
       @dr_active_spells_slivers = 0
       @dr_active_spells_stellar_percentage = 0
+      @current_target_ids = []
+      @current_target_id = nil
       # Clear any dynamically added attributes (e.g., prepared_spell from arcana specs)
       @prepared_spell = nil if instance_variable_defined?(:@prepared_spell)
     end
   end
 end
+
+# =============================================================================
+# Creature Mock
+# =============================================================================
+# XMLParser registers bold room NPCs whose exist id is a current target via
+# Creature.register. The parser only needs this to be a no-op in tests.
+
+module Creature
+  class << self
+    def register(*_args)
+      nil
+    end
+  end
+end unless defined?(Creature)
 
 # =============================================================================
 # Script Mock
