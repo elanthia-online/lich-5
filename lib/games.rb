@@ -544,6 +544,7 @@ module Lich
         end
 
         def process_xml_data(server_string)
+          fix_invalid_settings_info(server_string)
           begin
             # Ox is a permissive parser: it handles Simu's not-quite-XML stream
             # without the clean/retry dance REXML required (nested quotes, missing
@@ -560,10 +561,12 @@ module Lich
             # Windows-1252 was a divergence and caused entity corruption.
             Ox.sax_parse(XMLData, server_string, convert_special: false, symbolize: false, skip: :skip_none)
             check_stream_desync!(XMLData.sax_parse_errors)
-          rescue => e
-            # GameStreamDesyncError from the check above, or (rarely) Ox itself;
-            # either way log and reset rather than killing the server thread.
-            handle_xml_error(server_string, e)
+          rescue GameStreamDesyncError => e
+            # A truncated/desynced fragment. Ox never raises on malformed stream
+            # content -- it reports via the error callback, and check_stream_desync!
+            # promotes truncation-class errors to this exception. Log and reset
+            # rather than killing the server thread.
+            Lich.log "warning: stream desync (#{e.message}); resetting XMLData: #{server_string.inspect}"
             XMLData.reset
             return
           end
@@ -597,21 +600,23 @@ module Lich
           raise GameStreamDesyncError, desync if desync
         end
 
-        def handle_xml_error(server_string, error)
-          # Ignoring certain XML errors
-          unless error.to_s =~ /invalid byte sequence/
-            # Handle specific XML errors
-            if server_string =~ /<settingsInfo .*?space not found /
-              Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
-              server_string.sub!(/\s\bspace not found\b\s/, " client='1.0.1.28' ")
-              Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
-              @@settings_init_needed = true
-              return process_xml_data(server_string) # Return to retry with fixed string
-            end
+        # The server sends a malformed <settingsInfo ... space not found .../>
+        # (an attribute with no '=') to characters that have never connected with
+        # the Wrayth/StormFront client. REXML raised on it, so the rescue path
+        # repaired it; Ox tolerates it -- it emits "Unexpected Character: no
+        # attribute value" (not in STREAM_DESYNC_ERRORS) and parses the bad tokens
+        # into junk attributes (space="", not="", found="") -- so detect and
+        # repair it here in the normal flow, before the Ox parse. The repair lets
+        # XMLData read a valid settingsInfo, and @@settings_init_needed makes
+        # gameloader's PostLoad seed a valid client record (see
+        # settings_init_needed? and lib/common/gameloader.rb).
+        def fix_invalid_settings_info(server_string)
+          return unless server_string =~ /<settingsInfo .*?space not found /
 
-            Lich.log "Invalid XML detected - please report this: #{server_string.inspect}"
-            Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
-          end
+          Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
+          server_string.sub!(/\s\bspace not found\b\s/, " client='1.0.1.28' ")
+          Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
+          @@settings_init_needed = true
         end
 
         def process_downstream_hooks(server_string)

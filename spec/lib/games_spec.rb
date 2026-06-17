@@ -767,13 +767,13 @@ RSpec.describe 'Lich::GameBase stream desync guard' do
   end
 
   describe 'Game.process_xml_data with a truncated fragment' do
-    it 'routes the desync through handle_xml_error and resets XMLData' do
+    it 'logs the desync and resets XMLData' do
       parser = quiet_parser_class.new
       stub_const('XMLData', parser)
       allow(Lich).to receive(:log)
       allow(parser).to receive(:reset).and_call_original
       Lich::GameBase::Game.process_xml_data(+'<a exist="123" noun="swo')
-      expect(Lich).to have_received(:log).with(/Invalid XML detected/)
+      expect(Lich).to have_received(:log).with(/stream desync/)
       expect(parser).to have_received(:reset)
     end
 
@@ -787,6 +787,33 @@ RSpec.describe 'Lich::GameBase stream desync guard' do
       allow(parser).to receive(:reset).and_call_original
       Lich::GameBase::Game.process_xml_data(+"<prompt time=\"1746000000\">&gt;</prompt>\r\n")
       expect(parser).not_to have_received(:reset)
+    end
+  end
+
+  # Ox tolerates the malformed settingsInfo (see the check_stream_desync! test
+  # above), so the repair + @@settings_init_needed flag -- which REXML reached
+  # via its raise/rescue -- now has to run in the normal flow instead.
+  describe 'Game.fix_invalid_settings_info' do
+    before do
+      # @@settings_init_needed is a production class variable with no reset! hook;
+      # clear it so each example starts from a known state.
+      Lich::GameBase::Game.class_variable_set(:@@settings_init_needed, false)
+    end
+
+    it 'repairs the space-not-found settingsInfo and flags an init re-seed' do
+      server_string = +"<settingsInfo  crc='612586004' instance='GS4' space not found ItemCmds='1' />"
+      allow(Lich).to receive(:log)
+      Lich::GameBase::Game.fix_invalid_settings_info(server_string)
+      expect(server_string).to include("client='1.0.1.28'")
+      expect(server_string).not_to include('space not found')
+      expect(Lich::GameBase::Game.settings_init_needed?).to be true
+    end
+
+    it 'leaves a well-formed settingsInfo untouched and does not flag' do
+      server_string = +"<settingsInfo client='1.0.1.28' crc='0' instance='GS4' />"
+      Lich::GameBase::Game.fix_invalid_settings_info(server_string)
+      expect(server_string).to eq("<settingsInfo client='1.0.1.28' crc='0' instance='GS4' />")
+      expect(Lich::GameBase::Game.settings_init_needed?).to be false
     end
   end
 end
