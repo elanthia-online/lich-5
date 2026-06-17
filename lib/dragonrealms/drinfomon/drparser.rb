@@ -137,7 +137,7 @@ module Lich
           # This block parses a single line from the output of the `inv search <string>` verb,
           # which lists items on your character. Each line is an XML-like string.
           # Example: <d cmd='get #12345'>a small pouch</d>
-          if @@parsing_inventory_get && server_string.strip.start_with?('<d cmd=')
+          if @@parsing_inventory_get && (stripped = server_string.strip).start_with?('<d cmd=')
             # Pull the cmd attribute and item name out of the line's leading <d> element
             # with a SAX handler. The element is captured as it streams in, before any
             # trailing prose (e.g. "... is in your right hand.") -- which is not valid XML
@@ -146,7 +146,7 @@ module Lich
             # convert_special: false matches Game.process_xml_data: Ox never turns a
             # numeric entity into UTF-8. Ox leaves the standard entities literal, so
             # XmlEntities.decode restores them in the item name below.
-            Ox.sax_parse(handler, server_string.strip, convert_special: false, symbolize: false, skip: :skip_none)
+            Ox.sax_parse(handler, stripped, convert_special: false, symbolize: false, skip: :skip_none)
 
             return server_string unless handler.cmd
 
