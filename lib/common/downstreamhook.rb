@@ -10,6 +10,7 @@ module Lich
 
       @@downstream_hooks ||= Hash.new
       @@downstream_hook_sources ||= Hash.new
+      @@downstream_hook_owners ||= Hash.new
 
       # Per-class storage for the shared HookRegistry methods.
       def self._hooks
@@ -18,6 +19,10 @@ module Lich
 
       def self._hook_sources
         @@downstream_hook_sources
+      end
+
+      def self._hook_owners
+        @@downstream_hook_owners
       end
 
       def DownstreamHook.run(server_string)

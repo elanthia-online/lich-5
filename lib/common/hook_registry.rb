@@ -8,10 +8,12 @@ module Lich
     # and a fix (e.g. to source tracking) lands in one place.
     #
     # An including class is +extend+ed with these as class methods and supplies
-    # its own storage via +_hooks+ and +_hook_sources+, keeping its own +run+.
+    # its own storage via +_hooks+, +_hook_sources+ and +_hook_owners+, keeping
+    # its own +run+.
     module HookRegistry
       # Registers +action+ under +name+, recording the current script's name as
-      # the source (used by {#sources} for display).
+      # the source (used by {#sources} for display) and its object_id as the
+      # owner (used by {#remove_by_owner} for cleanup on script death).
       #
       # @param name   [String]
       # @param action [Proc]
@@ -22,24 +24,29 @@ module Lich
           return false
         end
         _hook_sources[name] = (Script.current.name || "Unknown")
+        _hook_owners[name]  = Script.current.object_id
         _hooks[name] = action
       end
 
-      # Removes the hook registered under +name+ from both maps.
+      # Removes the hook registered under +name+ from every map.
       #
       # @param name [String]
       # @return [Proc, nil] the removed proc, if any
       def remove(name)
         _hook_sources.delete(name)
+        _hook_owners.delete(name)
         _hooks.delete(name)
       end
 
-      # Removes every hook whose recorded source equals +source+.
+      # Removes every hook owned by the given script, identified by its
+      # object_id rather than its name. Two scripts started with +force: true+
+      # can share a name, so name-based removal would tear out a still-running
+      # sibling's hooks; object_id is unique per instance.
       #
-      # @param source [String] the originating script name (Script#name)
+      # @param owner_id [Integer] the owning script's +object_id+
       # @return [Integer] the number of hooks removed
-      def remove_by_source(source)
-        names = _hook_sources.select { |_name, src| src == source }.keys
+      def remove_by_owner(owner_id)
+        names = _hook_owners.select { |_name, owner| owner == owner_id }.keys
         names.each { |name| remove(name) }
         names.size
       end

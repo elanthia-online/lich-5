@@ -823,11 +823,12 @@ module Lich
               # Backstop: drop any down/upstream hooks this script registered but
               # did not remove itself. An orphaned hook proc lives in the global
               # registry and captures the script's binding, pinning the entire
-              # dead script so it can never be garbage collected. Removal is
-              # idempotent, so this is a no-op for scripts that cleaned up in a
-              # before_dying block.
-              DownstreamHook.remove_by_source(@name)
-              UpstreamHook.remove_by_source(@name)
+              # dead script so it can never be garbage collected. Removal is by
+              # this instance's object_id (not name), so a sibling started with
+              # force: true that shares our name keeps its own hooks. Idempotent
+              # - a no-op for scripts that cleaned up in a before_dying block.
+              DownstreamHook.remove_by_owner(object_id)
+              UpstreamHook.remove_by_owner(object_id)
               # Release per-script watchfor procs (and the bindings they
               # capture). The script is removed from @@running below, so they can
               # never fire again; cleared to {} rather than nil so a concurrent

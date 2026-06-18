@@ -36,8 +36,10 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
     # example never affects another (these are class-level state).
     Lich::Common::DownstreamHook.class_variable_set(:@@downstream_hooks, {})
     Lich::Common::DownstreamHook.class_variable_set(:@@downstream_hook_sources, {})
+    Lich::Common::DownstreamHook.class_variable_set(:@@downstream_hook_owners, {})
     Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hooks, {})
     Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hook_sources, {})
+    Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hook_owners, {})
     allow(Lich).to receive(:log)
     allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(false)
     allow(Thread).to receive(:new) { |&block| block.call; instance_double(Thread) }
@@ -59,17 +61,21 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       expect(GC).not_to have_received(:start)
     end
 
-    it 'removes hooks registered by the dying script and clears its watchfor' do
+    it 'removes hooks owned by the dying script and clears its watchfor' do
+      script = build_script(name: 'hooky')
+      other_owner = Object.new.object_id # a different live script instance
+
+      # Two hooks named 'hooky' as the source but owned by different instances:
+      # only the ones owned by the dying script must be removed.
       Lich::Common::DownstreamHook.class_variable_set(
         :@@downstream_hooks, { 'hooky-down' => proc { |s| s }, 'keep' => proc { |s| s } }
       )
       Lich::Common::DownstreamHook.class_variable_set(
-        :@@downstream_hook_sources, { 'hooky-down' => 'hooky', 'keep' => 'other' }
+        :@@downstream_hook_owners, { 'hooky-down' => script.object_id, 'keep' => other_owner }
       )
       Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hooks, { 'hooky-up' => proc { |s| s } })
-      Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hook_sources, { 'hooky-up' => 'hooky' })
+      Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hook_owners, { 'hooky-up' => script.object_id })
 
-      script = build_script(name: 'hooky')
       script.instance_variable_set(:@watchfor, { /trigger/ => proc {} })
       script.instance_variable_set(:@downstream_buffer, ['pending'])
       script.instance_variable_set(:@upstream_buffer, ['pending'])
@@ -77,7 +83,7 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
 
       script.kill
 
-      # The dying script's hooks are gone; a hook from another source survives.
+      # The dying script's hooks are gone; a hook owned by another instance survives.
       expect(Lich::Common::DownstreamHook.list).to contain_exactly('keep')
       expect(Lich::Common::UpstreamHook.list).to be_empty
       expect(script.watchfor).to be_empty
