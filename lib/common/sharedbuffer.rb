@@ -86,7 +86,9 @@ module Lich
 
       # rubocop:disable Lint/HashCompareByIdentity
       def rewind
-        @buffer_index[Thread.current.object_id] = @buffer_offset
+        # Hold the mutex: a first-call rewind adds a new key, which must not
+        # race a concurrent cleanup_threads delete_if.
+        @buffer_mutex.synchronize { @buffer_index[Thread.current.object_id] = @buffer_offset }
         return self
       end
 

@@ -78,8 +78,13 @@ module Lich
 
       def Buffer.rewind
         thread_id = Thread.current.object_id
-        @@index[thread_id] = @@offset
-        @@streams[thread_id] ||= DOWNSTREAM_STRIPPED
+        # Hold the mutex: for a thread whose first Buffer call is rewind this
+        # adds new keys, which must not race a concurrent cleanup delete_if
+        # (Ruby raises on a key added during iteration).
+        @@mutex.synchronize {
+          @@index[thread_id] = @@offset
+          @@streams[thread_id] ||= DOWNSTREAM_STRIPPED
+        }
         return self
       end
 
