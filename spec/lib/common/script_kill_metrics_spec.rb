@@ -71,6 +71,8 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
 
       script = build_script(name: 'hooky')
       script.instance_variable_set(:@watchfor, { /trigger/ => proc {} })
+      script.instance_variable_set(:@downstream_buffer, ['pending'])
+      script.instance_variable_set(:@upstream_buffer, ['pending'])
       script_class.class_variable_set(:@@running, [script])
 
       script.kill
@@ -79,6 +81,10 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       expect(Lich::Common::DownstreamHook.list).to contain_exactly('keep')
       expect(Lich::Common::UpstreamHook.list).to be_empty
       expect(script.watchfor).to be_empty
+      # Stream buffers are reset to empty arrays (not nil) so a concurrent
+      # new_downstream/new_upstream push cannot raise NoMethodError.
+      expect(script.downstream_buffer).to eq([])
+      expect(script.upstream_buffer).to eq([])
     end
 
     it 'falls back to inline cleanup when Ruby cannot allocate a cleanup thread' do

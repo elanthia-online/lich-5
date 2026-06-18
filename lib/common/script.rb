@@ -833,7 +833,15 @@ module Lich
               # never fire again; cleared to {} rather than nil so a concurrent
               # new_downstream sweep still sees a safe, empty collection.
               @watchfor = {}
-              @die_with = @at_exit_procs = @downstream_buffer = @upstream_buffer = @match_stack_labels = @match_stack_strings = nil
+              # Same reasoning for the stream buffers: Script.new_downstream,
+              # new_downstream_xml and new_upstream run on the parser thread and
+              # push to these without a nil guard, and can fire in the window
+              # before the @@running.delete below. Reset to fresh empty arrays
+              # ("no pending lines") rather than nil so a concurrent push cannot
+              # raise NoMethodError. Distinct arrays - never the same object.
+              @downstream_buffer = []
+              @upstream_buffer = []
+              @die_with = @at_exit_procs = @match_stack_labels = @match_stack_strings = nil
               @@running.delete(self)
               unless @quiet
                 if @killed_externally
