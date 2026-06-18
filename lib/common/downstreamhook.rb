@@ -1,19 +1,23 @@
 # Carve out from lich.rbw
 # class DownstreamHook 2024-06-13
 
+require_relative 'hook_registry'
+
 module Lich
   module Common
     class DownstreamHook
+      extend HookRegistry
+
       @@downstream_hooks ||= Hash.new
       @@downstream_hook_sources ||= Hash.new
 
-      def DownstreamHook.add(name, action)
-        unless action.is_a?(Proc)
-          echo "DownstreamHook: not a Proc (#{action})"
-          return false
-        end
-        @@downstream_hook_sources[name] = (Script.current.name || "Unknown")
-        @@downstream_hooks[name] = action
+      # Per-class storage for the shared HookRegistry methods.
+      def self._hooks
+        @@downstream_hooks
+      end
+
+      def self._hook_sources
+        @@downstream_hook_sources
       end
 
       def DownstreamHook.run(server_string)
@@ -28,41 +32,6 @@ module Lich
           end
         end
         return server_string
-      end
-
-      def DownstreamHook.remove(name)
-        @@downstream_hook_sources.delete(name)
-        @@downstream_hooks.delete(name)
-      end
-
-      # Removes every hook registered by the named script. Called from the
-      # script kill path so a script that exits without removing its own hooks
-      # does not leak them. Each hook proc lives in this global registry and
-      # captures the registering script's binding, so an orphaned hook keeps the
-      # entire dead script reachable and unreclaimable. Idempotent - a no-op for
-      # scripts that already removed their hooks in a before_dying block.
-      #
-      # @param source [String] the originating script name (Script#name)
-      # @return [Integer] the number of hooks removed
-      def DownstreamHook.remove_by_source(source)
-        names = @@downstream_hook_sources.select { |_name, src| src == source }.keys
-        names.each { |name| remove(name) }
-        names.size
-      end
-
-      def DownstreamHook.list
-        @@downstream_hooks.keys.dup
-      end
-
-      def DownstreamHook.sources
-        info_table = Terminal::Table.new :headings => ['Hook', 'Source'],
-                                         :rows     => @@downstream_hook_sources.to_a,
-                                         :style    => { :all_separators => true }
-        Lich::Messaging.mono(info_table.to_s)
-      end
-
-      def DownstreamHook.hook_sources
-        @@downstream_hook_sources
       end
     end
   end
