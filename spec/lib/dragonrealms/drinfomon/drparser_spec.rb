@@ -67,6 +67,36 @@ RSpec.describe Lich::DragonRealms::DRParser do
     # NOTE: class_variable_set used because DRParser is a production module with no reset! method
     described_class.class_variable_set(:@@parsing_exp_mods_output, false)
     described_class.class_variable_set(:@@parsing_inventory_get, false)
+    described_class.class_variable_set(:@@shutdown_at, nil)
+  end
+
+  describe 'game shutdown tracking' do
+    it 'reports no shutdown initially' do
+      expect(described_class.shutting_down?).to be false
+      expect(described_class.shutdown_minutes).to be_nil
+    end
+
+    it 'records a pending shutdown from a notice line' do
+      described_class.check_game_shutdown('DragonRealms will be shutting down in 15 minutes for routine maintenance.')
+      expect(described_class.shutting_down?).to be true
+      expect(described_class.shutdown_minutes).to eq(15)
+    end
+
+    it 'recomputes the estimate as the warnings count down' do
+      described_class.check_game_shutdown('DragonRealms will be shutting down in 15 minutes for routine maintenance.')
+      described_class.check_game_shutdown('DragonRealms will be shutting down in 1 minute for routine maintenance.')
+      expect(described_class.shutdown_minutes).to eq(1)
+    end
+
+    it 'ignores lines that are not shutdown notices' do
+      described_class.check_game_shutdown('You glance around the room.')
+      expect(described_class.shutting_down?).to be false
+    end
+
+    it 'never reports negative minutes once the target time passes' do
+      described_class.class_variable_set(:@@shutdown_at, Time.now - 120)
+      expect(described_class.shutdown_minutes).to eq(0)
+    end
   end
 
   describe 'Pattern constants' do
@@ -106,6 +136,38 @@ RSpec.describe Lich::DragonRealms::DRParser do
         match = line.match(described_class::Pattern::RoomPlayers)
         expect(match).not_to be_nil
         expect(match[:players]).to eq('Mahtra and Quilsilgas')
+      end
+    end
+
+    describe 'GameShutdown' do
+      # Real announcement lines captured from a routine maintenance shutdown.
+      {
+        15 => 'DragonRealms will be shutting down in 15 minutes for routine maintenance.  Please be sure to gather your things and be prepared to exit the game at that time.',
+        10 => 'DragonRealms will be shutting down in 10 minutes for routine maintenance.  Please be sure to gather your things and be prepared to exit the game at that time.',
+        5  => 'DragonRealms will be shutting down in 5 minutes for routine maintenance.  Please gather your things and exit the game as soon as possible.',
+        2  => 'DragonRealms will be shutting down in 2 minutes for routine maintenance.  Please gather your things and exit the game as soon as possible.',
+        1  => 'DragonRealms will be shutting down in 1 minute for routine maintenance.  Please gather your things and exit the game as soon as possible.'
+      }.each do |minutes, line|
+        it "captures #{minutes} from the #{minutes}-minute notice" do
+          match = line.match(described_class::Pattern::GameShutdown)
+          expect(match).not_to be_nil
+          expect(match[:minutes].to_i).to eq(minutes)
+        end
+      end
+
+      it 'matches even with an Announcement prefix' do
+        line = 'Announcement: DragonRealms will be shutting down in 1 minute for routine maintenance.'
+        match = line.match(described_class::Pattern::GameShutdown)
+        expect(match[:minutes].to_i).to eq(1)
+      end
+
+      it 'does not match unrelated lines' do
+        expect('You glance around the room.'.match(described_class::Pattern::GameShutdown)).to be_nil
+      end
+
+      it 'does not match the phrase quoted mid-line (chat/speech)' do
+        line = 'Someone says, "DragonRealms will be shutting down in 5 minutes, lol."'
+        expect(line.match(described_class::Pattern::GameShutdown)).to be_nil
       end
     end
 
