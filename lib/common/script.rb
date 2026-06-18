@@ -7,6 +7,8 @@
 # also, don't put 'untrusted' in the name of the untrusted binding; it shows up in error messages and makes people think the error is caused by not trusting the script
 #
 
+require_relative 'script_death'
+
 module Lich
   module Common
     # module Gemstone
@@ -820,15 +822,15 @@ module Lich
               @die_with.each { |script_name| Script.kill(script_name) }
               @paused = false
               @at_exit_procs.each { |p| report_errors { p.call } }
-              # Backstop: drop any down/upstream hooks this script registered but
-              # did not remove itself. An orphaned hook proc lives in the global
+              # Backstop: let each per-script-state subsystem (the hook
+              # registries, etc.) drop anything this script registered but did
+              # not remove itself. An orphaned hook proc lives in a global
               # registry and captures the script's binding, pinning the entire
-              # dead script so it can never be garbage collected. Removal is by
-              # this instance's object_id (not name), so a sibling started with
-              # force: true that shares our name keeps its own hooks. Idempotent
-              # - a no-op for scripts that cleaned up in a before_dying block.
-              DownstreamHook.remove_by_owner(object_id)
-              UpstreamHook.remove_by_owner(object_id)
+              # dead script so it can never be garbage collected. Subsystems
+              # register their own cleanup with ScriptDeath, so kill does not
+              # need to name them; cleanup keys on this instance (not its name),
+              # so a force: true sibling sharing our name keeps its own state.
+              ScriptDeath.run(self)
               # Release per-script watchfor procs (and the bindings they
               # capture). The script is removed from @@running below, so they can
               # never fire again; cleared to {} rather than nil so a concurrent

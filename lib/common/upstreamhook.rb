@@ -2,6 +2,7 @@
 # UpstreamHook class 2024-06-13
 
 require_relative 'hook_registry'
+require_relative 'script_death'
 
 module Lich
   module Common
@@ -38,6 +39,10 @@ module Lich
         end
         return client_string
       end
+
+      # Drop this registry's hooks when their owning script dies, so the kill
+      # path does not need to know about UpstreamHook by name.
+      ScriptDeath.on_death { |script| remove_by_owner(script.object_id) }
     end
   end
 end
