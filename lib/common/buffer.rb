@@ -2,6 +2,8 @@
 # 2024-06-13
 # has rubocop error Lint/HashCompareByIdentity - cop disabled until reviewed
 
+require_relative 'throttle'
+
 module Lich
   module Common
     module Buffer
@@ -20,9 +22,8 @@ module Lich
       # @@index / @@streams are keyed by Thread#object_id and were never pruned,
       # so every thread that ever read the buffer leaked an entry that outlived
       # it. maybe_cleanup sweeps dead-thread entries from the registration path,
-      # at most once per CLEANUP_INTERVAL seconds.
-      CLEANUP_INTERVAL    = 60.0
-      @@last_cleanup_at   = 0.0
+      # at most once every 60s via this throttle.
+      @@cleanup_throttle  = Throttle.new(60.0)
       def Buffer.gets
         thread_id = Thread.current.object_id
         if @@index[thread_id].nil?
@@ -164,11 +165,7 @@ module Lich
       # be called outside @@mutex (cleanup acquires it; Ruby mutexes are not
       # reentrant).
       def Buffer.maybe_cleanup
-        now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        return if (now - @@last_cleanup_at) < CLEANUP_INTERVAL
-
-        @@last_cleanup_at = now
-        cleanup
+        @@cleanup_throttle.run { cleanup }
       end
       private_class_method :maybe_cleanup
     end

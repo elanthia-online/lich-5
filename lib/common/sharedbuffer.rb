@@ -2,14 +2,12 @@
 # 2024-06-13
 # has rubocop Lint/HashCompareByIdentity errors that require research - temporarily disabled
 
+require_relative 'throttle'
+
 module Lich
   module Common
     class SharedBuffer
       attr_accessor :max_size
-
-      # Seconds between automatic sweeps of dead-thread entries from
-      # @buffer_index (keyed by Thread#object_id, previously never pruned).
-      CLEANUP_INTERVAL = 60.0
 
       def initialize(args = {})
         @buffer = Array.new
@@ -17,7 +15,9 @@ module Lich
         @buffer_index = Hash.new
         @buffer_mutex = Mutex.new
         @max_size = args[:max_size] || 500
-        @last_cleanup_at = 0.0
+        # Sweeps dead-thread entries from @buffer_index (keyed by
+        # Thread#object_id, previously never pruned) at most once every 60s.
+        @cleanup_throttle = Throttle.new(60.0)
         # return self # rubocop does not like this - Lint/ReturnInVoidContext
       end
 
@@ -123,11 +123,7 @@ module Lich
       # long session. Must be called outside @buffer_mutex (cleanup_threads
       # acquires it; Ruby mutexes are not reentrant).
       def maybe_cleanup_threads
-        now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        return if (now - @last_cleanup_at) < CLEANUP_INTERVAL
-
-        @last_cleanup_at = now
-        cleanup_threads
+        @cleanup_throttle.run { cleanup_threads }
       end
       private :maybe_cleanup_threads
     end

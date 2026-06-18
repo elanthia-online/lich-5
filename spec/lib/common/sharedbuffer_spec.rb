@@ -8,7 +8,8 @@ require_relative '../../../lib/common/sharedbuffer'
 RSpec.describe Lich::Common::SharedBuffer do
   subject(:buffer) { described_class.new }
 
-  let(:index) { buffer.instance_variable_get(:@buffer_index) }
+  let(:index)    { buffer.instance_variable_get(:@buffer_index) }
+  let(:throttle) { buffer.instance_variable_get(:@cleanup_throttle) }
 
   # Registers each id in @buffer_index by reading from a thread that then dies.
   def register_dead_threads(count)
@@ -34,11 +35,11 @@ RSpec.describe Lich::Common::SharedBuffer do
 
   describe 'automatic cleanup on registration' do
     it 'sweeps dead-thread entries once the interval has elapsed' do
-      buffer.instance_variable_set(:@last_cleanup_at, Process.clock_gettime(Process::CLOCK_MONOTONIC))
+      throttle.last_run_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       register_dead_threads(3)
       expect(index.size).to eq(3)
 
-      buffer.instance_variable_set(:@last_cleanup_at, 0.0)
+      throttle.last_run_at = 0.0
       buffer.gets?
 
       expect(index.keys).to contain_exactly(Thread.current.object_id)
