@@ -114,9 +114,11 @@ File.write(churn_lic, <<~'LIC')
   # throwaway churn script: registers a downstream hook + a watchfor that the
   # current script-death path does not clean up, then exits. Exercises the
   # hook registry, per-script @watchfor, and thread-id-keyed buffer indices.
-  DownstreamHook.add("memchurn-#{Time.now.to_f}", proc { |server_string| server_string })
+  # Register a downstream hook + a watchfor, then fall off the end so the
+  # script dies and runs its kill cleanup. Pre-fix these leaked into the global
+  # hook registry / per-script watchfor; post-fix the kill path removes them.
+  DownstreamHook.add("memchurn-#{Time.now.to_f}-#{rand(1_000_000)}", proc { |server_string| server_string })
   Lich::Common::Watchfor.new(/this pattern never matches anything zzzz/) { nil }
-  Lich::Common::Buffer.gets rescue nil
 LIC
 
 started = 0
