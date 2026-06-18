@@ -703,6 +703,27 @@ RSpec.describe Lich::Common::GameObj do
       expect(index[key].first).to equal(keeper)
     end
 
+    it 'prunes a stale variant even when a different-name entry shares its id' do
+      described_class.auto_prune_threshold = 10
+      described_class.auto_prune_interval = 0
+      described_class.auto_prune_ttl = 0
+
+      # The same exist-id is seen first under one name (then cleared, so it goes
+      # stale) and again under a different name that stays live. The live guard
+      # keys on object identity, not id, so the stale variant - a distinct
+      # instance held in no registry - must still be evicted even though a live
+      # sibling shares its id. (An id-based guard would wrongly keep it.)
+      described_class.new_npc('555', 'kobold', 'a kobold')
+      described_class.clear_npcs # 'a kobold' entry is now stale, not live
+      live = described_class.new_npc('555', 'kobold', 'a snarling kobold')
+
+      # Churn past the threshold so a sweep trips.
+      200.times { |i| described_class.new_npc((600_000 + i).to_s, 'rat', "rat #{i}") }
+
+      expect(index).not_to have_key('555|kobold|a kobold') # stale variant evicted
+      expect(index['555|kobold|a snarling kobold'].first).to equal(live) # live sibling kept
+    end
+
     it 'respects the time-throttle between attempts' do
       described_class.auto_prune_threshold = 10
       described_class.auto_prune_interval = 10_000 # effectively never re-fires
