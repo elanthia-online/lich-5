@@ -629,4 +629,108 @@ RSpec.describe Lich::Common::GameObj do
       end
     end
   end
+
+  describe 'automatic index pruning' do
+    let(:index) { described_class.class_variable_get(:@@index) }
+
+    before do
+      # The outer before seeds two hand objects into the index; start from a
+      # clean, empty index so entry counts in these examples are exact.
+      index.clear
+      described_class.class_variable_set(:@@right_hand, nil)
+      described_class.class_variable_set(:@@left_hand, nil)
+    end
+
+    after do
+      # Restore production defaults so mutated class state never leaks between
+      # examples (tests run under --order random).
+      described_class.auto_prune = true
+      described_class.auto_prune_threshold = 3000
+      described_class.auto_prune_interval = 60.0
+      described_class.auto_prune_ttl = 900
+      described_class.class_variable_set(:@@last_auto_prune_at, 0.0)
+    end
+
+    it 'exposes round-tripping accessors' do
+      described_class.auto_prune = false
+      described_class.auto_prune_threshold = 42
+      described_class.auto_prune_interval = 5
+      described_class.auto_prune_ttl = 10
+
+      expect(described_class.auto_prune?).to be false
+      expect(described_class.auto_prune_threshold).to eq(42)
+      expect(described_class.auto_prune_interval).to eq(5.0)
+      expect(described_class.auto_prune_ttl).to eq(10)
+    end
+
+    it 'does not run until the index exceeds the threshold' do
+      described_class.auto_prune_threshold = 100
+      described_class.auto_prune_interval = 0
+      described_class.auto_prune_ttl = 0
+
+      50.times { |i| described_class.new_npc((800_000 + i).to_s, 'wraith', "wraith #{i}") }
+      described_class.clear_npcs # make them stale (not live), but still under threshold
+
+      expect(index.size).to eq(50) # below threshold -> never swept
+    end
+
+    it 'prunes stale, non-live entries once threshold and interval pass' do
+      described_class.auto_prune_threshold = 100
+      described_class.auto_prune_interval = 0
+      described_class.auto_prune_ttl = 0
+
+      150.times { |i| described_class.new_npc((800_000 + i).to_s, 'wraith', "wraith #{i}") }
+      described_class.clear_npcs # 150 stale entries left in the index
+
+      # Inserting past the threshold again trips the sweep; the cleared wraiths
+      # are stale and evicted, the fresh ghosts (live in @@npcs) are kept.
+      120.times { |i| described_class.new_npc((900_000 + i).to_s, 'ghost', "ghost #{i}") }
+
+      expect(index.size).to eq(120)
+    end
+
+    it 'never prunes an entry that is still live in a registry' do
+      described_class.auto_prune_threshold = 10
+      described_class.auto_prune_interval = 0
+      described_class.auto_prune_ttl = 0
+
+      keeper = described_class.new_npc('123456', 'guardian', 'a stone guardian')
+      # Churn many inserts while the guardian remains in @@npcs.
+      200.times { |i| described_class.new_npc((700_000 + i).to_s, 'rat', "rat #{i}") }
+
+      key = '123456|guardian|a stone guardian'
+      expect(index.key?(key)).to be true
+      expect(index[key].first).to equal(keeper)
+    end
+
+    it 'respects the time-throttle between attempts' do
+      described_class.auto_prune_threshold = 10
+      described_class.auto_prune_interval = 10_000 # effectively never re-fires
+      described_class.auto_prune_ttl = 0
+
+      # First batch crosses the threshold: one sweep runs (all live, nothing
+      # removed) and stamps @@last_auto_prune_at.
+      20.times { |i| described_class.new_npc((800_000 + i).to_s, 'wraith', "wraith #{i}") }
+      described_class.clear_npcs # 20 stale entries
+
+      # A further insert is inside the throttle window, so no sweep happens and
+      # the stale entries survive.
+      described_class.new_npc('999999', 'imp', 'a cackling imp')
+
+      expect(index.size).to eq(21)
+    end
+
+    it 'can be disabled to restore manual-only behaviour' do
+      described_class.auto_prune = false
+      described_class.auto_prune_threshold = 10
+      described_class.auto_prune_interval = 0
+      described_class.auto_prune_ttl = 0
+
+      50.times { |i| described_class.new_npc((800_000 + i).to_s, 'wraith', "wraith #{i}") }
+      described_class.clear_npcs
+      50.times { |i| described_class.new_npc((900_000 + i).to_s, 'ghost', "ghost #{i}") }
+
+      expect(index.size).to eq(100) # nothing pruned with auto-prune off
+    end
+  end
 end

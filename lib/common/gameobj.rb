@@ -75,6 +75,33 @@ module Lich
       @@index = {}
 
       # ---------------------------------------------------------------------------
+      # Automatic index pruning
+      #
+      # +prune_index!+ has always existed but had to be called by hand, so in
+      # practice the index grew unbounded across a long session. These settings
+      # drive a throttled prune that runs *automatically* from the index insert
+      # path, so no script intervention is required.
+      #
+      # The trigger is intentionally cheap: on each *new* insert we prune only
+      # when the index has grown past +@@auto_prune_threshold+ entries AND at
+      # least +@@auto_prune_interval+ seconds have elapsed since the last
+      # attempt. The sweep itself reuses the same live-registry guard as
+      # +prune_index!+, so an object still held in any registry is never evicted
+      # regardless of age. Entries last seen within +@@auto_prune_ttl+ seconds
+      # are also kept; only genuinely stale entries are removed.
+      #
+      # Tune via +GameObj.auto_prune=+, +.auto_prune_threshold=+,
+      # +.auto_prune_interval=+, and +.auto_prune_ttl=+. Set +auto_prune = false+
+      # to restore the old manual-only behaviour.
+      # ---------------------------------------------------------------------------
+
+      @@auto_prune           = true
+      @@auto_prune_threshold = 3000  # only consider pruning once this many entries accumulate
+      @@auto_prune_interval  = 60.0  # seconds; minimum gap between auto-prune attempts
+      @@auto_prune_ttl       = 900   # seconds; stale-entry age threshold (matches prune_index! default)
+      @@last_auto_prune_at   = 0.0   # monotonic timestamp of the last auto-prune attempt
+
+      # ---------------------------------------------------------------------------
       # Instance interface
       # ---------------------------------------------------------------------------
 
@@ -403,6 +430,7 @@ module Lich
 
         obj          = GameObj.new(id, noun, name, before, after)
         @@index[key] = [obj, now]
+        maybe_auto_prune
         obj
       end
 
@@ -597,6 +625,51 @@ module Lich
       # Index lifecycle - pruning & diagnostics
       # ---------------------------------------------------------------------------
 
+      # @return [Boolean] whether the index is pruned automatically on insert
+      def self.auto_prune?
+        @@auto_prune
+      end
+
+      # Enables or disables automatic index pruning.
+      # @param value [Boolean]
+      # @return [Boolean]
+      def self.auto_prune=(value)
+        @@auto_prune = value
+      end
+
+      # @return [Integer] entry count below which auto-prune never runs
+      def self.auto_prune_threshold
+        @@auto_prune_threshold
+      end
+
+      # @param value [Integer]
+      # @return [Integer]
+      def self.auto_prune_threshold=(value)
+        @@auto_prune_threshold = value
+      end
+
+      # @return [Float] minimum seconds between auto-prune attempts
+      def self.auto_prune_interval
+        @@auto_prune_interval
+      end
+
+      # @param value [Numeric]
+      # @return [Float]
+      def self.auto_prune_interval=(value)
+        @@auto_prune_interval = value.to_f
+      end
+
+      # @return [Integer] stale-entry age threshold (seconds) used by auto-prune
+      def self.auto_prune_ttl
+        @@auto_prune_ttl
+      end
+
+      # @param value [Integer]
+      # @return [Integer]
+      def self.auto_prune_ttl=(value)
+        @@auto_prune_ttl = value
+      end
+
       # Removes entries from the shared identity index whose +last_seen_at+
       # timestamp is older than +ttl+ seconds ago **and** whose object is not
       # currently present in any active registry, then GC-hints Ruby.
@@ -652,28 +725,10 @@ module Lich
         t_start   = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         cutoff    = t_start - ttl
 
-        # Build the live-ID set once before the sweep so we do not repeatedly
-        # iterate all registries inside the delete_if block.
-        live_ids = live_registry_ids
-
         obj_before  = gameobj_memory_bytes
         heap_before = ruby_heap_bytes
 
-        pruned       = 0
-        skipped_live = 0
-
-        @@index.delete_if do |_key, (obj, last_seen)|
-          if live_ids.include?(obj.id)
-            # Object is currently held in a registry - never prune regardless of age.
-            skipped_live += 1
-            false
-          elsif last_seen < cutoff
-            pruned += 1
-            true
-          else
-            false
-          end
-        end
+        pruned, skipped_live = sweep_stale!(cutoff)
 
         GC.start(full_mark: false, immediate_sweep: false) if pruned.positive?
 
@@ -1024,7 +1079,63 @@ module Lich
           obj          = GameObj.new(id, noun, name, before, after)
           @@index[key] = [obj, now]
           registry.push(obj)
+          maybe_auto_prune
           obj
+        end
+
+        # Throttled automatic prune, invoked from the index insert paths so the
+        # shared identity index does not grow without bound over a long session.
+        #
+        # Deliberately cheap on the common path: returns immediately unless
+        # auto-prune is enabled, the index has exceeded +@@auto_prune_threshold+
+        # entries, and at least +@@auto_prune_interval+ seconds have elapsed
+        # since the last attempt. Only then does it run the (O(n)) stale sweep.
+        # The attempt timestamp is updated even when nothing is removed, so a
+        # young index that is over threshold is not swept on every insert.
+        #
+        # @return [Integer, nil] entries pruned, or nil when the trigger is skipped
+        def maybe_auto_prune
+          return unless @@auto_prune
+          return if @@index.size < @@auto_prune_threshold
+
+          now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          return if (now - @@last_auto_prune_at) < @@auto_prune_interval
+
+          @@last_auto_prune_at = now
+          pruned, = sweep_stale!(now - @@auto_prune_ttl)
+          GC.start(full_mark: false, immediate_sweep: false) if pruned.positive?
+          pruned
+        end
+
+        # Removes index entries that are both stale (last seen before +cutoff+)
+        # and not currently held in any registry, leaving live and recently-seen
+        # entries intact. Shared by +prune_index!+ and +maybe_auto_prune+ so the
+        # live-registry guard lives in exactly one place.
+        #
+        # @param cutoff [Float] monotonic timestamp; entries last seen before
+        #   this are eligible for eviction
+        # @return [Array(Integer, Integer)] +[pruned, skipped_live]+ counts
+        def sweep_stale!(cutoff)
+          # Build the live-ID set once before the sweep so we do not repeatedly
+          # iterate all registries inside the delete_if block.
+          live_ids     = live_registry_ids
+          pruned       = 0
+          skipped_live = 0
+
+          @@index.delete_if do |_key, (obj, last_seen)|
+            if live_ids.include?(obj.id)
+              # Object is currently held in a registry - never prune regardless of age.
+              skipped_live += 1
+              false
+            elsif last_seen < cutoff
+              pruned += 1
+              true
+            else
+              false
+            end
+          end
+
+          [pruned, skipped_live]
         end
 
         # Returns a Set (or Array if Set is unavailable) of all object IDs
