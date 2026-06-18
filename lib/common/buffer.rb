@@ -17,6 +17,12 @@ module Lich
       @@offset            = 0
       @@buffer            = Array.new
       @@max_size          = 3000
+      # @@index / @@streams are keyed by Thread#object_id and were never pruned,
+      # so every thread that ever read the buffer leaked an entry that outlived
+      # it. maybe_cleanup sweeps dead-thread entries from the registration path,
+      # at most once per CLEANUP_INTERVAL seconds.
+      CLEANUP_INTERVAL    = 60.0
+      @@last_cleanup_at   = 0.0
       def Buffer.gets
         thread_id = Thread.current.object_id
         if @@index[thread_id].nil?
@@ -24,6 +30,7 @@ module Lich
             @@index[thread_id] = (@@offset + @@buffer.length)
             @@streams[thread_id] ||= DOWNSTREAM_STRIPPED
           }
+          maybe_cleanup
         end
         line = nil
         loop {
@@ -49,6 +56,7 @@ module Lich
             @@index[thread_id] = (@@offset + @@buffer.length)
             @@streams[thread_id] ||= DOWNSTREAM_STRIPPED
           }
+          maybe_cleanup
         end
         line = nil
         loop {
@@ -82,6 +90,7 @@ module Lich
             @@index[thread_id] = (@@offset + @@buffer.length)
             @@streams[thread_id] ||= DOWNSTREAM_STRIPPED
           }
+          maybe_cleanup
         end
         lines = Array.new
         loop {
@@ -132,11 +141,31 @@ module Lich
       end
 
       # rubocop:enable Lint/HashCompareByIdentity
+      # Removes @@index / @@streams entries whose thread is no longer alive.
+      # Snapshots the live thread ids once rather than recomputing them per
+      # entry, and holds the mutex so it cannot race with a concurrent reader
+      # mutating the same hashes.
       def Buffer.cleanup
-        @@index.delete_if { |k, _v| not Thread.list.any? { |t| t.object_id == k } }
-        @@streams.delete_if { |k, _v| not Thread.list.any? { |t| t.object_id == k } }
+        @@mutex.synchronize {
+          live_ids = Thread.list.map(&:object_id)
+          @@index.delete_if { |k, _v| !live_ids.include?(k) }
+          @@streams.delete_if { |k, _v| !live_ids.include?(k) }
+        }
         return self
       end
+
+      # Throttled automatic {Buffer.cleanup}, invoked from the thread-registration
+      # path so dead-thread entries do not accumulate over a long session. Must
+      # be called outside @@mutex (cleanup acquires it; Ruby mutexes are not
+      # reentrant).
+      def Buffer.maybe_cleanup
+        now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        return if (now - @@last_cleanup_at) < CLEANUP_INTERVAL
+
+        @@last_cleanup_at = now
+        cleanup
+      end
+      private_class_method :maybe_cleanup
     end
   end
 end
