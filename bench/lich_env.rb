@@ -48,7 +48,10 @@ module Bench
       %i[TEMP_DIR DATA_DIR LOG_DIR BACKUP_DIR MAP_DIR].each do |c|
         dir = File.join(SANDBOX, c.to_s.sub('_DIR', '').downcase)
         FileUtils.mkdir_p(dir)
-        Object.const_set(c, dir) unless defined?(c)
+        # const_defined?(c), not defined?(c): c is a block local (always
+        # defined), so defined?(c) would always skip and leave these pointing
+        # at the repo dirs via constants.rb's ||=, defeating the sandbox.
+        Object.const_set(c, dir) unless Object.const_defined?(c)
       end
       # SCRIPT_DIR points into the sandbox so the thread-churn phase can drop a
       # throwaway .lic for Script.start without polluting the repo's scripts/.
