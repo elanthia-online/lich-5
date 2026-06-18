@@ -35,6 +35,21 @@ module Lich
         @@downstream_hooks.delete(name)
       end
 
+      # Removes every hook registered by the named script. Called from the
+      # script kill path so a script that exits without removing its own hooks
+      # does not leak them. Each hook proc lives in this global registry and
+      # captures the registering script's binding, so an orphaned hook keeps the
+      # entire dead script reachable and unreclaimable. Idempotent - a no-op for
+      # scripts that already removed their hooks in a before_dying block.
+      #
+      # @param source [String] the originating script name (Script#name)
+      # @return [Integer] the number of hooks removed
+      def DownstreamHook.remove_by_source(source)
+        names = @@downstream_hook_sources.select { |_name, src| src == source }.keys
+        names.each { |name| remove(name) }
+        names.size
+      end
+
       def DownstreamHook.list
         @@downstream_hooks.keys.dup
       end

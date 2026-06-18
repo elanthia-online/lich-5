@@ -2,6 +2,11 @@
 
 require_relative '../../spec_helper'
 require_relative '../../../lib/common/feature_flags'
+# Load the real hook classes so Script's kill cleanup resolves them
+# deterministically (rather than the top-level spec_helper mocks), letting us
+# assert the cleanup actually removes a registered hook.
+require_relative '../../../lib/common/downstreamhook'
+require_relative '../../../lib/common/upstreamhook'
 
 RSpec.describe 'Lich::Common::Script kill metrics' do
   let(:thread_group) { instance_double(ThreadGroup, list: [], add: true) }
@@ -27,6 +32,12 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       :duration_max_ms   => 0.0,
       :failures          => 0
     })
+    # Start each example with empty hook registries so a hook left by one
+    # example never affects another (these are class-level state).
+    Lich::Common::DownstreamHook.class_variable_set(:@@downstream_hooks, {})
+    Lich::Common::DownstreamHook.class_variable_set(:@@downstream_hook_sources, {})
+    Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hooks, {})
+    Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hook_sources, {})
     allow(Lich).to receive(:log)
     allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(false)
     allow(Thread).to receive(:new) { |&block| block.call; instance_double(Thread) }
@@ -46,6 +57,28 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
 
       expect(script_class.list).to be_empty
       expect(GC).not_to have_received(:start)
+    end
+
+    it 'removes hooks registered by the dying script and clears its watchfor' do
+      Lich::Common::DownstreamHook.class_variable_set(
+        :@@downstream_hooks, { 'hooky-down' => proc { |s| s }, 'keep' => proc { |s| s } }
+      )
+      Lich::Common::DownstreamHook.class_variable_set(
+        :@@downstream_hook_sources, { 'hooky-down' => 'hooky', 'keep' => 'other' }
+      )
+      Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hooks, { 'hooky-up' => proc { |s| s } })
+      Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hook_sources, { 'hooky-up' => 'hooky' })
+
+      script = build_script(name: 'hooky')
+      script.instance_variable_set(:@watchfor, { /trigger/ => proc {} })
+      script_class.class_variable_set(:@@running, [script])
+
+      script.kill
+
+      # The dying script's hooks are gone; a hook from another source survives.
+      expect(Lich::Common::DownstreamHook.list).to contain_exactly('keep')
+      expect(Lich::Common::UpstreamHook.list).to be_empty
+      expect(script.watchfor).to be_empty
     end
 
     it 'falls back to inline cleanup when Ruby cannot allocate a cleanup thread' do

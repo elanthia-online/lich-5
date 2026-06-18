@@ -820,6 +820,19 @@ module Lich
               @die_with.each { |script_name| Script.kill(script_name) }
               @paused = false
               @at_exit_procs.each { |p| report_errors { p.call } }
+              # Backstop: drop any down/upstream hooks this script registered but
+              # did not remove itself. An orphaned hook proc lives in the global
+              # registry and captures the script's binding, pinning the entire
+              # dead script so it can never be garbage collected. Removal is
+              # idempotent, so this is a no-op for scripts that cleaned up in a
+              # before_dying block.
+              DownstreamHook.remove_by_source(@name)
+              UpstreamHook.remove_by_source(@name)
+              # Release per-script watchfor procs (and the bindings they
+              # capture). The script is removed from @@running below, so they can
+              # never fire again; cleared to {} rather than nil so a concurrent
+              # new_downstream sweep still sees a safe, empty collection.
+              @watchfor = {}
               @die_with = @at_exit_procs = @downstream_buffer = @upstream_buffer = @match_stack_labels = @match_stack_strings = nil
               @@running.delete(self)
               unless @quiet

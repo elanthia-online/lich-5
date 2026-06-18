@@ -725,7 +725,27 @@ module DownstreamHook
   def self.run(data)
     data
   end
+
+  # Matches the production surface used by Script's kill cleanup.
+  def self.remove_by_source(_source)
+    0
+  end
 end unless defined?(DownstreamHook)
+
+# =============================================================================
+# UpstreamHook Mock
+# =============================================================================
+
+module UpstreamHook
+  def self.run(data)
+    data
+  end
+
+  # Matches the production surface used by Script's kill cleanup.
+  def self.remove_by_source(_source)
+    0
+  end
+end unless defined?(UpstreamHook)
 
 # =============================================================================
 # Char Mock
