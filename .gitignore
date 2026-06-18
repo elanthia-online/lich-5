@@ -27,6 +27,7 @@ doc/yard/
 !docs/*.md
 !spec/README.md
 !spec/fixtures/README.md
+!bench/README.md
 # Test database artifacts
 spec/*.db
 spec/*.db3
