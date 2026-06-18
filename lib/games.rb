@@ -235,6 +235,15 @@ module Lich
           @game_instance = GameInstanceFactory.create(game_type)
         end
 
+        # Opens the TCP connection to the game server and starts the socket's
+        # wrap and main reader threads.
+        #
+        # @param host [String] game server hostname
+        # @param port [Integer] game server port
+        # @return [TCPSocket] the connected, configured game socket
+        # @note Connection errors propagate to the caller. Use
+        #   {.open_with_timeout} to bound how long the connect may block.
+        # @see .open_with_timeout
         def open(host, port)
           @socket = TCPSocket.open(host, port)
 
@@ -277,10 +286,18 @@ module Lich
           @socket
         end
 
-        # Opens the game socket on a background thread so a stuck Game.open cannot
-        # hang startup forever; raises if the connect does not complete within
-        # +timeout+ seconds. Extracted verbatim from the inline connect loop in
-        # lib/main/main.rb so its behavior can be tested.
+        # Connects to the game server on a background thread, enforcing a connect
+        # timeout that a bare {.open} cannot. Surfaces a stuck or failed connect
+        # instead of letting startup proceed with a dead socket.
+        #
+        # @param host [String] game server hostname
+        # @param port [Integer] game server port
+        # @param timeout [Integer, Float] seconds to wait for the connect to complete
+        # @return [void]
+        # @raise [RuntimeError] if the connect does not complete within +timeout+
+        # @raise [StandardError] re-raises whatever {.open} raises
+        #   (e.g. Errno::ECONNREFUSED) so the caller's rescue runs
+        # @see .open
         def open_with_timeout(host, port, timeout = 30)
           connect_thread = Thread.new {
             # report_on_exception off: a failed open is surfaced by the join below
