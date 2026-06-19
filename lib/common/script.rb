@@ -822,14 +822,13 @@ module Lich
               @die_with.each { |script_name| Script.kill(script_name) }
               @paused = false
               @at_exit_procs.each { |p| report_errors { p.call } }
-              # Backstop: let each per-script-state subsystem (the hook
-              # registries, etc.) drop anything this script registered but did
-              # not remove itself. An orphaned hook proc lives in a global
-              # registry and captures the script's binding, pinning the entire
-              # dead script so it can never be garbage collected. Subsystems
-              # register their own cleanup with ScriptDeath, so kill does not
-              # need to name them; cleanup keys on this instance (not its name),
-              # so a force: true sibling sharing our name keeps its own state.
+              # Let each per-script-state subsystem (the hook registries, etc.)
+              # apply its own death policy for what this script registered.
+              # Subsystems register with ScriptDeath, so kill does not name them;
+              # cleanup keys on this instance (not its name), so a force: true
+              # sibling sharing our name is unaffected. Hooks persist by default
+              # (so register-and-exit patterns like ;alias keep working); a hook
+              # is only removed if it opted in with persist: false.
               ScriptDeath.run(self)
               # Release per-script watchfor procs (and the bindings they
               # capture). The script is removed from @@running below, so they can

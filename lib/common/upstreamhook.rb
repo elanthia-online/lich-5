@@ -12,6 +12,7 @@ module Lich
       @@upstream_hooks ||= Hash.new
       @@upstream_hook_sources ||= Hash.new
       @@upstream_hook_owners ||= Hash.new
+      @@upstream_hook_persist ||= Hash.new
 
       # Per-class storage for the shared HookRegistry methods.
       def self._hooks
@@ -24,6 +25,10 @@ module Lich
 
       def self._hook_owners
         @@upstream_hook_owners
+      end
+
+      def self._hook_persist
+        @@upstream_hook_persist
       end
 
       def UpstreamHook.run(client_string)
@@ -40,9 +45,10 @@ module Lich
         return client_string
       end
 
-      # Drop this registry's hooks when their owning script dies, so the kill
-      # path does not need to know about UpstreamHook by name.
-      ScriptDeath.on_death { |script| remove_by_owner(script.object_id) }
+      # Apply this registry's per-script-death policy (remove script-scoped
+      # hooks, keep persistent ones, warn on undeclared) so the kill path does
+      # not need to know about UpstreamHook by name.
+      ScriptDeath.on_death { |script| cleanup_on_death(script.object_id) }
     end
   end
 end

@@ -726,8 +726,8 @@ module DownstreamHook
     data
   end
 
-  # Matches the production surface used by Script's kill cleanup.
-  def self.remove_by_owner(_owner_id)
+  # Matches the production surface used by the ScriptDeath cleanup.
+  def self.cleanup_on_death(_owner_id)
     0
   end
 end unless defined?(DownstreamHook)
@@ -741,8 +741,8 @@ module UpstreamHook
     data
   end
 
-  # Matches the production surface used by Script's kill cleanup.
-  def self.remove_by_owner(_owner_id)
+  # Matches the production surface used by the ScriptDeath cleanup.
+  def self.cleanup_on_death(_owner_id)
     0
   end
 end unless defined?(UpstreamHook)

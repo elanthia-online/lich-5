@@ -544,14 +544,14 @@ reconnect_if_wanted = proc {
             server_string
           end
         }
-        DownstreamHook.add('inventory_boxes_off', inv_off_proc)
+        DownstreamHook.add('inventory_boxes_off', inv_off_proc, persist: true) # engine display toggle
         inv_toggle_proc = proc { |client_string_inv_toggle|
           if client_string_inv_toggle =~ /^(?:<c>)?_flag Display Inventory Boxes ([01])/
             if $1 == '1'
               DownstreamHook.remove('inventory_boxes_off')
               Lich.set_inventory_boxes(XMLData.player_id, true)
             else
-              DownstreamHook.add('inventory_boxes_off', inv_off_proc)
+              DownstreamHook.add('inventory_boxes_off', inv_off_proc, persist: true) # engine display toggle
               Lich.set_inventory_boxes(XMLData.player_id, false)
             end
             nil
@@ -561,7 +561,7 @@ reconnect_if_wanted = proc {
               respond 'You have enabled viewing of inventory and container windows.'
               Lich.set_inventory_boxes(XMLData.player_id, true)
             else
-              DownstreamHook.add('inventory_boxes_off', inv_off_proc)
+              DownstreamHook.add('inventory_boxes_off', inv_off_proc, persist: true) # engine display toggle
               respond 'You have disabled viewing of inventory and container windows.'
               Lich.set_inventory_boxes(XMLData.player_id, false)
             end
@@ -570,7 +570,7 @@ reconnect_if_wanted = proc {
             client_string_inv_toggle
           end
         }
-        UpstreamHook.add('inventory_boxes_toggle', inv_toggle_proc)
+        UpstreamHook.add('inventory_boxes_toggle', inv_toggle_proc, persist: true) # engine display toggle
 
         unless $offline_mode
           client_string = $_CLIENT_.gets
