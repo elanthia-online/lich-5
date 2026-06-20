@@ -69,6 +69,7 @@ module Lich
           TicketEtherealScrip = /^\s*Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
           TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards?\.$/.freeze
           TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
+          TicketAevit = /^\s*Inquisitor - (?<aevit>[\d,]+) aevit\.$/.freeze
           TicketGold = /^\s*Gold - (?<gold>[\d,]+) gold\.$/.freeze
           WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
           WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
@@ -130,7 +131,7 @@ module Lich
                              CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
                              SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
                              Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketGold,
-                             TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
+                             TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen, TicketAevit,
                              WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, InnCheckedOut, SpellsongRenewed,
                              ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
                              AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, ResignConfirmCHE,
@@ -510,6 +511,10 @@ module Lich
             when Pattern::TicketRaikhen
               match = Regexp.last_match
               Infomon.set('currency.raikhen', match[:raikhen].delete(',').to_i)
+              :ok
+            when Pattern::TicketAevit
+              match = Regexp.last_match
+              Infomon.set('currency.aevit', match[:aevit].delete(',').to_i)
               :ok
             when Pattern::WealthSilver
               match = Regexp.last_match
