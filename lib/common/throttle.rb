@@ -30,11 +30,17 @@ module Lich
       # have elapsed since the last run; the timestamp is stamped first so a run
       # that raises still counts as an attempt.
       #
+      # A non-positive +last_run_at+ (the initial/forced-open state) always runs,
+      # so the gate does not depend on the absolute value of the monotonic clock.
+      # +CLOCK_MONOTONIC+ counts from an arbitrary epoch (often boot), so on a
+      # freshly-booted host +now+ can be smaller than +interval+; comparing it
+      # against +0.0+ directly would wrongly keep the first call gated.
+      #
       # @yield the work to rate-limit
       # @return [Boolean] whether the block ran
       def run
         now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        return false if (now - @last_run_at) < @interval
+        return false if @last_run_at.positive? && (now - @last_run_at) < @interval
 
         @last_run_at = now
         yield
