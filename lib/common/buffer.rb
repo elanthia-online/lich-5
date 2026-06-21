@@ -135,14 +135,17 @@ module Lich
 
       # rubocop:disable Lint/HashCompareByIdentity
       def Buffer.streams
-        @@streams[Thread.current.object_id]
+        @@mutex.synchronize { @@streams[Thread.current.object_id] }
       end
 
       def Buffer.streams=(val)
         if (!val.is_a?(Integer)) or ((val & 63) == 0)
           respond "--- Lich: error: invalid streams value\n\t#{$!.caller[0..2].join("\n\t")}"
         else
-          @@streams[Thread.current.object_id] = val
+          # Hold the mutex: setting streams for a thread that has not registered
+          # yet adds a new key, which must not race the cleanup delete_if sweep
+          # (Ruby raises on a key added during iteration).
+          @@mutex.synchronize { @@streams[Thread.current.object_id] = val }
         end
       end
 

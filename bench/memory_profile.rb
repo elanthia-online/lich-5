@@ -32,10 +32,19 @@ require_relative 'lich_env'
 
 sampler = Bench::MemorySampler.new
 
-ITER         = Integer(ENV.fetch('ITER', 2000))
-SAMPLE_EVERY = Integer(ENV.fetch('SAMPLE_EVERY', 500))
-NPCS         = Integer(ENV.fetch('NPCS', 5000))
-CHURN        = Integer(ENV.fetch('CHURN', 200))
+# These knobs are loop counts and modulo divisors (SAMPLE_EVERY/NPCS/CHURN feed
+# the per-phase sample intervals), so a zero or negative value would
+# ZeroDivisionError mid-run. Reject it up front with a clear message.
+def positive_env_int(name, default)
+  value = Integer(ENV.fetch(name, default))
+  raise ArgumentError, "#{name} must be > 0 (got #{value})" unless value.positive?
+  value
+end
+
+ITER         = positive_env_int('ITER', 2000)
+SAMPLE_EVERY = positive_env_int('SAMPLE_EVERY', 500)
+NPCS         = positive_env_int('NPCS', 5000)
+CHURN        = positive_env_int('CHURN', 200)
 CENSUS       = ENV['CENSUS'].to_s == '1'
 
 # ---------------------------------------------------------------------------
@@ -111,13 +120,13 @@ puts "GameObj @@index size: #{idx ? idx.size : 'n/a'}"
 # ---------------------------------------------------------------------------
 churn_lic = File.join(SCRIPT_DIR, 'memchurn.lic')
 File.write(churn_lic, <<~'LIC')
-  # throwaway churn script: registers a downstream hook + a watchfor that the
-  # current script-death path does not clean up, then exits. Exercises the
-  # hook registry, per-script @watchfor, and thread-id-keyed buffer indices.
-  # Register a downstream hook + a watchfor, then fall off the end so the
-  # script dies and runs its kill cleanup. Pre-fix these leaked into the global
-  # hook registry / per-script watchfor; post-fix the kill path removes them.
-  DownstreamHook.add("memchurn-#{Time.now.to_f}-#{rand(1_000_000)}", proc { |server_string| server_string })
+  # throwaway churn script: registers a downstream hook + a watchfor, then
+  # falls off the end so the script dies and runs its kill cleanup. Exercises
+  # the hook registry, per-script @watchfor, and thread-id-keyed buffer indices.
+  # The hook declares persist: false (scoped to this script), so the kill path
+  # removes it -- without that it would be retained by default and inflate the
+  # phase-5 hook count, masking whether cleanup actually fires.
+  DownstreamHook.add("memchurn-#{Time.now.to_f}-#{rand(1_000_000)}", proc { |server_string| server_string }, persist: false)
   Lich::Common::Watchfor.new(/this pattern never matches anything zzzz/) { nil }
 LIC
 
