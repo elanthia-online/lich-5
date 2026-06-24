@@ -45,7 +45,7 @@ module Lich
                   :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
                   :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
                   :dialogs, :room_id, :previous_nav_rm, :concentration, :max_concentration,
-                  :arrival_pcs, :room_player_hidden
+                  :arrival_pcs, :room_player_hidden, :assess
       attr_accessor :send_fake_tags
 
       @@warned_deprecated_spellfront = 0
@@ -148,6 +148,11 @@ module Lich
         @arrival_pcs = []
         @check_obvious_hiding = false
         @room_player_hidden = false
+
+        # assess (combat situation) stream tracking
+        @assess = []
+        @assess_buffer = nil
+        @assess_ids = []
       end
 
       # for backwards compatibility
@@ -238,6 +243,69 @@ module Lich
 
       PSM_3_DIALOG_IDS = ["Buffs", "Active Spells", "Debuffs", "Cooldowns"]
 
+      # assess stream parsing
+      ASSESS_RANGES = { 'melee' => :melee, 'pole weapon' => :pole, 'missile' => :missile }.freeze
+      ASSESS_RELATION = /^(?<relation>moving to flank|flanking|facing|behind|in front of|beside|advancing on|next to|to (?:the )?(?:left|right) of)\s+(?<target>.+)$/.freeze
+
+      # Parse a single reconstructed line from the 'assess' (combat situation) stream
+      # into a structured entry. `ids` is the ordered list of look-target ids pulled
+      # from the line's <d cmd='look #id'> tags (subject first, then target).
+      # Returns a Hash, or nil for the header / unparseable lines.
+      def parse_assess_line(text, ids)
+        text = text.to_s.strip
+        return nil if text.empty?
+        return nil if text =~ /assess your combat situation/i
+
+        # drop the trailing "  | F" face-hint (the F lives in a <d cmd='face #id'> tag)
+        text = text.sub(/\s*\|.*$/, '').strip
+
+        m = text.match(/^(?<name>.+?)\s+\((?:(?<number>\d+):\s*)?(?<status>[^)]*)\)\s+(?:is|are)\s+(?<rest>.+?)\s+at\s+(?<range>melee|pole weapon|missile)\s+range\b/i)
+        return nil unless m
+
+        name   = m[:name].strip
+        number = m[:number] && m[:number].to_i
+        status = m[:status].strip
+        range  = ASSESS_RANGES[m[:range].downcase]
+        rest   = m[:rest].strip
+
+        # the target may carry its own assess number, e.g. "facing a jeol moradu (2)"
+        target_number = nil
+        if rest =~ /\((\d+)\)\s*$/
+          target_number = $1.to_i
+          rest = rest.sub(/\s*\(\d+\)\s*$/, '').strip
+        end
+
+        if (rm = rest.match(ASSESS_RELATION))
+          relation = rm[:relation]
+          target   = rm[:target].strip
+        else
+          relation = rest
+          target   = nil
+        end
+        relation = 'flanking' if relation == 'moving to flank'
+
+        is_self = !(name =~ /^You$/i).nil?
+        if is_self
+          subject_id = nil
+          target_id  = ids[0]
+        else
+          subject_id = ids[0]
+          target_id  = (target && target =~ /^you$/i) ? nil : ids[1]
+        end
+        is_pc = subject_id.to_s.start_with?('-')
+
+        {
+          name: name, id: subject_id, number: number, status: status,
+          relation: relation, target: target, target_id: target_id,
+          target_number: target_number, range: range, self: is_self, pc: is_pc
+        }
+      end
+
+      # convenience: just the creatures (positive ids; excludes self and PCs)
+      def assess_creatures
+        @assess.reject { |e| e[:self] || e[:pc] }
+      end
+
       def tag_start(name, attributes)
         # This is called once per element by REXML in games.rb
         # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
@@ -324,12 +392,26 @@ module Lich
           if name == 'pushStream'
             @in_stream = true
             @current_stream = attributes['id'].to_s
+            if attributes['id'].to_s == 'assess'
+              @assess_buffer = String.new
+              @assess_ids = []
+            end
             if XMLData.game =~ /^GS/
               GameObj.clear_inv if attributes['id'].to_s == 'inv'
               GameObj.clear_reserve if attributes['id'].to_s == 'reserve'
             end
           end
+
+          if name == 'd' && @current_stream == 'assess'
+            @assess_ids ||= []
+            @assess_ids << $1 if attributes['cmd'].to_s =~ /look #(-?\d+)/
+          end
           if name == 'popStream'
+            if @current_stream == 'assess' && @assess_buffer
+              entry = parse_assess_line(@assess_buffer, @assess_ids)
+              @assess << entry if entry
+              @assess_buffer = nil
+            end
             if attributes['id'] == 'room'
               unless @room_window_disabled
                 @room_count += 1
@@ -596,6 +678,8 @@ module Lich
           if (name == 'clearStream')
             if attributes['id'] == 'bounty'
               @bounty_task = String.new
+            elsif attributes['id'] == 'assess'
+              @assess = []
             end
           end
           if (name == 'playerID')
@@ -829,6 +913,8 @@ module Lich
             @bounty_task += text_string
           elsif @current_stream == 'society'
             @society_task = text_string
+          elsif @current_stream == 'assess'
+            @assess_buffer.concat(text_string) if @assess_buffer
           elsif (@current_stream == 'inv') and @active_tags.include?('a')
             GameObj.new_inv(@obj_exist, @obj_noun, text_string, nil)
           elsif (@current_stream == 'reserve') and @active_tags.include?('a')
