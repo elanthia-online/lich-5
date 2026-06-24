@@ -11,7 +11,7 @@
 #                            tag_start / text / popStream / clearStream wiring
 #                            reassembles each line and the d-tag ids correctly.
 #
-# The ASSESS_CORPUS below is verbatim game output: each combat line arrives in
+# The assess_corpus below is verbatim game output: each combat line arrives in
 # its own pushStream/popStream, ids live in <d cmd='look #id'> attributes
 # (subject first, then target), and the trailing "  | F" is a <d cmd='face #id'>
 # face hint that must be discarded.
@@ -21,8 +21,11 @@ require 'rexml/document'
 require 'rexml/streamlistener'
 require_relative '../../../lib/common/xmlparser'
 
-# Raw assess stream, wrapped per-line in pushStream/popStream as the game sends it.
-ASSESS_CORPUS = <<~'__ASSESS__'
+RSpec.describe Lich::Common::XMLParser do
+  subject(:parser) { described_class.new }
+
+  # Raw assess stream, wrapped per-line in pushStream/popStream as the game sends it.
+  let(:assess_corpus) { <<~'__ASSESS__' }
   <pushStream id="assess"/><clearStream id="assess"/>You assess your combat situation...
   <popStream/><pushStream id="assess"/>You (adeptly balanced) are facing <d cmd='look #89513914'>a jeol moradu</d> (4) at melee range.
   <popStream/><pushStream id="assess"/><d cmd='look #89511379'>A jeol moradu</d> (1: cursed and nimbly balanced) is behind <d cmd='look #-10592168'>Tenuk</d> at melee range.  | <d cmd='face #89511379'>F</d>
@@ -35,10 +38,7 @@ ASSESS_CORPUS = <<~'__ASSESS__'
   <popStream/><pushStream id="assess"/><d cmd='look #-10592168'>Tenuk</d> (incredibly balanced) is facing <d cmd='look #89511387'>a jeol moradu</d> (2) at melee range.  | <d cmd='face #89511387'>F</d>
   <popStream/><pushStream id="assess"/><d cmd='look #-10581503'>Byd</d> (hidden and incredibly balanced) is moving to flank <d cmd='look #89511379'>a jeol moradu</d> (1) at missile range.  | <d cmd='face #89511379'>F</d>
   <popStream/><prompt time="1782253647">R&gt;</prompt>
-__ASSESS__
-
-RSpec.describe Lich::Common::XMLParser do
-  subject(:parser) { described_class.new }
+  __ASSESS__
 
   describe '#parse_assess_line' do
     it 'returns nil for the header line' do
@@ -54,7 +54,7 @@ RSpec.describe Lich::Common::XMLParser do
         'You (adeptly balanced) are facing a jeol moradu (4) at melee range.', ['89513914']
       )
       expect(entry).to include(
-        name: 'You', id: nil, self: true, pc: false,
+        name: 'You', id: nil, number: nil, self: true, pc: false,
         status: 'adeptly balanced', relation: 'facing',
         target: 'a jeol moradu', target_id: '89513914', target_number: 4,
         range: :melee
@@ -111,7 +111,7 @@ RSpec.describe Lich::Common::XMLParser do
   end
 
   describe 'assess stream integration (full REXML feed)' do
-    before { REXML::Document.parse_stream("<root>#{ASSESS_CORPUS}</root>", parser) }
+    before { REXML::Document.parse_stream("<root>#{assess_corpus}</root>", parser) }
 
     it 'captures every assessed entity except the header' do
       expect(parser.assess.length).to eq(10)

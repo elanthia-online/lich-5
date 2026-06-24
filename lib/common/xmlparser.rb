@@ -256,8 +256,9 @@ module Lich
         return nil if text.empty?
         return nil if text =~ /assess your combat situation/i
 
-        # drop the trailing "  | F" face-hint (the F lives in a <d cmd='face #id'> tag)
-        text = text.sub(/\s*\|.*$/, '').strip
+        # drop the trailing "  | F" face-hint (the F lives in a <d cmd='face #id'> tag);
+        # anchored to the pipe + trailing token so a stray '|' mid-line can't eat text
+        text = text.sub(/\s+\|\s+\S+\s*$/, '').strip
 
         m = text.match(/^(?<name>.+?)\s+\((?:(?<number>\d+):\s*)?(?<status>[^)]*)\)\s+(?:is|are)\s+(?<rest>.+?)\s+at\s+(?<range>melee|pole weapon|missile)\s+range\b/i)
         return nil unless m
@@ -284,7 +285,7 @@ module Lich
         end
         relation = 'flanking' if relation == 'moving to flank'
 
-        is_self = !(name =~ /^You$/i).nil?
+        is_self = name.casecmp?('you')
         if is_self
           subject_id = nil
           target_id  = ids[0]
@@ -403,7 +404,6 @@ module Lich
           end
 
           if name == 'd' && @current_stream == 'assess'
-            @assess_ids ||= []
             @assess_ids << $1 if attributes['cmd'].to_s =~ /look #(-?\d+)/
           end
           if name == 'popStream'
