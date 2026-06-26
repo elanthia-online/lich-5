@@ -773,17 +773,29 @@ module Lich
       # because process exit can stop many scripts for reasons unrelated to
       # ordinary script churn.
       #
+      # Runtime kills run cleanup in a dedicated thread so the caller is not
+      # blocked. Shutdown kills run cleanup inline instead: the shutdown drain
+      # (see shutdown_script_drain.rb) kills every script in a tight loop, and on
+      # long sessions spawning one cleanup thread per script there pushes the
+      # process past the OS thread ceiling ("can't alloc thread"). Inline
+      # teardown at shutdown is also the order we want -- sequential, not a
+      # concurrent burst.
+      #
       # @param context [Symbol] :runtime for ordinary script stops, :shutdown
       #   when the owning Lich process is closing
       # @return [String] script name
       def kill(context: :runtime)
         source = @kill_source || caller[0..2]
 
-        begin
-          Thread.new { __run_kill_cleanup(source: source, context: context, record_metrics: true) }
-        rescue ThreadError => e
-          __log_kill_thread_fallback(e)
+        if context == :shutdown
           __run_kill_cleanup(source: source, context: context, record_metrics: false)
+        else
+          begin
+            Thread.new { __run_kill_cleanup(source: source, context: context, record_metrics: true) }
+          rescue ThreadError => e
+            __log_kill_thread_fallback(e)
+            __run_kill_cleanup(source: source, context: context, record_metrics: false)
+          end
         end
 
         @name
@@ -807,6 +819,17 @@ module Lich
       # @return [void]
       # @api private
       def __run_kill_cleanup(source:, context:, record_metrics:)
+        # Re-entrancy guard. A die_with cycle (A die_with B and B die_with A, or
+        # a self-reference) reached on the inline cleanup path routes Script.kill
+        # back to this same instance on the same thread while the outer call
+        # still holds @killer_mutex. Re-entering @killer_mutex.synchronize there
+        # raises "deadlock; recursive locking" because it is a plain,
+        # non-reentrant Mutex. The outer call is already mid-teardown and will
+        # finish this script, so the re-entrant request has nothing to do.
+        # (Note: we do not swap in a reentrant Monitor -- that would *run* the
+        # cleanup body twice over already-nilled state, not skip it.)
+        return if @killer_mutex.owned?
+
         @killer_mutex.synchronize {
           if @@running.include?(self)
             instrument_kill = record_metrics && (context != :shutdown) && Script.__send__(:__script_kill_metrics_enabled?)
