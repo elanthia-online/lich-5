@@ -647,4 +647,56 @@ RSpec.describe Lich::Common::GameObj do
       end
     end
   end
+
+  # Pruning is driven off the game thread by Lich::Util::MemoryReleaser, which
+  # calls prune_index! periodically; there is no insert-path auto-prune.
+  describe '.prune_index!' do
+    let(:index) { described_class.class_variable_get(:@@index) }
+
+    before do
+      # The outer before seeds two hand objects into the index; start from a
+      # clean, empty index so entry counts in these examples are exact.
+      index.clear
+      described_class.class_variable_set(:@@right_hand, nil)
+      described_class.class_variable_set(:@@left_hand, nil)
+    end
+
+    it 'removes stale, non-live entries and keeps live ones' do
+      150.times { |i| described_class.new_npc((800_000 + i).to_s, 'wraith', "wraith #{i}") }
+      described_class.clear_npcs # 150 stale entries left in the index
+      120.times { |i| described_class.new_npc((900_000 + i).to_s, 'ghost', "ghost #{i}") } # live
+
+      result = described_class.prune_index!(ttl: 0) # ttl 0 -> everything stale by age
+
+      expect(result[:pruned]).to eq(150)
+      expect(index.size).to eq(120) # the live ghosts survive
+    end
+
+    it 'never prunes an entry that is still live in a registry, regardless of age' do
+      keeper = described_class.new_npc('123456', 'guardian', 'a stone guardian')
+
+      result = described_class.prune_index!(ttl: 0)
+
+      key = '123456|guardian|a stone guardian'
+      expect(index.key?(key)).to be true
+      expect(index[key].first).to equal(keeper)
+      expect(result[:skipped_live]).to be >= 1
+    end
+
+    it 'prunes a stale variant even when a different-name entry shares its id' do
+      # The same exist-id is seen first under one name (then cleared, so it goes
+      # stale) and again under a different name that stays live. The live guard
+      # keys on object identity, not id, so the stale variant - a distinct
+      # instance held in no registry - must still be evicted even though a live
+      # sibling shares its id. (An id-based guard would wrongly keep it.)
+      described_class.new_npc('555', 'kobold', 'a kobold')
+      described_class.clear_npcs # 'a kobold' entry is now stale, not live
+      live = described_class.new_npc('555', 'kobold', 'a snarling kobold')
+
+      described_class.prune_index!(ttl: 0)
+
+      expect(index).not_to have_key('555|kobold|a kobold') # stale variant evicted
+      expect(index['555|kobold|a snarling kobold'].first).to equal(live) # live sibling kept
+    end
+  end
 end

@@ -75,6 +75,26 @@ module Lich
 
       @@index = {}
 
+      # Serializes structural access to @@index (inserts and the delete_if
+      # sweeps). The index is mutated from at least two threads - the game
+      # parser thread on every object insert, and the MemoryReleaser background
+      # worker via +prune_index!+ - so without this a sweep could iterate the
+      # hash while another thread inserts a key, raising "can't add a new key
+      # into hash during iteration". Held only around the structural operations,
+      # never while computing the live-object set.
+      @@index_mutex = Mutex.new
+
+      # ---------------------------------------------------------------------------
+      # Index pruning
+      #
+      # Stale entries are reclaimed by +prune_index!+, which is driven
+      # periodically off the game thread by +Lich::Util::MemoryReleaser+ (the
+      # engine's single memory-maintenance scheduler). The index is therefore
+      # not pruned from the hot insert path - that would run an O(n) sweep on
+      # the parser thread and duplicate the releaser's job. See +prune_index!+
+      # and +sweep_stale!+ below.
+      # ---------------------------------------------------------------------------
+
       # ---------------------------------------------------------------------------
       # Instance interface
       # ---------------------------------------------------------------------------
@@ -394,17 +414,19 @@ module Lich
         key    = "#{str_id}|#{noun}|#{name}"
         now    = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
-        if (entry = @@index[key])
-          existing, _ts        = entry
-          @@index[key]         = [existing, now]
-          existing.before_name = before if existing.before_name.nil? && !before.nil?
-          existing.after_name  = after  if existing.after_name.nil?  && !after.nil?
-          return existing
+        @@index_mutex.synchronize do
+          if (entry = @@index[key])
+            existing, _ts        = entry
+            @@index[key]         = [existing, now]
+            existing.before_name = before if existing.before_name.nil? && !before.nil?
+            existing.after_name  = after  if existing.after_name.nil?  && !after.nil?
+            existing
+          else
+            new_obj      = GameObj.new(id, noun, name, before, after)
+            @@index[key] = [new_obj, now]
+            new_obj
+          end
         end
-
-        obj          = GameObj.new(id, noun, name, before, after)
-        @@index[key] = [obj, now]
-        obj
       end
 
       # ---------------------------------------------------------------------------
@@ -653,28 +675,10 @@ module Lich
         t_start   = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         cutoff    = t_start - ttl
 
-        # Build the live-ID set once before the sweep so we do not repeatedly
-        # iterate all registries inside the delete_if block.
-        live_ids = live_registry_ids
-
         obj_before  = gameobj_memory_bytes
         heap_before = ruby_heap_bytes
 
-        pruned       = 0
-        skipped_live = 0
-
-        @@index.delete_if do |_key, (obj, last_seen)|
-          if live_ids.include?(obj.id)
-            # Object is currently held in a registry - never prune regardless of age.
-            skipped_live += 1
-            false
-          elsif last_seen < cutoff
-            pruned += 1
-            true
-          else
-            false
-          end
-        end
+        pruned, skipped_live = sweep_stale!(cutoff)
 
         GC.start(full_mark: false, immediate_sweep: false) if pruned.positive?
 
@@ -755,16 +759,20 @@ module Lich
         return empty_index_stats if @@index.empty?
 
         now        = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        live_ids   = live_registry_ids
+        live_objs  = live_registry_objects
+        # Snapshot the entries under the mutex so we never iterate the index
+        # while another thread inserts into or prunes it.
+        entries    = @@index_mutex.synchronize { @@index.values }
+        total      = entries.size
         buckets    = { 'under5m' => 0, '5-15m' => 0,
                        '15-30m' => 0, '30-60m' => 0, 'over60m' => 0 }
         stale      = 0
         oldest_age = 0.0
 
-        @@index.each_value do |obj, last_seen|
+        entries.each do |obj, last_seen|
           age        = now - last_seen
           oldest_age = age if age > oldest_age
-          stale     += 1 unless live_ids.include?(obj.id)
+          stale     += 1 unless live_objs.include?(obj)
 
           buckets[case age
                   when 0...300    then 'under5m'
@@ -779,8 +787,8 @@ module Lich
         heap_mem = ruby_heap_bytes
 
         result = {
-          total_entries: @@index.size,
-          live_in_registries: @@index.size - stale,
+          total_entries: total,
+          live_in_registries: total - stale,
           stale_entries: stale,
           oldest_entry_seconds: oldest_age.round(1),
           age_buckets: buckets,
@@ -801,7 +809,7 @@ module Lich
           puts "=" * 52
           puts "  GameObj.index_stats"
           puts "=" * 52
-          puts format("  %-#{w}s %d", "Total index entries:",  @@index.size)
+          puts format("  %-#{w}s %d", "Total index entries:",  total)
           puts format("  %-#{w}s %d", "Live in registries:",   result[:live_in_registries])
           puts format("  %-#{w}s %d", "Stale (index-only):",   stale)
           puts format("  %-#{w}s %s", "Oldest entry:",         oldest_fmt)
@@ -1013,35 +1021,79 @@ module Lich
           key    = "#{str_id}|#{noun}|#{name}"
           now    = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
-          if (entry = @@index[key])
-            existing, _ts      = entry
-            @@index[key]       = [existing, now] # refresh last-seen timestamp
-            existing.before_name = before if existing.before_name.nil? && !before.nil?
-            existing.after_name  = after  if existing.after_name.nil?  && !after.nil?
-            registry.push(existing) unless registry.include?(existing)
-            return existing
+          @@index_mutex.synchronize do
+            if (entry = @@index[key])
+              existing, _ts        = entry
+              @@index[key]         = [existing, now] # refresh last-seen timestamp
+              existing.before_name = before if existing.before_name.nil? && !before.nil?
+              existing.after_name  = after  if existing.after_name.nil?  && !after.nil?
+              registry.push(existing) unless registry.include?(existing)
+              existing
+            else
+              new_obj      = GameObj.new(id, noun, name, before, after)
+              @@index[key] = [new_obj, now]
+              registry.push(new_obj)
+              new_obj
+            end
           end
-
-          obj          = GameObj.new(id, noun, name, before, after)
-          @@index[key] = [obj, now]
-          registry.push(obj)
-          obj
         end
 
-        # Returns a Set (or Array if Set is unavailable) of all object IDs
-        # currently present in any active registry, including the hand slots.
-        # Used by +prune_index!+ as the live-guard check and by +index_stats+
-        # to classify entries as live vs stale.
+        # Removes index entries that are both stale (last seen before +cutoff+)
+        # and not currently held in any registry, leaving live and recently-seen
+        # entries intact. Used by +prune_index!+ to keep the live-registry guard
+        # in one place.
         #
-        # @return [Set<String>, Array<String>]
-        def live_registry_ids
-          ids = [
+        # The live set is computed up front (it walks the registries, not the
+        # index), then the delete_if runs under +@@index_mutex+ so it cannot
+        # race a concurrent insert or a second sweep.
+        #
+        # @param cutoff [Float] monotonic timestamp; entries last seen before
+        #   this are eligible for eviction
+        # @return [Array(Integer, Integer)] +[pruned, skipped_live]+ counts
+        def sweep_stale!(cutoff)
+          live_objs    = live_registry_objects
+          pruned       = 0
+          skipped_live = 0
+
+          @@index_mutex.synchronize do
+            @@index.delete_if do |_key, (obj, last_seen)|
+              if live_objs.include?(obj)
+                # This exact instance is still held in a registry - never prune
+                # it regardless of age. Guarding by object identity (not by id)
+                # means a stale noun/name variant that merely shares an id with a
+                # live object is still evicted, so the index cannot accumulate
+                # per-id variants without bound.
+                skipped_live += 1
+                false
+              elsif last_seen < cutoff
+                pruned += 1
+                true
+              else
+                false
+              end
+            end
+          end
+
+          [pruned, skipped_live]
+        end
+
+        # Returns a Set (or Array if Set is unavailable) of all GameObj instances
+        # currently present in any active registry, including the hand slots.
+        # Membership is by object identity (GameObj defines no custom eql?/hash),
+        # which is what lets the sweep keep only the exact instances still in use
+        # rather than every entry sharing a live object's id. Used by
+        # +sweep_stale!+ as the live-guard check and by +index_stats+ to classify
+        # entries as live vs stale.
+        #
+        # @return [Set<GameObj>, Array<GameObj>]
+        def live_registry_objects
+          objs = [
             *@@loot, *@@npcs, *@@pcs, *@@inv, *@@reserve,
             *@@room_desc, *@@fam_loot, *@@fam_npcs, *@@fam_pcs, *@@fam_room_desc,
             *@@contents.values.flatten,
             @@right_hand, @@left_hand
-          ].compact.map(&:id)
-          defined?(Set) ? Set.new(ids) : ids
+          ].compact
+          defined?(Set) ? Set.new(objs) : objs
         end
 
         # Returns the zero-state stats hash used when +@@index+ is empty.
@@ -1069,7 +1121,9 @@ module Lich
         #
         # @return [Integer] bytes
         def gameobj_memory_bytes
-          @@index.sum { |_key, (obj, _ts)| ObjectSpace.memsize_of(obj) }
+          @@index_mutex.synchronize do
+            @@index.sum { |_key, (obj, _ts)| ObjectSpace.memsize_of(obj) }
+          end
         end
 
         # Returns the current size of the Ruby heap in bytes, measured as

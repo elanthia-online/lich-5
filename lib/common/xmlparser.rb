@@ -594,7 +594,7 @@ module Lich
                       end
                     }
                     @nerve_tracker_num += 1
-                    DownstreamHook.add('nerve_tracker', action)
+                    DownstreamHook.add('nerve_tracker', action, persist: true) # engine-managed, toggled by the parser
                     Game._puts "#{$cmd_prefix}health"
                   }
                 end

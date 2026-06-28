@@ -924,7 +924,27 @@ module DownstreamHook
   def self.run(data)
     data
   end
+
+  # Matches the production surface used by the ScriptDeath cleanup.
+  def self.cleanup_on_death(_owner_id)
+    0
+  end
 end unless defined?(DownstreamHook)
+
+# =============================================================================
+# UpstreamHook Mock
+# =============================================================================
+
+module UpstreamHook
+  def self.run(data)
+    data
+  end
+
+  # Matches the production surface used by the ScriptDeath cleanup.
+  def self.cleanup_on_death(_owner_id)
+    0
+  end
+end unless defined?(UpstreamHook)
 
 # =============================================================================
 # Char Mock
