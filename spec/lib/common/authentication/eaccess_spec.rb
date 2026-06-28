@@ -32,6 +32,15 @@ end unless defined?(Lich::Common::Account)
 require_relative '../../../../lib/common/authentication/eaccess'
 
 RSpec.describe Lich::Common::Authentication::EAccess do
+  ACCOUNT_STATE_ACCESSORS = %i[name game_code character subscription members].freeze
+
+  around do |example|
+    account_state = ACCOUNT_STATE_ACCESSORS.to_h { |accessor| [accessor, Lich::Common::Account.public_send(accessor)] }
+    example.run
+  ensure
+    account_state.each { |accessor, value| Lich::Common::Account.public_send("#{accessor}=", value) }
+  end
+
   describe 'AuthenticationError' do
     it 'stores the error code' do
       error = described_class::AuthenticationError.new('REJECT')
