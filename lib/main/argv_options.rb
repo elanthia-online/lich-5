@@ -75,6 +75,8 @@ module Lich
               @argv_options[:reconnect_delay] = $1
             when /^--host=(.+):(.+)$/
               @argv_options[:host] = { domain: $1, port: $2.to_i }
+            when /^--bind-address=(.+)$/i
+              @argv_options[:bind_address] = $1
             when /^--hosts-file=(.+)$/i
               @argv_options[:hosts_file] = $1
             when /^--no-gui$/i
@@ -95,6 +97,8 @@ module Lich
               @argv_options[:frontend_command] = $1
             when /^--save$/i
               @argv_options[:save] = true
+            when /^--pipe$/i
+              @argv_options[:pipe] = true
             when /^--wine(?:\-prefix)?=.+$/i
               nil # already used when defining the Wine module
             when /\.sal$|Gse\.~xt$/i
@@ -172,7 +176,7 @@ module Lich
         end
 
         def self.handle_detachable_client(argv_options)
-          argv_options[:detachable_client_host] = '127.0.0.1'
+          argv_options[:detachable_client_host] = argv_options[:bind_address] || '127.0.0.1'
           argv_options[:detachable_client_port] = nil
           if (arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=[0-9]+$/ })
             argv_options[:detachable_client_port] = /^\-\-detachable\-client=([0-9]+)$/.match(arg).captures.first.to_i

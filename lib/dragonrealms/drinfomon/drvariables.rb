@@ -58,6 +58,35 @@ module Lich
       'incredibly'
     ].freeze
 
+    # Combat positioning relative to your opponent, captured from the balance
+    # status line (e.g. "[You're solidly balanced and in good position.]").
+    # Stored as a signed magnitude: positive means you hold the advantage,
+    # negative means your opponent does, and 0 is an even contest. The scale is
+    # symmetric, and the two "overwhelming opponent" phrasings map to the same
+    # value.
+    DR_POSITION_VALUES = {
+      'opponent overwhelming you'        => -9,
+      'opponent dominating'              => -8,
+      'opponent in excellent position'   => -7,
+      'opponent in superior position'    => -6,
+      'opponent in very strong position' => -5,
+      'opponent in strong position'      => -4,
+      'opponent in good position'        => -3,
+      'opponent in better position'      => -2,
+      'opponent has slight advantage'    => -1,
+      'no advantage'                     => 0,
+      'have slight advantage'            => 1,
+      'in better position'               => 2,
+      'in good position'                 => 3,
+      'in strong position'               => 4,
+      'in very strong position'          => 5,
+      'in superior position'             => 6,
+      'in excellent position'            => 7,
+      'in dominating position'           => 8,
+      'overwhelming opponent'            => 9,
+      'overwhelming your opponent'       => 9
+    }.freeze
+
     DR_SKILLS_DATA = {
       skillsets: {
         'Armor'    => [

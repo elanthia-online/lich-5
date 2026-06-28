@@ -98,6 +98,14 @@ RSpec.describe Lich::Common::Spell do
     it 'has end message (msgdn)' do
       expect(spirit_warding.msgdn).to include('light blue glow leaves you')
     end
+
+    it 'preserves verbatim whitespace in message regexes' do
+      # msgup/msgdn are matched as regexes against the live game stream, which
+      # puts two spaces after a sentence period. The XML loader must not collapse
+      # that whitespace or the pattern stops matching (regression guard for the
+      # REXML -> Ox conversion: Ox collapses whitespace unless told not to).
+      expect(Lich::Common::Spell[215].msgup).to include(".  You feel charged with extra vitality")
+    end
   end
 
   describe '.list' do

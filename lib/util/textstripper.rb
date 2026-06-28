@@ -17,13 +17,15 @@ rescue StandardError => e
   false
 end
 
+require 'ox'
+
 module Lich
   module Util
     # Utility module for stripping markup, HTML, and XML from text
     #
     # This module provides methods to remove various types of formatting
     # from text strings, including HTML tags, XML tags, and Markdown markup.
-    # It uses the Kramdown library for HTML and Markdown parsing, and REXML
+    # It uses the Kramdown library for HTML and Markdown parsing, and Ox
     # for proper XML parsing.
     #
     # @example Basic usage
@@ -106,7 +108,7 @@ module Lich
       # Map of modes to their corresponding Kramdown input formats
       #
       # @return [Hash<Symbol, String>] Mapping of modes to Kramdown input types
-      # @note XML mode does not use Kramdown; it uses REXML instead
+      # @note XML mode does not use Kramdown; it uses Ox instead
       # @note MARKDOWN is an alias for MARKUP and uses the same input format
       # @api private
       MODE_TO_INPUT_FORMAT = {
@@ -134,7 +136,7 @@ module Lich
       # @param text [String] The text to process
       # @param mode [Symbol, String, Mode constant] The stripping mode to use. Valid options are:
       #   * `Mode::HTML` or `:html` - Strip HTML tags using Kramdown
-      #   * `Mode::XML` or `:xml` - Strip XML tags using REXML
+      #   * `Mode::XML` or `:xml` - Strip XML tags using Ox
       #   * `Mode::MARKUP` or `:markup` - Strip Markdown formatting (GitHub Flavored Markdown) using Kramdown
       #   * `Mode::MARKDOWN` or `:markdown` - Strip Markdown formatting (alias for MARKUP)
       #
@@ -176,7 +178,7 @@ module Lich
       #   TextStripper.strip("text", :invalid)
       #   # raises ArgumentError: Invalid mode: invalid. Use one of: html, xml, markup, markdown
       #
-      # @note If Kramdown or REXML parsing fails, a warning is issued and the original
+      # @note If Kramdown or Ox parsing fails, a warning is issued and the original
       #   text is returned unchanged
       def self.strip(text, mode)
         return "" if text.nil? || text.empty?
@@ -194,7 +196,7 @@ module Lich
         # Route to appropriate parsing method based on mode
         case validated_mode
         when Mode::XML
-          strip_xml_with_rexml(text)
+          strip_xml_with_ox(text)
         else
           strip_with_kramdown(text, validated_mode)
         end
@@ -202,8 +204,8 @@ module Lich
         # Handle Kramdown parsing errors (HTML/MARKUP/MARKDOWN modes)
         log_error("Failed to parse #{validated_mode}", e)
         text
-      rescue REXML::ParseException => e
-        # Handle REXML parsing errors (XML mode)
+      rescue Ox::ParseError => e
+        # Handle Ox parsing errors (XML mode)
         log_error("Failed to parse #{validated_mode}", e)
         text
       rescue StandardError => e
@@ -289,74 +291,81 @@ module Lich
         extract_text(doc.root).strip
       end
 
-      # Strip XML tags using REXML and return plain text
+      # Strip XML tags using Ox and return plain text
       #
-      # This method uses REXML to properly parse XML content and extract all
-      # text nodes. Unlike the HTML parser, REXML correctly handles XML-specific
-      # features like namespaces, CDATA sections, and processing instructions.
+      # This method uses Ox (generic mode) to properly parse XML content and
+      # extract all text nodes. Unlike the HTML parser, Ox correctly handles
+      # XML-specific features like namespaces, CDATA sections, and processing
+      # instructions, and it decodes HTML named entities such as +&nbsp;+ that
+      # are not part of XML's predefined set.
       #
       # @param text [String] The XML text to process
       #
       # @return [String] Plain text with XML tags removed and whitespace trimmed
+      #
+      # @note skip: :skip_off keeps whitespace verbatim, including whitespace-only
+      #   text nodes between sibling elements. (:skip_none still drops those
+      #   inter-element nodes, so "<a>x</a>  <b>y</b>" would strip to "xy" not
+      #   "x  y".)
       #
       # @note This method handles:
       #   * XML namespaces
       #   * CDATA sections (content is preserved as text)
       #   * Nested elements
       #   * Mixed content (text and elements)
+      #   * HTML named entities (e.g. +&nbsp;+) and numeric character references
       #   * Unescaped special characters in plain text (wraps in CDATA if needed)
       #
       # @api private
-      def self.strip_xml_with_rexml(text)
+      def self.strip_xml_with_ox(text)
         # Try to parse as-is first (in case it's already well-formed XML)
         begin
-          doc = REXML::Document.new("<root>#{text}</root>")
-        rescue REXML::ParseException
+          parsed = Ox.load("<root>#{text}</root>", mode: :generic, skip: :skip_off)
+        rescue Ox::ParseError
           # If parsing fails due to unescaped characters, wrap in CDATA
-          doc = REXML::Document.new("<root><![CDATA[#{text}]]></root>")
+          parsed = Ox.load("<root><![CDATA[#{text}]]></root>", mode: :generic, skip: :skip_off)
         end
 
+        # Ox.load returns an Ox::Document when the input has an XML prolog and
+        # the bare root Ox::Element otherwise; the root is <root> either way.
+        root = parsed.is_a?(Ox::Document) ? parsed.root : parsed
+
         # Extract all text content from the document
-        extract_xml_text(doc.root).strip
+        extract_xml_text(root).strip
       end
 
-      # Extract plain text from a REXML element tree
+      # Extract plain text from an Ox element tree
       #
-      # Recursively traverses the REXML element tree and extracts all
+      # Recursively traverses the Ox element tree and extracts all
       # text content, including CDATA sections.
       #
-      # @param element [REXML::Element] The root element to extract text from
+      # @param element [Ox::Element] The root element to extract text from
       #
       # @return [String] The extracted plain text
       #
       # @note This method processes all child nodes including:
-      #   * Text nodes
-      #   * CDATA sections
+      #   * Text nodes (plain Strings in Ox's generic model)
+      #   * CDATA sections (Ox::CData)
       #   * Nested elements (recursively)
       #
       # @api private
       def self.extract_xml_text(element)
         return '' if element.nil?
 
-        text_parts = []
-
-        # Iterate through all child nodes
-        element.each do |node|
+        # In Ox's generic model text nodes are plain Strings and CDATA sections
+        # are Ox::CData; comments/PIs are other node types and are ignored.
+        element.nodes.map do |node|
           case node
-          when REXML::Text
-            # Regular text node
-            text_parts << node.value
-          when REXML::CData
-            # CDATA section - extract the content
-            text_parts << node.value
-          when REXML::Element
-            # Nested element - recursively extract text
-            text_parts << extract_xml_text(node)
+          when Ox::CData
+            node.value
+          when Ox::Element
+            extract_xml_text(node)
+          when String
+            node
+          else
+            ''
           end
-          # Ignore other node types (comments, processing instructions, etc.)
-        end
-
-        text_parts.join
+        end.join
       end
 
       # Extract plain text from a Kramdown element tree
@@ -478,10 +487,10 @@ module Lich
 
       # Strip XML tags and return plain text
       #
-      # Removes XML tags from the input text using REXML for proper XML parsing.
+      # Removes XML tags from the input text using Ox for proper XML parsing.
       # This method correctly handles XML-specific features like namespaces,
       # CDATA sections, and processing instructions. This is a convenience
-      # wrapper around {#strip_xml_with_rexml}.
+      # wrapper around {#strip_xml_with_ox}.
       #
       # @param text [String] The XML text to process
       #
@@ -503,13 +512,13 @@ module Lich
       #   TextStripper.strip_xml("<root xmlns='http://example.com'><item>data</item></root>")
       #   # => "data"
       #
-      # @note This method uses REXML for proper XML parsing, which correctly
+      # @note This method uses Ox for proper XML parsing, which correctly
       #   handles XML-specific features (CDATA, namespaces, etc.)
       # @note This method is called internally by {#strip} when mode is Mode::XML
       # @see #strip
       # @api private
       def self.strip_xml(text)
-        strip_xml_with_rexml(text)
+        strip_xml_with_ox(text)
       end
 
       # Strip Markdown formatting and return plain text
