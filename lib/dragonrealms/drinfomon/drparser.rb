@@ -40,6 +40,15 @@ module Lich
         FavorValue_XPWindow = %r{^<component id='exp favor'>\s*Favors:\s*(?<favor>\d+)</component>}.freeze
         InventoryGetStart = %r{You rummage about your person, looking for}.freeze
 
+        # Scheduled shutdown announcement, e.g. "Announcement: DragonRealms will
+        # be shutting down in 15 minutes for routine maintenance." Anchored to
+        # the start of the line (with the optional "Announcement:" prefix) so
+        # quoted or chat text containing the phrase cannot trigger it. Only the
+        # stem is stable: the count drops to "1 minute" (singular) and the
+        # reason/trailing text varies ("...as soon as possible."), so match the
+        # stem and capture the count.
+        GameShutdown = /^(?:Announcement:\s+)?DragonRealms will be shutting down in (?<minutes>\d+) minutes?\b/.freeze
+
         # Spell parsing patterns (check_known_spells)
         OutputClassMono = %r{^<output class="mono"/>}.freeze
         OutputClassEmpty = %r{^<output class=""/>}.freeze
@@ -70,6 +79,10 @@ module Lich
       @@parsing_exp_mods_output = false
       @@parsing_inventory_get = false
 
+      # Wall-clock time the game is expected to go down for maintenance, set
+      # from a shutdown announcement. nil when no shutdown is pending.
+      @@shutdown_at = nil
+
       # Checks server output against registered Flag matchers.
       # Updates Flags.flags hash when a pattern matches.
       # @param server_string [String] A line of server output to check
@@ -84,6 +97,35 @@ module Lich
           end
         end
         server_string
+      end
+
+      # Detects scheduled maintenance shutdown notices and records the target
+      # time, so any script can read DRParser.shutting_down? and
+      # DRParser.shutdown_minutes to wind down cleanly before the disconnect.
+      # Recomputing the target on every announcement keeps the estimate
+      # accurate as the warnings count down; a nil count (a final notice with
+      # no number) means shutdown is now.
+      # @param line [String] A line of server output to check
+      # @return [void]
+      def self.check_game_shutdown(line)
+        return unless (match = line.match(Pattern::GameShutdown))
+
+        minutes = match[:minutes]&.to_i
+        @@shutdown_at = minutes ? Time.now + (minutes * 60) : Time.now
+      end
+
+      # @return [Boolean] true once a maintenance shutdown has been announced
+      def self.shutting_down?
+        !@@shutdown_at.nil?
+      end
+
+      # Minutes remaining until the announced shutdown, counted down in real
+      # time (never negative). nil when no shutdown is pending.
+      # @return [Integer, nil]
+      def self.shutdown_minutes
+        return nil unless @@shutdown_at
+
+        [(@@shutdown_at - Time.now) / 60.0, 0].max.ceil
       end
 
       # Ox::Sax handler that extracts the cmd attribute and item name from the first
@@ -426,6 +468,7 @@ module Lich
       def self.parse(line)
         check_events(line)
         begin
+          check_game_shutdown(line)
           if Pattern::InventoryGetStart.match?(line)
             GameObj.clear_inv
             GameObj.clear_all_containers
