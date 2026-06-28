@@ -251,6 +251,47 @@ RSpec.describe Lich::DragonRealms::DRParser do
         end
       end
     end
+
+    describe 'PositionValue' do
+      it 'captures the "and" position clause' do
+        line = "[You're solidly balanced and in good position.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('in good position')
+      end
+
+      it 'captures the "with" position clause' do
+        line = "[You're badly balanced with opponent dominating.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('opponent dominating')
+      end
+
+      it 'captures the neutral "no advantage" clause' do
+        line = "[You're nimbly balanced with no advantage.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('no advantage')
+      end
+
+      it 'captures both "overwhelming opponent" phrasings' do
+        {
+          "[You're incredibly balanced and overwhelming opponent.]"      => 'overwhelming opponent',
+          "[You're incredibly balanced and overwhelming your opponent.]" => 'overwhelming your opponent'
+        }.each do |line, expected|
+          match = line.match(described_class::Pattern::PositionValue)
+          expect(match).not_to be_nil, "expected #{line.inspect} to match"
+          expect(match[:position]).to eq(expected)
+        end
+      end
+
+      it 'captures the full multi-word position rather than a substring' do
+        line = "[You're solidly balanced and in very strong position.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('in very strong position')
+      end
+    end
   end
 
   describe '.parse' do
@@ -261,6 +302,42 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(drstats_class).to receive(:balance=).with(expected_index)
 
         line = "[You're battered (71%), winded (100%), mighty (100%), incredibly balanced and in dominating position.]"
+        described_class.parse(line)
+      end
+
+      it 'sets both balance and position from a combat-status line' do
+        expect(drstats_class).to receive(:balance=).with(Lich::DragonRealms::DR_BALANCE_VALUES.index('solidly'))
+        expect(drstats_class).to receive(:position=).with(-1)
+
+        line = "[You're bruised, solidly balanced and opponent has slight advantage.]"
+        described_class.parse(line)
+      end
+
+      it 'sets a positive position when winning' do
+        expect(drstats_class).to receive(:position=).with(8)
+
+        line = "[You're incredibly balanced and in dominating position.]"
+        described_class.parse(line)
+      end
+
+      it 'maps "overwhelming your opponent" to the maximum position' do
+        expect(drstats_class).to receive(:position=).with(9)
+
+        line = "[You're incredibly balanced and overwhelming your opponent.]"
+        described_class.parse(line)
+      end
+
+      it 'sets a neutral position for "no advantage"' do
+        expect(drstats_class).to receive(:position=).with(0)
+
+        line = "[You're nimbly balanced with no advantage.]"
+        described_class.parse(line)
+      end
+
+      it 'does not set position for a bare balance line' do
+        expect(drstats_class).not_to receive(:position=)
+
+        line = "You are solidly balanced."
         described_class.parse(line)
       end
     end
