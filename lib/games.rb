@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'common/shutdown_log'
+
 # Modernized version of games.rb with separated DR and GS functionality
 # Original module carve out from lich.rbw
 # Refactored on 2025-04-01
@@ -61,7 +63,7 @@ module Lich
           raise NotImplementedError, "#{self.class} must implement #get_documentation_url"
         end
 
-        def process_game_specific_data(server_string)
+        def process_game_specific_data(server_string, stripped_server = nil)
           raise NotImplementedError, "#{self.class} must implement #process_game_specific_data"
         end
 
@@ -122,9 +124,6 @@ module Lich
 
     # XML string cleaner module
     module XMLCleaner
-      POORLY_ENCODED_APOSTROPHE_BYTE = 0x92
-      ASCII_APOSTROPHE_BYTE = 0x27
-
       class << self
         def clean_nested_quotes(server_string)
           # Fix nested single quotes
@@ -149,29 +148,15 @@ module Lich
         end
 
         def fix_invalid_characters(server_string)
-          # Fix ampersands
-          if server_string.include?('&') && !server_string.include?('&amp;') && !server_string.include?('&gt;') && !server_string.include?('&lt;') && !server_string.include?('&apos;') && !server_string.include?('&quot;')
-            Lich.log "Invalid & detected: #{server_string.inspect}"
-            server_string.gsub!('&', '&amp;')
-            Lich.log "Invalid & fixed to: #{server_string.inspect}"
-          end
+          # Note: a bare '&' is intentionally not escaped here. REXML raised on it
+          # (hence the old escaping); Ox tolerates it (convert_special: false emits
+          # it verbatim with no error), so escaping is no longer needed for parsing.
 
           # Fix bell character
           if server_string.include?("\a")
             Lich.log "Invalid \\a detected: #{server_string.inspect}"
             server_string.gsub!("\a", '')
             Lich.log "Invalid \\a stripped out: #{server_string.inspect}"
-          end
-
-          # Fix poorly encoded apostrophes
-          if server_string.bytes.include?(POORLY_ENCODED_APOSTROPHE_BYTE)
-            Lich.log "Detected poorly encoded apostrophe: #{server_string.inspect}"
-            original_encoding = server_string.encoding
-            repaired_bytes = server_string.bytes.map do |byte|
-              byte == POORLY_ENCODED_APOSTROPHE_BYTE ? ASCII_APOSTROPHE_BYTE : byte
-            end
-            server_string.replace(repaired_bytes.pack('C*').force_encoding(original_encoding))
-            Lich.log "Changed poorly encoded apostrophe to: #{server_string.inspect}"
           end
 
           server_string
@@ -202,8 +187,65 @@ module Lich
       end
     end
 
+    # Raised when a server fragment is structurally truncated (cut off
+    # mid-element) -- the stream has desynced from XML framing. Pre-Ox, strict
+    # REXML raised on these fragments and Game.process_xml_data's rescue logged
+    # the fragment and reset XMLData, so parser strictness doubled as desync
+    # detection. Ox is permissive: it parses truncated fragments without
+    # raising (auto-closing elements, fabricating empty attribute values) and
+    # only reports the damage through its optional error callback. That
+    # callback is now the only desync signal, so process_xml_data promotes
+    # truncation-class parse errors to this exception to keep the old
+    # recovery path (log + XMLData.reset).
+    class GameStreamDesyncError < StandardError; end
+
+    # Ox error-callback messages that mean the fragment ended mid-token -- the
+    # only unambiguous truncation signal, since a complete line cannot end inside
+    # an open tag, attribute list, or quoted value. (In practice genuine
+    # truncation is an edge case: reads are newline-delimited via @socket.gets,
+    # Simu keeps each tag on one line, multi-line content is reassembled upstream
+    # by buffer_room_objs, and #4's tag_end guard keeps @active_tags balanced
+    # regardless. This is a backstop for a partial read at disconnect.)
+    #
+    # Ox also fires the callback for Simu's routine almost-XML -- bare text and
+    # multiple top-level elements ('text not terminated', 'multiple top level
+    # elements'), nested quotes ('no attribute value'), unescaped ampersands
+    # ('Invalid special character sequence'), missing </d> end tags ('Start End
+    # Mismatch: ... not closed') -- none of which match these patterns, so they
+    # stay tolerated. The message prefix matters: 'Unexpected Character: element
+    # not closed' (a start tag that never got its '>') is truncation, while the
+    # similarly worded 'Start End Mismatch: element ... not closed' (an element
+    # missing its end tag) is routine.
+    #
+    # 'attribute value not in quotes' is intentionally NOT here: it fires on a
+    # *complete* unquoted-attribute line (<a x=y>), so matching it false-resets a
+    # fully-parsed fragment. A truncated unquoted attr (<a x=y) still resets via
+    # 'attributes not terminated' / 'element not closed' below.
+    STREAM_DESYNC_ERRORS = [
+      /\ANot Terminated: attributes not terminated/,
+      /\ANot Terminated: quoted value not terminated/,
+      /\ANot Terminated: document not terminated/,
+      /\AUnexpected Character: element not closed/
+    ].freeze
+
+    # Ox's signature when a tag scatters into valueless attributes: the
+    # settingsInfo space-not-found bug, or a same-quote inside a quoted value
+    # (e.g. title='Tsetem's Items'), where the inner quote ends the value early.
+    # (A genuinely valueless attribute, <a foo>, reports the same thing, but the
+    # repairs leave it unchanged so no reparse happens.)
+    NO_ATTRIBUTE_VALUE_ERROR = /\AUnexpected Character: no attribute value/
+
     # Base Game class with common functionality
     class Game
+      # Seconds to wait for readable game socket data before one read timeout.
+      READ_TIMEOUT_SECONDS = 30
+
+      # Consecutive read timeouts allowed before treating the game link as dead.
+      MAX_CONSECUTIVE_READ_TIMEOUTS = 3
+
+      # Sentinel returned when the game socket has no readable data before timeout.
+      READ_TIMEOUT = Object.new.freeze
+
       class << self
         attr_reader :thread, :buffer, :_buffer, :game_instance
 
@@ -229,12 +271,25 @@ module Lich
           @room_number_after_ready = false
           @last_id_shown_room_window = 0
           @game_instance = nil
+          # strip_xml's multiline carry is a process-global; clear it here so a
+          # fragment left open before a reconnect/session reset does not bleed
+          # into the next session.
+          $strip_xml_multiline = {}
         end
 
         def set_game_instance(game_type)
           @game_instance = GameInstanceFactory.create(game_type)
         end
 
+        # Opens the TCP connection to the game server and starts the socket's
+        # wrap and main reader threads.
+        #
+        # @param host [String] game server hostname
+        # @param port [Integer] game server port
+        # @return [TCPSocket] the connected, configured game socket
+        # @note Connection errors propagate to the caller. Use
+        #   {.open_with_timeout} to bound how long the connect may block.
+        # @see .open_with_timeout
         def open(host, port)
           @socket = TCPSocket.open(host, port)
 
@@ -275,6 +330,37 @@ module Lich
           start_main_thread
 
           @socket
+        end
+
+        # Connects to the game server on a background thread, enforcing a connect
+        # timeout that a bare {.open} cannot. Surfaces a stuck or failed connect
+        # instead of letting startup proceed with a dead socket.
+        #
+        # @param host [String] game server hostname
+        # @param port [Integer] game server port
+        # @param timeout [Integer, Float] seconds to wait for the connect to complete
+        # @return [void]
+        # @raise [RuntimeError] if the connect does not complete within +timeout+
+        # @raise [StandardError] re-raises whatever {.open} raises
+        #   (e.g. Errno::ECONNREFUSED) so the caller's rescue runs
+        # @see .open
+        def open_with_timeout(host, port, timeout = 30)
+          connect_thread = Thread.new {
+            # report_on_exception off: a failed open is surfaced by the join below
+            # (which re-raises it), not by an auto-printed thread warning.
+            Thread.current.report_on_exception = false
+            self.open(host, port)
+          }
+          # join returns nil on timeout, the thread on success, and re-raises the
+          # thread's exception on failure -- so a Game.open that errors (e.g.
+          # connection refused) propagates to the caller's rescue instead of being
+          # silently swallowed (the old `if connect_thread.status` could not tell a
+          # thread that died with an exception, status nil, from a normal finish,
+          # status false).
+          if connect_thread.join(timeout).nil?
+            connect_thread.kill rescue nil
+            raise "error: timed out connecting to #{host}:#{port}"
+          end
         end
 
         def start_wrap_thread
@@ -350,42 +436,49 @@ module Lich
         def start_main_thread
           @thread = Thread.new do
             consecutive_timeouts = 0
-            max_consecutive_timeouts = 3 # Allow 3 timeouts before giving up
+            max_consecutive_timeouts = MAX_CONSECUTIVE_READ_TIMEOUTS
 
             begin
               while true
                 begin
-                  # Try to read from socket with timeout
-                  server_string = @socket.gets
+                  server_string = read_server_string
 
-                  # Successfully received data - reset timeout counter
+                  if server_string.equal?(READ_TIMEOUT)
+                    raise IO::TimeoutError, "no game data for #{READ_TIMEOUT_SECONDS} seconds"
+                  end
+
                   consecutive_timeouts = 0
 
                   # Break if socket closed (gets returns nil)
-                  break if server_string.nil?
+                  if server_string.nil?
+                    record_shutdown_reason(:game_eof, source: :game_reader)
+                    break
+                  end
 
                   @last_recv = Time.now
                   @_buffer.update(server_string) if defined?(TESTING) && TESTING
 
                   begin
                     process_server_string(server_string)
+                  rescue GameStreamDesyncError
+                    raise
                   rescue StandardError => e
                     log_error("Error processing server string", e)
                   end
-                rescue Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError => timeout_error
-                  # Socket read timed out - this is expected if server is quiet
+                rescue Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
                   consecutive_timeouts += 1
 
-                  Lich.log "Socket read timeout #{consecutive_timeouts}/#{max_consecutive_timeouts} (no data for 30s)"
+                  shutdown_log.info("socket read timeout #{consecutive_timeouts}/#{max_consecutive_timeouts} (no game data for #{READ_TIMEOUT_SECONDS}s)")
 
                   if consecutive_timeouts >= max_consecutive_timeouts
-                    Lich.log "Too many consecutive timeouts, connection may be dead"
-                    raise timeout_error # Let the outer rescue handle it
+                    total_timeout = total_read_timeout_seconds(max_consecutive_timeouts)
+                    shutdown_log.warning("game connection timed out after #{max_consecutive_timeouts} consecutive read timeouts (#{total_timeout}s)")
+                    raise IO::TimeoutError, "no game data for #{total_timeout} seconds"
                   end
 
                   # Check if socket is still alive
                   if @socket.closed?
-                    Lich.log "Socket is closed, exiting thread"
+                    shutdown_log.info("game socket is closed; exiting server thread")
                     break
                   end
 
@@ -394,26 +487,52 @@ module Lich
                   retry
                 rescue Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED => conn_error
                   # Connection was reset/broken - these are fatal
-                  Lich.log "Connection error: #{conn_error.class} - #{conn_error.message}"
+                  shutdown_log.info("connection error: #{conn_error.class} - #{conn_error.message}")
                   raise conn_error
                 end
               end
             rescue StandardError => e
+              if intentional_shutdown_close_error?(e)
+                shutdown_log.info("server thread exiting after orderly user shutdown")
+                next
+              end
+
               # Handle any other errors
               should_continue = handle_thread_error(e)
-
               # Only retry if handle_thread_error says it's safe and socket is still open
               if should_continue && !@socket.closed? && $_CLIENT_.alive?
-                Lich.log "Retrying server thread after error..."
+                shutdown_log.debug("retrying server thread after error")
                 consecutive_timeouts = 0 # Reset counter on retry
                 sleep 1 # Brief pause before retry
                 retry
               else
-                Lich.log "Server thread exiting due to unrecoverable error"
+                reason = shutdown_reason_for_thread_exit(e)
+                record_shutdown_reason(reason, source: :game_reader, detail: e.class)
+                shutdown_log.info("server thread exiting due to #{reason}")
               end
             end
           end
           @thread.priority = 4
+        end
+
+        # Reads one game-server line after an explicit readiness wait.
+        #
+        # Ruby does not reliably surface SO_RCVTIMEO through TCPSocket#gets on
+        # every supported platform. Waiting with IO.select makes the reader's
+        # no-data timeout deterministic while preserving gets-based EOF handling.
+        #
+        # @param read_timeout [Numeric] seconds to wait for game socket data
+        # @return [String, nil, Object] a server line, nil for EOF, or READ_TIMEOUT
+        def read_server_string(read_timeout: READ_TIMEOUT_SECONDS)
+          return READ_TIMEOUT unless IO.select([@socket], nil, nil, read_timeout)
+
+          @socket.gets
+        end
+
+        # @param timeout_count [Integer] number of consecutive read waits
+        # @return [Integer] total elapsed no-data seconds represented by count
+        def total_read_timeout_seconds(timeout_count = MAX_CONSECUTIVE_READ_TIMEOUTS)
+          READ_TIMEOUT_SECONDS * timeout_count
         end
 
         def process_server_string(server_string)
@@ -528,65 +647,98 @@ module Lich
 
         def process_xml_data(server_string)
           begin
-            # Check for valid XML
-            REXML::Document.parse_stream("<root>#{server_string}</root>", XMLData)
-          rescue => e
-            case e.to_s
-            # Missing attribute equal: <s> - in dynamic dialogs with a single apostrophe for possessive 'Tsetem's Items'
-            when /nested single quotes|nested double quotes|Missing attribute equal: <[^>]+>|Invalid attribute name: <[^>]+>/
-              original_server_string = server_string.dup
-              server_string = XMLCleaner.clean_nested_quotes(server_string)
-              if original_server_string != server_string
-                retry
-              else
-                handle_xml_error(server_string, e)
-                XMLData.reset
-                return
-              end
-            when /invalid characters/
-              server_string = XMLCleaner.fix_invalid_characters(server_string)
-              retry
-            when /Missing end tag for 'd'/
-              server_string = XMLCleaner.fix_xml_tags(server_string)
-              retry
-            else
-              handle_xml_error(server_string, e)
-              XMLData.reset
-              return
-            end
+            # Ox is a permissive parser: it handles Simu's not-quite-XML stream
+            # without the clean/retry dance REXML required (nested quotes, missing
+            # 'd' end tags, etc. are tolerated rather than raised). XMLData itself
+            # implements the Ox::Sax interface, so Ox parses straight into it. No
+            # <root> wrapper needed: that was a REXML requirement (single root); Ox
+            # handles multiple top-level elements and bare text directly.
+            XMLData.sax_parse_errors.clear
+            # convert_special: false keeps Ox in bytes-land: it never decodes a
+            # numeric entity (e.g. &#8217;) into UTF-8. The five standard XML
+            # entities are decoded by XMLData#attr/#text instead. Values are left
+            # in Ox's native (ASCII-8BIT) encoding -- REXML effectively produced
+            # ASCII for this (high-byte-scrubbed) stream, so retagging to
+            # Windows-1252 was a divergence and caused entity corruption.
+            Ox.sax_parse(XMLData, server_string, convert_special: false, symbolize: false, skip: :skip_none)
+            check_stream_desync!(XMLData.sax_parse_errors)
+            repair_malformed_attributes_and_reparse(server_string)
+          rescue GameStreamDesyncError => e
+            # A truncated/desynced fragment. Ox never raises on malformed stream
+            # content -- it reports via the error callback, and check_stream_desync!
+            # promotes truncation-class errors to this exception. Log and reset
+            # rather than killing the server thread.
+            Lich.log "warning: stream desync (#{e.message}); resetting XMLData: #{server_string.inspect}"
+            XMLData.reset
+            return
           end
+
+          stripped_server = strip_xml(server_string, type: "main")
 
           # Process game-specific data using instance
           if @game_instance && Module.const_defined?(:GameLoader)
-            @game_instance.process_game_specific_data(server_string)
+            @game_instance.process_game_specific_data(server_string, stripped_server)
           end
 
           # Process downstream XML
           Script.new_downstream_xml(server_string) if defined?(Script)
 
           # Process stripped server string
-          stripped_server = strip_xml(server_string, type: 'main')
           stripped_server.split("\r\n").each do |line|
             @buffer.update(line) if defined?(TESTING) && TESTING
             Script.new_downstream(line) if defined?(Script) && !line.empty?
           end
         end
 
-        def handle_xml_error(server_string, error)
-          # Ignoring certain XML errors
-          unless error.to_s =~ /invalid byte sequence/
-            # Handle specific XML errors
-            if server_string =~ /<settingsInfo .*?space not found /
-              Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
-              server_string.sub!(/\s\bspace not found\b\s/, " client='1.0.1.28' ")
-              Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
-              @@settings_init_needed = true
-              return process_xml_data(server_string) # Return to retry with fixed string
-            end
-
-            Lich.log "Invalid XML detected - please report this: #{server_string.inspect}"
-            Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
+        # Promote truncation-class Ox parse errors to GameStreamDesyncError so
+        # a desynced stream still hits the log + reset recovery path instead of
+        # being silently absorbed (see the GameStreamDesyncError comment).
+        # parse_errors is XMLData's collected Ox error-callback messages for
+        # the fragment just parsed.
+        def check_stream_desync!(parse_errors)
+          desync = parse_errors.find do |message|
+            STREAM_DESYNC_ERRORS.any? { |pattern| pattern.match?(message) }
           end
+          raise GameStreamDesyncError, desync if desync
+        end
+
+        # Ox reports "no attribute value" for two repairable malformations that
+        # scatter a tag into junk attributes: the settingsInfo space-not-found
+        # server bug, and a same-quote inside a quoted value (Simu's dynamic
+        # dialogs, e.g. title='Tsetem's Items'). Both raised in REXML and were
+        # repaired in the rescue; Ox tolerates them, so drive the repair off its
+        # error report -- only the rare flagged line pays the cost. Apply the
+        # repairs; if any changed the line, drop the junk the first parse committed
+        # and parse once more, ignoring any errors on that pass so we never loop.
+        # Escaped &apos;/&quot; round-trip back to the literal char via
+        # XmlEntities.decode and the front-end's own entity decoding.
+        def repair_malformed_attributes_and_reparse(server_string)
+          return unless XMLData.sax_parse_errors.any? { |message| NO_ATTRIBUTE_VALUE_ERROR.match?(message) }
+
+          before = server_string.dup
+          fix_invalid_settings_info(server_string)
+          XMLCleaner.clean_nested_quotes(server_string)
+          return if server_string == before # nothing to repair (e.g. a genuine valueless attribute)
+
+          XMLData.reset
+          XMLData.sax_parse_errors.clear
+          Ox.sax_parse(XMLData, server_string, convert_special: false, symbolize: false, skip: :skip_none)
+        end
+
+        # The server sends a malformed <settingsInfo ... space not found .../> (an
+        # attribute with no '=') to characters that have never connected with the
+        # Wrayth/StormFront client. REXML raised on it (the rescue repaired it); Ox
+        # tolerates it and emits "no attribute value", so it is repaired from
+        # repair_malformed_attributes_and_reparse. @@settings_init_needed makes
+        # gameloader's PostLoad seed a valid client record (see settings_init_needed?
+        # and lib/common/gameloader.rb).
+        def fix_invalid_settings_info(server_string)
+          return unless server_string =~ /<settingsInfo .*?space not found /
+
+          Lich.log "Invalid settingsInfo XML tags detected: #{server_string.inspect}"
+          server_string.sub!(/\s\bspace not found\b\s/, " client='1.0.1.28' ")
+          Lich.log "Invalid settingsInfo XML tags fixed to: #{server_string.inspect}"
+          @@settings_init_needed = true
         end
 
         def process_downstream_hooks(server_string)
@@ -638,32 +790,94 @@ module Lich
         end
 
         def handle_thread_error(error)
-          Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
+          if recognized_connection_disruption?(error)
+            shutdown_log.info("server_thread: #{connection_disruption_log_message(error)}")
+            shutdown_log.debug("server_thread backtrace: #{error.backtrace.join("\n\t")}") if error.backtrace
+          else
+            shutdown_log.error("server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}")
+          end
           sleep 0.2
 
-          # Determine if we should retry
           case error
           when Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
-            # Timeout errors are potentially recoverable if we haven't seen too many
-            Lich.log "Timeout error detected - may attempt retry"
-            return true
+            # Timeout errors reach this outer handler only after the inner
+            # reader loop has exhausted its consecutive-timeout threshold.
+            shutdown_log.info("game timeout - will not retry")
+            return false
           when Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED
             # Connection errors are fatal
-            Lich.log "Fatal connection error - will not retry"
+            shutdown_log.info("connection error - will not retry")
+            return false
+          when GameStreamDesyncError
+            shutdown_log.info("game stream desync detected - will not retry")
             return false
           else
             # Check if socket/client are closed or if it's a known fatal error
             if !$_CLIENT_.alive? || @socket.closed?
-              Lich.log "Client or socket closed - will not retry"
+              shutdown_log.info("client or socket closed - will not retry")
               return false
             elsif error.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i
-              Lich.log "Fatal error pattern detected - will not retry"
+              shutdown_log.info("fatal error pattern detected - will not retry")
               return false
             else
-              Lich.log "Unknown error - will attempt retry"
+              shutdown_log.debug("unknown server thread error - will attempt retry")
               return true
             end
           end
+        end
+
+        def shutdown_reason_for_thread_exit(error)
+          case error
+          when Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
+            :game_timeout
+          when Errno::ECONNRESET
+            :connection_reset
+          when Errno::EPIPE
+            :connection_pipe
+          when Errno::ECONNABORTED
+            :connection_aborted
+          when GameStreamDesyncError
+            :game_stream_desync
+          else
+            :unrecoverable_game_thread_error
+          end
+        end
+
+        def record_shutdown_reason(reason, source:, detail: nil)
+          return unless defined?(Lich::Common::ShutdownCoordinator)
+
+          Lich::Common::ShutdownCoordinator.request(reason: reason, source: source, detail: detail)
+        rescue StandardError => e
+          shutdown_log.warning("failed to record shutdown reason #{reason.inspect}: #{e.class}: #{e.message}")
+        end
+
+        def shutdown_log
+          Lich::Common::ShutdownLog
+        end
+
+        def intentional_shutdown_close_error?(error)
+          return false unless defined?(Lich::Common::ShutdownCoordinator)
+          return false unless Lich::Common::ShutdownCoordinator.orderly_user_exit?
+          return false unless @socket&.closed?
+
+          error.is_a?(Errno::EBADF) ||
+            error.to_s =~ /stream closed in another thread|closed stream|bad file descriptor/i
+        end
+
+        def recognized_connection_disruption?(error)
+          error.is_a?(Errno::ETIMEDOUT) ||
+            error.is_a?(Errno::EWOULDBLOCK) ||
+            error.is_a?(IO::TimeoutError) ||
+            error.is_a?(Errno::ECONNRESET) ||
+            error.is_a?(Errno::EPIPE) ||
+            error.is_a?(Errno::ECONNABORTED) ||
+            error.is_a?(GameStreamDesyncError)
+        end
+
+        def connection_disruption_log_message(error)
+          return "GameStreamDesyncError: #{error.message.lines.first&.strip}" if error.is_a?(GameStreamDesyncError)
+
+          "#{error.class}: #{error.message}"
         end
 
         protected
@@ -765,11 +979,12 @@ module Lich
         "https://gswiki.play.net/Lich:Software/Installation"
       end
 
-      def process_game_specific_data(server_string)
-        infomon_serverstring = server_string.dup
-        Infomon::XMLParser.parse(infomon_serverstring)
-        stripped_infomon_serverstring = strip_xml(infomon_serverstring, type: 'infomon')
-        stripped_infomon_serverstring.split("\r\n").each do |line|
+      def process_game_specific_data(server_string, stripped_server = nil)
+        # Infomon's XML-level parse needs the raw string; its line parser reuses
+        # the text already stripped by process_xml_data (XMLParser.parse does not
+        # mutate, so no dup or second strip_xml is needed).
+        Infomon::XMLParser.parse(server_string)
+        stripped_server.split("\r\n").each do |line|
           Infomon::Parser.parse(line) unless line.empty?
         end
       end
@@ -918,7 +1133,7 @@ module Lich
         "https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich"
       end
 
-      def process_game_specific_data(server_string)
+      def process_game_specific_data(server_string, _stripped_server = nil)
         # Parse directly to allow inline modifications (e.g., inline exp display)
         # The parser modifies server_string in place via line.replace()
         DRParser.parse(server_string)

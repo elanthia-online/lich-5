@@ -19,7 +19,8 @@ module Lich
       # Known fatal error codes that should not be retried
       # REJECT = bad credentials, NORECORD = account not found, INVALID = invalid request
       # PASSWORD = wrong password, CHARACTER_NOT_FOUND = character not in account
-      FATAL_ERROR_CODES = %w[REJECT NORECORD INVALID PASSWORD CHARACTER_NOT_FOUND].freeze
+      # GENERATOR_NOT_AVAILABLE = account not entitled to create a character on the instance
+      FATAL_ERROR_CODES = %w[REJECT NORECORD INVALID PASSWORD CHARACTER_NOT_FOUND GENERATOR_NOT_AVAILABLE].freeze
 
       # Authenticates a user with the game server
       # Includes automatic retry with exponential backoff for transient errors
@@ -29,16 +30,18 @@ module Lich
       # @param character [String, nil] Character name (optional)
       # @param game_code [String, nil] Game code (optional)
       # @param legacy [Boolean] Whether to use legacy authentication
+      # @param generator [Boolean] Whether to enter the character generator instead of selecting a character
       # @return [Hash, Array] Authentication data containing connection information
       # @raise [StandardError] Re-raises the last error after all retries exhausted
-      def self.authenticate(account:, password:, character: nil, game_code: nil, legacy: false)
+      def self.authenticate(account:, password:, character: nil, game_code: nil, legacy: false, generator: false)
         with_retry do
-          if character && game_code
+          if game_code && (character || generator)
             EAccess.auth(
               account: account,
               password: password,
               character: character,
-              game_code: game_code
+              game_code: game_code,
+              generator: generator
             )
           elsif legacy
             EAccess.auth(
