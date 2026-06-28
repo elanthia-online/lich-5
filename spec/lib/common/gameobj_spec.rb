@@ -510,6 +510,24 @@ RSpec.describe Lich::Common::GameObj do
       end
     end
 
+    it 'preserves verbatim whitespace in classification regexes' do
+      # type/name patterns are compiled to regexes and matched against the
+      # object name. The loader must not collapse the double space, or an item
+      # whose name has two spaces would stop classifying (regression guard for
+      # the REXML -> Ox conversion: Ox collapses whitespace unless told not to).
+      Dir.mktmpdir do |dir|
+        base_file = File.join(dir, 'base.xml')
+        # noun is a non-matching value so this asserts purely on the name regex
+        File.write(base_file, "<data><type name=\"pole\"><name>war  blade</name><noun>halberd</noun></type></data>")
+        stub_const('DATA_DIR', dir)
+
+        expect(described_class.load_data(base_file)).to be(true)
+        expect(described_class.type_data['pole'][:name].source).to eq('war  blade')
+        expect(described_class.new('601', 'staff', 'a war  blade').type).to include('pole')
+        expect(described_class.new('602', 'staff', 'a war blade').type).to be_nil
+      end
+    end
+
     it 'caches type results by object name in type_cache' do
       Dir.mktmpdir do |dir|
         base_file = File.join(dir, 'base.xml')

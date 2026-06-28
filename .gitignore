@@ -21,6 +21,7 @@ R4LGTK3.iss
 data
 scripts
 .vscode
+.idea
 .claude
 doc/yard/
 *.md

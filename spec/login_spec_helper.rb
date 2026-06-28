@@ -67,6 +67,7 @@ end
 module Gtk
   def self.queue; yield if block_given?; end
   def self.main_quit; end
+  def self.lich_main_quit; end
 
   class Window
     def initialize(_type); end
