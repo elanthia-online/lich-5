@@ -1,35 +1,8 @@
 =begin
 xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
-
-    Maintainer: Elanthia-Online
-    Original Author: Tillmen, others
-    game: Gemstone
-    tags: CORE, spells
-    required: Lich > 5.7
-    version: 1.3.4
-
-  changelog:
-    v1.3.4 (2025-01-04)
-      Feature: Add support for room IDs in DR
-    v1.3.3 (2024-10-31)
-      Feature: Add DR Active Spells to XMLData
-    v1.3.2 (2024-10-17)
-      Bugfix: Simu breaking change for UID and roomname logic
-    v1.3.1 (2024-09-11)
-      Split out if/elif block for better tag detection in DR
-    v1.3.0 (2023-11-19)
-      Add usage of new Lich::Claim module
-    v1.2.1 (2022-05-29)
-      Logic to avoid adding 'Cooldown' tag to any spell with text 'Recovery'
-      (for 599, Rapid Fire Recovery) in XMLData.active_spells
-    v1.2.0 (2022-03-09)
-      Adding the tags 'Cooldown' and 'Debuff' so that spell-list.xml spell detection of 'Cooldown' and recovery is back in operation.
-    v1.1.0 (2022-03-08)
-      rebaselined as xmlparser.rb to support continuing game changes
-    v1.0.0
-      Initial release and subsequent modifications as SIMU XML changes warranted
-
 =end
+
+require File.join(LIB_DIR, 'common', 'xml_entities.rb')
 
 module Lich
   module Common
@@ -45,12 +18,11 @@ module Lich
                   :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
                   :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
                   :dialogs, :room_id, :previous_nav_rm, :concentration, :max_concentration,
-                  :arrival_pcs, :room_player_hidden, :assess
+                  :arrival_pcs, :room_player_hidden, :field_exp, :max_field_exp,
+                  :room_climate, :room_terrain, :assess
       attr_accessor :send_fake_tags
 
       @@warned_deprecated_spellfront = 0
-
-      include REXML::StreamListener
 
       def initialize
         @buffer = String.new
@@ -97,6 +69,8 @@ module Lich
         @room_description = String.new
         @room_exits = Array.new
         @room_exits_string = String.new
+        @room_climate = 0
+        @room_terrain = 0
 
         @familiar_room_title = String.new
         @familiar_room_description = String.new
@@ -129,6 +103,8 @@ module Lich
         @stance_value = 0
         @mind_text = String.new
         @mind_value = 0
+        @field_exp = 0
+        @max_field_exp = 0
         @prepared_spell = 'None'
         @encumbrance_text = String.new
         @encumbrance_full_text = String.new
@@ -153,6 +129,13 @@ module Lich
         @assess = []
         @assess_buffer = nil
         @assess_ids = []
+
+        # Ox SAX bridge state (see start_element/attr/attrs_done/error below):
+        # the element/attributes being accumulated and parse errors for the
+        # fragment currently being parsed.
+        @sax_element = nil
+        @sax_attributes = {}
+        @sax_parse_errors = []
       end
 
       # for backwards compatibility
@@ -187,6 +170,7 @@ module Lich
         @active_ids = Array.new
         @current_stream = String.new
         @current_style = String.new
+        @sax_parse_errors = []
       end
 
       def safe_to_respond?
@@ -307,6 +291,50 @@ module Lich
         @assess.reject { |e| e[:self] || e[:pc] }
       end
 
+      # Ox::Sax interface: Ox parses the server stream directly into XMLData (see
+      # Game.process_xml_data). Ox fires start_element, then attr per attribute,
+      # then attrs_done, then text/children, then end_element. Attributes are
+      # accumulated and flushed to tag_start (matching the old REXML-style single
+      # tag_start(name, hash) call). The game stream is Windows-1252, so byte
+      # content is tagged with that encoding; names are ASCII.
+      def start_element(name)
+        @sax_element = name
+        @sax_attributes = {}
+      end
+
+      # Values are left in Ox's native encoding rather than retagged: REXML handed
+      # these callbacks UTF-8 (effectively ASCII for the scrubbed game stream), so
+      # force-tagging Windows-1252 was both a divergence from the pre-Ox behavior
+      # and the source of the entity corruption. Ox runs with convert_special:
+      # false, so XmlEntities.decode restores the standard entities here.
+      def attr(name, value)
+        @sax_attributes[name] = XmlEntities.decode(value)
+      end
+
+      def attrs_done
+        tag_start(@sax_element, @sax_attributes)
+      end
+
+      def end_element(name)
+        tag_end(name)
+      end
+
+      # REXML routed CDATA through text handling; do the same.
+      def cdata(value)
+        text(value)
+      end
+
+      # Ox reports parse problems here instead of raising, then keeps parsing,
+      # auto-balancing whatever was malformed. Collect the messages so
+      # Game.process_xml_data can tell Simu's routine almost-XML from a
+      # genuinely truncated (desynced) fragment once the parse completes.
+      # The caller clears this between fragments.
+      attr_reader :sax_parse_errors
+
+      def error(message, line, column)
+        @sax_parse_errors << "#{message} (line #{line}, column #{column})"
+      end
+
       def tag_start(name, attributes)
         # This is called once per element by REXML in games.rb
         # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
@@ -389,6 +417,10 @@ module Lich
           end
           if name == 'resource'
             nil
+          end
+          if name == 'roommeta'
+            @room_climate = attributes['climate'].to_i if attributes['climate']
+            @room_terrain = attributes['terrain'].to_i if attributes['terrain']
           end
           if name == 'pushStream'
             @in_stream = true
@@ -513,6 +545,8 @@ module Lich
             elsif attributes['id'] == 'mindState'
               @mind_text = attributes['text']
               @mind_value = attributes['value'].to_i
+              @field_exp = attributes['field_exp'].to_i if attributes['field_exp']
+              @max_field_exp = attributes['max_field_exp'].to_i if attributes['max_field_exp']
               $_CLIENT_.puts "\034GSr#{MINDMAP[@mind_text]}\r\n" if @send_fake_tags
             elsif attributes['id'] == 'health'
               @health, @max_health = attributes['text'].scan(/-?\d+/).collect { |num| num.to_i }
@@ -642,7 +676,7 @@ module Lich
                       end
                     }
                     @nerve_tracker_num += 1
-                    DownstreamHook.add('nerve_tracker', action)
+                    DownstreamHook.add('nerve_tracker', action, persist: true) # engine-managed, toggled by the parser
                     Game._puts "#{$cmd_prefix}health"
                   }
                 end
@@ -748,8 +782,9 @@ module Lich
       end
 
       def text(text_string)
-        # This is called once per element with text in it by REXML in games.rb
-        # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
+        # Called by Ox once per text node. Decode the standard XML entities (Ox
+        # runs with convert_special: false; see Lich::Common::XmlEntities).
+        text_string = XmlEntities.decode(text_string)
         begin
           # fixme: /<stream id="Spells">.*?<\/stream>/m
           # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))
@@ -976,8 +1011,13 @@ module Lich
       end
 
       def tag_end(name)
-        # This is called once per element by REXML in games.rb
-        # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
+        # Called once per element close. Ox synthesizes an end for a stray closing
+        # tag -- a close with no matching open (e.g. a desynced </prompt> whose
+        # <prompt> was in a prior, truncated read). tag_start never pushed it (Ox
+        # fires no attrs_done for a synthetic start), so popping here would remove
+        # the wrong element and the inv/compass end-handlers would fire spuriously.
+        # Ignore any close that does not match the currently-open tag.
+        return unless @active_tags.last == name
 
         begin
           if @game =~ /^DR/

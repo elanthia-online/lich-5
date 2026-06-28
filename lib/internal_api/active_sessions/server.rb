@@ -3,6 +3,8 @@
 require 'json'
 require 'socket'
 
+require_relative '../../common/shutdown_log'
+
 module Lich
   module InternalAPI
     module ActiveSessions
@@ -145,7 +147,7 @@ module Lich
         ensure
           if defined?(Lich) && Lich.respond_to?(:log)
             if stopping?
-              Lich.log("info: ActiveSessions accept_loop stopped pid=#{Process.pid}")
+              Lich::Common::ShutdownLog.info("ActiveSessions accept_loop stopped pid=#{Process.pid}")
             else
               Lich.log("warning: ActiveSessions accept_loop thread exiting pid=#{Process.pid}")
             end
