@@ -8,11 +8,11 @@ module Lich
       end
 
       def self.fxp_current
-        Infomon.get("experience.field_experience_current")
+        XMLData.field_exp
       end
 
       def self.fxp_max
-        Infomon.get("experience.field_experience_max")
+        XMLData.max_field_exp
       end
 
       def self.exp

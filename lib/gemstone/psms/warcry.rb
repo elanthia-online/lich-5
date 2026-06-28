@@ -135,10 +135,13 @@ module Lich
       # blocked by overexertion
       # @example
       #   Warcry.available?("holler") => true # if known, affordable, not on cooldown, and not overexerted
+      #   and not silenced or cutthroat
       def Warcry.available?(name, min_rank: 1, forcert_count: 0)
         Warcry.known?(name, min_rank: min_rank) &&
           Warcry.affordable?(name, forcert_count: forcert_count) &&
-          PSMS.available?(name)
+          PSMS.available?(name) &&
+          !Status.cutthroat? &&
+          !Status.silenced?
       end
 
       # DEPRECATED: Use {#buff_active?} instead.
