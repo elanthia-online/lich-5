@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'common/shutdown_log'
+
 # Modernized version of games.rb with separated DR and GS functionality
 # Original module carve out from lich.rbw
 # Refactored on 2025-04-01
@@ -235,6 +237,15 @@ module Lich
 
     # Base Game class with common functionality
     class Game
+      # Seconds to wait for readable game socket data before one read timeout.
+      READ_TIMEOUT_SECONDS = 30
+
+      # Consecutive read timeouts allowed before treating the game link as dead.
+      MAX_CONSECUTIVE_READ_TIMEOUTS = 3
+
+      # Sentinel returned when the game socket has no readable data before timeout.
+      READ_TIMEOUT = Object.new.freeze
+
       class << self
         attr_reader :thread, :buffer, :_buffer, :game_instance
 
@@ -385,42 +396,49 @@ module Lich
         def start_main_thread
           @thread = Thread.new do
             consecutive_timeouts = 0
-            max_consecutive_timeouts = 3 # Allow 3 timeouts before giving up
+            max_consecutive_timeouts = MAX_CONSECUTIVE_READ_TIMEOUTS
 
             begin
               while true
                 begin
-                  # Try to read from socket with timeout
-                  server_string = @socket.gets
+                  server_string = read_server_string
 
-                  # Successfully received data - reset timeout counter
+                  if server_string.equal?(READ_TIMEOUT)
+                    raise IO::TimeoutError, "no game data for #{READ_TIMEOUT_SECONDS} seconds"
+                  end
+
                   consecutive_timeouts = 0
 
                   # Break if socket closed (gets returns nil)
-                  break if server_string.nil?
+                  if server_string.nil?
+                    record_shutdown_reason(:game_eof, source: :game_reader)
+                    break
+                  end
 
                   @last_recv = Time.now
                   @_buffer.update(server_string) if defined?(TESTING) && TESTING
 
                   begin
                     process_server_string(server_string)
+                  rescue GameStreamDesyncError
+                    raise
                   rescue StandardError => e
                     log_error("Error processing server string", e)
                   end
-                rescue Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError => timeout_error
-                  # Socket read timed out - this is expected if server is quiet
+                rescue Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
                   consecutive_timeouts += 1
 
-                  Lich.log "Socket read timeout #{consecutive_timeouts}/#{max_consecutive_timeouts} (no data for 30s)"
+                  shutdown_log.info("socket read timeout #{consecutive_timeouts}/#{max_consecutive_timeouts} (no game data for #{READ_TIMEOUT_SECONDS}s)")
 
                   if consecutive_timeouts >= max_consecutive_timeouts
-                    Lich.log "Too many consecutive timeouts, connection may be dead"
-                    raise timeout_error # Let the outer rescue handle it
+                    total_timeout = total_read_timeout_seconds(max_consecutive_timeouts)
+                    shutdown_log.warning("game connection timed out after #{max_consecutive_timeouts} consecutive read timeouts (#{total_timeout}s)")
+                    raise IO::TimeoutError, "no game data for #{total_timeout} seconds"
                   end
 
                   # Check if socket is still alive
                   if @socket.closed?
-                    Lich.log "Socket is closed, exiting thread"
+                    shutdown_log.info("game socket is closed; exiting server thread")
                     break
                   end
 
@@ -429,26 +447,52 @@ module Lich
                   retry
                 rescue Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED => conn_error
                   # Connection was reset/broken - these are fatal
-                  Lich.log "Connection error: #{conn_error.class} - #{conn_error.message}"
+                  shutdown_log.info("connection error: #{conn_error.class} - #{conn_error.message}")
                   raise conn_error
                 end
               end
             rescue StandardError => e
+              if intentional_shutdown_close_error?(e)
+                shutdown_log.info("server thread exiting after orderly user shutdown")
+                next
+              end
+
               # Handle any other errors
               should_continue = handle_thread_error(e)
-
               # Only retry if handle_thread_error says it's safe and socket is still open
               if should_continue && !@socket.closed? && $_CLIENT_.alive?
-                Lich.log "Retrying server thread after error..."
+                shutdown_log.debug("retrying server thread after error")
                 consecutive_timeouts = 0 # Reset counter on retry
                 sleep 1 # Brief pause before retry
                 retry
               else
-                Lich.log "Server thread exiting due to unrecoverable error"
+                reason = shutdown_reason_for_thread_exit(e)
+                record_shutdown_reason(reason, source: :game_reader, detail: e.class)
+                shutdown_log.info("server thread exiting due to #{reason}")
               end
             end
           end
           @thread.priority = 4
+        end
+
+        # Reads one game-server line after an explicit readiness wait.
+        #
+        # Ruby does not reliably surface SO_RCVTIMEO through TCPSocket#gets on
+        # every supported platform. Waiting with IO.select makes the reader's
+        # no-data timeout deterministic while preserving gets-based EOF handling.
+        #
+        # @param read_timeout [Numeric] seconds to wait for game socket data
+        # @return [String, nil, Object] a server line, nil for EOF, or READ_TIMEOUT
+        def read_server_string(read_timeout: READ_TIMEOUT_SECONDS)
+          return READ_TIMEOUT unless IO.select([@socket], nil, nil, read_timeout)
+
+          @socket.gets
+        end
+
+        # @param timeout_count [Integer] number of consecutive read waits
+        # @return [Integer] total elapsed no-data seconds represented by count
+        def total_read_timeout_seconds(timeout_count = MAX_CONSECUTIVE_READ_TIMEOUTS)
+          READ_TIMEOUT_SECONDS * timeout_count
         end
 
         def process_server_string(server_string)
@@ -706,32 +750,94 @@ module Lich
         end
 
         def handle_thread_error(error)
-          Lich.log "error: server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}"
+          if recognized_connection_disruption?(error)
+            shutdown_log.info("server_thread: #{connection_disruption_log_message(error)}")
+            shutdown_log.debug("server_thread backtrace: #{error.backtrace.join("\n\t")}") if error.backtrace
+          else
+            shutdown_log.error("server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}")
+          end
           sleep 0.2
 
-          # Determine if we should retry
           case error
           when Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
-            # Timeout errors are potentially recoverable if we haven't seen too many
-            Lich.log "Timeout error detected - may attempt retry"
-            return true
+            # Timeout errors reach this outer handler only after the inner
+            # reader loop has exhausted its consecutive-timeout threshold.
+            shutdown_log.info("game timeout - will not retry")
+            return false
           when Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED
             # Connection errors are fatal
-            Lich.log "Fatal connection error - will not retry"
+            shutdown_log.info("connection error - will not retry")
+            return false
+          when GameStreamDesyncError
+            shutdown_log.info("game stream desync detected - will not retry")
             return false
           else
             # Check if socket/client are closed or if it's a known fatal error
             if !$_CLIENT_.alive? || @socket.closed?
-              Lich.log "Client or socket closed - will not retry"
+              shutdown_log.info("client or socket closed - will not retry")
               return false
             elsif error.to_s =~ /invalid argument|A connection attempt failed|An existing connection was forcibly closed|An established connection was aborted by the software in your host machine./i
-              Lich.log "Fatal error pattern detected - will not retry"
+              shutdown_log.info("fatal error pattern detected - will not retry")
               return false
             else
-              Lich.log "Unknown error - will attempt retry"
+              shutdown_log.debug("unknown server thread error - will attempt retry")
               return true
             end
           end
+        end
+
+        def shutdown_reason_for_thread_exit(error)
+          case error
+          when Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
+            :game_timeout
+          when Errno::ECONNRESET
+            :connection_reset
+          when Errno::EPIPE
+            :connection_pipe
+          when Errno::ECONNABORTED
+            :connection_aborted
+          when GameStreamDesyncError
+            :game_stream_desync
+          else
+            :unrecoverable_game_thread_error
+          end
+        end
+
+        def record_shutdown_reason(reason, source:, detail: nil)
+          return unless defined?(Lich::Common::ShutdownCoordinator)
+
+          Lich::Common::ShutdownCoordinator.request(reason: reason, source: source, detail: detail)
+        rescue StandardError => e
+          shutdown_log.warning("failed to record shutdown reason #{reason.inspect}: #{e.class}: #{e.message}")
+        end
+
+        def shutdown_log
+          Lich::Common::ShutdownLog
+        end
+
+        def intentional_shutdown_close_error?(error)
+          return false unless defined?(Lich::Common::ShutdownCoordinator)
+          return false unless Lich::Common::ShutdownCoordinator.orderly_user_exit?
+          return false unless @socket&.closed?
+
+          error.is_a?(Errno::EBADF) ||
+            error.to_s =~ /stream closed in another thread|closed stream|bad file descriptor/i
+        end
+
+        def recognized_connection_disruption?(error)
+          error.is_a?(Errno::ETIMEDOUT) ||
+            error.is_a?(Errno::EWOULDBLOCK) ||
+            error.is_a?(IO::TimeoutError) ||
+            error.is_a?(Errno::ECONNRESET) ||
+            error.is_a?(Errno::EPIPE) ||
+            error.is_a?(Errno::ECONNABORTED) ||
+            error.is_a?(GameStreamDesyncError)
+        end
+
+        def connection_disruption_log_message(error)
+          return "GameStreamDesyncError: #{error.message.lines.first&.strip}" if error.is_a?(GameStreamDesyncError)
+
+          "#{error.class}: #{error.message}"
         end
 
         protected
