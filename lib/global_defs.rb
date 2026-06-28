@@ -1898,6 +1898,7 @@ def unnoded_pulse
 end
 
 require_relative File.join(LIB_DIR, "stash.rb")
+require File.join(LIB_DIR, 'common', 'xml_entities.rb')
 
 def empty_hands
   waitrt?
@@ -2170,31 +2171,58 @@ def sf_to_wiz(line, bypass_multiline: false)
   end
 end
 
-def strip_xml(line, type: 'main')
-  return line if line == "\r\n"
+# Strip game markup from a server-stream fragment.
+#
+# @param line [String] one server-stream fragment
+# @param type [String, Symbol, nil] optional multiline buffer key. When nil (the
+#   default) the fragment is stripped statelessly. When given, unfinished
+#   pushStream content is accumulated in a process-global, type-keyed buffer
+#   ($strip_xml_multiline) until a balancing popStream arrives, so an element
+#   split across reads is reassembled before stripping. Pass it as a keyword
+#   (type: "main"); the keyword form is the supported call shape.
+# @return [String, nil]
+#   - the stripped text when printable content remains
+#   - nil when the line is entirely whitespace, when stripping leaves no
+#     printable text, or while a typed multiline fragment is still being
+#     accumulated
+# @note nil is a normal return, not an error. Callers commonly feed the result
+#   straight to String#split; that is safe because NilClass#split is patched to
+#   return [] (see lib/common/class_exts/nilclass.rb), so no nil guard is needed.
+def strip_xml(line, type: nil)
+  if type.nil?
+    strip_xml_simple(line)
+  else
+    strip_xml_multiline(line, type)
+  end
+end
 
-  if $strip_xml_multiline[type]
-    $strip_xml_multiline[type] = $strip_xml_multiline[type] + line
-    line = $strip_xml_multiline[type]
-  end
-  if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
-    $strip_xml_multiline ||= {}
-    $strip_xml_multiline[type] = line
-    return nil
-  end
-  $strip_xml_multiline[type] = nil
+def strip_xml_simple(line)
+  return nil if line == "\r\n" # short-circuit empty links
 
   line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
   line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
   line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
   line = line.gsub(/<[^>]+>/, '')
-  line = line.gsub('&gt;', '>')
-  line = line.gsub('&lt;', '<')
+  line = Lich::Common::XmlEntities.decode(line)
 
-  return nil if line.gsub("\n", '').gsub("\r", '').gsub(' ', '').length < 1
+  return nil if line.match?(/\A\s*\z/)
 
-  return line
+  line
 end
+
+def strip_xml_multiline(line, type)
+  $strip_xml_multiline ||= {}
+  line = $strip_xml_multiline[type] + line if $strip_xml_multiline[type]
+  if line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length
+    $strip_xml_multiline[type] = line
+    return nil
+  end
+  $strip_xml_multiline[type] = nil
+  strip_xml_simple(line)
+end
+
+# Internal helpers for strip_xml; not part of the script-facing API.
+private :strip_xml_simple, :strip_xml_multiline
 
 def monsterbold_start
   if Frontend.supports_gsl?

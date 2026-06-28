@@ -46,6 +46,11 @@ reconnect_if_wanted = proc {
   @launch_data = nil
   require File.join(LIB_DIR, 'common', 'authentication', 'eaccess.rb')
   require File.join(LIB_DIR, 'common', 'account.rb')
+  # PipeIO is only consumed here (--pipe mode client adapter), so it loads with
+  # main rather than from lich.rbw's top-level require chain -- that chain also
+  # runs during self-update against older lib snapshots where pipe_io.rb may not
+  # exist yet, and an unconditional require there would break the update path.
+  require File.join(LIB_DIR, 'common', 'pipe_io.rb')
   # Lifecycle tracker is loaded here because startup context (argv/account)
   # and shutdown sequencing both live in main runtime orchestration.
   require File.join(LIB_DIR, 'common', 'session_lifecycle.rb')
@@ -238,6 +243,15 @@ reconnect_if_wanted = proc {
     Lich.log "info: game: #{game}"
     if ARGV.include?('--without-frontend')
       $_CLIENT_ = nil
+    elsif @argv_options[:pipe]
+      # Use stdin/stdout as the client transport instead of a front-end socket.
+      # Pair with -g HOST:PORT to connect directly to the game server (no SGE).
+      # stdin supplies what a front-end would send (including the initial login
+      # key); processed server output is written to stdout. EOF on stdin marks
+      # the client dead (PipeIO#closed?) and triggers the normal shutdown path.
+      Frontend.client = 'unknown'
+      $_CLIENT_ = SynchronizedSocket.new(Lich::Common::PipeIO.new)
+      Lich.log 'info: --pipe mode: using stdin/stdout as client transport'
     elsif Frontend.client.eql?('suks')
       nil
     else
@@ -364,6 +378,49 @@ reconnect_if_wanted = proc {
       end
     end
     Lich.log 'info: connected'
+  elsif @argv_options[:pipe] and @argv_options[:game_host] and @argv_options[:game_port]
+    # --pipe with -g: no front-end socket and no hosts-file redirection.
+    # stdin/stdout act as the client transport; connect straight to the game
+    # server named by -g (SGE/eaccess login already bypassed by -g). stdin
+    # supplies the login key + version; processed server output goes to stdout.
+    Frontend.client = 'unknown'
+    $_CLIENT_ = SynchronizedSocket.new(Lich::Common::PipeIO.new)
+    Lich.log 'info: --pipe mode: using stdin/stdout as client transport'
+    @argv_options[:game_host], @argv_options[:game_port] = Lich.fix_game_host_port(@argv_options[:game_host], @argv_options[:game_port])
+    # Bring a concrete Game class into scope so bare Game.* references (here and
+    # in the client thread / shutdown) resolve to one consistent class. Prefer an
+    # explicit --dragonrealms/--gemstone flag (useful when -g points at a loopback
+    # host that can't be sniffed); otherwise fall back to the host name. The
+    # actual game instance is still derived from the server's <settingsInfo>.
+    if Lich::Common::Authentication::LoginHelpers.dragonrealms_flag?(ARGV) || @argv_options[:game_host] =~ /dr/i
+      include Lich::DragonRealms
+    else
+      include Lich::Gemstone
+    end
+    Lich.log "info: connecting to game server (#{@argv_options[:game_host]}:#{@argv_options[:game_port]})"
+    begin
+      # Bounded connect so a stuck Game.open cannot hang pipe mode indefinitely on
+      # an unreachable host.
+      connect_thread = Thread.new {
+        # report_on_exception off: a failed Game.open is surfaced by the join below
+        # (which re-raises it), not by an auto-printed thread warning.
+        Thread.current.report_on_exception = false
+        Game.open(@argv_options[:game_host], @argv_options[:game_port])
+      }
+      # join(30) returns nil on timeout, the thread on success, and re-raises if
+      # Game.open errored (e.g. connection refused) -- so a failed connect reaches
+      # the rescue below instead of silently proceeding with a dead game socket.
+      if connect_thread.join(30).nil?
+        connect_thread.kill rescue nil
+        raise "timed out connecting to #{@argv_options[:game_host]}:#{@argv_options[:game_port]}"
+      end
+    rescue
+      Lich.log "error: #{$!}"
+      $stdout.puts "error: #{$!}"
+      $_CLIENT_.close rescue nil
+      exit
+    end
+    Lich.log 'info: connection with the game host is open'
   elsif @argv_options[:game_host] and @argv_options[:game_port]
     unless Lich.hosts_file
       Lich.log "error: cannot find hosts file"
@@ -470,20 +527,22 @@ reconnect_if_wanted = proc {
     }
   else
     #
-    # shutdown listening socket
+    # shutdown listening socket (pipe mode never opened one)
     #
-    error_count = 0
-    begin
-      # Somehow... for some ridiculous reason... Windows doesn't let us close the socket if we shut it down first...
-      # listener.shutdown
-      listener.close unless listener.closed?
-    rescue
-      Lich.log "warning: failed to close listener socket: #{$!}"
-      if (error_count += 1) > 20
-        Lich.log 'warning: giving up...'
-      else
-        sleep 0.05
-        retry
+    unless @argv_options[:pipe]
+      error_count = 0
+      begin
+        # Somehow... for some ridiculous reason... Windows doesn't let us close the socket if we shut it down first...
+        # listener.shutdown
+        listener.close if listener && !listener.closed?
+      rescue
+        Lich.log "warning: failed to close listener socket: #{$!}"
+        if (error_count += 1) > 20
+          Lich.log 'warning: giving up...'
+        else
+          sleep 0.05
+          retry
+        end
       end
     end
 
