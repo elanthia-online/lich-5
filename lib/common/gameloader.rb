@@ -67,7 +67,7 @@ module Lich
         PostLoad.register("settings_init") do
           # When the game server sends malformed <settingsInfo  space not found ...> XML,
           # it means this character has never logged in with the Wrayth client.
-          # The reactive fix in handle_xml_error patches the XML and sets the flag.
+          # Game.fix_invalid_settings_info patches the XML and sets the flag.
           # Here we send a dummy <db> command to seed a valid client record so
           # the server sends properly formatted settingsInfo on future connects.
           if GameBase::Game.settings_init_needed?

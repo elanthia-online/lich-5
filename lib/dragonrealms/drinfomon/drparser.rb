@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require File.join(LIB_DIR, 'common', 'xml_entities.rb')
+
 module Lich
   module DragonRealms
     module DRParser
@@ -84,6 +86,44 @@ module Lich
         server_string
       end
 
+      # Ox::Sax handler that extracts the cmd attribute and item name from the first
+      # <d> element of an inventory line, e.g. <d cmd='get #12345'>a small pouch</d>.
+      # Streaming means the element is captured before any trailing prose, which is
+      # not well-formed XML; the resulting parse error is swallowed by #error.
+      class InventoryItemSax
+        attr_reader :cmd, :name
+
+        def initialize
+          @in_d = false
+          @done = false
+          @cmd = nil
+          @name = nil
+        end
+
+        def start_element(name)
+          @in_d = true if name == "d" && !@done
+        end
+
+        def attr(name, value)
+          @cmd = value if @in_d && name == "cmd"
+        end
+
+        def text(value)
+          @name = value if @in_d && @name.nil?
+        end
+
+        def end_element(name)
+          return unless @in_d && name == "d"
+
+          @in_d = false
+          @done = true # ignore any later <d> elements; we only want the leading item
+        end
+
+        # Trailing prose after </d> is not valid XML. We have already captured the
+        # element by the time Ox reports it, so the error is intentionally ignored.
+        def error(_message, _line, _column); end
+      end
+
       # Parses inventory search output and populates GameObj inventory.
       # Called for each line when @@parsing_inventory_get is true.
       # @param server_string [String] A line of server output
@@ -98,19 +138,24 @@ module Lich
           # This block parses a single line from the output of the `inv search <string>` verb,
           # which lists items on your character. Each line is an XML-like string.
           # Example: <d cmd='get #12345'>a small pouch</d>
-          if @@parsing_inventory_get && server_string.strip.start_with?('<d cmd=')
-            # The server string is an XML fragment, so we wrap it in a root element to make it parsable.
-            document = REXML::Document.new("<root>#{server_string.strip}</root>")
-            d_element = document.root.elements["d"]
+          if @@parsing_inventory_get && (stripped = server_string.strip).start_with?('<d cmd=')
+            # Pull the cmd attribute and item name out of the line's leading <d> element
+            # with a SAX handler. The element is captured as it streams in, before any
+            # trailing prose (e.g. "... is in your right hand.") -- which is not valid XML
+            # and would break a tree parse -- is reached.
+            handler = InventoryItemSax.new
+            # convert_special: false matches Game.process_xml_data: Ox never turns a
+            # numeric entity into UTF-8. Ox leaves the standard entities literal, so
+            # XmlEntities.decode restores them in the item name below.
+            Ox.sax_parse(handler, stripped, convert_special: false, symbolize: false, skip: :skip_none)
 
-            return unless d_element
+            return server_string unless handler.cmd
 
-            # Extract the item name from the text inside the <d> tag.
-            # Normalize it by lowercasing and removing leading articles ('a', 'an', 'some').
-            item_name = d_element.text.sub(/^(?:a|an|some)\s/, '').strip
+            # Normalize the item name by removing leading articles ('a', 'an', 'some').
+            item_name = Lich::Common::XmlEntities.decode(handler.name.to_s).sub(/^(?:a|an|some)\s/, '').strip
 
             # Extract the command and the unique item ID from the 'cmd' attribute.
-            cmd = d_element.attributes["cmd"].downcase.strip
+            cmd = handler.cmd.to_s.downcase.strip
             id_match = /get (?<itemID>#\d+)(?: in (?<container1>#\d+|[^']+))?(?: in (?<container2>#\d+|[^']+))?/.match(cmd)
             # <!-- Regex to capture item and container IDs: cmd='get (?<itemID>#\d+)(?: in (?<container1>#\d+|[^']+))?(?: in (?<container2>#\d+|[^']+))?' -->
             # <d cmd='get #8286821 in #8286816 in #8286762'>A papyrus parchment</d> is in a black winter cloak crafted from thick cashmere, which is in a scuffed traveler's pack.

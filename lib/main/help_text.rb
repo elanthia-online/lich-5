@@ -205,12 +205,14 @@ module Lich
             --no-gui
             --without-frontend
             --detachable-client=PORT
+            --pipe
             --frontend=NAME
             --frontend-command=CMD
             --game=HOST:PORT
 
           Notes:
             Prefer --headless PORT or --headless auto for new headless launches.
+            --pipe uses stdin/stdout as the client transport instead of a front-end socket.
             Compatibility flags remain supported but are intentionally omitted from the default help screen.
         TEXT
       end
