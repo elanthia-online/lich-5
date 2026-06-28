@@ -1,11 +1,15 @@
 # frozen_string_literal: true
 
 require_relative '../spec_helper'
+require 'socket'
 require 'timeout'
 
 # Load production code
+require "ox"
 require "common/class_exts/synchronizedsocket"
 require "common/sharedbuffer"
+require "common/shutdown_coordinator"
+require "common/xmlparser"
 require "games"
 require "gemstone/wounds"
 require "gemstone/scars"
@@ -27,24 +31,11 @@ RSpec.describe Lich::GameBase do
       expect(output).to include('&quot;The')
     end
 
-    it 'fixes invalid ampersands' do
-      # Use +@ to unfreeze string for in-place modification
-      input = +'You also see a large bin labeled "Lost & Found"'
-      output = Lich::GameBase::XMLCleaner.fix_invalid_characters(input)
-      expect(output).to include('&amp;')
-    end
-
     it 'removes bell characters' do
       # Use +@ to unfreeze string for in-place modification
       input = +"\aYOU HAVE BEEN IDLE TOO LONG. PLEASE RESPOND.\a\n"
       output = Lich::GameBase::XMLCleaner.fix_invalid_characters(input)
       expect(output).not_to include("\a")
-    end
-
-    it 'fixes poorly encoded apostrophes' do
-      input = [*'Membrach'.bytes, 0x92, *'s Greed'.bytes].pack('C*')
-      output = Lich::GameBase::XMLCleaner.fix_invalid_characters(input)
-      expect(output).to eq("Membrach's Greed")
     end
 
     it 'fixes open-ended XML tags' do
@@ -59,6 +50,94 @@ RSpec.describe Lich::GameBase do
       input = +"</component>\r\n"
       output = Lich::GameBase::XMLCleaner.fix_xml_tags(input)
       expect(output).to eq("")
+    end
+  end
+
+  describe Lich::GameBase::Game do
+    before do
+      allow(Lich).to receive(:log)
+      allow(XMLData).to receive(:tag_start)
+      allow(XMLData).to receive(:tag_end)
+      allow(XMLData).to receive(:text)
+    end
+
+    it 'maps stream desync errors to shutdown reason' do
+      error = Lich::GameBase::GameStreamDesyncError.new('Missing end tag')
+
+      expect(described_class.shutdown_reason_for_thread_exit(error)).to eq(:game_stream_desync)
+    end
+
+    it 'returns a read timeout sentinel when the game socket has no readable data' do
+      socket = instance_double(TCPSocket)
+      described_class.instance_variable_set(:@socket, socket)
+
+      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return(nil)
+      allow(socket).to receive(:gets)
+
+      expect(described_class.read_server_string(read_timeout: 0.01)).to equal(Lich::GameBase::Game::READ_TIMEOUT)
+      expect(socket).not_to have_received(:gets)
+    end
+
+    it 'reads a game line when the socket is readable' do
+      socket = instance_double(TCPSocket)
+      described_class.instance_variable_set(:@socket, socket)
+
+      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return([[socket], [], []])
+      allow(socket).to receive(:gets).and_return("<prompt/>\r\n")
+
+      expect(described_class.read_server_string(read_timeout: 0.01)).to eq("<prompt/>\r\n")
+    end
+
+    it 'preserves nil reads as game EOF after the socket becomes readable' do
+      socket = instance_double(TCPSocket)
+      described_class.instance_variable_set(:@socket, socket)
+
+      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return([[socket], [], []])
+      allow(socket).to receive(:gets).and_return(nil)
+
+      expect(described_class.read_server_string(read_timeout: 0.01)).to be_nil
+    end
+
+    it 'handles connection reset as a recognized fatal disruption without a backtrace log' do
+      error = Errno::ECONNRESET.new
+      error.set_backtrace(['games.rb:1'])
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log).with(/info: server_thread: Errno::ECONNRESET:/)
+      expect(Lich).to have_received(:log).with('info: connection error - will not retry')
+      expect(Lich).not_to have_received(:log).with(/error: server_thread:.*\n\t/m)
+      expect(Lich).not_to have_received(:log).with(/debug: server_thread backtrace:/)
+    end
+
+    it 'logs recognized disruption backtraces only when shutdown diagnostics are enabled' do
+      error = Errno::ECONNRESET.new
+      error.set_backtrace(['games.rb:1'])
+      allow(ARGV).to receive(:include?).with('--debug').and_return(true)
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log).with("debug: server_thread backtrace: games.rb:1")
+    end
+
+    it 'handles repeated timeout as a recognized fatal disruption after threshold' do
+      error = IO::TimeoutError.new('read timed out')
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log).with('info: server_thread: IO::TimeoutError: read timed out')
+      expect(Lich).to have_received(:log).with('info: game timeout - will not retry')
+      expect(described_class.shutdown_reason_for_thread_exit(error)).to eq(:game_timeout)
+    end
+
+    it 'reports total elapsed no-data time for consecutive read timeouts' do
+      expect(described_class.total_read_timeout_seconds).to eq(90)
+      expect(described_class.total_read_timeout_seconds(2)).to eq(60)
+    end
+
+    it 'keeps stream desync disruption logging to one line in the thread handler' do
+      error = Lich::GameBase::GameStreamDesyncError.new("Missing end tag\nLine: 2")
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log).with('info: server_thread: GameStreamDesyncError: Missing end tag')
+      expect(Lich).to have_received(:log).with('info: game stream desync detected - will not retry')
     end
   end
 end
@@ -375,6 +454,42 @@ end
 # from instance variables (@) to class variables (@@). This is testing the
 # implementation detail by design, not testing through public API.
 RSpec.describe Lich::GameBase::Game do
+  describe '.intentional_shutdown_close_error?' do
+    let(:closed_socket) { double('socket', closed?: true) }
+    let(:open_socket) { double('socket', closed?: false) }
+
+    before do
+      Lich::Common::ShutdownCoordinator.reset!
+      described_class.instance_variable_set(:@socket, closed_socket)
+    end
+
+    after do
+      Lich::Common::ShutdownCoordinator.reset!
+      described_class.instance_variable_set(:@socket, nil)
+    end
+
+    it 'recognizes reader-thread close errors during orderly user shutdown' do
+      Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
+
+      expect(described_class.intentional_shutdown_close_error?(IOError.new('stream closed in another thread'))).to be_truthy
+      expect(described_class.intentional_shutdown_close_error?(Errno::EBADF.new)).to be_truthy
+    end
+
+    it 'does not recognize close errors outside orderly user shutdown' do
+      Lich::Common::ShutdownCoordinator.request(reason: :game_eof, source: :game_reader)
+
+      expect(described_class.intentional_shutdown_close_error?(IOError.new('stream closed in another thread'))).to be false
+      expect(described_class.intentional_shutdown_close_error?(Errno::EBADF.new)).to be false
+    end
+
+    it 'does not recognize orderly shutdown errors while the socket is open' do
+      Lich::Common::ShutdownCoordinator.request(reason: :user_exit, source: :primary_frontend)
+      described_class.instance_variable_set(:@socket, open_socket)
+
+      expect(described_class.intentional_shutdown_close_error?(IOError.new('stream closed in another thread'))).to be false
+    end
+  end
+
   describe '.autostarted?' do
     before do
       # Reset the class variable for test isolation
@@ -689,6 +804,186 @@ RSpec.describe Lich::GameBase::Game do
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
         expect(Lich).to have_received(:log).with(/client socket write failed.*closed stream/)
       end
+    end
+  end
+end
+
+# The stream desync guard: pre-Ox, strict REXML raised on truncated fragments
+# and Game.process_xml_data's rescue logged the fragment and reset XMLData --
+# parser strictness doubled as stream-desync detection. Ox is permissive: it
+# parses truncated fragments without raising (auto-closing elements,
+# fabricating empty attribute values) and reports problems only through the
+# optional error callback. These specs prove the callback-based guard restores
+# the pre-Ox failure mode (GameStreamDesyncError -> log + reset) for
+# truncation, while still tolerating the routine almost-XML that Ox was
+# adopted to absorb without REXML's clean-and-retry dance.
+RSpec.describe 'Lich::GameBase stream desync guard' do
+  # Collects Ox parse errors through the real XMLParser error callback while
+  # neutering tag handlers (parser state side effects are irrelevant here).
+  let(:quiet_parser_class) do
+    Class.new(Lich::Common::XMLParser) do
+      def tag_start(_name, _attributes); end
+
+      def tag_end(_name); end
+
+      def text(_value); end
+    end
+  end
+
+  def parse_errors(parser, fragment)
+    Ox.sax_parse(parser, fragment, convert_special: false, symbolize: false, skip: :skip_none)
+    parser.sax_parse_errors
+  end
+
+  def check!(fragment)
+    Lich::GameBase::Game.check_stream_desync!(parse_errors(quiet_parser_class.new, fragment))
+  end
+
+  describe 'Game.check_stream_desync!' do
+    context 'with truncated (desynced) fragments REXML used to raise on' do
+      it 'raises when a fragment is cut off inside a quoted attribute value' do
+        expect { check!('<a exist="123" noun="swo') }
+          .to raise_error(Lich::GameBase::GameStreamDesyncError, /quoted value not terminated/)
+      end
+
+      it 'raises when a fragment is cut off after an attribute equals sign' do
+        expect { check!('<pushStream id="room"/><compDef id=') }
+          .to raise_error(Lich::GameBase::GameStreamDesyncError)
+      end
+
+      it 'raises when a fragment is cut off inside an element name' do
+        expect { check!('<dialogDa') }
+          .to raise_error(Lich::GameBase::GameStreamDesyncError, /document not terminated/)
+      end
+
+      it 'raises when a start tag never gets its closing bracket' do
+        expect { check!('<dialogData id="minivitals"><progressBar id="health"') }
+          .to raise_error(Lich::GameBase::GameStreamDesyncError, /not terminated|not closed/)
+      end
+    end
+
+    context 'with routine almost-XML the stream sends constantly' do
+      it 'tolerates plain prose lines (Ox still reports text not terminated)' do
+        errors = parse_errors(quiet_parser_class.new, 'You also see a wooden barrel.')
+        expect(errors).not_to be_empty # proves toleration is a choice, not absence of errors
+        expect { Lich::GameBase::Game.check_stream_desync!(errors) }.not_to raise_error
+      end
+
+      it 'tolerates multiple top-level elements with trailing text' do
+        expect { check!('<popBold/><pushStream id="room"/>text after') }.not_to raise_error
+      end
+
+      it 'tolerates nested single quotes in attribute values' do
+        expect { check!("<d cmd='look Tsetem's pack'>Tsetem's pack</d>") }.not_to raise_error
+      end
+
+      it "tolerates elements missing their end tag (Simu's </d> bug)" do
+        expect { check!("<d cmd='go gate'>gate<d>more") }.not_to raise_error
+      end
+
+      it 'tolerates unescaped ampersands' do
+        expect { check!('a large bin labeled "Lost & Found"') }.not_to raise_error
+      end
+
+      it 'tolerates the settingsInfo space-not-found server bug' do
+        expect { check!("<settingsInfo  crc='612586004' instance='GS4' space not found ItemCmds='1' />") }
+          .not_to raise_error
+      end
+
+      it 'tolerates a complete unquoted attribute value (not a truncation)' do
+        # <a x=y> emits "attribute value not in quotes" but is a complete line;
+        # matching it would false-reset a fully-parsed fragment.
+        expect { check!('<a x=y>text</a>') }.not_to raise_error
+      end
+    end
+  end
+
+  describe 'Game.process_xml_data with a truncated fragment' do
+    it 'logs the desync and resets XMLData' do
+      parser = quiet_parser_class.new
+      stub_const('XMLData', parser)
+      allow(Lich).to receive(:log)
+      allow(parser).to receive(:reset).and_call_original
+      Lich::GameBase::Game.process_xml_data(+'<a exist="123" noun="swo')
+      expect(Lich).to have_received(:log).with(/stream desync/)
+      expect(parser).to have_received(:reset)
+    end
+
+    it 'does not reset XMLData for a clean fragment' do
+      parser = quiet_parser_class.new
+      stub_const('XMLData', parser)
+      # strip_xml lives outside games.rb and is not loaded here; the assertion
+      # under test is only that the parse stage does not trigger recovery.
+      # It returns the stripped line as a String; the callsite splits it on CRLF.
+      allow(Lich::GameBase::Game).to receive(:strip_xml).and_return('')
+      allow(parser).to receive(:reset).and_call_original
+      Lich::GameBase::Game.process_xml_data(+"<prompt time=\"1746000000\">&gt;</prompt>\r\n")
+      expect(parser).not_to have_received(:reset)
+    end
+
+    it 'repairs nested quotes and reparses when Ox flags a valueless attribute' do
+      parser = quiet_parser_class.new
+      stub_const('XMLData', parser)
+      allow(Lich::GameBase::Game).to receive(:strip_xml).and_return('')
+      allow(parser).to receive(:reset).and_call_original
+      # title='Tsetem's Items' makes Ox emit "no attribute value"; the retry
+      # escapes the inner quote, resets the junk first parse, and reparses.
+      server_string = +"<openDialog id='quux' title='Tsetem's Items'/>"
+      Lich::GameBase::Game.process_xml_data(server_string)
+      expect(server_string).to include("title='Tsetem&apos;s Items'")
+      expect(parser).to have_received(:reset)
+    end
+
+    it 'does not reparse a genuinely valueless attribute (nothing to escape)' do
+      parser = quiet_parser_class.new
+      stub_const('XMLData', parser)
+      allow(Lich::GameBase::Game).to receive(:strip_xml).and_return('')
+      allow(parser).to receive(:reset).and_call_original
+      # <a foo> also emits "no attribute value", but clean_nested_quotes finds
+      # no nested quote to escape, so there is no reset/reparse.
+      Lich::GameBase::Game.process_xml_data(+"<a foo>x</a>")
+      expect(parser).not_to have_received(:reset)
+    end
+
+    it 'repairs a malformed settingsInfo via the retry path and flags an init re-seed' do
+      parser = quiet_parser_class.new
+      stub_const('XMLData', parser)
+      allow(Lich::GameBase::Game).to receive(:strip_xml).and_return('')
+      allow(parser).to receive(:reset).and_call_original
+      # @@settings_init_needed is a production class variable with no reset! hook.
+      Lich::GameBase::Game.class_variable_set(:@@settings_init_needed, false)
+      server_string = +"<settingsInfo crc='0' instance='GS4' space not found ItemCmds='1'/>"
+      Lich::GameBase::Game.process_xml_data(server_string)
+      expect(server_string).to include("client='1.0.1.28'")
+      expect(Lich::GameBase::Game.settings_init_needed?).to be true
+      expect(parser).to have_received(:reset)
+    end
+  end
+
+  # Ox tolerates the malformed settingsInfo (see the check_stream_desync! test
+  # above), so the repair + @@settings_init_needed flag -- which REXML reached
+  # via its raise/rescue -- now has to run in the normal flow instead.
+  describe 'Game.fix_invalid_settings_info' do
+    before do
+      # @@settings_init_needed is a production class variable with no reset! hook;
+      # clear it so each example starts from a known state.
+      Lich::GameBase::Game.class_variable_set(:@@settings_init_needed, false)
+    end
+
+    it 'repairs the space-not-found settingsInfo and flags an init re-seed' do
+      server_string = +"<settingsInfo  crc='612586004' instance='GS4' space not found ItemCmds='1' />"
+      allow(Lich).to receive(:log)
+      Lich::GameBase::Game.fix_invalid_settings_info(server_string)
+      expect(server_string).to include("client='1.0.1.28'")
+      expect(server_string).not_to include('space not found')
+      expect(Lich::GameBase::Game.settings_init_needed?).to be true
+    end
+
+    it 'leaves a well-formed settingsInfo untouched and does not flag' do
+      server_string = +"<settingsInfo client='1.0.1.28' crc='0' instance='GS4' />"
+      Lich::GameBase::Game.fix_invalid_settings_info(server_string)
+      expect(server_string).to eq("<settingsInfo client='1.0.1.28' crc='0' instance='GS4' />")
+      expect(Lich::GameBase::Game.settings_init_needed?).to be false
     end
   end
 end

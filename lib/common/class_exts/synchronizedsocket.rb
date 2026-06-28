@@ -129,7 +129,15 @@ module Lich
       def handle_write_failure(error)
         @alive = false
         @delegate.close rescue nil
-        Lich.log "error: client socket write failed: #{error.class} - #{error.message}"
+        if defined?(Lich::Common::ShutdownCoordinator) && Lich::Common::ShutdownCoordinator.respond_to?(:record_client_socket_write_failure)
+          Lich::Common::ShutdownCoordinator.record_client_socket_write_failure(error: error)
+        end
+        message = "client socket write failed: #{error.class} - #{error.message}"
+        if defined?(Lich::Common::ShutdownLog) && Lich::Common::ShutdownLog.respond_to?(:error)
+          Lich::Common::ShutdownLog.error(message)
+        else
+          Lich.log "error: #{message}"
+        end
       end
     end
   end

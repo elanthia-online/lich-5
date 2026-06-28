@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'ox' # populate_inventory_get parses <d> fragments via Ox (loaded by lich.rbw in production)
 
 # Load dependencies
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
@@ -207,9 +208,140 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(match[:rate].strip).to eq('learning')
       end
     end
+
+    describe 'BalanceValue' do
+      it 'matches a standalone balance line' do
+        line = "You are solidly balanced."
+        match = line.match(described_class::Pattern::BalanceValue)
+        expect(match).not_to be_nil
+        expect(match[:balance]).to eq('solidly')
+      end
+
+      it 'matches a bracketed balance line' do
+        line = "[You're adeptly balanced]"
+        match = line.match(described_class::Pattern::BalanceValue)
+        expect(match).not_to be_nil
+        expect(match[:balance]).to eq('adeptly')
+      end
+
+      it 'matches a balance line preceded by wound and condition status' do
+        line = "[You're battered (71%), winded (100%), mighty (100%), incredibly balanced and in dominating position.]"
+        match = line.match(described_class::Pattern::BalanceValue)
+        expect(match).not_to be_nil
+        expect(match[:balance]).to eq('incredibly')
+      end
+
+      it 'matches the "off balance" form without a trailing d' do
+        line = "[You're battered (73%), winded (100%), off balance with opponent dominating.]"
+        match = line.match(described_class::Pattern::BalanceValue)
+        expect(match).not_to be_nil
+        expect(match[:balance]).to eq('off')
+      end
+
+      it 'captures the full multi-word balance value rather than a substring' do
+        # "slightly off" must not be truncated to "off"; "somewhat off" likewise.
+        {
+          "[You're battered (70%), winded (97%), slightly off balance and in strong position.]" => 'slightly off',
+          "[You're somewhat off balance.]"                                                      => 'somewhat off',
+          "[You're very badly balanced with opponent overwhelming you.]"                        => 'very badly'
+        }.each do |line, expected|
+          match = line.match(described_class::Pattern::BalanceValue)
+          expect(match).not_to be_nil, "expected #{line.inspect} to match"
+          expect(match[:balance]).to eq(expected)
+        end
+      end
+    end
+
+    describe 'PositionValue' do
+      it 'captures the "and" position clause' do
+        line = "[You're solidly balanced and in good position.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('in good position')
+      end
+
+      it 'captures the "with" position clause' do
+        line = "[You're badly balanced with opponent dominating.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('opponent dominating')
+      end
+
+      it 'captures the neutral "no advantage" clause' do
+        line = "[You're nimbly balanced with no advantage.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('no advantage')
+      end
+
+      it 'captures both "overwhelming opponent" phrasings' do
+        {
+          "[You're incredibly balanced and overwhelming opponent.]"      => 'overwhelming opponent',
+          "[You're incredibly balanced and overwhelming your opponent.]" => 'overwhelming your opponent'
+        }.each do |line, expected|
+          match = line.match(described_class::Pattern::PositionValue)
+          expect(match).not_to be_nil, "expected #{line.inspect} to match"
+          expect(match[:position]).to eq(expected)
+        end
+      end
+
+      it 'captures the full multi-word position rather than a substring' do
+        line = "[You're solidly balanced and in very strong position.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('in very strong position')
+      end
+    end
   end
 
   describe '.parse' do
+    describe 'balance parsing' do
+      it 'sets balance index from a combat-status line' do
+        # 'incredibly' is the last entry in DR_BALANCE_VALUES
+        expected_index = Lich::DragonRealms::DR_BALANCE_VALUES.index('incredibly')
+        expect(drstats_class).to receive(:balance=).with(expected_index)
+
+        line = "[You're battered (71%), winded (100%), mighty (100%), incredibly balanced and in dominating position.]"
+        described_class.parse(line)
+      end
+
+      it 'sets both balance and position from a combat-status line' do
+        expect(drstats_class).to receive(:balance=).with(Lich::DragonRealms::DR_BALANCE_VALUES.index('solidly'))
+        expect(drstats_class).to receive(:position=).with(-1)
+
+        line = "[You're bruised, solidly balanced and opponent has slight advantage.]"
+        described_class.parse(line)
+      end
+
+      it 'sets a positive position when winning' do
+        expect(drstats_class).to receive(:position=).with(8)
+
+        line = "[You're incredibly balanced and in dominating position.]"
+        described_class.parse(line)
+      end
+
+      it 'maps "overwhelming your opponent" to the maximum position' do
+        expect(drstats_class).to receive(:position=).with(9)
+
+        line = "[You're incredibly balanced and overwhelming your opponent.]"
+        described_class.parse(line)
+      end
+
+      it 'sets a neutral position for "no advantage"' do
+        expect(drstats_class).to receive(:position=).with(0)
+
+        line = "[You're nimbly balanced with no advantage.]"
+        described_class.parse(line)
+      end
+
+      it 'does not set position for a bare balance line' do
+        expect(drstats_class).not_to receive(:position=)
+
+        line = "You are solidly balanced."
+        described_class.parse(line)
+      end
+    end
+
     describe 'gender/age/circle parsing' do
       it 'sets DRStats values from INFO output' do
         # Real code strips whitespace
@@ -510,6 +642,185 @@ RSpec.describe Lich::DragonRealms::DRParser do
         line = 'You rummage about your person, looking for all items'
         expect(line).to match(described_class::Pattern::InventoryGetStart)
       end
+    end
+  end
+
+  describe '.parse additional state' do
+    describe 'stat values' do
+      it 'sets multiple stats scanned from a single INFO line' do
+        expect(drstats_class).to receive(:intelligence=).with(80)
+        expect(drstats_class).to receive(:wisdom=).with(90)
+        described_class.parse('Intelligence    :   80   Wisdom          :   90')
+      end
+    end
+
+    describe 'balance' do
+      it 'sets the balance index from a balance line' do
+        expect(drstats_class).to receive(:balance=).with(0)
+        described_class.parse('You are completely balanced.')
+      end
+    end
+
+    describe 'mindstate clear' do
+      it 'clears the mind for a skill on an empty exp component' do
+        expect(drskill_class).to receive(:clear_mind).with('Evasion')
+        described_class.parse("<component id='exp Evasion'></component>")
+      end
+    end
+
+    describe 'exp columns' do
+      it 'updates a skill from a plain-text exp column line' do
+        expect(drskill_class).to receive(:update).with(a_string_matching(/Evasion/), '565', anything, '39')
+        described_class.parse('         Evasion:  565 39% thoughtful')
+      end
+    end
+
+    describe 'brief exp' do
+      it 'updates skill and rate from BRIEFEXP ON output' do
+        expect(drskill_class).to receive(:update).with('Evasion', 565, '2', '39')
+        described_class.parse("<component id='exp Evasion'><d cmd='skill Evasion'>     Eva:  565 39%  [ 2/34]</d></component>")
+      end
+    end
+
+    describe 'spellbook format toggle' do
+      it 'sets the spellbook format from the SPELLS verb toggle' do
+        drspells_class.reset!
+        described_class.parse('You will see column-formatted output for the SPELLS verb.')
+        expect(drspells_class.spellbook_format).to eq('column-formatted')
+      end
+    end
+
+    describe 'spell-list capture triggers' do
+      it 'starts grabbing known spells' do
+        expect(drspells_class).to receive(:grabbing_known_spells=).with(true)
+        described_class.parse('You recall the spells you have learned from your training.')
+      end
+
+      it 'starts grabbing barbarian abilities' do
+        expect(drspells_class).to receive(:check_known_barbarian_abilities=).with(true)
+        described_class.parse('You know the Berserks: Avalanche, Drought.')
+      end
+
+      it 'starts grabbing thief khri' do
+        expect(drspells_class).to receive(:grabbing_known_khri=).with(true)
+        described_class.parse('From the Subtlety tree, you know the following khri: Darken (Aug)')
+      end
+    end
+
+    describe 'subscription premium normalization' do
+      before do
+        allow(Lich::Common::Account).to receive(:subscription).and_call_original
+        allow(Lich::Common::Account).to receive(:subscription=).and_call_original
+        Lich::Common::Account.subscription = nil
+      end
+
+      it 'normalizes Platinum to Premium' do
+        described_class.parse('Current Account Status: Platinum')
+        expect(Lich::Common::Account.subscription).to eq('PREMIUM')
+      end
+    end
+  end
+
+  describe '.check_known_spells' do
+    before do
+      drspells_class.reset!
+      allow(drspells_class).to receive(:grabbing_known_spells).and_return(true)
+    end
+
+    it 'detects column-formatted output from the mono tag' do
+      described_class.check_known_spells('<output class="mono"/>')
+      expect(drspells_class.spellbook_format).to eq('column-formatted')
+    end
+
+    it 'parses a spell name from column-formatted slot info' do
+      drspells_class.spellbook_format = 'column-formatted'
+      line = '<popBold/>     maf  Manifest Force                  Slot(s): 1   Min Prep: 1     Max Prep: 100'
+      described_class.check_known_spells(line)
+      expect(drspells_class.known_spells).to include('Manifest Force' => true)
+    end
+
+    it 'parses spells from a non-column chapter line' do
+      line = 'In the chapter entitled "Analogous Patterns", you have notes on the Manifest Force [maf] and Gauge Flow [gaf] spells.'
+      described_class.check_known_spells(line)
+      expect(drspells_class.known_spells).to include('Manifest Force' => true, 'Gauge Flow' => true)
+    end
+
+    it 'parses magic feats, splitting the non-Oxford "and"' do
+      line = 'You recall proficiency with the magic feats of Sorcerous Patterns, Alternate Preparation and Augmentation Mastery.'
+      described_class.check_known_spells(line)
+      expect(drspells_class.known_feats).to include('Sorcerous Patterns' => true, 'Alternate Preparation' => true, 'Augmentation Mastery' => true)
+    end
+
+    it 'stops grabbing on the spells-end line' do
+      expect(drspells_class).to receive(:grabbing_known_spells=).with(false)
+      described_class.check_known_spells('You can use SPELL STANCE [HELP] to view or modify your spellcasting preferences.')
+    end
+  end
+
+  describe '.check_known_barbarian_abilities' do
+    before do
+      drspells_class.reset!
+      allow(drspells_class).to receive(:check_known_barbarian_abilities).and_return(true)
+    end
+
+    it 'parses known berserks into known_spells' do
+      described_class.check_known_barbarian_abilities('You know the Berserks:<pushBold/> Avalanche, Drought.')
+      expect(drspells_class.known_spells).to include('Avalanche' => true, 'Drought' => true)
+    end
+
+    it 'parses known masteries into known_feats' do
+      described_class.check_known_barbarian_abilities('<popBold/>You know the Masteries:<pushBold/> Juggernaut, Duelist.')
+      expect(drspells_class.known_feats).to include('Juggernaut' => true, 'Duelist' => true)
+    end
+
+    it 'stops on the training-remaining line' do
+      expect(drspells_class).to receive(:check_known_barbarian_abilities=).with(false)
+      described_class.check_known_barbarian_abilities('You recall that you have 0 training sessions remaining with the Guild.')
+    end
+  end
+
+  describe '.check_known_thief_khri' do
+    before do
+      drspells_class.reset!
+      allow(drspells_class).to receive(:grabbing_known_khri).and_return(true)
+    end
+
+    it 'parses khri names, stripping the type annotations' do
+      line = 'From the Subtlety tree, you know the following khri: Darken (Aug), Dampen (Util/Ward), Strike (Aug)'
+      described_class.check_known_thief_khri(line)
+      expect(drspells_class.known_spells).to include('Darken' => true, 'Dampen' => true, 'Strike' => true)
+    end
+
+    it 'stops on the available-slots line' do
+      expect(drspells_class).to receive(:grabbing_known_khri=).with(false)
+      described_class.check_known_thief_khri('You have 7 available slots.')
+    end
+  end
+
+  describe '.populate_inventory_get' do
+    before(:each) do
+      allow(GameObj).to receive(:new_inv)
+      described_class.class_variable_set(:@@parsing_inventory_get, true)
+    end
+
+    it 'parses a top-level item, stripping a leading article' do
+      expect(GameObj).to receive(:new_inv).with('12345', nil, 'small pouch', nil, 'get #12345', nil)
+      described_class.populate_inventory_get("<d cmd='get #12345'>a small pouch</d>")
+    end
+
+    it 'parses a nested item with its container' do
+      expect(GameObj).to receive(:new_inv).with('1', nil, 'sack', '2', 'get #1 in #2', nil)
+      described_class.populate_inventory_get("<d cmd='get #1 in #2'>a sack</d>")
+    end
+
+    it 'parses an item line with trailing location prose' do
+      expect(GameObj).to receive(:new_inv).with('8761784', nil, 'seagull feather quill', nil, 'get #8761784', nil)
+      described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your right hand.")
+    end
+
+    it 'stops parsing on the output-class-empty tag' do
+      described_class.populate_inventory_get('<output class=""/>')
+      expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be false
     end
   end
 end

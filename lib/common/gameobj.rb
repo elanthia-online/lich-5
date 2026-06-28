@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-require 'rexml/document'
+require 'ox'
+require 'rexml/document' # retained for script compatibility; parsing now uses Ox
 
 module Lich
   module Common
@@ -1113,32 +1114,38 @@ module Lich
         # Parses an XML data file, populating +@@type_data+ and +@@sellable_data+.
         # When +merge: true+, existing patterns are merged via +Regexp.union+.
         #
+        # Uses Ox in generic mode. skip: :skip_none keeps the regex text in
+        # +<name>/<noun>/<exclude>+ verbatim. Unlike the permissive SAX parser,
+        # Ox.load is strict and raises Ox::ParseError on malformed XML, so the
+        # caller's rescue still treats a corrupt data file as a load failure.
+        #
         # @param filename [String]
         # @param merge    [Boolean]
         # @return [void]
         def parse_data_file(filename, merge: false)
-          File.open(filename) do |file|
-            doc = REXML::Document.new(file.read)
-            parse_data_section(doc, 'data/type',     @@type_data,     merge: merge)
-            parse_data_section(doc, 'data/sellable', @@sellable_data, merge: merge)
-          end
+          parsed = Ox.load(File.read(filename), mode: :generic, skip: :skip_none)
+          # Ox.load returns an Ox::Document when the file has an XML prolog and
+          # the bare root Ox::Element otherwise; the root is <data> either way.
+          root = parsed.is_a?(Ox::Document) ? parsed.root : parsed
+          parse_data_section(root, 'type',     @@type_data,     merge: merge)
+          parse_data_section(root, 'sellable', @@sellable_data, merge: merge)
         end
 
-        # Parses a named XPath section of the document into the given target hash.
+        # Parses a named child section of the <data> root into the target hash.
         #
-        # @param doc     [REXML::Document]
-        # @param xpath   [String]
+        # @param root    [Ox::Element] the <data> root element
+        # @param section [String] child element name ('type' or 'sellable')
         # @param target  [Hash]
         # @param merge   [Boolean]
         # @return [void]
-        def parse_data_section(doc, xpath, target, merge: false)
-          doc.elements.each(xpath) do |e|
-            key = e.attributes['name']
+        def parse_data_section(root, section, target, merge: false)
+          root.locate(section).each do |e|
+            key = e['name'] # the name="..." attribute, not the <name> child
             next unless key
 
             target[key] ||= {}
             %i[name noun exclude].each do |field|
-              text = e.elements[field.to_s]&.text
+              text = e.locate(field.to_s).first&.text
               next if text.nil? || text.empty?
 
               regexp = Regexp.new(text)
