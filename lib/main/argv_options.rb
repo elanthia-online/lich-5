@@ -97,6 +97,8 @@ module Lich
               @argv_options[:frontend_command] = $1
             when /^--save$/i
               @argv_options[:save] = true
+            when /^--pipe$/i
+              @argv_options[:pipe] = true
             when /^--wine(?:\-prefix)?=.+$/i
               nil # already used when defining the Wine module
             when /\.sal$|Gse\.~xt$/i

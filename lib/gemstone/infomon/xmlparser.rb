@@ -511,14 +511,32 @@ module Lich
           # Overwatch patterns - simplified reference to the observer patterns
           Overwatch_Short = Overwatch::Observer::Term::ANY
 
-          All = Regexp.union(NpcDeathMessage, Group_Short, Also_Here_Arrival, StowListOutputStart, StowListContainer, StowSetContainer1, StowSetContainer2,
-                             ReadyListOutputStart, ReadyListNormal, ReadyListAmmo2, ReadyListSheathsSet, ReadyListFinished, ReadyItemClear, ReadyItemSet,
-                             ReadyStoreSet, StatusPrompt, Overwatch_Short)
+          # Split by anchoring so the common single-line server string can skip the
+          # per-position scan of the line-start-anchored patterns (attempt them only
+          # at \A) and scan just the genuinely mid-line ones. self.parse falls back
+          # to the full union for multi-line strings (e.g. buffered combat blocks,
+          # where a death message can appear on an inner line).
+          AnchoredList = [NpcDeathMessage, Also_Here_Arrival, StowListOutputStart, StowListContainer,
+                          StowSetContainer1, ReadyListOutputStart, ReadyListNormal, ReadyListAmmo2,
+                          ReadyListSheathsSet, ReadyItemClear, ReadyItemSet, ReadyStoreSet].freeze
+          MidlineList = [Group_Short, StowSetContainer2, ReadyListFinished, StatusPrompt, Overwatch_Short].freeze
+          All = Regexp.union(AnchoredList + MidlineList)
+          AllStart = Regexp.new('\A(?:' + Regexp.union(AnchoredList).source + ')').freeze
+          AllMidline = Regexp.union(MidlineList)
         end
 
         def self.parse(line)
-          # O(1) vs O(N)
-          return :noop unless line =~ Pattern::All
+          # Fast path: attempt the anchored union only at line start and scan just
+          # the mid-line patterns. A non-terminal newline means a combined
+          # multi-line string (e.g. buffered combat); fall back to the full union
+          # so inner-line ^ anchors (e.g. death messages) still match.
+          nl = line.index("\n")
+          matched = if nl && nl < line.length - 1
+                      Pattern::All.match?(line)
+                    else
+                      Pattern::AllStart.match?(line) || Pattern::AllMidline.match?(line)
+                    end
+          return :noop unless matched
 
           begin
             case line

@@ -205,6 +205,7 @@ module Lich
             --no-gui
             --without-frontend
             --detachable-client=PORT
+            --pipe
             --frontend=NAME
             --frontend-command=CMD
             --game=HOST:PORT
@@ -212,6 +213,7 @@ module Lich
 
           Notes:
             Prefer --headless PORT or --headless auto for new headless launches.
+            --pipe uses stdin/stdout as the client transport instead of a front-end socket.
             --bind-address=IP sets the local address Lich binds its listen sockets to
             (the frontend, --game proxy, and detachable-client listeners).
             Defaults to 127.0.0.1. Use 0.0.0.0 to accept connections from other hosts.

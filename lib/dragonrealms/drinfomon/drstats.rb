@@ -20,6 +20,7 @@ module Lich
       @@tdps ||= 0
       @@encumbrance = nil
       @@balance ||= 8
+      @@position ||= 0
       @@luck ||= 0
 
       def self.race
@@ -156,6 +157,17 @@ module Lich
 
       def self.balance=(val)
         @@balance = val
+      end
+
+      # Combat positioning relative to your opponent. Signed magnitude where
+      # positive means you hold the advantage, negative means your opponent
+      # does, and 0 is an even contest. See DR_POSITION_VALUES.
+      def self.position
+        @@position
+      end
+
+      def self.position=(val)
+        @@position = val
       end
 
       def self.encumbrance
