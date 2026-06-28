@@ -26,6 +26,7 @@ RSpec.describe Lich::DragonRealms::DRStats do
     described_class.class_variable_set(:@@tdps, 0)
     described_class.class_variable_set(:@@encumbrance, nil)
     described_class.class_variable_set(:@@balance, 8)
+    described_class.class_variable_set(:@@position, 0)
     described_class.class_variable_set(:@@luck, 0)
   end
 
@@ -225,6 +226,17 @@ RSpec.describe Lich::DragonRealms::DRStats do
       it 'can be set and retrieved' do
         described_class.balance = 10
         expect(described_class.balance).to eq(10)
+      end
+    end
+
+    describe '.position' do
+      it 'returns 0 by default' do
+        expect(described_class.position).to eq(0)
+      end
+
+      it 'can be set and retrieved' do
+        described_class.position = -3
+        expect(described_class.position).to eq(-3)
       end
     end
   end

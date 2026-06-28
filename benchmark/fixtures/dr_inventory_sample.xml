@@ -1,0 +1,95 @@
+<mode id="GAME"/>
+<playerID id='700001'/>
+<settingsInfo  client="1.0.1.28" major="32" crc='1009451187' instance='DR'/>
+Welcome to DragonRealms (R) v2.00
+Copyright 2026 Simutronics Corp.
+All Rights Reserved
+<app char="Tannar" game="DR" title="[DR: Tannar] Wrayth"/>
+<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
+<streamWindow id='inv' title='My Inventory' target='wear' ifClosed='' resident='true'/>
+<streamWindow id="thoughts" title="Thoughts" location="center" resident="true" styleIfClosed="thought" timestamp="on"/>
+<streamWindow id="logons" title="Arrivals" location="left" resident="true" nameFilterOption="true" timestamp="on"/>
+<openDialog type='dynamic' id='minivitals' title='Stats' location='statBar'><dialogData id='minivitals'></dialogData></openDialog>
+<endSetup/>
+### benchmark:body-repeats-below ###
+You rummage about your person, looking for everything.
+<d cmd='get #8200000'>a small pouch</d> is in your right hand.
+<d cmd='get #8200007 in #9100001'>a brass lantern</d> is in a black winter cloak.
+<d cmd='get #8200014 in #9100002 in #9150002'>some arzumodine cloth</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200021'>a papyrus parchment</d>
+<d cmd='get #8200028'>a seagull feather quill</d> is in a deep pocket.
+<d cmd='get #8200035 in #9100001'>a steel-banded oaken cudgel</d> is in a black winter cloak.
+<d cmd='get #8200042 in #9100002 in #9150002'>a tattered leather journal</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200049'>a vial of crimson ink</d>
+<d cmd='get #8200056'>a chunk of star sapphire</d> is worn over your shoulders.
+<d cmd='get #8200063 in #9100001'>a coil of waxed linen cord</d> is in a black winter cloak.
+<d cmd='get #8200070 in #9100002 in #9150002'>a frostweave cloak</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200077'>a sprig of dried lavender</d>
+<d cmd='get #8200084'>a tarnished silver locket</d> is in your backpack.
+<d cmd='get #8200091 in #9100001'>a bundle of fletching feathers</d> is in a black winter cloak.
+<d cmd='get #8200098 in #9100002 in #9150002'>a wedge of sharp cheese</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200105'>a folded paper fan</d>
+<d cmd='get #8200112'>a cracked clay tankard</d> is lying at your feet.
+<d cmd='get #8200119 in #9100001'>a length of copper wire</d> is in a black winter cloak.
+<d cmd='get #8200126 in #9100002 in #9150002'>a polished river stone</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200133'>a moth-eaten woolen scarf</d>
+<d cmd='get #8200140'>a small pouch</d> is in your right hand.
+<d cmd='get #8200147 in #9100001'>a brass lantern</d> is in a black winter cloak.
+<d cmd='get #8200154 in #9100002 in #9150002'>some arzumodine cloth</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200161'>a papyrus parchment</d>
+<d cmd='get #8200168'>a seagull feather quill</d> is in a deep pocket.
+<d cmd='get #8200175 in #9100001'>a steel-banded oaken cudgel</d> is in a black winter cloak.
+<d cmd='get #8200182 in #9100002 in #9150002'>a tattered leather journal</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200189'>a vial of crimson ink</d>
+<d cmd='get #8200196'>a chunk of star sapphire</d> is worn over your shoulders.
+<d cmd='get #8200203 in #9100001'>a coil of waxed linen cord</d> is in a black winter cloak.
+<d cmd='get #8200210 in #9100002 in #9150002'>a frostweave cloak</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200217'>a sprig of dried lavender</d>
+<d cmd='get #8200224'>a tarnished silver locket</d> is in your backpack.
+<d cmd='get #8200231 in #9100001'>a bundle of fletching feathers</d> is in a black winter cloak.
+<d cmd='get #8200238 in #9100002 in #9150002'>a wedge of sharp cheese</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200245'>a folded paper fan</d>
+<d cmd='get #8200252'>a cracked clay tankard</d> is lying at your feet.
+<d cmd='get #8200259 in #9100001'>a length of copper wire</d> is in a black winter cloak.
+<d cmd='get #8200266 in #9100002 in #9150002'>a polished river stone</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200273'>a moth-eaten woolen scarf</d>
+<d cmd='get #8200280'>a small pouch</d> is in your right hand.
+<d cmd='get #8200287 in #9100001'>a brass lantern</d> is in a black winter cloak.
+<d cmd='get #8200294 in #9100002 in #9150002'>some arzumodine cloth</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200301'>a papyrus parchment</d>
+<d cmd='get #8200308'>a seagull feather quill</d> is in a deep pocket.
+<d cmd='get #8200315 in #9100001'>a steel-banded oaken cudgel</d> is in a black winter cloak.
+<d cmd='get #8200322 in #9100002 in #9150002'>a tattered leather journal</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200329'>a vial of crimson ink</d>
+<d cmd='get #8200336'>a chunk of star sapphire</d> is worn over your shoulders.
+<d cmd='get #8200343 in #9100001'>a coil of waxed linen cord</d> is in a black winter cloak.
+<d cmd='get #8200350 in #9100002 in #9150002'>a frostweave cloak</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200357'>a sprig of dried lavender</d>
+<d cmd='get #8200364'>a tarnished silver locket</d> is in your backpack.
+<d cmd='get #8200371 in #9100001'>a bundle of fletching feathers</d> is in a black winter cloak.
+<d cmd='get #8200378 in #9100002 in #9150002'>a wedge of sharp cheese</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200385'>a folded paper fan</d>
+<d cmd='get #8200392'>a cracked clay tankard</d> is lying at your feet.
+<d cmd='get #8200399 in #9100001'>a length of copper wire</d> is in a black winter cloak.
+<d cmd='get #8200406 in #9100002 in #9150002'>a polished river stone</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200413'>a moth-eaten woolen scarf</d>
+<d cmd='get #8200420'>a small pouch</d> is in your right hand.
+<d cmd='get #8200427 in #9100001'>a brass lantern</d> is in a black winter cloak.
+<d cmd='get #8200434 in #9100002 in #9150002'>some arzumodine cloth</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200441'>a papyrus parchment</d>
+<d cmd='get #8200448'>a seagull feather quill</d> is in a deep pocket.
+<d cmd='get #8200455 in #9100001'>a steel-banded oaken cudgel</d> is in a black winter cloak.
+<d cmd='get #8200462 in #9100002 in #9150002'>a tattered leather journal</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200469'>a vial of crimson ink</d>
+<d cmd='get #8200476'>a chunk of star sapphire</d> is worn over your shoulders.
+<d cmd='get #8200483 in #9100001'>a coil of waxed linen cord</d> is in a black winter cloak.
+<d cmd='get #8200490 in #9100002 in #9150002'>a frostweave cloak</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200497'>a sprig of dried lavender</d>
+<d cmd='get #8200504'>a tarnished silver locket</d> is in your backpack.
+<d cmd='get #8200511 in #9100001'>a bundle of fletching feathers</d> is in a black winter cloak.
+<d cmd='get #8200518 in #9100002 in #9150002'>a wedge of sharp cheese</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200525'>a folded paper fan</d>
+<d cmd='get #8200532'>a cracked clay tankard</d> is lying at your feet.
+<d cmd='get #8200539 in #9100001'>a length of copper wire</d> is in a black winter cloak.
+<d cmd='get #8200546 in #9100002 in #9150002'>a polished river stone</d> is in a lumpy canvas sack, which is in a sungold frame satchel.
+<d cmd='get #8200553'>a moth-eaten woolen scarf</d>
