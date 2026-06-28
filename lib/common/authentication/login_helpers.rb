@@ -13,6 +13,12 @@ module Lich
         # Valid game codes
         VALID_GAME_CODES = %w[GS3 GS4 GSX GSF GST DR DRX DRF DRT].freeze
 
+        # CLI login name that requests the character generator instead of
+        # selecting an existing character (e.g. `--login NEW`). This is a
+        # user-facing CLI convention; the generator decision is carried to the
+        # lower layers as explicit intent, not as a magic character name.
+        NEW_CHARACTER_LOGIN = /\Anew\z/i
+
         # Valid frontend flags accepted by CLI login argument parsing.
         # Note: only wizard/stormfront/avalon affect protocol path selection;
         # other values are treated as frontend launch selectors/modifiers.
