@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'shutdown_log'
+
 module Lich
   module Common
     # Tracks script teardown during process shutdown.
@@ -7,9 +9,13 @@ module Lich
     # This helper keeps the shutdown orchestration in `main.rb` readable while
     # making the slow-script accounting independently testable.
     module ShutdownScriptDrain
+      # Maximum number of polling attempts while waiting for scripts to exit.
       DEFAULT_DRAIN_ATTEMPTS = 200
+
+      # Seconds slept between drain polling attempts.
       DEFAULT_DRAIN_INTERVAL = 0.1
 
+      # Script shutdown drain metrics and remaining-script detail.
       Result = Struct.new(
         :scripts_started,
         :slow_script_threshold,
@@ -98,9 +104,7 @@ module Lich
       # @param error [StandardError] raised kill error
       # @return [void]
       def self.log_kill_error(script, error)
-        return unless defined?(Lich) && Lich.respond_to?(:log)
-
-        Lich.log("warning: shutdown script kill failed for #{script_name(script)}: #{error.class}: #{error.message}")
+        ShutdownLog.warning("shutdown script kill failed for #{script_name(script)}: #{error.class}: #{error.message}")
       end
       private_class_method :log_kill_error
 
