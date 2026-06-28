@@ -281,6 +281,15 @@ module Lich
           @game_instance = GameInstanceFactory.create(game_type)
         end
 
+        # Opens the TCP connection to the game server and starts the socket's
+        # wrap and main reader threads.
+        #
+        # @param host [String] game server hostname
+        # @param port [Integer] game server port
+        # @return [TCPSocket] the connected, configured game socket
+        # @note Connection errors propagate to the caller. Use
+        #   {.open_with_timeout} to bound how long the connect may block.
+        # @see .open_with_timeout
         def open(host, port)
           @socket = TCPSocket.open(host, port)
 
@@ -321,6 +330,37 @@ module Lich
           start_main_thread
 
           @socket
+        end
+
+        # Connects to the game server on a background thread, enforcing a connect
+        # timeout that a bare {.open} cannot. Surfaces a stuck or failed connect
+        # instead of letting startup proceed with a dead socket.
+        #
+        # @param host [String] game server hostname
+        # @param port [Integer] game server port
+        # @param timeout [Integer, Float] seconds to wait for the connect to complete
+        # @return [void]
+        # @raise [RuntimeError] if the connect does not complete within +timeout+
+        # @raise [StandardError] re-raises whatever {.open} raises
+        #   (e.g. Errno::ECONNREFUSED) so the caller's rescue runs
+        # @see .open
+        def open_with_timeout(host, port, timeout = 30)
+          connect_thread = Thread.new {
+            # report_on_exception off: a failed open is surfaced by the join below
+            # (which re-raises it), not by an auto-printed thread warning.
+            Thread.current.report_on_exception = false
+            self.open(host, port)
+          }
+          # join returns nil on timeout, the thread on success, and re-raises the
+          # thread's exception on failure -- so a Game.open that errors (e.g.
+          # connection refused) propagates to the caller's rescue instead of being
+          # silently swallowed (the old `if connect_thread.status` could not tell a
+          # thread that died with an exception, status nil, from a normal finish,
+          # status false).
+          if connect_thread.join(timeout).nil?
+            connect_thread.kill rescue nil
+            raise "error: timed out connecting to #{host}:#{port}"
+          end
         end
 
         def start_wrap_thread

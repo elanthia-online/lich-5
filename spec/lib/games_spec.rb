@@ -808,6 +808,31 @@ RSpec.describe Lich::GameBase::Game do
   end
 end
 
+RSpec.describe Lich::GameBase::Game, '.open_with_timeout' do
+  it 'returns without error when Game.open succeeds' do
+    allow(described_class).to receive(:open).and_return(:socket)
+    expect { described_class.open_with_timeout('host', 1, 1) }.not_to raise_error
+  end
+
+  it 'raises when the connect does not finish within the timeout' do
+    allow(described_class).to receive(:open) { sleep 5 } # hangs past the timeout
+    expect { described_class.open_with_timeout('host', 1, 0.3) }
+      .to raise_error(/timed out connecting/)
+  end
+
+  # Long-standing bug (currently failing; present since the original connect-loop
+  # in "Base Lich 5"): a Game.open that raises (e.g. connection refused) must
+  # surface so the caller's rescue (retry / clean exit) runs instead of proceeding
+  # with a dead socket. The connect thread dies with an exception
+  # (Thread#status == nil), which the current code treats the same as a normal
+  # finish (status == false).
+  it 'raises when Game.open fails to connect' do
+    allow(described_class).to receive(:open).and_raise(Errno::ECONNREFUSED)
+    expect { described_class.open_with_timeout('unreachable.host', 1, 1) }
+      .to raise_error(Errno::ECONNREFUSED)
+  end
+end
+
 # The stream desync guard: pre-Ox, strict REXML raised on truncated fragments
 # and Game.process_xml_data's rescue logged the fragment and reset XMLData --
 # parser strictness doubled as stream-desync detection. Ox is permissive: it

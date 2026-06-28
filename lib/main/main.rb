@@ -372,33 +372,13 @@ reconnect_if_wanted = proc {
     gamehost, gameport = Lich.fix_game_host_port(gamehost, gameport)
     Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
     begin
-      connect_thread = Thread.new {
-        Game.open(gamehost, gameport)
-      }
-      300.times {
-        sleep 0.1
-        break unless connect_thread.status
-      }
-      if connect_thread.status
-        connect_thread.kill rescue nil
-        raise "error: timed out connecting to #{gamehost}:#{gameport}"
-      end
+      Game.open_with_timeout(gamehost, gameport)
     rescue
       Lich.log "error: #{$!}"
       gamehost, gameport = Lich.break_game_host_port(gamehost, gameport)
       Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
       begin
-        connect_thread = Thread.new {
-          Game.open(gamehost, gameport)
-        }
-        300.times {
-          sleep 0.1
-          break unless connect_thread.status
-        }
-        if connect_thread.status
-          connect_thread.kill rescue nil
-          raise "error: timed out connecting to #{gamehost}:#{gameport}"
-        end
+        Game.open_with_timeout(gamehost, gameport)
       rescue
         Lich.log "error: #{$!}"
         $_CLIENT_.close rescue nil
