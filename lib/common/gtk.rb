@@ -107,6 +107,83 @@ module Lich
       return Gtk.main_quit if Gtk.respond_to?(:main_quit)
     end
 
+    # Returns true when the shared GTK main loop is currently running.
+    #
+    # Used to decide whether core teardown must be handed to the GTK thread via
+    # {#shutdown_gtk_before_exit} (loop running, caller on another thread) or can
+    # run synchronously in place (loop already unwound, caller on the GTK thread).
+    #
+    # @return [Boolean]
+    def self.gtk_main_loop_running?
+      return false unless defined?(Gtk) && Gtk.respond_to?(:main_level)
+
+      Gtk.main_level.to_i > 0
+    end
+
+    # Runs core GTK teardown before process exit, so Ruby's finalizer is not left
+    # to dispose surviving widget wrappers in an unsafe order (which disposes
+    # native objects out of order and segfaults).
+    #
+    # Dispatch depends on the GTK main loop state:
+    #
+    # * **Loop running** (the launcher and the main game loop, which call this
+    #   from a thread other than the GTK thread): the teardown is queued onto the
+    #   GTK thread and this method blocks on a bounded barrier until it completes.
+    #   {#shutdown_gtk!} also quits the loop, so this both destroys the widgets
+    #   and unwinds `Gtk.main`.
+    # * **Loop not running** (the terminal `exit` in `lich.rbw`, reached on the
+    #   GTK thread after `Gtk.main` returns): a queued block would never be
+    #   serviced, so teardown runs directly in place. This is the idempotent
+    #   backstop that sweeps any widgets a route which bypassed the orchestrated
+    #   exits left alive; after a clean teardown the registries are already empty
+    #   and it is a cheap no-op.
+    #
+    # If GTK is unavailable, or the work cannot be queued, or it does not finish
+    # within +timeout+, the retention registries are cleared directly so Ruby-side
+    # callback references are not left alive until interpreter finalization.
+    #
+    # @param timeout [Float] seconds to wait for the queued teardown to complete
+    # @return [void]
+    def self.shutdown_gtk_before_exit(timeout: 2.0)
+      return clear_gtk_retention_registries unless defined?(Gtk)
+
+      # No live loop to service a queued block -- tear down directly in place
+      # (we are on the GTK thread at the terminal exit) before the VM finalizes.
+      unless gtk_main_loop_running?
+        shutdown_gtk!
+        return
+      end
+
+      shutdown_complete = Queue.new
+      queued = Gtk.queue do
+        begin
+          shutdown_gtk!
+        ensure
+          shutdown_complete << true
+        end
+      end
+
+      unless queued
+        clear_gtk_retention_registries
+        return
+      end
+
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      loop do
+        begin
+          shutdown_complete.pop(true)
+          return
+        rescue ThreadError
+          break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+          sleep 0.01
+        end
+      end
+
+      Lich.log 'warning: GTK shutdown queue did not complete before exit'
+      clear_gtk_retention_registries
+    end
+
     # Returns log context for GTK guard messages.
     #
     # Prefers the currently running script name when available so blocked GTK

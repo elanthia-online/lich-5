@@ -161,4 +161,97 @@ RSpec.describe 'Lich::Common GTK hardening' do
     expect(Lich::Common.quit_gtk_main_loop).to eq(:main_quit_called)
     expect(Gtk.main_quit_calls).to eq(1)
   end
+
+  describe 'shutdown_gtk_before_exit' do
+    context 'while the GTK main loop is running' do
+      # The launcher and the main game loop call this from a thread other than
+      # the GTK thread, so teardown is queued onto the GTK thread and awaited.
+      before { Gtk.main_level = 1 }
+
+      it 'queues core GTK teardown and returns once it signals completion' do
+        widget = Gtk::Widget.new
+        widget.signal_connect('clicked') { :clicked }
+        # Run the queued block synchronously so the barrier is satisfied in-test;
+        # the production path runs it on the GTK thread and waits the same way.
+        allow(Gtk).to receive(:queue) { |&block| block.call; 1 }
+
+        Lich::Common.shutdown_gtk_before_exit
+
+        expect(widget.destroyed?).to be true
+        expect(Gtk.main_quit_calls).to eq(1)
+        expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers }).to be_empty
+      end
+
+      it 'clears retention registries when the teardown cannot be queued' do
+        allow(Gtk).to receive(:queue).and_return(nil)
+        allow(Lich::Common).to receive(:clear_gtk_retention_registries)
+
+        Lich::Common.shutdown_gtk_before_exit
+
+        expect(Lich::Common).to have_received(:clear_gtk_retention_registries)
+        # The teardown body never ran, so the GTK loop was not quit.
+        expect(Gtk.main_quit_calls).to eq(0)
+      end
+
+      it 'warns and clears registries when the queued teardown does not finish in time' do
+        # Queued (truthy) but the block never runs, so completion is never signaled.
+        allow(Gtk).to receive(:queue).and_return(1)
+        allow(Lich::Common).to receive(:clear_gtk_retention_registries)
+
+        Lich::Common.shutdown_gtk_before_exit(timeout: 0.05)
+
+        expect(Lich).to have_received(:log).with(/GTK shutdown queue did not complete/)
+        expect(Lich::Common).to have_received(:clear_gtk_retention_registries)
+      end
+    end
+
+    context 'after the GTK main loop has returned (terminal exit backstop)' do
+      # The loop is unwound, so a queued block would never run; teardown must
+      # happen directly in place, sweeping any widgets an unwired route left.
+      before { Gtk.main_level = 0 }
+
+      it 'runs teardown directly without queuing when the loop is not running' do
+        widget = Gtk::Widget.new
+        widget.signal_connect('clicked') { :clicked }
+        expect(Gtk).not_to receive(:queue)
+
+        Lich::Common.shutdown_gtk_before_exit
+
+        expect(widget.destroyed?).to be true
+        expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers }).to be_empty
+      end
+
+      it 'is a clean no-op when nothing remains to tear down' do
+        expect(Gtk).not_to receive(:queue)
+
+        expect { Lich::Common.shutdown_gtk_before_exit }.not_to raise_error
+        expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers }).to be_empty
+      end
+    end
+
+    it 'clears retention registries directly when GTK is unavailable' do
+      hide_const('Gtk')
+      allow(Lich::Common).to receive(:clear_gtk_retention_registries)
+
+      expect { Lich::Common.shutdown_gtk_before_exit }.not_to raise_error
+      expect(Lich::Common).to have_received(:clear_gtk_retention_registries)
+    end
+  end
+
+  describe 'gtk_main_loop_running?' do
+    it 'is true while a GTK main loop is active' do
+      Gtk.main_level = 1
+      expect(Lich::Common.gtk_main_loop_running?).to be true
+    end
+
+    it 'is false once the loop has unwound' do
+      Gtk.main_level = 0
+      expect(Lich::Common.gtk_main_loop_running?).to be false
+    end
+
+    it 'is false when GTK is unavailable' do
+      hide_const('Gtk')
+      expect(Lich::Common.gtk_main_loop_running?).to be false
+    end
+  end
 end
