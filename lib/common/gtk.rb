@@ -109,9 +109,9 @@ module Lich
 
     # Returns true when the shared GTK main loop is currently running.
     #
-    # Used to decide whether core teardown must be handed to the GTK thread via
-    # {#shutdown_gtk_before_exit} (loop running, caller on another thread) or can
-    # run synchronously in place (loop already unwound, caller on the GTK thread).
+    # Used to decide whether core teardown can be handed to the GTK thread via
+    # {#shutdown_gtk_before_exit}. A false return means the queue cannot be
+    # serviced; only the terminal `lich.rbw` backstop may run direct teardown.
     #
     # @return [Boolean]
     def self.gtk_main_loop_running?
@@ -124,43 +124,56 @@ module Lich
     # to dispose surviving widget wrappers in an unsafe order (which disposes
     # native objects out of order and segfaults).
     #
-    # Dispatch depends on the GTK main loop state:
+    # Dispatch depends on the GTK main loop state and caller context:
     #
     # * **Loop running** (the launcher and the main game loop, which call this
     #   from a thread other than the GTK thread): the teardown is queued onto the
     #   GTK thread and this method blocks on a bounded barrier until it completes.
     #   {#shutdown_gtk!} also quits the loop, so this both destroys the widgets
     #   and unwinds `Gtk.main`.
-    # * **Loop not running** (the terminal `exit` in `lich.rbw`, reached on the
-    #   GTK thread after `Gtk.main` returns): a queued block would never be
-    #   serviced, so teardown runs directly in place. This is the idempotent
-    #   backstop that sweeps any widgets a route which bypassed the orchestrated
-    #   exits left alive; after a clean teardown the registries are already empty
-    #   and it is a cheap no-op.
+    # * **Loop not running**: a queued block would never be serviced. Ordinary
+    #   callers clear Ruby retention registries only. The terminal `lich.rbw`
+    #   backstop passes +direct: true+ after `Gtk.main` returns on the GTK thread;
+    #   only that path destroys surviving widgets directly in place.
     #
-    # If GTK is unavailable, or the work cannot be queued, or it does not finish
-    # within +timeout+, the retention registries are cleared directly so Ruby-side
-    # callback references are not left alive until interpreter finalization.
+    # If GTK is unavailable, the queue cannot be serviced, the work cannot be
+    # queued, or it does not finish within +timeout+, the retention registries are
+    # cleared directly so Ruby-side callback references are not left alive until
+    # interpreter finalization.
     #
     # @param timeout [Float] seconds to wait for the queued teardown to complete
+    # @param direct [Boolean] true only for the terminal GTK-thread backstop after
+    #   `Gtk.main` returns
     # @return [void]
-    def self.shutdown_gtk_before_exit(timeout: 2.0)
+    def self.shutdown_gtk_before_exit(timeout: 2.0, direct: false)
       return clear_gtk_retention_registries unless defined?(Gtk)
 
-      # No live loop to service a queued block -- tear down directly in place
-      # (we are on the GTK thread at the terminal exit) before the VM finalizes.
       unless gtk_main_loop_running?
-        shutdown_gtk!
+        if direct
+          begin
+            shutdown_gtk!
+          rescue StandardError => e
+            Lich.log "warning: Failed to run direct GTK shutdown before exit: #{e.class}: #{e.message}"
+            clear_gtk_retention_registries
+          end
+        else
+          clear_gtk_retention_registries
+        end
         return
       end
 
       shutdown_complete = Queue.new
-      queued = Gtk.queue do
-        begin
-          shutdown_gtk!
-        ensure
-          shutdown_complete << true
+      queued = begin
+        Gtk.queue do
+          begin
+            shutdown_gtk!
+          ensure
+            shutdown_complete << true
+          end
         end
+      rescue StandardError => e
+        Lich.log "warning: Failed to queue GTK shutdown before exit: #{e.class}: #{e.message}"
+        nil
       end
 
       unless queued

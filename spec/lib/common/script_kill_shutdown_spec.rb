@@ -150,6 +150,10 @@ RSpec.describe 'Lich::Common::Script shutdown kill path' do
     it 'returns false without raising when no running script matches' do
       expect(script_class.kill('absent', context: :shutdown)).to be(false)
     end
+
+    it 'rejects invalid kill contexts before matching scripts' do
+      expect { script_class.kill('target', context: :shudown) }.to raise_error(ArgumentError, /invalid script kill context/)
+    end
   end
 
   describe 'runtime kill regression' do
@@ -161,6 +165,14 @@ RSpec.describe 'Lich::Common::Script shutdown kill path' do
       expect(script.kill).to eq('async-target')
 
       expect(script_class.list).to be_empty
+    end
+
+    it 'rejects invalid instance kill contexts' do
+      script = build_script(name: 'bad-context')
+      script_class.class_variable_set(:@@running, [script])
+
+      expect { script.kill(context: :later) }.to raise_error(ArgumentError, /invalid script kill context/)
+      expect(script_class.list).to eq([script])
     end
   end
 

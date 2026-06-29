@@ -193,6 +193,17 @@ RSpec.describe 'Lich::Common GTK hardening' do
         expect(Gtk.main_quit_calls).to eq(0)
       end
 
+      it 'clears retention registries when GTK shutdown cannot be scheduled' do
+        allow(Gtk).to receive(:queue).and_raise('queue boom')
+        allow(Lich::Common).to receive(:clear_gtk_retention_registries)
+
+        expect { Lich::Common.shutdown_gtk_before_exit }.not_to raise_error
+
+        expect(Lich).to have_received(:log).with(/Failed to queue GTK shutdown before exit/)
+        expect(Lich::Common).to have_received(:clear_gtk_retention_registries)
+        expect(Gtk.main_quit_calls).to eq(0)
+      end
+
       it 'warns and clears registries when the queued teardown does not finish in time' do
         # Queued (truthy) but the block never runs, so completion is never signaled.
         allow(Gtk).to receive(:queue).and_return(1)
@@ -206,25 +217,48 @@ RSpec.describe 'Lich::Common GTK hardening' do
     end
 
     context 'after the GTK main loop has returned (terminal exit backstop)' do
-      # The loop is unwound, so a queued block would never run; teardown must
-      # happen directly in place, sweeping any widgets an unwired route left.
+      # The loop is unwound, so a queued block would never run. Only the terminal
+      # GTK-thread backstop may destroy widgets directly in place.
       before { Gtk.main_level = 0 }
 
-      it 'runs teardown directly without queuing when the loop is not running' do
+      it 'runs teardown directly without queuing when direct backstop is requested' do
+        widget = Gtk::Widget.new
+        widget.signal_connect('clicked') { :clicked }
+        expect(Gtk).not_to receive(:queue)
+
+        Lich::Common.shutdown_gtk_before_exit(direct: true)
+
+        expect(widget.destroyed?).to be true
+        expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers }).to be_empty
+      end
+
+      it 'clears registries without direct widget teardown for non-terminal callers' do
         widget = Gtk::Widget.new
         widget.signal_connect('clicked') { :clicked }
         expect(Gtk).not_to receive(:queue)
 
         Lich::Common.shutdown_gtk_before_exit
 
-        expect(widget.destroyed?).to be true
+        expect(widget.destroyed?).to be false
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers }).to be_empty
+      end
+
+      it 'clears registries when direct teardown fails' do
+        Gtk.main_quit_failure = true
+        widget = Gtk::Widget.new
+        widget.signal_connect('clicked') { :clicked }
+        allow(Lich::Common).to receive(:clear_gtk_retention_registries).and_call_original
+
+        expect { Lich::Common.shutdown_gtk_before_exit(direct: true) }.not_to raise_error
+
+        expect(Lich).to have_received(:log).with(/Failed to run direct GTK shutdown before exit/)
+        expect(Lich::Common).to have_received(:clear_gtk_retention_registries).at_least(:once)
       end
 
       it 'is a clean no-op when nothing remains to tear down' do
         expect(Gtk).not_to receive(:queue)
 
-        expect { Lich::Common.shutdown_gtk_before_exit }.not_to raise_error
+        expect { Lich::Common.shutdown_gtk_before_exit(direct: true) }.not_to raise_error
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers }).to be_empty
       end
     end

@@ -138,7 +138,7 @@ if defined?(Gtk)
   # thread with the loop unwound. Sweep any widgets a route that bypassed the
   # orchestrated exits left alive, before the interpreter finalizer disposes
   # them in an unsafe order and segfaults. Idempotent after a clean shutdown.
-  Lich::Common.shutdown_gtk_before_exit
+  Lich::Common.shutdown_gtk_before_exit(direct: true)
 else
   @main_thread.join
 end

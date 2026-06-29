@@ -25,6 +25,8 @@ module Lich
     TRUSTED_SCRIPT_BINDING = proc { _script }
 
     class Script
+      VALID_KILL_CONTEXTS = [:runtime, :shutdown].freeze
+
       @@elevated_script_start = proc { |args|
         if args.empty?
           # fixme: error
@@ -419,6 +421,10 @@ module Lich
       #   (:runtime or :shutdown)
       # @return [Boolean] true when a matching running script was found and stopped
       def Script.kill(name, context: :runtime)
+        unless VALID_KILL_CONTEXTS.include?(context)
+          raise ArgumentError, "invalid script kill context: #{context.inspect}"
+        end
+
         if (s = (@@running.find { |i| i.name == name }) || (@@running.find { |i| i.name =~ /^#{name}$/i }))
           s.killed_externally = true
           s.kill_source = caller[0..2]
@@ -796,6 +802,10 @@ module Lich
       #   when the owning Lich process is closing
       # @return [String] script name
       def kill(context: :runtime)
+        unless VALID_KILL_CONTEXTS.include?(context)
+          raise ArgumentError, "invalid script kill context: #{context.inspect}"
+        end
+
         source = @kill_source || caller[0..2]
 
         if context == :shutdown
