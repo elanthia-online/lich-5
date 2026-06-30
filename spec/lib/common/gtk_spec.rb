@@ -191,7 +191,7 @@ RSpec.describe 'Lich::Common GTK hardening' do
 
         Lich::Common.shutdown_gtk_before_exit
 
-        expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).not_to be_nil
+        expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[timeout_id] }).to be_nil
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[idle_id] }).to be_nil
         # The teardown body never ran, so the GTK loop was not quit.
@@ -208,7 +208,7 @@ RSpec.describe 'Lich::Common GTK hardening' do
         expect { Lich::Common.shutdown_gtk_before_exit }.not_to raise_error
 
         expect(Lich).to have_received(:log).with(/Failed to queue GTK shutdown before exit/)
-        expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).not_to be_nil
+        expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[timeout_id] }).to be_nil
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[idle_id] }).to be_nil
         expect(Gtk.main_quit_calls).to eq(0)
@@ -225,7 +225,7 @@ RSpec.describe 'Lich::Common GTK hardening' do
         Lich::Common.shutdown_gtk_before_exit(timeout: 0.05)
 
         expect(Lich).to have_received(:log).with(/GTK shutdown queue did not complete/)
-        expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).not_to be_nil
+        expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[timeout_id] }).to be_nil
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[idle_id] }).to be_nil
       end
@@ -247,7 +247,7 @@ RSpec.describe 'Lich::Common GTK hardening' do
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers }).to be_empty
       end
 
-      it 'keeps signal handlers for the terminal sweep without direct widget teardown for non-terminal callers' do
+      it 'clears retained Ruby references without direct widget teardown for non-terminal callers' do
         widget = Gtk::Widget.new
         timeout_id = GLib::Timeout.add(50) { true }
         idle_id = GLib::Idle.add { true }
@@ -257,7 +257,7 @@ RSpec.describe 'Lich::Common GTK hardening' do
         Lich::Common.shutdown_gtk_before_exit
 
         expect(widget.destroyed?).to be false
-        expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).not_to be_nil
+        expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[timeout_id] }).to be_nil
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[idle_id] }).to be_nil
       end
