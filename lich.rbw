@@ -35,7 +35,13 @@ require 'json'
 require 'monitor'
 require 'net/http'
 require 'ostruct'
-require 'ox'
+begin
+  require 'ox'
+rescue LoadError
+  Gem.install('ox')
+  Gem.clear_paths
+  require 'ox'
+end
 require 'resolv'
 require 'rexml/document'
 require 'rexml/streamlistener'
