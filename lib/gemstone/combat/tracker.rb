@@ -308,7 +308,7 @@ module Lich
               server_string
             end
 
-            DownstreamHook.add(@hook_id, segment_buffer)
+            DownstreamHook.add(@hook_id, segment_buffer, persist: true) # tracker manages its own removal
           end
 
           def remove_downstream_hook

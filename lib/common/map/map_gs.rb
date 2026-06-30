@@ -261,7 +261,7 @@ module Lich
                       server_string
                     end
                   end
-                  DownstreamHook.add('squelch-peer', squelch_proc)
+                  DownstreamHook.add('squelch-peer', squelch_proc, persist: false) # scoped to this peer command
                   result = dothistimeout "peer #{peer_direction}", 3, /^You peer|^\[Usage: PEER/
                   if result =~ /^You peer/
                     peer_results = []

@@ -41,6 +41,10 @@ module Lich
         Lich::Gemstone::Infomon.get('currency.soul_shards')
       end
 
+      def self.aevit
+        Lich::Gemstone::Infomon.get('currency.aevit')
+      end
+
       def self.gold
         Lich::Gemstone::Infomon.get('currency.gold')
       end

@@ -2028,6 +2028,8 @@ RSpec.describe Lich::DragonRealms::DRCI do
 
     [
       'You unload the crossbow.',
+      "<dialogData id='AimTimerDialog'><timer id='firingTimer' value='0' /> </dialogData>You unload the shortbow.",
+      "<dialogData id='AimTimerDialog'><timer id='firingTimer' value='0' /> </dialogData>You remain concealed by your surroundings, convinced that your unloading of the crossbow went unobserved.",
       'Your bolt falls from your crossbow to your feet.',
       'As you release the string, the arrow tumbles to the ground.',
       'You remain concealed by your surroundings, convinced that your unloading of the crossbow went unobserved.'
