@@ -59,6 +59,21 @@ module Lich
       end
     end
 
+    # Clears retained callback registries that do not drive terminal widget
+    # teardown.
+    #
+    # Non-terminal shutdown fallbacks cannot safely destroy GTK receivers, but
+    # the signal-handler registry is also the terminal direct-shutdown worklist.
+    # Keep it intact so the post-`Gtk.main` backstop can still sweep widgets.
+    #
+    # @return [void]
+    def self.clear_gtk_async_retention_registries
+      with_gtk_registry_lock do
+        gtk_timeout_callbacks.clear
+        gtk_idle_callbacks.clear
+      end
+    end
+
     # Performs explicit GTK teardown before Ruby process exit.
     #
     # ruby-gnome will otherwise release surviving widget wrappers during Ruby
@@ -132,14 +147,15 @@ module Lich
     #   {#shutdown_gtk!} also quits the loop, so this both destroys the widgets
     #   and unwinds `Gtk.main`.
     # * **Loop not running**: a queued block would never be serviced. Ordinary
-    #   callers clear Ruby retention registries only. The terminal `lich.rbw`
-    #   backstop passes +direct: true+ after `Gtk.main` returns on the GTK thread;
-    #   only that path destroys surviving widgets directly in place.
+    #   callers clear only async callback retention and preserve the signal
+    #   receiver worklist. The terminal `lich.rbw` backstop passes +direct: true+
+    #   after `Gtk.main` returns on the GTK thread; only that path destroys
+    #   surviving widgets directly in place.
     #
-    # If GTK is unavailable, the queue cannot be serviced, the work cannot be
-    # queued, or it does not finish within +timeout+, the retention registries are
-    # cleared directly so Ruby-side callback references are not left alive until
-    # interpreter finalization.
+    # If GTK is unavailable, all retention registries are cleared. If the queue
+    # cannot be serviced, the work cannot be queued, or it does not finish within
+    # +timeout+, async callback retention is cleared while signal receivers remain
+    # available for the terminal direct sweep.
     #
     # @param timeout [Float] seconds to wait for the queued teardown to complete
     # @param direct [Boolean] true only for the terminal GTK-thread backstop after
@@ -157,7 +173,7 @@ module Lich
             clear_gtk_retention_registries
           end
         else
-          clear_gtk_retention_registries
+          clear_gtk_async_retention_registries
         end
         return
       end
@@ -177,7 +193,7 @@ module Lich
       end
 
       unless queued
-        clear_gtk_retention_registries
+        clear_gtk_async_retention_registries
         return
       end
 
@@ -194,7 +210,7 @@ module Lich
       end
 
       Lich.log 'warning: GTK shutdown queue did not complete before exit'
-      clear_gtk_retention_registries
+      clear_gtk_async_retention_registries
     end
 
     # Returns log context for GTK guard messages.
