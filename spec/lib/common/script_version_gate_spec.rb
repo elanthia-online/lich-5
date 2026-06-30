@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require 'zlib'
 
 # Specs for the Lich version-gating helpers on Lich::Common::Script:
 #   - Script.required_lich_version  (parses the "required: Lich >= X" header)
@@ -167,6 +168,49 @@ RSpec.describe 'Lich::Common::Script Lich version gating' do
       expect(script_class.required_lich_version('does-not-exist')).to be_nil
     end
 
+    it 'reads a gzip-compressed script header (gz-aware), not crashing on binary bytes' do
+      dir = Dir.mktmpdir
+      path = File.join(dir, 'gzscript.lic.gz')
+      Zlib::GzipWriter.open(path) { |f| f.write(header('required: Lich >= 5.16.0')) }
+      allow(script_class).to receive(:current).and_return(running_script('gzscript', path))
+
+      expect(script_class.required_lich_version).to eq('5.16.0')
+    ensure
+      FileUtils.rm_rf(dir) if dir
+    end
+
+    it 'fails soft (no requirement) on a corrupt .gz rather than raising' do
+      dir = Dir.mktmpdir
+      path = File.join(dir, 'corrupt.lic.gz')
+      # Gzip magic bytes then garbage (built from ASCII-only source).
+      File.binwrite(path, [0x1f, 0x8b, 0x08].pack('C*') + ' not a valid gzip stream')
+      allow(script_class).to receive(:current).and_return(running_script('corrupt', path))
+
+      expect { script_class.required_lich_version }.not_to raise_error
+      expect(script_class.required_lich_version).to be_nil
+    ensure
+      FileUtils.rm_rf(dir) if dir
+    end
+
+    it 'fails soft when a non-gz file holds invalid byte sequences (ArgumentError guard)' do
+      path = "#{root}/binary.lic"
+      # Invalid UTF-8 bytes, constructed from ASCII-only source via pack.
+      @contents[path] = [0xff, 0xfe, 0x80, 0x81].pack('C*').force_encoding('UTF-8')
+      allow(script_class).to receive(:current).and_return(running_script('binary', path))
+
+      expect { script_class.required_lich_version }.not_to raise_error
+      expect(script_class.required_lich_version).to be_nil
+    end
+
+    it 'fails soft (returns nil, no raise) when the file is transiently unreadable' do
+      path = "#{root}/flaky.lic"
+      @root_files << 'flaky.lic'
+      allow(File).to receive(:read).with(path).and_raise(Errno::EACCES)
+
+      expect { script_class.required_lich_version('flaky') }.not_to raise_error
+      expect(script_class.required_lich_version('flaky')).to be_nil
+    end
+
     it 'returns nil (without touching disk) when no current script is running' do
       allow(script_class).to receive(:current).and_return(nil)
 
@@ -281,6 +325,19 @@ RSpec.describe 'Lich::Common::Script Lich version gating' do
       allow(Lich::Messaging).to receive(:msg)
 
       expect { script_class.require_lich_version!('5.15.0') }.not_to raise_error
+    end
+
+    it 'stays non-fatal when the running script\'s header is unreadable (no raise, no exit)' do
+      stub_const('LICH_VERSION', '5.10.0')
+      path = "#{root}/flaky.lic"
+      allow(File).to receive(:read).with(path).and_raise(Errno::EACCES)
+      current = running_script('flaky', path)
+      allow(script_class).to receive(:current).and_return(current)
+      expect(current).not_to receive(:exit)
+
+      # No explicit minimum: the floor would come from the unreadable header.
+      # A read error must be treated as "no requirement" -> the guard passes.
+      expect(script_class.require_lich_version!).to be true
     end
   end
 

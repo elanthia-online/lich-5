@@ -371,6 +371,45 @@ module Lich
       end
       private_class_method :__extract_header_comments
 
+      # Reads a script file and returns its header comment lines, failing soft.
+      #
+      # Gzip-compressed scripts (.gz) are decompressed first, mirroring how
+      # Script#initialize loads them; reading their bytes as text would
+      # otherwise raise on the binary content. Header parsing must never raise
+      # out of a startup version check, so a missing, unreadable, corrupt, or
+      # non-text file is treated as "no header" (an empty list) rather than
+      # propagating the error.
+      #
+      # @param file_path [String] absolute path to the script file
+      # @return [Array<String>] the header comment lines, or [] when the file cannot be read or parsed
+      def Script.__read_header_comments(file_path)
+        data =
+          if file_path =~ /\.gz$/i
+            Zlib::GzipReader.open(file_path) { |f| f.read }
+          else
+            File.read(file_path)
+          end
+        __extract_header_comments(data)
+      rescue SystemCallError, IOError, Zlib::Error, ArgumentError
+        []
+      end
+      private_class_method :__read_header_comments
+
+      # Resolves a script name to its header comment lines, or nil when not found.
+      #
+      # Centralizes the name -> file -> read sequence shared by {Script.version}
+      # and {Script.required_lich_version}. Reading is fail-soft via
+      # {Script.__read_header_comments}; a name that resolves to no file returns
+      # nil, distinct from a found-but-headerless script, which returns [].
+      #
+      # @param script_name [String] the script name (with or without extension)
+      # @return [Array<String>, nil] the header comment lines, or nil when no file matches
+      def Script.__header_lines_for(script_name)
+        file_name = __find_script_file(script_name.sub(/[.](lic|rb|cmd|wiz)$/, ''))
+        file_name && __read_header_comments("#{SCRIPT_DIR}/#{file_name}")
+      end
+      private_class_method :__header_lines_for
+
       # Reads a script's declared +version:+ header.
       #
       # @param script_name [String] the script name (with or without extension)
@@ -380,14 +419,14 @@ module Lich
       # @return [nil] when the script file cannot be found
       def Script.version(script_name, script_version_required = nil)
         script_name = script_name.sub(/[.](lic|rb|cmd|wiz)$/, '')
-        file_name = __find_script_file(script_name)
-        if file_name.nil?
+        lines = __header_lines_for(script_name)
+        if lines.nil?
           respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR}"
           return nil
         end
 
         script_version = '0.0.0'
-        __extract_header_comments(File.read("#{SCRIPT_DIR}/#{file_name}")).each do |line|
+        lines.each do |line|
           if line =~ /^[\s\t#]*version:[\s\t]*([\w,\s\.\d]+)/i
             script_version = $1.sub(/\s\(.*?\)/, '').strip
           end
@@ -424,17 +463,16 @@ module Lich
       # @param script_name [String, nil] the script to inspect; when nil (the default), the currently running script is read directly
       # @return [String, nil] the declared minimum version (e.g. "5.15.0"), or nil when the script declares none or cannot be found
       def Script.required_lich_version(script_name = nil)
-        if script_name
-          file_name = __find_script_file(script_name.sub(/[.](lic|rb|cmd|wiz)$/, ''))
-          return nil if file_name.nil?
-          file_path = "#{SCRIPT_DIR}/#{file_name}"
-        else
-          file_path = Script.current&.file_name
-        end
-        return nil if file_path.nil?
+        lines =
+          if script_name
+            __header_lines_for(script_name)
+          elsif (file_path = Script.current&.file_name)
+            __read_header_comments(file_path)
+          end
+        return nil if lines.nil?
 
         required = nil
-        __extract_header_comments(File.read(file_path)).each do |line|
+        lines.each do |line|
           required = $1.strip if line =~ /^[\s\t#]*required:[\s\t]*Lich[\s\t]*(?:>=?[\s\t]*)?([\d.]+)/i
         end
         required
