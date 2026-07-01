@@ -33,6 +33,8 @@ else
   require_relative('./lib/constants.rb')
 end
 require File.join(LIB_DIR, 'version.rb')
+require File.join(LIB_DIR, 'gemcheck.rb')
+Lich::GemCheck.verify!
 
 # TODO: Move all local requires to top of file
 require 'base64'
