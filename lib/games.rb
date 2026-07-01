@@ -543,6 +543,9 @@ module Lich
           @server_reader_process_last = nil
           @server_reader_process_max = 0.0
           @server_reader_process_total = 0.0
+          @server_parser_last = nil
+          @server_parser_max = 0.0
+          @server_parser_total = 0.0
           nil
         end
 
@@ -562,6 +565,9 @@ module Lich
           process_last = @server_reader_process_last
           process_max = @server_reader_process_max.to_f
           process_avg = enqueued.positive? ? @server_reader_process_total.to_f / enqueued : 0.0
+          parser_last = @server_parser_last
+          parser_max = @server_parser_max.to_f
+          parser_avg = dequeued.positive? ? @server_parser_total.to_f / dequeued : 0.0
           stats = {
             depth: depth,
             last_depth: @server_queue_last_depth.to_i,
@@ -583,6 +589,9 @@ module Lich
             reader_process_last_ms: process_last ? (process_last * 1000.0).round(3) : nil,
             reader_process_max_ms: (process_max * 1000.0).round(3),
             reader_process_avg_ms: (process_avg * 1000.0).round(3),
+            parser_process_last_ms: parser_last ? (parser_last * 1000.0).round(3) : nil,
+            parser_process_max_ms: (parser_max * 1000.0).round(3),
+            parser_process_avg_ms: (parser_avg * 1000.0).round(3),
             last_enqueue_at: @server_queue_last_enqueue_at,
             last_dequeue_at: @server_queue_last_dequeue_at,
             reader_status: @reader_thread&.status,
@@ -685,6 +694,13 @@ module Lich
               @server_queue_max_wait = wait if wait > @server_queue_max_wait.to_f
             end
           end
+          nil
+        end
+
+        def record_server_parser_timing(parse_time)
+          @server_parser_last = parse_time
+          @server_parser_total = @server_parser_total.to_f + parse_time.to_f
+          @server_parser_max = parse_time if parse_time.to_f > @server_parser_max.to_f
           nil
         end
 
@@ -801,7 +817,9 @@ module Lich
               begin
                 server_string, enqueued_monotonic_at = unwrap_server_queue_item(item)
                 record_server_queue_dequeue(enqueued_monotonic_at)
+                parse_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
                 process_server_string(server_string)
+                record_server_parser_timing(Process.clock_gettime(Process::CLOCK_MONOTONIC) - parse_started)
               rescue StandardError => e
                 log_error("Error processing server string", e)
               end
