@@ -18,24 +18,94 @@ module Lich
     module_function
 
     # Runs Bundler.setup for the given groups; on failure, alerts the
-    # user and exits.
+    # user and exits. If Bundler complains about a gem outside the
+    # requested groups (which some Bundler versions do despite `without`
+    # settings), the complaint is silently ignored and boot continues.
     # @param groups [Array<Symbol>] Bundler groups to verify
     # @return [void]
     def verify!(*groups)
       groups = [:default] if groups.empty?
-      Bundler.setup(*groups)
-    rescue Bundler::GemNotFound, Bundler::GitError
-      alert
-      exit 1
+
+      missing = missing_gems(groups)
+      unless missing.empty?
+        alert(missing: missing, groups: groups)
+        exit 1
+      end
+
+      excluded = (all_groups - groups).map(&:to_s)
+      begin
+        Bundler.settings.temporary(without: excluded) do
+          Bundler.definition(true)
+          Bundler.setup(*groups)
+        end
+      rescue Bundler::GemNotFound, Bundler::GitError => e
+        if bundler_error_out_of_scope?(e, groups)
+          # Bundler is complaining about a gem outside the requested groups.
+          # Our detector already confirmed the requested groups are satisfied,
+          # so this is a scope-semantics disagreement, not a real failure.
+          # Continue boot silently.
+        else
+          alert(missing: missing_gems(groups), groups: groups, error: e)
+          exit 1
+        end
+      end
     end
 
+    # Names of gems declared in the Gemfile that are not installed at any
+    # version satisfying the declared requirement, scoped to the given groups.
+    # @param groups [Array<Symbol>] groups being verified
+    # @return [Array<String>] sorted, unique gem names
+    def missing_gems(groups = [:default])
+      Bundler.definition.current_dependencies.select do |dep|
+        (dep.groups & groups).any?
+      end.reject do |dep|
+        Gem::Specification.find_all_by_name(dep.name, dep.requirement).any?
+      end.map(&:name).sort.uniq
+    rescue StandardError
+      []
+    end
+
+    # @return [Array<Symbol>] all groups declared in the Gemfile
+    def all_groups
+      Bundler.definition.groups
+    rescue StandardError
+      [:default]
+    end
+
+    # @param error [Exception]
+    # @param groups [Array<Symbol>]
+    # @return [Boolean] true if the error concerns a gem outside the requested groups
+    def bundler_error_out_of_scope?(error, groups)
+      name = extract_gem_name(error.message)
+      return false unless name
+
+      dep = safe_call { Bundler.definition.current_dependencies.find { |d| d.name == name } }
+      return false unless dep.respond_to?(:groups)
+
+      (dep.groups & groups).empty?
+    end
+
+    # Extracts a gem name from a Bundler error message. Matches:
+    #   "Could not find gem 'foo' in ..."
+    #   "Could not find 'foo' in ..."
+    # @param msg [String]
+    # @return [String, nil]
+    def extract_gem_name(msg)
+      match = msg.match(/Could not find (?:gem )?['"]([^'"]+)['"]/)
+      match && match[1]
+    end
+
+    # @param missing [Array<String>] gem names identified by our detector
+    # @param groups [Array<Symbol>] groups being verified
+    # @param error [Exception, nil] the Bundler exception, if any
     # @return [void]
-    def alert
-      write_log
+    def alert(missing: [], groups: [:default], error: nil)
+      write_log(missing: missing, groups: groups, error: error)
+      body = build_alert_body(missing, error)
       case RUBY_PLATFORM
-      when /mswin|mingw|cygwin/ then alert_windows
-      when /darwin/             then alert_macos
-      else                           alert_linux
+      when /mswin|mingw|cygwin/ then alert_windows(body)
+      when /darwin/             then alert_macos(body)
+      else                           alert_linux(body)
       end
     end
 
@@ -47,12 +117,65 @@ module Lich
       end
     end
 
+    # Composes the alert dialog body: platform message + either a bulleted
+    # list of detected missing gems, or the raw Bundler error if our
+    # detector came up empty.
+    # @param missing [Array<String>]
+    # @param error [Exception, nil]
+    # @return [String]
+    def build_alert_body(missing, error)
+      parts = [message]
+      if missing.any?
+        parts << "Missing gems:\n  - #{missing.join("\n  - ")}"
+      elsif error
+        parts << "Bundler reported:\n  #{error.message.lines.first.to_s.strip}"
+      end
+      parts << "See #{File.join(TEMP_DIR, LOG_FILENAME)} for details." if defined?(TEMP_DIR)
+      parts.join("\n\n")
+    end
+
+    # @param missing [Array<String>]
+    # @param groups [Array<Symbol>]
+    # @param error [Exception, nil]
     # @return [void]
-    def write_log
+    def write_log(missing: [], groups: [:default], error: nil)
       log_path = File.join(TEMP_DIR, LOG_FILENAME)
       File.open(log_path, 'a') do |f|
-        f.puts "[#{Time.now}] Missing required Ruby gems"
+        f.puts "[#{Time.now}] Lich5 GemCheck failure"
         f.puts message.gsub(/^/, '  ')
+        f.puts
+
+        f.puts '  Diagnostics:'
+        f.puts "    Ruby:            #{RUBY_DESCRIPTION}"
+        f.puts "    Bundler:         #{safe_call { Bundler::VERSION }}"
+        f.puts "    Gemfile:         #{safe_call { Bundler.default_gemfile }}"
+        f.puts "    Lockfile:        #{safe_call { Bundler.default_lockfile }}"
+        f.puts "    Working dir:     #{Dir.pwd}"
+        f.puts "    Groups checked:  #{groups.inspect}"
+        f.puts "    All groups:      #{all_groups.inspect}"
+        f.puts
+
+        if missing.any?
+          f.puts '  Missing gems (detected):'
+          missing.each { |name| f.puts "    - #{name}" }
+        else
+          f.puts '  Missing gems (detected): none identified by GemCheck'
+        end
+        f.puts
+
+        if error
+          f.puts '  Bundler error:'
+          f.puts "    Class:   #{error.class}"
+          error.message.each_line { |line| f.puts "    #{line.chomp}" }
+          f.puts
+        end
+
+        f.puts '  Declared dependencies in requested groups:'
+        safe_call { dependency_report(groups) }.to_s.each_line do |line|
+          f.puts "    #{line.chomp}"
+        end
+        f.puts
+
         f.puts "  Download: #{RELEASE_URL}" if RUBY_PLATFORM =~ /mswin|mingw|cygwin/
         f.puts
       end
@@ -60,19 +183,49 @@ module Lich
       # Filesystem write failed; continue to GUI attempt.
     end
 
+    # Builds a per-dependency status line for every gem in the requested
+    # groups: name, requirement, and whether it's installed. This is the
+    # single most useful piece of debug output when the detector disagrees
+    # with Bundler.
+    # @param groups [Array<Symbol>]
+    # @return [String]
+    def dependency_report(groups)
+      deps = Bundler.definition.current_dependencies.select do |dep|
+        (dep.groups & groups).any?
+      end
+      return '(none)' if deps.empty?
+
+      deps.sort_by(&:name).map do |dep|
+        installed = Gem::Specification.find_all_by_name(dep.name, dep.requirement)
+        status = installed.any? ? "OK (#{installed.map(&:version).join(', ')})" : 'MISSING'
+        "#{dep.name.ljust(24)} #{dep.requirement.to_s.ljust(20)} #{status}"
+      end.join("\n")
+    end
+
+    # Wraps a block, returning its result or a placeholder string on error.
+    # @yield the value to compute
+    # @return [Object, String]
+    def safe_call
+      yield
+    rescue StandardError => e
+      "(unavailable: #{e.class}: #{e.message})"
+    end
+
+    # @param body [String]
     # @return [void]
-    def alert_windows
+    def alert_windows(body)
       require 'win32ole'
       shell = WIN32OLE.new('WScript.Shell')
-      result = shell.Popup("#{WINDOWS_MESSAGE}\n\nClick OK to open the download page.",
+      result = shell.Popup("#{body}\n\nClick OK to open the download page.",
                            0, TITLE, 1 + 64) # OK/Cancel + Information icon
       shell.Run(RELEASE_URL) if result == 1
     end
 
+    # @param body [String]
     # @return [void]
-    def alert_macos
-      as_message = UNIX_MESSAGE.split("\n").map(&:inspect).join(' & return & ')
-      script = %(display dialog #{as_message} ) +
+    def alert_macos(body)
+      as_body = body.split("\n").map(&:inspect).join(' & return & ')
+      script = %(display dialog #{as_body} ) +
                %(with title #{TITLE.inspect} ) +
                %(buttons {"OK"} default button "OK" with icon caution)
       IO.popen(['osascript', '-'], 'r+') do |io|
@@ -82,16 +235,17 @@ module Lich
       end
     end
 
+    # @param body [String]
     # @return [void]
-    def alert_linux
+    def alert_linux(body)
       if cmd_available?('zenity')
-        system('zenity', '--info', '--title', TITLE, '--text', UNIX_MESSAGE)
+        system('zenity', '--info', '--title', TITLE, '--text', body)
       elsif cmd_available?('kdialog')
-        system('kdialog', '--title', TITLE, '--msgbox', UNIX_MESSAGE)
+        system('kdialog', '--title', TITLE, '--msgbox', body)
       elsif cmd_available?('xmessage')
-        system('xmessage', '-center', UNIX_MESSAGE)
+        system('xmessage', '-center', body)
       else
-        warn "!!ALERT!! #{UNIX_MESSAGE}"
+        warn "!!ALERT!! #{body}"
       end
     end
 
