@@ -38,7 +38,7 @@ module Lich
           Bundler.definition(true)
           Bundler.setup(*groups)
         end
-      rescue Bundler::GemNotFound, Bundler::GitError => e
+      rescue Bundler::BundlerError => e
         if bundler_error_out_of_scope?(e, groups)
           # Bundler is complaining about a gem outside the requested groups.
           # Our detector already confirmed the requested groups are satisfied,
@@ -53,6 +53,8 @@ module Lich
 
     # Names of gems declared in the Gemfile that are not installed at any
     # version satisfying the declared requirement, scoped to the given groups.
+    # Relies on installed Gem::Specifications; git/path-sourced gems are not
+    # detected here (the current Gemfile has none).
     # @param groups [Array<Symbol>] groups being verified
     # @return [Array<String>] sorted, unique gem names
     def missing_gems(groups = [:default])
@@ -140,6 +142,9 @@ module Lich
     # @return [void]
     def write_log(missing: [], groups: [:default], error: nil)
       log_path = File.join(TEMP_DIR, LOG_FILENAME)
+      # verify! can run before init.rb creates TEMP_DIR (fresh install), so
+      # ensure the directory exists or the alert would cite a log we never wrote.
+      Dir.mkdir(TEMP_DIR) unless File.exist?(TEMP_DIR)
       File.open(log_path, 'a') do |f|
         f.puts "[#{Time.now}] Lich5 GemCheck failure"
         f.puts message.gsub(/^/, '  ')
