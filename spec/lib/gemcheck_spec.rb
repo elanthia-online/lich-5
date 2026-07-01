@@ -4,7 +4,12 @@ require 'fileutils'
 # TEMP_DIR is referenced by GemCheck#write_log; it must exist before that
 # method runs. Constants are resolved at call time (not require time),
 # so defining it here in the spec is sufficient.
-TEMP_DIR = Dir.mktmpdir('lich-gemcheck-spec') unless defined?(TEMP_DIR)
+unless defined?(TEMP_DIR)
+  TEMP_DIR = Dir.mktmpdir('lich-gemcheck-spec')
+  RSpec.configure do |config|
+    config.after(:suite) { FileUtils.remove_entry(TEMP_DIR) if Dir.exist?(TEMP_DIR) }
+  end
+end
 
 require_relative '../../lib/gemcheck'
 
@@ -77,17 +82,49 @@ RSpec.describe Lich::GemCheck do
     end
   end
 
+  describe '.message' do
+    it 'returns the Windows message on mingw' do
+      stub_const('RUBY_PLATFORM', 'x64-mingw-ucrt')
+      expect(described_class.message).to eq(described_class::WINDOWS_MESSAGE)
+    end
+
+    it 'returns the Windows message on mswin' do
+      stub_const('RUBY_PLATFORM', 'i386-mswin32')
+      expect(described_class.message).to eq(described_class::WINDOWS_MESSAGE)
+    end
+
+    it 'returns the Unix message on darwin' do
+      stub_const('RUBY_PLATFORM', 'x86_64-darwin23')
+      expect(described_class.message).to eq(described_class::UNIX_MESSAGE)
+    end
+
+    it 'returns the Unix message on linux' do
+      stub_const('RUBY_PLATFORM', 'x86_64-linux')
+      expect(described_class.message).to eq(described_class::UNIX_MESSAGE)
+    end
+  end
+
   describe '.write_log' do
     let(:log_path) { File.join(TEMP_DIR, described_class::LOG_FILENAME) }
 
     before { FileUtils.rm_f(log_path) }
     after  { FileUtils.rm_f(log_path) }
 
-    it 'writes the message and URL to TEMP_DIR' do
+    it 'writes the platform message to TEMP_DIR' do
       described_class.write_log
-      contents = File.read(log_path)
-      expect(contents).to include('Missing required Ruby gems')
-      expect(contents).to include(described_class::RELEASE_URL)
+      expect(File.read(log_path)).to include('Missing required Ruby gems')
+    end
+
+    it 'includes the release URL on Windows' do
+      stub_const('RUBY_PLATFORM', 'x64-mingw-ucrt')
+      described_class.write_log
+      expect(File.read(log_path)).to include(described_class::RELEASE_URL)
+    end
+
+    it 'omits the release URL on Unix platforms' do
+      stub_const('RUBY_PLATFORM', 'x86_64-linux')
+      described_class.write_log
+      expect(File.read(log_path)).not_to include(described_class::RELEASE_URL)
     end
 
     it 'includes an ISO-style timestamp' do
@@ -107,8 +144,6 @@ RSpec.describe Lich::GemCheck do
   end
 
   describe '.alert_linux' do
-    let(:url) { described_class::RELEASE_URL }
-
     def stub_only_available(tool)
       allow(described_class).to receive(:cmd_available?).and_return(false)
       allow(described_class).to receive(:cmd_available?).with(tool).and_return(true)
@@ -117,18 +152,10 @@ RSpec.describe Lich::GemCheck do
     context 'when zenity is available' do
       before { stub_only_available('zenity') }
 
-      it 'prompts with zenity and opens the URL on confirmation' do
+      it 'shows a zenity info dialog' do
         expect(described_class).to receive(:system)
-          .with('zenity', '--question', '--title', described_class::TITLE, '--text', kind_of(String))
-          .and_return(true)
-        expect(described_class).to receive(:system).with('xdg-open', url)
-        described_class.alert_linux
-      end
-
-      it 'does not open the URL when the user declines' do
-        allow(described_class).to receive(:system)
-          .with('zenity', any_args).and_return(false)
-        expect(described_class).not_to receive(:system).with('xdg-open', anything)
+          .with('zenity', '--info', '--title', described_class::TITLE,
+                '--text', described_class::UNIX_MESSAGE)
         described_class.alert_linux
       end
     end
@@ -136,11 +163,10 @@ RSpec.describe Lich::GemCheck do
     context 'when only kdialog is available' do
       before { stub_only_available('kdialog') }
 
-      it 'prompts with kdialog' do
+      it 'shows a kdialog msgbox' do
         expect(described_class).to receive(:system)
-          .with('kdialog', '--title', described_class::TITLE, '--yesno', kind_of(String))
-          .and_return(true)
-        allow(described_class).to receive(:system).with('xdg-open', anything)
+          .with('kdialog', '--title', described_class::TITLE,
+                '--msgbox', described_class::UNIX_MESSAGE)
         described_class.alert_linux
       end
     end
@@ -148,10 +174,9 @@ RSpec.describe Lich::GemCheck do
     context 'when only xmessage is available' do
       before { stub_only_available('xmessage') }
 
-      it 'shows xmessage and does not open a URL' do
+      it 'shows an xmessage dialog' do
         expect(described_class).to receive(:system)
-          .with('xmessage', '-center', kind_of(String))
-        expect(described_class).not_to receive(:system).with('xdg-open', anything)
+          .with('xmessage', '-center', described_class::UNIX_MESSAGE)
         described_class.alert_linux
       end
     end
@@ -159,8 +184,8 @@ RSpec.describe Lich::GemCheck do
     context 'when no dialog tool is available' do
       before { allow(described_class).to receive(:cmd_available?).and_return(false) }
 
-      it 'falls back to warn' do
-        expect(described_class).to receive(:warn).at_least(:once)
+      it 'falls back to warn with the unix message' do
+        expect(described_class).to receive(:warn).with(/bundle install/)
         described_class.alert_linux
       end
     end
