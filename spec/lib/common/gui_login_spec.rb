@@ -176,6 +176,9 @@ RSpec.describe Lich::Common, "#gui_login" do
     allow(Lich).to receive(:log)
     allow(Lich::Common).to receive(:shutdown_gtk!)
     allow(Lich::Common).to receive(:clear_gtk_retention_registries)
+    # The launcher delegates pre-exit GTK teardown to this shared helper; its
+    # barrier/timeout behavior is covered in gtk_spec.
+    allow(Lich::Common).to receive(:shutdown_gtk_before_exit)
   end
 
   after do
@@ -259,24 +262,14 @@ RSpec.describe Lich::Common, "#gui_login" do
       expect(test_instance.gui_login).to eq(launch_data)
     end
 
-    it "exits when no launch data is available" do
+    it "runs shared GTK teardown then exits when no launch data is available" do
       # Set launch_data to nil
       test_instance.instance_variable_set(:@launch_data, nil)
 
-      # Test that the application exits when @launch_data is nil
+      # The exit path delegates pre-exit GTK teardown to the shared helper
+      # (barrier/timeout behavior is covered in gtk_spec) and then exits.
       expect { test_instance.gui_login }.to raise_error(SystemExit)
-      expect(Lich::Common).to have_received(:shutdown_gtk!)
-    end
-
-    it "falls back if queued GTK shutdown work does not complete" do
-      allow(Gtk).to receive(:queue).and_return(1)
-      allow(Process).to receive(:clock_gettime).and_return(0.0, 2.1)
-      allow(test_instance).to receive(:sleep)
-
-      test_instance.send(:shutdown_gtk_before_exit)
-
-      expect(Lich).to have_received(:log).with(/GTK shutdown queue did not complete/)
-      expect(Lich::Common).to have_received(:clear_gtk_retention_registries)
+      expect(Lich::Common).to have_received(:shutdown_gtk_before_exit)
     end
   end
 

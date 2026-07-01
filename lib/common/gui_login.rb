@@ -685,7 +685,7 @@ module Lich
     # @return [Array, nil] Launch data if available
     def return_launch_data_or_exit
       if @launch_data.nil?
-        shutdown_gtk_before_exit
+        Lich::Common.shutdown_gtk_before_exit
         exit
       end
 
@@ -714,46 +714,6 @@ module Lich
 
       save_window_geometry
       @window.destroy
-    end
-
-    # Runs core GTK teardown and waits for the queued shutdown work to finish.
-    #
-    # The launcher exits its Ruby process after the GUI closes. Waiting for the
-    # queued GTK teardown prevents Ruby finalizers from disposing surviving GTK
-    # wrappers after the process has already started interpreter cleanup.
-    #
-    # @return [void]
-    def shutdown_gtk_before_exit
-      shutdown_complete = Queue.new
-      queued = Gtk.queue do
-        begin
-          Lich::Common.shutdown_gtk!
-        ensure
-          shutdown_complete << true
-        end
-      end
-
-      if queued
-        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 2.0
-        completed = false
-        until completed
-          begin
-            shutdown_complete.pop(true)
-            completed = true
-          rescue ThreadError
-            break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
-
-            sleep 0.01
-          end
-        end
-
-        unless completed
-          Lich.log "warning: GTK shutdown queue did not complete before exit"
-          Lich::Common.clear_gtk_retention_registries
-        end
-      else
-        Lich::Common.clear_gtk_retention_registries
-      end
     end
   end
 end
