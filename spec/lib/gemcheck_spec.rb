@@ -104,6 +104,25 @@ RSpec.describe Lich::GemCheck do
       end
     end
 
+    context 'when Bundler.setup raises another BundlerError subclass' do
+      before do
+        allow(described_class).to receive(:missing_gems)
+          .with([:default]).and_return([])
+        allow(described_class).to receive(:bundler_error_out_of_scope?)
+          .and_return(false)
+      end
+
+      it 'alerts and exits 1 (rescue covers all Bundler setup failures)' do
+        error = Bundler::PathError.new('bundler path error')
+        allow(Bundler).to receive(:setup).and_raise(error)
+        expect(described_class).to receive(:alert)
+          .with(missing: [], groups: [:default], error: error)
+        expect { described_class.verify! }.to raise_error(SystemExit) do |e|
+          expect(e.status).to eq(1)
+        end
+      end
+    end
+
     context 'when Bundler.setup raises for an out-of-scope gem' do
       before do
         allow(described_class).to receive(:missing_gems)
