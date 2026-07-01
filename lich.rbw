@@ -27,6 +27,16 @@ for arg in ARGV
   end
 end
 
+if defined? LIB_DIR
+  require File.join(LIB_DIR, 'constants.rb')
+else
+  require_relative('./lib/constants.rb')
+end
+require File.join(LIB_DIR, 'version.rb')
+require File.join(LIB_DIR, 'gemcheck.rb')
+Lich::GemCheck.verify!
+
+# TODO: Move all local requires to top of file
 require 'base64'
 require 'digest/md5'
 require 'digest/sha1'
@@ -45,14 +55,6 @@ require 'terminal-table'
 require 'time'
 require 'yaml'
 require 'zlib'
-
-# TODO: Move all local requires to top of file
-if defined? LIB_DIR
-  require File.join(LIB_DIR, 'constants.rb')
-else
-  require_relative('./lib/constants.rb')
-end
-require File.join(LIB_DIR, 'version.rb')
 
 require File.join(LIB_DIR, 'lich.rb')
 require File.join(LIB_DIR, 'init.rb')
