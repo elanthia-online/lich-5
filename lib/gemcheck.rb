@@ -6,13 +6,14 @@ module Lich
   # user via a native OS dialog (with a log-file fallback) when any
   # are missing. Runs once during boot, before scripts load.
   module GemCheck
-    MESSAGE = "You're missing required Ruby gems!\n\n" \
-              "Please update to the latest Ruby version using the\n" \
-              "Ruby4Lich5 installer, or run 'bundle install' from\n" \
-              "your Lich5 folder."
-    TITLE        = 'Lich5: Missing Ruby Gems'
-    RELEASE_URL  = 'https://github.com/elanthia-online/lich-5/releases/latest'
-    LOG_FILENAME = 'lich5-missing-gems.log'
+    WINDOWS_MESSAGE = "You're missing required Ruby gems!\n\n" \
+                      "Please update to the latest Ruby version using the\n" \
+                      "Ruby4Lich5 installer."
+    UNIX_MESSAGE    = "You're missing required Ruby gems!\n\n" \
+                      "Please run 'bundle install' from your Lich5 folder."
+    TITLE           = 'Lich5: Missing Ruby Gems'
+    RELEASE_URL     = 'https://github.com/elanthia-online/lich-5/releases/latest'
+    LOG_FILENAME    = 'lich5-missing-gems.log'
 
     module_function
 
@@ -38,13 +39,21 @@ module Lich
       end
     end
 
+    # @return [String] the message appropriate for the current platform
+    def message
+      case RUBY_PLATFORM
+      when /mswin|mingw|cygwin/ then WINDOWS_MESSAGE
+      else                           UNIX_MESSAGE
+      end
+    end
+
     # @return [void]
     def write_log
       log_path = File.join(TEMP_DIR, LOG_FILENAME)
       File.open(log_path, 'a') do |f|
         f.puts "[#{Time.now}] Missing required Ruby gems"
-        f.puts MESSAGE.gsub(/^/, '  ')
-        f.puts "  Download: #{RELEASE_URL}"
+        f.puts message.gsub(/^/, '  ')
+        f.puts "  Download: #{RELEASE_URL}" if RUBY_PLATFORM =~ /mswin|mingw|cygwin/
         f.puts
       end
     rescue StandardError
@@ -55,40 +64,35 @@ module Lich
     def alert_windows
       require 'win32ole'
       shell = WIN32OLE.new('WScript.Shell')
-      result = shell.Popup("#{MESSAGE}\n\nClick OK to open the download page.",
+      result = shell.Popup("#{WINDOWS_MESSAGE}\n\nClick OK to open the download page.",
                            0, TITLE, 1 + 64) # OK/Cancel + Information icon
       shell.Run(RELEASE_URL) if result == 1
     end
 
     # @return [void]
     def alert_macos
-      as_message = MESSAGE.split("\n").map(&:inspect).join(' & return & ')
-      script = %(display dialog #{as_message} & return & return & ) +
-               %("Open the download page now?" with title #{TITLE.inspect} ) +
-               %(buttons {"Cancel", "OK"} default button "OK" with icon caution)
-      output = IO.popen(['osascript', '-'], 'r+') do |io|
+      as_message = UNIX_MESSAGE.split("\n").map(&:inspect).join(' & return & ')
+      script = %(display dialog #{as_message} ) +
+               %(with title #{TITLE.inspect} ) +
+               %(buttons {"OK"} default button "OK" with icon caution)
+      IO.popen(['osascript', '-'], 'r+') do |io|
         io.write(script)
         io.close_write
         io.read
       end
-      system('open', RELEASE_URL) if output.to_s.include?('button returned:OK')
     end
 
     # @return [void]
     def alert_linux
-      prompt = "#{MESSAGE}\n\nOpen the download page?"
-      opened = false
       if cmd_available?('zenity')
-        opened = system('zenity', '--question', '--title', TITLE, '--text', prompt)
+        system('zenity', '--info', '--title', TITLE, '--text', UNIX_MESSAGE)
       elsif cmd_available?('kdialog')
-        opened = system('kdialog', '--title', TITLE, '--yesno', prompt)
+        system('kdialog', '--title', TITLE, '--msgbox', UNIX_MESSAGE)
       elsif cmd_available?('xmessage')
-        system('xmessage', '-center', "#{MESSAGE}\n\nDownload: #{RELEASE_URL}")
+        system('xmessage', '-center', UNIX_MESSAGE)
       else
-        warn "!!ALERT!! #{MESSAGE}"
-        warn "Download: #{RELEASE_URL}"
+        warn "!!ALERT!! #{UNIX_MESSAGE}"
       end
-      system('xdg-open', RELEASE_URL) if opened
     end
 
     # @param cmd [String] executable name to probe
