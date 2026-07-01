@@ -5,7 +5,12 @@ require 'fileutils'
 # TEMP_DIR is referenced by GemCheck#write_log; it must exist before that
 # method runs. Constants are resolved at call time (not require time),
 # so defining it here in the spec is sufficient.
-TEMP_DIR = Dir.mktmpdir('lich-gemcheck-spec') unless defined?(TEMP_DIR)
+unless defined?(TEMP_DIR)
+  TEMP_DIR = Dir.mktmpdir('lich-gemcheck-spec')
+  RSpec.configure do |config|
+    config.after(:suite) { FileUtils.remove_entry(TEMP_DIR) if Dir.exist?(TEMP_DIR) }
+  end
+end
 
 require_relative '../../lib/gemcheck'
 
@@ -344,7 +349,7 @@ RSpec.describe Lich::GemCheck do
 
     it 'writes the platform message to TEMP_DIR' do
       described_class.write_log
-      expect(File.read(log_path)).to include('Missing required Ruby gems')
+      expect(File.read(log_path)).to include("You're missing required Ruby gems")
     end
 
     it 'writes missing gem names when provided' do
