@@ -70,4 +70,53 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
 
     expect(Lich::Gemstone::Creature[614999]).not_to be_nil
   end
+
+  describe 'room roster (Creature.targets), independent of GameObj' do
+    before do
+      allow(Lich::Common::GameObj).to receive(:clear_npcs)
+      allow(Lich::Common::GameObj).to receive(:clear_pcs)
+      allow(Lich::Common::GameObj).to receive(:clear_room_desc)
+    end
+
+    it 'tracks who is in the room from crtrStatus alone, with no GameObj involvement' do
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="607736" hostile="1"/><b> <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/></b> and<crtrStatus exist="607744" hostile="1"/><b> <pushBold/>a <a exist="607744" noun="worm">carrion worm</a><popBold/></b>.</component>))
+
+      expect(Lich::Gemstone::CreatureInstance.current_room_ids).to contain_exactly(607736, 607744)
+      expect(Lich::Gemstone::Creature.targets.map(&:name)).to contain_exactly('sea nymph', 'carrion worm')
+    end
+
+    it 'excludes non-hostile room creatures from targets but keeps them in the roster' do
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="607736" hostile="1"/><b> <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/></b> and<crtrStatus exist="999001" hostile="0"/><b> <pushBold/>a <a exist="999001" noun="rabbit">field rabbit</a><popBold/></b>.</component>))
+
+      expect(Lich::Gemstone::CreatureInstance.current_room_ids).to contain_exactly(607736, 999001)
+      expect(Lich::Gemstone::Creature.targets.map(&:name)).to eq(['sea nymph'])
+    end
+
+    it 'clears the roster on a room-objs refresh, dropping creatures that left even though the registry still remembers them' do
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="607736" hostile="1"/><b> <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/></b>.</component>))
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="607744" hostile="1"/><b> <pushBold/>a <a exist="607744" noun="worm">carrion worm</a><popBold/></b>.</component>))
+
+      expect(Lich::Gemstone::CreatureInstance.current_room_ids).to eq([607744])
+      expect(Lich::Gemstone::Creature.targets.map(&:name)).to eq(['carrion worm'])
+      expect(Lich::Gemstone::Creature[607736]).not_to be_nil # still remembered for wound reporting
+    end
+
+    it 'clears the roster on nav (room change), same as GameObj.clear_npcs' do
+      stub_const('XMLData', double(current_target_ids: [], game: 'GSIV'))
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="607736" hostile="1"/><b> <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/></b>.</component>))
+      expect(Lich::Gemstone::CreatureInstance.current_room_ids).to eq([607736])
+
+      feed(%(<nav rm='7355'/>))
+
+      expect(Lich::Gemstone::CreatureInstance.current_room_ids).to be_empty
+      expect(Lich::Gemstone::Creature.targets).to be_empty
+    end
+
+    it 'filters targets by status/flag name, ANDed on top of the hostile baseline' do
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="607736" hostile="1"/><b> <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/></b> and<crtrStatus exist="607744" hostile="1" prone="1"/><b> <pushBold/>a <a exist="607744" noun="worm">carrion worm</a><popBold/></b>.</component>))
+
+      expect(Lich::Gemstone::Creature.targets(:prone).map(&:name)).to eq(['carrion worm'])
+      expect(Lich::Gemstone::Creature.targets(:not_prone).map(&:name)).to eq(['sea nymph'])
+    end
+  end
 end

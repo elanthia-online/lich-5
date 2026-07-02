@@ -37,6 +37,89 @@ RSpec.describe Lich::Gemstone::CreatureInstance do
     end
   end
 
+  describe '#flag_active?' do
+    it 'matches a status name, a classification flag name, or its negation' do
+      creature = described_class.register('test creature', 6)
+      creature.sync_crtr_status('hostile' => '1', 'prone' => '1')
+
+      expect(creature.flag_active?(:prone)).to be true
+      expect(creature.flag_active?('hostile')).to be true
+      expect(creature.flag_active?(:dead)).to be false
+      expect(creature.flag_active?(:nonexistent_flag)).to be false
+    end
+  end
+
+  describe 'room roster (.mark_in_room / .clear_room / .current_room_ids)' do
+    it 'marks a creature in the room on registration, including re-registration of an existing one' do
+      described_class.register('sea nymph', 607736)
+      expect(described_class.current_room_ids).to eq([607736])
+
+      described_class.register('sea nymph', 607736) # already known, e.g. a later room-objs refresh
+      expect(described_class.current_room_ids).to eq([607736])
+    end
+
+    it 'clear_room empties the roster without touching the persistent registry' do
+      described_class.register('sea nymph', 607736)
+
+      described_class.clear_room
+
+      expect(described_class.current_room_ids).to be_empty
+      expect(described_class[607736]).not_to be_nil
+    end
+
+    it 'clear also resets the room roster' do
+      described_class.register('sea nymph', 607736)
+
+      described_class.clear
+
+      expect(described_class.current_room_ids).to be_empty
+    end
+
+    context 'debug echo' do
+      after { Lich::Gemstone::Creature.debug_on(false) }
+
+      def capture_class_respond
+        messages = []
+        allow(described_class).to receive(:respond) { |msg| messages << msg }
+        messages
+      end
+
+      it 'echoes "in room" when an already-known creature reappears after a room-roster clear' do
+        Lich::Gemstone::Creature.debug_on(true)
+        described_class.register('sea nymph', 607736)
+        described_class.clear_room # e.g. a nav/room-objs refresh - instance persists, roster doesn't
+        messages = capture_class_respond
+
+        described_class.register('sea nymph', 607736)
+
+        expect(messages).to include('--- sea nymph (607736): in room')
+      end
+
+      it 'stays silent on re-registration when nothing changed and debug is off' do
+        described_class.register('sea nymph', 607736)
+        messages = capture_class_respond
+
+        described_class.register('sea nymph', 607736)
+
+        expect(messages).to be_empty
+      end
+
+      it 'echoes a count on clear_room, but only when there was something to clear' do
+        Lich::Gemstone::Creature.debug_on(true)
+        described_class.register('sea nymph', 607736)
+        described_class.register('carrion worm', 607744)
+        messages = capture_class_respond
+
+        described_class.clear_room
+        expect(messages).to include('--- room: roster cleared (2 creatures)')
+
+        messages.clear
+        described_class.clear_room
+        expect(messages).to be_empty
+      end
+    end
+  end
+
   describe '#sync_crtr_status' do
     # Replays the sequence captured from a live GST session (nymph exist=607736):
     # arrival with hostile only, a stun landing, then a lethal hit.
@@ -173,6 +256,94 @@ RSpec.describe Lich::Gemstone::CreatureInstance do
       creature.add_status(:webbed)
 
       expect(messages).to include('--- carrion worm (607744): +status: webbed (no auto-expiry)')
+    end
+  end
+
+  describe '#valid_target?' do
+    it 'is true for an ordinary hostile creature' do
+      creature = described_class.register('sea nymph', 1)
+      expect(creature.valid_target?).to be true
+    end
+
+    it 'is false once crtrStatus reports dead' do
+      creature = described_class.register('sea nymph', 1)
+      creature.sync_crtr_status('dead' => '1')
+      expect(creature.valid_target?).to be false
+    end
+
+    it 'is false once HP-based dead? is true, even without a dead crtrStatus flag' do
+      creature = described_class.register('sea nymph', 1)
+      creature.add_damage(creature.max_hp)
+      expect(creature.valid_target?).to be false
+    end
+
+    it 'excludes animated decoys but keeps the animated slush exception' do
+      expect(described_class.register('animated corpse', 1).valid_target?).to be false
+      expect(described_class.register('animated slush', 2).valid_target?).to be true
+    end
+
+    it 'excludes appendage/limb sub-targets but keeps the named kraken tentacle exception' do
+      expect(described_class.register('generic tentacle', 1, 'tentacle').valid_target?).to be false
+      expect(described_class.register('amaranthine kraken tentacle', 2, 'tentacle').valid_target?).to be true
+    end
+  end
+end
+
+RSpec.describe Lich::Gemstone::Creature do
+  before do
+    Lich::Gemstone::CreatureInstance.clear
+    XMLData.current_target_ids = []
+  end
+
+  describe '.targets' do
+    it 'requires hostile, unlike valid_target? alone - room presence is not enough' do
+      hostile = Lich::Gemstone::CreatureInstance.register('sea nymph', 1)
+      hostile.sync_crtr_status('hostile' => '1')
+      Lich::Gemstone::CreatureInstance.register('field rabbit', 2).sync_crtr_status('hostile' => '0')
+
+      expect(described_class.targets.map(&:id)).to eq([1])
+    end
+
+    it 'still excludes dead/decoy/appendage noise even when hostile' do
+      dead = Lich::Gemstone::CreatureInstance.register('dead thing', 3)
+      dead.sync_crtr_status('hostile' => '1', 'dead' => '1')
+      alive = Lich::Gemstone::CreatureInstance.register('sea nymph', 1)
+      alive.sync_crtr_status('hostile' => '1')
+
+      expect(described_class.targets.map(&:id)).to eq([1])
+    end
+
+    it 'sources room membership from its own roster, not GameObj or current_target_ids alone' do
+      registered = Lich::Gemstone::CreatureInstance.register('sea nymph', 1)
+      registered.sync_crtr_status('hostile' => '1')
+
+      expect(described_class.targets.map(&:id)).to eq([1])
+    end
+
+    it 'unions in current_target_ids for anything actively targeted but not yet in the room roster' do
+      # Simulates a creature engaged mid-combat before any room-objs refresh
+      # has re-listed it - registered (so Creature knows about it) but never
+      # marked into the room roster via a fresh register/crtrStatus call.
+      targeted = Lich::Gemstone::CreatureInstance.new(9, 'thing', 'ambushing thing')
+      targeted.sync_crtr_status('hostile' => '1')
+      Lich::Gemstone::CreatureInstance.class_variable_get(:@@instances)[9] = targeted
+      XMLData.current_target_ids = ['9']
+
+      expect(described_class.targets.map(&:id)).to eq([9])
+    end
+
+    it 'returns an empty array when nothing hostile is present' do
+      expect(described_class.targets).to eq([])
+    end
+
+    it 'AND-filters on top of the hostile baseline, including not_ negation' do
+      prone = Lich::Gemstone::CreatureInstance.register('carrion worm', 1)
+      prone.sync_crtr_status('hostile' => '1', 'prone' => '1')
+      standing = Lich::Gemstone::CreatureInstance.register('sea nymph', 2)
+      standing.sync_crtr_status('hostile' => '1')
+
+      expect(described_class.targets(:prone).map(&:id)).to eq([1])
+      expect(described_class.targets(:not_prone).map(&:id)).to eq([2])
     end
   end
 end

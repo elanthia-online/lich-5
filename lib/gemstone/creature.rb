@@ -191,6 +191,12 @@ module Lich
       @@max_size = 1000
       @@auto_register = true
 
+      # Ids currently present in the room, independent of @@instances (which
+      # deliberately keeps departed creatures around for wound reporting).
+      # Cleared and rebuilt entirely from xmlparser's own nav/room-objs hooks -
+      # not read from or written to GameObj, by design (see retirement plan).
+      @@current_room_ids = []
+
       attr_accessor :id, :noun, :name, :status, :injuries, :health, :damage_taken, :created_at, :fatal_crit, :status_timestamps,
                     :ucs_smote, :ucs_updated
       attr_writer :ucs_position, :ucs_tierup
@@ -375,6 +381,14 @@ module Lich
         @crtr_flags[key.to_sym] || false
       end
 
+      # True if key names either an active status (has_status?) or an active
+      # classification flag (crtr_flag?) - the two vocabularies are disjoint,
+      # so trying both lets callers filter on any known name without caring
+      # which bucket it lives in. Backs Creature.targets' filter arguments.
+      def flag_active?(key)
+        has_status?(key) || crtr_flag?(key)
+      end
+
       # UCS (Unarmed Combat System) tracking methods
 
       # Convert position string/number to tier (1-3)
@@ -529,6 +543,19 @@ module Lich
         current_hp == 0
       end
 
+      # Same exclusions GameObj.targets applies (animated decoys, appendage/limb
+      # sub-targets), but the dead check is structured (crtrStatus's dead flag,
+      # or HP hitting 0) instead of regex-matching a status string. Backs
+      # Creature.targets and is also usable standalone on a single lookup.
+      def valid_target?
+        return false if crtr_flag?(:dead) || dead?
+        return false if @name =~ /^animated\b/i && @name !~ /^animated slush/i
+        return false if @noun =~ /^(?:arm|appendage|claw|limb|pincer|tentacle)s?$|^(?:palpus|palpi)$/i &&
+                        @name !~ /(?:amaranthine|ghostly|grizzled|ancient) kraken tentacle/i
+
+        true
+      end
+
       # Reset damage (creature healed or respawned)
       def reset_damage
         @damage_taken = 0
@@ -606,10 +633,20 @@ module Lich
           size >= @@max_size
         end
 
-        # Register a new creature instance
+        # Register a new creature instance. Also marks the id as present in
+        # the room - called every time a bolded name is seen in room-objs,
+        # which is exactly the event that means "this creature is here now",
+        # whether or not it's a brand-new instance.
         def register(name, id, noun = nil)
           return nil unless auto_register?
-          return @@instances[id.to_i] if @@instances[id.to_i] # Already exists
+
+          entered_room = mark_in_room(id)
+
+          existing = @@instances[id.to_i]
+          if existing
+            respond "--- #{name} (#{id}): in room" if entered_room && $creature_debug
+            return existing
+          end
 
           # Auto-cleanup old instances if registry is full - get progressively more aggressive
           if full?
@@ -628,6 +665,32 @@ module Lich
           instance
         end
 
+        # Marks an id present in the room, returning true if it wasn't
+        # already. Internal - called from register; not meant to be called
+        # directly by scripts.
+        def mark_in_room(id)
+          id = id.to_i
+          return false if @@current_room_ids.include?(id)
+
+          @@current_room_ids << id
+          true
+        end
+
+        # Empties the room roster. Internal - called from xmlparser's own
+        # nav/room-objs-refresh hooks (mirroring, not reading, GameObj's
+        # equivalent clears) so it's rebuilt fresh on every room-objs line,
+        # same accuracy characteristic as GameObj.npcs without depending on it.
+        def clear_room
+          count = @@current_room_ids.size
+          @@current_room_ids = []
+          respond "--- room: roster cleared (#{count} creature#{'s' unless count == 1})" if $creature_debug && count > 0
+        end
+
+        # Ids currently present in the room (see #clear_room/#mark_in_room).
+        def current_room_ids
+          @@current_room_ids.dup
+        end
+
         # Lookup creature by ID
         def [](id)
           @@instances[id.to_i]
@@ -641,6 +704,7 @@ module Lich
         # Clear all instances (session reset)
         def clear
           @@instances.clear
+          clear_room
         end
 
         # Remove old instances (cleanup)
@@ -668,6 +732,40 @@ module Lich
       # Lookup creature instance by ID
       def self.[](id)
         CreatureInstance[id]
+      end
+
+      # Authoritative hostile creatures currently in the room. Deliberately
+      # independent of GameObj (no .npcs, no .targets, no .status) - room
+      # membership comes from CreatureInstance's own roster (see
+      # CreatureInstance.clear_room/mark_in_room, hooked directly into
+      # xmlparser's nav/room-objs events), unioned with XMLData.current_target_ids
+      # to also catch anything actively engaged that hasn't hit a room-objs
+      # refresh yet. valid_target? drops the dead/decoy/appendage noise;
+      # crtr_flag?(:hostile) is the structured hostility signal.
+      #
+      # Extra filters narrow further, ANDed together: any known status name
+      # (:prone, :stunned, ...) or classification flag (:hostile, :ascended,
+      # ...), or its not_ negation (:not_prone). Unknown names simply match
+      # nothing (flag_active? degrades to false), so this stays open-ended as
+      # more statuses/flags get tracked - no changes needed here for those.
+      def self.targets(*filters)
+        ids = (CreatureInstance.current_room_ids + XMLData.current_target_ids.map(&:to_i)).uniq
+
+        candidates = ids.filter_map { |id| CreatureInstance[id] }
+                        .select { |c| c.valid_target? && c.crtr_flag?(:hostile) }
+
+        filters.each do |filter|
+          negate = filter.to_s.start_with?('not_')
+          key = negate ? filter.to_s.delete_prefix('not_') : filter.to_s
+          candidates = candidates.select { |c| c.flag_active?(key) != negate }
+        end
+
+        candidates
+      end
+
+      # Empties the room roster. Internal - see CreatureInstance.clear_room.
+      def self.clear_room
+        CreatureInstance.clear_room
       end
 
       # Register a new creature

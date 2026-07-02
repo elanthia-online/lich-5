@@ -350,6 +350,9 @@ module Lich
             GameObj.clear_npcs
             GameObj.clear_pcs
             GameObj.clear_room_desc
+            # Creature tracks its own room roster independently of GameObj
+            # (see lib/gemstone/creature.rb) - not loaded for DR sessions.
+            Lich::Gemstone::Creature.clear_room if defined?(Lich::Gemstone::Creature)
             @check_obvious_hiding = true
             unless XMLData.game =~ /^DR/
               @previous_nav_rm = @room_id
@@ -383,6 +386,7 @@ module Lich
             if attributes['id'] == 'room objs'
               GameObj.clear_loot
               GameObj.clear_npcs
+              Lich::Gemstone::Creature.clear_room if defined?(Lich::Gemstone::Creature)
             elsif attributes['id'] == 'room players'
               GameObj.clear_pcs
             elsif attributes['id'] == 'room exits'
