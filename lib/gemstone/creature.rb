@@ -32,6 +32,10 @@ module Lich
         @family = data[:family]
         @type = data[:type]
         @undead = data[:undead]
+        # Tri-state (true/false/nil) - nil means uncatalogued/unknown, not false.
+        @has_blood = data[:has_blood]
+        @has_bones = data[:has_bones]
+        @muggable = data[:muggable]
         @otherclass = data[:otherclass] || []
         @areas = data[:areas] || []
         @bcs = data[:bcs]
@@ -141,6 +145,21 @@ module Lich
         @@templates.values.uniq
       end
 
+      # Tri-state predicates: true, false, or nil when the template hasn't
+      # catalogued this trait. nil is not coerced to false - an uncatalogued
+      # creature is unknown, not confirmed bloodless/boneless/unmuggable.
+      def has_blood?
+        @has_blood
+      end
+
+      def has_bones?
+        @has_bones
+      end
+
+      def muggable?
+        @muggable
+      end
+
       private
 
       def normalize_spells(spells)
@@ -202,6 +221,43 @@ module Lich
         'poisoned'    => nil # Has removal messages
       }.freeze
 
+      # <crtrStatus exist="..." hostile="1" stunned="1" .../> XML attribute names,
+      # mapped to the canonical status strings used above and by
+      # Combat::Definitions::Statuses (message-based detection), so both sources
+      # reconcile into the same @status entries instead of diverging spellings
+      # (XML's "immobile"/"calmed" vs the parser's "immobilized"/"calm").
+      CRTR_STATUS_FLAGS = {
+        'immobile'    => 'immobilized',
+        'webbed'      => 'webbed',
+        'sleeping'    => 'sleeping',
+        'disoriented' => 'disoriented',
+        'stunned'     => 'stunned',
+        'rooted'      => 'rooted',
+        'calmed'      => 'calm',
+        'kneeling'    => 'kneeling',
+        'prone'       => 'prone',
+        'sitting'     => 'sitting',
+        'flying'      => 'flying',
+        'hovering'    => 'hovering'
+      }.freeze
+
+      # Remaining <crtrStatus> attributes are classification/relationship facts
+      # rather than transient combat conditions, so they don't go through
+      # @status/STATUS_DURATIONS - they're read via #crtr_flag?.
+      CRTR_CLASSIFICATION_FLAGS = {
+        'hostile'       => :hostile,
+        'disengaged'    => :disengaged,
+        'dead'          => :dead,
+        'sympathetic'   => :sympathetic,
+        'ascended'      => :ascended,
+        'inferior'      => :inferior,
+        'AscensionBoss' => :ascension_boss,
+        'MiniBoss'      => :mini_boss,
+        'challenging'   => :challenging,
+        'rider'         => :rider,
+        'mount'         => :mount
+      }.freeze
+
       def initialize(id, noun, name)
         @id = id.to_i
         @noun = noun
@@ -217,6 +273,7 @@ module Lich
         @ucs_tierup = nil
         @ucs_smote = nil
         @ucs_updated = nil
+        @crtr_flags = {}
       end
 
       # Get the template for this creature
@@ -230,14 +287,18 @@ module Lich
       end
 
       # Add status to creature
+      # Normalizes to String so callers can pass symbols (as combat/processor.rb's
+      # message-based Statuses parser does) or strings (as <crtrStatus> handling
+      # does) and both land in the same @status entries - has_status? already
+      # compares via to_s, so storage needs to match or lookups silently miss.
       def add_status(status, duration = nil)
+        status = status.to_s
         return if @status.include?(status)
 
         @status << status
 
         # Set expiration timestamp for timed statuses
-        status_key = status.to_s.downcase
-        duration ||= STATUS_DURATIONS[status_key]
+        duration ||= STATUS_DURATIONS[status.downcase]
         if duration
           @status_timestamps[status] = Time.now + duration
           respond "  +status: #{status} (expires in #{duration}s)" if $creature_debug
@@ -248,6 +309,7 @@ module Lich
 
       # Remove status from creature
       def remove_status(status)
+        status = status.to_s
         @status.delete(status)
         @status_timestamps.delete(status)
         respond "  -status: #{status}" if $creature_debug
@@ -275,6 +337,35 @@ module Lich
       def statuses
         cleanup_expired_statuses # Clean up expired statuses first
         @status.dup
+      end
+
+      # Reconcile status/classification from a <crtrStatus> tag's attributes.
+      # The tag is a full snapshot of what's currently active, not a delta -
+      # a flag missing (or "0") means inactive even if it was active a moment
+      # ago, so absent flags must clear rather than just be ignored.
+      def sync_crtr_status(attrs)
+        CRTR_STATUS_FLAGS.each do |xml_name, status|
+          if attrs[xml_name] == '1'
+            add_status(status)
+          elsif @status.include?(status)
+            remove_status(status)
+          end
+        end
+
+        CRTR_CLASSIFICATION_FLAGS.each do |xml_name, key|
+          new_value = (attrs[xml_name] == '1')
+          respond "  ~flag: #{key}=#{new_value}" if $creature_debug && @crtr_flags[key] != new_value
+          @crtr_flags[key] = new_value
+        end
+      end
+
+      # Look up a classification flag captured from <crtrStatus> (hostile, dead,
+      # ascended, ascension_boss, mini_boss, etc). Unlike the template's tri-state
+      # has_blood?/has_bones?/muggable?, this is false (not nil) until a
+      # <crtrStatus> tag has actually been seen - these are always-sent booleans
+      # off a live feed, not catalogued-or-unknown template data.
+      def crtr_flag?(key)
+        @crtr_flags[key.to_sym] || false
       end
 
       # UCS (Unarmed Combat System) tracking methods
@@ -529,6 +620,12 @@ module Lich
 
     # Main Creature module - provides the public API
     module Creature
+      # Toggle live echo of status/flag/registration changes as they happen
+      # (see $creature_debug usage throughout CreatureInstance/CreatureTemplate).
+      def self.debug_on(enabled = true)
+        $creature_debug = enabled
+      end
+
       # Lookup creature instance by ID
       def self.[](id)
         CreatureInstance[id]

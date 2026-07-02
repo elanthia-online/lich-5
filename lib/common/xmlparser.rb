@@ -62,6 +62,7 @@ module Lich
         @next_level_value = 0
         @next_level_text = String.new
         @current_target_ids = Array.new
+        @pending_crtr_status = Hash.new
 
         @room_count = 0
         @room_title = String.new
@@ -396,6 +397,24 @@ module Lich
           if name =~ /^(?:a|right|left)$/
             @obj_exist = attributes['exist']
             @obj_noun = attributes['noun']
+          end
+          if name == 'crtrStatus'
+            # Self-closing and self-contained (carries its own id), so it needs
+            # no surrounding-tag context, unlike the bolded <a> name path below.
+            # It reliably precedes that <a> tag on the same line, but the
+            # creature may not be registered yet the first time it's seen, so
+            # stash the flags here and let the text() handler apply them once
+            # Creature.register runs.
+            crtr_id = attributes['exist']
+            if crtr_id
+              flags = attributes.reject { |k, _| k == 'exist' }
+              creature = Creature[crtr_id.to_i]
+              if creature
+                creature.sync_crtr_status(flags)
+              else
+                @pending_crtr_status[crtr_id] = flags
+              end
+            end
           end
           if name == 'inv'
             if attributes['id'] == 'stow'
@@ -866,7 +885,12 @@ module Lich
               if @active_tags.include?('a')
                 if @bold
                   GameObj.new_npc(@obj_exist, @obj_noun, text_string)
-                  Creature.register(text_string, @obj_exist, @obj_noun) if XMLData.current_target_ids.include?(@obj_exist)
+                  if XMLData.current_target_ids.include?(@obj_exist) || @pending_crtr_status.key?(@obj_exist)
+                    creature = Creature.register(text_string, @obj_exist, @obj_noun)
+                    if creature && (pending_flags = @pending_crtr_status.delete(@obj_exist))
+                      creature.sync_crtr_status(pending_flags)
+                    end
+                  end
                 else
                   GameObj.new_loot(@obj_exist, @obj_noun, text_string)
                 end
