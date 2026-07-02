@@ -258,6 +258,11 @@ module Lich
         'mount'         => :mount
       }.freeze
 
+      # Every <crtrStatus> attribute's canonical name, keyed by XML name - used
+      # for the :all/:active debug snapshot, which reports both buckets
+      # together since they're both just attributes of the same tag.
+      ALL_CRTR_FLAGS = CRTR_STATUS_FLAGS.merge(CRTR_CLASSIFICATION_FLAGS).freeze
+
       def initialize(id, noun, name)
         @id = id.to_i
         @noun = noun
@@ -301,9 +306,9 @@ module Lich
         duration ||= STATUS_DURATIONS[status.downcase]
         if duration
           @status_timestamps[status] = Time.now + duration
-          respond "  +status: #{status} (expires in #{duration}s)" if $creature_debug
+          debug_log("+status: #{status} (expires in #{duration}s)")
         else
-          respond "  +status: #{status} (no auto-expiry)" if $creature_debug
+          debug_log("+status: #{status} (no auto-expiry)")
         end
       end
 
@@ -312,7 +317,7 @@ module Lich
         status = status.to_s
         @status.delete(status)
         @status_timestamps.delete(status)
-        respond "  -status: #{status}" if $creature_debug
+        debug_log("-status: #{status}")
       end
 
       # Clean up expired status effects
@@ -323,7 +328,7 @@ module Lich
         @status_timestamps.select { |_status, expires_at| expires_at <= now }.keys.each do |expired_status|
           @status.delete(expired_status)
           @status_timestamps.delete(expired_status)
-          respond "  ~status: #{expired_status} (auto-expired)" if $creature_debug
+          debug_log("~status: #{expired_status} (auto-expired)")
         end
       end
 
@@ -354,9 +359,11 @@ module Lich
 
         CRTR_CLASSIFICATION_FLAGS.each do |xml_name, key|
           new_value = (attrs[xml_name] == '1')
-          respond "  ~flag: #{key}=#{new_value}" if $creature_debug && @crtr_flags[key] != new_value
+          debug_log("~flag: #{key}=#{new_value}") if debug_level == :changes && @crtr_flags[key] != new_value
           @crtr_flags[key] = new_value
         end
+
+        report_crtr_snapshot(attrs) if %i[all active].include?(debug_level)
       end
 
       # Look up a classification flag captured from <crtrStatus> (hostile, dead,
@@ -390,21 +397,21 @@ module Lich
 
         @ucs_position = new_tier
         @ucs_updated = Time.now
-        respond "  UCS: position=#{new_tier}" if $creature_debug
+        debug_log("UCS: position=#{new_tier}")
       end
 
       # Set UCS tierup vulnerability
       def set_ucs_tierup(attack_type)
         @ucs_tierup = attack_type
         @ucs_updated = Time.now
-        respond "  UCS: tierup=#{attack_type}" if $creature_debug
+        debug_log("UCS: tierup=#{attack_type}")
       end
 
       # Mark creature as smote (crimson mist applied)
       def smite!
         @ucs_smote = Time.now
         @ucs_updated = Time.now
-        respond "  UCS: smote!" if $creature_debug
+        debug_log("UCS: smote!")
       end
 
       # Check if creature is currently smote
@@ -424,7 +431,7 @@ module Lich
       def clear_smote
         @ucs_smote = nil
         @ucs_updated = Time.now
-        respond "  UCS: smote cleared" if $creature_debug
+        debug_log("UCS: smote cleared")
       end
 
       # Check if UCS data has expired
@@ -548,6 +555,34 @@ module Lich
         }
       end
 
+      private
+
+      # true (from old-style Creature.debug_on(true)) is treated as :changes so
+      # existing callers/behavior aren't disrupted by the level split.
+      def debug_level
+        $creature_debug == true ? :changes : $creature_debug
+      end
+
+      # Every debug line carries this so simultaneous encounters (routine at
+      # ascended levels) stay attributable to the right creature.
+      def debug_header
+        "--- #{@name} (#{@id}):"
+      end
+
+      def debug_log(message)
+        respond "#{debug_header} #{message}" if $creature_debug
+      end
+
+      # :all reports every <crtrStatus> flag every time; :active reports only
+      # the ones currently true. Read straight from the tag's attrs rather
+      # than post-mutation state, so the snapshot reflects exactly what the
+      # tag said regardless of how add_status/@crtr_flags applied it.
+      def report_crtr_snapshot(attrs)
+        flags = ALL_CRTR_FLAGS.map { |xml_name, key| [key, attrs[xml_name] == '1'] }
+        flags = flags.select { |_, active| active } if debug_level == :active
+        debug_log("crtrStatus: #{flags.map { |key, active| "#{key}=#{active}" }.join(', ')}")
+      end
+
       # Class methods for registry management
       class << self
         # Configure registry
@@ -589,7 +624,7 @@ module Lich
 
           instance = new(id, noun, name)
           @@instances[id.to_i] = instance
-          respond "--- Creature registered: #{name} (#{id})" if $creature_debug
+          respond "--- #{name} (#{id}): registered" if $creature_debug
           instance
         end
 
@@ -620,10 +655,14 @@ module Lich
 
     # Main Creature module - provides the public API
     module Creature
-      # Toggle live echo of status/flag/registration changes as they happen
-      # (see $creature_debug usage throughout CreatureInstance/CreatureTemplate).
-      def self.debug_on(enabled = true)
-        $creature_debug = enabled
+      # Toggle live echo of status/flag/registration changes as they happen.
+      # level:
+      #   false     - off
+      #   true / :changes (default) - only what actually changed (current behavior)
+      #   :all      - every <crtrStatus> flag, every time, true or false
+      #   :active   - every <crtrStatus> flag, every time, active (true) only
+      def self.debug_on(level = :changes)
+        $creature_debug = level
       end
 
       # Lookup creature instance by ID
