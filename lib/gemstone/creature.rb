@@ -736,32 +736,52 @@ module Lich
 
       # Authoritative hostile creatures currently in the room. Deliberately
       # independent of GameObj (no .npcs, no .targets, no .status) - room
-      # membership comes from CreatureInstance's own roster (see
+      # membership comes from CreatureInstance's own roster alone (see
       # CreatureInstance.clear_room/mark_in_room, hooked directly into
-      # xmlparser's nav/room-objs events), unioned with XMLData.current_target_ids
-      # to also catch anything actively engaged that hasn't hit a room-objs
-      # refresh yet. valid_target? drops the dead/decoy/appendage noise;
-      # crtr_flag?(:hostile) is the structured hostility signal.
+      # xmlparser's nav/room-objs events).
       #
-      # Extra filters narrow further, ANDed together: any known status name
-      # (:prone, :stunned, ...) or classification flag (:hostile, :ascended,
-      # ...), or its not_ negation (:not_prone). Unknown names simply match
-      # nothing (flag_active? degrades to false), so this stays open-ended as
-      # more statuses/flags get tracked - no changes needed here for those.
+      # XMLData.current_target_ids is deliberately NOT used here: it's the
+      # client's "last selected target" dropdown, which the server only
+      # resends when the target *list* changes - it does not clear when that
+      # target leaves or dies, so it can stay stuck on a stale id
+      # indefinitely (confirmed in a live capture surviving several room
+      # changes and a zone change). valid_target? drops the dead/decoy/
+      # appendage noise; crtr_flag?(:hostile) is the structured hostility
+      # signal.
+      #
+      # Extra filters narrow further, ANDed together - see #in_room for the
+      # filter syntax.
       def self.targets(*filters)
-        ids = (CreatureInstance.current_room_ids + XMLData.current_target_ids.map(&:to_i)).uniq
+        candidates = CreatureInstance.current_room_ids
+                                     .filter_map { |id| CreatureInstance[id] }
+                                     .select { |c| c.valid_target? && c.crtr_flag?(:hostile) }
+        apply_filters(candidates, filters)
+      end
 
-        candidates = ids.filter_map { |id| CreatureInstance[id] }
-                        .select { |c| c.valid_target? && c.crtr_flag?(:hostile) }
+      # Everyone currently in the room, with no hostile/valid baseline -
+      # .targets deliberately excludes dead/decoy things since they're never
+      # attackable, but you still want to find them for looting or a wound
+      # check, e.g. Creature.in_room(:dead).
+      #
+      # Filters AND together: any known status name (:prone, :stunned, ...)
+      # or classification flag (:hostile, :dead, :ascended, ...), or its
+      # not_ negation (:not_prone). Unknown names simply match nothing
+      # (flag_active? degrades to false), so this stays open-ended as more
+      # statuses/flags get tracked - no changes needed here for those.
+      def self.in_room(*filters)
+        candidates = CreatureInstance.current_room_ids.filter_map { |id| CreatureInstance[id] }
+        apply_filters(candidates, filters)
+      end
 
+      def self.apply_filters(candidates, filters)
         filters.each do |filter|
           negate = filter.to_s.start_with?('not_')
           key = negate ? filter.to_s.delete_prefix('not_') : filter.to_s
           candidates = candidates.select { |c| c.flag_active?(key) != negate }
         end
-
         candidates
       end
+      private_class_method :apply_filters
 
       # Empties the room roster. Internal - see CreatureInstance.clear_room.
       def self.clear_room

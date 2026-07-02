@@ -320,16 +320,19 @@ RSpec.describe Lich::Gemstone::Creature do
       expect(described_class.targets.map(&:id)).to eq([1])
     end
 
-    it 'unions in current_target_ids for anything actively targeted but not yet in the room roster' do
-      # Simulates a creature engaged mid-combat before any room-objs refresh
-      # has re-listed it - registered (so Creature knows about it) but never
-      # marked into the room roster via a fresh register/crtrStatus call.
-      targeted = Lich::Gemstone::CreatureInstance.new(9, 'thing', 'ambushing thing')
-      targeted.sync_crtr_status('hostile' => '1')
-      Lich::Gemstone::CreatureInstance.class_variable_get(:@@instances)[9] = targeted
-      XMLData.current_target_ids = ['9']
+    it 'ignores current_target_ids entirely - it is a sticky last-selected-target dropdown, not a presence signal' do
+      # Confirmed via a live capture: the server only resends dDBTarget when
+      # the target *list* changes, not when the current target leaves or
+      # dies - it stayed pointed at a departed creature's id through a dozen
+      # room changes and a zone change. Anything sourced from it alone (not
+      # also in the room roster) must not leak into an "authoritative"
+      # in-room list.
+      stale = Lich::Gemstone::CreatureInstance.new(9, 'thing', 'departed thing')
+      stale.sync_crtr_status('hostile' => '1')
+      Lich::Gemstone::CreatureInstance.class_variable_get(:@@instances)[9] = stale
+      XMLData.current_target_ids = ['9'] # registered, hostile, but never marked into the room roster
 
-      expect(described_class.targets.map(&:id)).to eq([9])
+      expect(described_class.targets.map(&:id)).to eq([])
     end
 
     it 'returns an empty array when nothing hostile is present' do
@@ -344,6 +347,40 @@ RSpec.describe Lich::Gemstone::Creature do
 
       expect(described_class.targets(:prone).map(&:id)).to eq([1])
       expect(described_class.targets(:not_prone).map(&:id)).to eq([2])
+    end
+
+    it 'never returns dead things, even asked for by name - that contradiction is exactly what .in_room is for' do
+      dead = Lich::Gemstone::CreatureInstance.register('carrion worm', 1)
+      dead.sync_crtr_status('hostile' => '1', 'dead' => '1')
+
+      expect(described_class.targets(:dead)).to eq([])
+    end
+  end
+
+  describe '.in_room' do
+    it 'has no hostile/valid baseline - returns everyone in the room roster' do
+      Lich::Gemstone::CreatureInstance.register('sea nymph', 1).sync_crtr_status('hostile' => '1')
+      Lich::Gemstone::CreatureInstance.register('field rabbit', 2).sync_crtr_status('hostile' => '0')
+      dead = Lich::Gemstone::CreatureInstance.register('carrion worm', 3)
+      dead.sync_crtr_status('hostile' => '1', 'dead' => '1')
+
+      expect(described_class.in_room.map(&:id)).to contain_exactly(1, 2, 3)
+    end
+
+    it 'finds dead things to loot - the case .targets(:dead) cannot serve' do
+      dead = Lich::Gemstone::CreatureInstance.register('carrion worm', 1)
+      dead.sync_crtr_status('hostile' => '1', 'dead' => '1')
+      Lich::Gemstone::CreatureInstance.register('sea nymph', 2).sync_crtr_status('hostile' => '1')
+
+      expect(described_class.in_room(:dead).map(&:id)).to eq([1])
+    end
+
+    it 'also ignores current_target_ids, same as .targets' do
+      stale = Lich::Gemstone::CreatureInstance.new(9, 'thing', 'departed thing')
+      Lich::Gemstone::CreatureInstance.class_variable_get(:@@instances)[9] = stale
+      XMLData.current_target_ids = ['9']
+
+      expect(described_class.in_room.map(&:id)).to eq([])
     end
   end
 end
