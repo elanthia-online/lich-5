@@ -145,17 +145,23 @@ module Lich
         @@templates.values.uniq
       end
 
-      # Tri-state predicates: true, false, or nil when the template hasn't
-      # catalogued this trait. nil is not coerced to false - an uncatalogued
-      # creature is unknown, not confirmed bloodless/boneless/unmuggable.
+      # Returns whether the bestiary template says the creature has blood.
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
       def has_blood?
         @has_blood
       end
 
+      # Returns whether the bestiary template says the creature has bones.
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
       def has_bones?
         @has_bones
       end
 
+      # Returns whether the bestiary template says the creature can be mugged.
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
       def muggable?
         @muggable
       end
@@ -227,11 +233,14 @@ module Lich
         'poisoned'    => nil # Has removal messages
       }.freeze
 
-      # <crtrStatus exist="..." hostile="1" stunned="1" .../> XML attribute names,
-      # mapped to the canonical status strings used above and by
-      # Combat::Definitions::Statuses (message-based detection), so both sources
-      # reconcile into the same @status entries instead of diverging spellings
-      # (XML's "immobile"/"calmed" vs the parser's "immobilized"/"calm").
+      # Maps <crtrStatus> transient XML flags to canonical status names.
+      #
+      # The XML feed and message parser use slightly different terms for the
+      # same state, e.g. "immobile" versus "immobilized". Keeping this mapping
+      # explicit lets XML and message-based detection reconcile into the same
+      # `@status` entries.
+      #
+      # @return [Hash{String=>String}]
       CRTR_STATUS_FLAGS = {
         'immobile'    => 'immobilized',
         'webbed'      => 'webbed',
@@ -247,9 +256,13 @@ module Lich
         'hovering'    => 'hovering'
       }.freeze
 
-      # Remaining <crtrStatus> attributes are classification/relationship facts
-      # rather than transient combat conditions, so they don't go through
-      # @status/STATUS_DURATIONS - they're read via #crtr_flag?.
+      # Maps <crtrStatus> classification XML flags to predicate keys.
+      #
+      # These are relationship or classification facts rather than transient
+      # combat statuses, so they are stored separately from `@status` and read
+      # via {#crtr_flag?}.
+      #
+      # @return [Hash{String=>Symbol}]
       CRTR_CLASSIFICATION_FLAGS = {
         'hostile'       => :hostile,
         'disengaged'    => :disengaged,
@@ -264,9 +277,9 @@ module Lich
         'mount'         => :mount
       }.freeze
 
-      # Every <crtrStatus> attribute's canonical name, keyed by XML name - used
-      # for the :all/:active debug snapshot, which reports both buckets
-      # together since they're both just attributes of the same tag.
+      # All known <crtrStatus> attributes keyed by XML name.
+      #
+      # @return [Hash{String=>String, Symbol}] canonical flag names for debug snapshots.
       ALL_CRTR_FLAGS = CRTR_STATUS_FLAGS.merge(CRTR_CLASSIFICATION_FLAGS).freeze
 
       def initialize(id, noun, name)
@@ -297,11 +310,15 @@ module Lich
         !template.nil?
       end
 
-      # Add status to creature
-      # Normalizes to String so callers can pass symbols (as combat/processor.rb's
-      # message-based Statuses parser does) or strings (as <crtrStatus> handling
-      # does) and both land in the same @status entries - has_status? already
-      # compares via to_s, so storage needs to match or lookups silently miss.
+      # Adds a status to the creature.
+      #
+      # Normalizes to String so callers can pass symbols from message-based
+      # status parsing or strings from <crtrStatus>; both sources then land in
+      # the same `@status` entries and match {#has_status?}.
+      #
+      # @param status [String, Symbol] canonical status name.
+      # @param duration [Integer, nil] optional expiration duration in seconds.
+      # @return [void]
       def add_status(status, duration = nil)
         status = status.to_s
         return if @status.include?(status)
@@ -318,7 +335,10 @@ module Lich
         end
       end
 
-      # Remove status from creature
+      # Removes a status from the creature.
+      #
+      # @param status [String, Symbol] canonical status name.
+      # @return [void]
       def remove_status(status)
         status = status.to_s
         @status.delete(status)
@@ -350,10 +370,14 @@ module Lich
         @status.dup
       end
 
-      # Reconcile status/classification from a <crtrStatus> tag's attributes.
-      # The tag is a full snapshot of what's currently active, not a delta -
-      # a flag missing (or "0") means inactive even if it was active a moment
-      # ago, so absent flags must clear rather than just be ignored.
+      # Reconciles status and classification from a <crtrStatus> tag.
+      #
+      # The tag is a full snapshot of what is currently active, not a delta. A
+      # missing flag, or a flag set to "0", means inactive even if it was active
+      # a moment ago, so absent known flags clear rather than being ignored.
+      #
+      # @param attrs [Hash{String=>String}] XML attributes excluding `exist`.
+      # @return [void]
       def sync_crtr_status(attrs)
         CRTR_STATUS_FLAGS.each do |xml_name, status|
           if attrs[xml_name] == '1'
@@ -372,19 +396,25 @@ module Lich
         report_crtr_snapshot(attrs) if %i[all active].include?(debug_level)
       end
 
-      # Look up a classification flag captured from <crtrStatus> (hostile, dead,
-      # ascended, ascension_boss, mini_boss, etc). Unlike the template's tri-state
-      # has_blood?/has_bones?/muggable?, this is false (not nil) until a
-      # <crtrStatus> tag has actually been seen - these are always-sent booleans
-      # off a live feed, not catalogued-or-unknown template data.
+      # Checks a classification flag captured from <crtrStatus>.
+      #
+      # Unlike template tri-state facts such as {CreatureTemplate#has_blood?},
+      # live XML flags are always-sent booleans. Unknown or unseen flags are
+      # therefore false, not nil.
+      #
+      # @param key [String, Symbol] classification key, such as `:hostile` or `:dead`.
+      # @return [Boolean]
       def crtr_flag?(key)
         @crtr_flags[key.to_sym] || false
       end
 
-      # True if key names either an active status (has_status?) or an active
-      # classification flag (crtr_flag?) - the two vocabularies are disjoint,
-      # so trying both lets callers filter on any known name without caring
-      # which bucket it lives in. Backs Creature.targets' filter arguments.
+      # Checks whether a status or classification flag is active.
+      #
+      # The two vocabularies are intentionally disjoint, so callers can filter
+      # on any known flag name without caring which bucket stores it.
+      #
+      # @param key [String, Symbol] status or classification key.
+      # @return [Boolean]
       def flag_active?(key)
         has_status?(key) || crtr_flag?(key)
       end
@@ -543,10 +573,13 @@ module Lich
         current_hp == 0
       end
 
-      # Same exclusions GameObj.targets applies (animated decoys, appendage/limb
-      # sub-targets), but the dead check is structured (crtrStatus's dead flag,
-      # or HP hitting 0) instead of regex-matching a status string. Backs
-      # Creature.targets and is also usable standalone on a single lookup.
+      # Checks whether this creature should be considered attackable.
+      #
+      # Uses the same decoy and appendage exclusions as `GameObj.targets`, but
+      # uses structured death data from <crtrStatus> and HP tracking instead of
+      # regex-matching a status string.
+      #
+      # @return [Boolean]
       def valid_target?
         return false if crtr_flag?(:dead) || dead?
         return false if @name =~ /^animated\b/i && @name !~ /^animated slush/i
@@ -584,26 +617,36 @@ module Lich
 
       private
 
-      # true (from old-style Creature.debug_on(true)) is treated as :changes so
-      # existing callers/behavior aren't disrupted by the level split.
+      # Normalizes the configured creature debug level.
+      #
+      # @return [Symbol, false, nil] debug level; true is normalized to `:changes`.
       def debug_level
         $creature_debug == true ? :changes : $creature_debug
       end
 
-      # Every debug line carries this so simultaneous encounters (routine at
-      # ascended levels) stay attributable to the right creature.
+      # Builds the prefix used for creature debug messages.
+      #
+      # @return [String]
       def debug_header
         "--- #{@name} (#{@id}):"
       end
 
+      # Emits a creature debug message when creature debugging is enabled.
+      #
+      # @param message [String] message body.
+      # @return [void]
       def debug_log(message)
         respond "#{debug_header} #{message}" if $creature_debug
       end
 
-      # :all reports every <crtrStatus> flag every time; :active reports only
-      # the ones currently true. Read straight from the tag's attrs rather
-      # than post-mutation state, so the snapshot reflects exactly what the
-      # tag said regardless of how add_status/@crtr_flags applied it.
+      # Emits a debug snapshot for a <crtrStatus> tag.
+      #
+      # `:all` reports every known flag; `:active` reports only true flags. The
+      # snapshot reads straight from the tag attributes so it reflects exactly
+      # what the feed sent, independent of how the mutation logic applies it.
+      #
+      # @param attrs [Hash{String=>String}] XML attributes excluding `exist`.
+      # @return [void]
       def report_crtr_snapshot(attrs)
         flags = ALL_CRTR_FLAGS.map { |xml_name, key| [key, attrs[xml_name] == '1'] }
         flags = flags.select { |_, active| active } if debug_level == :active
@@ -633,10 +676,16 @@ module Lich
           size >= @@max_size
         end
 
-        # Register a new creature instance. Also marks the id as present in
-        # the room - called every time a bolded name is seen in room-objs,
-        # which is exactly the event that means "this creature is here now",
-        # whether or not it's a brand-new instance.
+        # Registers or looks up a creature instance.
+        #
+        # Also marks the id as present in the room. The parser calls this every
+        # time a bolded room-object name is seen, which is the feed event that
+        # means the creature is present whether or not the instance is new.
+        #
+        # @param name [String] display name from room XML.
+        # @param id [Integer, String] server creature id.
+        # @param noun [String, nil] noun from room XML.
+        # @return [CreatureInstance, nil] registered instance, or nil when disabled/full.
         def register(name, id, noun = nil)
           return nil unless auto_register?
 
@@ -665,9 +714,10 @@ module Lich
           instance
         end
 
-        # Marks an id present in the room, returning true if it wasn't
-        # already. Internal - called from register; not meant to be called
-        # directly by scripts.
+        # Marks an id present in the current room roster.
+        #
+        # @param id [Integer, String] server creature id.
+        # @return [Boolean] true when the id was newly added.
         def mark_in_room(id)
           id = id.to_i
           return false if @@current_room_ids.include?(id)
@@ -676,17 +726,22 @@ module Lich
           true
         end
 
-        # Empties the room roster. Internal - called from xmlparser's own
-        # nav/room-objs-refresh hooks (mirroring, not reading, GameObj's
-        # equivalent clears) so it's rebuilt fresh on every room-objs line,
-        # same accuracy characteristic as GameObj.npcs without depending on it.
+        # Empties the current room roster.
+        #
+        # Called from XML parser nav and room-object refresh hooks. The roster
+        # is rebuilt from fresh room XML, mirroring `GameObj.npcs` accuracy
+        # without reading from or mutating GameObj itself.
+        #
+        # @return [void]
         def clear_room
           count = @@current_room_ids.size
           @@current_room_ids = []
           respond "--- room: roster cleared (#{count} creature#{'s' unless count == 1})" if $creature_debug && count > 0
         end
 
-        # Ids currently present in the room (see #clear_room/#mark_in_room).
+        # Returns the creature ids currently present in the room.
+        #
+        # @return [Array<Integer>]
         def current_room_ids
           @@current_room_ids.dup
         end
@@ -717,14 +772,14 @@ module Lich
       end
     end
 
-    # Main Creature module - provides the public API
+    # Public Creature API for GemStone runtime creature tracking.
     module Creature
-      # Toggle live echo of status/flag/registration changes as they happen.
-      # level:
-      #   false     - off
-      #   true / :changes (default) - only what actually changed (current behavior)
-      #   :all      - every <crtrStatus> flag, every time, true or false
-      #   :active   - every <crtrStatus> flag, every time, active (true) only
+      # Toggles live echo of status, flag, and registration changes.
+      #
+      # @param level [Boolean, Symbol] false disables debug output; true or
+      #   `:changes` reports changes only; `:all` reports every <crtrStatus>
+      #   flag; `:active` reports only active <crtrStatus> flags.
+      # @return [Boolean, Symbol] the configured debug value.
       def self.debug_on(level = :changes)
         $creature_debug = level
       end
@@ -734,23 +789,18 @@ module Lich
         CreatureInstance[id]
       end
 
-      # Authoritative hostile creatures currently in the room. Deliberately
-      # independent of GameObj (no .npcs, no .targets, no .status) - room
-      # membership comes from CreatureInstance's own roster alone (see
-      # CreatureInstance.clear_room/mark_in_room, hooked directly into
-      # xmlparser's nav/room-objs events).
+      # Returns attackable hostile creatures currently in the room.
       #
-      # XMLData.current_target_ids is deliberately NOT used here: it's the
-      # client's "last selected target" dropdown, which the server only
-      # resends when the target *list* changes - it does not clear when that
-      # target leaves or dies, so it can stay stuck on a stale id
-      # indefinitely (confirmed in a live capture surviving several room
-      # changes and a zone change). valid_target? drops the dead/decoy/
-      # appendage noise; crtr_flag?(:hostile) is the structured hostility
-      # signal.
+      # This deliberately uses Creature's own room roster instead of
+      # `GameObj.targets` or `XMLData.current_target_ids`. The target id list is
+      # the client's last-selected-target control, not authoritative room
+      # membership, so it can remain stale after movement or death. The roster
+      # is fed directly by XML room-object events, `valid_target?` removes
+      # decoys/dead appendages, and `crtr_flag?(:hostile)` supplies structured
+      # hostility.
       #
-      # Extra filters narrow further, ANDed together - see #in_room for the
-      # filter syntax.
+      # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
+      # @return [Array<CreatureInstance>]
       def self.targets(*filters)
         candidates = CreatureInstance.current_room_ids
                                      .filter_map { |id| CreatureInstance[id] }
@@ -758,21 +808,25 @@ module Lich
         apply_filters(candidates, filters)
       end
 
-      # Everyone currently in the room, with no hostile/valid baseline -
-      # .targets deliberately excludes dead/decoy things since they're never
-      # attackable, but you still want to find them for looting or a wound
-      # check, e.g. Creature.in_room(:dead).
+      # Returns all tracked creatures currently in the room.
       #
-      # Filters AND together: any known status name (:prone, :stunned, ...)
-      # or classification flag (:hostile, :dead, :ascended, ...), or its
-      # not_ negation (:not_prone). Unknown names simply match nothing
-      # (flag_active? degrades to false), so this stays open-ended as more
-      # statuses/flags get tracked - no changes needed here for those.
+      # Unlike {.targets}, this does not require hostility or target validity,
+      # so it can be used for dead creatures, looting, or wound inspection.
+      # Filters are ANDed and may name a known status, a classification flag, or
+      # a `not_` negation such as `:not_prone`; unknown filters match nothing.
+      #
+      # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
+      # @return [Array<CreatureInstance>]
       def self.in_room(*filters)
         candidates = CreatureInstance.current_room_ids.filter_map { |id| CreatureInstance[id] }
         apply_filters(candidates, filters)
       end
 
+      # Applies Creature status/classification filters to a candidate list.
+      #
+      # @param candidates [Array<CreatureInstance>] initial creature list.
+      # @param filters [Array<String, Symbol>] filter names, optionally prefixed with `not_`.
+      # @return [Array<CreatureInstance>]
       def self.apply_filters(candidates, filters)
         filters.each do |filter|
           negate = filter.to_s.start_with?('not_')
@@ -783,7 +837,9 @@ module Lich
       end
       private_class_method :apply_filters
 
-      # Empties the room roster. Internal - see CreatureInstance.clear_room.
+      # Empties the current room roster.
+      #
+      # @return [void]
       def self.clear_room
         CreatureInstance.clear_room
       end
