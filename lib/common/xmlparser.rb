@@ -172,6 +172,13 @@ module Lich
         @current_stream = String.new
         @current_style = String.new
         @sax_parse_errors = []
+        # A <crtrStatus> tag can be fully parsed and cached here while the
+        # matching bold <a> text is still in an as-yet-unparsed remainder of
+        # the fragment. If a malformed/truncated fragment forces a reset in
+        # that window, an uncleared entry would sit here indefinitely and
+        # could misapply to an unrelated creature that later reuses the same
+        # exist id (ids are recycled - see Creature.targets' notes).
+        @pending_crtr_status.clear
       end
 
       def safe_to_respond?
@@ -353,6 +360,10 @@ module Lich
             # Creature tracks its own room roster independently of GameObj
             # (see lib/gemstone/creature.rb) - not loaded for DR sessions.
             Lich::Gemstone::Creature.clear_room if defined?(Lich::Gemstone::Creature)
+            # Any <crtrStatus> cached for the room being left is scoped to
+            # that room - don't let it survive to misapply if the id gets
+            # reused elsewhere.
+            @pending_crtr_status.clear
             @check_obvious_hiding = true
             unless XMLData.game =~ /^DR/
               @previous_nav_rm = @room_id
@@ -387,6 +398,7 @@ module Lich
               GameObj.clear_loot
               GameObj.clear_npcs
               Lich::Gemstone::Creature.clear_room if defined?(Lich::Gemstone::Creature)
+              @pending_crtr_status.clear
             elsif attributes['id'] == 'room players'
               GameObj.clear_pcs
             elsif attributes['id'] == 'room exits'
@@ -405,20 +417,17 @@ module Lich
           if name == 'crtrStatus'
             # Self-closing and self-contained (carries its own id), so it needs
             # no surrounding-tag context, unlike the bolded <a> name path below.
-            # It reliably precedes that <a> tag on the same line, but the
-            # creature may not be registered yet the first time it's seen, so
-            # stash the flags here and let the text() handler apply them once
-            # Creature.register runs.
+            # Always stash rather than applying directly even when the
+            # creature is already known: Creature.register (and the room-in
+            # marking it does) only ever runs from the <a> text path below, so
+            # syncing here and skipping that path would update the instance's
+            # flags correctly while silently leaving it out of the room
+            # roster after the next clear_room - it would sync but never
+            # reappear in Creature.targets/.in_room. Deferring to the text()
+            # handler keeps registration/room-marking and flag application on
+            # the same path for both new and already-known creatures.
             crtr_id = attributes['exist']
-            if crtr_id
-              flags = attributes.reject { |k, _| k == 'exist' }
-              creature = Creature[crtr_id.to_i]
-              if creature
-                creature.sync_crtr_status(flags)
-              else
-                @pending_crtr_status[crtr_id] = flags
-              end
-            end
+            @pending_crtr_status[crtr_id] = attributes.reject { |k, _| k == 'exist' } if crtr_id
           end
           if name == 'inv'
             if attributes['id'] == 'stow'

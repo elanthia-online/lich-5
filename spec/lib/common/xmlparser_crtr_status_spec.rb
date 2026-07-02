@@ -38,7 +38,7 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
     expect(nymph.crtr_flag?(:hostile)).to be true
   end
 
-  it 'applies a crtrStatus update directly once the creature is already registered' do
+  it 'applies a crtrStatus update once the creature is already registered' do
     feed(%(<component id='room objs'>  You notice<crtrStatus exist="607736" hostile="1"/><b> <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/></b>.</component>))
     feed(%(<component id='room objs'>  You notice<crtrStatus exist="607736" hostile="1" stunned="1"/><b> <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/></b> (stunned).</component>))
 
@@ -117,6 +117,62 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
 
       expect(Lich::Gemstone::Creature.targets(:prone).map(&:name)).to eq(['carrion worm'])
       expect(Lich::Gemstone::Creature.targets(:not_prone).map(&:name)).to eq(['sea nymph'])
+    end
+
+    it 'marks an already-known creature back into the roster when it reappears after a clear_room' do
+      # Regression: crtrStatus used to sync flags directly on an already-known
+      # creature and skip Creature.register entirely for that case, since
+      # register (and the room-marking it does) only ever ran from the <a>
+      # text path. The creature's flags stayed correct, but it silently
+      # dropped out of the room roster forever after the next clear_room -
+      # sync'd but never reappearing in Creature.targets/.in_room.
+      stub_const('XMLData', double(current_target_ids: [], game: 'GSIV'))
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="607736" hostile="1"/><b> <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/></b>.</component>))
+      feed(%(<nav rm='7355'/>))
+      expect(Lich::Gemstone::CreatureInstance.current_room_ids).to be_empty
+
+      # She's still around - same shape as her first appearance, same id,
+      # and Creature already has an instance for her from before the nav.
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="607736" hostile="1"/><b> <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/></b>.</component>))
+
+      expect(Lich::Gemstone::CreatureInstance.current_room_ids).to eq([607736])
+      expect(Lich::Gemstone::Creature.targets.map(&:id)).to eq([607736])
+    end
+  end
+
+  describe 'pending crtrStatus does not leak across a reused exist id' do
+    it 'reset clears it, so a fragment abandoned mid-parse cannot misapply to a later creature with the same id' do
+      feed(%(<crtrStatus exist="999999" hostile="1" dead="1"/>)) # arrives, but its matching <a> never does - fragment truncated
+      expect(parser.instance_variable_get(:@pending_crtr_status)).to have_key('999999')
+
+      parser.reset # malformed/truncated fragment recovery
+
+      expect(parser.instance_variable_get(:@pending_crtr_status)).to be_empty
+
+      # Id reused later by an unrelated creature via the current_target_ids path.
+      stub_const('XMLData', double(current_target_ids: ['999999']))
+      feed(%(<component id='room objs'>  You notice <pushBold/>a <a exist="999999" noun="crab">giant crab</a><popBold/>.</component>))
+
+      expect(Lich::Gemstone::Creature[999999].crtr_flag?(:dead)).to be false
+    end
+
+    it 'nav clears it too, so a fragment abandoned mid-room cannot survive into the next room' do
+      feed(%(<crtrStatus exist="999999" hostile="1" dead="1"/>))
+      expect(parser.instance_variable_get(:@pending_crtr_status)).to have_key('999999')
+
+      stub_const('XMLData', double(current_target_ids: [], game: 'GSIV'))
+      feed(%(<nav rm='7355'/>))
+
+      expect(parser.instance_variable_get(:@pending_crtr_status)).to be_empty
+    end
+
+    it 'a room-objs refresh clears it too' do
+      feed(%(<crtrStatus exist="999999" hostile="1" dead="1"/>))
+      expect(parser.instance_variable_get(:@pending_crtr_status)).to have_key('999999')
+
+      feed(%(<component id='room objs'>  You notice a <a exist="-2294" noun="gate">wrought iron gate</a>.</component>))
+
+      expect(parser.instance_variable_get(:@pending_crtr_status)).to be_empty
     end
   end
 end

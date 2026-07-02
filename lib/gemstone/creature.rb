@@ -589,6 +589,18 @@ module Lich
         true
       end
 
+      # Creature-side analog of Lich::Gemstone::Status.muckled? (the player's
+      # own "can't act right now" check). Deliberately narrower than
+      # everything tracked in @status: excludes penalty-only conditions
+      # (disoriented), positional ones (prone/kneeling/sitting/flying/
+      # hovering), and calm (the player version excludes that too, tracking
+      # it separately) - this is only the statuses that actually prevent
+      # acting, not ones that merely penalize or reposition.
+      def muckled?
+        has_status?('webbed') || crtr_flag?(:dead) || dead? || has_status?('stunned') ||
+          has_status?('sleeping') || has_status?('immobilized') || has_status?('rooted')
+      end
+
       # Reset damage (creature healed or respawned)
       def reset_damage
         @damage_taken = 0

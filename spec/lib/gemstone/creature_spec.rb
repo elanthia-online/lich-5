@@ -37,6 +37,39 @@ RSpec.describe Lich::Gemstone::CreatureInstance do
     end
   end
 
+  describe '#muckled?' do
+    %w[webbed stunned sleeping immobilized rooted].each do |status|
+      it "is true when #{status} is active" do
+        creature = described_class.register('test creature', 1)
+        creature.add_status(status)
+
+        expect(creature.muckled?).to be true
+      end
+    end
+
+    it 'is true when dead' do
+      creature = described_class.register('test creature', 1)
+      creature.sync_crtr_status('dead' => '1')
+
+      expect(creature.muckled?).to be true
+    end
+
+    it 'is false for penalty-only or positional statuses (disoriented, prone, calm), unlike the others' do
+      creature = described_class.register('test creature', 1)
+      creature.add_status(:disoriented)
+      creature.add_status(:prone)
+      creature.add_status(:calm)
+
+      expect(creature.muckled?).to be false
+    end
+
+    it 'is false with no relevant status active' do
+      creature = described_class.register('test creature', 1)
+
+      expect(creature.muckled?).to be false
+    end
+  end
+
   describe '#flag_active?' do
     it 'matches a status name, a classification flag name, or its negation' do
       creature = described_class.register('test creature', 6)
