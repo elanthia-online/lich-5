@@ -292,6 +292,41 @@ module Lich
         activated
       end
 
+      def need_buffs?(buff_list)
+        # commoner's don't really have a way to check buffs so assume always yes
+        return true if DRStats.guild == "Commoner"
+
+        # no need to interate if list of buffs is already empty
+        return false if buff_list.nil? || buff_list.size == 0
+
+        # no need to interate if no buffs active and buff_list is not empty
+        return true if DRSpells.active_spells.empty?
+
+        case DRStats.guild
+        when 'Barbarian'
+          # barbarian buffs are an array of strings so we can just iterate over it and check if any are not in the active spells hash
+          buff_list.each { |buff| return true if !DRSpells.active_spells.key?("#{buff}") }
+        when 'Thief'
+          # thieves need special handling to convert buff_list to an array of JUST khri names due to the different options supported
+          buff_list.map { |buff| buff.sub(/khri /i, '') }
+                   .map { |buff| buff.sub(/delay /i, '') }
+                   .join(' ')
+                   .split(' ')
+                   .each { |khri| return true if !DRSpells.active_spells.key?("Khri #{khri}") }
+        else
+          # for MUs check list of required buffs against list of active spells and their durations/recast
+          buff_list.each do |spell,data|
+            # ignore spells which don't recast (ignite, etf, etc.)
+            next if data['recast'] < 0
+            # if any buff is not in the active spells, or whose duration is less than recast, need to buff
+            return true if !DRSpells.active_spells.key?(spell) || DRSpells.active_spells[spell] <= (data['recast'] ? data['recast'] : 1)
+          end
+        end
+
+        # all buffs were in active spells with longer durations than recast, no need to buff
+        return false
+      end
+
       def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep = nil, retries: PREPARE_MAX_RETRIES)
         return false unless abbrev
         spell_prep_messages = !custom_prep ? get_data('spells').prep_messages : (get_data('spells').prep_messages + [custom_prep])
